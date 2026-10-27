@@ -124,7 +124,8 @@ export function priorityName(n: number): string {
 function macFor(seed: string): string {
   let h = 0
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  const bytes = [0x08, 0x00, 0x27, (h >> 16) & 0xff, (h >> 8) & 0xff, h & 0xff]
+  // 52:54:00 es el prefijo de las placas virtuales de QEMU/KVM, el hipervisor del servidor simulado.
+  const bytes = [0x52, 0x54, 0x00, (h >> 16) & 0xff, (h >> 8) & 0xff, h & 0xff]
   return bytes.map((b) => b.toString(16).padStart(2, '0')).join(':')
 }
 

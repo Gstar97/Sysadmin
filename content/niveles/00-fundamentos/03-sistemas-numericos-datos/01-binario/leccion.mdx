@@ -1,0 +1,135 @@
+---
+id: n0-m3-l1
+titulo: Binario
+minutos: 120
+objetivos:
+  - Explicar qué son un bit y un byte.
+  - Convertir de decimal a binario y de binario a decimal sin calculadora.
+  - Entender por qué 8 bits representan valores de 0 a 255 (clave para IPv4).
+glosario: [bit, byte, binario, octeto]
+verificado: 2026-10
+---
+
+import byte from './byte.svg?raw'
+
+El binario aparece en el trabajo de un sysadmin mucho más de lo que parece: en las direcciones IP y sus máscaras, en los permisos de Linux, en los tamaños de disco y en las reglas de firewall. En el nivel de redes vas a calcular subredes, y ese cálculo es binario puro. Esta lección te da la base para hacerlo de cabeza, sin calculadora.
+
+## Por qué las computadoras usan binario
+
+Todo circuito digital distingue solo dos estados: hay tensión o no hay, una celda de memoria flash está cargada o no, una zona del disco está magnetizada en un sentido o en el otro. Por eso la información se guarda con solo dos dígitos, 0 y 1.
+
+- Un **<Termino id="bit">bit</Termino>** (*binary digit*) es un dígito binario: vale 0 o 1.
+- Un **<Termino id="byte">byte</Termino>** son 8 bits. Es la unidad básica con la que se mide la memoria y el almacenamiento: un carácter de texto simple, como la letra A, ocupa un byte.
+
+## El sistema posicional
+
+En decimal, cada posición vale diez veces más que la de su derecha: el número 405 es 4 × 100 + 0 × 10 + 5 × 1. El **<Termino id="binario">sistema binario</Termino>** funciona igual, pero cada posición vale **el doble** que la de su derecha: 1, 2, 4, 8, 16, 32, 64, 128...
+
+<Diagrama svg={byte} alt="Un byte con los pesos 128, 64, 32, 16, 8, 4, 2 y 1 sobre cada bit; el valor 11000000 equivale a 192. Debajo, la IP 192.168.1.10 con cada octeto convertido a binario" pie="Cada bit en 1 suma su peso. Una IPv4 son cuatro bytes." />
+
+Para leer un número binario, se suman los pesos de las posiciones que tienen un 1. Por ejemplo, `1011`:
+
+```text
+peso:   8   4   2   1
+bit:    1   0   1   1
+        8 + 0 + 2 + 1 = 11
+```
+
+Prueba con el tablero: cada interruptor es un bit. Enciende y apaga bits y mira cómo cambia el número. Fíjate también qué pasa al "correr" todos los bits una posición: a la izquierda el valor se duplica, a la derecha se divide por dos.
+
+<TableroBits />
+
+## De binario a decimal
+
+Se suman los pesos de los bits en 1. Conviene escribir los pesos arriba hasta que salga de memoria:
+
+```text
+peso:   128  64  32  16   8   4   2   1
+bit:      1   0   1   0   1   0   0   0
+        128     + 32     + 8              = 168
+```
+
+`10101000` es 168. Con práctica, los valores típicos de las redes se reconocen de un vistazo.
+
+## De decimal a binario
+
+El método más rápido para números de hasta 255 es **restar pesos de mayor a menor**:
+
+1. Escribe los pesos: 128, 64, 32, 16, 8, 4, 2, 1.
+2. Para cada peso, de izquierda a derecha: si cabe en lo que queda, pon un 1 y réstalo; si no cabe, pon un 0.
+
+Por ejemplo, 200:
+
+```text
+128 cabe en 200 → 1, quedan 72
+ 64 cabe en 72  → 1, quedan 8
+ 32 no cabe     → 0
+ 16 no cabe     → 0
+  8 cabe en 8   → 1, quedan 0
+  4, 2, 1       → 0 0 0
+200 = 11001000
+```
+
+Hay otro método que sirve para números de cualquier tamaño: dividir por 2 una y otra vez, anotar los restos y leerlos de abajo hacia arriba. Los dos dan el mismo resultado; usa el que te resulte más natural.
+
+Practica las dos direcciones. Cada ejercicio, si te equivocas, muestra los pasos:
+
+<ConversorBases modo="practicar" tipos={["dec-bin", "bin-dec"]} />
+
+## Cuántos valores entran en n bits
+
+Con n bits se pueden formar 2<sup>n</sup> combinaciones distintas. Como una de ellas es el cero, el valor máximo es 2<sup>n</sup> − 1:
+
+| Bits | Combinaciones | Rango | Dónde aparece |
+| --- | --- | --- | --- |
+| 1 | 2 | 0 y 1 | Activado o desactivado |
+| 4 | 16 | 0 a 15 | Un dígito hexadecimal (próxima lección) |
+| 8 | 256 | 0 a 255 | Cada número de una dirección IPv4 |
+| 16 | 65.536 | 0 a 65.535 | Los puertos TCP y UDP |
+| 32 | unos 4.300 millones | 0 a 4.294.967.295 | Una dirección IPv4 completa |
+| 128 | 3,4 × 10<sup>38</sup> | | Una dirección IPv6 |
+
+Cada uno de los cuatro números de una IPv4 es un **<Termino id="octeto">octeto</Termino>**: 8 bits. Por eso van de 0 a 255, y una dirección como 192.168.1.300 no existe. Y por eso también se agotaron las direcciones IPv4: 32 bits dan "solo" 4.300 millones de combinaciones, menos que la cantidad de dispositivos conectados a internet.
+
+<Pregunta id="p08" />
+
+## Los valores que conviene memorizar
+
+En las máscaras de red (las vas a estudiar a fondo en el nivel de redes) aparecen siempre los mismos valores: octetos con unos seguidos desde la izquierda. Vale la pena saberlos de memoria:
+
+| Binario | Decimal |
+| --- | --- |
+| 10000000 | 128 |
+| 11000000 | 192 |
+| 11100000 | 224 |
+| 11110000 | 240 |
+| 11111000 | 248 |
+| 11111100 | 252 |
+| 11111110 | 254 |
+| 11111111 | 255 |
+
+Un truco para reconstruirlos: cada uno es el anterior más el peso del bit que se agrega (128, +64 = 192, +32 = 224, +16 = 240...).
+
+<Consejo>
+Para verificar tus cuentas en una terminal Linux: `echo $((2#11001000))` convierte de binario a decimal (responde 200), y `python3 -c "print(bin(200))"` hace lo contrario (responde `0b11001000`). Pero el objetivo es hacerlo de cabeza: en un examen de certificación o en medio de un incidente no siempre hay calculadora.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Leer los pesos al revés">
+    El bit de la derecha es el que vale 1, y el de la izquierda el que más vale (128 en un byte). Si lees `00000001` como 128, estás leyendo de derecha a izquierda. Escribe los pesos arriba de cada bit hasta que sea automático.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar los ceros a la izquierda en un octeto">
+    En una IP, cada octeto tiene siempre 8 bits: 10 es `00001010`, no `1010`. Al juntar los octetos de una dirección, si a uno le faltan ceros, todos los bits siguientes quedan corridos y el cálculo de la red sale mal.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir 256 con 255">
+    Con 8 bits hay 256 combinaciones, pero el valor máximo es 255, porque se empieza a contar desde 0. Lo mismo con los puertos: 65.536 combinaciones, del 0 al 65.535.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un bit vale 0 o 1; un byte son 8 bits.
+- En binario cada posición vale el doble que la de su derecha: 1, 2, 4, 8, 16, 32, 64, 128.
+- De binario a decimal: sumar los pesos de los bits en 1. De decimal a binario: restar pesos de mayor a menor.
+- Con n bits hay 2^n combinaciones, de 0 a 2^n − 1: un octeto va de 0 a 255, un puerto de 0 a 65.535.
+- Conviene memorizar 128, 192, 224, 240, 248, 252, 254 y 255, los octetos de las máscaras de red.
+</Resumen>

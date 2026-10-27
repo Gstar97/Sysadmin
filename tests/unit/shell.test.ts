@@ -112,4 +112,16 @@ describe('detalles que usa el Nivel 0', () => {
     expect((await uefi.run('lsblk')).out).toContain('/boot/efi')
     expect((await uefi.run('sudo dmidecode -s bios-vendor')).out).toBe('EDK II\n')
   })
+
+  it('sumas de verificación (md5, sha1, sha256, sha512) y base64', async () => {
+    const { run } = await session()
+    expect((await run('echo -n "abc" | md5sum')).out).toBe('900150983cd24fb0d6963f7d28e17f72  -\n')
+    expect((await run('echo -n "abc" | sha1sum')).out).toBe('a9993e364706816aba3e25717850c26c9cd0d89d  -\n')
+    expect((await run('echo -n "abc" | sha256sum')).out).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  -\n')
+    await run('echo hola > a.txt; sha256sum a.txt > a.sha256')
+    expect((await run('sha256sum -c a.sha256')).out).toBe('a.txt: OK\n')
+    await run('echo chau >> a.txt')
+    expect((await run('sha256sum -c a.sha256')).code).toBe(1)
+    expect((await run('echo -n "hola" | base64')).out).toBe('aG9sYQ==\n')
+  })
 })

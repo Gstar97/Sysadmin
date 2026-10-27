@@ -1,0 +1,106 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuántos bits tiene un byte?
+  opciones:
+    - { texto: "8", correcta: true, explicacion: "Un byte son 8 bits; por eso un byte va de 0 a 255." }
+    - { texto: "4", explicacion: "4 bits forman un nibble, medio byte." }
+    - { texto: "10", explicacion: "No hay ninguna unidad estándar de 10 bits." }
+    - { texto: "16", explicacion: "16 bits son 2 bytes." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuánto vale en decimal el número binario 1010?
+  opciones:
+    - { texto: "10", correcta: true, explicacion: "8 + 0 + 2 + 0 = 10." }
+    - { texto: "5", explicacion: "5 es 0101: se leyeron los pesos al revés." }
+    - { texto: "1010", explicacion: "Ese sería el valor si fuera decimal." }
+    - { texto: "12", explicacion: "12 es 1100." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuánto vale 11000000 en decimal?
+  opciones:
+    - { texto: "192", correcta: true, explicacion: "128 + 64 = 192. Es uno de los octetos típicos de las máscaras." }
+    - { texto: "3", explicacion: "3 es 00000011: se leyó de derecha a izquierda." }
+    - { texto: "224", explicacion: "224 es 11100000, con tres unos." }
+    - { texto: "128", explicacion: "128 es 10000000, con un solo uno." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Cómo se escribe 200 en binario (8 bits)?
+  opciones:
+    - { texto: "11001000", correcta: true, explicacion: "128 + 64 + 8 = 200." }
+    - { texto: "11000100", explicacion: "Es 128 + 64 + 4 = 196." }
+    - { texto: "10011001", explicacion: "Es 128 + 16 + 8 + 1 = 153." }
+    - { texto: "00010011", explicacion: "Es 19: los bits de 11001000 están invertidos de orden." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: ¿Cómo se escribe 10 como octeto (8 bits)?
+  opciones:
+    - { texto: "00001010", correcta: true, explicacion: "En un octeto siempre se escriben los 8 bits, con ceros a la izquierda." }
+    - { texto: "1010", explicacion: "Es el valor correcto, pero un octeto tiene 8 bits." }
+    - { texto: "10100000", explicacion: "Eso es 160: los ceros se pusieron a la derecha." }
+    - { texto: "00000010", explicacion: "Eso es 2." }
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuál es el valor máximo que se puede representar con 8 bits?
+  opciones:
+    - { texto: "255", correcta: true, explicacion: "Hay 256 combinaciones, de 0 a 255." }
+    - { texto: "256", explicacion: "256 es la cantidad de combinaciones; como se empieza en 0, el máximo es 255." }
+    - { texto: "128", explicacion: "128 es el peso del bit más alto, no el valor máximo." }
+    - { texto: "99", explicacion: "Eso sería con dos dígitos decimales." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Por qué los puertos TCP van de 0 a 65.535?
+  opciones:
+    - { texto: "Porque el número de puerto ocupa 16 bits: 2^16 = 65.536 combinaciones", correcta: true, explicacion: "El campo de puerto en el encabezado TCP y UDP tiene 16 bits." }
+    - { texto: "Porque es un límite que decidió cada sistema operativo", explicacion: "Lo define el protocolo, igual en todos los sistemas." }
+    - { texto: "Porque 65.535 es el doble de 32.767", explicacion: "El motivo es la cantidad de bits del campo." }
+    - { texto: "Porque un byte llega hasta 65.535", explicacion: "Un byte llega a 255; 65.535 corresponde a 2 bytes." }
+- id: p08
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Cuáles de estas direcciones IPv4 son imposibles?
+  opciones:
+    - { texto: "192.168.1.300", correcta: true, explicacion: "Un octeto no puede pasar de 255." }
+    - { texto: "10.256.0.1", correcta: true, explicacion: "256 no entra en 8 bits." }
+    - { texto: "172.16.0.255", explicacion: "Todos sus octetos están entre 0 y 255." }
+    - { texto: "8.8.8.8", explicacion: "Es una dirección válida (un servidor DNS público)." }
+- id: p09
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para convertir 172 a binario con el método de restar pesos.
+  pasos:
+    - "128 cabe en 172: bit en 1, quedan 44"
+    - "64 no cabe en 44: bit en 0"
+    - "32 cabe en 44: bit en 1, quedan 12"
+    - "16 no cabe en 12: bit en 0"
+    - "8 cabe en 12: bit en 1, quedan 4"
+    - "4 cabe en 4: bit en 1, quedan 0; los pesos 2 y 1 van en 0"
+  explicacion: 172 = 10101100. Se recorren los pesos de mayor a menor, siempre en el mismo orden.
+- id: p10
+  tipo: completar_comando
+  enunciado: En bash, escribe un comando que muestre el valor decimal del número binario 11110000.
+  aceptadas: ['echo $((2#11110000))', 'echo $[2#11110000]']
+  patrones: ['^echo\s+"?\$\(\(\s*2#11110000\s*\)\)"?$']
+  explicacion: "La sintaxis `base#número` dentro de `$(( ))` interpreta el número en esa base. El resultado es 240."
+- id: p11
+  tipo: encontrar_error
+  enunciado: Un compañero convirtió estas máscaras a binario. Marca la línea con el error.
+  archivo: |
+    255 = 11111111
+    252 = 11111100
+    248 = 11111000
+    240 = 11100000
+    192 = 11000000
+  lineas_con_error: [4]
+  explicacion: 240 es 11110000 (128 + 64 + 32 + 16). 11100000 es 224.
+- id: p12
+  tipo: opcion_multiple
+  enunciado: ¿Qué pasa con el valor de un número binario si todos sus bits se corren una posición a la izquierda (agregando un 0 a la derecha)?
+  opciones:
+    - { texto: "Se duplica", correcta: true, explicacion: "Cada bit pasa a una posición que vale el doble. Ejemplo: 0011 (3) pasa a 0110 (6)." }
+    - { texto: "Se divide por dos", explicacion: "Eso pasa al correrlos a la derecha." }
+    - { texto: "Se le suma 1", explicacion: "Correr bits multiplica por 2, no suma 1." }
+    - { texto: "No cambia", explicacion: "Cada bit cambia de peso, así que el valor cambia." }

@@ -1,0 +1,86 @@
+---
+id: n0-m3-l2
+titulo: Hexadecimal y octal
+minutos: 90
+objetivos:
+  - Convertir entre binario, hexadecimal, octal y decimal.
+  - Reconocer dónde aparecen (direcciones MAC, IPv6, colores, permisos de Linux).
+glosario: [hexadecimal, octal, direccion-mac]
+verificado: 2026-10
+---
+
+import hex from './hex.svg?raw'
+import dondeAparece from './donde-aparece.yaml'
+import ejHex from './ej-hex.yaml'
+
+El binario es perfecto para las computadoras, pero incómodo para las personas: una dirección IPv6 en binario tiene 128 dígitos. Por eso, cuando hay que mostrar bytes, se usan dos sistemas más compactos que se convierten a binario sin hacer cuentas: el **hexadecimal** y el **octal**. Los vas a ver en direcciones de red, códigos de error, sumas de verificación y permisos de archivos.
+
+## Hexadecimal: 4 bits por dígito
+
+El **<Termino id="hexadecimal">hexadecimal</Termino>** (base 16) usa dieciséis dígitos: del 0 al 9 y después las letras A (10), B (11), C (12), D (13), E (14) y F (15). Su gran ventaja es que **cada dígito equivale exactamente a 4 bits**, así que un byte siempre se escribe con dos dígitos hexadecimales.
+
+<Diagrama svg={hex} alt="Tabla de los 16 dígitos hexadecimales con su valor en binario de 4 bits y en decimal; ejemplo de 1100 0000 igual a C0 igual a 192; y una dirección MAC dividida en la parte del fabricante y la parte de la placa" pie="Un dígito hexadecimal = 4 bits. Un byte = 2 dígitos hexadecimales." />
+
+Para que no se confunda con un número decimal, el hexadecimal se marca de distintas formas según el contexto: `0xC0` (en programación y en muchas herramientas), `C0h` (en documentación de hardware), `#C0C0C0` (en colores web) o directamente separado por `:` (en direcciones MAC e IPv6).
+
+### Convertir
+
+- **Hexadecimal a binario**: cada dígito se reemplaza por sus 4 bits. `A7` = `1010 0111`.
+- **Binario a hexadecimal**: se agrupan los bits de a 4 **desde la derecha** y cada grupo se reemplaza por su dígito. `11 0101 1110` = `0011 0101 1110` = `35E`.
+- **Hexadecimal a decimal**: cada dígito se multiplica por la potencia de 16 de su posición (1, 16, 256, 4096...). `1F4` = 1 × 256 + 15 × 16 + 4 × 1 = 500. Para un byte, alcanza con: primer dígito × 16 + segundo dígito. `C0` = 12 × 16 + 0 = 192.
+- **Decimal a hexadecimal**: lo más simple es pasar primero a binario y después agrupar de a 4. 200 = `1100 1000` = `C8`.
+
+<ConversorBases />
+
+## Dónde aparece el hexadecimal
+
+- **Direcciones <Termino id="direccion-mac">MAC</Termino>**: el identificador de cada placa de red, de 6 bytes: `52:54:00:4e:66:a1`. Los tres primeros bytes identifican al fabricante (se llaman OUI). Es útil en el trabajo diario: si en la red aparece una MAC que empieza con `08:00:27` es una máquina virtual de VirtualBox, y `00:15:5d` es una de Hyper-V.
+- **Direcciones IPv6**: 128 bits escritos en 8 grupos de 4 dígitos hexadecimales, `2001:0db8:0000:0000:0000:0000:0000:0001`, que se pueden abreviar como `2001:db8::1`. Las vas a estudiar en el nivel de redes.
+- **Códigos de error**: Windows informa muchos errores en hexadecimal. `0x80070005` es "acceso denegado", y es mucho más fácil buscar ese código que la descripción traducida.
+- **Sumas de verificación**: un SHA-256 son 256 bits, que se muestran como 64 dígitos hexadecimales.
+- **Colores**: `#0f766e` son tres bytes: rojo `0f`, verde `76`, azul `6e`.
+- **El contenido de los archivos**: herramientas como `hexdump` y `xxd` muestran cada byte de un archivo en hexadecimal. Sirven para ver caracteres invisibles o investigar un archivo dañado.
+
+<Emparejar ejercicio={dondeAparece} />
+
+## Octal: 3 bits por dígito
+
+El **<Termino id="octal">octal</Termino>** (base 8) usa los dígitos del 0 al 7, y cada uno equivale a **3 bits**. Hoy casi solo aparece en un lugar, pero un lugar muy importante para un sysadmin: **los permisos de Linux**.
+
+Los permisos de un archivo son tres grupos de tres bits: lectura (r), escritura (w) y ejecución (x), para el dueño, el grupo y el resto. Cada grupo de 3 bits es un dígito octal:
+
+| Permisos | Binario | Octal |
+| --- | --- | --- |
+| `---` | 000 | 0 |
+| `r--` | 100 | 4 |
+| `r-x` | 101 | 5 |
+| `rw-` | 110 | 6 |
+| `rwx` | 111 | 7 |
+
+Así, `chmod 750 script.sh` deja los permisos en `rwxr-x---`: el dueño puede todo (7), el grupo lee y ejecuta (5) y el resto, nada (0). La forma rápida de calcularlos: r vale 4, w vale 2 y x vale 1, y se suman los que corresponden a cada grupo. Los permisos tienen un módulo completo en el nivel de Linux; por ahora alcanza con entender que son octal.
+
+<Pregunta id="p08" />
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejHex} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Leer 0x10 como diez">
+    `0x10` es dieciséis: 1 × 16 + 0. El prefijo `0x` indica que lo que sigue está en hexadecimal. Lo mismo pasa con un número que empieza en 0 en muchos lenguajes de programación y archivos de configuración: `0755` se interpreta en octal.
+  </ErrorComun>
+  <ErrorComun titulo="Agrupar los bits desde la izquierda al pasar a hexadecimal">
+    Los grupos de 4 se arman desde la derecha. `110101` es `11 0101` = `35`, no `1101 01` = `D1`. Si faltan bits al grupo de la izquierda, se completan con ceros.
+  </ErrorComun>
+  <ErrorComun titulo='Usar chmod 777 para "arreglar" un problema de permisos'>
+    777 da lectura, escritura y ejecución a cualquier usuario del sistema. Resuelve el síntoma y crea un problema de seguridad mucho más grande. Hay que averiguar qué usuario necesita qué permiso y dar exactamente eso: lo vas a practicar en el nivel de Linux.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Hexadecimal: base 16, dígitos 0-9 y A-F; cada dígito son 4 bits y un byte son 2 dígitos.
+- Para pasar entre hexadecimal y binario no hacen falta cuentas: se reemplaza cada dígito por sus 4 bits, o se agrupan los bits de a 4 desde la derecha.
+- El hexadecimal aparece en direcciones MAC (los primeros 3 bytes son el fabricante), IPv6, códigos de error, sumas de verificación y colores.
+- Octal: base 8, cada dígito son 3 bits. Se usa en los permisos de Linux: r = 4, w = 2, x = 1.
+- `chmod 750` es `rwxr-x---`.
+</Resumen>

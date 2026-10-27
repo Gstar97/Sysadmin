@@ -905,39 +905,118 @@ register(['realpath', 'readlink'], {
   },
 })
 
-async function sha256(text: string): Promise<string> {
+/** MD5 (RFC 1321). WebCrypto no lo incluye porque ya no es seguro, pero md5sum sigue existiendo. */
+function md5(bytes: Uint8Array): string {
+  const K = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 2 ** 32) >>> 0)
+  const S = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21]
+  const len = bytes.length
+  const padded = new Uint8Array(((len + 8) >>> 6) * 64 + 64)
+  padded.set(bytes)
+  padded[len] = 0x80
+  const view = new DataView(padded.buffer)
+  view.setUint32(padded.length - 8, (len * 8) >>> 0, true)
+  view.setUint32(padded.length - 4, Math.floor((len * 8) / 2 ** 32), true)
+  let a0 = 0x67452301
+  let b0 = 0xefcdab89
+  let c0 = 0x98badcfe
+  let d0 = 0x10325476
+  for (let off = 0; off < padded.length; off += 64) {
+    const M = Array.from({ length: 16 }, (_, i) => view.getUint32(off + i * 4, true))
+    let [A, B, C, D] = [a0, b0, c0, d0]
+    for (let i = 0; i < 64; i++) {
+      let F: number
+      let g: number
+      if (i < 16) [F, g] = [(B & C) | (~B & D), i]
+      else if (i < 32) [F, g] = [(D & B) | (~D & C), (5 * i + 1) % 16]
+      else if (i < 48) [F, g] = [B ^ C ^ D, (3 * i + 5) % 16]
+      else [F, g] = [C ^ (B | ~D), (7 * i) % 16]
+      F = (F + A + K[i] + M[g]) >>> 0
+      A = D
+      D = C
+      C = B
+      const sh = S[(i >> 4) * 4 + (i % 4)]
+      B = (B + ((F << sh) | (F >>> (32 - sh)))) >>> 0
+    }
+    a0 = (a0 + A) >>> 0
+    b0 = (b0 + B) >>> 0
+    c0 = (c0 + C) >>> 0
+    d0 = (d0 + D) >>> 0
+  }
+  return [a0, b0, c0, d0].map((w) => [0, 8, 16, 24].map((s2) => ((w >>> s2) & 0xff).toString(16).padStart(2, '0')).join('')).join('')
+}
+
+const HASHES = { md5sum: { algo: 'MD5', hex: 32 }, sha1sum: { algo: 'SHA-1', hex: 40 }, sha256sum: { algo: 'SHA-256', hex: 64 }, sha384sum: { algo: 'SHA-384', hex: 96 }, sha512sum: { algo: 'SHA-512', hex: 128 } } as const
+
+async function digest(algo: string, text: string): Promise<string> {
   const data = new TextEncoder().encode(text)
-  const hash = await crypto.subtle.digest('SHA-256', data)
+  if (algo === 'MD5') return md5(data)
+  const hash = await crypto.subtle.digest(algo, data)
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-register('sha256sum', {
-  usage: 'sha256sum [FILE]...',
+register(Object.keys(HASHES), {
+  usage: 'sha256sum [-c] [FILE]...',
+  summary: '  -c, --check  lee las sumas de un archivo y las verifica',
   async run(ctx) {
+    const { algo, hex } = HASHES[ctx.name as keyof typeof HASHES]
     const check = ctx.args.includes('-c') || ctx.args.includes('--check')
     const inputs = readInputs(ctx, ctx.args.filter((a) => !a.startsWith('-')))
     if (typeof inputs === 'number') return inputs
     if (check) {
       let failed = 0
+      let checked = 0
+      const re = new RegExp(`^([0-9a-fA-F]{${hex}})\\s+\\*?(.+)$`)
       for (const inp of inputs) {
         for (const line of lines(inp.data)) {
-          const m = /^([0-9a-f]{64})\s+\*?(.+)$/.exec(line)
+          const m = re.exec(line)
           if (!m) continue
+          checked++
           try {
             const data = ctx.sys.vfs.readFile(ctx.sh.resolve(m[2]), ctx.sh.cred)
-            const ok = (await sha256(data)) === m[1]
+            const ok = (await digest(algo, data)) === m[1].toLowerCase()
             if (!ok) failed++
             ctx.out(`${m[2]}: ${ok ? 'OK' : 'FAILED'}\n`)
           } catch {
+            ctx.err(`${ctx.name}: ${m[2]}: No such file or directory\n`)
             ctx.out(`${m[2]}: FAILED open or read\n`)
             failed++
           }
         }
       }
-      if (failed) ctx.err(`sha256sum: WARNING: ${failed} computed checksum${failed > 1 ? 's' : ''} did NOT match\n`)
+      if (!checked) {
+        ctx.err(`${ctx.name}: ${inputs[0]?.name ?? '-'}: no properly formatted checksum lines found\n`)
+        return 1
+      }
+      if (failed) ctx.err(`${ctx.name}: WARNING: ${failed} computed checksum${failed > 1 ? 's' : ''} did NOT match\n`)
       return failed ? 1 : 0
     }
-    for (const inp of inputs) ctx.out(`${await sha256(inp.data)}  ${inp.name}\n`)
+    for (const inp of inputs) ctx.out(`${await digest(algo, inp.data)}  ${inp.name}\n`)
+    return 0
+  },
+})
+
+register('base64', {
+  usage: 'base64 [-d] [FILE]',
+  summary: '  -d, --decode  decodifica',
+  run(ctx) {
+    const decode = ctx.args.some((a) => a === '-d' || a === '--decode')
+    const inputs = readInputs(ctx, ctx.args.filter((a) => !a.startsWith('-')))
+    if (typeof inputs === 'number') return inputs
+    for (const inp of inputs) {
+      if (decode) {
+        try {
+          const bin = atob(inp.data.replace(/\s+/g, ''))
+          ctx.out(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))))
+        } catch {
+          ctx.err('base64: invalid input\n')
+          return 1
+        }
+      } else {
+        const bytes = new TextEncoder().encode(inp.data)
+        const b64 = btoa(String.fromCharCode(...bytes))
+        ctx.out((b64.match(/.{1,76}/g) ?? ['']).join('\n') + '\n')
+      }
+    }
     return 0
   },
 })

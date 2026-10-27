@@ -1,0 +1,63 @@
+tipo: terminal
+shell: bash
+titulo: Hexadecimal y octal en un servidor
+descripcion: >-
+  Busca el hexadecimal y el octal donde aparecen en un servidor real, y usa la terminal para
+  comprobar tus conversiones.
+estado_inicial:
+  distro: rocky
+  hostname: srv-hex01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+  archivos:
+    /home/estudiante/notas.txt: { contenido: "Hola\n" }
+pasos:
+  - consigna: Mira la dirección MAC de la placa de red con `ip link`. Es el valor que aparece después de `link/ether`.
+    verificar:
+      - { comando_usado: 'ip\s+(-\w+\s+)*l(ink)?\b' }
+    pistas:
+      - "`ip link`"
+    solucion: [ip link]
+    explicacion: >-
+      La MAC tiene 6 bytes escritos en hexadecimal. Los tres primeros, `52:54:00`, identifican al
+      fabricante: en este caso, una placa virtual de QEMU/KVM. VirtualBox usa `08:00:27` y Hyper-V,
+      `00:15:5d`.
+  - consigna: Convierte el hexadecimal C0 a decimal con `echo $((16#C0))`.
+    verificar:
+      - { salida_contiene: "192" }
+    pistas:
+      - "`echo $((16#C0))`"
+    solucion: [echo $((16#C0))]
+    explicacion: C0 = 1100 0000 = 192. La sintaxis `base#número` sirve para cualquier base entre 2 y 64.
+  - consigna: 'Ahora al revés: muestra 172 en hexadecimal con `printf "%X\n" 172`.'
+    verificar:
+      - { salida_contiene: AC }
+    pistas:
+      - "`printf \"%X\\n\" 172`"
+    solucion: ['printf "%X\n" 172']
+    explicacion: 172 = 1010 1100 = AC. `%X` muestra en hexadecimal con mayúsculas, `%x` con minúsculas y `%o` en octal.
+  - consigna: Mira los bytes del archivo `notas.txt` en hexadecimal con `hexdump -C notas.txt`.
+    verificar:
+      - { comando_usado: 'hexdump|xxd|od' }
+    pistas:
+      - "`hexdump -C notas.txt`"
+    solucion: [hexdump -C notas.txt]
+    explicacion: >-
+      Cada letra es un byte: `48` es la H, `6f` la o, `6c` la l, `61` la a y `0a` el salto de
+      línea. A la derecha, hexdump muestra los mismos bytes como texto. Vas a volver a esto en la
+      lección de codificación.
+  - consigna: Cambia los permisos del archivo a `640` con `chmod 640 notas.txt`.
+    verificar:
+      - { archivo: /home/estudiante/notas.txt, modo: "0640" }
+    pistas:
+      - "`chmod 640 notas.txt`"
+    solucion: [chmod 640 notas.txt]
+    explicacion: 6 = 110 = rw- (dueño), 4 = 100 = r-- (grupo), 0 = 000 = --- (resto).
+  - consigna: Comprueba los permisos en octal y en letras con `stat -c "%a %A" notas.txt`.
+    verificar:
+      - { salida_contiene: "640 -rw-r-----" }
+    pistas:
+      - "`stat -c \"%a %A\" notas.txt`"
+    solucion: ['stat -c "%a %A" notas.txt']
+    explicacion: "`%a` muestra los permisos en octal y `%A` en letras. Son la misma información en dos formatos."
