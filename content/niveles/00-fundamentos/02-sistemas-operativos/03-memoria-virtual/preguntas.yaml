@@ -1,0 +1,102 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué es la memoria virtual?
+  opciones:
+    - { texto: "Un espacio de direcciones propio para cada proceso, que el kernel traduce a posiciones reales de la RAM o del swap", correcta: true, explicacion: "Así cada proceso queda aislado de los demás y el kernel decide dónde está cada página." }
+    - { texto: "La memoria de una máquina virtual", explicacion: "El nombre se parece, pero son conceptos distintos." }
+    - { texto: "Otro nombre del swap", explicacion: "El swap es una de las ubicaciones posibles de las páginas, no la memoria virtual en sí." }
+    - { texto: "Memoria RAM que todavía no se compró", explicacion: "No tiene que ver con la cantidad física de memoria." }
+- id: p02
+  tipo: opcion_multiple
+  enunciado: ¿Qué es un fallo de página?
+  opciones:
+    - { texto: "El aviso que recibe el kernel cuando un proceso usa una página que no está en la RAM", correcta: true, explicacion: "Es parte del funcionamiento normal; el problema es cuando obliga a leer el swap todo el tiempo." }
+    - { texto: "Un error que cierra el programa", explicacion: "Eso sería una violación de segmento: acceder a memoria que no le pertenece al proceso." }
+    - { texto: "Un módulo de RAM dañado", explicacion: "Un fallo de página no tiene que ver con fallas del hardware." }
+    - { texto: "Una página web que no carga", explicacion: "Aquí página es un bloque de memoria." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué una biblioteca usada por cien procesos no ocupa cien veces su tamaño en la RAM?
+  opciones:
+    - { texto: "Porque se carga una sola vez y aparece en el mapa de memoria virtual de todos los procesos", correcta: true, explicacion: "La memoria virtual permite que varias páginas virtuales apunten al mismo marco de RAM." }
+    - { texto: "Porque se comprime", explicacion: "No se comprime; se comparte." }
+    - { texto: "Porque se guarda en el swap", explicacion: "El swap no tiene que ver con compartir." }
+    - { texto: "Porque cada proceso usa una parte distinta", explicacion: "Todos usan la biblioteca completa, compartida." }
+- id: p04
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: Según esta salida de `free -h`, ¿le falta memoria al servidor?
+  salida: |2
+                   total        used        free      shared  buff/cache   available
+    Mem:            31Gi        28Gi       0.3Gi       210Mi       2.9Gi       2.1Gi
+    Swap:          8.0Gi       6.7Gi       1.3Gi
+  opciones:
+    - { texto: "Sí: queda poca memoria disponible y el swap está casi lleno", correcta: true, explicacion: "Con 6,7 GiB en el swap y apenas 2,1 GiB disponibles, el sistema está usando el disco como memoria de forma permanente." }
+    - { texto: "No: tiene 2,9 GiB de caché que se pueden liberar", explicacion: "La caché ya está incluida en available; el uso de swap muestra el problema." }
+    - { texto: "No: el swap todavía tiene 1,3 GiB libres", explicacion: "Que el swap tenga lugar no significa que esté bien usarlo así." }
+    - { texto: "No se puede saber", explicacion: "available y el uso de swap alcanzan para saberlo." }
+- id: p05
+  tipo: interpretar_salida
+  enunciado: Según esta salida de `free -h`, ¿le falta memoria al servidor?
+  salida: |2
+                   total        used        free      shared  buff/cache   available
+    Mem:            31Gi       6.2Gi       0.4Gi       180Mi        24Gi        24Gi
+    Swap:          8.0Gi        12Mi       8.0Gi
+  opciones:
+    - { texto: "No: hay 24 GiB disponibles; la memoria libre es poca porque se usa como caché de disco", correcta: true, explicacion: "La caché se libera en cuanto un programa la necesita; el swap casi no se usa." }
+    - { texto: "Sí: solo quedan 0,4 GiB libres", explicacion: "free no cuenta la caché; available sí, y es alta." }
+    - { texto: "Sí: hay 12 MiB en el swap", explicacion: "Un uso mínimo de swap es normal; el sistema movió páginas que nadie usaba." }
+    - { texto: "Sí: la caché ocupa 24 GiB", explicacion: "La caché aprovecha memoria que de otro modo estaría sin usar." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Por qué un servidor que usa el swap todo el tiempo se vuelve tan lento?
+  opciones:
+    - { texto: "Porque cada vez que un proceso necesita una página que está en el swap, espera a que se lea del disco", correcta: true, explicacion: "El disco es entre mil y cien mil veces más lento que la RAM." }
+    - { texto: "Porque el swap usa mucha CPU", explicacion: "El problema es la espera del disco, no la CPU." }
+    - { texto: "Porque el swap borra la caché del procesador", explicacion: "No tiene relación con la caché del procesador." }
+    - { texto: "Porque el swap tiene un límite de velocidad configurado", explicacion: "No hay tal límite; la lentitud es la del propio disco." }
+- id: p07
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un script de reportes consume toda la memoria y el OOM killer termina a la base de datos. ¿Por qué eligió la base de datos?
+  opciones:
+    - { texto: "Porque era el proceso que más memoria ocupaba", correcta: true, explicacion: "El OOM killer elige sobre todo por memoria ocupada, no por quién causó el problema." }
+    - { texto: "Porque la base de datos causó el problema", explicacion: "El que pidió la memoria fue el script; la base de datos fue la víctima." }
+    - { texto: "Porque es el proceso con el PID más bajo", explicacion: "El PID no interviene en la elección." }
+    - { texto: "Porque las bases de datos nunca tienen prioridad", explicacion: "No hay una regla así; se puede ajustar la prioridad de cada proceso con oom_score_adj." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe un comando que muestre solo los mensajes del kernel del journal (donde aparecen los avisos del OOM killer).
+  aceptadas: [journalctl -k, sudo journalctl -k, journalctl --dmesg, sudo journalctl --dmesg, dmesg, sudo dmesg]
+  explicacion: "`journalctl -k` (o `dmesg`) muestra los mensajes del kernel. Combinado con `grep -i \"out of memory\"` encuentra las intervenciones del OOM killer."
+- id: p09
+  tipo: interpretar_salida
+  enunciado: ¿Cuánta memoria real ocupa este proceso?
+  salida: |2
+      PID USER      VIRT    RES  %MEM COMMAND
+     3104 tomcat   8.2g   1.1g  14.1 java
+  opciones:
+    - { texto: "Alrededor de 1,1 GB (RES)", correcta: true, explicacion: "RES es la memoria residente, la que ocupa de verdad en la RAM." }
+    - { texto: "8,2 GB (VIRT)", explicacion: "VIRT es la memoria virtual reservada, mucho mayor que la usada." }
+    - { texto: "9,3 GB (la suma)", explicacion: "RES ya está incluida dentro de VIRT; no se suman." }
+    - { texto: "14,1 GB", explicacion: "14,1 es un porcentaje de la RAM total, no un tamaño." }
+- id: p10
+  tipo: encontrar_error
+  enunciado: Estas son las conclusiones de un informe sobre un servidor. Marca la línea incorrecta.
+  archivo: |
+    El servicio se cayó a las 3:12 sin dejar errores en su propio log.
+    El kernel registró "Out of memory: Killed process" para ese servicio.
+    La solución definitiva es duplicar el tamaño del swap.
+    Hay que revisar qué proceso consumió la memoria a esa hora.
+  lineas_con_error: [3]
+  explicacion: Más swap no resuelve una falta real de memoria; solo vuelve el servidor más lento antes de llegar al mismo punto. Hay que reducir el consumo o agregar RAM.
+- id: p11
+  tipo: opcion_multiple
+  enunciado: ¿Cómo se llama el swap en Windows?
+  opciones:
+    - { texto: "Archivo de paginación (pagefile.sys)", correcta: true, explicacion: "Cumple la misma función que el swap de Linux." }
+    - { texto: "hiberfil.sys", explicacion: "Es el archivo de hibernación, que guarda la memoria al hibernar." }
+    - { texto: "Papelera de reciclaje", explicacion: "No tiene relación con la memoria." }
+    - { texto: "Caché de DNS", explicacion: "Es una caché de nombres de red." }

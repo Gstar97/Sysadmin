@@ -1,0 +1,108 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Estás en /var/log. ¿A qué carpeta lleva el comando `cd ../lib`?
+  opciones:
+    - { texto: "/var/lib", correcta: true, explicacion: "`..` sube a /var y desde ahí se entra a lib." }
+    - { texto: "/lib", explicacion: "Para eso habría que subir dos niveles o usar la ruta absoluta /lib." }
+    - { texto: "/var/log/lib", explicacion: "Eso sería cd lib, sin los dos puntos." }
+    - { texto: "/usr/lib", explicacion: "No hay nada en la ruta que lleve a /usr." }
+- id: p02
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Cuáles de estas rutas son absolutas?
+  opciones:
+    - { texto: "/etc/hosts", correcta: true, explicacion: "Empieza en la raíz /." }
+    - { texto: "C:\\Users\\ana\\Documents", correcta: true, explicacion: "En Windows, una ruta absoluta empieza con la letra de la unidad." }
+    - { texto: "documentos/inventario.txt", explicacion: "Es relativa: depende de la carpeta actual." }
+    - { texto: "../etc", explicacion: "Es relativa: parte de la carpeta actual y sube un nivel." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿En qué carpeta de Linux están los archivos de configuración del sistema y los servicios?
+  opciones:
+    - { texto: "/etc", correcta: true, explicacion: "Por ejemplo /etc/hosts, /etc/fstab y /etc/ssh/sshd_config." }
+    - { texto: "/var", explicacion: "/var guarda datos que cambian: registros, bases de datos, colas." }
+    - { texto: "/usr", explicacion: "/usr guarda los programas y sus bibliotecas." }
+    - { texto: "/home", explicacion: "/home guarda las carpetas personales de los usuarios." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: Un servidor se quedó sin espacio en disco. ¿En qué carpeta conviene buscar primero?
+  opciones:
+    - { texto: "/var, sobre todo /var/log y /var/lib", correcta: true, explicacion: "Los registros y los datos de los servicios son lo que más crece en un servidor." }
+    - { texto: "/etc", explicacion: "Los archivos de configuración son pequeños." }
+    - { texto: "/proc", explicacion: "/proc no está en el disco: lo genera el kernel en memoria." }
+    - { texto: "/bin", explicacion: "Los programas no crecen solos; cambian con las actualizaciones." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Necesitas copiar una imagen ISO de 6 GB a una memoria USB que vas a usar en Windows, macOS y Linux. ¿Con qué sistema de archivos la formateas?
+  opciones:
+    - { texto: exFAT, correcta: true, explicacion: "Admite archivos grandes y funciona en los tres sistemas." }
+    - { texto: FAT32, explicacion: "No admite archivos de más de 4 GiB." }
+    - { texto: XFS, explicacion: "Windows y macOS no lo leen." }
+    - { texto: NTFS, explicacion: "macOS lo lee pero no escribe sin programas adicionales; para todos, exFAT es mejor." }
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué sistema de archivos usa por defecto Rocky Linux y qué limitación importante tiene?
+  opciones:
+    - { texto: "XFS; se puede agrandar pero no achicar", correcta: true, explicacion: "Por eso conviene planificar los tamaños y usar LVM." }
+    - { texto: "ext4; no admite archivos de más de 4 GiB", explicacion: "Rocky usa XFS, y el límite de 4 GiB es de FAT32." }
+    - { texto: "NTFS; no tiene permisos", explicacion: "NTFS es de Windows, y sí tiene permisos." }
+    - { texto: "Btrfs; no tiene journal", explicacion: "Rocky usa XFS." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: Según esta línea de `ls -l`, ¿quién puede leer el archivo?
+  salida: |
+    -rw-r----- 1 root wheel 2210 Oct 27 08:30 clave_backup.conf
+  opciones:
+    - { texto: "root (lectura y escritura) y los miembros del grupo wheel (solo lectura)", correcta: true, explicacion: "rw- es del dueño, r-- del grupo y --- del resto: nadie más puede leerlo." }
+    - { texto: "Cualquier usuario", explicacion: "El último grupo de permisos (el resto) es ---: sin acceso." }
+    - { texto: "Solo root", explicacion: "El grupo tiene r: los miembros de wheel también pueden leerlo." }
+    - { texto: "Nadie, porque no tiene x", explicacion: "x es para ejecutar; para leer alcanza con r." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra la carpeta en la que estás parado.
+  aceptadas: [pwd]
+  explicacion: "`pwd` (print working directory) muestra la ruta absoluta de la carpeta actual."
+- id: p09
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: Un usuario recibió estos adjuntos. Según `file`, ¿cuál es peligroso abrir en Windows?
+  salida: |
+    contrato.docx:   Microsoft Word 2007+
+    factura.pdf:     PE32+ executable (GUI) x86-64, for MS Windows
+    logo.png:        PNG image data, 1920 x 1080, 8-bit/color RGBA
+    planilla.xlsx:   Microsoft Excel 2007+
+  opciones:
+    - { texto: "factura.pdf: es un ejecutable de Windows disfrazado de PDF", correcta: true, explicacion: "El contenido es un programa, no un documento; el nombre está puesto para engañar." }
+    - { texto: "logo.png, porque las imágenes pueden ser virus", explicacion: "file confirma que es una imagen PNG real." }
+    - { texto: "contrato.docx, porque es de Word", explicacion: "file confirma que es un documento de Word; puede tener macros, pero no es un ejecutable disfrazado." }
+    - { texto: "Ninguno: las extensiones son correctas", explicacion: "La extensión de factura.pdf no coincide con su contenido real." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: ¿Qué guarda el inodo de un archivo en Linux?
+  opciones:
+    - { texto: "Dueño, grupo, permisos, tamaño, fechas y dónde está el contenido en el disco", correcta: true, explicacion: "Son los metadatos que muestran ls -l y stat." }
+    - { texto: "El nombre del archivo", explicacion: "El nombre está en la carpeta, que apunta al inodo." }
+    - { texto: "Una copia de seguridad del contenido", explicacion: "El inodo no guarda copias." }
+    - { texto: "La extensión que define su tipo", explicacion: "Linux no usa la extensión para definir el tipo." }
+- id: p11
+  tipo: ordenar_pasos
+  enunciado: Estás en /home/estudiante y quieres llegar a /var/log y después volver a tu carpeta. Ordena los comandos.
+  pasos:
+    - pwd
+    - cd /var/log
+    - ls -l
+    - cd ~
+  explicacion: pwd confirma dónde estás, cd /var/log usa una ruta absoluta, ls -l muestra el contenido con detalle y cd ~ vuelve a tu carpeta personal.
+- id: p12
+  tipo: encontrar_error
+  enunciado: Estos son apuntes de un estudiante. Marca la línea incorrecta.
+  archivo: |
+    En Linux todo cuelga de la raíz /.
+    Los discos se montan en carpetas del árbol.
+    Linux no distingue entre Informe.txt e informe.txt.
+    La extensión no define el tipo real de un archivo.
+  lineas_con_error: [3]
+  explicacion: Linux distingue mayúsculas y minúsculas; son dos archivos distintos. El que no las distingue es Windows.

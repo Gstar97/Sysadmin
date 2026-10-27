@@ -1,0 +1,66 @@
+tipo: terminal
+shell: bash
+titulo: La base de datos se cayó de madrugada
+descripcion: >-
+  A las 3 de la mañana el sistema de ventas dejó de funcionar porque la base de datos se
+  detuvo. Ya la volvieron a iniciar y todo funciona. Te piden averiguar qué pasó para que no se
+  repita.
+estado_inicial:
+  distro: rocky
+  hostname: srv-ventas01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+  journal:
+    - { unidad: kernel, mensaje: "python3 invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0", prioridad: warning, hace_minutos: 312 }
+    - { unidad: kernel, mensaje: "Out of memory: Killed process 2218 (mariadbd) total-vm:6812448kB, anon-rss:3105736kB, file-rss:0kB, shmem-rss:0kB, UID:27 pgtables:6716kB oom_score_adj:0", prioridad: err, hace_minutos: 312 }
+    - { unidad: mariadb.service, mensaje: "mariadb.service: A process of this unit has been killed by the OOM killer.", prioridad: warning, hace_minutos: 312 }
+    - { unidad: mariadb.service, mensaje: "mariadb.service: Main process exited, code=killed, status=9/KILL", prioridad: err, hace_minutos: 312 }
+    - { unidad: mariadb.service, mensaje: "mariadb.service: Failed with result 'oom-kill'.", prioridad: err, hace_minutos: 312 }
+    - { unidad: crond.service, mensaje: "(contabilidad) CMD (python3 /home/contabilidad/reporte_mensual.py)", prioridad: info, hace_minutos: 330 }
+pasos:
+  - consigna: Mira cómo está la memoria ahora con `free -h`.
+    verificar:
+      - { comando_usado: '^\s*free' }
+    pistas:
+      - "`free -h`"
+    solucion: [free -h]
+    explicacion: >-
+      Ahora la memoria está bien: hay bastante disponible y el swap no se usa. Lo que pasó a la
+      madrugada ya no se ve aquí; hay que buscarlo en los registros.
+  - consigna: >-
+      Busca en los mensajes del kernel si actuó el OOM killer con
+      `sudo journalctl -k | grep -i "out of memory"`.
+    verificar:
+      - { salida_contiene: Killed process }
+    pistas:
+      - "`journalctl -k` muestra solo los mensajes del kernel; `grep -i` busca sin importar mayúsculas."
+      - "`sudo journalctl -k | grep -i \"out of memory\"`"
+    solucion: ['sudo journalctl -k | grep -i "out of memory"']
+    explicacion: >-
+      El kernel se quedó sin memoria y terminó el proceso `mariadbd` (PID 2218), que ocupaba unos
+      3 GB de memoria real (*anon-rss: 3105736kB*). Lo eligió porque era el que más memoria usaba,
+      no porque fuera el culpable.
+  - consigna: >-
+      Averigua qué proceso pidió la memoria que faltaba: busca la línea que contiene
+      `invoked oom-killer` con `sudo journalctl -k | grep oom-killer`.
+    verificar:
+      - { salida_contiene: invoked oom-killer }
+    pistas:
+      - "`sudo journalctl -k | grep oom-killer`"
+    solucion: [sudo journalctl -k | grep oom-killer]
+    explicacion: >-
+      Fue un `python3`. Justo antes, el registro de cron muestra que a esa hora arrancó
+      `reporte_mensual.py` de contabilidad. El reporte fue pidiendo cada vez más memoria hasta
+      agotarla, y el kernel terminó a la base de datos para salvar al resto del sistema.
+  - consigna: Confirma qué registró systemd sobre la base de datos con `sudo journalctl -u mariadb`.
+    verificar:
+      - { comando_usado: 'journalctl.*-u\s*mariadb' }
+    pistas:
+      - "`sudo journalctl -u mariadb`"
+    solucion: [sudo journalctl -u mariadb]
+    explicacion: >-
+      systemd indica *Failed with result 'oom-kill'*: confirma la causa. Las soluciones posibles
+      son correr el reporte en otro servidor o en un horario sin carga, limitar cuánta memoria
+      puede usar (systemd lo permite con `MemoryMax`), o agregar RAM si el servidor realmente
+      la necesita.

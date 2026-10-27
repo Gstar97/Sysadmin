@@ -1,0 +1,89 @@
+tipo: terminal
+shell: bash
+titulo: Recorrer el servidor y revisar unos adjuntos
+descripcion: >-
+  Tus primeros pasos en la terminal: moverte por el árbol de directorios con rutas absolutas y
+  relativas, y revisar unos archivos que llegaron por correo a la carpeta de descargas.
+estado_inicial:
+  distro: rocky
+  hostname: srv-archivos
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+  archivos:
+    /home/estudiante/documentos/inventario.txt: { contenido: "Servidor: srv-archivos\nCPU: 2 núcleos\nRAM: 4 GB\n" }
+    /home/estudiante/descargas/factura_octubre.pdf: { contenido: "MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00This program cannot be run in DOS mode.\r\n" }
+    /home/estudiante/descargas/foto_equipo.jpg: { contenido: "\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00" }
+    /home/estudiante/descargas/presupuesto.txt: { contenido: "%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<< /Type /Catalog >>\nendobj\n" }
+pasos:
+  - consigna: Muestra en qué directorio estás con `pwd` (*print working directory*).
+    verificar:
+      - { comando_usado: '^\s*pwd' }
+    pistas:
+      - "`pwd`"
+    solucion: [pwd]
+    explicacion: Al iniciar sesión, la terminal arranca en tu carpeta personal, `/home/estudiante`.
+  - consigna: Lista lo que hay en ella con `ls`.
+    verificar:
+      - { comando_usado: '^\s*ls' }
+    pistas:
+      - "`ls`"
+    solucion: [ls]
+    explicacion: Hay dos carpetas, `descargas` y `documentos`.
+  - consigna: Ve a la carpeta de registros del sistema con una **ruta absoluta**, `cd /var/log`.
+    verificar:
+      - { directorio_actual: /var/log }
+    pistas:
+      - Una ruta absoluta empieza con `/` y funciona desde cualquier lugar.
+      - "`cd /var/log`"
+    solucion: [cd /var/log]
+    explicacion: El prompt cambia y ahora muestra `log`, la carpeta actual.
+  - consigna: Lista su contenido con detalle usando `ls -l`.
+    verificar:
+      - { comando_usado: '^\s*ls\s+-\w*l' }
+    pistas:
+      - "`ls -l`"
+    solucion: [ls -l]
+    explicacion: >-
+      Cada línea muestra tipo y permisos, cantidad de enlaces, dueño, grupo, tamaño, fecha de
+      modificación y nombre. `messages` y `secure` son los registros principales de Rocky Linux;
+      fíjate que `secure` solo lo puede leer root.
+  - consigna: >-
+      Ahora ve a `/etc` con una **ruta relativa**: desde `/var/log`, sube dos niveles con `..` y
+      entra a `etc`: `cd ../../etc`.
+    verificar:
+      - { directorio_actual: /etc }
+    pistas:
+      - "`..` es la carpeta de arriba: desde `/var/log`, `..` es `/var` y `../..` es `/`."
+      - "`cd ../../etc`"
+    solucion: [cd ../../etc]
+    explicacion: Una ruta relativa se interpreta desde la carpeta actual. Aquí era más corto escribir `cd /etc`, pero las rutas relativas son muy prácticas dentro de un proyecto.
+  - consigna: Vuelve a la carpeta de descargas de tu usuario con `cd ~/descargas` (`~` es tu carpeta personal).
+    verificar:
+      - { directorio_actual: /home/estudiante/descargas }
+    pistas:
+      - "`cd ~/descargas`"
+    solucion: [cd ~/descargas]
+    explicacion: "`~` se reemplaza por `/home/estudiante`. `cd` sin nada también te lleva a tu carpeta personal."
+  - consigna: >-
+      Revisa qué tipo de archivo es cada uno de verdad con `file *` (el asterisco significa "todos
+      los archivos de esta carpeta").
+    verificar:
+      - { salida_contiene: PE32 }
+    pistas:
+      - "`file *`"
+    solucion: [file *]
+    explicacion: >-
+      `file` mira el contenido, no el nombre. La "factura" en PDF es en realidad un **ejecutable de
+      Windows**: un intento de engaño clásico. En Windows, con las extensiones ocultas, alguien la
+      habría abierto con doble clic. En cambio `presupuesto.txt` es un PDF real con la extensión
+      equivocada: inofensivo, solo mal nombrado.
+  - consigna: Mira todos los metadatos de `presupuesto.txt` con `stat presupuesto.txt`.
+    verificar:
+      - { comando_usado: 'stat\s+.*presupuesto' }
+    pistas:
+      - "`stat presupuesto.txt`"
+    solucion: [stat presupuesto.txt]
+    explicacion: >-
+      `stat` muestra lo que el sistema de archivos guarda sobre el archivo, además del contenido:
+      tamaño, número de inodo, permisos, dueño, grupo y fechas.

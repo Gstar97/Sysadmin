@@ -1,0 +1,110 @@
+---
+id: n0-m2-l3
+titulo: Memoria virtual
+minutos: 90
+objetivos:
+  - Explicar memoria virtual, páginas y swap.
+  - Entender qué hace el OOM killer cuando se agota la memoria.
+  - Interpretar el uso de memoria de un sistema sin confundir caché con memoria ocupada.
+glosario: [memoria-virtual, pagina, swap, oom-killer, cache-disco]
+verificado: 2026-10
+---
+
+import paginas from './paginas.svg?raw'
+import ejOom from './ej-oom.yaml'
+
+En el módulo anterior viste que cuando la RAM se llena el servidor se pone lento y, en el peor caso, un proceso desaparece. En esta lección vas a ver el mecanismo que hay detrás, la memoria virtual, y a leer los registros que deja el sistema cuando la memoria se agota, que es lo que vas a hacer en un incidente real.
+
+## Cada proceso tiene su propio mapa de memoria
+
+Ningún proceso ve la memoria física directamente. Cada uno recibe un espacio de direcciones propio, la **<Termino id="memoria-virtual">memoria virtual</Termino>**, como si tuviera toda la memoria para él solo. El kernel y el procesador (con un componente llamado MMU) traducen cada dirección virtual a la posición real en la RAM.
+
+La memoria se maneja en bloques de tamaño fijo llamados **<Termino id="pagina">páginas</Termino>**, normalmente de 4 KiB. El kernel lleva una tabla por proceso que dice dónde está cada página: en un marco de la RAM, en el disco o en ningún lado todavía.
+
+<Diagrama svg={paginas} alt="Dos procesos con sus páginas virtuales apuntando a marcos de la RAM física; una biblioteca compartida aparece una sola vez en la RAM, una página está en el swap y otra todavía no existe" pie="Las páginas de cada proceso pueden estar en cualquier lugar de la RAM, en el swap o todavía sin crear." />
+
+Este esquema resuelve varios problemas a la vez:
+
+- **Aislamiento**: un proceso no puede ni siquiera nombrar la memoria de otro, porque sus direcciones solo existen en su propio mapa.
+- **Ahorro**: una biblioteca que usan cien procesos (como glibc) está una sola vez en la RAM y aparece en el mapa de todos.
+- **Reservar no es usar**: un programa puede pedir 2 GB y el kernel solo le asigna RAM real a medida que escribe en cada página. Por eso la memoria "virtual" de un proceso (VSZ en `ps`) suele ser mucho más grande que la que ocupa de verdad (RSS).
+- **Swap**: las páginas que se usan poco se pueden mover al disco para hacer lugar.
+
+## Fallos de página y swap
+
+Cuando un proceso usa una página que no está en la RAM, el procesador avisa al kernel con un **fallo de página** (*page fault*). No es un error: es parte del funcionamiento normal.
+
+- Si la página nunca se había usado, el kernel le asigna un marco libre de RAM y listo. Es rapidísimo.
+- Si la página estaba en el **<Termino id="swap">swap</Termino>**, el kernel tiene que leerla del disco. El proceso queda esperando todo ese tiempo: milisegundos en un disco rígido, decenas de microsegundos en un SSD. Si pasa miles de veces por segundo, el sistema se arrastra.
+
+El swap puede ser una partición o un archivo. Rocky Linux crea por defecto un volumen de swap (lo viste en `lsblk` como `rl-swap`), Ubuntu usa un archivo llamado `/swap.img` y Windows usa el **archivo de paginación** `C:\pagefile.sys`.
+
+<Nota>
+Tener swap no es malo: le permite al sistema sacar de la RAM páginas que nadie usa (por ejemplo, de un servicio que arranca y casi no trabaja) y dejar ese lugar para la caché de disco. Lo malo es necesitarlo todo el tiempo porque la RAM no alcanza.
+</Nota>
+
+## La caché de disco
+
+Como viste en el módulo anterior, la RAM que los programas no usan se aprovecha como **<Termino id="cache-disco">caché de disco</Termino>** (en Linux, *page cache*): copias de archivos leídos hace poco. Es memoria "ocupada" que se libera en el acto cuando un programa la necesita. Por eso las herramientas distinguen:
+
+| Herramienta | Memoria realmente usada | Caché que se puede liberar | Lo que se puede usar todavía |
+| --- | --- | --- | --- |
+| `free -h` en Linux | used | buff/cache | **available** |
+| Administrador de tareas de Windows | En uso | En caché | **Disponible** |
+
+La pregunta "¿le falta memoria a este servidor?" se contesta mirando la memoria **disponible** y el uso de swap, nunca la memoria "libre".
+
+## Ver la memoria virtual en acción
+
+Este simulador tiene 12 marcos de RAM y 4 espacios de swap. Prueba esta secuencia:
+
+1. Toca **Leer un archivo grande** un par de veces: la memoria libre se convierte en caché.
+2. Haz que el **reporte mensual** pida memoria varias veces. Fíjate en el registro: primero ocupa la memoria libre, después el kernel descarta caché y después empieza a mover páginas poco usadas al swap.
+3. Toca **usar** en una página que quedó en el swap: es un fallo de página que obliga a leer el disco.
+4. Sigue pidiendo memoria con el reporte hasta que no quede lugar ni en la RAM ni en el swap.
+
+<SimuladorMemoria />
+
+## El OOM killer
+
+Cuando la RAM y el swap se agotan y un proceso pide más memoria, el kernel no tiene de dónde sacarla. En Linux, en ese momento actúa el **<Termino id="oom-killer">OOM killer</Termino>** (*Out Of Memory*): elige un proceso y lo termina con SIGKILL para recuperar su memoria.
+
+Para elegir, calcula un puntaje para cada proceso basado sobre todo en cuánta memoria ocupa. Por eso casi siempre termina al proceso más grande, que suele ser el más importante del servidor (la base de datos, la aplicación principal), aunque el que causó el problema haya sido otro. Cada vez que actúa, deja un registro en los mensajes del kernel como este:
+
+```text
+python3 invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0
+Out of memory: Killed process 2218 (mariadbd) total-vm:6812448kB, anon-rss:3105736kB, ...
+```
+
+La primera línea dice qué proceso pidió memoria cuando ya no quedaba (*invoked oom-killer*); la segunda, a quién terminó y cuánta memoria liberó (*anon-rss* es la memoria real que ocupaba).
+
+Ubuntu, además, incluye **systemd-oomd**, que actúa antes que el kernel: si detecta que el sistema pasa demasiado tiempo esperando por falta de memoria, termina procesos para evitar que todo se arrastre durante minutos. Sus decisiones quedan en `journalctl -u systemd-oomd`.
+
+<Pregunta id="p07" />
+
+## Practicar
+
+<Terminal ejercicio={ejOom} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"Linux se está comiendo toda la RAM"'>
+    Es la caché de disco, y es una buena noticia: la RAM que no se usa no sirve para nada, y el sistema la aprovecha para acelerar el acceso a los archivos. En `free -h`, mira la columna *available*. Si es alta, al servidor no le falta memoria.
+  </ErrorComun>
+  <ErrorComun titulo="Un servicio se cae sin ningún error en su propio log">
+    Si un proceso desaparece de golpe sin escribir nada, sospecha del OOM killer: con SIGKILL el proceso no tiene oportunidad de registrar nada. Busca en los mensajes del kernel: `sudo journalctl -k | grep -i "out of memory"` o `sudo dmesg | grep -i oom`.
+  </ErrorComun>
+  <ErrorComun titulo="Agregar más swap para resolver la falta de memoria">
+    Más swap solo cambia "el proceso desaparece" por "el servidor se arrastra durante horas". Si la memoria no alcanza para el trabajo normal, hay que reducir el consumo (limitar o mover procesos) o agregar RAM. El swap es un colchón para picos, no un reemplazo de la RAM.
+  </ErrorComun>
+  <ErrorComun titulo="Un proceso muestra 8 GB en VSZ y el servidor tiene 4 GB">
+    VSZ es la memoria virtual que el proceso reservó, no la que ocupa. La que cuenta es RSS (columna RES en `top`). Muchos programas, como Java o las bases de datos, reservan grandes espacios que nunca llegan a usar completos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Cada proceso tiene su propio espacio de memoria virtual, dividido en páginas de 4 KiB que el kernel ubica en la RAM, en el swap o en ningún lado todavía.
+- Un fallo de página es normal; leer páginas del swap cada vez que se usan es lo que vuelve lento al servidor.
+- La caché de disco usa la RAM libre y se libera cuando hace falta: se mira la memoria disponible, no la libre.
+- Cuando se agotan la RAM y el swap, el OOM killer termina un proceso, casi siempre el más grande, y lo registra en los mensajes del kernel.
+- VSZ es memoria reservada; RSS es memoria realmente ocupada.
+</Resumen>

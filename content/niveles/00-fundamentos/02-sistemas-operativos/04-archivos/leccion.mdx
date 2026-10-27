@@ -1,0 +1,133 @@
+---
+id: n0-m2-l4
+titulo: Archivos y sistemas de archivos
+minutos: 120
+objetivos:
+  - Recorrer una jerarquía de directorios usando rutas absolutas y relativas.
+  - Explicar qué es un sistema de archivos y comparar ext4, XFS, NTFS, FAT32 y exFAT.
+  - Entender los metadatos (dueño, permisos, fechas) y que la extensión no define el tipo real de un archivo.
+glosario: [ruta-absoluta, sistema-archivos, montaje, inodo, extension]
+verificado: 2026-10
+---
+
+import arbol from './arbol.svg?raw'
+import arbolDatos from './arbol.yaml'
+import ejRutas from './ej-rutas.yaml'
+import emparejarFs from './emparejar-fs.yaml'
+
+Casi todo lo que hace un sysadmin pasa por archivos: configuraciones, registros, copias de seguridad, datos de los usuarios. Saber dónde está cada cosa, moverse con soltura entre carpetas y entender qué guarda el sistema sobre cada archivo es la base de todo el trabajo con servidores. En esta lección también vas a escribir tus primeros comandos de navegación.
+
+## El árbol de directorios
+
+En Linux todo cuelga de un único árbol que empieza en la **raíz**, `/`. Los discos, las particiones, los USB y hasta los recursos compartidos de la red se **montan** en alguna carpeta de ese árbol. En Windows, en cambio, cada disco o partición tiene su propia letra (`C:\`, `D:\`), con su propio árbol.
+
+Las carpetas principales de Linux siguen un estándar (el FHS), así que son las mismas en Rocky, Ubuntu y casi cualquier distribución. Toca cada una:
+
+<DiagramaInteractivo datos={arbolDatos} svg={arbol} alt="Árbol de directorios de Linux: la raíz con las carpetas etc, home, root, var, usr, tmp, boot, dev, proc, sys, opt y srv, y algunas subcarpetas" />
+
+En Windows, las carpetas equivalentes son `C:\Windows` (el sistema), `C:\Program Files` (programas), `C:\Users` (las carpetas de los usuarios) y `C:\ProgramData` (datos y configuración de los programas).
+
+## Rutas absolutas y relativas
+
+Una **ruta** indica dónde está un archivo. Hay dos formas de escribirla:
+
+- **<Termino id="ruta-absoluta">Ruta absoluta</Termino>**: empieza en la raíz y funciona desde cualquier lugar. `/var/log/messages` en Linux, `C:\Users\ana\Documents` en Windows.
+- **Ruta relativa**: se interpreta desde la carpeta en la que estás. Si estás en `/var`, la ruta `log/messages` lleva al mismo archivo.
+
+Hay tres atajos que se usan todo el tiempo:
+
+| Atajo | Significa | Ejemplo |
+| --- | --- | --- |
+| `.` | La carpeta actual | `./script.sh` ejecuta un script de la carpeta actual |
+| `..` | La carpeta de arriba | Desde `/var/log`, `cd ..` lleva a `/var` |
+| `~` | Tu carpeta personal | `cd ~` lleva a `/home/estudiante` |
+
+Dos diferencias con Windows que causan muchos errores:
+
+- Linux separa las carpetas con `/` y Windows con `\`.
+- Linux **distingue mayúsculas y minúsculas**: `Informe.txt` e `informe.txt` son dos archivos distintos. Windows los considera el mismo.
+
+Los tres comandos básicos para moverse son `pwd` (muestra dónde estás), `ls` (lista el contenido) y `cd` (cambia de carpeta). Practícalos:
+
+<Terminal ejercicio={ejRutas} />
+
+## Qué es un sistema de archivos
+
+Un disco, para el hardware, es solo una larga fila de bloques numerados. El **<Termino id="sistema-archivos">sistema de archivos</Termino>** es la organización que se escribe sobre esos bloques para que existan archivos y carpetas: dónde empieza cada archivo, qué bloques ocupa, cómo se llama, quién es el dueño. **Formatear** una partición es crear un sistema de archivos vacío sobre ella (por eso los datos anteriores dejan de verse).
+
+Los sistemas de archivos modernos tienen un **journal** (registro de cambios): antes de modificar algo, anotan qué van a hacer. Si se corta la luz a mitad de una escritura, al volver a montar el disco terminan o deshacen la operación en segundos, en lugar de revisar el disco entero.
+
+| Sistema | Dónde se usa | Permisos | Tamaño máximo de archivo | Detalle importante |
+| --- | --- | --- | --- | --- |
+| **XFS** | Rocky, AlmaLinux, RHEL (por defecto) | Sí | Enorme (8 EiB) | Se puede agrandar, pero **no achicar** |
+| **ext4** | Ubuntu, Debian (por defecto) | Sí | 16 TiB | Se puede agrandar y achicar |
+| **NTFS** | Windows | Sí, muy detallados | Enorme | Linux lo lee y escribe, pero no es su sistema nativo |
+| **FAT32** | Partición EFI, dispositivos viejos | No | **4 GiB** | Compatible con todo |
+| **exFAT** | Memorias USB, tarjetas | No | Enorme | Compatible con Windows, macOS y Linux |
+
+También vas a encontrar **Btrfs** (con instantáneas, por defecto en Fedora y openSUSE), **ZFS** (en equipos de almacenamiento como TrueNAS y en Proxmox) y **ReFS** (en Windows Server para almacenamiento de datos).
+
+<Emparejar ejercicio={emparejarFs} />
+
+### Montar
+
+Para usar un sistema de archivos en Linux hay que **<Termino id="montaje">montarlo</Termino>** en una carpeta, que pasa a mostrar su contenido. El archivo `/etc/fstab` dice qué se monta automáticamente al arrancar. Para ver qué está montado y de qué tipo es cada uno:
+
+```bash
+df -hT        # espacio usado y libre de cada sistema de archivos, con su tipo
+lsblk -f      # discos y particiones, con su sistema de archivos
+```
+
+## Metadatos: lo que se guarda además del contenido
+
+Además del contenido, el sistema de archivos guarda datos **sobre** cada archivo. En Linux viven en una estructura llamada **<Termino id="inodo">inodo</Termino>**: dueño, grupo, permisos, tamaño, fechas y en qué bloques del disco está el contenido. El nombre no está en el inodo, sino en la carpeta, que es una lista de nombres que apuntan a inodos.
+
+`ls -l` muestra los metadatos principales:
+
+```text
+-rw-r----- 1 syslog adm 48213 Oct 27 09:12 auth.log
+│└───┬───┘   └──┬─┘ └┬┘ └─┬─┘ └─────┬────┘ └──┬───┘
+│ permisos   dueño grupo tamaño   fecha      nombre
+└ tipo: - archivo, d carpeta, l enlace
+```
+
+Los permisos se leen en tres grupos de tres letras: lo que puede hacer el **dueño**, el **grupo** y **el resto** (`r` leer, `w` escribir, `x` ejecutar). En el ejemplo (el registro de accesos de Ubuntu), el usuario syslog puede leer y escribir, el grupo adm solo leer y nadie más puede ni mirar. Los permisos tienen un módulo completo en el nivel de Linux.
+
+Las fechas también importan en el trabajo diario: la de **modificación** (cuándo cambió el contenido) ayuda a saber si alguien tocó una configuración, y `stat` muestra además la de último acceso y la de cambio de metadatos.
+
+En Windows, los mismos datos están en *Propiedades* del archivo (pestañas *General* y *Seguridad*) o en PowerShell con `Get-Item archivo | Format-List *`.
+
+## La extensión no define el tipo
+
+La **<Termino id="extension">extensión</Termino>** (`.pdf`, `.txt`, `.exe`) es solo parte del nombre. Windows la usa para decidir con qué programa abrir un archivo, y por defecto la **oculta**: un archivo llamado `factura.pdf.exe` aparece como `factura.pdf`, con un ícono que alguien eligió para que parezca un documento. Es uno de los engaños más usados para distribuir programas maliciosos por correo.
+
+Linux no usa la extensión para nada importante. El comando `file` identifica el tipo real leyendo los primeros bytes del contenido, que cada formato tiene distintos (los llamados números mágicos): `%PDF` en un PDF, `MZ` en un ejecutable de Windows, `\x7fELF` en un ejecutable de Linux.
+
+<Consejo>
+En las PC con Windows que administres, activa en el Explorador de archivos la opción **Ver > Mostrar > Extensiones de nombre de archivo**. Es un cambio mínimo que evita muchos engaños.
+</Consejo>
+
+<Pregunta id="p09" />
+
+<ErroresComunes>
+  <ErrorComun titulo='"No such file or directory" con un archivo que sí existe'>
+    Casi siempre es una de tres cosas: estás en otra carpeta y la ruta relativa no apunta donde crees (revisa con `pwd`), hay una diferencia de mayúsculas (`Informe.txt` no es `informe.txt` en Linux) o el nombre tiene espacios. Los nombres con espacios se escriben entre comillas: `cd "Mis documentos"`.
+  </ErrorComun>
+  <ErrorComun titulo='"El archivo es demasiado grande para el sistema de archivos de destino"'>
+    Estás copiando un archivo de más de 4 GiB (una imagen ISO, una máquina virtual) a una memoria USB con FAT32. Hay que formatearla con exFAT (o NTFS, si solo se va a usar en Windows). Formatear borra todo lo que tiene.
+  </ErrorComun>
+  <ErrorComun titulo="No se puede achicar una partición XFS">
+    XFS solo se puede agrandar. Si se necesita achicar, hay que hacer copia de seguridad, recrear el sistema de archivos más chico y restaurar. Por eso conviene no asignar todo el disco de entrada y usar LVM, que permite agrandar después (se ve en el nivel de Linux).
+  </ErrorComun>
+  <ErrorComun titulo='Un usuario abrió "factura.pdf" y no pasó nada visible'>
+    Puede haber sido un ejecutable disfrazado de PDF. Aísla el equipo de la red, avisa al responsable de seguridad y no lo apagues sin consultar (se pueden perder evidencias). La prevención: mostrar las extensiones y filtrar ejecutables en el correo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Linux tiene un único árbol que empieza en `/`; los discos se montan en carpetas. Windows usa una letra por disco o partición.
+- Rutas absolutas desde la raíz, relativas desde la carpeta actual; `.`, `..` y `~` son atajos. Linux distingue mayúsculas.
+- El sistema de archivos organiza los bloques del disco en archivos y carpetas. XFS y ext4 en Linux, NTFS en Windows, FAT32 y exFAT para intercambio.
+- El inodo guarda los metadatos: dueño, grupo, permisos, tamaño y fechas. `ls -l` y `stat` los muestran.
+- La extensión es solo parte del nombre: `file` identifica el tipo real por el contenido.
+</Resumen>
