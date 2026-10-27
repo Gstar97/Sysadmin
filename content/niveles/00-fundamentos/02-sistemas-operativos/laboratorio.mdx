@@ -1,0 +1,47 @@
+---
+titulo: Tu laboratorio con Linux y Windows Server
+horas: 4
+verificacion:
+  - Tengo una red de solo anfitrión y cada VM tiene una placa en NAT y otra en esa red.
+  - Me conecto por SSH desde mi PC a ubuntu01.
+  - Instalé Rocky Linux 10 (o AlmaLinux 10), actualicé el sistema y me conecto por SSH a rocky01.
+  - Instalé Windows Server 2025 de evaluación con interfaz gráfica y le puse el nombre win2025.
+  - Las tres VMs tienen una instantánea llamada instalación limpia.
+  - Hice un cambio en una VM, restauré la instantánea y comprobé que el cambio desapareció.
+  - Documenté nombres, sistemas, IP, usuarios e instantáneas del laboratorio.
+---
+
+import pasos from './lab-tres-vms.yaml'
+
+## Objetivo
+
+Dejar listo el laboratorio que vas a usar en toda la carrera: un Ubuntu Server (que instalaste en la última lección), un Rocky Linux y un Windows Server 2025, conectados entre sí y accesibles desde tu PC, con instantáneas para volver atrás cuando haga falta.
+
+## Qué necesitas
+
+- La VM `ubuntu01` de la lección anterior.
+- Al menos 16 GB de RAM para tener las tres VMs encendidas a la vez. Con 8 GB, enciende de a una o dos (Windows Server con 4 GB y un Linux con 2 GB, como máximo).
+- Unos 120 GB libres en disco.
+- Unas cuatro horas, que puedes repartir en varios días: el progreso de los pasos queda guardado.
+
+## El plan
+
+| VM | Sistema | CPU | RAM | Disco | Red |
+| --- | --- | --- | --- | --- | --- |
+| ubuntu01 | Ubuntu Server LTS | 2 | 2 GB | 25 GB | NAT + solo anfitrión |
+| rocky01 | Rocky Linux 10 o AlmaLinux 10 | 2 | 2 GB | 25 GB | NAT + solo anfitrión |
+| win2025 | Windows Server 2025 (evaluación) | 2 | 4 GB | 60 GB | NAT + solo anfitrión |
+
+## Pasos
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. ¿Por qué conviene que las dos distribuciones de Linux sean de familias distintas (Debian y Red Hat)? Piensa en qué cambia entre Ubuntu y Rocky en lo que viste hasta ahora: gestor de paquetes, grupo de sudo, sistema de archivos por defecto, registros.
+2. La evaluación de Windows Server dura 180 días. ¿Qué harías al acercarse el vencimiento, sabiendo que tienes una instantánea limpia y que el servidor no tiene nada que conservar?
+3. ¿Qué pasaría con tu laboratorio si se daña el disco de tu PC? ¿Qué parte de lo que hiciste se podría reconstruir y qué no?
+
+<Consejo>
+Los 180 días de la evaluación de Windows Server se pueden extender con `slmgr /rearm` (en PowerShell como administrador, seguido de un reinicio). `slmgr /dlv` muestra cuántos días quedan.
+</Consejo>

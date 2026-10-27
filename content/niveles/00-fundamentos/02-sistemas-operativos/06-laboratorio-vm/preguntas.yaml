@@ -1,0 +1,97 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué es un hipervisor?
+  opciones:
+    - { texto: "El software que crea y ejecuta máquinas virtuales", correcta: true, explicacion: "Por ejemplo VirtualBox, VMware, Hyper-V o KVM." }
+    - { texto: "Un supervisor de la mesa de ayuda", explicacion: "No tiene que ver con puestos de trabajo." }
+    - { texto: "El sistema operativo que se instala dentro de una VM", explicacion: "Ese es el sistema invitado; el hipervisor es el que lo hace funcionar." }
+    - { texto: "Un tipo de procesador", explicacion: "Es software, aunque aprovecha funciones del procesador (VT-x, AMD-V)." }
+- id: p02
+  tipo: opcion_multiple
+  enunciado: ¿Cuál es la diferencia entre un hipervisor de tipo 1 y uno de tipo 2?
+  opciones:
+    - { texto: "El tipo 1 se instala directamente sobre el hardware; el tipo 2 corre como un programa sobre otro sistema operativo", correcta: true, explicacion: "ESXi o Proxmox son de tipo 1; VirtualBox es de tipo 2." }
+    - { texto: "El tipo 1 es gratuito y el tipo 2 es pago", explicacion: "Hay hipervisores gratuitos y pagos de los dos tipos." }
+    - { texto: "El tipo 1 virtualiza Linux y el tipo 2 Windows", explicacion: "Los dos pueden virtualizar ambos sistemas." }
+    - { texto: "El tipo 2 es más rápido", explicacion: "En general el tipo 1 tiene menos capas y es el que se usa en los centros de datos." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Tu VM está en modo NAT. Tiene internet, pero no puedes conectarte a ella por SSH desde tu PC. ¿Por qué?
+  opciones:
+    - { texto: "Porque en NAT la VM sale a internet a través del anfitrión, pero desde afuera no se llega a ella sin reenvío de puertos", correcta: true, explicacion: "Se resuelve con un reenvío de puertos o agregando una placa en modo solo anfitrión." }
+    - { texto: "Porque SSH no funciona en máquinas virtuales", explicacion: "Funciona perfectamente; el problema es el modo de red." }
+    - { texto: "Porque la VM no tiene IP", explicacion: "Tiene IP: si no, no tendría internet." }
+    - { texto: "Porque falta activar VT-x", explicacion: "Si faltara VT-x, la VM ni siquiera encendería." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: Quieres que la VM tenga internet y que tu PC pueda conectarse a ella por SSH en cualquier red. ¿Qué configuras?
+  opciones:
+    - { texto: "Dos placas de red: una en NAT y otra en solo anfitrión", correcta: true, explicacion: "NAT da internet y la red de solo anfitrión permite conectarse desde tu PC sin depender de la red física." }
+    - { texto: "Una sola placa en solo anfitrión", explicacion: "No tendría internet." }
+    - { texto: "Una sola placa en puente", explicacion: "Funciona en algunas redes, pero en Wi-Fi o en redes de oficina puede fallar." }
+    - { texto: "Ninguna placa de red", explicacion: "Sin placa no hay ninguna comunicación." }
+- id: p05
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estas afirmaciones sobre las instantáneas son correctas?
+  opciones:
+    - { texto: "Permiten volver la VM a un estado anterior en segundos", correcta: true, explicacion: "Es su principal utilidad en un laboratorio." }
+    - { texto: "Una cadena larga de instantáneas vuelve más lenta la VM y ocupa espacio", correcta: true, explicacion: "Cada una guarda los cambios desde la anterior." }
+    - { texto: "Reemplazan a las copias de seguridad", explicacion: "Viven en el mismo disco que la VM: si se pierde, se pierden juntas." }
+    - { texto: "Se pueden tomar con la VM encendida", correcta: true, explicacion: "En ese caso también guardan el contenido de la memoria." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Tu PC tiene 8 GB de RAM. ¿Cuánta memoria le asignas a una VM con Ubuntu Server para practicar?
+  opciones:
+    - { texto: "2 GB", correcta: true, explicacion: "Alcanza para un servidor sin interfaz gráfica y deja memoria de sobra para tu sistema." }
+    - { texto: "8 GB", explicacion: "Tu propio sistema se quedaría sin memoria." }
+    - { texto: "7 GB", explicacion: "Dejaría a tu sistema con muy poco; todo se volvería lento." }
+    - { texto: "256 MB", explicacion: "Es muy poco para un Ubuntu Server actual." }
+- id: p07
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Tomaste una instantánea de la VM y después el disco de tu PC se dañó. ¿Puedes recuperar la VM con la instantánea?
+  opciones:
+    - { texto: "No: la instantánea vive en el mismo disco que la VM y se perdió con ella", correcta: true, explicacion: "Por eso una instantánea no es una copia de seguridad." }
+    - { texto: "Sí, las instantáneas se guardan en la nube", explicacion: "Se guardan junto a los archivos de la VM, en tu disco." }
+    - { texto: "Sí, porque la instantánea está en la memoria", explicacion: "La memoria se borra al apagar; las instantáneas están en el disco." }
+    - { texto: "Solo si la instantánea se tomó con la VM apagada", explicacion: "Da igual cómo se tomó: está en el disco que falló." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: Al encender una VM nueva en VirtualBox aparece este mensaje. ¿Qué haces?
+  salida: |
+    VT-x is disabled in the BIOS for all CPU modes
+    (VERR_VMX_MSR_ALL_VMX_DISABLED).
+  opciones:
+    - { texto: "Activar Intel Virtualization Technology en el firmware del equipo", correcta: true, explicacion: "El mensaje indica que la virtualización del procesador está desactivada en el firmware." }
+    - { texto: "Reinstalar VirtualBox", explicacion: "El problema está en el firmware del equipo, no en el programa." }
+    - { texto: "Asignarle más memoria a la VM", explicacion: "El mensaje no tiene relación con la memoria." }
+    - { texto: "Cambiar la ISO", explicacion: "La VM ni siquiera llega a leer la ISO." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: En Hyper-V, una VM de Generación 2 con Rocky Linux no arranca y dice "The image's hash and certificate are not allowed (DB)". ¿Qué cambias?
+  opciones:
+    - { texto: "La plantilla de arranque seguro a Microsoft UEFI Certificate Authority", correcta: true, explicacion: "La plantilla por defecto solo acepta Windows; la de UEFI CA acepta el shim de las distribuciones Linux." }
+    - { texto: "Paso la VM a Generación 1", explicacion: "Arranca, pero pierde UEFI y Secure Boot sin necesidad." }
+    - { texto: "Le agrego más disco", explicacion: "El mensaje es de Secure Boot, no de espacio." }
+    - { texto: "Cambio la placa de red a puente", explicacion: "La red no participa en este error." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Tienes una Mac con chip M3. ¿Qué imagen de Ubuntu Server descargas para tu VM?
+  opciones:
+    - { texto: "La versión ARM64 (arm64)", correcta: true, explicacion: "Los chips de Apple son ARM; las VMs tienen que ser de la misma arquitectura para rendir bien." }
+    - { texto: "La versión amd64", explicacion: "Es para procesadores x86-64; en Apple Silicon solo correría emulada y muy lenta." }
+    - { texto: "Cualquiera, el hipervisor la convierte", explicacion: "El hipervisor no traduce entre arquitecturas con buen rendimiento." }
+    - { texto: "La versión para Raspberry Pi", explicacion: "Es ARM, pero preparada para ese hardware, no para una VM." }
+- id: p11
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para tener tu primer servidor Linux en una VM.
+  pasos:
+    - Verificar que la virtualización esté activada en el firmware
+    - Instalar el hipervisor
+    - Descargar la ISO de Ubuntu Server
+    - Crear la VM con CPU, memoria, disco y la ISO conectada
+    - Instalar Ubuntu Server con OpenSSH
+    - Desconectar la ISO, reiniciar y tomar una instantánea
+  explicacion: La instantánea al final de la instalación es tu punto de partida limpio para todos los ejercicios.

@@ -1,0 +1,83 @@
+tipo: troubleshooting
+titulo: La máquina virtual no arranca
+descripcion: >-
+  Tres problemas típicos al armar el laboratorio, en tres equipos distintos. Cada decisión suma
+  minutos: resuélvelos sin dar vueltas.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      En una notebook con Windows 11 creaste tu primera VM en VirtualBox. Al encenderla, la
+      ventana se cierra y aparece un error.
+    evidencia:
+      - titulo: Mensaje de VirtualBox
+        contenido: |
+          Failed to open a session for the virtual machine ubuntu01.
+
+          VT-x is disabled in the BIOS for all CPU modes
+          (VERR_VMX_MSR_ALL_VMX_DISABLED).
+
+          Result Code: E_FAIL (0x80004005)
+    opciones:
+      - { texto: "Reiniciar la notebook, entrar al firmware y activar Intel Virtualization Technology", ir_a: n2, minutos: 10 }
+      - texto: Desinstalar y volver a instalar VirtualBox
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          El error es exactamente el mismo. El mensaje lo dice: la función de virtualización del
+          procesador está desactivada en el firmware. Ningún programa la puede activar desde
+          Windows.
+      - texto: Darle más memoria a la VM
+        ir_a: n1
+        minutos: 2
+        consecuencia: El error no menciona la memoria. Sigue igual.
+  n2:
+    situacion: Con VT-x activado, la VM enciende, pero la pantalla negra muestra un mensaje y no pasa nada más.
+    evidencia:
+      - titulo: Pantalla de la VM
+        contenido: |
+          No bootable medium found!
+
+          Please insert a bootable medium and reboot.
+    opciones:
+      - { texto: "Conectar la ISO de Ubuntu Server a la unidad óptica virtual y reiniciar la VM", ir_a: n3, minutos: 2 }
+      - texto: Agrandar el disco virtual
+        ir_a: n2
+        minutos: 5
+        consecuencia: >-
+          El disco está vacío: es una VM nueva. El firmware de la VM recorrió sus dispositivos de
+          arranque (disco y unidad óptica) y no encontró nada para arrancar. Falta el instalador.
+  n3:
+    situacion: >-
+      En esa notebook todo anda. Un compañero, en otra PC, usa Hyper-V: creó una VM de
+      Generación 2 para Rocky Linux con los valores por defecto y al encenderla ve este mensaje.
+    evidencia:
+      - titulo: Pantalla de la VM en Hyper-V
+        contenido: |
+          Virtual Machine Boot Summary
+          1. SCSI DVD    (0,1)  The image's hash and certificate are not allowed (DB).
+          2. SCSI Disk   (0,0)  The boot loader did not load an operating system.
+          3. Network Adapter    A boot image was not found.
+          No operating system was loaded.
+    opciones:
+      - { texto: "Cambiar la plantilla de arranque seguro de la VM a Microsoft UEFI Certificate Authority", ir_a: fin_ok, minutos: 3 }
+      - texto: Desactivar el arranque seguro de la VM
+        ir_a: n3
+        minutos: 2
+        consecuencia: >-
+          Así arranca, pero sin Secure Boot. La plantilla por defecto de Hyper-V solo confía en el
+          certificado de Windows; Linux usa shim, firmado con la autoridad UEFI de terceros de
+          Microsoft. Hay una opción mejor que no resigna la protección.
+      - texto: Volver a crear la VM como Generación 1
+        ir_a: n3
+        minutos: 8
+        consecuencia: >-
+          Funciona, pero la VM queda con BIOS heredado, sin UEFI ni Secure Boot. Para sistemas
+          modernos, Generación 2 es la opción correcta; el problema era solo la plantilla.
+  fin_ok:
+    final: exito
+    resumen: >-
+      Los tres problemas se resolvieron leyendo el mensaje: virtualización desactivada en el
+      firmware, falta del medio de instalación y una plantilla de Secure Boot que solo acepta
+      Windows. En cada caso el mensaje decía en qué etapa del arranque estaba el problema, igual
+      que con una máquina física.

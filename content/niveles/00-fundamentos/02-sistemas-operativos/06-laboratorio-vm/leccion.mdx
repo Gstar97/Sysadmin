@@ -1,0 +1,112 @@
+---
+id: n0-m2-l6
+titulo: 'Tu laboratorio: máquinas virtuales'
+minutos: 180
+objetivos:
+  - Elegir e instalar un hipervisor de escritorio (VirtualBox, VMware Workstation Pro, Hyper-V, o UTM en Mac con Apple Silicon).
+  - Crear una máquina virtual con CPU, RAM, disco y red (NAT, puente, solo anfitrión) y usar instantáneas.
+  - Instalar el primer Linux en una máquina virtual.
+glosario: [maquina-virtual, hipervisor, instantanea, nat]
+verificado: 2026-10
+---
+
+import redes from './redes-vm.svg?raw'
+import modosRed from './modos-red.yaml'
+import pasos from './pasos-primera-vm.yaml'
+import noArranca from './vm-no-arranca.yaml'
+
+Desde ahora, la práctica de la carrera pasa a tu propio laboratorio: servidores Linux y Windows que puedes romper, arreglar y volver a crear sin miedo, todos dentro de tu computadora. En esta lección vas a entender cómo funciona una máquina virtual, vas a elegir un hipervisor y vas a instalar tu primer servidor Linux.
+
+## Qué es una máquina virtual
+
+Una **<Termino id="maquina-virtual">máquina virtual</Termino>** (VM) es una computadora completa simulada por software: tiene su propio procesador virtual, su memoria, su disco, su placa de red y su firmware, y adentro se instala un sistema operativo como en cualquier computadora. El programa que crea y ejecuta las VMs es el **<Termino id="hipervisor">hipervisor</Termino>**.
+
+No es una simulación lenta: gracias a las extensiones de virtualización del procesador (Intel VT-x, AMD-V), el código de la VM corre directamente en la CPU real, y el hipervisor solo interviene en lo que la VM no puede hacer sola (como acceder al hardware). Por eso una VM rinde casi como un equipo físico.
+
+Hay dos tipos de hipervisores:
+
+- **Tipo 1**, o de servidor: se instalan directamente sobre el hardware, en lugar de un sistema operativo. Son los de los centros de datos: VMware ESXi, Proxmox VE, Hyper-V en Windows Server, KVM. Los vas a estudiar en el nivel de virtualización.
+- **Tipo 2**, o de escritorio: se instalan como un programa más sobre tu sistema operativo. Son los que vas a usar para el laboratorio.
+
+| Hipervisor | Funciona en | Costo | Comentario |
+| --- | --- | --- | --- |
+| VirtualBox | Windows, Linux, macOS | Gratuito | El más simple para empezar |
+| VMware Workstation Pro | Windows, Linux | Gratuito | Muy usado en empresas; se descarga desde el portal de Broadcom |
+| Hyper-V | Windows Pro, Enterprise y Education | Incluido | Técnicamente es de tipo 1: al activarlo, Windows mismo pasa a correr sobre el hipervisor |
+| KVM con virt-manager | Linux | Gratuito | Es el mismo KVM que se usa en servidores |
+| UTM | Mac con Apple Silicon | Gratuito | Solo virtualiza con buen rendimiento sistemas ARM64 |
+
+<Advertencia>
+En una Mac con Apple Silicon (M1 en adelante) solo se pueden virtualizar con buen rendimiento sistemas **ARM64**. Ubuntu Server y Rocky Linux tienen versiones ARM y funcionan perfecto; Windows Server para x86-64 no. Para las prácticas de Windows Server vas a necesitar otra PC o una máquina virtual en la nube (se ven en el nivel de nube).
+</Advertencia>
+
+## Los recursos de una VM
+
+Al crear una VM se le asignan recursos de tu equipo:
+
+- **CPU**: cantidad de procesadores virtuales. Nunca más que las CPU lógicas que tienes; para servidores de práctica, 2 alcanzan.
+- **Memoria**: la VM la toma de tu RAM mientras está encendida. Deja siempre al menos 4 GB para tu propio sistema. Un Linux de servidor funciona con 2 GB; Windows Server con interfaz gráfica, mejor con 4 GB.
+- **Disco**: un archivo grande en tu disco (`.vdi` en VirtualBox, `.vmdk` en VMware, `.vhdx` en Hyper-V, `.qcow2` en KVM). Si es **dinámico**, ocupa solo lo que la VM realmente escribe y crece a medida que hace falta.
+- **Firmware**: BIOS o UEFI, como viste en el módulo anterior. Para sistemas actuales, UEFI.
+- **Placa de red**: conectada a una red virtual según el modo que elijas.
+
+## Los modos de red
+
+La pregunta más común en un laboratorio es "¿por qué no llego a mi VM?" o "¿por qué mi VM no tiene internet?". La respuesta casi siempre está en el modo de red:
+
+<Diagrama svg={redes} alt="Tres modos de red: NAT, donde la VM sale a internet a través del anfitrión pero el anfitrión no llega a la VM; puente, donde la VM recibe una IP de la red física; y solo anfitrión, una red privada entre el anfitrión y las VMs sin salida a internet" pie="NAT, puente y solo anfitrión: quién puede llegar a quién." />
+
+- **<Termino id="nat">NAT</Termino>**: el hipervisor actúa como un router. La VM sale a internet usando la conexión de tu PC, pero desde tu PC (y desde la red) no se puede llegar a la VM, salvo que se configure un **reenvío de puertos**. Es el modo por defecto. En Hyper-V se llama **Default Switch**.
+- **Puente** (*bridged*): la VM se conecta directamente a tu red física y recibe una IP de tu router, como cualquier otro equipo de la casa. Todos la ven. En Wi-Fi y en redes de oficina a veces no funciona, porque el punto de acceso o la red bloquean equipos que no conocen.
+- **Solo anfitrión** (*host-only*): una red privada entre tu PC y tus VMs, sin salida a internet. Ideal para conectarte por SSH y para que las VMs se comuniquen entre sí.
+
+La combinación recomendada para el laboratorio: **dos placas de red**, una en NAT (para internet) y otra en solo anfitrión (para conectarte desde tu PC). Funciona igual en cualquier red.
+
+<Emparejar ejercicio={modosRed} />
+
+## Instantáneas
+
+Una **<Termino id="instantanea">instantánea</Termino>** (*snapshot*; en Hyper-V, *punto de control*) guarda el estado completo de la VM en un momento: disco, configuración y, si está encendida, también la memoria. Si después algo sale mal, se vuelve a ese momento en segundos.
+
+Es la herramienta perfecta para practicar: tomas una instantánea antes de un ejercicio difícil y, si rompes el sistema, vuelves atrás. Dos advertencias:
+
+- **Una instantánea no es una copia de seguridad.** Vive en el mismo disco que la VM: si ese disco falla o borras la VM, se pierde todo junto.
+- Una cadena larga de instantáneas hace más lenta la VM y ocupa cada vez más espacio, porque cada una guarda los cambios desde la anterior. Borra las que ya no necesites.
+
+<Pregunta id="p07" />
+
+## Manos a la obra
+
+Sigue los pasos en tu computadora. El progreso queda marcado en este navegador, así que puedes dejarlo y continuar después.
+
+<PasosGuiados ejercicio={pasos} />
+
+Y antes de terminar, los tres problemas que más aparecen al armar un laboratorio:
+
+<Troubleshooting escenario={noArranca} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"VT-x is disabled in the BIOS" o "AMD-V is disabled"'>
+    La virtualización del procesador está desactivada en el firmware. Reinicia, entra a la configuración del firmware y activa **Intel Virtualization Technology** o **SVM Mode**. Si ya está activada y el error sigue en Windows, otra función puede estar usando la virtualización (Hyper-V, WSL2, la integridad de memoria): usa Hyper-V o desactívalas.
+  </ErrorComun>
+  <ErrorComun titulo="La VM no tiene internet">
+    Revisa el modo de la placa de red: en solo anfitrión no hay salida a internet; en NAT sí. En modo puente sobre Wi-Fi, el punto de acceso puede estar bloqueando la VM: prueba con NAT. Dentro de la VM, `ip -br address` muestra si la placa recibió una IP.
+  </ErrorComun>
+  <ErrorComun titulo="Tu PC se pone lenta al encender la VM">
+    Le asignaste demasiada memoria o demasiadas CPU. Tu sistema necesita su parte: con 8 GB de RAM, no le des más de 4 GB a las VMs en total. Apaga las VMs que no estés usando.
+  </ErrorComun>
+  <ErrorComun titulo="Al reiniciar, la VM vuelve a abrir el instalador">
+    La ISO sigue conectada a la unidad óptica virtual y el firmware la prueba antes que el disco. Desconéctala desde la configuración de la VM.
+  </ErrorComun>
+  <ErrorComun titulo="El disco de tu PC se llena por las VMs">
+    Los discos dinámicos crecen y las instantáneas acumulan cambios. Borra las instantáneas viejas y las VMs que ya no uses; desde el hipervisor, no borrando archivos a mano, para no dejar la VM rota.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una máquina virtual es una computadora completa simulada por un hipervisor, que aprovecha las extensiones de virtualización del procesador para rendir casi como un equipo físico.
+- Los hipervisores de escritorio (VirtualBox, VMware Workstation Pro, Hyper-V, KVM, UTM) son gratuitos; en Apple Silicon solo van bien los sistemas ARM64.
+- NAT da internet pero no se llega a la VM desde afuera; puente la pone en tu red; solo anfitrión es una red privada sin internet. Para el laboratorio: NAT más solo anfitrión.
+- Una instantánea permite volver atrás en segundos, pero no es una copia de seguridad.
+- La primera VM: 2 CPU, 2 GB de RAM, 25 GB de disco dinámico, UEFI y Ubuntu Server con OpenSSH.
+</Resumen>

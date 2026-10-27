@@ -1,0 +1,115 @@
+tipo: troubleshooting
+titulo: La máquina virtual no tiene internet
+descripcion: >-
+  Un compañero de curso armó su laboratorio y te pide ayuda por videollamada. Cada decisión suma
+  minutos: encuentra las causas sin hacerle perder la tarde.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Tu compañero usa VirtualBox en una notebook con Windows 11. Su VM rocky01 arranca bien, pero
+      al actualizarla aparece un error.
+    evidencia:
+      - titulo: sudo dnf upgrade
+        contenido: |
+          Errors during downloading metadata for repository 'baseos':
+            - Curl error (6): Couldn't resolve host name for
+              https://mirrors.rockylinux.org/mirrorlist?arch=x86_64&repo=BaseOS-10
+              [Could not resolve host: mirrors.rockylinux.org]
+          Error: Failed to download metadata for repo 'baseos'
+    opciones:
+      - { texto: "Pedirle que muestre las direcciones de la VM con ip -br address", ir_a: n_ip, minutos: 2 }
+      - texto: Pedirle que desactive el firewall de Windows
+        ir_a: n1
+        minutos: 5
+        consecuencia: >-
+          Nada cambia, y la notebook quedó menos protegida (pídele que lo vuelva a activar). El
+          error es de la VM, que no logra resolver nombres: primero hay que ver si tiene red.
+      - texto: Pedirle que reinstale Rocky Linux
+        ir_a: fin_reinstalar
+        minutos: 40
+        consecuencia: >-
+          Después de 40 minutos, la VM nueva tiene exactamente el mismo problema: la instalación
+          no tenía nada que ver.
+  n_ip:
+    situacion: La VM tiene una sola placa de red con IP.
+    evidencia:
+      - titulo: ip -br address
+        contenido: |
+          lo        UNKNOWN  127.0.0.1/8 ::1/128
+          enp0s3    UP       192.168.56.101/24 fe80::a00:27ff:fe4e:66a1/64
+    opciones:
+      - { texto: "Revisar en VirtualBox a qué red está conectada esa placa", ir_a: n_config, minutos: 3 }
+      - texto: Pedirle que haga ping 8.8.8.8 desde la VM
+        ir_a: n_ip
+        minutos: 1
+        consecuencia: >-
+          Responde "connect: Network is unreachable": la VM no tiene ninguna ruta hacia internet.
+          Confirma que no es un problema de DNS sino de red. 192.168.56.x es justamente el rango
+          de la red de solo anfitrión de VirtualBox.
+  n_config:
+    situacion: En la configuración de red de la VM en VirtualBox aparece esto.
+    evidencia:
+      - titulo: Configuración > Red
+        contenido: |
+          Adaptador 1:  Habilitado
+                        Conectado a: Adaptador solo anfitrión
+                        Nombre: VirtualBox Host-Only Ethernet Adapter
+          Adaptador 2:  Deshabilitado
+    opciones:
+      - { texto: "Habilitar el adaptador 2 conectado a NAT y dejar el 1 en solo anfitrión", ir_a: n_nat, minutos: 5 }
+      - texto: Cambiar el adaptador 1 a modo puente
+        ir_a: n_config
+        minutos: 4
+        consecuencia: >-
+          Tu compañero está conectado al Wi-Fi de una biblioteca, que solo da IP a los equipos que
+          aceptaron sus condiciones en el navegador. En puente, la VM no recibe IP. Además perdería
+          la conexión por SSH desde su PC. Vuelves a dejarlo como estaba.
+  n_nat:
+    situacion: Después de habilitar el adaptador 2 en NAT y reiniciar la VM, todo funciona.
+    evidencia:
+      - titulo: ip -br address y sudo dnf upgrade
+        contenido: |
+          lo        UNKNOWN  127.0.0.1/8 ::1/128
+          enp0s3    UP       192.168.56.101/24
+          enp0s8    UP       10.0.3.15/24
+
+          Rocky Linux 10 - BaseOS                 3.1 MB/s | 2.4 MB     00:00
+          Rocky Linux 10 - AppStream              4.8 MB/s | 8.9 MB     00:01
+          Dependencies resolved.
+    opciones:
+      - { texto: "Ayudarlo con el otro problema que menciona: en su PC de escritorio la misma VM no enciende", ir_a: n_amd, minutos: 1 }
+  n_amd:
+    situacion: >-
+      En su PC de escritorio (procesador AMD), al encender cualquier VM, VirtualBox muestra un
+      error y la VM no arranca.
+    evidencia:
+      - titulo: Mensaje de VirtualBox
+        contenido: |
+          AMD-V is disabled in the BIOS (or by the host OS).
+          (VERR_SVM_DISABLED)
+          Result Code: E_FAIL (0x80004005)
+    opciones:
+      - { texto: "Que reinicie, entre al firmware y active SVM Mode", ir_a: fin_ok, minutos: 10 }
+      - texto: Que le asigne menos CPU a la VM
+        ir_a: n_amd
+        minutos: 3
+        consecuencia: El error no depende de los recursos de la VM. El mensaje indica que la virtualización del procesador está desactivada.
+      - texto: Que instale otra versión de VirtualBox
+        ir_a: n_amd
+        minutos: 15
+        consecuencia: El mismo error en la versión nueva. Ningún programa puede activar algo que el firmware tiene desactivado.
+  fin_ok:
+    final: exito
+    resumen: >-
+      La VM tenía una sola placa, conectada a la red de solo anfitrión: la PC llegaba a la VM,
+      pero la VM no tenía salida a internet. Con una segunda placa en NAT quedó como se recomienda
+      para el laboratorio. En la otra PC, la virtualización del procesador (SVM, en AMD) estaba
+      desactivada en el firmware, que es como vienen muchos equipos de fábrica. En los dos casos,
+      el primer dato (la IP de la VM y el mensaje de error) ya indicaba la causa.
+  fin_reinstalar:
+    final: fracaso
+    resumen: >-
+      Reinstalar no cambia la configuración de red de la VM, que es del hipervisor. Mirar la IP
+      de la VM habría mostrado en un minuto que estaba en la red de solo anfitrión, sin salida a
+      internet.

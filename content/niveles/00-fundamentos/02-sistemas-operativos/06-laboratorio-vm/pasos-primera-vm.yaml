@@ -1,0 +1,122 @@
+tipo: pasos
+titulo: Tu primera máquina virtual con Ubuntu Server
+descripcion: >-
+  Estos pasos se hacen en tu computadora. Vas a necesitar unos 90 minutos, conexión a internet
+  para descargar unos 3 GB y la ficha técnica que armaste en el laboratorio del módulo anterior.
+pasos:
+  - titulo: Revisa que tu equipo esté listo
+    detalle: >-
+      Necesitas la virtualización activada en el firmware, al menos 8 GB de RAM (con 16 GB vas a
+      poder tener dos o tres VMs encendidas a la vez) y unos 100 GB libres, idealmente en un SSD.
+      Todo eso ya lo anotaste en tu ficha técnica.
+    comprobar: La virtualización figura como habilitada y tienes espacio libre suficiente.
+    si_falla: Si la virtualización está desactivada, actívala en el firmware (lección de arranque del módulo anterior). Sin ella, los hipervisores no funcionan o funcionan muy lento.
+  - titulo: Instala un hipervisor
+    detalle: Elige uno según tu sistema. Todos son gratuitos.
+    variantes:
+      - nombre: Windows
+        detalle: >-
+          **VirtualBox** (virtualbox.org) es el más sencillo para empezar. **VMware Workstation
+          Pro** también es gratuito (se descarga desde el portal de Broadcom, con una cuenta).
+          Si tu Windows es Pro o Enterprise, también tienes **Hyper-V**, que se activa desde
+          PowerShell como administrador y pide reiniciar:
+        comandos:
+          - Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
+      - nombre: Linux
+        detalle: 'Usa KVM, el hipervisor que ya trae el kernel, con la interfaz gráfica virt-manager. Después de instalar, cierra la sesión y vuelve a entrar:'
+        comandos:
+          - "# Rocky, AlmaLinux, Fedora"
+          - sudo dnf install @virtualization virt-manager
+          - "# Ubuntu, Debian"
+          - sudo apt install qemu-kvm libvirt-daemon-system virt-manager
+          - sudo usermod -aG libvirt $USER
+      - nombre: Mac con Apple Silicon
+        detalle: >-
+          Instala **UTM** (mac.getutm.app, gratuito) o VMware Fusion Pro (gratuito). Atención: en
+          estas Mac solo funcionan bien los sistemas **ARM64**. Descarga las imágenes de Ubuntu
+          Server y Rocky Linux para ARM (arm64 / aarch64). Windows Server para x86-64 no se puede
+          virtualizar con buen rendimiento: para las prácticas de Windows Server vas a necesitar
+          otra PC o una máquina en la nube.
+    comprobar: El hipervisor abre sin errores.
+    si_falla: >-
+      En Windows, si usas VirtualBox o VMware y además tienes Hyper-V, WSL2 o la integridad de
+      memoria activados, funcionan, pero más lento y con algunas limitaciones (como la de
+      x86-64-v3 que viste en la lección del procesador). Si te da problemas, usa Hyper-V para
+      todo o desactiva esas funciones.
+  - titulo: Descarga la imagen de Ubuntu Server LTS
+    detalle: >-
+      Desde **ubuntu.com/download/server** descarga la versión LTS más reciente (26.04 LTS; la
+      24.04 LTS también sirve, tiene soporte hasta 2029). Es un archivo `.iso` de unos 3 GB. En la
+      misma página está el valor SHA256 para verificar que la descarga no esté dañada; lo vas a
+      hacer en el laboratorio del módulo de sistemas numéricos.
+    comprobar: Tienes el archivo .iso completo en tu carpeta de descargas.
+  - titulo: Crea la máquina virtual
+    detalle: >-
+      Crea una VM nueva con estos valores: **2 CPU**, **2 GB de RAM** (2048 MB), disco de **25 GB**
+      de tamaño dinámico (crece a medida que se usa) y la imagen ISO conectada a la unidad óptica.
+      Activa el firmware **EFI/UEFI** si el hipervisor lo pregunta.
+    variantes:
+      - nombre: VirtualBox
+        detalle: >-
+          *Máquina > Nueva*. Pon un nombre (por ejemplo `ubuntu01`), elige la ISO y marca **Omitir
+          instalación desatendida**, para hacer la instalación a mano y ver cada paso. En
+          *Hardware* asigna RAM y CPU y activa **Habilitar EFI**. En *Disco duro*, 25 GB.
+      - nombre: VMware Workstation
+        detalle: >-
+          *File > New Virtual Machine > Typical*, elige la ISO, nombre, disco de 25 GB y después
+          *Customize Hardware* para poner 2 GB de RAM y 2 procesadores. En *Options > Advanced*
+          elige firmware UEFI.
+      - nombre: Hyper-V
+        detalle: >-
+          *Acción > Nuevo > Máquina virtual*. Elige **Generación 2** (UEFI). Desactiva la memoria
+          dinámica y pon 2048 MB, conecta el adaptador al **Default Switch** y crea un disco de 25
+          GB. Antes de encenderla, en *Configuración > Seguridad*, cambia la plantilla de arranque
+          seguro a **Microsoft UEFI Certificate Authority** (la plantilla por defecto solo sirve
+          para Windows).
+      - nombre: virt-manager
+        detalle: >-
+          *Archivo > Nueva máquina virtual > Medio de instalación local*, elige la ISO, 2048 MB y 2
+          CPU, disco de 25 GB. En el último paso marca *Personalizar antes de instalar* y en
+          *Overview* elige firmware **UEFI**.
+    comprobar: La VM aparece en la lista del hipervisor, apagada, con la ISO conectada.
+  - titulo: Instala Ubuntu Server
+    detalle: |-
+      Enciende la VM. El instalador funciona con el teclado: flechas para moverte, Enter para elegir, Tab para pasar al siguiente campo. Recorre las pantallas así:
+
+      - Idioma: >-
+          el que prefieras (los mensajes técnicos se buscan más fácil en inglés). Teclado: el tuyo, por ejemplo *Spanish* o *Spanish (Latin American)*.
+      - Tipo de instalación: **Ubuntu Server** (no la versión mínima).
+      - Red: deja la configuración automática (DHCP) y anota la IP que muestra.
+      - Proxy y servidor de paquetes: deja los valores por defecto.
+      - Almacenamiento: **Use an entire disk** con LVM, que es lo que viene marcado.
+      - Perfil: tu nombre, el nombre del servidor (`ubuntu01`), tu usuario y una contraseña que recuerdes.
+      - Marca **Install OpenSSH server** para poder conectarte por SSH.
+      - No marques ningún paquete adicional (*snaps*).
+
+      Al terminar, elige **Reboot Now**. Si pide quitar el medio de instalación, desconecta la ISO desde el hipervisor y presiona Enter.
+    comprobar: La VM arranca sola desde el disco y muestra `ubuntu01 login:`.
+    si_falla: >-
+      Si vuelve a arrancar el instalador, la ISO sigue conectada: desconéctala y reinicia la VM.
+      Si la instalación se queda en "Downloading and installing security updates" durante mucho
+      tiempo, espera: depende de tu conexión.
+  - titulo: Inicia sesión y revisa el sistema
+    detalle: 'Entra con tu usuario y contraseña (al escribir la contraseña no se ve nada en pantalla, es normal) y ejecuta:'
+    comandos:
+      - hostnamectl
+      - ip -br address
+      - free -h
+      - sudo apt update && sudo apt upgrade
+    comprobar: '`hostnamectl` muestra Ubuntu y *Virtualization*, `ip -br address` muestra una IP en la placa de red y la actualización termina sin errores.'
+    si_falla: Si `apt update` no puede conectarse, la VM no tiene internet. Revisa que su placa de red esté en NAT (o en el Default Switch de Hyper-V) y que tu PC tenga conexión.
+  - titulo: Toma una instantánea y pruébala
+    detalle: >-
+      Apaga la VM con `sudo poweroff`. En el hipervisor, toma una instantánea llamada
+      `instalación limpia` (VirtualBox: *Instantáneas > Tomar*; VMware: *VM > Snapshot*;
+      Hyper-V: *Punto de control*; virt-manager: *Ver > Instantáneas*). Después enciéndela y
+      crea un archivo de prueba:
+    comandos:
+      - echo "esto va a desaparecer" > prueba.txt
+      - ls
+    comprobar: >-
+      Apaga la VM, restaura la instantánea `instalación limpia` y vuelve a encenderla: `ls` ya no
+      muestra `prueba.txt`. La VM volvió exactamente al estado en que la guardaste.
