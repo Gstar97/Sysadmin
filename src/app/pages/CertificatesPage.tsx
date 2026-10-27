@@ -26,7 +26,7 @@ export default function CertificatesPage() {
         Al completar todos los módulos de un nivel y entregar su proyecto integrador se obtiene la insignia y un certificado
         imprimible.
       </PageHeader>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {content.levels.map((level) => {
           const state = snap.levels[level.id]
           const earned = !!state?.badgeEarnedAt

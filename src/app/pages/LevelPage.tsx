@@ -30,7 +30,7 @@ export default function LevelPage() {
       </PageHeader>
 
       <Card>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <div className="text-sm font-semibold">Al terminar el nivel vas a poder</div>
             <p className="mt-1 text-muted">{level.perfil_salida}</p>
@@ -52,7 +52,7 @@ export default function LevelPage() {
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Módulos</h2>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {level.modules.map((mod) => {
             const total = mod.lessons.length + mod.planned.length
             return (

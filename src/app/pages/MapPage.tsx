@@ -59,7 +59,7 @@ export default function MapPage() {
                   {formatHours(levelHours(level))} · {Math.round(levelFraction(level, snap) * 100)}%
                 </span>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {level.modules.map((mod) => (
                   <ModuleNode
                     key={mod.id}
