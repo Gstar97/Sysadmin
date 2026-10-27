@@ -70,13 +70,16 @@ export function PacketSimulator({ scenario }: Props) {
   const prev = index > 0 ? steps[index - 1] : undefined
 
   const nodes = new Map(scenario.nodos.map((n) => [n.id, n]))
-  const xs = scenario.nodos.map((n) => n.x)
   const ys = scenario.nodos.map((n) => n.y)
   const pad = 60
-  const minX = Math.min(...xs) - pad
+  // Las etiquetas van centradas debajo del ícono: el margen lateral crece con su largo para que no se corten.
+  const half = (n: { etiqueta: string }) => Math.max(pad, n.etiqueta.length * 3.6 + 8)
+  const minX = Math.min(...scenario.nodos.map((n) => n.x - half(n)))
   const minY = Math.min(...ys) - pad
-  const width = Math.max(...xs) - minX + pad
+  const width = Math.max(...scenario.nodos.map((n) => n.x + half(n))) - minX
   const height = Math.max(...ys) - minY + pad + 20
+  // Una topología muy apaisada se ve diminuta en una columna: va a todo el ancho y el detalle debajo.
+  const wide = width / height >= 2.2
 
   // Animación del paquete a lo largo del enlace.
   useEffect(() => {
@@ -121,7 +124,7 @@ export function PacketSimulator({ scenario }: Props) {
         <h3 className="text-lg font-semibold">{scenario.titulo}</h3>
         {scenario.descripcion && <RichText text={scenario.descripcion} className="text-muted" />}
       </div>
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+      <div className={cn('grid', !wide && 'lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]')}>
         <div className="p-2">
           <svg viewBox={`${minX} ${minY} ${width} ${height}`} className="h-auto max-h-[380px] w-full" role="img" aria-label={`Diagrama de ${scenario.titulo}. Paso ${index + 1}: ${step.titulo}`}>
             {scenario.enlaces.map((l, i) => {
@@ -175,15 +178,15 @@ export function PacketSimulator({ scenario }: Props) {
             </span>
           </div>
         </div>
-        <div className="border-t border-line p-4 lg:border-l lg:border-t-0" aria-live="polite">
+        <div className={cn('border-t border-line p-4', !wide && 'lg:border-l lg:border-t-0')} aria-live="polite">
           <h4 className="font-semibold">{step.titulo}</h4>
           <p className="text-xs text-muted">
             {nodes.get(step.desde)?.etiqueta} → {nodes.get(step.hacia)?.etiqueta}
           </p>
           <RichText text={step.explicacion} className="mt-2 text-sm" />
-          <div className="mt-3 space-y-1.5" aria-label="Encabezados del paquete en este tramo">
+          <div className={cn('mt-3', wide ? 'grid gap-1.5 md:grid-cols-2' : 'space-y-1.5')} aria-label="Encabezados del paquete en este tramo">
             {LAYER_INFO.filter((l) => step.capas[l.key]).map((l, depth) => (
-              <div key={l.key} className="rounded-lg border-l-4 bg-surface-2 p-2" style={{ borderColor: l.color, marginLeft: depth * 6 }}>
+              <div key={l.key} className="rounded-lg border-l-4 bg-surface-2 p-2" style={{ borderColor: l.color, marginLeft: wide ? 0 : depth * 6 }}>
                 <div className="mb-1 flex items-center justify-between text-xs font-semibold">
                   <span>{l.name}</span>
                   <span className="font-normal text-muted">{l.pdu}</span>

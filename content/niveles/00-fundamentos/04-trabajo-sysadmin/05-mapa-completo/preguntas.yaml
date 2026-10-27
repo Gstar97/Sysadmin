@@ -1,0 +1,98 @@
+- id: p01
+  tipo: ordenar_pasos
+  diagnostico: true
+  enunciado: Ordena lo que pasa al abrir https://tienda.example.com.
+  pasos:
+    - La PC consulta al DNS la IP del sitio
+    - El router traduce la IP privada con NAT y el paquete cruza Internet
+    - Se abre la conexión TCP con el puerto 443
+    - El saludo TLS verifica el certificado y acuerda el cifrado
+    - El navegador envía el pedido HTTP
+    - El servidor web pasa el pedido a la aplicación, que consulta la base de datos
+  explicacion: Sin IP no hay a dónde ir, sin conexión TCP no hay saludo TLS, y el pedido HTTP viaja recién cuando el canal está cifrado.
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué hace el DNS?
+  opciones:
+    - { texto: "Traduce nombres como tienda.example.com a direcciones IP", correcta: true, explicacion: "Las personas usan nombres y las redes usan IP: el DNS hace la traducción." }
+    - { texto: "Cifra la conexión con el servidor", explicacion: "Eso lo hace TLS." }
+    - { texto: "Asigna la IP a la PC al conectarse", explicacion: "Eso lo hace DHCP." }
+    - { texto: "Bloquea el tráfico no permitido", explicacion: "Eso lo hace un firewall." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Para qué sirve un número de puerto?
+  opciones:
+    - { texto: "Para identificar a qué servicio va dirigido el tráfico dentro de un mismo equipo", correcta: true, explicacion: "La IP lleva al equipo; el puerto, al servicio: 443 HTTPS, 22 SSH, 53 DNS." }
+    - { texto: "Para identificar la placa de red física", explicacion: "Eso es la dirección MAC." }
+    - { texto: "Para saber en qué país está el servidor", explicacion: "El puerto no tiene relación con la ubicación." }
+    - { texto: "Para medir la velocidad de la conexión", explicacion: "No mide nada: es un número que identifica un servicio." }
+- id: p04
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Cuando el router de la oficina hace NAT sobre un paquete que sale hacia Internet, ¿qué cambia?
+  opciones:
+    - { texto: "La IP de origen privada se reemplaza por la IP pública del router (y puede cambiar el puerto de origen)", correcta: true, explicacion: "El router anota la traducción para devolver la respuesta a la PC correcta." }
+    - { texto: "La IP de destino se reemplaza por la del DNS", explicacion: "El destino sigue siendo el servidor." }
+    - { texto: "El contenido cifrado se descifra", explicacion: "El router no puede ni necesita descifrar el contenido." }
+    - { texto: "No cambia nada", explicacion: "La IP privada no sirve en Internet: tiene que cambiar." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: El navegador muestra "La conexión no es privada" al entrar a la intranet. ¿Qué pieza del camino hay que revisar?
+  opciones:
+    - { texto: "El certificado TLS del servidor (vencido, de otro nombre o firmado por una autoridad no confiable)", correcta: true, explicacion: "Es la advertencia típica de un problema con el certificado." }
+    - { texto: "El DNS", explicacion: "Si el DNS fallara, no se llegaría al servidor." }
+    - { texto: "La base de datos", explicacion: "La advertencia aparece antes de que la aplicación haga nada." }
+    - { texto: "El cable de red de la PC", explicacion: "Si llegó a mostrar la advertencia, la red funciona." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Una página responde "502 Bad Gateway". ¿Qué es lo más probable?
+  opciones:
+    - { texto: "El servidor web funciona, pero no puede comunicarse con la aplicación que está detrás", correcta: true, explicacion: "El proxy inverso responde 502 cuando la aplicación no contesta o contesta mal." }
+    - { texto: "La página no existe", explicacion: "Eso sería un 404." }
+    - { texto: "El DNS no resuelve el nombre", explicacion: "Sin DNS no llegaría ninguna respuesta del servidor." }
+    - { texto: "Falta un permiso de archivo", explicacion: "Eso suele dar un 403." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: Un usuario dice que la intranet no abre. Ejecutas estas pruebas desde su PC. ¿Dónde está el problema?
+  salida: |
+    $ ping -c 2 intranet.empresa.local
+    ping: >-
+      intranet.empresa.local: Name or service not known
+    $ ping -c 2 10.0.0.20
+    64 bytes from 10.0.0.20: icmp_seq=1 ttl=63 time=0.84 ms
+    64 bytes from 10.0.0.20: icmp_seq=2 ttl=63 time=0.79 ms
+  opciones:
+    - { texto: "En la resolución de nombres (DNS): con la IP se llega, con el nombre no", correcta: true, explicacion: "La red y el servidor responden; lo que falla es traducir el nombre." }
+    - { texto: "En el cable de red", explicacion: "El ping a la IP funciona: la red está bien." }
+    - { texto: "En el servidor web", explicacion: "Todavía no se llegó a probar el servidor web; el primer problema es el nombre." }
+    - { texto: "En el certificado", explicacion: "El error aparece antes de cualquier conexión TLS." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: ¿Qué protege TLS en una conexión HTTPS?
+  opciones:
+    - { texto: "Que nadie en el camino pueda leer ni modificar el contenido, y que el servidor sea quien dice ser", correcta: true, explicacion: "Cifra el contenido y verifica la identidad del servidor con el certificado." }
+    - { texto: "Que la página cargue más rápido", explicacion: "No es su objetivo; agrega un saludo inicial." }
+    - { texto: "Que nadie sepa a qué IP te conectas", explicacion: "Las IP y los puertos siguen visibles: se necesitan para llegar." }
+    - { texto: "Que el servidor no tenga errores", explicacion: "TLS protege el transporte, no el funcionamiento de la aplicación." }
+- id: p09
+  tipo: completar_comando
+  enunciado: En Linux, escribe el comando que pide la página https://intranet.empresa.local y muestra solo los encabezados de la respuesta.
+  aceptadas: [curl -I https://intranet.empresa.local, curl --head https://intranet.empresa.local]
+  explicacion: "`curl -I` (o `--head`) muestra el código de estado y los encabezados, sin el contenido."
+- id: p10
+  tipo: opcion_multiple
+  enunciado: "¿En qué nivel de esta carrera vas a aprender a configurar un servidor web con su certificado TLS?"
+  opciones:
+    - { texto: "Nivel 4: Servicios e infraestructura", correcta: true, explicacion: "Tiene los módulos de servidores web y de certificados y TLS." }
+    - { texto: "Nivel 2: Redes", explicacion: "El Nivel 2 cubre IP, routing, DNS y firewalls, no servidores web." }
+    - { texto: "Nivel 7: Contenedores y cloud", explicacion: "Ahí se ejecutan aplicaciones en contenedores y en la nube, partiendo de lo visto en el Nivel 4." }
+    - { texto: "Nivel 0: Fundamentos", explicacion: "Aquí solo se ve el mapa general." }
+- id: p11
+  tipo: respuesta_multiple
+  enunciado: El ping al servidor responde, pero la página se queda cargando hasta dar error de tiempo agotado. ¿Qué causas son posibles?
+  opciones:
+    - { texto: "Un firewall bloquea el puerto 443", correcta: true, explicacion: "El ping usa ICMP y pasa; el tráfico al 443 se descarta." }
+    - { texto: "El servidor web no está escuchando en el puerto 443 y un firewall descarta los intentos", correcta: true, explicacion: "Sin firewall se vería un rechazo inmediato; con firewall, una espera." }
+    - { texto: "El DNS no resuelve el nombre", explicacion: "Si el ping por nombre responde, el DNS funciona." }
+    - { texto: "La PC no tiene IP", explicacion: "Sin IP no respondería el ping." }

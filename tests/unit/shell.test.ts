@@ -124,4 +124,24 @@ describe('detalles que usa el Nivel 0', () => {
     expect((await run('sha256sum -c a.sha256')).code).toBe(1)
     expect((await run('echo -n "hola" | base64')).out).toBe('aG9sYQ==\n')
   })
+
+  it('el camino de un pedido web: ip, dig, ping y curl con TLS', async () => {
+    const { run } = await session({
+      distro: 'ubuntu',
+      paquetes: { instalados: ['dnsutils'] },
+      red: {
+        interfaces: [{ nombre: 'enp0s3', ip: '192.168.1.20/24' }],
+        puerta_enlace: '192.168.1.1',
+        dns: ['192.168.1.53'],
+        alcanzables: ['192.168.1.53'],
+        registros_dns: { 'tienda.example.com': '198.51.100.20' },
+      },
+    })
+    expect((await run('ip route')).out).toContain('default via 192.168.1.1')
+    expect((await run('dig +short tienda.example.com')).out).toBe('198.51.100.20\n')
+    expect((await run('ping -c 1 tienda.example.com')).out).toContain('1 received')
+    const v = await run('curl -v https://tienda.example.com')
+    expect(v.err).toMatch(/Trying 198\.51\.100\.20:443[\s\S]*TLSv1\.3[\s\S]*subject: CN=tienda\.example\.com[\s\S]*expire date: \w{3} [ \d]\d \d\d:\d\d:\d\d \d{4} GMT[\s\S]*< HTTP\/1\.1 200 OK/)
+    expect((await run('curl -v http://tienda.example.com')).err).not.toContain('TLSv1.3')
+  })
 })

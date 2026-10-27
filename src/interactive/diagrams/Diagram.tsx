@@ -32,6 +32,12 @@ interface InteractiveProps {
   alt: string
 }
 
+/** Un SVG muy apaisado se lee mejor a todo el ancho, con la explicación debajo. */
+function isWide(svg?: string): boolean {
+  const m = svg && /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(svg)
+  return !!m && Number(m[1]) / Number(m[2]) >= 1.8
+}
+
 /**
  * Diagrama con zonas clicables: cada punto abre su explicación.
  * Las áreas se expresan en porcentaje del ancho y alto de la imagen.
@@ -46,11 +52,12 @@ export function InteractiveDiagram({ datos, svg, src, alt }: InteractiveProps) {
     setVisited((v) => new Set(v).add(id))
   }
   const withAreas = datos.puntos.some((p) => p.area)
+  const wide = isWide(svg)
 
   return (
     <div className="my-6 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
       {datos.titulo && <div className="border-b border-line px-4 py-2 font-semibold">{datos.titulo}</div>}
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className={cn('grid gap-0', !wide && 'lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]')}>
         <div className="self-start p-3 text-fg">
           {/* Las zonas se ubican en porcentaje sobre la imagen, sin contar el relleno del contenedor. */}
           <div className="relative">
@@ -74,7 +81,7 @@ export function InteractiveDiagram({ datos, svg, src, alt }: InteractiveProps) {
               )}
           </div>
         </div>
-        <div className="border-t border-line p-4 lg:border-l lg:border-t-0">
+        <div className={cn('border-t border-line p-4', !wide && 'lg:border-l lg:border-t-0')}>
           <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Partes del diagrama">
             {datos.puntos.map((p, i) => (
               <button

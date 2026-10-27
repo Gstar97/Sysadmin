@@ -1,0 +1,94 @@
+tipo: diagrama
+titulo: El camino de una página web
+puntos:
+  - id: pc
+    titulo: Tu PC y el navegador
+    area: { x: 1.25, y: 45.2, ancho: 12, alto: 17.1 }
+    texto: >-
+      Antes de todo, la PC necesita una dirección IP, la máscara, la puerta de enlace y el
+      servidor DNS. Casi siempre los recibe automáticamente por DHCP al conectarse a la red. El
+      navegador arma el pedido y el sistema operativo lo envía por la placa de red. Cuando alguien
+      dice "no tengo internet", lo primero es revisar esta configuración. La administración de
+      equipos Linux y Windows se ve en los Niveles 1 y 3; DHCP, en el Nivel 2.
+  - id: dns
+    titulo: Servidor DNS
+    area: { x: 12.5, y: 9.5, ancho: 18.75, alto: 13.3 }
+    texto: >-
+      Las personas usan nombres (tienda.example.com) y las redes usan direcciones IP: el DNS hace
+      la traducción. La PC le pregunta a su servidor DNS (el de la empresa o el del proveedor de
+      internet). Si este no tiene la respuesta guardada, consulta a otros servidores de Internet
+      hasta llegar al responsable del dominio. La respuesta se guarda un tiempo (el TTL) para no
+      repetir la consulta. Con un error de DNS parece que nada funciona, aunque la red esté
+      perfecta. Se ve en el Nivel 2 (en Linux) y en el Nivel 3 (en Windows Server).
+  - id: router
+    titulo: Router y NAT
+    area: { x: 15.5, y: 45.2, ancho: 12, alto: 17.1 }
+    texto: >-
+      Como el servidor está en otra red, la PC le entrega el paquete a su puerta de enlace: el
+      router. En una oficina o una casa, el router además hace NAT: cambia la IP privada de la PC
+      (por ejemplo, 192.168.1.20) por la IP pública de la conexión y anota el cambio para devolver
+      la respuesta a quien corresponde. Direcciones IP, subredes, routing y NAT son el centro del
+      Nivel 2.
+  - id: internet
+    titulo: Internet
+    area: { x: 29.75, y: 45.2, ancho: 12, alto: 17.1 }
+    texto: >-
+      Internet es una red de redes: el paquete pasa por los routers de varios proveedores hasta
+      llegar a la red del servidor. Cada router mira la IP de destino, decide por dónde seguir y le
+      resta 1 al TTL del paquete, para que un paquete perdido no quede dando vueltas para siempre.
+      `traceroute` (`tracert` en Windows) muestra ese camino salto por salto. Lo vas a practicar en
+      el Nivel 2.
+  - id: firewall
+    titulo: Firewall
+    area: { x: 44, y: 45.2, ancho: 12, alto: 17.1 }
+    texto: >-
+      Antes de llegar al servidor, un firewall decide qué tráfico entra. Para un sitio web público
+      lo normal es permitir solo el puerto 443 (HTTPS) y el 80 (HTTP, que solo redirige a HTTPS) y
+      bloquear todo lo demás. Además, cada servidor tiene su propio firewall: firewalld en Rocky,
+      ufw en Ubuntu, Firewall de Windows. Un puerto bloqueado suele verse como "la conexión tardó
+      demasiado en responder". Los firewalls de red están en los Niveles 2 y 8; el de cada
+      servidor aparece desde el Nivel 1.
+  - id: web
+    titulo: Servidor web
+    area: { x: 58.25, y: 45.2, ancho: 12, alto: 17.1 }
+    texto: >-
+      Un programa como Nginx (o Apache, o IIS en Windows) atiende la conexión en el puerto 443.
+      Primero hace el saludo TLS: presenta el certificado del sitio, que prueba que el servidor es
+      quien dice ser, y acuerda con el navegador las claves para cifrar todo lo que sigue. Después
+      recibe el pedido HTTP: si es un archivo fijo (una imagen, una hoja de estilos), lo devuelve
+      directamente; si es algo dinámico, se lo pasa a la aplicación. Cuando hace de intermediario
+      se lo llama proxy inverso. Servidores web y certificados son dos módulos del Nivel 4.
+  - id: app
+    titulo: Aplicación
+    area: { x: 72.5, y: 45.2, ancho: 12, alto: 17.1 }
+    texto: >-
+      Es el programa que escribieron los desarrolladores: la tienda, el sistema de turnos, el
+      correo web. Arma cada página según quién la pide y qué datos hay. El sysadmin no la programa,
+      pero la instala, la mantiene funcionando, revisa sus registros y la actualiza. Corre en un
+      servidor Linux (Nivel 1) o Windows (Nivel 3), y cada vez más dentro de contenedores (Nivel
+      7). Si la aplicación se cae, el servidor web responde "502 Bad Gateway".
+  - id: db
+    titulo: Base de datos
+    area: { x: 86.75, y: 45.2, ancho: 12, alto: 17.1 }
+    texto: >-
+      La aplicación guarda y consulta los datos (productos, clientes, pedidos) en una base de datos
+      como MariaDB, PostgreSQL o SQL Server. Una sola página puede generar decenas de consultas.
+      Al sysadmin le toca instalarla, darle a la aplicación los permisos justos, vigilar su
+      espacio y su rendimiento y, sobre todo, hacer y probar sus backups. Se ve en el Nivel 4.
+  - id: donde
+    titulo: Dónde corre todo esto
+    area: { x: 1.25, y: 71.4, ancho: 97.5, alto: 9.5 }
+    texto: >-
+      Cada pieza del camino es un equipo o un programa que corre en alguna parte: un servidor
+      físico en un rack (Nivel 4), una máquina virtual dentro de un hipervisor (Nivel 5), un
+      contenedor o un servicio en la nube de AWS o Azure (Nivel 7). Para quien abre la página da
+      lo mismo; para el sysadmin cambia cómo se instala, se protege y se recupera.
+  - id: mantener
+    titulo: Lo que lo mantiene funcionando
+    area: { x: 1.25, y: 83.8, ancho: 97.5, alto: 13.3 }
+    texto: >-
+      Que la página cargue hoy no alcanza: tiene que cargar mañana y después de un desastre. Para
+      eso están los backups y la recuperación (Nivel 5); el monitoreo que avisa antes de que se
+      queje un usuario, los registros centralizados y la automatización (Nivel 6); la seguridad en
+      cada capa (Nivel 8); y la parte profesional: documentación, gestión de cambios y guardias
+      (Nivel 9).

@@ -1,0 +1,129 @@
+---
+id: n0-m4-l5
+titulo: 'El mapa completo: qué pasa al abrir una página web'
+minutos: 120
+objetivos:
+  - Seguir el recorrido completo de un pedido web, del DNS a la base de datos.
+  - Explicar con palabras simples qué hacen IP, TCP, TLS y HTTP, y qué es un puerto.
+  - Ubicar cada pieza del recorrido en el nivel de la carrera donde se aprende.
+glosario: [direccion-ip, dns, puerto, tcp, tls, certificado, http, proxy-inverso, base-datos, firewall]
+verificado: 2026-10
+---
+
+import recorrido from './recorrido.svg?raw'
+import recorridoDatos from './recorrido.yaml'
+import paquetes from './paquetes.yaml'
+import sintomas from './sintomas.yaml'
+import ejCamino from './ej-camino.yaml'
+
+Abres el navegador, escribes `tienda.example.com` y en menos de un segundo aparece la página. En ese segundo participan más de diez sistemas distintos, y cada uno es parte de esta carrera. Esta lección es el mapa: no vas a dominar ninguna pieza todavía (para eso están los niveles siguientes), pero vas a saber qué hace cada una, en qué orden actúan y dónde se aprende. Y vas a ganar algo muy práctico: cuando alguien diga "la página no carga", vas a saber por dónde empezar a mirar.
+
+## Las piezas del camino
+
+Haz clic en cada pieza para ver qué hace, qué puede fallar y en qué nivel la vas a estudiar.
+
+<DiagramaInteractivo datos={recorridoDatos} svg={recorrido} alt="Recorrido de un pedido web: la PC consulta al servidor DNS, sale por el router con NAT, cruza Internet, pasa el firewall y llega al servidor web, que usa la aplicación y la base de datos. Debajo, dónde corre todo (servidores físicos, máquinas virtuales, contenedores y nube) y lo que lo mantiene funcionando (backups, monitoreo, seguridad, documentación)." />
+
+## El recorrido, paso a paso
+
+**1. La PC ya tiene red.** Al conectarse, la PC recibió por DHCP su **<Termino id="direccion-ip">dirección IP</Termino>** (por ejemplo, 192.168.1.20), la máscara, la puerta de enlace (el router, 192.168.1.1) y el servidor DNS. Una IP identifica a un equipo dentro de una red, como una dirección postal.
+
+**2. DNS: del nombre a la IP.** La PC no sabe dónde está `tienda.example.com`; necesita su IP. Se la pregunta al servidor **<Termino id="dns">DNS</Termino>**, que responde `198.51.100.20`. Si el DNS falla, nada funciona aunque la red esté perfecta: por eso en el trabajo vas a escuchar mucho la frase "siempre es el DNS".
+
+**3. Salir de la red local.** La IP del servidor no está en la red de la PC, así que el paquete se entrega a la puerta de enlace. El router hace **NAT**: reemplaza la IP privada de la PC por la IP pública de la conexión. Después, el paquete cruza Internet de router en router hasta la red del servidor.
+
+**4. TCP: abrir la conexión.** Un servidor puede ofrecer muchos servicios a la vez, y cada uno escucha en un número de **<Termino id="puerto">puerto</Termino>** distinto: 443 para HTTPS, 80 para HTTP, 22 para SSH, 53 para DNS. Antes de enviar datos, la PC y el servidor hacen el saludo de **<Termino id="tcp">TCP</Termino>** en tres pasos (SYN, SYN-ACK, ACK). TCP se ocupa de que todo llegue completo y en orden: si un paquete se pierde, se vuelve a enviar. En el medio, el **<Termino id="firewall">firewall</Termino>** decide si deja pasar la conexión a ese puerto.
+
+**5. TLS: verificar y cifrar.** Antes de hablar HTTP, el navegador y el servidor hacen el saludo **<Termino id="tls">TLS</Termino>**. El servidor presenta su **<Termino id="certificado">certificado</Termino>**: un documento digital que dice "soy tienda.example.com", firmado por una autoridad en la que el navegador confía (por ejemplo, Let's Encrypt). Si el certificado venció o es de otro sitio, el navegador muestra una advertencia. Si está bien, acuerdan claves y desde ahí todo viaja cifrado: es el candado de la barra de direcciones.
+
+**6. HTTP: el pedido y la respuesta.** Ahora sí, el navegador pide la página con **<Termino id="http">HTTP</Termino>** ("dame `/` del sitio tienda.example.com") y el servidor responde con un **código de estado** y el contenido. HTTPS es exactamente eso: HTTP dentro de TLS.
+
+**7. Dentro del servidor.** El servidor web (Nginx, Apache o IIS) recibe el pedido. Si es un archivo fijo, lo entrega; si es una página dinámica, actúa como **<Termino id="proxy-inverso">proxy inverso</Termino>** y se lo pasa a la aplicación, que consulta la **<Termino id="base-datos">base de datos</Termino>** y arma el HTML.
+
+**8. La respuesta vuelve** por el mismo camino. El navegador lee el HTML, descubre que necesita estilos, imágenes y scripts, y los pide por la misma conexión.
+
+<Nota>
+Muchos sitios grandes ya usan HTTP/3, que viaja sobre un protocolo llamado QUIC (sobre UDP) en lugar de TCP, y combina el saludo de la conexión con el de TLS para ganar tiempo. Las piezas del camino son las mismas: DNS, routing, cifrado, servidor, aplicación y datos.
+</Nota>
+
+Los códigos de estado HTTP son de lo primero que mira un sysadmin cuando una página falla:
+
+| Código | Significa | Dónde mirar |
+|---|---|---|
+| 200 OK | Todo bien | — |
+| 301 / 302 | Redirección a otra dirección (por ejemplo, de HTTP a HTTPS) | La configuración del servidor web, si se forma un bucle |
+| 403 Forbidden | El servidor no permite ver eso | Permisos de los archivos o configuración del servidor web |
+| 404 Not Found | Lo pedido no existe | La dirección o la ubicación de los archivos |
+| 500 Internal Server Error | La aplicación falló al armar la respuesta | Los registros de la aplicación |
+| 502 Bad Gateway | El servidor web no pudo hablar con la aplicación | Si la aplicación está funcionando |
+| 503 Service Unavailable | El servicio no puede atender (sobrecarga o mantenimiento) | La carga del servidor y los servicios detrás |
+
+## Míralo paquete por paquete
+
+Avanza paso a paso y fíjate qué encabezados cambian en cada tramo (las MAC en cada salto, las IP en el NAT) y cuáles llegan intactos (los puertos de destino, el contenido cifrado).
+
+<SimuladorPaquetes escenario={paquetes} />
+
+<Pregunta id="p04" />
+
+## Usar el mapa cuando algo falla
+
+El recorrido es también una lista de control. Cuando "la página no carga", se prueba cada pieza en orden, y cada prueba descarta una parte del camino:
+
+| Pieza | Linux | Windows |
+|---|---|---|
+| ¿La PC tiene IP y puerta de enlace? | `ip -br address`, `ip route` | `ipconfig` |
+| ¿Resuelve el nombre? | `dig nombre`, `nslookup nombre` | `Resolve-DnsName nombre`, `nslookup nombre` |
+| ¿Llega al servidor? | `ping`, `traceroute` | `ping`, `tracert` |
+| ¿Responde el puerto? | `curl -v https://nombre` | `Test-NetConnection nombre -Port 443` |
+| ¿Qué responde el servidor web? | `curl -I https://nombre` | `curl.exe -I https://nombre` |
+
+`curl -v` es especialmente útil porque muestra el recorrido entero en una sola salida (aquí recortada):
+
+```text
+$ curl -v https://tienda.example.com
+* Host tienda.example.com:443 was resolved.               ← DNS
+* IPv4: 198.51.100.20
+*   Trying 198.51.100.20:443...                           ← TCP al puerto 443
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384   ← TLS
+* Server certificate:
+*  subject: CN=tienda.example.com
+*  expire date: Dec 30 23:59:59 2026 GMT
+*  SSL certificate verify ok.                             ← certificado válido
+* Connected to tienda.example.com (198.51.100.20) port 443
+> GET / HTTP/2                                            ← pedido HTTP
+> Host: tienda.example.com
+< HTTP/2 200                                              ← respuesta del servidor
+< server: nginx
+```
+
+Prueba la secuencia completa en la terminal:
+
+<Terminal ejercicio={ejCamino} />
+
+Ahora usa el mapa para decidir por dónde empezar en cada caso:
+
+<Emparejar ejercicio={sintomas} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Pensar que si el ping responde, la página tiene que funcionar">
+    El ping prueba que la red llega al servidor (las capas de abajo). No dice nada del puerto 443, del certificado ni de la aplicación. Y al revés: muchos servidores bloquean el ping y la página funciona igual. Para probar un servicio web, usa `curl` o `Test-NetConnection` con el puerto.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse del DNS">
+    "No funciona internet" muchas veces es "no funciona el DNS". La prueba clave: si con la IP funciona y con el nombre no, la red está bien y el problema es la resolución de nombres. Revisa qué servidor DNS tiene configurado la PC y si responde.
+  </ErrorComun>
+  <ErrorComun titulo="Culpar al servidor web por un 502">
+    El 502 lo genera el servidor web, pero el problema está detrás: la aplicación no responde. Reiniciar Nginx no lo arregla; hay que revisar el servicio de la aplicación y sus registros.
+  </ErrorComun>
+  <ErrorComun titulo="Ignorar la advertencia del certificado">
+    Hacer clic en "continuar de todos modos" esconde el problema y entrena a los usuarios a ignorar una alerta que existe para protegerlos. Un certificado vencido o equivocado se corrige en el servidor (Nivel 4).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Recorrido: la PC con red (IP, puerta de enlace, DNS) → DNS traduce el nombre → router con NAT → Internet → firewall → TCP al puerto 443 → TLS verifica el certificado y cifra → HTTP pide la página → servidor web → aplicación → base de datos → la respuesta vuelve.
+- Un puerto identifica un servicio dentro de un equipo: 443 HTTPS, 80 HTTP, 22 SSH, 53 DNS.
+- Los códigos HTTP orientan el diagnóstico: 404 no existe, 403 sin permiso, 500 falla la aplicación, 502 el servidor web no llega a la aplicación, 503 no puede atender.
+- Para diagnosticar, se prueba cada pieza en orden: `ip`, `dig`, `ping`, `curl -v` (en Windows: `ipconfig`, `Resolve-DnsName`, `Test-NetConnection`).
+- Cada pieza tiene su lugar en la carrera: redes en el Nivel 2, servicios web, certificados y bases de datos en el Nivel 4, y la infraestructura que lo sostiene en los Niveles 5 a 9.
+</Resumen>

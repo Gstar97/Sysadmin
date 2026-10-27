@@ -1,0 +1,74 @@
+tipo: terminal
+shell: bash
+titulo: Recorrer el camino desde la terminal
+descripcion: >-
+  Estás en una PC con Ubuntu de la oficina y vas a comprobar, una por una, las piezas del camino
+  hasta tienda.example.com. Es la misma secuencia que se usa cuando "la página no carga".
+estado_inicial:
+  distro: ubuntu
+  hostname: pc-ventas07
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+  paquetes:
+    instalados: [dnsutils]
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.1.20/24 }
+    puerta_enlace: 192.168.1.1
+    dns: [192.168.1.53]
+    alcanzables: [192.168.1.53]
+    registros_dns:
+      tienda.example.com: 198.51.100.20
+    sitios_web:
+      tienda.example.com: |
+        <!doctype html>
+        <html><head><title>Tienda</title></head><body><h1>Bienvenido a la tienda</h1></body></html>
+pasos:
+  - consigna: Mira qué dirección IP tiene la PC con `ip -br address`.
+    verificar:
+      - { comando_usado: 'ip\s+(-\S+\s+)*a(d|dd|ddr|ddress)?(\s|$)' }
+      - { salida_contiene: 192.168.1.20 }
+    pistas:
+      - "`ip -br address` muestra una línea por placa de red"
+    solucion: [ip -br address]
+    explicacion: La placa enp0s3 tiene la IP 192.168.1.20 con máscara /24. Sin una IP válida, nada de lo que sigue puede funcionar.
+  - consigna: Averigua cuál es la puerta de enlace con `ip route`.
+    verificar:
+      - { comando_usado: 'ip\s+(-\S+\s+)*r(o|ou|out|oute)?(\s|$)' }
+      - { salida_contiene: default via 192.168.1.1 }
+    pistas:
+      - "`ip route` muestra la tabla de rutas; la línea que empieza con `default` es la puerta de enlace"
+    solucion: [ip route]
+    explicacion: >-
+      `default via 192.168.1.1` significa: todo lo que no sea de la red local se le entrega al
+      router 192.168.1.1. Es el camino de salida hacia Internet.
+  - consigna: Pregúntale al DNS la IP de tienda.example.com con `dig +short tienda.example.com`.
+    verificar:
+      - { comando_usado: '(dig|nslookup|host)\s+.*tienda\.example\.com' }
+      - { salida_contiene: 198.51.100.20 }
+    pistas:
+      - "`dig +short nombre` muestra solo la respuesta; `nslookup nombre` también sirve"
+    solucion: [dig +short tienda.example.com]
+    explicacion: El DNS respondió 198.51.100.20. Si este paso fallara, el navegador mostraría que no encuentra el servidor, aunque la red funcione.
+  - consigna: Comprueba que el servidor responde a través de Internet con `ping -c 3 tienda.example.com`.
+    verificar:
+      - { comando_usado: 'ping\s+.*(tienda\.example\.com|198\.51\.100\.20)' }
+    pistas:
+      - "`-c 3` envía tres paquetes y termina"
+    solucion: [ping -c 3 tienda.example.com]
+    explicacion: >-
+      Las respuestas confirman que los paquetes van y vuelven: la puerta de enlace, el NAT y el
+      routing funcionan. Ojo: muchos servidores bloquean el ping, así que si no responde no
+      siempre es un problema.
+  - consigna: Pide la página y mira solo los encabezados de la respuesta con `curl -I https://tienda.example.com`.
+    verificar:
+      - { comando_usado: 'curl\s+.*tienda\.example\.com' }
+      - { salida_contiene: 200 OK }
+    pistas:
+      - "`curl -I URL` muestra solo los encabezados"
+    solucion: [curl -I https://tienda.example.com]
+    explicacion: >-
+      `200 OK` es la respuesta del servidor web: el pedido llegó, pasó el firewall, el saludo TLS
+      funcionó y el servidor devolvió la página. Recorriste el camino completo, de la PC al
+      servidor, en cinco comandos.

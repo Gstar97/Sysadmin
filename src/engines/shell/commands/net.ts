@@ -415,7 +415,16 @@ register(['curl', 'wget'], {
       ctx.err(`--${new Date().toISOString().slice(0, 19).replace('T', ' ')}--  ${url}\nResolving ${host}... ${ip}\nConnecting to ${host}|${ip}|:${port}... connected.\nHTTP request sent, awaiting response... ${res.status} ${statusText}\nLength: ${res.body.length} [text/html]\nSaving to: '${file}'\n\n'${file}' saved [${res.body.length}/${res.body.length}]\n\n`)
       return res.status >= 400 ? 8 : 0
     }
-    if (a.flags.has('v')) ctx.err(`*   Trying ${ip}:${port}...\n* Connected to ${host} (${ip}) port ${port}\n> GET ${m[4] ?? '/'} HTTP/1.1\n> Host: ${host}\n> User-Agent: curl/8.9.1\n> Accept: */*\n>\n< ${headers.trim().split('\n').join('\n< ')}\n<\n`)
+    if (a.flags.has('v')) {
+      // Formato de OpenSSL: "Oct  1 16:55:24 2026 GMT" (día rellenado con espacio)
+      const gmt = (d: Date) => `${d.toUTCString().slice(8, 11)} ${String(d.getUTCDate()).padStart(2, ' ')} ${d.toISOString().slice(11, 19)} ${d.getUTCFullYear()} GMT`
+      const now = Date.now()
+      const tls =
+        scheme === 'https'
+          ? `* ALPN: curl offers h2,http/1.1\n* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519 / RSASSA-PSS\n* ALPN: server accepted http/1.1\n* Server certificate:\n*  subject: CN=${host}\n*  start date: ${gmt(new Date(now - 26 * 86400000))}\n*  expire date: ${gmt(new Date(now + 64 * 86400000))}\n*  subjectAltName: host "${host}" matched cert's "${host}"\n*  SSL certificate verify ok.\n`
+          : ''
+      ctx.err(`* Host ${host}:${port} was resolved.\n* IPv6: (none)\n* IPv4: ${ip}\n*   Trying ${ip}:${port}...\n${tls}* Connected to ${host} (${ip}) port ${port}\n> GET ${m[4] ?? '/'} HTTP/1.1\n> Host: ${host}\n> User-Agent: curl/8.9.1\n> Accept: */*\n>\n< ${headers.trim().split('\n').join('\n< ')}\n<\n`)
+    }
     if (a.flags.has('I')) {
       ctx.out(headers.replace(/\n/g, '\r\n').replace(/\r\n\r\n$/, '\r\n\r\n'))
       return 0
