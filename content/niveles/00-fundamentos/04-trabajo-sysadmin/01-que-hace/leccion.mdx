@@ -1,0 +1,93 @@
+---
+id: n0-m4-l1
+titulo: Qué hace un sysadmin
+minutos: 90
+objetivos:
+  - Describir las tareas habituales (altas de usuarios, parches, backups, monitoreo, incidentes y proyectos).
+  - Diferenciar trabajo planificado de interrupciones y entender cómo se organiza una semana real.
+glosario: [sysadmin, incidente, ticket, ventana-mantenimiento]
+verificado: 2026-10
+---
+
+import semana from './semana.svg?raw'
+import ordenarLunes from './ordenar-lunes.yaml'
+import tiposPedido from './tipos-pedido.yaml'
+
+Hasta ahora viste cómo funcionan las computadoras y los sistemas operativos. En este módulo cambia la pregunta: ¿qué hace, concretamente, una persona que trabaja de esto? Saberlo te ayuda a entender para qué sirve cada cosa que vas a aprender en la carrera y a llegar a una entrevista sabiendo de qué se trata el puesto.
+
+## El trabajo, en una frase
+
+Un **<Termino id="sysadmin">sysadmin</Termino>** (administrador de sistemas) se ocupa de que los servidores, la red y los servicios de una organización funcionen, sean seguros y estén disponibles cuando la gente los necesita. En empresas chicas, una misma persona hace de todo; en las grandes, el trabajo se reparte en equipos (lo vas a ver en la próxima lección).
+
+## Las tareas de todos los días
+
+- **Altas, bajas y cambios de usuarios**: crear la cuenta de una persona que entra, darle acceso a lo que necesita, y quitárselo todo el día que se va.
+- **Actualizaciones (parches)**: instalar las actualizaciones de seguridad de sistemas operativos y aplicaciones, probándolas antes y en horarios que no afecten el trabajo.
+- **Copias de seguridad**: revisar que se hayan hecho, que no tengan errores y, cada tanto, probar que se pueden restaurar. Un backup que nunca se probó no es un backup.
+- **Monitoreo**: revisar alertas de espacio en disco, servicios caídos, certificados por vencer, uso de CPU y memoria, y actuar antes de que se conviertan en problemas.
+- **Incidentes**: cuando algo deja de funcionar, encontrar la causa y restablecer el servicio lo antes posible.
+- **Proyectos**: instalar un servidor nuevo, migrar un sistema, cambiar la plataforma de correo, automatizar una tarea repetitiva.
+- **Documentación**: dejar escrito cómo está armado cada sistema y cómo se resuelven los problemas, para que cualquiera del equipo pueda hacerlo.
+- **Compras y proveedores**: pedir presupuestos, revisar garantías, abrir casos con el soporte de los fabricantes.
+
+## Planificado e imprevisto
+
+La característica más particular del trabajo es que se mezclan dos tipos de tareas: las **planificadas** (proyectos, mantenimiento, revisiones) y las **interrupciones** (incidentes y pedidos que llegan en cualquier momento). Una semana real se ve más o menos así:
+
+<Diagrama svg={semana} alt="Calendario de una semana de lunes a viernes: todos los días empieza con la revisión de alertas y backups; hay bloques de proyecto, de tickets, incidentes imprevistos, una reunión de cambios, prueba de parches, documentación y una ventana de mantenimiento el jueves a la noche" pie="Una semana típica: el trabajo planificado tiene que convivir con las interrupciones." />
+
+Algunas costumbres de los equipos que funcionan bien:
+
+- **Empezar el día revisando** alertas, backups y monitoreo, antes de que alguien llame.
+- **Proteger bloques de tiempo** para los proyectos; si no, las interrupciones se comen toda la semana.
+- **Hacer los cambios riesgosos en una <Termino id="ventana-mantenimiento">ventana de mantenimiento</Termino>**: un horario acordado (por ejemplo, el jueves a las 22) en el que se avisa que puede haber cortes.
+- **Turnarse para las guardias**: una persona por vez atiende las alertas fuera de horario, y el resto descansa.
+- **Dejar tiempo para aprender y mejorar**: automatizar lo repetitivo es lo que, con el tiempo, reduce las interrupciones.
+
+## Tickets: cómo se ordena el trabajo
+
+Casi todas las organizaciones registran los pedidos en un sistema de **<Termino id="ticket">tickets</Termino>** (mesa de ayuda): cada pedido tiene un número, quién lo pidió, qué pasó, quién lo atiende y cómo se resolvió. Así nada se pierde, se puede medir cuánto se tarda y queda un historial que ayuda la próxima vez.
+
+Muchas organizaciones siguen las prácticas de **ITIL**, un marco de gestión de servicios de IT. No hace falta conocerlo en detalle para empezar, pero sí distinguir cuatro tipos de registro:
+
+<Emparejar ejercicio={tiposPedido} />
+
+Un **<Termino id="incidente">incidente</Termino>** es cualquier interrupción o degradación de un servicio. Su prioridad no depende de quién lo reporta, sino de dos cosas:
+
+- **Impacto**: a cuánta gente o qué parte del negocio afecta.
+- **Urgencia**: qué tan rápido el problema causa daño, o si hay una alternativa mientras tanto.
+
+| | Urgencia alta | Urgencia media | Urgencia baja |
+| --- | --- | --- | --- |
+| **Impacto alto** (toda la empresa) | P1, crítica | P2, alta | P3, media |
+| **Impacto medio** (un área) | P2, alta | P3, media | P4, baja |
+| **Impacto bajo** (una persona) | P3, media | P4, baja | P4, baja |
+
+Ahora aplícalo:
+
+<Ordenar ejercicio={ordenarLunes} />
+
+<Pregunta id="p07" />
+
+<ErroresComunes>
+  <ErrorComun titulo="Atender primero al que grita más fuerte (o al que tiene el cargo más alto)">
+    La prioridad la dan el impacto y la urgencia, no la insistencia ni el cargo. Un pedido del gerente que afecta solo a él, con una alternativa a mano, va después de un sistema caído para toda la empresa. Explicarlo con la tabla de prioridades evita discusiones.
+  </ErrorComun>
+  <ErrorComun titulo="Resolver los pedidos por chat o en el pasillo, sin registrarlos">
+    Lo que no está registrado no existe: no se puede medir, no queda historial y el próximo que tenga el mismo problema empieza de cero. Incluso lo que se resuelve en dos minutos se anota en un ticket.
+  </ErrorComun>
+  <ErrorComun titulo="Hacer cambios en producción a media mañana sin avisar">
+    Un cambio que "no debería afectar nada" es la causa más común de los incidentes. Los cambios se planifican, se avisan, se hacen en la ventana de mantenimiento y siempre con un plan para volver atrás.
+  </ErrorComun>
+  <ErrorComun titulo="No dejar tiempo para los proyectos">
+    Si todo el día se va en interrupciones, los proyectos que reducirían esas interrupciones (automatizar, mejorar el monitoreo, documentar) nunca se hacen. Hay que reservar bloques de tiempo y defenderlos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un sysadmin mantiene servidores, red y servicios funcionando, seguros y disponibles.
+- Tareas habituales: usuarios, parches, backups, monitoreo, incidentes, proyectos, documentación y proveedores.
+- El trabajo mezcla tareas planificadas e interrupciones: hay que empezar el día revisando, proteger tiempo para proyectos y hacer los cambios en ventanas de mantenimiento.
+- Los pedidos se registran en tickets: incidentes, solicitudes, cambios y problemas.
+- La prioridad de un incidente sale del impacto y la urgencia, no de quién lo pide.
+</Resumen>
