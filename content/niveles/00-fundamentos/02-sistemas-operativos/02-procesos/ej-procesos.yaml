@@ -1,0 +1,72 @@
+tipo: terminal
+shell: bash
+titulo: El servidor anda lento
+descripcion: >-
+  Los usuarios avisan que el servidor de aplicaciones responde lento desde hace media hora.
+  Encuentra qué proceso está usando la CPU y resuélvelo con el método correcto.
+estado_inicial:
+  distro: rocky
+  hostname: srv-app02
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+    - { nombre: contabilidad }
+  procesos:
+    - { usuario: contabilidad, comando: python3 /home/contabilidad/reporte_mensual.py --año 2026, cpu: 99.2, mem: 4.1 }
+    - { usuario: root, comando: /usr/sbin/httpd -DFOREGROUND, cpu: 0.4, mem: 1.2 }
+pasos:
+  - consigna: Mira la carga del sistema con `uptime`.
+    verificar:
+      - { comando_usado: '^\s*uptime' }
+    pistas:
+      - "`uptime`"
+    solucion: [uptime]
+    explicacion: >-
+      El *load average* son tres promedios (de 1, 5 y 15 minutos) de cuántos procesos están
+      usando la CPU o esperando para usarla. Este servidor tiene 2 CPU: un valor cercano a 1
+      significa que hay una CPU ocupada todo el tiempo.
+  - consigna: Mira qué proceso usa más CPU con `top` (en un servidor real se sale con la tecla q).
+    verificar:
+      - { comando_usado: '^\s*(top|htop)' }
+    pistas:
+      - "`top`"
+    solucion: [top]
+    explicacion: >-
+      `top` ordena por uso de CPU. Arriba de todo hay un `python3` del usuario *contabilidad* al
+      99%: usa un núcleo entero sin parar.
+  - consigna: >-
+      Mira la línea de comandos completa de ese proceso con `ps aux | grep reporte` para saber
+      qué es y anotar su PID (segunda columna).
+    verificar:
+      - { comando_usado: 'ps\s+.*\|\s*grep' }
+    pistas:
+      - "`ps aux | grep reporte`"
+    solucion: [ps aux | grep reporte]
+    explicacion: >-
+      Es un reporte mensual que alguien de contabilidad dejó corriendo. Antes de terminar un
+      proceso ajeno, en la vida real se avisa al dueño: puede estar a punto de terminar. Aquí
+      supongamos que ya hablaste con esa persona y pidió que lo detengas.
+  - consigna: >-
+      Pídele al proceso que termine de forma ordenada con `sudo kill PID` (reemplaza PID por el
+      número que viste). `kill` sin opciones envía la señal SIGTERM. Hace falta `sudo` porque el
+      proceso es de otro usuario.
+    verificar:
+      - { proceso: reporte_mensual, existe: false }
+    pistas:
+      - Sin `sudo` vas a ver *Operation not permitted*.
+      - "Si no recuerdas el PID: `pgrep python3` lo muestra."
+    solucion: [sudo pkill -f reporte_mensual]
+    explicacion: >-
+      SIGTERM le pide al proceso que termine: puede cerrar sus archivos y guardar lo que estaba
+      haciendo. Solo si no responde se usa `kill -9` (SIGKILL), que lo corta en seco sin darle
+      oportunidad de limpiar. `pkill -f texto` hace lo mismo buscando por la línea de comandos.
+  - consigna: Confirma con `uptime` o con `top` que la carga bajó.
+    verificar:
+      - { comando_usado: '^\s*(uptime|top)' }
+    pistas:
+      - "`uptime`"
+    solucion: [uptime]
+    explicacion: >-
+      El promedio de 1 minuto baja enseguida; los de 5 y 15 minutos tardan más porque son
+      promedios más largos. Para que no vuelva a pasar, el siguiente paso sería acordar con
+      contabilidad que corra el reporte de noche o con menor prioridad (`nice`).

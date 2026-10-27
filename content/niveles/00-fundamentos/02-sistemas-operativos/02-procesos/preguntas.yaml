@@ -1,0 +1,115 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuál es la diferencia entre un programa y un proceso?
+  opciones:
+    - { texto: "El programa es el archivo en el disco; el proceso es ese programa en ejecución, con su PID y su memoria", correcta: true, explicacion: "Un mismo programa puede estar corriendo como muchos procesos a la vez." }
+    - { texto: "Son lo mismo con distinto nombre", explicacion: "Un programa que nadie ejecuta no es un proceso." }
+    - { texto: "El proceso es la parte del programa que está en el disco", explicacion: "Es al revés: lo que está en el disco es el programa." }
+    - { texto: "Un proceso es un programa de Windows y un programa es de Linux", explicacion: "Los dos conceptos existen en todos los sistemas operativos." }
+- id: p02
+  tipo: opcion_multiple
+  enunciado: ¿Qué comparten los hilos de un mismo proceso?
+  opciones:
+    - { texto: La memoria del proceso, correcta: true, explicacion: "Por eso pueden trabajar sobre los mismos datos, y por eso un error en un hilo puede afectar a todo el proceso." }
+    - { texto: Nada, explicacion: "Lo que no comparten memoria son los procesos distintos." }
+    - { texto: Solo el nombre, explicacion: "Comparten mucho más: memoria, archivos abiertos y PID del proceso." }
+    - { texto: El mismo turno de CPU, explicacion: "Cada hilo puede ejecutarse en un núcleo distinto al mismo tiempo." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En Linux, ¿qué proceso tiene el PID 1?
+  opciones:
+    - { texto: "systemd, el primer proceso que inicia el kernel", correcta: true, explicacion: "Todos los demás procesos descienden de él." }
+    - { texto: "El primer usuario que inicia sesión", explicacion: "La sesión del usuario es un proceso mucho posterior." }
+    - { texto: "bash", explicacion: "bash es la terminal de cada usuario." }
+    - { texto: "El kernel", explicacion: "El kernel no aparece como un proceso más con PID 1; es quien arranca a systemd." }
+- id: p04
+  tipo: interpretar_salida
+  enunciado: Según esta salida de `ps`, ¿qué está haciendo la mayoría de los procesos?
+  salida: |2
+      PID STAT COMMAND
+     1203 Ss   sshd: /usr/sbin/sshd -D
+     1250 S    /usr/sbin/crond -n
+     1305 Sl   /usr/libexec/mariadbd
+     1410 R    python3 reporte.py
+     1422 S    -bash
+  opciones:
+    - { texto: "Esperando que llegue algo (S); solo uno está ejecutándose (R)", correcta: true, explicacion: "Es lo normal: los procesos duermen hasta que llega un pedido, un dato o un temporizador." }
+    - { texto: "Están todos colgados", explicacion: "S no significa colgado: es una espera normal." }
+    - { texto: "Están detenidos por una señal", explicacion: "Detenido es T." }
+    - { texto: "Son zombies", explicacion: "Los zombies aparecen con Z." }
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un servidor tiene 4 CPU y su load average es 12. ¿Qué significa?
+  opciones:
+    - { texto: "Que en promedio hay unos 8 procesos esperando su turno además de los 4 que se ejecutan: está saturado", correcta: true, explicacion: "El load se compara con la cantidad de CPU; muy por encima indica fila de espera." }
+    - { texto: "Que la CPU está al 12%", explicacion: "El load average no es un porcentaje." }
+    - { texto: "Que hay 12 usuarios conectados", explicacion: "Los usuarios conectados no se miden así." }
+    - { texto: "Que está bien, porque es menor que 100", explicacion: "No se compara con 100 sino con la cantidad de CPU." }
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En el planificador, ¿qué ventaja tiene "turnos rotativos" frente a "por orden de llegada"?
+  opciones:
+    - { texto: "Todos los procesos empiezan a ejecutarse pronto, aunque haya uno muy largo", correcta: true, explicacion: "Mejora el tiempo de respuesta, a cambio de más cambios de contexto." }
+    - { texto: "No hace cambios de contexto", explicacion: "Hace más cambios de contexto, no menos." }
+    - { texto: "Siempre termina todos los procesos antes", explicacion: "El tiempo total de trabajo es el mismo; cambia el orden y la espera." }
+    - { texto: "Le da más CPU al proceso más importante", explicacion: "Eso hace la planificación por prioridades." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Un proceso de copia de seguridad hace lento al servidor durante el día. ¿Cómo bajas su prioridad de CPU en Linux sin detenerlo?
+  opciones:
+    - { texto: "Con renice, subiendo su valor nice (por ejemplo, a 15)", correcta: true, explicacion: "Un nice más alto significa menos prioridad: el proceso sigue, pero cede la CPU a los demás." }
+    - { texto: "Con kill -9", explicacion: "Eso lo termina, no le baja la prioridad." }
+    - { texto: "Con renice, poniéndole nice -20", explicacion: "-20 es la máxima prioridad: haría lo contrario." }
+    - { texto: "Reiniciando el servidor", explicacion: "Corta todo el servicio y no resuelve el problema." }
+- id: p08
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué diferencia hay entre `kill PID` y `kill -9 PID`?
+  opciones:
+    - { texto: "kill envía SIGTERM y deja que el proceso termine ordenadamente; kill -9 envía SIGKILL y el kernel lo corta en seco", correcta: true, explicacion: "Por eso se usa primero kill y solo si no responde kill -9." }
+    - { texto: "No hay diferencia", explicacion: "Envían señales distintas con efectos muy distintos." }
+    - { texto: "kill -9 termina 9 procesos a la vez", explicacion: "El 9 es el número de la señal, no una cantidad." }
+    - { texto: "kill solo funciona como root", explicacion: "Cualquier usuario puede enviar señales a sus propios procesos." }
+- id: p09
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra todos los procesos del sistema con su usuario, uso de CPU y memoria (formato BSD).
+  aceptadas: [ps aux, ps -aux, ps axu]
+  patrones: ['^ps\s+-?(aux|axu|uax|xau)$']
+  explicacion: "`ps aux` lista todos los procesos (a: de todos los usuarios, x: también los que no tienen terminal, u: con columnas de usuario, CPU y memoria). `ps -ef` es la alternativa con formato estándar."
+- id: p10
+  tipo: interpretar_salida
+  enunciado: Según esta parte de `top`, ¿dónde está el problema de rendimiento?
+  salida: |
+    load average: 9.84, 9.10, 8.77      (servidor de 4 CPU)
+    %Cpu(s):  3.1 us,  1.2 sy,  0.0 ni,  5.4 id, 90.3 wa
+      PID USER   S  %CPU  COMMAND
+     2210 root   D   0.3  rsync
+     2218 mysql  D   1.1  mariadbd
+     2305 www    D   0.2  php-fpm
+  opciones:
+    - { texto: "En el disco: la CPU casi no trabaja, hay 90% de espera de E/S (wa) y varios procesos en estado D", correcta: true, explicacion: "El load es alto porque cuenta los procesos que esperan al disco, no porque falte CPU." }
+    - { texto: "En la CPU, porque el load average es muy alto", explicacion: "La CPU usa apenas un 4%; el load alto viene de los procesos en estado D." }
+    - { texto: "En la memoria", explicacion: "No hay ningún dato de memoria que indique un problema." }
+    - { texto: "No hay ningún problema", explicacion: "90% de espera de E/S y un load de casi 10 en 4 CPU es un problema serio." }
+- id: p11
+  tipo: encontrar_error
+  enunciado: Un técnico anotó estos pasos para detener un proceso trabado de otro usuario. Marca la línea con el error.
+  archivo: |
+    Identifico el proceso con top y anoto su PID.
+    Confirmo con ps el usuario y la línea de comandos completa.
+    Envío directamente kill -9 para no perder tiempo.
+    Verifico con ps que el proceso ya no está.
+  lineas_con_error: [3]
+  explicacion: Primero se envía SIGTERM (kill PID) para que el proceso pueda terminar ordenadamente; SIGKILL se usa solo si no responde.
+- id: p12
+  tipo: opcion_multiple
+  enunciado: ¿Qué es un proceso zombie?
+  opciones:
+    - { texto: "Un proceso que ya terminó, pero cuyo padre todavía no recogió su resultado", correcta: true, explicacion: "No usa CPU ni memoria; si se acumulan muchos, el problema es el proceso padre." }
+    - { texto: "Un proceso que usa la CPU sin hacer nada útil", explicacion: "Un zombie no usa CPU." }
+    - { texto: "Un virus", explicacion: "Es un estado normal del ciclo de vida de los procesos." }
+    - { texto: "Un proceso que vuelve a arrancar solo cuando se lo termina", explicacion: "Eso lo hacen los servicios configurados para reiniciarse, no los zombies." }

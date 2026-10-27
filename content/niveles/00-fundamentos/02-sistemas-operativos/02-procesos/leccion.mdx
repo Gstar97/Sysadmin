@@ -1,0 +1,143 @@
+---
+id: n0-m2-l2
+titulo: Procesos e hilos
+minutos: 120
+objetivos:
+  - Diferenciar programa, proceso e hilo, e identificar un proceso por su PID.
+  - Explicar los estados de un proceso y cómo el planificador reparte la CPU.
+  - Entender la multitarea y por qué un proceso puede perjudicar a los demás.
+glosario: [proceso, pid, hilo, planificador, senal, load-average]
+verificado: 2026-10
+---
+
+import estados from './estados.svg?raw'
+import ejProcesos from './ej-procesos.yaml'
+
+Cuando un servidor anda lento, casi siempre hay un proceso detrás. Saber qué es un proceso, en qué estados puede estar y cómo el sistema reparte la CPU entre todos te permite pasar de "el servidor está lento" a "este programa de este usuario está usando un núcleo entero desde hace media hora".
+
+## Programa, proceso e hilo
+
+- Un **programa** es un archivo en el disco: `/usr/bin/python3`, `C:\Windows\notepad.exe`. Mientras nadie lo ejecuta, no hace nada.
+- Un **<Termino id="proceso">proceso</Termino>** es un programa en ejecución. Tiene su propia memoria, un dueño (el usuario que lo ejecutó), archivos abiertos y un número único: el **<Termino id="pid">PID</Termino>**. El mismo programa puede estar corriendo en muchos procesos a la vez: cada persona conectada por SSH tiene su propio proceso `bash`.
+- Un **<Termino id="hilo">hilo</Termino>** (*thread*) es una línea de ejecución dentro de un proceso. Los hilos de un mismo proceso comparten su memoria y trabajan en paralelo. Una base de datos atiende cada consulta en un hilo distinto; un navegador usa decenas.
+
+Cada proceso, además, tiene un **proceso padre** (el que lo creó), identificado por su **PPID**. Todos descienden del primer proceso que arranca el kernel, que tiene el PID 1: en Linux es **systemd**. Cuando te conectas por SSH, el servicio `sshd` crea un proceso para tu sesión, y ese proceso crea tu `bash`; cada comando que escribes es un proceso hijo de ese `bash`.
+
+### Cómo se ven
+
+<Distros>
+  <Distro nombre="Linux">
+    `ps aux` lista todos los procesos con su usuario, PID, uso de CPU y memoria, estado y comando. `top` los muestra ordenados por uso de CPU y se actualiza cada pocos segundos. `pgrep nombre` devuelve el PID de los procesos con ese nombre.
+  </Distro>
+  <Distro nombre="Windows">
+    El **Administrador de tareas** (pestaña *Detalles* para ver los PID) o, en PowerShell, `Get-Process`. Muchos servicios de Windows corren agrupados dentro de procesos llamados `svchost.exe`.
+  </Distro>
+</Distros>
+
+Así se ve una parte de `ps aux` en un servidor Rocky Linux:
+
+```text
+USER         PID %CPU %MEM     VSZ    RSS TTY      STAT START   TIME COMMAND
+root           1  0.0  0.3   32000  15400 ?        Ss   Oct24   0:00 /usr/lib/systemd/systemd
+root         802  0.0  0.3   32000  15400 ?        Ss   Oct24   0:00 sshd: /usr/sbin/sshd -D
+mysql        915  2.1 18.4 2201536 727040 ?        Ssl  Oct24  41:12 /usr/libexec/mariadbd
+estudiante  1153  0.0  0.1   24000   7800 pts/0    Ss   09:12   0:00 -bash
+```
+
+- **USER** y **PID**: quién lo ejecuta y su número.
+- **%CPU** y **%MEM**: cuánto usa de cada recurso. **RSS** es la memoria real que ocupa, en KiB (727040 KiB son unos 710 MiB).
+- **TTY**: la terminal a la que está conectado; `?` indica un proceso de fondo, como los servicios.
+- **STAT**: el estado (lo vemos enseguida). Las letras extra agregan detalles: `s` indica que es el líder de su sesión y `l`, que tiene varios hilos, como mariadbd.
+- **TIME**: cuánto tiempo de CPU consumió en total desde que arrancó.
+
+## Los estados de un proceso
+
+Un servidor tiene cientos de procesos y pocos núcleos. La gran mayoría está casi siempre **esperando** algo: que llegue un pedido por la red, que el disco entregue un dato o que alguien escriba en el teclado.
+
+<Diagrama svg={estados} alt="Diagrama de estados: un proceso nuevo pasa a listo; el planificador lo pasa a ejecutando; si pide un dato pasa a esperando y vuelve a listo cuando llega; puede quedar detenido por una señal o terminar" pie="La mayoría de los procesos pasa casi todo el tiempo esperando; solo unos pocos usan la CPU a la vez." />
+
+En la columna STAT de `ps` y en la S de `top`:
+
+| Letra | Estado | Qué significa |
+| --- | --- | --- |
+| R | Ejecutando o listo | Usa la CPU o está en la fila para usarla |
+| S | Esperando | Duerme hasta que llegue algo (red, teclado, un temporizador). Es lo normal |
+| D | Esperando sin interrupción | Espera al disco o a la red de almacenamiento y no se puede interrumpir. Muchos procesos en D indican un problema de disco |
+| T | Detenido | Pausado por una señal (por ejemplo, con Ctrl+Z) |
+| Z | Zombie | Ya terminó, pero su padre todavía no recogió el resultado. No usa CPU ni memoria |
+
+## El planificador
+
+Si hay más procesos listos que núcleos, alguien tiene que decidir quién usa la CPU en cada momento: es el **<Termino id="planificador">planificador</Termino>** del kernel. Da a cada proceso un turno muy corto (milisegundos) y lo cambia por otro. Cambiar de proceso se llama **cambio de contexto** y tiene un pequeño costo: guardar los registros de uno y cargar los del siguiente.
+
+Como los turnos son tan cortos, parece que todo corre a la vez: eso es la **multitarea**. Prueba los tres algoritmos clásicos con el mismo grupo de procesos y compara los resultados:
+
+<PlanificadorCpu />
+
+Fíjate en tres cosas:
+
+- **Por orden de llegada**: si el primer proceso es largo, todos los demás esperan detrás. El tiempo de respuesta es malo.
+- **Turnos rotativos**: todos empiezan a ejecutarse enseguida (buena respuesta), a cambio de más cambios de contexto. Con un quantum muy chico, los cambios se multiplican; con uno muy grande, se parece a "por orden de llegada".
+- **Prioridades**: el proceso importante se atiende primero, pero si siempre llegan procesos más prioritarios, uno de baja prioridad puede quedarse esperando mucho tiempo.
+
+Los sistemas reales combinan estas ideas. Linux, desde la versión 6.6 del kernel, usa un planificador llamado EEVDF que reparte la CPU de forma proporcional y atiende antes a los procesos que la usan poco (como los interactivos). En Linux la prioridad se ajusta con el valor **nice**, de -20 (más prioridad) a 19 (menos): `nice -n 10 comando` arranca un proceso con menos prioridad y `renice` cambia la de uno que ya corre. En Windows se elige la prioridad desde el Administrador de tareas.
+
+<Pregunta id="p06" />
+
+## Cuando un proceso perjudica a los demás
+
+Como todos comparten los mismos recursos, un solo proceso puede afectar a todo el servidor:
+
+- Uno que usa **la CPU sin parar** (un bucle, un reporte pesado) le quita tiempo a los demás.
+- Uno que **consume memoria sin límite** termina forzando el uso de swap (ya lo viste en el módulo anterior).
+- Uno que **lee y escribe muchísimo en el disco** hace esperar a todos los que necesitan el disco.
+
+El indicador más rápido es el **<Termino id="load-average">load average</Termino>**, que muestran `uptime` y `top`: el promedio de procesos que están usando la CPU o esperando para usarla (en Linux también cuenta a los que esperan al disco en estado D). Se interpreta comparándolo con la cantidad de CPU:
+
+- En un servidor de 4 CPU, un load de 2 indica que sobra capacidad.
+- Un load de 4 indica que la CPU está ocupada todo el tiempo.
+- Un load de 12 indica que en promedio hay 8 procesos haciendo fila: todo responde lento.
+
+## Señales: cómo se le habla a un proceso
+
+Para detener o avisar algo a un proceso, se le envía una **<Termino id="senal">señal</Termino>** con el comando `kill` (el nombre es engañoso: no siempre lo termina).
+
+| Señal | Número | Qué hace |
+| --- | --- | --- |
+| SIGTERM | 15 | Le pide que termine. El proceso puede cerrar sus archivos y guardar lo pendiente. Es la que envía `kill` sin opciones |
+| SIGKILL | 9 | El kernel lo termina en el acto, sin darle oportunidad de limpiar nada |
+| SIGINT | 2 | Lo mismo que apretar Ctrl+C en la terminal |
+| SIGHUP | 1 | Muchos servicios la usan para volver a leer su configuración sin reiniciarse |
+| SIGSTOP y SIGCONT | 19 y 18 | Pausar y reanudar |
+
+La regla de oro: **primero SIGTERM y, solo si el proceso no responde, SIGKILL**. Terminar una base de datos con `kill -9` puede dejar archivos a medio escribir. En Windows, el equivalente es "Finalizar tarea" o `Stop-Process`; con `-Force` (o `taskkill /F`) es el corte en seco.
+
+## Practicar
+
+<Terminal ejercicio={ejProcesos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar kill -9 como primera opción">
+    SIGKILL no deja que el proceso guarde nada: una base de datos o un programa que estaba escribiendo un archivo pueden quedar con datos corruptos. Envía primero SIGTERM (`kill PID`), espera unos segundos y solo si sigue vivo usa `kill -9`. Para servicios, lo correcto es directamente `systemctl stop servicio`.
+  </ErrorComun>
+  <ErrorComun titulo='"Operation not permitted" al intentar terminar un proceso'>
+    Un usuario común solo puede enviar señales a sus propios procesos. Para los de otros usuarios hace falta `sudo`. Antes de usarlo, confirma de quién es y qué hace ese proceso, y si es posible avisa al dueño.
+  </ErrorComun>
+  <ErrorComun titulo="Un proceso zombie que no se puede matar">
+    Un zombie ya está muerto: solo queda su entrada en la tabla de procesos hasta que el padre la recoja, así que `kill` no tiene efecto. Unos pocos no hacen daño. Si se acumulan, el problema es el proceso padre: hay que reiniciarlo o terminarlo, y los zombies desaparecen con él.
+  </ErrorComun>
+  <ErrorComun titulo="Load average alto pero la CPU está casi libre">
+    En Linux el load average también cuenta a los procesos en estado D, que esperan al disco o a un almacenamiento de red. Si `top` muestra la CPU ociosa y un valor alto en *wa* (espera de E/S), el problema está en el disco o en el almacenamiento, no en la CPU.
+  </ErrorComun>
+  <ErrorComun titulo="Terminar el proceso equivocado">
+    Con `ps aux | grep nombre`, una de las líneas suele ser el propio `grep`. Lee siempre la línea de comandos completa y el usuario antes de enviar una señal, o usa `pgrep -a nombre`, que no se lista a sí mismo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un programa es un archivo; un proceso es un programa en ejecución con PID, dueño y memoria propia; los hilos de un proceso comparten su memoria.
+- Los procesos pasan casi todo el tiempo esperando (S). Muchos en estado D indican problemas de disco.
+- El planificador reparte la CPU en turnos cortos; los algoritmos equilibran tiempo de respuesta, espera y cambios de contexto. En Linux la prioridad se ajusta con nice.
+- El load average se compara con la cantidad de CPU: mayor que ese número significa procesos haciendo fila.
+- kill envía señales: primero SIGTERM (15) y solo si no responde SIGKILL (9).
+</Resumen>

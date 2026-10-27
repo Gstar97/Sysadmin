@@ -476,7 +476,11 @@ function killProcs(ctx: CommandContext, targets: number[], signal: number): numb
       continue
     }
     if (pid === 1) continue
-    if (signal === 1 || signal === 10 || signal === 12 || signal === 18) continue
+    if (signal === 18) {
+      if (p.stat.startsWith('T')) p.stat = p.cpu > 50 ? 'R' : 'S'
+      continue
+    }
+    if (signal === 1 || signal === 10 || signal === 12) continue
     if (signal === 19) {
       p.stat = 'T'
       continue

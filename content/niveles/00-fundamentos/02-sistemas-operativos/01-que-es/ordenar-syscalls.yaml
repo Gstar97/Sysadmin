@@ -1,0 +1,13 @@
+tipo: ordenar
+consigna: El comando `cat /etc/hostname` muestra un archivo en pantalla. Ordena las llamadas al sistema que hace.
+pasos:
+  - "openat: abrir /etc/hostname (el kernel revisa los permisos y devuelve un número de archivo)"
+  - "read: leer el contenido del archivo"
+  - "write: escribir ese contenido en la salida estándar (la pantalla)"
+  - "read: leer otra vez y recibir 0 bytes (se llegó al final)"
+  - "close: cerrar el archivo"
+explicacion: >-
+  Así se ve con la herramienta `strace`, que muestra cada llamada al sistema de un programa.
+  Hasta el comando más simple trabaja así: pide, el kernel controla y responde. Cuando un
+  programa falla con "Permission denied", el que dijo que no fue el kernel, en la llamada
+  `openat`.

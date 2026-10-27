@@ -1,0 +1,52 @@
+tipo: diagrama
+titulo: Las capas de un sistema operativo
+puntos:
+  - id: aplicaciones
+    titulo: Aplicaciones y servicios
+    area: { x: 3.3, y: 5, ancho: 76.7, alto: 15 }
+    texto: >-
+      Todo lo que se usa directamente: el navegador, la base de datos, el servidor web, la propia
+      terminal. Corren en **espacio de usuario**: no pueden tocar el hardware ni la memoria de otros
+      programas. Si una aplicación falla, el sistema operativo la cierra y el resto sigue
+      funcionando.
+  - id: bibliotecas
+    titulo: Bibliotecas del sistema
+    area: { x: 3.3, y: 22.5, ancho: 76.7, alto: 12.5 }
+    texto: >-
+      Código compartido que usan casi todos los programas para pedirle cosas al kernel sin
+      escribir los detalles cada vez. En Linux, la más importante es **glibc** (la biblioteca de C);
+      en Windows, **kernel32.dll** y **ntdll.dll**. Por eso un programa compilado para Linux no
+      funciona en Windows: espera otras bibliotecas y otras llamadas al sistema.
+  - id: llamadas
+    titulo: Llamadas al sistema
+    area: { x: 3.3, y: 37.5, ancho: 76.7, alto: 7.5 }
+    texto: >-
+      La única puerta entre el espacio de usuario y el kernel. Cuando un programa quiere abrir un
+      archivo, leer de la red o crear otro proceso, hace una **llamada al sistema** (`open`, `read`,
+      `write`, `fork`). El procesador cambia a modo privilegiado, el kernel revisa que el programa
+      tenga permiso, hace el trabajo y devuelve el resultado.
+  - id: kernel
+    titulo: Kernel
+    area: { x: 3.3, y: 47.5, ancho: 76.7, alto: 32.5 }
+    texto: >-
+      El núcleo del sistema operativo: el único programa con acceso completo al hardware. Reparte
+      la CPU entre los procesos, asigna la memoria, organiza los archivos en el disco, maneja la red
+      y aplica los permisos. Corre en **espacio de kernel**, en el modo privilegiado del
+      procesador. Un error aquí no cierra un programa: detiene la máquina entera (en Linux,
+      *kernel panic*; en Windows, la pantalla azul).
+  - id: drivers
+    titulo: Drivers
+    area: { x: 5.7, y: 68, ancho: 72, alto: 9 }
+    texto: >-
+      Los **drivers** (controladores) son la parte del kernel que sabe hablar con cada dispositivo:
+      una placa de red de un fabricante, una controladora RAID, una GPU. Gracias a ellos, el resto
+      del sistema trata a todos los discos como "un disco" y a todas las placas como "una placa de
+      red". En Linux casi todos vienen incluidos en el kernel como **módulos**; en Windows muchos
+      los provee el fabricante del hardware.
+  - id: hardware
+    titulo: Hardware
+    area: { x: 3.3, y: 82.5, ancho: 76.7, alto: 12.5 }
+    texto: >-
+      Lo que viste en el módulo anterior: procesador, memoria, discos y placas. Ningún programa de
+      usuario lo toca directamente; todo pasa por el kernel. Eso es lo que permite que muchos
+      programas compartan la misma máquina sin pisarse.

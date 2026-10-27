@@ -1,0 +1,100 @@
+- id: p01
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Cuáles de estas tareas son responsabilidad del sistema operativo?
+  opciones:
+    - { texto: Repartir la CPU entre los programas, correcta: true, explicacion: "Lo hace el planificador del kernel." }
+    - { texto: Impedir que un programa lea la memoria de otro, correcta: true, explicacion: "Es parte de la protección que da el kernel." }
+    - { texto: Aplicar los permisos de los archivos, correcta: true, explicacion: "El kernel revisa los permisos en cada llamada que abre un archivo." }
+    - { texto: Calcular los totales de una planilla de cálculo, explicacion: "Eso lo hace la aplicación; el sistema operativo solo le da los recursos." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué un error grave en un driver detiene toda la máquina y uno en una aplicación no?
+  opciones:
+    - { texto: "Porque el driver corre en espacio de kernel, con acceso completo, y no hay nada por encima que lo pueda contener", correcta: true, explicacion: "Una aplicación corre en espacio de usuario: si falla, el kernel la termina." }
+    - { texto: "Porque los drivers usan más memoria", explicacion: "El problema no es la cantidad de memoria sino el nivel de privilegio." }
+    - { texto: "Porque las aplicaciones se reinician solas", explicacion: "No se reinician solas; el kernel las termina y el resto sigue funcionando." }
+    - { texto: "Porque los drivers no tienen errores", explicacion: "Los tienen, y por eso se prueban antes de instalarlos en producción." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Qué es una llamada al sistema?
+  opciones:
+    - { texto: Un pedido de un programa al kernel para que haga algo que el programa no puede hacer solo, correcta: true, explicacion: "Por ejemplo, abrir un archivo (openat) o leer de la red (read)." }
+    - { texto: Una llamada telefónica al soporte del fabricante, explicacion: "No; es un mecanismo interno del sistema operativo." }
+    - { texto: Un mensaje que el kernel muestra en pantalla al arrancar, explicacion: "Esos son mensajes del kernel, que se ven con dmesg." }
+    - { texto: Un programa que corre al inicio del sistema, explicacion: "Eso es un servicio." }
+- id: p04
+  tipo: interpretar_salida
+  enunciado: Según esta salida de `strace`, ¿por qué falló el programa?
+  salida: |
+    openat(AT_FDCWD, "/etc/shadow", O_RDONLY) = -1 EACCES (Permission denied)
+    write(2, "cat: /etc/shadow: Permission denied\n", 36) = 36
+  opciones:
+    - { texto: "El kernel rechazó la apertura del archivo porque el usuario no tiene permiso", correcta: true, explicacion: "openat devolvió -1 con el error EACCES: el kernel revisó los permisos y dijo que no." }
+    - { texto: "El archivo no existe", explicacion: "Eso sería ENOENT (No such file or directory)." }
+    - { texto: "El disco está lleno", explicacion: "Leer un archivo no requiere espacio libre; el error es de permisos." }
+    - { texto: "cat tiene un error de programación", explicacion: "cat hizo bien su trabajo: pidió el archivo y mostró el error que le dio el kernel." }
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué es una distribución de Linux?
+  opciones:
+    - { texto: "El kernel Linux más herramientas, instalador, sistema de paquetes, actualizaciones y soporte", correcta: true, explicacion: "Rocky, Ubuntu y Debian usan el mismo kernel, pero son distribuciones distintas." }
+    - { texto: "Una versión del kernel", explicacion: "El kernel tiene su propia numeración; la distribución es el conjunto completo." }
+    - { texto: "Un programa para distribuir archivos por la red", explicacion: "No tiene que ver con el significado en este contexto." }
+    - { texto: "Una copia pirata de Linux", explicacion: "Las distribuciones son legítimas; muchas son gratuitas y algunas tienen soporte pago." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: ¿Qué distribución y qué versión tiene este servidor?
+  salida: |
+    $ uname -r
+    6.12.0-55.el10.x86_64
+    $ grep PRETTY_NAME /etc/os-release
+    PRETTY_NAME="Rocky Linux 10.0 (Red Quartz)"
+  opciones:
+    - { texto: "Rocky Linux 10.0, con kernel 6.12", correcta: true, explicacion: "os-release da la distribución; uname -r, la versión del kernel. El 'el10' del kernel indica que es de la familia Enterprise Linux 10." }
+    - { texto: "Linux 6.12", explicacion: "Esa es solo la versión del kernel." }
+    - { texto: "Rocky Linux 6.12", explicacion: "Se mezcla el nombre de la distribución con la versión del kernel." }
+    - { texto: "Red Hat Enterprise Linux 10", explicacion: "Rocky es compatible con RHEL, pero es otra distribución." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Una empresa necesita controlar usuarios, equipos y políticas de seguridad de 300 PC con Windows. ¿Qué sistema usa normalmente?
+  opciones:
+    - { texto: "Windows Server con Active Directory", correcta: true, explicacion: "Active Directory es el estándar para administrar usuarios y equipos Windows en una empresa." }
+    - { texto: "FreeBSD", explicacion: "FreeBSD es habitual en firewalls, no para administrar equipos Windows." }
+    - { texto: "macOS", explicacion: "macOS es un sistema de escritorio." }
+    - { texto: "Ubuntu Desktop", explicacion: "Es un sistema de escritorio; no administra equipos Windows." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra solo la versión del kernel de Linux.
+  aceptadas: [uname -r, uname --kernel-release]
+  explicacion: "`uname -r` muestra la versión del kernel. `uname -a` muestra todo junto: kernel, nombre del equipo y arquitectura."
+- id: p09
+  tipo: ordenar_pasos
+  enunciado: Un programa quiere mostrar en pantalla un archivo. Ordena lo que pasa.
+  pasos:
+    - El programa hace la llamada al sistema para abrir el archivo
+    - El kernel revisa los permisos y abre el archivo
+    - El programa pide leer el contenido
+    - El driver del disco lee los datos y el kernel se los entrega al programa
+    - El programa pide escribir el contenido en la salida estándar
+  explicacion: El programa nunca toca el disco ni la pantalla directamente; en cada paso le pide al kernel, que usa los drivers.
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Vas a instalar un servidor que debería funcionar 6 años. ¿Qué conviene revisar antes de elegir la versión del sistema operativo?
+  opciones:
+    - { texto: "La fecha de fin de soporte de esa versión", correcta: true, explicacion: "Si deja de recibir actualizaciones antes de tiempo, el servidor queda sin parches de seguridad o hay que migrarlo." }
+    - { texto: "Que sea la versión con el fondo de pantalla más nuevo", explicacion: "No es un criterio para un servidor." }
+    - { texto: "Que el kernel tenga el número más alto", explicacion: "El número del kernel no dice nada sobre el soporte de la distribución." }
+    - { texto: "Nada: todas las versiones tienen soporte para siempre", explicacion: "Todas tienen una fecha de fin de soporte." }
+- id: p11
+  tipo: encontrar_error
+  enunciado: Un compañero escribió estas notas sobre sistemas operativos. Marca la línea incorrecta.
+  archivo: |
+    El kernel es la única parte con acceso completo al hardware.
+    Las aplicaciones corren en espacio de usuario.
+    Los drivers corren en espacio de usuario, por eso no afectan al sistema.
+    Las llamadas al sistema son la puerta entre las aplicaciones y el kernel.
+  lineas_con_error: [3]
+  explicacion: Los drivers corren en espacio de kernel; por eso un driver defectuoso puede detener toda la máquina.

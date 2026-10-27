@@ -1,0 +1,41 @@
+tipo: terminal
+shell: bash
+titulo: ¿Qué sistema operativo tiene este servidor?
+descripcion: >-
+  Te dan acceso a un servidor que nadie documentó. Averigua qué distribución y qué versión
+  tiene, y qué kernel está usando.
+estado_inicial:
+  distro: ubuntu
+  hostname: srv-legado
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: Mira la distribución y su versión en el archivo `/etc/os-release` con `cat /etc/os-release`.
+    verificar:
+      - { comando_usado: 'os-release' }
+    pistas:
+      - "`cat /etc/os-release`"
+    solucion: [cat /etc/os-release]
+    explicacion: >-
+      Todas las distribuciones actuales tienen este archivo. *PRETTY_NAME* es el nombre completo;
+      *ID* e *ID_LIKE* dicen de qué familia es (Ubuntu es de la familia de Debian).
+  - consigna: Mira la versión del kernel con `uname -r`.
+    verificar:
+      - { comando_usado: 'uname\s+-\w*r' }
+    pistas:
+      - "`uname -r` (r de *release*)"
+    solucion: [uname -r]
+    explicacion: >-
+      El kernel tiene su propia numeración, distinta de la de la distribución: Ubuntu 24.04 usa
+      un kernel 6.8. Cuando un proveedor pregunta "¿qué versión de Linux tiene?", conviene dar
+      las dos.
+  - consigna: Mira el resumen completo con `hostnamectl`.
+    verificar:
+      - { comando_usado: '^\s*hostnamectl' }
+    pistas:
+      - "`hostnamectl`"
+    solucion: [hostnamectl]
+    explicacion: >-
+      `hostnamectl` junta en un solo lugar el nombre del equipo, el sistema operativo, el kernel,
+      la arquitectura y si es una máquina virtual (*Virtualization: kvm*).

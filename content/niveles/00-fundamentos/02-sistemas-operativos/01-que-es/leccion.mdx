@@ -1,0 +1,128 @@
+---
+id: n0-m2-l1
+titulo: Qué es un sistema operativo
+minutos: 90
+objetivos:
+  - Explicar qué hace el kernel y la diferencia entre espacio de kernel y espacio de usuario.
+  - Entender qué son los drivers y las llamadas al sistema.
+  - Ubicar las familias principales (distribuciones Linux, Windows y Windows Server, macOS y BSD) y dónde se usa cada una.
+glosario: [sistema-operativo, kernel, llamada-sistema, driver, distribucion]
+verificado: 2026-10
+---
+
+import capas from './capas.svg?raw'
+import capasDatos from './capas.yaml'
+import familias from './familias.yaml'
+import syscalls from './ordenar-syscalls.yaml'
+import ejSistema from './ej-sistema.yaml'
+
+El trabajo de un sysadmin es, en gran parte, administrar sistemas operativos: instalarlos, actualizarlos, configurarlos y entender por qué fallan. En esta lección vas a ver qué hace un sistema operativo por dentro, por qué un programa que falla no tira abajo el servidor (y un driver sí) y cuáles son las familias que vas a encontrar en el trabajo.
+
+## Para qué sirve
+
+Un servidor puede tener al mismo tiempo una base de datos, un servidor web, un antivirus y diez personas conectadas. Todos quieren usar la misma CPU, la misma memoria y el mismo disco. El **<Termino id="sistema-operativo">sistema operativo</Termino>** es el programa que hace posible esa convivencia:
+
+- **Reparte el hardware**: decide qué programa usa la CPU en cada momento, cuánta memoria recibe cada uno y en qué orden se atienden los pedidos al disco.
+- **Esconde los detalles**: un programa "abre un archivo" sin saber si está en un NVMe, en un disco rígido o en un servidor de la red. El sistema operativo resuelve la diferencia.
+- **Protege**: un programa no puede leer la memoria de otro ni abrir archivos para los que no tiene permiso.
+- **Ofrece servicios comunes**: red, usuarios, registros, hora, impresión.
+
+## Las capas
+
+Un sistema operativo se organiza en capas. Toca cada una para ver qué hace:
+
+<DiagramaInteractivo datos={capasDatos} svg={capas} alt="Capas de un sistema operativo: aplicaciones, bibliotecas, llamadas al sistema, kernel con sus subsistemas y drivers, y hardware" />
+
+## Espacio de kernel y espacio de usuario
+
+El **<Termino id="kernel">kernel</Termino>** es la parte central del sistema operativo y el único programa con acceso completo al hardware. Para que eso sea posible, el propio procesador tiene dos modos:
+
+- **Modo privilegiado** (espacio de kernel): puede ejecutar cualquier instrucción y acceder a toda la memoria. Ahí corren el kernel y los drivers.
+- **Modo usuario** (espacio de usuario): no puede tocar el hardware ni la memoria de otros procesos. Ahí corre todo lo demás, incluso los programas del administrador.
+
+La consecuencia práctica es enorme. Si una aplicación tiene un error grave, el kernel la termina y el resto del servidor sigue funcionando. Si el error está en el kernel o en un driver, no hay nadie más arriba que lo pueda contener: la máquina entera se detiene. En Linux aparece un *kernel panic*; en Windows, la pantalla azul.
+
+Un caso real lo muestra bien: en julio de 2024, una actualización defectuosa de un producto de seguridad que funciona como driver del kernel de Windows hizo que unos 8,5 millones de equipos quedaran con pantalla azul al arrancar, entre ellos servidores de aerolíneas, bancos y hospitales. El mismo error en un programa común habría cerrado ese programa y nada más.
+
+<Advertencia>
+Por esa misma razón, todo lo que se instala en el kernel (drivers de terceros, agentes de seguridad, módulos de monitoreo) se prueba primero en equipos que no sean de producción y se despliega de a poco.
+</Advertencia>
+
+## Llamadas al sistema
+
+Los programas de usuario no tocan el hardware, pero necesitan leer archivos, usar la red y crear procesos. Para eso hacen **<Termino id="llamada-sistema">llamadas al sistema</Termino>**: pedidos formales al kernel. El kernel revisa que el programa tenga permiso, hace el trabajo y devuelve el resultado.
+
+En Linux se pueden ver con la herramienta `strace`. Esto es lo que hace el comando `cat /etc/hostname` (la salida está resumida):
+
+```text
+$ strace -e trace=openat,read,write,close cat /etc/hostname
+openat(AT_FDCWD, "/etc/hostname", O_RDONLY) = 3
+read(3, "srv-web01\n", 131072)          = 10
+write(1, "srv-web01\n", 10)              = 10
+read(3, "", 131072)                     = 0
+close(3)                                = 0
+```
+
+Cada línea es una llamada con su resultado. `openat` devuelve 3: un número que identifica el archivo abierto. `write(1, …)` escribe en el 1, que es la salida estándar, la pantalla. Si el archivo no tuviera permiso de lectura, `openat` devolvería un error y `cat` mostraría *Permission denied*: el que dice que no es el kernel.
+
+<Ordenar ejercicio={syscalls} />
+
+## Drivers
+
+Un **<Termino id="driver">driver</Termino>** (o controlador) es el código que sabe hablar con un dispositivo concreto. Gracias a los drivers, el resto del sistema trata igual a todas las placas de red, aunque sean de fabricantes distintos.
+
+- En **Linux**, casi todos los drivers vienen incluidos en el kernel como **módulos** que se cargan cuando hace falta. `lsmod` lista los cargados y `modinfo` muestra los datos de uno.
+- En **Windows**, muchos drivers los provee el fabricante del hardware. Se administran desde el **Administrador de dispositivos**.
+
+Para servidores, los fabricantes publican listas de hardware certificado para cada sistema operativo (por ejemplo, el catálogo de Red Hat o el Windows Server Catalog). Antes de comprar una controladora o una placa de red, conviene revisar que esté en esa lista.
+
+## Las familias de sistemas operativos
+
+| Familia | Ejemplos | Dónde se usa |
+| --- | --- | --- |
+| Linux de tipo Red Hat | RHEL, Rocky Linux, AlmaLinux | Servidores de empresa, bases de datos, aplicaciones con soporte comercial |
+| Linux de tipo Debian | Ubuntu Server, Debian | Servidores web, nube, contenedores |
+| Windows Server | Windows Server 2025 y 2022 | Active Directory, servidores de archivos, aplicaciones .NET y SQL Server |
+| Windows de escritorio | Windows 11 | Las PC de los usuarios |
+| macOS | macOS | Notebooks y equipos de escritorio de Apple |
+| BSD | FreeBSD, OpenBSD | Firewalls (pfSense, OPNsense), algunos equipos de almacenamiento y red |
+
+Linux es en realidad solo el kernel. Lo que se instala es una **<Termino id="distribucion">distribución</Termino>**: el kernel más las herramientas, el instalador, el sistema de paquetes, las actualizaciones y el soporte. En esta carrera vas a trabajar con las dos familias de Linux más usadas en servidores: **Rocky Linux o AlmaLinux** (compatibles con Red Hat) y **Ubuntu Server LTS**.
+
+### El ciclo de vida importa
+
+Cada versión de un sistema operativo tiene una fecha de fin de soporte, después de la cual no recibe más actualizaciones de seguridad. Elegir una versión es también elegir hasta cuándo va a estar protegida:
+
+- **RHEL, Rocky y AlmaLinux**: una versión mayor cada tres años aproximadamente, con unos 10 años de actualizaciones. La versión 10 salió en 2025.
+- **Ubuntu LTS**: una versión cada dos años (24.04 en 2024, 26.04 en abril de 2026), con 5 años de actualizaciones gratuitas y hasta 12 años con la suscripción Ubuntu Pro.
+- **Windows Server**: 5 años de soporte general y 5 de soporte extendido. Windows Server 2025 salió en noviembre de 2024.
+- **Windows 10**: dejó de recibir actualizaciones gratuitas en octubre de 2025. Los equipos que siguen con Windows 10 necesitan el programa pago de actualizaciones extendidas o pasar a Windows 11.
+
+<Emparejar ejercicio={familias} />
+
+## Practicar
+
+<Terminal ejercicio={ejSistema} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Confundir la versión del kernel con la versión de la distribución">
+    `uname -r` muestra la versión del kernel (por ejemplo 6.12), no la de la distribución (Rocky 10). Un proveedor que pregunta "qué versión de Linux" casi siempre quiere la distribución: está en `/etc/os-release`. Lo más útil es dar las dos.
+  </ErrorComun>
+  <ErrorComun titulo="Un driver nuevo deja el servidor sin arrancar">
+    El driver corre en el kernel: si falla, falla todo el sistema. En Linux, el menú de GRUB permite arrancar con el kernel anterior, que se conserva justamente para esto; en Windows, el modo seguro arranca con los drivers mínimos. Y la regla para la próxima vez: probar fuera de producción y tener un plan para volver atrás.
+  </ErrorComun>
+  <ErrorComun titulo='"Cannot execute binary file" o un .exe que no abre en Linux'>
+    Cada sistema operativo tiene sus propias bibliotecas, llamadas al sistema y formato de ejecutables. Un programa para Windows no funciona en Linux ni al revés; hay que conseguir la versión para el sistema correcto (o, en casos puntuales, usar una máquina virtual).
+  </ErrorComun>
+  <ErrorComun titulo="Instalar un servidor nuevo con un sistema que está por quedarse sin soporte">
+    Antes de instalar, revisa la fecha de fin de soporte de la versión. Un servidor dura años: si la versión deja de recibir actualizaciones al año siguiente, vas a tener que migrarlo enseguida o dejarlo sin parches de seguridad.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El sistema operativo reparte el hardware entre programas, esconde los detalles de cada dispositivo y protege a unos programas de otros.
+- El kernel y los drivers corren en modo privilegiado: un error ahí detiene toda la máquina. Las aplicaciones corren en espacio de usuario.
+- Los programas le piden todo al kernel con llamadas al sistema (open, read, write); el kernel controla los permisos.
+- Linux es el kernel; una distribución agrega herramientas, paquetes y soporte. En servidores dominan la familia Red Hat (RHEL, Rocky, Alma) y la Debian (Ubuntu, Debian).
+- Cada versión tiene fecha de fin de soporte: es parte de la decisión al instalar.
+</Resumen>
