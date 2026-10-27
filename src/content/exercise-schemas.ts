@@ -203,6 +203,25 @@ export const configExerciseSchema = z.strictObject({
   solucion: z.string().optional(),
 })
 
+/** Pasos guiados para hacer en la computadora propia (instalar, configurar), con casillas que se guardan. */
+export const guidedStepsSchema = z.strictObject({
+  tipo: z.literal('pasos'),
+  titulo: z.string().min(1),
+  descripcion: z.string().optional(),
+  pasos: z
+    .array(
+      z.strictObject({
+        titulo: z.string().min(1),
+        detalle: z.string().optional(),
+        comandos: z.array(z.string()).default([]),
+        variantes: z.array(z.strictObject({ nombre: z.string().min(1), detalle: z.string().min(1), comandos: z.array(z.string()).default([]) })).default([]),
+        comprobar: z.string().optional(),
+        si_falla: z.string().optional(),
+      }),
+    )
+    .min(2),
+})
+
 /** Esquema de cada tipo de archivo de ejercicio, según su campo "tipo". */
 export const exerciseSchemas = {
   terminal: terminalExerciseSchema,
@@ -213,6 +232,7 @@ export const exerciseSchemas = {
   emparejar: matchExerciseSchema,
   troubleshooting: troubleshootingSchema,
   configuracion: configExerciseSchema,
+  pasos: guidedStepsSchema,
 } as const
 
 export type ExerciseKind = keyof typeof exerciseSchemas
@@ -227,4 +247,5 @@ export type MatchExercise = z.infer<typeof matchExerciseSchema>
 export type TroubleshootingScenario = z.infer<typeof troubleshootingSchema>
 export type ConfigExercise = z.infer<typeof configExerciseSchema>
 export type ConfigRule = z.infer<typeof configRuleSchema>
+export type GuidedSteps = z.infer<typeof guidedStepsSchema>
 export type ConfigLanguage = (typeof configLanguages)[number]

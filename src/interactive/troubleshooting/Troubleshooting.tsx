@@ -44,9 +44,15 @@ export function optimalPath(s: TroubleshootingScenario): { minutes: number; path
   return undefined
 }
 
+/** Los escenarios de decisión (todas las opciones con 0 minutos) no muestran reloj ni comparan con el camino más corto. */
+export function isTimed(s: TroubleshootingScenario): boolean {
+  return Object.values(s.nodos).some((n) => n.opciones.some((o) => o.minutos > 0))
+}
+
 export function Troubleshooting({ scenario, onSolved }: Props) {
   const [visits, setVisits] = useState<Visit[]>([{ node: scenario.inicio }])
   const optimal = useMemo(() => optimalPath(scenario), [scenario])
+  const timed = useMemo(() => isTimed(scenario), [scenario])
   const current = visits[visits.length - 1]
   const node = scenario.nodos[current.node]
   const minutes = visits.reduce((sum, v) => sum + (v.choice !== undefined ? scenario.nodos[v.node].opciones[v.choice].minutos : 0), 0)
@@ -72,10 +78,12 @@ export function Troubleshooting({ scenario, onSolved }: Props) {
           <h3 className="text-lg font-semibold">{scenario.titulo}</h3>
           {scenario.descripcion && <RichText text={scenario.descripcion} className="text-sm text-muted" />}
         </div>
-        <Badge tone="neutral">
-          <Icon name="clock" className="h-3.5 w-3.5" />
-          {minutes} min
-        </Badge>
+        {timed && (
+          <Badge tone="neutral">
+            <Icon name="clock" className="h-3.5 w-3.5" />
+            {minutes} min
+          </Badge>
+        )}
       </div>
       <div className="space-y-4 p-4">
         {lastOption?.consecuencia && (
@@ -98,10 +106,10 @@ export function Troubleshooting({ scenario, onSolved }: Props) {
         )}
         {node.final ? (
           <div className="space-y-3">
-            <Callout tone={node.final === 'exito' ? 'ok' : 'bad'} title={node.final === 'exito' ? `Problema resuelto en ${minutes} minutos` : 'Este camino no resolvió el problema'}>
+            <Callout tone={node.final === 'exito' ? 'ok' : 'bad'} title={node.final === 'exito' ? (timed ? `Problema resuelto en ${minutes} minutos` : 'Buena decisión') : timed ? 'Este camino no resolvió el problema' : 'Esta decisión no fue la mejor'}>
               {node.resumen && <RichText text={node.resumen} />}
             </Callout>
-            {optimal && node.final === 'exito' && (
+            {timed && optimal && node.final === 'exito' && (
               <p className="text-sm text-muted">
                 {minutes <= optimal.minutes ? '¡Elegiste el camino más rápido posible!' : `El camino más corto lleva ${optimal.minutes} minutos (tardaste ${minutes - optimal.minutes} más). Repasa qué conviene revisar primero.`}
               </p>
@@ -133,7 +141,7 @@ export function Troubleshooting({ scenario, onSolved }: Props) {
                   const inOptimal = optimal?.path.includes(op.ir_a) && optimal.path.includes(v.node)
                   return (
                     <li key={i} className={cn(inOptimal ? 'text-fg' : 'text-muted')}>
-                      {op.texto} <span className="text-xs">({op.minutos} min)</span>
+                      {op.texto} {timed && <span className="text-xs">({op.minutos} min)</span>}
                     </li>
                   )
                 })}

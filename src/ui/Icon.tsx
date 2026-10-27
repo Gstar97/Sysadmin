@@ -19,6 +19,7 @@ const paths = {
   x: 'M7 7l10 10M17 7 7 17',
   arrowRight: 'M5 12h14m-6-6 6 6-6 6',
   arrowLeft: 'M19 12H5m6-6-6 6 6 6',
+  chevron: 'M9 6l6 6-6 6',
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 4v5l3 2',
   play: 'M7 5v14l11-7L7 5Z',
   pause: 'M8 5v14M16 5v14',

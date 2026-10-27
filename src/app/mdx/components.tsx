@@ -2,7 +2,7 @@
  * Componentes disponibles dentro de las lecciones (MDX). Los interactivos pesados se cargan
  * solo cuando la lección los usa.
  */
-import { Children, createContext, isValidElement, lazy, Suspense, useContext, useEffect, useId, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react'
+import { Children, createContext, isValidElement, lazy, Suspense, useContext, useEffect, useId, useMemo, useState, type ComponentProps, type ComponentType, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { z } from 'zod'
 import { content, loadQuestionBank, type LessonEntry } from '@/content'
@@ -32,6 +32,16 @@ const MatchExercise = lazy(() => import('@/interactive/dnd/MatchExercise').then(
 const TroubleshootingRunner = lazy(() => import('@/interactive/troubleshooting/Troubleshooting').then((m) => ({ default: m.Troubleshooting })))
 const InteractiveDiagram = lazy(() => import('@/interactive/diagrams/Diagram').then((m) => ({ default: m.InteractiveDiagram })))
 const StaticDiagram = lazy(() => import('@/interactive/diagrams/Diagram').then((m) => ({ default: m.Diagram })))
+const CpuSimulator = lazy(() => import('@/interactive/fundamentos/CpuSimulator').then((m) => ({ default: m.CpuSimulator })))
+const LatencyScale = lazy(() => import('@/interactive/fundamentos/LatencyScale').then((m) => ({ default: m.LatencyScale })))
+const DiskComparator = lazy(() => import('@/interactive/fundamentos/DiskComparator').then((m) => ({ default: m.DiskComparator })))
+const SchedulerSim = lazy(() => import('@/interactive/fundamentos/SchedulerSim').then((m) => ({ default: m.SchedulerSim })))
+const MemorySim = lazy(() => import('@/interactive/fundamentos/MemorySim').then((m) => ({ default: m.MemorySim })))
+const BitBoard = lazy(() => import('@/interactive/fundamentos/BitBoard').then((m) => ({ default: m.BitBoard })))
+const BaseConverter = lazy(() => import('@/interactive/fundamentos/BaseConverter').then((m) => ({ default: m.BaseConverter })))
+const UnitsCalculator = lazy(() => import('@/interactive/fundamentos/UnitsCalculator').then((m) => ({ default: m.UnitsCalculator })))
+const BitOps = lazy(() => import('@/interactive/fundamentos/BitOps').then((m) => ({ default: m.BitOps })))
+const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
 function Loading() {
   return <Spinner label="Cargando el ejercicio…" />
@@ -336,6 +346,39 @@ export function EditorConfig({ ejercicio }: { ejercicio: unknown }) {
   )
 }
 
+function withSuspense<P extends object>(Component: ComponentType<P>) {
+  return function Wrapped(props: P) {
+    return (
+      <Suspense fallback={<Loading />}>
+        <Component {...props} />
+      </Suspense>
+    )
+  }
+}
+
+// Interactivos de fundamentos (Nivel 0): no necesitan archivo de datos.
+export const SimuladorCpu = withSuspense(CpuSimulator)
+export const EscalaLatencias = withSuspense(LatencyScale)
+export const ComparadorDiscos = withSuspense(DiskComparator)
+export const PlanificadorCpu = withSuspense(SchedulerSim)
+export const SimuladorMemoria = withSuspense(MemorySim)
+export const TableroBits = withSuspense(BitBoard)
+export const ConversorBases = withSuspense(BaseConverter)
+export const CalculadoraUnidades = withSuspense(UnitsCalculator)
+export const OperacionesBits = withSuspense(BitOps)
+
+/** Pasos para hacer en la computadora propia; las casillas se guardan por lección. */
+export function PasosGuiados({ ejercicio }: { ejercicio: unknown }) {
+  const { lesson } = useContext(LessonContext)
+  const { value, error } = useExercise('pasos', ejercicio)
+  if (error) return <ExerciseError error={error} />
+  return (
+    <Suspense fallback={<Loading />}>
+      <GuidedSteps data={value!} storageKey={`${lesson?.id ?? 'suelto'}:${slugify(value!.titulo)}`} />
+    </Suspense>
+  )
+}
+
 /** Una pregunta del banco de la lección, para practicar en medio de la explicación. */
 export function Pregunta({ id }: { id: string }) {
   const { lesson } = useContext(LessonContext)
@@ -418,4 +461,14 @@ export const mdxComponents = {
   Troubleshooting,
   EditorConfig,
   Pregunta,
+  SimuladorCpu,
+  EscalaLatencias,
+  ComparadorDiscos,
+  PlanificadorCpu,
+  SimuladorMemoria,
+  TableroBits,
+  ConversorBases,
+  CalculadoraUnidades,
+  OperacionesBits,
+  PasosGuiados,
 }

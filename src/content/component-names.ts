@@ -15,6 +15,16 @@ export const INTERACTIVE_COMPONENTS = [
   'Troubleshooting',
   'EditorConfig',
   'Pregunta',
+  'SimuladorCpu',
+  'EscalaLatencias',
+  'ComparadorDiscos',
+  'PlanificadorCpu',
+  'SimuladorMemoria',
+  'TableroBits',
+  'ConversorBases',
+  'CalculadoraUnidades',
+  'OperacionesBits',
+  'PasosGuiados',
 ] as const
 
 export const REQUIRED_BLOCKS = [

@@ -1,0 +1,23 @@
+tipo: pasos
+titulo: Revisar la virtualización de tu computadora
+descripcion: Estos pasos se hacen en tu propia computadora. Marca cada uno cuando lo termines; el avance queda guardado en este navegador.
+pasos:
+  - titulo: Averigua si tu procesador soporta virtualización
+    detalle: Las extensiones se llaman **Intel VT-x** o **AMD-V**. Casi todos los procesadores de los últimos diez años las tienen, pero a veces vienen desactivadas en el firmware.
+    variantes:
+      - nombre: Windows
+        detalle: Abre el Administrador de tareas (`Ctrl+Shift+Esc`), pestaña **Rendimiento**, sección **CPU**. Mira el dato **Virtualización**.
+      - nombre: Linux
+        detalle: 'Cuenta las líneas que mencionan las extensiones (vmx es Intel, svm es AMD):'
+        comandos:
+          - grep -cE 'vmx|svm' /proc/cpuinfo
+      - nombre: macOS
+        detalle: Las Mac con Apple Silicon (M1 en adelante) siempre tienen virtualización, pero solo pueden virtualizar sistemas para ARM.
+    comprobar: En Windows dice **Habilitado**; en Linux el número es mayor que 0.
+    si_falla: Si dice **Deshabilitado**, entra al firmware (UEFI) al encender la computadora y activa la opción **Intel Virtualization Technology** o **SVM Mode**.
+  - titulo: Libera espacio para las máquinas virtuales
+    detalle: Cada máquina virtual de práctica necesita entre 20 y 40 GB de disco. Deja al menos 60 GB libres.
+    comprobar: El disco tiene 60 GB libres o más.
+  - titulo: Anota la cantidad de RAM
+    detalle: Con 8 GB se puede practicar con una máquina virtual a la vez; con 16 GB, con dos o tres.
+    comprobar: Sabes cuánta RAM tiene tu equipo.

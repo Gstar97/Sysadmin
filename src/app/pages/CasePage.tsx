@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { getLevel, getModule, loadCaseScenario } from '@/content'
 import type { TroubleshootingScenario } from '@/content/exercise-schemas'
-import { Troubleshooting } from '@/interactive/troubleshooting/Troubleshooting'
+import { isTimed, Troubleshooting } from '@/interactive/troubleshooting/Troubleshooting'
 import { formatHours } from '@/lib/cn'
 import { useProgress } from '@/progress/store'
 import { Badge, Callout, EmptyState, Icon, PageHeader, Spinner } from '@/ui'
@@ -41,7 +41,7 @@ export default function CasePage() {
           Caso real: problema simulado de producción
         </Badge>
         {mod.caso && <Badge>{formatHours(mod.caso.horas)}</Badge>}
-        {state?.caseSolved && <Badge tone="ok">Resuelto · mejor tiempo {state.caseBestMinutes} min simulados</Badge>}
+        {state?.caseSolved && <Badge tone="ok">{state.caseBestMinutes ? `Resuelto · mejor tiempo ${state.caseBestMinutes} min simulados` : 'Resuelto'}</Badge>}
       </span>
     </PageHeader>
   )
@@ -57,7 +57,9 @@ export default function CasePage() {
     <div className="mx-auto max-w-3xl space-y-6">
       {header}
       <Callout tone="info">
-        Cada decisión suma minutos, como en un incidente real. No hay que acertar todo de una: lo importante es llegar a la causa y entender qué conviene revisar primero.
+        {scenario && !isTimed(scenario)
+          ? 'Cada decisión tiene consecuencias, como en el trabajo real. No hay que acertar todo de una: lo importante es entender por qué una opción es mejor que otra.'
+          : 'Cada decisión suma minutos, como en un incidente real. No hay que acertar todo de una: lo importante es llegar a la causa y entender qué conviene revisar primero.'}
       </Callout>
       {scenario === undefined ? <Spinner label="Cargando el caso…" /> : scenario ? <Troubleshooting scenario={scenario} onSolved={(m) => void markCaseSolved(mod.id, m)} /> : <Callout tone="bad">No se encontró el archivo del caso.</Callout>}
     </div>

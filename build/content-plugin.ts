@@ -43,7 +43,8 @@ export function contentPlugin(options: { contentDir: string }): Plugin {
       if (isBuild && result.errors.length) {
         this.error(`El contenido tiene ${result.errors.length} errores:\n${result.errors.join('\n')}`)
       }
-      for (const file of [contentDir]) this.addWatchFile(file)
+      // La carpeta de contenido se vigila desde configureServer: addWatchFile con un
+      // directorio hace que el servidor de desarrollo intente importarlo y falle.
       const data = id === RESOLVED_INDEX ? result.index : result.searchDocs
       return `export default ${JSON.stringify(data)}`
     },

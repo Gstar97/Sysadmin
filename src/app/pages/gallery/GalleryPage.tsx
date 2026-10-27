@@ -5,20 +5,30 @@ import { percent } from '@/lib/cn'
 import { Button, Callout, Card, PageHeader } from '@/ui'
 import {
   Advertencia,
+  CalculadoraUnidades,
+  ComparadorDiscos,
   Consejo,
+  ConversorBases,
   DiagramaInteractivo,
   Distro,
   Distros,
   EditorConfig,
   Emparejar,
+  EscalaLatencias,
   ErrorComun,
   ErroresComunes,
   mdxComponents,
   Nota,
+  OperacionesBits,
   Ordenar,
+  PasosGuiados,
+  PlanificadorCpu,
   Resumen,
+  SimuladorCpu,
+  SimuladorMemoria,
   SimuladorPaquetes,
   Subnetting,
+  TableroBits,
   Terminal,
   Topologia,
   Troubleshooting,
@@ -30,6 +40,7 @@ import emparejar from './demos/emparejar.yaml'
 import modeloTcpIp from './demos/modelo-tcpip.svg?raw'
 import ordenar from './demos/ordenar.yaml'
 import paquetes from './demos/paquetes.yaml'
+import pasos from './demos/pasos.yaml'
 import preguntas from './demos/preguntas.yaml'
 import terminalBash from './demos/terminal-bash.yaml'
 import terminalIos from './demos/terminal-ios.yaml'
@@ -49,6 +60,10 @@ const SECTIONS = [
   { id: 'troubleshooting', titulo: 'Troubleshooting' },
   { id: 'editor', titulo: 'Editor de configuración' },
   { id: 'preguntas', titulo: 'Tipos de pregunta' },
+  { id: 'hardware', titulo: 'Hardware' },
+  { id: 'sistema-operativo', titulo: 'Sistema operativo' },
+  { id: 'numeros', titulo: 'Números y unidades' },
+  { id: 'pasos', titulo: 'Pasos guiados' },
   { id: 'bloques', titulo: 'Bloques de las lecciones' },
 ]
 
@@ -92,7 +107,7 @@ export default function GalleryPage() {
   const Pre = mdxComponents.pre
   return (
     <div className="space-y-8">
-      <PageHeader eyebrow="Etapa 2 · plataforma base" title="Galería de componentes interactivos">
+      <PageHeader eyebrow="Plataforma" title="Galería de componentes interactivos">
         Todos los interactivos de la plataforma con ejercicios de ejemplo, tal como se ven dentro de una lección. Cada ejercicio de esta página se escribe en un archivo YAML: agregar uno nuevo
         no requiere tocar código.
       </PageHeader>
@@ -152,9 +167,31 @@ export default function GalleryPage() {
         </Card>
       </Section>
 
+      <Section id="hardware" titulo="Hardware: CPU, latencias y discos" descripcion="Una CPU mínima que ejecuta un programa paso a paso (buscar, decodificar, ejecutar) con y sin caché; la escala de tiempos llevada a tiempo humano; y la comparación de discos según el tipo de trabajo.">
+        <SimuladorCpu />
+        <EscalaLatencias />
+        <ComparadorDiscos />
+      </Section>
+
+      <Section id="sistema-operativo" titulo="Sistema operativo: procesos y memoria" descripcion="Cómo reparte el sistema operativo la CPU entre procesos (con diagrama de Gantt y comparación de algoritmos) y cómo usa la RAM, la caché de disco y el swap hasta llegar al OOM killer.">
+        <PlanificadorCpu />
+        <SimuladorMemoria />
+      </Section>
+
+      <Section id="numeros" titulo="Números, bits y unidades" descripcion="Bits que se encienden con un toque, conversión entre bases con explicación paso a paso, operaciones AND/OR/XOR/NOT aplicadas a una máscara de red, y unidades de almacenamiento y velocidad. Todos tienen modo práctica.">
+        <TableroBits />
+        <ConversorBases />
+        <OperacionesBits />
+        <CalculadoraUnidades />
+      </Section>
+
+      <Section id="pasos" titulo="Pasos guiados" descripcion="Para lo que se hace en la computadora propia (instalar, configurar). Cada paso tiene comandos para copiar, variantes por sistema, cómo comprobar que salió bien y qué hacer si falla.">
+        <PasosGuiados ejercicio={pasos} />
+      </Section>
+
       <Section id="bloques" titulo="Bloques de las lecciones" descripcion="Avisos, diferencias entre distribuciones, código con botón para copiar, errores comunes y resumen.">
         <div className="prosa max-w-none">
-          <Nota>Los comandos de esta lección se probaron en Rocky Linux 10 y Ubuntu Server 24.04 LTS.</Nota>
+          <Nota>Los comandos de esta lección se probaron en Rocky Linux 10 y Ubuntu Server 24.04 y 26.04 LTS.</Nota>
           <Consejo>
             Antes de editar un archivo de configuración, haz una copia: <code>cp archivo archivo.bak</code>.
           </Consejo>
@@ -168,7 +205,7 @@ export default function GalleryPage() {
                 <code className="language-bash">{'sudo dnf install nginx\nsudo firewall-cmd --permanent --add-service=http\nsudo firewall-cmd --reload'}</code>
               </Pre>
             </Distro>
-            <Distro nombre="Ubuntu Server 24.04 LTS">
+            <Distro nombre="Ubuntu Server 24.04 / 26.04 LTS">
               <p>Los paquetes se instalan con apt y el firewall habitual es ufw (viene desactivado):</p>
               <Pre>
                 <code className="language-bash">{'sudo apt install nginx\nsudo ufw allow "Nginx HTTP"\nsudo ufw enable'}</code>
