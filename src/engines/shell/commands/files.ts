@@ -395,6 +395,18 @@ register(['less', 'more'], {
   },
 })
 
+/** Tipo de archivo según sus primeros bytes ("número mágico"), como hace file en un sistema real. */
+function magicType(data: string): string | undefined {
+  if (data.startsWith('\x7fELF')) return 'ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, stripped'
+  if (data.startsWith('MZ')) return 'PE32+ executable (GUI) x86-64, for MS Windows'
+  if (data.startsWith('%PDF-')) return `PDF document, version ${data.slice(5, 8)}`
+  if (data.startsWith('\x89PNG\r\n\x1a\n')) return 'PNG image data, 1920 x 1080, 8-bit/color RGBA, non-interlaced'
+  if (data.startsWith('\xff\xd8\xff')) return 'JPEG image data, JFIF standard 1.01'
+  if (data.startsWith('PK\x03\x04')) return data.includes('word/') ? 'Microsoft Word 2007+' : data.includes('xl/') ? 'Microsoft Excel 2007+' : 'Zip archive data, at least v2.0 to extract'
+  if (data.startsWith('\x1f\x8b')) return 'gzip compressed data, from Unix'
+  return undefined
+}
+
 register('file', {
   usage: 'file FILE...',
   run(ctx) {
@@ -406,6 +418,7 @@ register('file', {
         if (node.type === 'dir') kind = 'directory'
         else if (node.type === 'symlink') kind = `symbolic link to ${node.data}`
         else if (!node.data) kind = 'empty'
+        else if (magicType(node.data)) kind = magicType(node.data)!
         else if (node.data.startsWith('#!/bin/bash') || node.data.startsWith('#!/usr/bin/env bash')) kind = `Bourne-Again shell script, ASCII text executable${node.data.includes('\r\n') ? ', with CRLF line terminators' : ''}`
         else if (node.data.startsWith('#!/usr/bin/python3') || node.data.startsWith('#!/usr/bin/env python3')) kind = 'Python script, ASCII text executable'
         else if (node.data.startsWith('#!/bin/sh')) kind = 'POSIX shell script, ASCII text executable'

@@ -29,7 +29,7 @@ export function humanSize(bytes: number): string {
 export function sizeOf(node: Inode): number {
   if (node.type === 'dir') return 4096
   if (node.type === 'symlink') return node.data.length
-  return new TextEncoder().encode(node.data).length
+  return node.size ?? new TextEncoder().encode(node.data).length
 }
 
 /** Muestra un error de archivo con el formato de coreutils: "cmd: cannot X 'path': motivo". */

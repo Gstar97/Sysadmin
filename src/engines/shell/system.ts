@@ -43,10 +43,42 @@ export interface Proc {
   ppid: number
   user: string
   cmd: string
+  /** Nombre corto del proceso (lo que muestran top, pgrep y killall); por defecto, el del ejecutable. */
+  comm?: string
   cpu: number
   mem: number
   stat: string
   start: number
+}
+
+export function commOf(p: Proc): string {
+  return p.comm ?? (p.cmd.split(/\s+/)[0].split('/').pop() ?? '').replace(/:$/, '')
+}
+
+/** Proceso principal de cada servicio: línea de comandos, usuario y nombre corto, como en un servidor real. */
+function serviceProcess(distro: 'rocky' | 'ubuntu', name: string): { cmd: string; user: string; comm: string } {
+  const rocky = distro === 'rocky'
+  const table: Record<string, { cmd: string; user?: string; comm: string }> = {
+    sshd: { cmd: 'sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups', comm: 'sshd' },
+    ssh: { cmd: 'sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups', comm: 'sshd' },
+    crond: { cmd: '/usr/sbin/crond -n', comm: 'crond' },
+    cron: { cmd: '/usr/sbin/cron -f -P', comm: 'cron' },
+    chronyd: { cmd: '/usr/sbin/chronyd -F 2', user: 'chrony', comm: 'chronyd' },
+    chrony: { cmd: '/usr/sbin/chronyd -F 1', user: '_chrony', comm: 'chronyd' },
+    firewalld: { cmd: '/usr/bin/python3 -s /usr/sbin/firewalld --nofork --nopid', comm: 'firewalld' },
+    rsyslog: { cmd: '/usr/sbin/rsyslogd -n -iNONE', user: 'syslog', comm: 'rsyslogd' },
+    nginx: { cmd: 'nginx: master process /usr/sbin/nginx', comm: 'nginx' },
+    httpd: { cmd: '/usr/sbin/httpd -DFOREGROUND', comm: 'httpd' },
+    apache2: { cmd: '/usr/sbin/apache2 -k start', comm: 'apache2' },
+    mariadb: { cmd: rocky ? '/usr/libexec/mariadbd --basedir=/usr' : '/usr/sbin/mariadbd', user: 'mysql', comm: 'mariadbd' },
+    postgresql: { cmd: rocky ? '/usr/bin/postgres -D /var/lib/pgsql/data' : '/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main', user: 'postgres', comm: 'postgres' },
+    named: { cmd: rocky ? '/usr/sbin/named -u named -c /etc/named.conf' : '/usr/sbin/named -f -u bind', user: rocky ? 'named' : 'bind', comm: 'named' },
+    smb: { cmd: '/usr/sbin/smbd --foreground --no-process-group', comm: 'smbd' },
+    smbd: { cmd: '/usr/sbin/smbd --foreground --no-process-group', comm: 'smbd' },
+    'nfs-server': { cmd: '[nfsd]', comm: 'nfsd' },
+  }
+  const t = table[name] ?? { cmd: `/usr/sbin/${name}`, comm: name }
+  return { cmd: t.cmd, user: t.user ?? 'root', comm: t.comm }
 }
 
 export interface JournalEntry {
@@ -130,7 +162,7 @@ export class System {
   /** Cambios de red pendientes de nmcli (se aplican con "nmcli connection up"). */
   nmPending = new Map<string, { address?: string; gateway?: string; dns?: string[] }>()
   bootTime: number
-  private nextPid = 1200
+  private nextPid = 800
 
   get adminGroup() {
     return this.distro === 'rocky' ? 'wheel' : 'sudo'
@@ -396,9 +428,8 @@ export class System {
         ports: s.ports,
         pkg: name,
         since: silent ? this.bootTime + 30_000 : Date.now(),
-        pid: active ? this.allocPid() : undefined,
+        pid: active ? this.spawnService(s.name, silent ? this.bootTime + 30_000 : Date.now()).pid : undefined,
       })
-      if (active) this.spawn('root', s.name, 0, 0.3)
     }
     return true
   }
@@ -417,14 +448,23 @@ export class System {
     this.journal.push({ time: Date.now(), unit, priority, message, ident: unit.replace(/\.service$/, '') })
   }
 
+  /** PID nuevo, siempre mayor que el anterior y con saltos chicos, como en un sistema real. */
   allocPid() {
-    return this.nextPid++ + Math.floor(Math.random() * 3)
+    const pid = this.nextPid + Math.floor(Math.random() * 3)
+    this.nextPid = pid + 1
+    return pid
   }
 
-  spawn(user: string, cmd: string, cpu = 0, mem = 0.1, ppid = 1): Proc {
-    const p: Proc = { pid: this.allocPid(), ppid, user, cmd, cpu, mem, stat: cpu > 50 ? 'R' : 'S', start: Date.now() }
+  spawn(user: string, cmd: string, cpu = 0, mem = 0.1, ppid = 1, start = Date.now(), comm?: string): Proc {
+    const p: Proc = { pid: this.allocPid(), ppid, user, cmd, comm, cpu, mem, stat: cpu > 50 ? 'R' : 'S', start }
     this.procs.push(p)
     return p
+  }
+
+  /** Arranca el proceso principal de un servicio. */
+  spawnService(name: string, start = Date.now()): Proc {
+    const sp = serviceProcess(this.distro, name)
+    return this.spawn(sp.user, sp.cmd, 0, 0.3, 1, start, sp.comm)
   }
 
   // ---------------------------------------------------------------------------
@@ -464,7 +504,6 @@ export class System {
   private createBaseFilesystem() {
     const v = this.vfs
     const dirs: [string, number][] = [
-      ['/bin', 0o755],
       ['/boot', 0o555],
       ['/dev', 0o755],
       ['/etc', 0o755],
@@ -487,6 +526,7 @@ export class System {
       ['/usr/bin', 0o755],
       ['/usr/sbin', 0o755],
       ['/usr/lib', 0o755],
+      ['/usr/lib64', 0o755],
       ['/usr/local', 0o755],
       ['/usr/local/bin', 0o755],
       ['/usr/share', 0o755],
@@ -502,6 +542,8 @@ export class System {
       v.mkdirp(d, ROOT_CRED)
       v.stat(d, ROOT_CRED).mode = mode
     }
+    // Rocky y Ubuntu tienen /usr unificado: /bin, /sbin, /lib y /lib64 son enlaces a /usr.
+    for (const d of ['bin', 'sbin', 'lib', 'lib64']) v.symlink(`usr/${d}`, `/${d}`, ROOT_CRED)
     const osRelease =
       this.distro === 'rocky'
         ? 'NAME="Rocky Linux"\nVERSION="10.0 (Red Quartz)"\nID="rocky"\nID_LIKE="rhel centos fedora"\nVERSION_ID="10.0"\nPRETTY_NAME="Rocky Linux 10.0 (Red Quartz)"\n'
@@ -611,12 +653,30 @@ export class System {
   }
 
   private createBaseProcesses(user: string) {
-    const base = this.distro === 'rocky'
-      ? ['/usr/lib/systemd/systemd --switched-root --system', '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind', '/usr/sbin/NetworkManager --no-daemon', 'sshd: /usr/sbin/sshd -D', '/usr/sbin/crond -n', '/usr/sbin/chronyd -F 2', '/usr/bin/python3 -s /usr/sbin/firewalld --nofork']
-      : ['/sbin/init', '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-networkd', '/usr/lib/systemd/systemd-logind', 'sshd: /usr/sbin/sshd -D', '/usr/sbin/cron -f -P', '/usr/sbin/chronyd -F 1', '/usr/sbin/rsyslogd -n -iNONE']
-    this.procs.push({ pid: 1, ppid: 0, user: 'root', cmd: base[0], cpu: 0, mem: 0.3, stat: 'Ss', start: this.bootTime })
-    for (const cmd of base.slice(1)) this.spawn(cmd.startsWith('/usr/sbin/chronyd') ? 'chrony' : 'root', cmd, 0, 0.2)
-    const sshd = this.spawn('root', `sshd: ${user} [priv]`, 0, 0.1)
-    this.spawn(user, '-bash', 0, 0.1, sshd.pid)
+    // Procesos del sistema que no son servicios instalables; los servicios ya se crearon al instalar sus paquetes.
+    const base: [number, string, string][] =
+      this.distro === 'rocky'
+        ? [
+            [1, '/usr/lib/systemd/systemd --switched-root --system --deserialize=46', 'systemd'],
+            [612, '/usr/lib/systemd/systemd-journald', 'systemd-journal'],
+            [645, '/usr/lib/systemd/systemd-udevd', 'systemd-udevd'],
+            [702, '/usr/lib/systemd/systemd-logind', 'systemd-logind'],
+            [731, '/usr/sbin/NetworkManager --no-daemon', 'NetworkManager'],
+          ]
+        : [
+            [1, '/sbin/init', 'systemd'],
+            [388, '/usr/lib/systemd/systemd-journald', 'systemd-journal'],
+            [431, '/usr/lib/systemd/systemd-udevd', 'systemd-udevd'],
+            [612, '/usr/lib/systemd/systemd-networkd', 'systemd-network'],
+            [702, '/usr/lib/systemd/systemd-logind', 'systemd-logind'],
+          ]
+    for (const [pid, cmd, comm] of base) {
+      this.procs.push({ pid, ppid: pid === 1 ? 0 : 1, user: pid === 612 && this.distro === 'ubuntu' ? 'systemd-network' : 'root', cmd, comm, cpu: 0, mem: pid === 1 ? 0.3 : 0.2, stat: pid === 1 ? 'Ss' : 'Ss', start: this.bootTime })
+    }
+    // La sesión del usuario empieza después de los servicios del arranque.
+    this.nextPid = Math.max(this.nextPid, 1150)
+    const sshd = this.spawn('root', `sshd: ${user} [priv]`, 0, 0.1, this.procs.find((p) => p.comm === 'sshd')?.pid ?? 1, Date.now(), 'sshd')
+    this.spawn(user, '-bash', 0, 0.1, sshd.pid, Date.now(), 'bash')
   }
+
 }

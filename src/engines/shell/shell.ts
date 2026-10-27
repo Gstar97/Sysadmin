@@ -698,7 +698,7 @@ export class Shell {
       case '?':
         return String(this.lastExit)
       case '$':
-        return '4721'
+        return String(this.sys.procs.find((p) => p.cmd === '-bash' && p.user === this.user)?.pid ?? this.sys.procs.find((p) => p.cmd === '-bash')?.pid ?? 4721)
       case '#':
         return String(this.positional.length)
       case '@':

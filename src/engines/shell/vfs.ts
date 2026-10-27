@@ -15,6 +15,8 @@ export interface Inode {
   mtime: number
   /** Contenido del archivo o destino del enlace simbólico. */
   data: string
+  /** Tamaño aparente de los ejecutables simulados (su contenido real es solo la cabecera). */
+  size?: number
   entries?: Map<string, number>
   nlink: number
 }
@@ -212,6 +214,7 @@ export class VFS {
       if (node.type === 'dir') throw new FsError('EISDIR', path)
       if (!this.can(node, cred, 2)) throw new FsError('EACCES', path)
       node.data = opts.append ? node.data + data : data
+      node.size = undefined
       node.mtime = this.now()
       return
     }

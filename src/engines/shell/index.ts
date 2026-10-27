@@ -4,18 +4,43 @@ import './commands/users'
 import './commands/sysinfo'
 import './commands/pkg'
 import './commands/net'
+import { commandPackage } from './packages'
 import { bashStateSchema, type BashCheck, type BashStateInput } from './schema'
-import { Shell } from './shell'
+import { COMMANDS, Shell } from './shell'
 import { System } from './system'
 import { modeString, ROOT_CRED } from './vfs'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
 
+const BINARY_SIZES: Record<string, number> = { bash: 1389064, ls: 140920, cat: 36448, cp: 141976, mv: 137760, grep: 166560, ps: 145424, systemctl: 309536, sudo: 252608, find: 286040, tar: 528536, ssh: 857472, python3: 15736, vim: 4096832 }
+
+/** Crea en /usr/bin y /usr/sbin un ejecutable (solo la cabecera ELF) por cada comando disponible. */
+function installBinaries(sys: System) {
+  const add = (path: string, name: string) => {
+    if (sys.vfs.exists(path)) return
+    sys.vfs.writeFile(path, '\x7fELF\x02\x01\x01', ROOT_CRED)
+    const node = sys.vfs.stat(path, ROOT_CRED)
+    node.mode = name === 'sudo' ? 0o4111 : 0o755
+    node.size = BINARY_SIZES[name] ?? 24_000 + ([...name].reduce((h, c) => h * 31 + c.charCodeAt(0), 7) % 160_000)
+  }
+  // Herramientas que solo existen en una de las dos familias de distribuciones.
+  const otherFamily = sys.distro === 'rocky' ? ['apt', 'apt-get', 'dpkg', 'adduser', 'ufw'] : ['dnf', 'yum', 'rpm', 'firewall-cmd', 'nmcli']
+  for (const [name, def] of COMMANDS) {
+    if (otherFamily.includes(name)) continue
+    const pkg = commandPackage(sys.distro, name)
+    if (pkg && !sys.installed.has(pkg)) continue
+    add(`${def.path ?? '/usr/bin'}/${name}`, name)
+  }
+  add('/usr/bin/bash', 'bash')
+  if (!sys.vfs.exists('/usr/bin/sh')) sys.vfs.symlink('bash', '/usr/bin/sh', ROOT_CRED)
+}
+
 /** Crea una sesión de bash a partir del estado inicial de un ejercicio. */
 export function createBashSession(input: BashStateInput = {}): Shell {
   const state = bashStateSchema.parse(input)
   const sys = new System(state)
+  installBinaries(sys)
   return new Shell(sys, state.usuario, state.directorio)
 }
 

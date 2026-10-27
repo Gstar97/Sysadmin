@@ -1,6 +1,6 @@
 import { parseArgs } from '../args'
 import { BUILTINS, COMMANDS, formatPrintf, register, type CommandContext } from '../shell'
-import { priorityName, priorityNumber, type JournalEntry, type Service } from '../system'
+import { commOf, priorityName, priorityNumber, type JournalEntry, type Service } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
 import { CPU_FLAGS, dmiBiosText, efibootmgrText, fdiskText, lsblkText } from '../hardware'
@@ -61,7 +61,7 @@ function startService(ctx: CommandContext, svc: Service): boolean {
     svc.active = true
     svc.failed = false
     svc.since = Date.now()
-    svc.pid = ctx.sys.spawn('root', svc.name, 0, 0.4).pid
+    svc.pid = ctx.sys.spawnService(svc.name).pid
     ctx.sys.journal.push({ time: Date.now(), unit: `${svc.name}.service`, priority: 6, message: `Started ${svc.name}.service - ${svc.description}.`, ident: 'systemd', pid: 1 })
   }
   return true
@@ -401,7 +401,7 @@ register('ps', {
   summary: '  ps aux | ps -ef | ps -u USER | ps -p PID | ps -eo pid,user,%cpu,%mem,cmd --sort=-%cpu',
   run(ctx) {
     const args = ctx.args.join(' ')
-    let procs = [...ctx.sys.procs]
+    let procs = [...ctx.sys.procs].sort((a, b) => a.pid - b.pid)
     const sort = /--sort=(-?)(%?\w+)/.exec(args)
     if (sort) {
       const key = sort[2].replace('%', '')
@@ -415,7 +415,7 @@ register('ps', {
     const pidFilter = /-p\s+([\d,]+)/.exec(args)?.[1]
     if (pidFilter) procs = procs.filter((p) => pidFilter.split(',').includes(String(p.pid)))
     const cmdFilter = /-C\s+(\S+)/.exec(args)?.[1]
-    if (cmdFilter) procs = procs.filter((p) => p.cmd.split(/\s+/)[0].endsWith(cmdFilter))
+    if (cmdFilter) procs = procs.filter((p) => commOf(p) === cmdFilter)
     const time = (p: (typeof procs)[number]) => {
       const d = new Date(p.start)
       return Date.now() - p.start > 86_400_000 ? `${MONTHS[d.getMonth()]}${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -429,7 +429,7 @@ register('ps', {
         ctx.out(
           cols
             .map((c) =>
-              c === 'pid' ? String(p.pid).padStart(5) : c === 'ppid' ? String(p.ppid).padStart(5) : c === 'user' ? p.user.padEnd(8) : c === '%cpu' ? p.cpu.toFixed(1).padStart(4) : c === '%mem' ? p.mem.toFixed(1).padStart(4) : c === 'stat' ? p.stat : c === 'comm' ? p.cmd.split(/\s+/)[0].split('/').pop()! : p.cmd,
+              c === 'pid' ? String(p.pid).padStart(5) : c === 'ppid' ? String(p.ppid).padStart(5) : c === 'user' ? p.user.padEnd(8) : c === '%cpu' ? p.cpu.toFixed(1).padStart(4) : c === '%mem' ? p.mem.toFixed(1).padStart(4) : c === 'stat' ? p.stat : c === 'comm' ? commOf(p) : p.cmd,
             )
             .join(' ') + '\n',
         )
@@ -447,6 +447,11 @@ register('ps', {
       ctx.out('UID          PID    PPID  C STIME TTY          TIME CMD\n')
       for (const p of procs) ctx.out(`${p.user.padEnd(8)} ${String(p.pid).padStart(7)} ${String(p.ppid).padStart(7)}  ${Math.round(p.cpu)} ${time(p).padEnd(5)} ${p.cmd.startsWith('-bash') ? 'pts/0   ' : '?       '}     00:00:0${Math.min(9, Math.round(p.cpu / 10))} ${p.cmd}\n`)
       return 0
+    }
+    if (userFilter || pidFilter || cmdFilter) {
+      ctx.out('    PID TTY          TIME CMD\n')
+      for (const p of procs) ctx.out(`${String(p.pid).padStart(7)} ${p.cmd === '-bash' ? 'pts/0   ' : '?       '} 00:00:${pad(Math.min(59, Math.round(p.cpu / 10)))} ${commOf(p)}\n`)
+      return procs.length ? 0 : 1
     }
     const shellProc = ctx.sys.procs.find((p) => p.cmd === '-bash' && p.user === ctx.sh.user) ?? ctx.sys.procs.find((p) => p.cmd === '-bash')
     ctx.out(`    PID TTY          TIME CMD\n${String(shellProc?.pid ?? 1300).padStart(7)} pts/0    00:00:00 bash\n${String((shellProc?.pid ?? 1300) + 57).padStart(7)} pts/0    00:00:00 ps\n`)
@@ -520,7 +525,9 @@ register('kill', {
 register(['pkill', 'killall'], {
   usage: 'pkill [-SIGNAL] PATTERN',
   run(ctx) {
-    const args = [...ctx.args]
+    // pkill compara con el nombre del proceso; con -f, con la línea de comandos completa.
+    const full = ctx.name === 'pkill' && ctx.args.includes('-f')
+    const args = ctx.args.filter((x) => !(full && x === '-f'))
     let signal = 15
     if (args[0]?.startsWith('-')) signal = parseSignal(args.shift()!) ?? 15
     const pattern = args[0]
@@ -528,7 +535,14 @@ register(['pkill', 'killall'], {
       ctx.err(`${ctx.name}: no process selection criteria\n`)
       return 2
     }
-    const pids = ctx.sys.procs.filter((p) => (ctx.name === 'killall' ? p.cmd.split(/\s+/)[0].split('/').pop() === pattern : p.cmd.includes(pattern))).map((p) => p.pid)
+    let re: RegExp
+    try {
+      re = new RegExp(pattern)
+    } catch {
+      ctx.err(`${ctx.name}: invalid pattern\n`)
+      return 2
+    }
+    const pids = ctx.sys.procs.filter((p) => (ctx.name === 'killall' ? commOf(p) === pattern : re.test(full ? p.cmd : commOf(p)))).map((p) => p.pid)
     if (!pids.length) {
       if (ctx.name === 'killall') ctx.err(`${pattern}: no process found\n`)
       return 1
@@ -543,8 +557,8 @@ register('pgrep', {
     const a = parseArgs(ctx.args, { flags: { l: ['l', 'list-name'], a: ['a', 'list-full'] }, values: { u: ['u'] } })
     const pattern = a.rest[0] ?? ''
     const re = new RegExp(pattern)
-    const found = ctx.sys.procs.filter((p) => re.test(p.cmd.split(/\s+/)[0].split('/').pop() ?? '') && (!a.values.has('u') || p.user === a.values.get('u')))
-    for (const p of found) ctx.out(`${p.pid}${a.flags.has('l') ? ' ' + p.cmd.split(/\s+/)[0].split('/').pop() : a.flags.has('a') ? ' ' + p.cmd : ''}\n`)
+    const found = [...ctx.sys.procs].sort((x, y) => x.pid - y.pid).filter((p) => re.test(commOf(p)) && (!a.values.has('u') || p.user === a.values.get('u')))
+    for (const p of found) ctx.out(`${p.pid}${a.flags.has('l') ? ' ' + commOf(p) : a.flags.has('a') ? ' ' + p.cmd : ''}\n`)
     return found.length ? 0 : 1
   },
 })
@@ -576,13 +590,13 @@ register('uptime', {
 register(['top', 'htop'], {
   usage: 'top [-b] [-n ITERATIONS]',
   run(ctx) {
-    const procs = [...ctx.sys.procs].sort((a, b) => b.cpu - a.cpu)
+    const procs = [...ctx.sys.procs].sort((a, b) => b.cpu - a.cpu || a.pid - b.pid)
     const cpuUsed = Math.min(100, procs.reduce((s, p) => s + p.cpu, 0) / 2)
     ctx.out(
       `top - ${uptimeText(ctx).trim().replace(/^\S+ /, '')}\nTasks: ${procs.length} total,   ${procs.filter((p) => p.stat.startsWith('R')).length} running, ${procs.filter((p) => !p.stat.startsWith('R')).length} sleeping,   0 stopped,   0 zombie\n%Cpu(s): ${cpuUsed.toFixed(1)} us,  0.5 sy,  0.0 ni, ${(99.5 - cpuUsed).toFixed(1)} id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st\nMiB Mem :   3753.5 total,   1484.7 free,    985.2 used,   1349.1 buff/cache\nMiB Swap:   2048.0 total,   2048.0 free,      0.0 used.   2723.1 avail Mem\n\n    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\n`,
     )
     for (const p of procs.slice(0, 15)) {
-      ctx.out(`${String(p.pid).padStart(7)} ${p.user.padEnd(9).slice(0, 9)} 20   0 ${String(Math.round(20000 + p.mem * 40000)).padStart(7)} ${String(Math.round(4000 + p.mem * 38000)).padStart(6)}   2816 ${p.stat[0]} ${p.cpu.toFixed(1).padStart(5)} ${p.mem.toFixed(1).padStart(5)}   0:0${Math.min(9, Math.round(p.cpu / 10))}.12 ${p.cmd.split(/\s+/)[0].split('/').pop()}\n`)
+      ctx.out(`${String(p.pid).padStart(7)} ${p.user.padEnd(9).slice(0, 9)} 20   0 ${String(Math.round(20000 + p.mem * 40000)).padStart(7)} ${String(Math.round(4000 + p.mem * 38000)).padStart(6)}   2816 ${p.stat[0]} ${p.cpu.toFixed(1).padStart(5)} ${p.mem.toFixed(1).padStart(5)}   0:0${Math.min(9, Math.round(p.cpu / 10))}.12 ${commOf(p)}\n`)
     }
     if (ctx.isTTY && !ctx.args.includes('-b')) ctx.err(`[simulador] ${ctx.name} se actualiza en vivo y se sale con q; aquí se muestra una sola captura.\n`)
     return 0
