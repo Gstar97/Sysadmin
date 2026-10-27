@@ -1,0 +1,245 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Paleta base (tema claro). Los componentes usan solo estas variables. */
+:root {
+  color-scheme: light;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --fg: #16202c;
+  --muted: #5b6878;
+  --line: #d9dee6;
+  --accent: #0f766e;
+  --accent-fg: #ffffff;
+  --accent-soft: #d5f0ec;
+  --ok: #15803d;
+  --ok-soft: #dcf5e4;
+  --warn: #a16207;
+  --warn-soft: #fbf0d0;
+  --bad: #b91c1c;
+  --bad-soft: #fde2e2;
+  --info: #1d4ed8;
+  --info-soft: #e0e9fd;
+  --term-bg: #0d1117;
+  --term-fg: #d6dde6;
+  --term-muted: #8b96a3;
+  --term-accent: #7ee2b8;
+  --term-err: #ff8a8a;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0e1218;
+    --surface: #161c25;
+    --surface-2: #1f2733;
+    --fg: #e6ebf1;
+    --muted: #9aa7b6;
+    --line: #2c3644;
+    --accent: #2dd4bf;
+    --accent-fg: #062622;
+    --accent-soft: #123a36;
+    --ok: #4ade80;
+    --ok-soft: #133524;
+    --warn: #facc15;
+    --warn-soft: #3a3214;
+    --bad: #f87171;
+    --bad-soft: #3e1818;
+    --info: #93b4ff;
+    --info-soft: #1a2747;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e1218;
+  --surface: #161c25;
+  --surface-2: #1f2733;
+  --fg: #e6ebf1;
+  --muted: #9aa7b6;
+  --line: #2c3644;
+  --accent: #2dd4bf;
+  --accent-fg: #062622;
+  --accent-soft: #123a36;
+  --ok: #4ade80;
+  --ok-soft: #133524;
+  --warn: #facc15;
+  --warn-soft: #3a3214;
+  --bad: #f87171;
+  --bad-soft: #3e1818;
+  --info: #93b4ff;
+  --info-soft: #1a2747;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --shadow-card: var(--shadow);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  line-height: 1.55;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Texto de las lecciones (MDX) */
+.prosa {
+  font-size: 1.03rem;
+  max-width: 72ch;
+}
+.prosa > * + * {
+  margin-top: 0.9em;
+}
+.prosa h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin-top: 2em;
+  line-height: 1.3;
+  scroll-margin-top: 5rem;
+}
+.prosa h3 {
+  font-size: 1.15rem;
+  font-weight: 650;
+  margin-top: 1.6em;
+  scroll-margin-top: 5rem;
+}
+.prosa p,
+.prosa li {
+  line-height: 1.7;
+}
+.prosa ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.prosa ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.prosa li + li {
+  margin-top: 0.35em;
+}
+.prosa a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prosa strong {
+  font-weight: 650;
+}
+.prosa code:not(pre code) {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+}
+.prosa pre {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+.prosa table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  display: block;
+  overflow-x: auto;
+}
+.prosa th,
+.prosa td {
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+.prosa th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.prosa blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  color: var(--muted);
+}
+
+/* Diagramas SVG: heredan colores del tema */
+.diagrama svg {
+  width: 100%;
+  height: auto;
+  color: var(--fg);
+}
+.diagrama svg [data-punto] {
+  cursor: pointer;
+}
+.diagrama svg [data-punto]:hover,
+.diagrama svg [data-punto]:focus {
+  filter: drop-shadow(0 0 3px var(--accent));
+  outline: none;
+}
+.diagrama svg [data-activo='true'] {
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
