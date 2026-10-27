@@ -1,7 +1,7 @@
 ############################################################################################
 #                                                                                          #
 #          ARQUITECTURA TÉCNICA DE LA PLATAFORMA                                           #
-#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 2                       #
+#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 3                       #
 #                                                                                          #
 ############################################################################################
 
@@ -315,6 +315,27 @@ reordenar carpetas no rompe el progreso guardado de nadie.
     fin_ok: { final: exito, resumen: Qué se aprendió y qué se debió revisar primero. }
 
   La plataforma suma el tiempo de cada decisión y al final muestra el camino óptimo.
+  Si todas las opciones tienen 0 minutos, el escenario es de decisiones sin reloj (por
+  ejemplo, dilemas éticos): no muestra tiempo y cada elección se presenta como "buena
+  decisión" o "esta decisión no fue la mejor", con su consecuencia.
+
+5.4 bis Pasos guiados (laboratorios y proyectos)
+
+  tipo: pasos
+  titulo: Tu primera máquina virtual
+  descripcion: ...
+  pasos:
+    - titulo: Descarga la imagen
+      detalle: Texto con `código` y **negrita**. Las listas van en un bloque |- con un
+               elemento por línea.
+      comandos: [sha256sum ubuntu.iso]          # opcional, con botón para copiar
+      variantes:                                # opcional: pestañas por sistema o
+        - { nombre: Windows, detalle: ..., comandos: [...] }   # hipervisor
+      comprobar: Cómo saber que el paso salió bien.
+      si_falla: Qué revisar si no salió.
+
+  Cada paso se marca como hecho y queda guardado en el navegador, así que un laboratorio
+  largo se puede hacer en varias sesiones.
 
 5.5 Componentes que se pueden usar dentro de una lección
 
@@ -348,6 +369,21 @@ reordenar carpetas no rompe el progreso guardado de nadie.
                                      (por ejemplo services.web.ports contiene "8080:80")
     <Pregunta id="p03" />            una pregunta del banco de la lección, en el medio
                                      de la explicación
+    <PasosGuiados ejercicio={ej} />  pasos para hacer en máquinas reales (ver 5.4 bis)
+
+  Interactivos del Nivel 0 (sin archivo de datos, salvo SimuladorCpu)
+    <SimuladorCpu programa={ej} />   ciclo de instrucción paso a paso con registros
+    <EscalaLatencias />              de un registro a un paquete transatlántico, en
+                                     tiempo humano
+    <ComparadorDiscos />             HDD, SSD SATA y NVMe con cargas reales
+    <PlanificadorCpu />              FIFO, turnos rotativos y prioridades con diagrama
+                                     de Gantt
+    <SimuladorMemoria />             páginas, RAM, swap y OOM killer
+    <TableroBits bits={8} />         encender bits para formar números
+    <ConversorBases modo="practicar" tipos={[...]} />   decimal, binario, hexadecimal
+                                     y octal, con explicación paso a paso
+    <CalculadoraUnidades modo="capacidad" | "transferencia" | "practica" />
+    <OperacionesBits modo="bits" | "red" />   AND, OR, XOR, NOT y red/broadcast
 
   Tarjetas (tarjetas.yaml): id, frente y dorso.
   Glosario (glosario.yaml): id, término, alias, definición breve e id de la lección donde
@@ -408,6 +444,19 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     running-config, ip interface brief, vlan brief, interfaces trunk, ip route, ip ospf
     neighbor, ip protocols, cdp neighbors, arp, mac address-table, version. Conectada al
     motor de red: el ping desde la consola usa las mismas VLAN y rutas que el diagrama.
+  - Inventario y arranque (Etapa 3): lscpu, /proc/cpuinfo, free, lsblk, df -h/-H/-T,
+    dmidecode (-t y -s, solo con root), lspci, fdisk -l, efibootmgr, mokutil y
+    /sys/firmware/efi. El estado inicial elige firmware bios o uefi y Secure Boot; las
+    particiones, /etc/fstab y /boot/efi cambian según la distribución y el firmware.
+  - Procesos con PID fijos y realistas (systemd, sshd, la sesión), servicios que crean
+    su proceso al arrancar con el usuario de sistema del paquete (nginx, mysql, postgres,
+    named...), ps con -C/-p/-u, pkill -f, killall, pgrep y señales (SIGSTOP y SIGCONT).
+  - Datos e integridad: file reconoce ELF, PE, PDF, PNG, JPEG, ZIP y gzip; md5sum,
+    sha1sum, sha256sum, sha384sum y sha512sum (con -c); base64 (-d); bytes, UTF-8 y
+    finales de línea CRLF visibles con od, xxd, cat -A y file.
+  - Red del lado del cliente: ip, ping, traceroute, dig, nslookup, host, curl y wget
+    contra registros DNS y sitios definidos en el ejercicio; curl -v muestra la
+    resolución, la conexión, el saludo TLS y el certificado en las URL https.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el celular aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -439,6 +488,9 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 6.4 Diagramas interactivos
   - SVG con zonas clicables definidas en YAML; al tocar una parte se abre su explicación.
     Funcionan con teclado y lector de pantalla.
+  - Si el dibujo es muy apaisado (ancho/alto de 1,8 o más), ocupa todo el ancho y la
+    explicación va debajo. El simulador de paquetes hace lo mismo con las topologías
+    largas.
 
 6.5 Arrastrar y soltar
   - Ordenar pasos y emparejar conceptos, con mouse, pantalla táctil o teclado.
@@ -466,7 +518,11 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     lección. Cola diaria con límite configurable.
 
 6.9 Componentes específicos
-  - Simuladores de CPU, planificador, RAID, STP, quórum y migración; consolas de Python
+  - Hechos en la Etapa 3 (Nivel 0): simulador de CPU, escala de latencias, comparador de
+    discos, planificador de procesos, simulador de memoria virtual, tablero de bits,
+    conversor de bases, calculadora de unidades y transferencias, operaciones de bits
+    (con red y broadcast) y pasos guiados (ver 5.5).
+  - Pendientes, con el nivel que los usa: simuladores de RAID, STP, quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; visor de capturas de
     tráfico; constructor de rack y calculadoras (UPS, disponibilidad, permisos, cron,
@@ -668,9 +724,15 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       espaciado, insignias y certificados.
     - Pruebas automáticas, integración continua y LEEME.txt con instrucciones.
 
-  Etapa 3 - Nivel 0 completo como piloto (EN CURSO)
-    - 21 lecciones, 4 módulos con laboratorio, examen y caso real, y el proyecto
-      integrador. Banco de entre 170 y 300 preguntas y sus tarjetas. Pausa para revisión.
+  Etapa 3 - Nivel 0 completo como piloto (HECHA, en revisión)
+    - 21 lecciones en 4 módulos, cada módulo con laboratorio guiado, examen y caso real,
+      y el proyecto integrador del nivel.
+    - 234 preguntas, 147 tarjetas de repaso, 100 términos de glosario y 15 ejercicios
+      de terminal que el validador resuelve en el simulador.
+    - Componentes nuevos del Nivel 0 (ver 5.5 y 6.9), escenarios de decisión sin reloj,
+      pasos guiados para laboratorios y proyecto, y la terminal ampliada con inventario
+      de hardware, BIOS y UEFI, sumas de verificación y la red del lado del cliente.
+    - Pausa para revisión antes de empezar el Nivel 1.
 
   Etapa 4 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
   Los niveles más largos (Linux y Redes) se pueden entregar en dos partes dentro de la
@@ -683,7 +745,8 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 
   1. Nube: AWS y Azure, con equivalencias entre ambos.
   2. Distribuciones Linux de referencia: Rocky Linux 10 / AlmaLinux 10 y Ubuntu Server
-     LTS (24.04).
+     LTS (26.04 para instalar en el laboratorio; 24.04 sigue con soporte y es la que
+     usa la terminal simulada).
   3. Consola simulada tipo Cisco IOS incluida.
   4. Código en inglés y contenido en español neutro.
   5. Stack: React + TypeScript + Vite + MDX/YAML.
