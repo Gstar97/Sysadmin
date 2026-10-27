@@ -1,0 +1,104 @@
+tipo: troubleshooting
+titulo: Cinco decisiones de una semana
+descripcion: >-
+  Situaciones reales del trabajo con acceso privilegiado. No hay reloj: lo que importa es la
+  decisión. Si eliges mal, vas a ver qué podría pasar y vuelves a elegir.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Revisando permisos en el servidor de archivos, ves una carpeta de Recursos Humanos llamada
+      "Sueldos 2026". Como administrador, puedes abrirla.
+    opciones:
+      - { texto: "No abrirla. Si los permisos de la carpeta están mal, avisar a RRHH, que es el área dueña", ir_a: n2, minutos: 0 }
+      - texto: Abrirla un momento para verificar que los permisos internos estén bien
+        ir_a: n1
+        minutos: 0
+        consecuencia: >-
+          Para revisar permisos no hace falta abrir ningún archivo: se ven desde las propiedades de
+          la carpeta. Abrir datos de otras personas sin un motivo de trabajo es un abuso del acceso,
+          y queda registrado.
+      - texto: Copiarla a tu equipo para tener un respaldo propio
+        ir_a: n1
+        minutos: 0
+        consecuencia: >-
+          Acabas de sacar datos personales y confidenciales de su lugar, sin autorización. Si tu
+          equipo se pierde o lo comprometen, es una filtración. Los respaldos los hace el sistema
+          de backup, con controles.
+  n2:
+    situacion: >-
+      Te escriben por mensaje desde un número desconocido: "Soy el gerente general, estoy de
+      viaje y perdí el celular. Necesito urgente que me resetees la contraseña del correo y me la
+      mandes por acá."
+    opciones:
+      - { texto: "No hacer nada por ese canal, verificar llamando al número del gerente que tiene la empresa y avisar a seguridad", ir_a: n3, minutos: 0 }
+      - texto: Resetearla y mandársela, porque es el gerente y es urgente
+        ir_a: n2
+        minutos: 0
+        consecuencia: >-
+          Es la forma clásica de un ataque de ingeniería social: urgencia, autoridad y un canal
+          nuevo. Si no era el gerente, acabas de entregar su correo a un atacante, con acceso a todo
+          lo que llega ahí.
+      - texto: Ignorar el mensaje
+        ir_a: n2
+        minutos: 0
+        consecuencia: >-
+          No caíste, pero si era un ataque, otros compañeros pueden estar recibiendo lo mismo.
+          Avisar a seguridad permite alertar al resto.
+  n3:
+    situacion: >-
+      Ejecutaste un comando de limpieza en la carpeta equivocada y borraste los archivos del área
+      de Compras. Nadie se dio cuenta todavía.
+    opciones:
+      - { texto: "Avisar enseguida a tu supervisor y a Compras, y restaurar desde el backup", ir_a: n4, minutos: 0 }
+      - texto: Restaurar desde el backup sin decirle nada a nadie
+        ir_a: n3
+        minutos: 0
+        consecuencia: >-
+          El backup es de anoche: lo que Compras hizo esta mañana se perdió y nadie sabe que tiene
+          que rehacerlo. Ocultar un error convierte un problema técnico en uno de confianza.
+      - texto: Esperar a ver si alguien reclama
+        ir_a: n3
+        minutos: 0
+        consecuencia: >-
+          Mientras esperas, Compras sigue trabajando sin sus archivos y puede tomar decisiones con
+          datos incompletos. Cuanto antes se avisa, más fácil es arreglarlo.
+  n4:
+    situacion: >-
+      Tu jefe te pide que desactives "por un día" el registro de accesos del sistema de compras,
+      porque genera demasiadas alertas.
+    opciones:
+      - { texto: "Pedir que lo solicite por escrito con el motivo, consultar a seguridad y proponer filtrar las alertas sin apagar el registro", ir_a: n5, minutos: 0 }
+      - texto: Desactivarlo, porque lo pidió tu jefe
+        ir_a: n4
+        minutos: 0
+        consecuencia: >-
+          Un día sin registro de accesos es justo el día en que nadie podría saber qué pasó.
+          Apagar controles de auditoría es un pedido que hay que formalizar y consultar, venga de
+          quien venga; si algo sale mal, la responsabilidad también es de quien ejecutó.
+  n5:
+    situacion: >-
+      Revisando registros, ves que la cuenta de un empleado copia todas las noches la base de
+      clientes completa a un disco externo.
+    opciones:
+      - { texto: "Reportarlo a tu supervisor o a seguridad con la evidencia, sin alterar los registros ni comentarlo con nadie más", ir_a: fin_ok, minutos: 0 }
+      - texto: Hablar directamente con el empleado para que te explique
+        ir_a: n5
+        minutos: 0
+        consecuencia: >-
+          Puede haber una explicación legítima, o puede ser una fuga de datos. Si lo es, acabas de
+          avisarle a la persona investigada, que puede borrar evidencias. Investigar es tarea de
+          seguridad y de quien corresponda según las políticas.
+      - texto: Comentarlo en el grupo de chat del equipo
+        ir_a: n5
+        minutos: 0
+        consecuencia: >-
+          Expones a una persona que todavía no fue investigada y alertas a todos, incluido el
+          posible responsable. Los hallazgos así se informan por el canal formal, con discreción.
+  fin_ok:
+    final: exito
+    resumen: >-
+      En las cinco situaciones aplicaste los mismos principios: usar el acceso solo para lo que
+      el trabajo requiere y con autorización de quien corresponde, verificar identidades antes de
+      actuar, ser transparente con los errores propios y llevar los hallazgos delicados por el
+      canal formal. Es lo que hace que una organización pueda confiar en quien tiene las llaves.

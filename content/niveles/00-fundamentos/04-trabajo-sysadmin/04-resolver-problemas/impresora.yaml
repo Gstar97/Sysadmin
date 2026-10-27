@@ -1,0 +1,83 @@
+tipo: troubleshooting
+titulo: La impresora de contabilidad no imprime
+descripcion: >-
+  Un incidente simple para aplicar el método completo. Cada decisión suma minutos: el área
+  tiene que imprimir los cierres antes del mediodía.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 10:20. Te avisan que en Contabilidad (cinco personas) nadie puede imprimir en la
+      impresora del área, una láser conectada a la red. El resto de la empresa imprime bien en sus
+      impresoras.
+    opciones:
+      - { texto: "Preguntar desde cuándo pasa, si les pasa a todos igual y si cambió algo", ir_a: n_info, minutos: 3 }
+      - texto: Reinstalar el driver de la impresora en las cinco PC
+        ir_a: n1
+        minutos: 60
+        consecuencia: >-
+          Una hora después, el problema sigue igual en las cinco. Si a todos les falla a la vez,
+          lo más probable es que la causa sea algo que comparten, no algo de cada PC.
+      - texto: Reiniciar el servidor de impresión
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Durante diez minutos nadie de la empresa pudo imprimir, y Contabilidad sigue igual.
+          Reiniciar sin saber la causa afectó a muchos para no resolver nada.
+  n_info:
+    situacion: Las respuestas aportan datos clave.
+    evidencia:
+      - titulo: Lo que cuenta el área
+        contenido: |
+          - Pasa desde las 9:00, cuando llegaron.
+          - A los cinco les pasa lo mismo: el documento queda en la cola con el estado
+            "Error - Impresora sin conexión".
+          - Ayer a la tarde movieron los muebles del área.
+    opciones:
+      - { texto: "Hacer ping a la dirección IP de la impresora desde una PC del área", ir_a: n_ping, minutos: 2 }
+      - texto: Pedir un tóner nuevo
+        ir_a: n_info
+        minutos: 5
+        consecuencia: El mensaje dice "sin conexión", no "sin tóner". El tóner no es la hipótesis más probable con estos datos.
+  n_ping:
+    situacion: La impresora no responde por la red.
+    evidencia:
+      - titulo: Desde una PC de Contabilidad
+        contenido: |
+          C:\> ping 192.168.20.45
+          Haciendo ping a 192.168.20.45 con 32 bytes de datos:
+          Tiempo de espera agotado para esta solicitud.
+          Tiempo de espera agotado para esta solicitud.
+          Tiempo de espera agotado para esta solicitud.
+          Tiempo de espera agotado para esta solicitud.
+    opciones:
+      - { texto: "Ir a ver la impresora: su pantalla, el cable de red y las luces del puerto", ir_a: n_fisico, minutos: 8 }
+      - texto: Configurar otra IP para la impresora en las cinco PC
+        ir_a: n_ping
+        minutos: 15
+        consecuencia: >-
+          La impresora no responde en ninguna dirección. El problema no es la IP configurada en las
+          PC: la impresora no está llegando a la red.
+  n_fisico:
+    situacion: Junto a la impresora encuentras la causa.
+    evidencia:
+      - titulo: Lo que se ve
+        contenido: |
+          - La impresora está encendida y su pantalla dice "Lista".
+          - Las luces del puerto de red de la impresora están apagadas.
+          - En la boca de red de la pared, el conector quedó a medio enchufar detrás del mueble
+            que movieron ayer.
+    opciones:
+      - { texto: "Enchufar bien el cable y comprobar con ping y con una página de prueba", ir_a: n_ok, minutos: 3 }
+  n_ok:
+    situacion: Las luces del puerto se encienden, la impresora responde al ping y salen los documentos que estaban en la cola.
+    opciones:
+      - { texto: "Registrar en el ticket la causa, la solución y cómo se verificó", ir_a: fin_ok, minutos: 3 }
+  fin_ok:
+    final: exito
+    resumen: >-
+      Síntoma: nadie de un área imprime y el error dice "sin conexión". Información: a todos les
+      pasa igual y ayer movieron muebles, así que la causa es algo compartido. Hipótesis: la
+      impresora no está en la red. Prueba: el ping falla. Conclusión: el cable estaba mal
+      conectado. Registro: queda escrito para la próxima vez. Preguntar "¿qué cambió?" fue lo
+      que más acortó el camino.

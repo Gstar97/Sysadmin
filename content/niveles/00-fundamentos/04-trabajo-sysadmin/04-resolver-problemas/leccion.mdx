@@ -1,0 +1,134 @@
+---
+id: n0-m4-l4
+titulo: Cómo resolver problemas y aprender por cuenta propia
+minutos: 120
+objetivos:
+  - Aplicar un método de troubleshooting (síntoma, hipótesis, prueba, conclusión, registro).
+  - Leer documentación oficial y páginas de manual, y buscar mensajes de error con criterio.
+  - Escribir una buena pregunta técnica y tomar notas útiles.
+glosario: [troubleshooting, pagina-manual, cuaderno-tecnico]
+verificado: 2026-10
+---
+
+import metodo from './metodo.svg?raw'
+import impresora from './impresora.yaml'
+import ejDocumentacion from './ej-documentacion.yaml'
+
+Nadie sabe todo. Lo que distingue a un buen sysadmin no es conocer de memoria cada comando, sino saber **encontrar la causa de un problema que nunca vio** y **aprender lo que le falta** sin que nadie se lo enseñe. Las dos cosas son habilidades que se entrenan, con un método. Esta lección es probablemente la más importante del nivel: la vas a usar todos los días de tu carrera.
+
+## Un método para cualquier problema
+
+Resolver problemas técnicos (*<Termino id="troubleshooting">troubleshooting</Termino>*) no es probar cosas al azar hasta que algo funcione. Es un ciclo:
+
+<Diagrama svg={metodo} alt="Ciclo de seis pasos: síntoma, información, hipótesis, prueba, conclusión y registro; si la hipótesis no se confirma, se vuelve a la hipótesis con lo aprendido" pie="El ciclo del troubleshooting. El error más común es saltarse los dos primeros pasos." />
+
+1. **Definir el síntoma con precisión.** "No anda" no es un síntoma. ¿Qué falla exactamente? ¿A quién le pasa: a una persona, a un área, a todos? ¿Desde cuándo? ¿Siempre o a veces? ¿Hay un mensaje de error? (Copiarlo textual.)
+2. **Reunir información.** Registros del sistema, mensajes de error, comparación con lo que sí funciona, y la pregunta más poderosa de todas: **¿qué cambió?** La gran mayoría de los incidentes llega después de un cambio: una actualización, una configuración, un cable movido.
+3. **Formular una hipótesis.** Con lo que sabes, ¿qué es lo más probable? Empieza por lo más probable y lo más fácil de comprobar.
+4. **Probar.** Diseña una prueba que confirme o descarte la hipótesis, y **cambia una sola cosa por vez**. Si cambias tres cosas y se arregla, no sabes cuál fue.
+5. **Sacar una conclusión.** Si la prueba confirma la hipótesis, corriges y verificas que el síntoma desapareció. Si no, vuelves al paso 3 sabiendo algo más.
+6. **Registrar.** En el ticket: cuál era la causa, qué se hizo y cómo se verificó. La próxima vez, tú o un compañero lo van a resolver en minutos.
+
+Algunas estrategias que ayudan a formular buenas hipótesis:
+
+- **Dividir el problema en partes.** Si una página web no carga, el problema puede estar en tu PC, en la red, en el DNS, en el servidor o en la aplicación. Una prueba que separe en dos mitades (¿el servidor responde al ping?) descarta la mitad de las causas de una vez.
+- **Comparar con lo que funciona.** Si a un área le falla y a otra no, ¿qué tienen distinto?
+- **Reproducir el problema.** Si puedes hacerlo fallar a voluntad, puedes comprobar con certeza cuándo quedó resuelto.
+
+Aplica el método en un caso real:
+
+<Troubleshooting escenario={impresora} />
+
+## Aprender de la documentación
+
+Antes de buscar en internet, conviene mirar la documentación oficial: está actualizada para tu versión y es la fuente más confiable.
+
+- **Las páginas de manual** de Linux (`man comando`) explican cada comando y sus opciones. Todas tienen las mismas secciones: NAME, SYNOPSIS, DESCRIPTION, OPTIONS y, muchas, EXAMPLES. Se recorren con las flechas, se busca con `/palabra` y se sale con `q`. `man -k palabra` (o `apropos`) busca comandos por tema.
+- **La ayuda rápida**: casi todos los comandos aceptan `--help`. En PowerShell, `Get-Help comando -Examples`.
+- **La documentación del fabricante**: la de Red Hat (que sirve también para Rocky y AlmaLinux), la de Ubuntu Server, Microsoft Learn para Windows Server, y los manuales de cada producto. Fíjate siempre en que la versión coincida con la tuya.
+
+<Terminal ejercicio={ejDocumentacion} />
+
+## Buscar un error con criterio
+
+Cuando aparece un error que no conoces, buscarlo en internet es lo normal. La diferencia está en cómo:
+
+- **Copia el mensaje textual**, en el idioma original (casi siempre inglés). Una descripción con tus palabras no encuentra nada.
+- **Quita lo que es solo tuyo**: nombres de equipos, direcciones IP, números de proceso, rutas propias. Deja el texto del error.
+- **Agrega el producto y la versión**: `Rocky Linux 10`, `Windows Server 2025`, `nginx 1.26`.
+- **Usa comillas** para buscar la frase exacta.
+- **Mira la fecha y la versión de cada resultado.** Una solución de hace diez años puede no aplicar o ser peligrosa hoy.
+- **Prefiere fuentes confiables**: documentación oficial, bases de conocimiento del fabricante, reportes de errores del proyecto, y respuestas con muchos votos y comentarios que las confirmen.
+
+<Advertencia>
+Nunca ejecutes un comando que no entiendes, menos aún con `sudo` o si descarga y ejecuta algo de internet (por ejemplo, `curl ... | bash`). Lee primero qué hace cada parte. Lo mismo vale para las respuestas de los asistentes de inteligencia artificial: son muy útiles para orientarse, pero se equivocan con seguridad, así que se verifican. Y nunca pegues en un servicio externo contraseñas, datos de clientes ni registros con información confidencial.
+</Advertencia>
+
+<Pregunta id="p06" />
+
+## Hacer una buena pregunta técnica
+
+Cuando necesitas ayuda (de un compañero, del soporte de un fabricante o de un foro), la calidad de la respuesta depende de la calidad de la pregunta. Una buena pregunta incluye:
+
+1. **El contexto**: sistema operativo, versión, qué servicio o aplicación.
+2. **El objetivo**: qué intentas lograr, no solo el paso en el que te trabaste.
+3. **Qué pasa**: el error textual, completo.
+4. **Qué esperabas** que pasara.
+5. **Qué probaste** y qué resultado dio cada prueba.
+6. **Cómo reproducirlo**, si es posible.
+
+Compara:
+
+```text
+Pregunta mala:
+  "No me funciona el SSH, ¿alguien sabe?"
+
+Pregunta buena:
+  "En una VM con Rocky Linux 10 no puedo conectarme por SSH desde mi PC.
+  El comando ssh ana@192.168.56.11 responde 'Connection refused'.
+  Esperaba que me pidiera la contraseña.
+  En la VM, 'systemctl status sshd' dice 'inactive (dead)'.
+  Probé 'sudo systemctl start sshd' y vuelve a quedar inactivo.
+  'journalctl -u sshd' muestra:
+  sshd: /etc/ssh/sshd_config line 14: Bad configuration option: PermitRootLogn"
+```
+
+Con la segunda, cualquiera ve el error en la configuración (falta una letra en *PermitRootLogin*). Muchas veces, escribir la pregunta completa hace que encuentres la respuesta antes de enviarla.
+
+Otra trampa frecuente es preguntar por la solución que se te ocurrió en lugar del problema real: "¿cómo desactivo el firewall?" cuando el objetivo era "que un servicio sea accesible desde otra máquina". Contar el objetivo permite que te sugieran la solución correcta (abrir un puerto) en lugar de la peligrosa.
+
+## Tomar notas que sirvan
+
+El **<Termino id="cuaderno-tecnico">cuaderno técnico</Termino>** es tu memoria de trabajo: cada problema resuelto, cada procedimiento, cada comando que te costó encontrar. Vale la pena desde el primer día, y lo vas a crear en el laboratorio de este módulo. Una nota útil tiene:
+
+- La **fecha** y el **sistema** (con su versión).
+- El **problema**, con el error textual.
+- La **causa**, una vez encontrada.
+- La **solución**, con los comandos exactos.
+- Cómo se **verificó** que quedó resuelto.
+- Las **fuentes** que sirvieron (enlaces a la documentación).
+
+Escríbela para el "tú" de dentro de seis meses, que no va a recordar nada de esto.
+
+<ErroresComunes>
+  <ErrorComun titulo="Cambiar varias cosas a la vez">
+    Si cambias la configuración, reinicias el servicio y actualizas un paquete, y después funciona, no sabes cuál fue la solución. Y si no funciona, no sabes si alguno de los cambios empeoró algo. Un cambio por vez, y anotado.
+  </ErrorComun>
+  <ErrorComun titulo="Saltar a la solución sin entender el síntoma">
+    Reiniciar, reinstalar o "probar algo" antes de saber qué pasa suele hacer perder tiempo y, a veces, borra las pistas (los registros, el estado del sistema). Primero el síntoma y la información.
+  </ErrorComun>
+  <ErrorComun titulo="Copiar y pegar comandos de internet sin leerlos">
+    Un comando que "a alguien le funcionó" puede ser para otra versión, otro sistema o directamente dañino. Entiende cada parte antes de ejecutarlo, sobre todo si lleva `sudo`.
+  </ErrorComun>
+  <ErrorComun titulo="Resolver y no registrar">
+    El problema va a volver, quizás en otro servidor o con otra persona de guardia. Sin registro, alguien va a repetir toda la investigación.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Método: síntoma preciso, información (¿qué cambió?), hipótesis, prueba con un cambio por vez, conclusión y registro.
+- Estrategias: dividir el problema en partes, comparar con lo que funciona, reproducir.
+- Primero la documentación oficial: `man`, `--help`, `Get-Help`, y la documentación del fabricante para tu versión.
+- Buscar errores con el texto exacto, sin datos propios, con producto y versión; desconfiar de soluciones viejas y no ejecutar lo que no se entiende.
+- Una buena pregunta tiene contexto, objetivo, error textual, lo esperado, lo probado y cómo reproducirlo. Las notas se escriben para el "tú" del futuro.
+</Resumen>

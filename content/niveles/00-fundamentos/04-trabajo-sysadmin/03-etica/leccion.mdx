@@ -1,0 +1,89 @@
+---
+id: n0-m4-l3
+titulo: Ética y responsabilidad
+minutos: 90
+objetivos:
+  - Entender qué implica tener acceso privilegiado y por qué se trabaja siempre con autorización explícita.
+  - Aplicar criterios de privacidad y confidencialidad con datos de personas y de la empresa.
+  - Reconocer pedidos irregulares (por ejemplo, leer el correo de otra persona) y cómo actuar.
+glosario: [acceso-privilegiado, datos-personales, ingenieria-social]
+verificado: 2026-10
+---
+
+import decidir from './decidir.svg?raw'
+import decisiones from './decisiones.yaml'
+
+Un sysadmin puede leer el correo de cualquier persona de la empresa, ver sus archivos, cambiar sus contraseñas y revisar qué páginas visita. Técnicamente, casi no hay límites. Por eso la confianza es la base del trabajo: una organización le da las llaves de todo a alguien que tiene que usarlas solo para lo que corresponde. Esta lección trata sobre cómo tomar buenas decisiones cuando tener el acceso no alcanza para saber si algo se debe hacer.
+
+## Poder no es lo mismo que deber
+
+Un **<Termino id="acceso-privilegiado">acceso privilegiado</Termino>** es el que permite hacer cosas que un usuario común no puede: administrar sistemas, ver datos de otros, cambiar configuraciones. La pregunta "¿puedo hacerlo?" tiene casi siempre respuesta técnica: sí. Las preguntas que importan son otras:
+
+- **¿Está autorizado?** Por la persona o el área que corresponde según las políticas de la organización (el dueño de los datos, Recursos Humanos, Legales, la dirección), no simplemente por quien lo pide.
+- **¿Está por escrito?** Un ticket o un correo con qué hay que hacer, por qué y hasta cuándo. Un pedido verbal o por chat no alcanza para nada delicado.
+- **¿Es lo mínimo necesario?** Si hay que recuperar un archivo del buzón de alguien, se recupera ese archivo, no se lee el resto.
+- **¿Queda registrado?** Lo que se hace con privilegios se anota en el ticket, para que cualquiera pueda revisar después qué se hizo y por qué.
+
+<Diagrama svg={decidir} alt="Diagrama de decisión: ante un pedido de acceder a datos o actuar con privilegios, se pregunta si hay autorización por escrito de quien corresponde, si es lo mínimo necesario y si va a quedar registrado; si todo es sí, adelante; si alguna es no, no se hace todavía y se pide el pedido formal o se consulta" pie="Tres preguntas antes de usar un acceso privilegiado sobre datos de otros." />
+
+La autorización también te protege a ti. Si alguien pregunta después por qué entraste al buzón de una persona, el ticket aprobado es la respuesta.
+
+## Privacidad y confidencialidad
+
+En el trabajo vas a ver información que no es tuya: sueldos, datos de salud, conversaciones, datos de clientes. Algunas reglas que se aplican siempre:
+
+- **Mirar solo lo necesario para la tarea.** Si reparas un buzón de correo, no lees los mensajes. Si ves algo sin querer, no lo usas ni lo comentas.
+- **No sacar datos de su lugar.** Nada de copias "por las dudas" en un pendrive o en tu equipo: los respaldos los hace el sistema de backup.
+- **Las contraseñas no viajan por chat ni por correo.** Se usan los mecanismos de la organización (forzar el cambio en el primer inicio de sesión, gestores de contraseñas).
+- **Los <Termino id="datos-personales">datos personales</Termino> están protegidos por ley.** La mayoría de los países tiene una ley de protección de datos personales (en la Unión Europea, el RGPD; en América Latina, cada país tiene la suya). En general, obligan a usar los datos solo para el fin para el que se recolectaron, a protegerlos y, en muchos casos, a informar si hubo una filtración. Conviene conocer la de tu país.
+
+## Pedidos irregulares
+
+Tarde o temprano vas a recibir un pedido que no está bien, a veces de alguien con mucho cargo:
+
+- "Necesito que me des acceso al correo de tal persona."
+- "Desactiva el registro de accesos un día, que molesta."
+- "Dale a mi sobrino una cuenta de administrador, que sabe de computadoras."
+- "Borra esos registros, que no queremos que quede nada."
+- "Mándame la contraseña de este usuario por WhatsApp."
+
+La forma de actuar es la misma en todos los casos: **no lo ejecutes en el momento**. Pide que se haga por el canal formal, con autorización por escrito de quien corresponde, y si tienes dudas consulta con tu supervisor, con el área de seguridad o con Legales. Decir "lo hago en cuanto llegue el pedido aprobado" no es desobedecer: es hacer bien el trabajo.
+
+### La ingeniería social
+
+Muchos ataques no explotan fallas técnicas sino personas. La **<Termino id="ingenieria-social">ingeniería social</Termino>** usa la urgencia, la autoridad y la buena voluntad para conseguir que alguien entregue una contraseña o haga un cambio: un mensaje "del gerente" desde un número nuevo, un llamado "del proveedor" que necesita acceso remoto ya, un correo que parece de la mesa de ayuda. La defensa es simple y hay que aplicarla siempre: **verificar la identidad por otro canal**, por ejemplo llamando al número que la empresa tiene registrado, y avisar a seguridad si era un intento.
+
+## Cuando el error es tuyo
+
+Todos los que trabajan en sistemas, alguna vez, borran lo que no debían o tiran abajo un servicio. Lo que distingue a un buen profesional es qué hace después: **avisa enseguida**, ayuda a resolverlo y cuenta exactamente qué pasó. Ocultar un error, aunque se pueda arreglar en silencio, convierte un problema técnico en un problema de confianza, y suele empeorar el daño (alguien sigue trabajando con datos incompletos sin saberlo).
+
+Los equipos maduros analizan los incidentes **sin buscar culpables**: el objetivo es entender por qué fue posible el error y cambiar el proceso para que no se repita, no castigar a quien lo cometió. Esa cultura hace que la gente cuente los errores en lugar de esconderlos.
+
+## Practicar
+
+<Troubleshooting escenario={decisiones} />
+
+<Pregunta id="p04" />
+
+<ErroresComunes>
+  <ErrorComun titulo='"Lo hice porque me lo pidió alguien con cargo"'>
+    El cargo de quien pide no reemplaza la autorización formal. Si algo sale mal (una filtración, una denuncia, una auditoría), la responsabilidad también es de quien ejecutó. Pide el pedido por escrito y, si corresponde, la aprobación del área dueña de los datos.
+  </ErrorComun>
+  <ErrorComun titulo="Mirar por curiosidad">
+    Abrir un archivo o un correo ajeno sin motivo de trabajo es un abuso del acceso, aunque no se haga nada con lo que se vio. Además, casi todos los sistemas registran los accesos: tarde o temprano se ve.
+  </ErrorComun>
+  <ErrorComun titulo="Pasar contraseñas por chat o por correo">
+    Quedan guardadas en los dos equipos, en los servidores del servicio de mensajería y en cualquier respaldo. Se usa una contraseña temporal que el usuario debe cambiar al entrar, o un gestor de contraseñas para compartir credenciales del equipo.
+  </ErrorComun>
+  <ErrorComun titulo="Esconder un error propio">
+    Avisa enseguida, aunque ya sepas cómo arreglarlo. El que lo descubre después, sin explicación, pierde la confianza; el que lo cuenta a tiempo, la gana.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Tener acceso técnico no es lo mismo que estar autorizado: se necesita autorización por escrito de quien corresponde, hacer lo mínimo necesario y dejar registro.
+- Se mira solo lo necesario, no se sacan datos de su lugar y las contraseñas no viajan por chat. Los datos personales están protegidos por ley.
+- Ante un pedido irregular, no se ejecuta en el momento: se pide el canal formal y se consulta.
+- La ingeniería social usa urgencia y autoridad: se verifica la identidad por otro canal.
+- Los errores propios se avisan enseguida; los buenos equipos los analizan sin buscar culpables.
+</Resumen>

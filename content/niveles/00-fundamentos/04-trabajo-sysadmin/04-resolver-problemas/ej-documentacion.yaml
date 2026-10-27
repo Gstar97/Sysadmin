@@ -1,0 +1,37 @@
+tipo: terminal
+shell: bash
+titulo: Encontrar el comando y aprender a usarlo
+descripcion: >-
+  Necesitas saber cuánto espacio libre queda en los discos de un servidor, pero no recuerdas el
+  comando. Encuéntralo con la documentación que trae el propio sistema.
+estado_inicial:
+  distro: rocky
+  hostname: srv-docs02
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: Busca comandos relacionados con el espacio usando `apropos space` (busca la palabra en las descripciones de los manuales).
+    verificar:
+      - { comando_usado: '(apropos|man\s+-k)\s+\S+' }
+    pistas:
+      - "`apropos space` (equivale a `man -k space`)"
+    solucion: [apropos space]
+    explicacion: Aparecen `df` (espacio usado en los sistemas de archivos) y `du` (espacio que ocupan archivos y carpetas). Para lo que buscas, es `df`.
+  - consigna: Lee el manual de df con `man df`.
+    verificar:
+      - { comando_usado: 'man\s+df' }
+    pistas:
+      - "`man df`"
+    solucion: [man df]
+    explicacion: >-
+      Todo manual tiene las mismas secciones: NAME (qué hace), SYNOPSIS (cómo se escribe; lo que
+      está entre corchetes es opcional) y DESCRIPTION con las opciones. En un servidor real, el
+      manual se recorre con las flechas, se busca con `/palabra` y se sale con `q`.
+  - consigna: Usa la opción que muestra los tamaños en unidades legibles, con el tipo de cada sistema de archivos, `df -hT`.
+    verificar:
+      - { comando_usado: 'df\s+-(hT|Th)|df\s+-h\s+-T|df\s+-T\s+-h' }
+    pistas:
+      - "`df -hT`"
+    solucion: [df -hT]
+    explicacion: Encontraste el comando, leíste su documentación y elegiste las opciones. Es exactamente lo que vas a hacer cientos de veces con comandos que todavía no conoces.
