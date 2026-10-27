@@ -94,7 +94,7 @@ export const iosCheckSchema = z.union([
   }),
   z.strictObject({ equipo: z.string().optional(), ruta: z.string(), via: z.string().optional() }),
   z.strictObject({ ping: objectiveSpecSchema }),
-  z.strictObject({ guardado: z.boolean() }),
+  z.strictObject({ equipo: z.string().optional(), guardado: z.boolean() }),
   z.strictObject({ salida_contiene: z.string() }),
   z.strictObject({ comando_usado: z.string() }),
 ])
