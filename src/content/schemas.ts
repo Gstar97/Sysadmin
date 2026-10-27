@@ -113,6 +113,7 @@ export const questionSchema = z.discriminatedUnion('tipo', [
       patrones: z.array(z.string()).default([]),
       simulador: z
         .strictObject({
+          shell: z.enum(['bash', 'powershell']).default('bash'),
           estado_inicial: z.unknown().optional(),
           comparar_con: z.string().optional(),
           verificar: z.array(z.unknown()).default([]),

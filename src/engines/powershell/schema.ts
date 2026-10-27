@@ -49,6 +49,7 @@ export const psStateSchema = z.strictObject({
             departamento: z.string().optional(),
             ultimo_inicio: z.string().optional(),
             contrasena_nunca_vence: z.boolean().default(false),
+            bloqueado: z.boolean().default(false),
           }),
         )
         .default([]),
@@ -68,6 +69,7 @@ export const psStateSchema = z.strictObject({
         .default([]),
     })
     .optional(),
+  dns: z.array(z.strictObject({ nombre: z.string(), tipo: z.enum(['A', 'AAAA', 'CNAME', 'MX']).default('A'), valor: z.string() })).default([]),
   eventos: z
     .array(
       z.strictObject({

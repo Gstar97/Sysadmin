@@ -93,8 +93,10 @@ export async function gradeQuestion(q: Question, r: Response): Promise<GradeResu
       if (q.aceptadas.some((a) => normalizeCommand(a) === texto)) return { correct: true }
       if (q.patrones.some((p) => safeRegex(p)?.test(texto))) return { correct: true }
       if (q.simulador && texto) {
-        const { gradeWithSimulator } = await import('@/engines/shell/question')
-        const ok = await gradeWithSimulator(q.simulador, texto)
+        const ok =
+          q.simulador.shell === 'powershell'
+            ? await (await import('@/engines/powershell/question')).gradeWithPsSimulator(q.simulador, texto)
+            : await (await import('@/engines/shell/question')).gradeWithSimulator(q.simulador, texto)
         if (ok) return { correct: true }
       }
       return { correct: false, feedback: frecuente?.explicacion }
