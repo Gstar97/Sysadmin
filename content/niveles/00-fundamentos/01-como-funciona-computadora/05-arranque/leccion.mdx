@@ -1,0 +1,127 @@
+---
+id: n0-m1-l5
+titulo: Firmware y arranque
+minutos: 120
+objetivos:
+  - Describir la secuencia de arranque completa, del encendido al sistema operativo.
+  - Diferenciar BIOS heredado y UEFI, MBR y GPT, y explicar qué hace Secure Boot.
+  - Ubicar en qué etapa se detiene una máquina que no arranca.
+glosario: [firmware, post, uefi, gpt, particion-efi, secure-boot, cargador-arranque]
+verificado: 2026-10
+---
+
+import etapas from './etapas.svg?raw'
+import ordenar from './ordenar-arranque.yaml'
+import ejArranque from './ej-arranque.yaml'
+import noArranca from './no-arranca.yaml'
+
+"No arranca" puede significar cosas muy distintas: que no enciende ni una luz, que la pantalla queda negra, que aparece un mensaje de error del firmware o que el sistema operativo empieza a cargar y se detiene. Cada caso tiene causas y soluciones distintas. Si conoces las etapas del arranque, el último mensaje en pantalla te dice dónde buscar.
+
+## Del botón al sistema operativo
+
+<Diagrama svg={etapas} alt="Las seis etapas del arranque: encendido, POST, búsqueda del dispositivo de arranque, cargador, kernel y servicios, con el síntoma típico de una falla en cada una" pie="Las tres primeras etapas son del firmware; las tres últimas, del sistema operativo." />
+
+1. **Encendido**: la fuente estabiliza sus tensiones y le avisa a la placa. El procesador empieza a ejecutar el **<Termino id="firmware">firmware</Termino>**, el programa guardado en el chip de la placa madre.
+2. **<Termino id="post">POST</Termino>** (*Power-On Self-Test*): el firmware prueba e inicializa la memoria, el procesador, el video y los demás dispositivos. Si algo grave falla, avisa con pitidos o con luces de diagnóstico, porque todavía no hay video. En un servidor el POST puede tardar varios minutos (prueba mucha memoria e inicia controladoras de discos y de red): es normal.
+3. **Búsqueda del dispositivo de arranque**: el firmware recorre el **orden de arranque** (disco, USB, red) hasta encontrar algo que pueda arrancar.
+4. **<Termino id="cargador-arranque">Cargador de arranque</Termino>**: un programa pequeño que sabe cargar el sistema operativo. En Linux es **GRUB**; en Windows, el **Windows Boot Manager**. Si hay varios sistemas instalados, aquí aparece el menú para elegir.
+5. **Kernel**: el núcleo del sistema operativo inicia los controladores de hardware y monta el disco donde está el sistema. En Linux lo ayuda el **initramfs**, un sistema mínimo con los controladores necesarios para llegar al disco.
+6. **Servicios**: en Linux, **systemd** arranca los servicios (red, SSH, bases de datos) y aparece el inicio de sesión. En Windows pasa lo mismo con el administrador de servicios.
+
+<Ordenar ejercicio={ordenar} />
+
+## BIOS y UEFI
+
+Hay dos tipos de firmware:
+
+- **BIOS** (o BIOS heredado, *legacy*): el firmware de las PC desde los años ochenta. Para arrancar, lee el primer sector del disco (512 bytes) y ejecuta el código que encuentra ahí. Es muy limitado: no entiende de archivos ni de particiones grandes.
+- **<Termino id="uefi">UEFI</Termino>**: el reemplazo moderno, que traen todos los equipos desde hace más de diez años. Entiende particiones y archivos: arranca un archivo `.efi` guardado en una partición especial del disco. Además permite discos de más de 2 TB, Secure Boot, menús gráficos y arranque por red con HTTP.
+
+Muchos equipos UEFI incluían un modo de compatibilidad (**CSM**) para arrancar como BIOS heredado. Los fabricantes lo están quitando y Windows 11 exige UEFI, así que hoy se instala todo en modo UEFI, salvo que haya un motivo concreto para no hacerlo.
+
+### La partición EFI y las entradas de arranque
+
+Con UEFI, el disco tiene una **<Termino id="particion-efi">partición EFI</Termino>** (*EFI System Partition*): una partición pequeña, con formato FAT32, donde cada sistema operativo deja su cargador:
+
+```text
+\EFI\Microsoft\Boot\bootmgfw.efi     Windows Boot Manager
+\EFI\rocky\shimx64.efi               Rocky Linux (shim, que después carga GRUB)
+\EFI\ubuntu\shimx64.efi              Ubuntu
+\EFI\BOOT\BOOTX64.EFI                cargador de respaldo
+```
+
+El firmware guarda en su propia memoria una lista de **entradas de arranque** ("Rocky Linux: disco 1, archivo `\EFI\rocky\shimx64.efi`") y el orden en que las prueba. Si esa lista se pierde (por ejemplo, al reiniciar la configuración del firmware o al cambiar el disco de equipo), el firmware busca el cargador de respaldo `\EFI\BOOT\BOOTX64.EFI`, y si tampoco existe, muestra que no hay dispositivo de arranque.
+
+### Cómo saber con qué firmware arrancó un equipo
+
+<Distros>
+  <Distro nombre="Linux">
+    Si existe la carpeta `/sys/firmware/efi`, el sistema arrancó con UEFI. `efibootmgr` muestra las entradas de arranque y `mokutil --sb-state`, si Secure Boot está activo.
+  </Distro>
+  <Distro nombre="Windows">
+    En **Información del sistema** (`msinfo32`), el dato **Modo de BIOS** dice *UEFI* o *Heredado*, y **Estado de arranque seguro** dice si Secure Boot está activo. En PowerShell, `Confirm-SecureBootUEFI` devuelve `True` o `False`.
+  </Distro>
+</Distros>
+
+## MBR y GPT
+
+Un disco necesita una **tabla de particiones** que diga dónde empieza y termina cada partición. Hay dos formatos:
+
+| | MBR | <Termino id="gpt">GPT</Termino> |
+| --- | --- | --- |
+| Tamaño máximo del disco | 2 TiB | Prácticamente sin límite |
+| Cantidad de particiones | 4 primarias (o una extendida con lógicas adentro) | 128 por defecto |
+| Copia de seguridad de la tabla | No: si se daña el primer sector, se pierde | Sí, al final del disco, con verificación de errores |
+| Arranque | BIOS heredado | UEFI (y BIOS con una pequeña partición especial) |
+
+La regla práctica: **UEFI va con GPT, BIOS heredado va con MBR**. Windows exige exactamente esa combinación: si el instalador arrancó en modo UEFI y el disco es MBR, se niega a instalar. Linux es más flexible (puede arrancar con BIOS desde un disco GPT si tiene una partición de 1 MB de tipo *BIOS boot*), pero en servidores nuevos se usa siempre UEFI con GPT.
+
+<Pregunta id="p06" />
+
+## Secure Boot
+
+**<Termino id="secure-boot">Secure Boot</Termino>** es una función de UEFI que solo deja arrancar cargadores **firmados** con claves que el firmware tiene registradas. Así evita que un programa malicioso se instale antes que el sistema operativo, donde ningún antivirus lo puede ver.
+
+Los equipos traen de fábrica las claves de Microsoft. Windows arranca porque su cargador está firmado por Microsoft. Las distribuciones Linux usan un truco: un cargador pequeño llamado **shim**, firmado por Microsoft, que a su vez verifica GRUB y el kernel con las claves de la distribución. Por eso Rocky, AlmaLinux y Ubuntu arrancan con Secure Boot activo sin hacer nada.
+
+Lo que sí requiere un paso extra son los **módulos del kernel que no vienen firmados por la distribución**, como algunos controladores de placas de video o los de VirtualBox en un Linux anfitrión. Para cargarlos hay que firmarlos y registrar la clave en el firmware (se llama MOK, *Machine Owner Key*), o desactivar Secure Boot.
+
+<Importante>
+Los certificados de Secure Boot de Microsoft emitidos en 2011 vencieron entre junio y octubre de 2026 y se reemplazan por los de 2023. Los equipos siguen arrancando, pero sin los certificados nuevos no pueden recibir actualizaciones de seguridad del arranque ni arrancar cargadores firmados solo con las claves nuevas. Windows Update instala los certificados 2023 en la mayoría de los equipos; en servidores hay que revisar además las actualizaciones de firmware del fabricante.
+</Importante>
+
+Junto a Secure Boot suele aparecer el **TPM** (*Trusted Platform Module*), un chip que guarda claves y registra cada etapa del arranque. BitLocker lo usa para cifrar el disco: si alguien altera el arranque, el TPM no entrega la clave. Windows 11 exige TPM 2.0.
+
+## Practicar
+
+<Terminal ejercicio={ejArranque} />
+
+Ahora un caso real: una PC que no termina de arrancar. Usa lo que sabes de las etapas para no perder tiempo.
+
+<Troubleshooting escenario={noArranca} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"No boot device" o "Reboot and select proper boot device" después de cambiar o clonar un disco'>
+    El firmware no encuentra un cargador. Revisa en este orden: que el disco aparezca en el firmware, que el **modo de arranque** (UEFI o heredado) coincida con cómo se instaló el sistema (GPT con partición EFI necesita UEFI) y que en el **orden de arranque** exista una entrada para ese disco. Cuando la entrada se perdió, muchas veces basta con elegir el disco de nuevo en el menú de arranque del firmware.
+  </ErrorComun>
+  <ErrorComun titulo='Windows dice "En sistemas EFI, Windows solo se puede instalar en discos GPT"'>
+    El instalador arrancó en modo UEFI y el disco tiene tabla MBR. Si el disco no tiene datos que conservar, se puede convertir desde el mismo instalador (con `diskpart`: `clean` y `convert gpt`, que **borran todo el disco**). Si es una instalación existente de Windows, la herramienta `MBR2GPT` convierte sin borrar.
+  </ErrorComun>
+  <ErrorComun titulo='"Verification failed: (0x1A) Security Violation" al arrancar'>
+    Es shim avisando que Secure Boot rechazó un cargador o un kernel sin firma válida, por ejemplo un USB armado con una herramienta vieja o un kernel compilado a mano. Usa la imagen oficial de la distribución; si el componente es legítimo, regístralo con MOK. Desactivar Secure Boot es el último recurso, no el primero.
+  </ErrorComun>
+  <ErrorComun titulo="El equipo pierde la fecha y la configuración del firmware cada vez que se desenchufa">
+    La pila de la placa se agotó. Además de la hora, se pierde la configuración: modo de arranque, orden de arranque, virtualización activada. Es una causa clásica de "ayer arrancaba y hoy no": se cambia la pila y se vuelve a configurar el firmware.
+  </ErrorComun>
+  <ErrorComun titulo="El servidor queda varios minutos con la pantalla negra o con el logo">
+    En servidores es normal: el POST prueba toda la memoria e inicializa controladoras de discos y de red. Antes de forzar un reinicio, mira el progreso desde la consola del BMC, que suele mostrar en qué paso está.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El arranque tiene seis etapas: encendido, POST, búsqueda del dispositivo, cargador, kernel y servicios. El último mensaje indica dónde se detuvo.
+- BIOS heredado arranca desde el primer sector del disco; UEFI arranca un archivo `.efi` de la partición EFI según sus entradas de arranque.
+- UEFI va con GPT y BIOS con MBR. GPT permite discos grandes, más particiones y tiene copia de la tabla.
+- Secure Boot solo deja arrancar cargadores firmados; Linux lo cumple con shim. Los certificados de 2011 se reemplazan por los de 2023.
+- En Linux, `/sys/firmware/efi`, `efibootmgr`, `mokutil --sb-state` y `fdisk -l` muestran cómo arranca un equipo.
+</Resumen>

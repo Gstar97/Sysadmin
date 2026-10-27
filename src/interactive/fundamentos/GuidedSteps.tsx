@@ -26,22 +26,22 @@ function Commands({ lines }: { lines: string[] }) {
   const [copied, setCopied] = useState(false)
   if (!lines.length) return null
   return (
-    <div className="relative mt-2">
-      <pre className="overflow-x-auto rounded-lg p-3 pr-20 font-mono text-sm" style={{ background: 'var(--term-bg)', color: 'var(--term-fg)' }}>
-        {lines.join('\n')}
-      </pre>
-      <button
-        type="button"
-        className="absolute right-2 top-2 rounded-md border border-white/20 px-2 py-0.5 text-xs text-white/80 hover:bg-white/10"
-        onClick={() => {
-          void navigator.clipboard?.writeText(lines.join('\n')).then(() => {
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          })
-        }}
-      >
-        {copied ? 'Copiado' : 'Copiar'}
-      </button>
+    <div className="mt-2 overflow-hidden rounded-lg" style={{ background: 'var(--term-bg)', color: 'var(--term-fg)' }}>
+      <div className="flex justify-end border-b border-white/10 px-2 py-1">
+        <button
+          type="button"
+          className="rounded-md px-2 py-0.5 text-xs text-white/80 hover:bg-white/10"
+          onClick={() => {
+            void navigator.clipboard?.writeText(lines.join('\n')).then(() => {
+              setCopied(true)
+              setTimeout(() => setCopied(false), 1500)
+            })
+          }}
+        >
+          {copied ? 'Copiado' : 'Copiar'}
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-3 font-mono text-sm">{lines.join('\n')}</pre>
     </div>
   )
 }

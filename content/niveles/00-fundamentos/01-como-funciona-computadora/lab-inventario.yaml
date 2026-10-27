@@ -1,0 +1,140 @@
+tipo: pasos
+titulo: Inventario de hardware de tu equipo
+descripcion: >-
+  Cada paso tiene los comandos para Windows, Linux y macOS. Ve completando la ficha técnica a
+  medida que avanzas. En Windows, abre **PowerShell como administrador** (clic derecho en el
+  menú Inicio, *Terminal (Administrador)*).
+pasos:
+  - titulo: Equipo, fabricante y número de serie
+    detalle: Son los datos que pide el soporte del fabricante para cualquier reclamo de garantía.
+    variantes:
+      - nombre: Windows
+        detalle: 'Fabricante, modelo y memoria total; después, el número de serie y la versión del firmware:'
+        comandos:
+          - Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, TotalPhysicalMemory
+          - Get-CimInstance Win32_BIOS | Select-Object SerialNumber, SMBIOSBIOSVersion, ReleaseDate
+      - nombre: Linux
+        detalle: 'El firmware guarda estos datos y `dmidecode` los lee:'
+        comandos:
+          - sudo dmidecode -s system-manufacturer
+          - sudo dmidecode -s system-product-name
+          - sudo dmidecode -s system-serial-number
+          - sudo dmidecode -t bios
+      - nombre: macOS
+        detalle: 'En la Terminal (el número de serie aparece como *Serial Number*):'
+        comandos:
+          - system_profiler SPHardwareDataType
+    comprobar: Tienes fabricante, modelo, número de serie y versión del firmware anotados en la ficha.
+    si_falla: En equipos armados a medida el modelo puede decir *To Be Filled By O.E.M.* o similar. En ese caso anota el fabricante y el modelo de la **placa madre** (`Get-CimInstance Win32_BaseBoard` en Windows, `sudo dmidecode -t baseboard` en Linux).
+  - titulo: Procesador y arquitectura
+    detalle: Anota el modelo, los núcleos, los hilos, la frecuencia y la arquitectura. En x86-64, averigua además el nivel (v2, v3 o v4).
+    variantes:
+      - nombre: Windows
+        detalle: "Modelo, núcleos, CPU lógicas y frecuencia máxima en MHz:"
+        comandos:
+          - Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
+      - nombre: Linux
+        detalle: 'Con `lscpu` tienes todo; la segunda línea muestra qué niveles de x86-64 soporta el procesador:'
+        comandos:
+          - lscpu
+          - /lib64/ld-linux-x86-64.so.2 --help | grep supported
+      - nombre: macOS
+        detalle: '`uname -m` dice *arm64* en Apple Silicon y *x86_64* en las Mac con Intel:'
+        comandos:
+          - sysctl -n machdep.cpu.brand_string
+          - sysctl -n hw.physicalcpu hw.logicalcpu
+          - uname -m
+    comprobar: Sabes cuántos núcleos físicos y CPU lógicas tiene tu equipo, y si es x86-64 (con su nivel) o ARM64.
+    si_falla: >-
+      En Windows, si `NumberOfLogicalProcessors` es el doble de `NumberOfCores`, el procesador tiene SMT activo. Para saber el nivel de x86-64 en Windows, busca el modelo en la página del fabricante: si tiene AVX2, cumple v3.
+  - titulo: Memoria
+    detalle: Anota la memoria total, cuántos módulos hay y de qué tamaño, la velocidad, cuántas ranuras quedan libres y si es ECC.
+    variantes:
+      - nombre: Windows
+        detalle: 'Cada módulo instalado y la cantidad de ranuras. En la tercera línea, *MemoryErrorCorrection* vale 3 si no hay ECC y 5 o 6 si la hay:'
+        comandos:
+          - Get-CimInstance Win32_PhysicalMemory | Select-Object DeviceLocator, Capacity, Speed, Manufacturer, PartNumber
+          - Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryDevices, MaxCapacityEx
+          - Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryErrorCorrection
+      - nombre: Linux
+        detalle: 'Las ranuras vacías aparecen como *No Module Installed*; *Error Correction Type* dice si hay ECC:'
+        comandos:
+          - free -h
+          - sudo dmidecode -t memory
+      - nombre: macOS
+        detalle: En las Mac con Apple Silicon la memoria está integrada en el chip y no se puede ampliar.
+        comandos:
+          - system_profiler SPMemoryDataType
+    comprobar: Tienes memoria total, módulos (cantidad × tamaño), velocidad, ranuras libres y ECC sí o no.
+  - titulo: Discos y su estado de salud
+    detalle: Anota cada disco con su tipo (HDD, SSD SATA o NVMe), su capacidad y su estado.
+    variantes:
+      - nombre: Windows
+        detalle: '*MediaType* dice HDD o SSD y *BusType* si es SATA o NVMe. La segunda línea muestra datos de desgaste y errores (necesita PowerShell como administrador):'
+        comandos:
+          - Get-PhysicalDisk | Select-Object FriendlyName, MediaType, BusType, Size, HealthStatus
+          - Get-PhysicalDisk | Get-StorageReliabilityCounter | Select-Object DeviceId, Wear, Temperature, ReadErrorsTotal, PowerOnHours
+      - nombre: Linux
+        detalle: 'En `lsblk`, *ROTA* vale 1 para discos rígidos y 0 para SSD. Para SMART instala `smartmontools` (`sudo dnf install smartmontools` o `sudo apt install smartmontools`):'
+        comandos:
+          - lsblk -d -o NAME,MODEL,SIZE,ROTA,TRAN
+          - sudo smartctl -a /dev/nvme0
+          - sudo smartctl -a /dev/sda
+      - nombre: macOS
+        detalle: 'Discos y estado SMART resumido (*Verified* es correcto):'
+        comandos:
+          - diskutil list
+          - system_profiler SPNVMeDataType SPSerialATADataType
+    comprobar: Cada disco tiene anotados tipo, capacidad y salud. En SSD, el porcentaje de desgaste; en HDD, los sectores reubicados y pendientes.
+    si_falla: Si `smartctl` responde que el dispositivo no existe, usa el nombre que aparece en `lsblk` (por ejemplo `/dev/nvme0n1` o `/dev/sdb`). En Windows, si el contador de desgaste aparece vacío, el disco o su controlador no lo informa; prueba con CrystalDiskInfo.
+  - titulo: Firmware, modo de arranque y Secure Boot
+    detalle: Averigua si el equipo arranca con UEFI o BIOS heredado, qué tabla de particiones tiene el disco del sistema y si Secure Boot está activo.
+    variantes:
+      - nombre: Windows
+        detalle: 'Abre **Información del sistema** (`msinfo32`) y busca *Modo de BIOS* y *Estado de arranque seguro*. En PowerShell como administrador:'
+        comandos:
+          - Confirm-SecureBootUEFI
+          - Get-Disk | Select-Object Number, FriendlyName, PartitionStyle
+      - nombre: Linux
+        detalle: 'Si la primera línea lista contenido, arrancó con UEFI:'
+        comandos:
+          - ls /sys/firmware/efi
+          - mokutil --sb-state
+          - sudo fdisk -l
+      - nombre: macOS
+        detalle: Las Mac con Apple Silicon usan su propio arranque seguro (se configura en la *Utilidad de seguridad de arranque* desde el modo de recuperación) y discos con tabla GPT.
+    comprobar: Anotaste UEFI o heredado, GPT o MBR, y Secure Boot activo o inactivo.
+    si_falla: En Windows, `Confirm-SecureBootUEFI` da error *no se admite en esta plataforma* cuando el equipo arranca con BIOS heredado.
+  - titulo: Virtualización por hardware
+    detalle: La vas a necesitar en el próximo módulo para crear máquinas virtuales. Si está desactivada, se activa en el firmware.
+    variantes:
+      - nombre: Windows
+        detalle: En el **Administrador de tareas**, pestaña **Rendimiento**, sección **CPU**, mira el dato **Virtualización**. Si dice *Habilitado*, está lista. Si Hyper-V está activo, ese dato puede no aparecer y en su lugar Windows indica que se detectó un hipervisor.
+      - nombre: Linux
+        detalle: 'Si el número es mayor que 0, el procesador tiene las extensiones (vmx en Intel, svm en AMD). `lscpu` muestra *Virtualization: VT-x* o *AMD-V* cuando están activas:'
+        comandos:
+          - grep -cE 'vmx|svm' /proc/cpuinfo
+          - lscpu | grep -i virtualization
+      - nombre: macOS
+        detalle: Todas las Mac actuales soportan virtualización. En Apple Silicon solo se pueden virtualizar sistemas ARM64.
+    comprobar: Sabes si la virtualización está activa.
+    si_falla: Si está desactivada, reinicia, entra al firmware (suele ser con F2, Supr o F10 al encender) y activa **Intel Virtualization Technology (VT-x)** o **SVM Mode** en AMD. Está en menús como *Advanced* o *CPU Configuration*.
+  - titulo: Sistema operativo y red
+    variantes:
+      - nombre: Windows
+        detalle: 'Versión del sistema y placas de red con su velocidad:'
+        comandos:
+          - Get-ComputerInfo -Property OsName, OsVersion, OsArchitecture
+          - Get-NetAdapter | Select-Object Name, InterfaceDescription, Status, LinkSpeed
+      - nombre: Linux
+        detalle: 'Versión del sistema y placas de red:'
+        comandos:
+          - cat /etc/os-release
+          - uname -r
+          - ip -br link
+      - nombre: macOS
+        comandos:
+          - sw_vers
+          - networksetup -listallhardwareports
+        detalle: 'Versión del sistema y placas de red:'
+    comprobar: La ficha está completa, incluido el sistema operativo con su versión.

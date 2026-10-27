@@ -99,4 +99,17 @@ describe('detalles que usa el Nivel 0', () => {
     expect((await run('sudo dmidecode -s bios-vendor')).out).toBe('SeaBIOS\n')
     expect((await run('ls /sys/firmware/efi')).err).toContain('No such file or directory')
   })
+
+  it('arranque BIOS o UEFI: fdisk, efibootmgr, mokutil y /sys/firmware/efi', async () => {
+    const bios = await session({ usuarios: [{ nombre: 'estudiante', sudo: true }] })
+    expect((await bios.run('sudo fdisk -l')).out).toContain('Disklabel type: dos')
+    expect((await bios.run('efibootmgr')).err).toContain('not supported')
+    const uefi = await session({ distro: 'ubuntu', firmware: 'uefi', secure_boot: false, usuarios: [{ nombre: 'estudiante', sudo: true }] })
+    expect((await uefi.run('ls /sys/firmware/efi')).out).toContain('efivars')
+    expect((await uefi.run('sudo fdisk -l')).out).toMatch(/Disklabel type: gpt[\s\S]*\/dev\/sda1 +2048 +2099199 +2097152 +1G EFI System/)
+    expect((await uefi.run('efibootmgr')).out).toContain('Boot0004* ubuntu')
+    expect((await uefi.run('mokutil --sb-state')).out).toBe('SecureBoot disabled\n')
+    expect((await uefi.run('lsblk')).out).toContain('/boot/efi')
+    expect((await uefi.run('sudo dmidecode -s bios-vendor')).out).toBe('EDK II\n')
+  })
 })

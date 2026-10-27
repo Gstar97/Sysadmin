@@ -1,0 +1,67 @@
+---
+titulo: Ficha técnica de tu propio equipo
+horas: 2
+verificacion:
+  - Anoté fabricante, modelo, número de serie y versión del firmware.
+  - Anoté el procesador con sus núcleos, CPU lógicas y arquitectura (con el nivel de x86-64, si corresponde).
+  - Anoté la memoria total, los módulos, la velocidad, las ranuras libres y si es ECC.
+  - Anoté cada disco con su tipo, capacidad y estado de salud según SMART.
+  - Averigüé si el equipo arranca con UEFI o BIOS heredado, la tabla de particiones y el estado de Secure Boot.
+  - Verifiqué si la virtualización por hardware está activada.
+  - Guardé la ficha completa en un archivo que voy a usar en el proyecto del nivel.
+---
+
+import pasos from './lab-inventario.yaml'
+
+## Objetivo
+
+Armar la ficha técnica completa de tu computadora con las herramientas del sistema operativo, igual que lo harías con un servidor que te toca administrar por primera vez. Al final vas a saber exactamente qué hardware tienes, si sirve para el laboratorio de máquinas virtuales del próximo módulo y qué se le podría ampliar.
+
+## Qué necesitas
+
+- Tu computadora, con permisos de administrador.
+- Un editor de texto para la ficha (el Bloc de notas, TextEdit o el que uses).
+- Unos 90 minutos.
+
+No vas a modificar nada del equipo: todos los comandos solo leen información.
+
+## La ficha
+
+Copia esta plantilla en un archivo de texto llamado `ficha-tecnica.txt` y complétala a medida que avanzas:
+
+```text
+FICHA TÉCNICA                                   Fecha:
+Equipo:            fabricante y modelo
+Número de serie:
+Tipo:              PC / notebook / servidor
+Procesador:        modelo; núcleos / CPU lógicas; frecuencia base y máxima
+Arquitectura:      x86-64 (nivel v2, v3 o v4) o ARM64
+Memoria:           total; módulos (cantidad × tamaño); tipo y velocidad;
+                   ranuras libres; ECC sí/no
+Discos:            por cada uno: tipo (HDD, SSD SATA, NVMe), capacidad,
+                   modelo, estado SMART (desgaste o sectores dañados)
+Placa madre:       fabricante y modelo
+Firmware:          UEFI o BIOS heredado; versión y fecha
+Secure Boot:       activo / inactivo
+Disco de sistema:  tabla GPT o MBR
+Virtualización:    VT-x / AMD-V activada sí/no
+Sistema operativo: nombre, versión, arquitectura
+Red:               placas de red y velocidad
+Observaciones:     ampliaciones posibles, problemas detectados
+```
+
+## Pasos
+
+<PasosGuiados ejercicio={pasos} />
+
+## Analiza lo que encontraste
+
+Con la ficha completa, responde en la sección *Observaciones*:
+
+1. **¿Sirve para el laboratorio?** Para el próximo módulo conviene tener al menos 16 GB de RAM (8 GB alcanzan para una máquina virtual a la vez), 100 GB libres en un SSD y la virtualización activada. Si es x86-64 sin nivel v3, vas a usar AlmaLinux 10 en su versión v2 en lugar de Rocky 10.
+2. **¿Qué se puede ampliar?** Ranuras de memoria libres, bahías o ranuras M.2 libres para otro disco.
+3. **¿Hay algo que vigilar?** Un disco con sectores reubicados, un SSD con mucho desgaste, firmware muy viejo o en modo heredado.
+
+<Consejo>
+Si tienes acceso a otra computadora (la de tu trabajo, la de un familiar), repite el inventario en ella. Comparar dos fichas es la mejor forma de fijar qué significa cada dato.
+</Consejo>

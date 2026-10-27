@@ -1,0 +1,157 @@
+---
+id: n0-m1-l4
+titulo: Almacenamiento
+minutos: 120
+objetivos:
+  - Comparar HDD, SSD SATA y SSD NVMe en latencia, IOPS, rendimiento y costo.
+  - Explicar qué son IOPS, throughput y latencia, y cuál importa en cada tipo de carga.
+  - Interpretar datos de durabilidad (TBW, DWPD) y el estado SMART de un disco.
+glosario: [hdd, ssd, nvme, iops, throughput, tbw, smart]
+verificado: 2026-10
+---
+
+import discos from './discos.svg?raw'
+import emparejarCargas from './emparejar-cargas.yaml'
+
+Elegir mal los discos es uno de los errores más caros en infraestructura: una base de datos sobre discos rígidos puede ir diez veces más lenta de lo necesario, y una copia de seguridad sobre SSD caros puede costar el triple sin ninguna ventaja. En esta lección vas a aprender a elegir con datos, y a leer las señales de que un disco está por fallar.
+
+## Tres tipos de disco
+
+<Diagrama svg={discos} alt="Un disco rígido con su plato y su cabezal, un SSD SATA de 2,5 pulgadas con chips de memoria flash y un SSD NVMe en formato M.2" pie="El disco rígido tiene partes mecánicas; los SSD guardan los datos en memoria flash." />
+
+### Disco rígido (HDD)
+
+Un <Termino id="hdd">disco rígido</Termino> guarda los datos magnéticamente en platos que giran (a 7200 revoluciones por minuto en los modelos de servidor) y los lee con un cabezal que se mueve sobre ellos. Para leer un dato en un lugar al azar, el cabezal tiene que desplazarse y esperar a que el plato gire hasta la posición correcta: eso lleva unos 8 milisegundos. Por eso un disco rígido hace apenas entre 100 y 200 lecturas al azar por segundo.
+
+En cambio, cuando lee o escribe datos seguidos (un archivo grande), el cabezal casi no se mueve y alcanza unos 250 a 280 MB/s. Su gran ventaja es el **costo por TB**: es el almacenamiento más barato y hay modelos de más de 30 TB. Se usa para copias de seguridad, archivos históricos, video y grandes volúmenes de datos que se leen poco.
+
+<Nota>
+Algunos discos rígidos baratos usan grabación **SMR**, que escribe mucho más lento cuando tiene que reescribir zonas ya ocupadas. Funcionan bien para guardar archivos, pero no conviene usarlos en arreglos RAID: reconstruir un disco puede tardar días. La ficha técnica indica si un modelo es SMR o CMR.
+</Nota>
+
+### SSD SATA
+
+Un <Termino id="ssd">SSD</Termino> guarda los datos en chips de **memoria flash**, sin partes móviles. Un controlador interno reparte las lecturas y escrituras entre muchos chips a la vez. Lee un dato al azar en unos 100 microsegundos, ochenta veces más rápido que un disco rígido.
+
+Los SSD SATA usan el mismo conector y el mismo protocolo que los discos rígidos, así que entran en cualquier equipo, pero el bus SATA los limita a unos 550 MB/s.
+
+### SSD NVMe
+
+Un SSD <Termino id="nvme">NVMe</Termino> se conecta por PCIe, en general con 4 líneas directas a la CPU, y usa un protocolo diseñado para memoria flash: miles de colas de pedidos en paralelo, en lugar de la cola única de SATA. Un NVMe PCIe 4.0 lee hasta unos 7000 MB/s y uno PCIe 5.0, unos 14.000 MB/s.
+
+En las PC vienen en formato **M.2** (una tira). En los servidores se usan formatos que se cambian en caliente desde el frente: **U.2/U.3** (de 2,5 pulgadas) y los más nuevos **EDSFF** (E1.S, E3.S).
+
+## Latencia, IOPS y throughput
+
+Cada ficha técnica da tres números distintos, y cada uno importa para un tipo de trabajo:
+
+- **Latencia**: cuánto tarda una operación individual. Se mide en milisegundos o microsegundos. Es lo que percibe una persona esperando que cargue una pantalla.
+- **<Termino id="iops">IOPS</Termino>** (operaciones por segundo): cuántas lecturas o escrituras pequeñas (normalmente de 4 KiB) en lugares distintos del disco puede hacer por segundo.
+- **<Termino id="throughput">Throughput</Termino>** o rendimiento secuencial: cuántos MB por segundo mueve cuando lee o escribe datos seguidos.
+
+Los tres se relacionan: **throughput = IOPS × tamaño de cada operación**. Un disco rígido que hace 150 lecturas al azar por segundo, de 4 KiB cada una, mueve apenas 600 KB/s, aunque en la ficha diga 250 MB/s. Ese 250 MB/s solo se ve leyendo archivos grandes de forma secuencial.
+
+| | Disco rígido 7200 rpm | SSD SATA | SSD NVMe PCIe 4.0 | SSD NVMe PCIe 5.0 |
+| --- | --- | --- | --- | --- |
+| Latencia (lectura al azar) | ~8 ms | ~100 µs | ~60 µs | ~50 µs |
+| IOPS (4 KiB al azar) | 150 | 90.000 | 1.000.000 | 1.500.000 |
+| Throughput secuencial | 250 MB/s | 550 MB/s | 7000 MB/s | 14.000 MB/s |
+| Costo por TB (relativo) | 1 | ~3 | ~3,5 | ~5 |
+
+<Advertencia>
+Las IOPS de las fichas de SSD se miden con muchas operaciones en paralelo (cola profunda). Una aplicación que hace una operación por vez obtiene bastante menos. Y los precios cambian mucho con el mercado: la relación entre tipos se mantiene, pero los valores exactos hay que consultarlos al momento de comprar.
+</Advertencia>
+
+Prueba cómo rinde cada disco en trabajos reales:
+
+<ComparadorDiscos />
+
+Fíjate que en la copia de seguridad el disco rígido tarda más, pero no de forma tan exagerada como en la base de datos: ahí la diferencia es de horas contra segundos. Eso resume la regla práctica: **para trabajo al azar (bases de datos, máquinas virtuales), SSD; para guardar mucho y leerlo de corrido (backups, archivo), discos rígidos**.
+
+<Emparejar ejercicio={emparejarCargas} />
+
+## Cuánto dura un SSD
+
+La memoria flash se desgasta con las escrituras: cada celda soporta una cantidad limitada de ciclos de borrado. El controlador reparte las escrituras para que el desgaste sea parejo, y el fabricante declara la durabilidad con dos números:
+
+- **<Termino id="tbw">TBW</Termino>** (*terabytes written*): cuántos TB se pueden escribir en total durante la garantía.
+- **DWPD** (*drive writes per day*): cuántas veces por día se puede escribir la capacidad completa del disco durante la garantía, normalmente de 5 años.
+
+Se convierten así: **TBW = capacidad × DWPD × 365 × años de garantía**. Por ejemplo, un SSD de servidor de 1,92 TB con 1 DWPD y 5 años de garantía soporta 1,92 × 1 × 365 × 5 ≈ 3500 TB escritos. Un SSD de PC de 1 TB suele declarar unos 600 TBW: alrededor de 0,3 DWPD.
+
+Los SSD de servidor se venden por perfil de uso: **lectura intensiva** (alrededor de 1 DWPD) para datos que se leen mucho y cambian poco, y **uso mixto** (alrededor de 3 DWPD) para bases de datos con muchas escrituras. Además tienen **protección ante cortes de energía** (*power loss protection*): condensadores que les dan tiempo de guardar lo que tienen en su memoria interna si se corta la luz. Por eso no conviene usar SSD de PC en servidores.
+
+<Pregunta id="p07" />
+
+## El estado de un disco: SMART
+
+Todos los discos registran datos sobre su propio estado, llamados **<Termino id="smart">SMART</Termino>**. En Linux se leen con `smartctl`, del paquete `smartmontools`:
+
+```bash
+sudo smartctl -a /dev/sda        # disco SATA
+sudo smartctl -a /dev/nvme0      # disco NVMe
+```
+
+En Windows, `Get-PhysicalDisk | Get-StorageReliabilityCounter` en PowerShell muestra parte de esos datos, y programas como CrystalDiskInfo los muestran completos. En una máquina virtual no hay SMART: el disco es virtual y su estado lo controla el servidor físico.
+
+Esta es la parte importante de la salida de un SSD NVMe:
+
+```text
+SMART overall-health self-assessment test result: PASSED
+Critical Warning:                   0x00
+Temperature:                        38 Celsius
+Available Spare:                    100%
+Available Spare Threshold:          10%
+Percentage Used:                    3%
+Data Units Written:                 25,401,177 [13.0 TB]
+Power On Hours:                     8,760
+Unsafe Shutdowns:                   5
+Media and Data Integrity Errors:    0
+```
+
+- **Percentage Used**: cuánto de la vida útil declarada ya se consumió. 3% después de un año de uso continuo (8760 horas) es un disco con muchísima vida por delante.
+- **Available Spare**: celdas de reserva que quedan para reemplazar las que se desgastan. Si baja hasta el umbral, el disco entra en alerta.
+- **Media and Data Integrity Errors**: errores al leer datos. Tiene que ser 0.
+- **Unsafe Shutdowns**: cortes de energía sin apagado ordenado. No es una falla del disco, pero si crece mucho conviene revisar la alimentación del equipo.
+
+En un disco rígido los datos se muestran como una tabla de atributos. Estos son los que más anticipan una falla:
+
+```text
+ID# ATTRIBUTE_NAME          VALUE WORST THRESH  RAW_VALUE
+  5 Reallocated_Sector_Ct   100   100   010     0
+  9 Power_On_Hours          071   071   000     25934
+197 Current_Pending_Sector  100   100   000     8
+198 Offline_Uncorrectable   100   100   000     8
+199 UDMA_CRC_Error_Count    200   200   000     0
+```
+
+- **Reallocated_Sector_Ct**: sectores dañados que el disco ya reemplazó por otros de reserva.
+- **Current_Pending_Sector** y **Offline_Uncorrectable**: sectores que el disco no pudo leer y todavía no reemplazó. En este ejemplo hay 8: hay datos que ya no se pueden leer.
+- **UDMA_CRC_Error_Count**: errores en la transmisión por el cable. Si crece, el problema suele ser el cable o el conector, no el disco.
+
+<Importante>
+La línea **PASSED** solo dice que ningún atributo cruzó el umbral del fabricante, que suele ser muy permisivo. Un disco con sectores pendientes o reubicados que aumentan puede decir PASSED y fallar la semana siguiente. Se mira la columna **RAW_VALUE** de esos atributos, y se reemplaza el disco si no están en 0 o si crecen.
+</Importante>
+
+<ErroresComunes>
+  <ErrorComun titulo="Un SSD SATA rinde la mitad de lo esperado">
+    Puede estar conectado a un puerto SATA II (3 Gbit/s, unos 280 MB/s) o a través de un adaptador USB lento. En Linux, `sudo smartctl -i /dev/sda` muestra en la línea *SATA Version* la velocidad negociada: *current: 3.0 Gb/s* indica el problema.
+  </ErrorComun>
+  <ErrorComun titulo="La base de datos va lenta aunque el disco casi no transfiere MB/s">
+    Una base de datos hace miles de lecturas pequeñas al azar: el límite son las IOPS, no los MB/s. Con discos rígidos, unas pocas consultas simultáneas los saturan. La solución es pasar los datos a SSD o agregar memoria para que la base de datos lea menos del disco.
+  </ErrorComun>
+  <ErrorComun titulo="Un SSD de PC empezó rápido y en escrituras largas cae a la velocidad de un disco rígido">
+    Los SSD de PC escriben primero en una pequeña zona rápida (caché SLC) y, cuando se llena, escriben a la velocidad real de su memoria flash, que puede ser muy baja. Los SSD de servidor están pensados para escrituras sostenidas: para servidores se eligen modelos de servidor.
+  </ErrorComun>
+  <ErrorComun titulo="SMART dice PASSED pero el disco da errores de lectura">
+    Revisa los valores RAW de *Reallocated_Sector_Ct*, *Current_Pending_Sector* y *Offline_Uncorrectable* (o *Media and Data Integrity Errors* en NVMe). Si no están en 0, el disco se está dañando aunque el resumen diga PASSED. Haz una copia de los datos y reemplázalo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Disco rígido: barato por TB y bueno en lectura secuencial, pero lento al azar (unos 150 IOPS, ~8 ms).
+- SSD SATA: sin partes móviles, limitado a unos 550 MB/s por el bus. SSD NVMe: por PCIe, miles de veces más IOPS que un disco rígido.
+- Latencia, IOPS y throughput miden cosas distintas: throughput = IOPS × tamaño de operación.
+- Trabajo al azar (bases de datos, VMs): SSD. Mucho volumen leído de corrido (backups): discos rígidos.
+- La durabilidad de un SSD se declara en TBW o DWPD. SMART anticipa fallas: se miran los valores RAW, no solo PASSED.
+</Resumen>

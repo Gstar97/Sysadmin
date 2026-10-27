@@ -101,6 +101,8 @@ export class System {
   vfs = new VFS()
   distro: 'rocky' | 'ubuntu'
   hostname: string
+  firmware: 'bios' | 'uefi'
+  secureBoot: boolean
   users = new Map<string, User>()
   groups = new Map<string, Group>()
   services = new Map<string, Service>()
@@ -139,6 +141,8 @@ export class System {
     this.bootTime = now - 3 * 86_400_000 - 4 * 3_600_000
     this.distro = state.distro
     this.hostname = state.hostname
+    this.firmware = state.firmware
+    this.secureBoot = state.firmware === 'uefi' && state.secure_boot
     this.catalog = state.distro === 'rocky' ? ROCKY_PACKAGES : UBUNTU_PACKAGES
     this.vfs.now = () => Date.now()
 
@@ -506,7 +510,9 @@ export class System {
       '/etc/os-release': osRelease,
       '/etc/hostname': `${this.hostname}\n`,
       '/etc/hosts': `127.0.0.1   localhost localhost.localdomain\n::1         localhost localhost.localdomain\n`,
-      '/etc/fstab': '# /etc/fstab\nUUID=6f1c2b8e-1a7d-4c1e-9d5a-2b6f0c3e8a11 /     xfs  defaults 0 0\nUUID=3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22 /boot xfs  defaults 0 0\n',
+      '/etc/fstab':
+        '# /etc/fstab\nUUID=6f1c2b8e-1a7d-4c1e-9d5a-2b6f0c3e8a11 /     xfs  defaults 0 0\nUUID=3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22 /boot xfs  defaults 0 0\n' +
+        (this.firmware === 'uefi' ? 'UUID=1A2B-3C4D /boot/efi vfat umask=0077,shortname=winnt 0 2\n' : ''),
       '/etc/shells': '/bin/sh\n/bin/bash\n/usr/bin/sh\n/usr/bin/bash\n',
       '/etc/login.defs': 'PASS_MAX_DAYS\t99999\nPASS_MIN_DAYS\t0\nPASS_WARN_AGE\t7\nUID_MIN\t\t1000\nGID_MIN\t\t1000\nUMASK\t\t022\n',
       '/etc/ssh/sshd_config':
@@ -532,10 +538,21 @@ export class System {
       files['/var/log/auth.log'] = ''
       files['/etc/netplan/50-cloud-init.yaml'] = 'network:\n  version: 2\n  ethernets:\n    enp0s3:\n      dhcp4: true\n'
     }
+    if (this.firmware === 'uefi') {
+      const vendor = this.distro === 'rocky' ? 'rocky' : 'ubuntu'
+      v.mkdirp('/sys/firmware/efi/efivars', ROOT_CRED)
+      files['/boot/efi/EFI/BOOT/BOOTX64.EFI'] = ''
+      files['/boot/efi/EFI/BOOT/fbx64.efi'] = ''
+      files[`/boot/efi/EFI/${vendor}/shimx64.efi`] = ''
+      files[`/boot/efi/EFI/${vendor}/grubx64.efi`] = ''
+      files[`/boot/efi/EFI/${vendor}/grub.cfg`] = ''
+    }
     for (const [p, c] of Object.entries(files)) {
       v.mkdirp(p.slice(0, p.lastIndexOf('/')) || '/', ROOT_CRED)
       v.writeFile(p, c, ROOT_CRED)
     }
+    // La partición EFI se monta con umask=0077: solo root puede ver su contenido.
+    if (this.firmware === 'uefi') v.stat('/boot/efi', ROOT_CRED).mode = 0o700
     v.stat('/etc/sudoers', ROOT_CRED).mode = 0o440
     v.stat('/dev/null', ROOT_CRED).mode = 0o666
     v.stat('/etc/ssh/sshd_config', ROOT_CRED).mode = 0o600

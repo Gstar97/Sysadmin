@@ -15,6 +15,9 @@ const fileSpecSchema = z.union([
 export const bashStateSchema = z.strictObject({
   distro: z.enum(['rocky', 'ubuntu']).default('rocky'),
   hostname: z.string().default('servidor'),
+  /** Cómo arranca la máquina: BIOS heredado (tabla MBR en Rocky) o UEFI (con partición EFI). */
+  firmware: z.enum(['bios', 'uefi']).default('bios'),
+  secure_boot: z.boolean().default(true),
   usuario: z.string().default('estudiante'),
   directorio: z.string().optional(),
   usuarios: z

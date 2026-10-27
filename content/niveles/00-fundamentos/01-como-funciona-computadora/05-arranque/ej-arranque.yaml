@@ -1,0 +1,66 @@
+tipo: terminal
+shell: bash
+titulo: ¿Cómo arranca este servidor?
+descripcion: >-
+  Te pasan un servidor Rocky Linux para documentar. Averigua si arranca con UEFI o con BIOS
+  heredado, qué tabla de particiones tiene el disco, si Secure Boot está activo y cuál es la
+  entrada de arranque que usa.
+estado_inicial:
+  distro: rocky
+  hostname: srv-docs01
+  firmware: uefi
+  secure_boot: true
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: >-
+      Lista la carpeta `/sys/firmware/efi` con `ls`. Si existe, el sistema arrancó con UEFI; si
+      el comando dice *No such file or directory*, arrancó con BIOS heredado.
+    verificar:
+      - { comando_usado: 'ls.*/sys/firmware/efi' }
+    pistas:
+      - "`ls /sys/firmware/efi`"
+    solucion: [ls /sys/firmware/efi]
+    explicacion: El kernel crea esa carpeta solo cuando el firmware es UEFI. Este servidor arrancó con UEFI.
+  - consigna: Mira la tabla de particiones con `sudo fdisk -l` y busca la línea *Disklabel type*.
+    verificar:
+      - { comando_usado: 'sudo\s+fdisk\s+-l' }
+    pistas:
+      - "`sudo fdisk -l`"
+    solucion: [sudo fdisk -l]
+    explicacion: >-
+      *Disklabel type: gpt* indica una tabla GPT. La primera partición es la **EFI System** de
+      600 MB, donde el firmware busca los cargadores de arranque. Con BIOS heredado y MBR, aquí
+      diría *dos*.
+  - consigna: Averigua si Secure Boot está activo con `mokutil --sb-state`.
+    verificar:
+      - { comando_usado: 'mokutil\s+--sb-state' }
+    pistas:
+      - "`mokutil --sb-state`"
+    solucion: [mokutil --sb-state]
+    explicacion: Secure Boot está activo, así que el firmware solo acepta cargadores firmados con claves que tiene registradas.
+  - consigna: Lista las entradas de arranque que guarda el firmware con `efibootmgr -v`.
+    verificar:
+      - { comando_usado: 'efibootmgr' }
+    pistas:
+      - "`efibootmgr -v` (la `-v` muestra la ruta de cada entrada)"
+    solucion: [efibootmgr -v]
+    explicacion: >-
+      *BootOrder* es el orden en que el firmware prueba las entradas. La primera, Boot0004
+      *Rocky Linux*, carga el archivo `\EFI\rocky\shimx64.efi` de la partición 1 del disco.
+      Si esa entrada se borra o queda detrás de otra que no arranca, el servidor no inicia
+      aunque el disco esté perfecto.
+  - consigna: >-
+      Confirma que ese archivo existe en la partición EFI con `sudo ls /boot/efi/EFI/rocky`. La
+      partición EFI solo la puede leer root, por eso hace falta `sudo`.
+    verificar:
+      - { comando_usado: 'sudo\s+ls.*/boot/efi/EFI/rocky' }
+    pistas:
+      - "`sudo ls /boot/efi/EFI/rocky`"
+    solucion: [sudo ls /boot/efi/EFI/rocky]
+    explicacion: >-
+      La partición EFI está montada en `/boot/efi`. Ahí están `shimx64.efi` (el primer cargador,
+      firmado por Microsoft para que Secure Boot lo acepte) y `grubx64.efi` (GRUB, firmado por
+      Rocky). La carpeta `EFI/BOOT` tiene el cargador de respaldo que el firmware usa si no
+      encuentra ninguna entrada.

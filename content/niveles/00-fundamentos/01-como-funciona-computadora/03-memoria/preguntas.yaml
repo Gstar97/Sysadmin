@@ -1,0 +1,106 @@
+- id: p01
+  tipo: ordenar_pasos
+  diagnostico: true
+  enunciado: Ordena de la memoria con menor latencia a la de mayor latencia.
+  pasos:
+    - Registros
+    - Caché L1
+    - Memoria RAM
+    - SSD NVMe
+    - Disco rígido
+  explicacion: Los registros y la caché están dentro del procesador; la RAM está fuera, a unos 90 ns; un SSD tarda decenas de microsegundos y un disco rígido varios milisegundos.
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuál de estos almacenamientos pierde su contenido al apagar el equipo?
+  opciones:
+    - { texto: La memoria RAM, correcta: true, explicacion: "La RAM es volátil, igual que la caché y los registros." }
+    - { texto: El SSD NVMe, explicacion: "La memoria flash del SSD conserva los datos sin energía." }
+    - { texto: El disco rígido, explicacion: "Los datos quedan grabados magnéticamente en los platos." }
+    - { texto: Una cinta de backup, explicacion: "Las cintas son almacenamiento permanente; se usan justamente para guardar copias por años." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Aproximadamente cuántas veces más lenta es una lectura en un SSD NVMe que una lectura en la RAM?
+  opciones:
+    - { texto: Unas mil veces, correcta: true, explicacion: "La RAM responde en unos 90 ns y un SSD NVMe en unos 60 µs (60.000 ns)." }
+    - { texto: El doble, explicacion: "La diferencia es de tres órdenes de magnitud, no de dos veces." }
+    - { texto: Son iguales, explicacion: "Si fueran iguales no haría falta la RAM." }
+    - { texto: Un millón de veces, explicacion: "Eso se acerca más a la diferencia entre un registro y un disco rígido." }
+- id: p04
+  tipo: respuesta_multiple
+  enunciado: Un servidor se quedó sin RAM y está usando mucho swap. ¿Qué síntomas son esperables?
+  opciones:
+    - { texto: Todo responde muy lento, correcta: true, explicacion: "Cada acceso a datos que están en el swap requiere leer el disco." }
+    - { texto: El disco trabaja todo el tiempo, correcta: true, explicacion: "El sistema mueve datos entre la RAM y el swap sin parar." }
+    - { texto: La CPU está bastante desocupada, correcta: true, explicacion: "Los procesos pasan la mayor parte del tiempo esperando al disco, no calculando." }
+    - { texto: La temperatura de la RAM sube hasta apagar el equipo, explicacion: "Usar swap no calienta la RAM; el problema es de rendimiento." }
+- id: p05
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: Según esta salida de `free -h`, ¿cuánta memoria pueden usar todavía los programas sin recurrir al swap?
+  salida: |2
+                   total        used        free      shared  buff/cache   available
+    Mem:            15Gi       4.1Gi       0.6Gi       120Mi        10Gi        11Gi
+    Swap:          4.0Gi          0B       4.0Gi
+  opciones:
+    - { texto: "Unos 11 GiB", correcta: true, explicacion: "La columna available suma la memoria libre y la caché que se puede liberar." }
+    - { texto: "Solo 0,6 GiB", explicacion: "free no cuenta la caché de disco, que se libera en cuanto hace falta." }
+    - { texto: "4 GiB", explicacion: "4 GiB es el tamaño del swap, que no se está usando." }
+    - { texto: "15 GiB", explicacion: "15 GiB es el total; hay 4,1 GiB en uso por programas." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué hace el OOM killer de Linux?
+  opciones:
+    - { texto: "Termina un proceso cuando la memoria y el swap se agotan, para que el resto del sistema siga funcionando", correcta: true, explicacion: "Suele elegir al proceso que más memoria ocupa, que a menudo es la aplicación más importante." }
+    - { texto: Borra la caché de disco cada cierto tiempo, explicacion: "La caché se libera sola cuando hace falta; el OOM killer actúa en casos extremos." }
+    - { texto: Apaga el servidor para proteger la RAM, explicacion: "No apaga el equipo; termina procesos." }
+    - { texto: Comprime la memoria, explicacion: "Existen mecanismos de compresión (zram, zswap), pero no son el OOM killer." }
+- id: p07
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué hace la memoria ECC con un error de un solo bit?
+  opciones:
+    - { texto: "Lo corrige automáticamente y lo registra", correcta: true, explicacion: "Los errores corregidos se registran (BMC, rasdaemon) y sirven de alerta temprana." }
+    - { texto: Lo ignora, explicacion: "Eso hace la memoria sin ECC: el bit cambiado pasa inadvertido." }
+    - { texto: Apaga el servidor de inmediato, explicacion: "Eso ocurre con errores de dos bits, que se detectan pero no se pueden corregir." }
+    - { texto: Duplica el dato en otro módulo, explicacion: "Eso se parece al espejado de memoria, una función distinta que solo tienen algunos servidores." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Un servidor tiene un módulo DDR5-4800 y se agrega otro DDR5-5600. ¿A qué velocidad funciona la memoria?
+  opciones:
+    - { texto: "DDR5-4800 en los dos módulos", correcta: true, explicacion: "Toda la memoria funciona a la velocidad del módulo más lento." }
+    - { texto: "Cada módulo a su propia velocidad", explicacion: "El controlador de memoria usa una única velocidad para todos los módulos." }
+    - { texto: "DDR5-5600 en los dos módulos", explicacion: "El módulo de 4800 no puede funcionar más rápido de lo que soporta." }
+    - { texto: "No arranca: no se pueden mezclar velocidades", explicacion: "Normalmente arranca; lo que no se puede mezclar son generaciones (DDR4 con DDR5) ni tipos (RDIMM con UDIMM)." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Un servidor va a correr 6 máquinas virtuales de 16 GB cada una. ¿Cuánta RAM conviene comprar?
+  opciones:
+    - { texto: "128 GB", correcta: true, explicacion: "96 GB de VMs, más el hipervisor y un margen de 20 a 30%, dan unos 125 GB." }
+    - { texto: "96 GB", explicacion: "Alcanza justo para las VMs, sin dejar nada para el hipervisor ni para crecer." }
+    - { texto: "64 GB", explicacion: "Ni siquiera alcanza para las 6 VMs." }
+    - { texto: "1 TB", explicacion: "Es mucho más de lo necesario; el dinero rendiría más en discos o en otro servidor." }
+- id: p10
+  tipo: encontrar_error
+  enunciado: Estas son notas de un técnico sobre una ampliación de memoria. Marca la línea con el error.
+  archivo: |
+    El servidor usa módulos DDR5 RDIMM ECC.
+    Compramos 4 módulos iguales para repartirlos entre los canales.
+    Como los nuevos son UDIMM, más baratos, los mezclamos con los RDIMM.
+    Revisamos con dmidecode que el sistema vea todas las ranuras ocupadas.
+  lineas_con_error: [3]
+  explicacion: RDIMM (servidor) y UDIMM (PC) no se pueden mezclar; en general el servidor ni siquiera arranca. Los módulos nuevos tienen que ser del mismo tipo.
+- id: p11
+  tipo: opcion_multiple
+  enunciado: El BMC de un servidor registra todos los días varios errores de memoria corregidos en la ranura B2. ¿Qué conviene hacer?
+  opciones:
+    - { texto: "Programar el reemplazo de ese módulo en la próxima ventana de mantenimiento", correcta: true, explicacion: "Los errores corregidos repetidos anticipan una falla; cambiarlo a tiempo evita un error no corregible y una caída." }
+    - { texto: "Nada, porque la memoria ECC los corrige", explicacion: "Los corrige hoy, pero un módulo que acumula errores suele terminar con uno que no se puede corregir." }
+    - { texto: "Desactivar ECC en el firmware para que deje de avisar", explicacion: "Así solo se ocultan los errores y los datos quedan desprotegidos." }
+    - { texto: "Reiniciar el servidor todos los días", explicacion: "Reiniciar no repara un módulo dañado." }
+- id: p12
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra el uso de memoria de Linux en unidades fáciles de leer (GiB, MiB).
+  aceptadas: [free -h, free --human]
+  patrones: ['^free\s+-\w*h\w*$']
+  explicacion: "`free -h` muestra total, usada, libre, caché de disco y disponible, además del swap."

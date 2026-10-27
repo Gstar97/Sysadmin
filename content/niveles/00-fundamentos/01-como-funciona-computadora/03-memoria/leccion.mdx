@@ -1,0 +1,113 @@
+---
+id: n0-m1-l3
+titulo: La memoria
+minutos: 90
+objetivos:
+  - Ordenar la jerarquía de memoria (registros, caché, RAM, disco) por velocidad, tamaño y costo.
+  - Explicar qué pasa cuando la RAM se llena y por qué un servidor se pone lento.
+  - Entender qué es la memoria ECC y por qué se usa en servidores.
+glosario: [latencia, dimm, ecc]
+verificado: 2026-10
+---
+
+import jerarquia from './jerarquia.svg?raw'
+import ordenar from './ordenar-jerarquia.yaml'
+import ejMemoria from './ej-memoria.yaml'
+
+"El servidor anda lento" es probablemente el reclamo más común que va a recibir un sysadmin, y la memoria está detrás de muchísimos de esos casos. Para entender por qué, hay que ver la memoria como lo que es: una escalera de almacenamientos, cada uno más grande, más barato y mucho más lento que el anterior.
+
+## La jerarquía de memoria
+
+Ningún tipo de memoria es a la vez rápido, grande y barato. Por eso una computadora combina varios:
+
+<Diagrama svg={jerarquia} alt="Pirámide de la jerarquía de memoria: registros arriba, después caché L1 y L2, caché L3, RAM, SSD NVMe y disco rígido abajo, con su tiempo de acceso y su tamaño típico" pie="Cuanto más arriba, más rápido y más caro por GB. Los tiempos son valores de referencia." />
+
+El tiempo que tarda en llegar un dato desde que se lo pide se llama **<Termino id="latencia">latencia</Termino>**. Las diferencias son tan grandes que cuesta imaginarlas en nanosegundos. Esta escala las convierte a tiempo humano, como si un ciclo del procesador durara un segundo:
+
+<EscalaLatencias />
+
+Con esa escala, leer la RAM es como esperar cinco minutos, y leer un disco rígido es como esperar nueve meses. Ahora ordena tú la jerarquía:
+
+<Ordenar ejercicio={ordenar} />
+
+Dos ideas para quedarse:
+
+- **Solo lo que está de la RAM hacia arriba es volátil**: se pierde al apagar. Por eso, cuando un programa "guarda", escribe en el disco.
+- **El costo crece al subir**: por GB, la RAM cuesta decenas de veces más que un SSD, y un SSD varias veces más que un disco rígido. Por eso un servidor tiene, por ejemplo, 128 GB de RAM y 8 TB de disco, y no al revés.
+
+## La memoria RAM
+
+La RAM de las computadoras actuales es **DDR** (DDR4 o DDR5) y viene en módulos llamados **<Termino id="dimm">DIMM</Termino>**. Los datos que vas a ver en una ficha son:
+
+- **Generación**: DDR4 o DDR5. No son intercambiables: la muesca está en otro lugar y la placa soporta una sola.
+- **Velocidad**: en millones de transferencias por segundo, por ejemplo DDR5-5600. Si se mezclan módulos de distinta velocidad, todos funcionan a la del más lento.
+- **Tipo de módulo**: **UDIMM** (PC), **RDIMM** (servidor, con un chip de registro que permite poner muchos módulos), **SO-DIMM** (notebooks y equipos chicos). En muchas notebooks la memoria viene **soldada** a la placa (LPDDR) y no se puede ampliar.
+- **Capacidad por módulo** y **cantidad de canales** que usa: como viste en la primera lección, conviene repartir los módulos entre los canales siguiendo el orden que indica el manual.
+
+## Qué pasa cuando la RAM se llena
+
+El sistema operativo nunca deja la RAM sin usar. Lo que los programas no ocupan, lo usa como **caché de disco**: guarda copias de los archivos leídos recientemente para no volver a leerlos del disco. Esa memoria se libera en el acto cuando un programa la necesita. Por eso en un servidor sano la memoria "libre" casi siempre es poca, y está bien.
+
+El problema empieza cuando los programas realmente necesitan más memoria de la que hay:
+
+1. El sistema libera la caché de disco. Todo sigue funcionando, aunque las lecturas de archivos se vuelven algo más lentas.
+2. Cuando ya no queda caché para liberar, empieza a mover a una zona del disco llamada **swap** partes de la memoria que se usan poco.
+3. Si los programas necesitan esos datos otra vez, hay que traerlos del disco. Cada una de esas lecturas es miles de veces más lenta que leer la RAM. El servidor se pone **muy** lento de golpe: el disco trabaja sin parar y el procesador está casi ocioso, esperando.
+4. Si la memoria y el swap se agotan del todo, el sistema termina un proceso para salvar al resto (en Linux, el **OOM killer**). Casi siempre elige al que más memoria ocupa, que suele ser la base de datos o la aplicación principal.
+
+Vas a ver este proceso en detalle, con un simulador, en la lección de memoria virtual del próximo módulo. Por ahora alcanza con reconocer los síntomas y leer bien los datos:
+
+<Terminal ejercicio={ejMemoria} />
+
+<Pregunta id="p05" />
+
+## Memoria ECC
+
+Un bit de la memoria puede cambiar solo: por interferencia eléctrica, por una partícula de radiación que llega del espacio o por un módulo que empieza a fallar. Parece raro, pero no lo es: un estudio de Google sobre sus propios servidores encontró que cerca de un 8% de los módulos tenía al menos un error de este tipo por año.
+
+En una PC, un bit cambiado puede pasar inadvertido o causar un cuelgue raro. En un servidor puede ser mucho peor: un dato corrupto que se guarda en la base de datos o en las copias de seguridad, y nadie lo nota hasta meses después.
+
+La memoria **<Termino id="ecc">ECC</Termino>** (*Error-Correcting Code*) agrega bits de control a cada bloque de datos. Con ellos:
+
+- **Corrige** automáticamente los errores de un bit. El sistema registra el evento y sigue funcionando.
+- **Detecta** los errores de dos bits. Como no los puede corregir, detiene el equipo antes de que el dato equivocado se use o se guarde.
+
+<Importante>
+Los módulos DDR5 tienen corrección de errores **dentro de cada chip** (on-die ECC). Eso mejora la confiabilidad del chip, pero no protege el camino hasta el procesador ni avisa al sistema. No es lo mismo que la memoria ECC: en una ficha, la memoria de servidor dice **ECC** de forma explícita, y el procesador y la placa tienen que soportarla.
+</Importante>
+
+En la práctica, los errores corregidos son una **alerta temprana**: el BMC del servidor y herramientas de Linux como `rasdaemon` los registran. Un módulo que acumula errores corregidos día tras día va a fallar, y se cambia en la próxima ventana de mantenimiento, antes de que llegue un error que no se pueda corregir.
+
+## Cuánta memoria necesita un servidor
+
+No hay una cifra única, pero sí una forma de calcularla: sumar lo que necesita cada cosa que va a correr y agregar un margen.
+
+- **Sistema operativo**: un Linux de servidor sin interfaz gráfica funciona con 1 a 2 GB; Windows Server con interfaz gráfica necesita al menos 4 GB para estar cómodo.
+- **Aplicaciones**: la documentación de cada una indica sus requisitos. Una base de datos rinde mejor cuanto más de sus datos de uso frecuente entran en memoria.
+- **Máquinas virtuales**: un servidor que corre VMs necesita la suma de la memoria de todas, más lo que usa el propio hipervisor.
+- **Margen**: entre un 20 y un 30% para picos y crecimiento.
+
+Por ejemplo, para un servidor que va a correr 10 máquinas virtuales de 8 GB: 80 GB de las VMs, unos 8 GB para el hipervisor y un 25% de margen dan unos 110 GB. Se compra 128 GB, que además se reparten de forma pareja en los canales con 8 módulos de 16 GB o 4 de 32 GB.
+
+<ErroresComunes>
+  <ErrorComun titulo='"El servidor no tiene memoria libre" (y en realidad está bien)'>
+    `free` muestra poca memoria en *free* porque el resto está en *buff/cache*, la caché de disco, que se libera sola. Mira la columna **available** y el uso de **swap**. Si *available* tiene margen y el swap no crece, no hay problema de memoria.
+  </ErrorComun>
+  <ErrorComun titulo="El servidor está lentísimo, el disco trabaja sin parar y la CPU está casi libre">
+    Es el síntoma clásico de falta de memoria: el sistema está moviendo datos entre la RAM y el swap todo el tiempo. Revisa `free -h` (poca memoria *available*, swap en uso) y busca qué proceso consume la memoria con `top` ordenando por memoria (tecla `M`). Lo vas a practicar en el nivel de Linux.
+  </ErrorComun>
+  <ErrorComun titulo="Se agregaron módulos y la memoria funciona más lenta o no aparece toda">
+    Si se mezclan velocidades, toda la memoria funciona a la del módulo más lento. Si un módulo no aparece, puede estar mal insertado o en una ranura que no corresponde con esa cantidad de módulos. `sudo dmidecode -t memory` muestra qué ranuras ve ocupadas el sistema y a qué velocidad.
+  </ErrorComun>
+  <ErrorComun titulo="El BMC muestra errores de memoria corregibles en un módulo">
+    No hay que esperar a que empeore: anota la ranura que indica el registro, revisa si los errores se repiten y programa el reemplazo de ese módulo. Si el servidor tiene garantía, el fabricante lo cambia con ese registro como prueba.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- La jerarquía va de registros y caché (rápidos, chicos y caros) a RAM y discos (lentos, grandes y baratos).
+- Entre la RAM y el SSD más rápido hay un salto de unas mil veces en latencia.
+- La memoria "libre" en un servidor sano es poca porque se usa como caché de disco; lo que importa es la memoria disponible.
+- Cuando la RAM no alcanza, el sistema usa swap y todo se vuelve muy lento; si se agota todo, el OOM killer termina un proceso.
+- La memoria ECC corrige errores de un bit y detecta los de dos. Los errores corregidos son una alerta para cambiar el módulo.
+</Resumen>

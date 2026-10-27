@@ -1,0 +1,109 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué un disco rígido es tan lento para leer datos repartidos al azar?
+  opciones:
+    - { texto: "Porque el cabezal tiene que moverse y esperar a que el plato gire hasta el dato, unos 8 ms por lectura", correcta: true, explicacion: "Por eso hace solo entre 100 y 200 lecturas al azar por segundo." }
+    - { texto: "Porque el bus SATA es lento", explicacion: "SATA da unos 550 MB/s, mucho más de lo que un disco rígido usa en lecturas al azar." }
+    - { texto: "Porque la memoria flash se desgasta", explicacion: "Los discos rígidos no tienen memoria flash." }
+    - { texto: "Porque no tiene caché", explicacion: "Tiene una caché pequeña, pero no evita el movimiento del cabezal." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué mide la cifra de IOPS de un disco?
+  opciones:
+    - { texto: "Cuántas operaciones pequeñas de lectura o escritura puede hacer por segundo", correcta: true, explicacion: "Normalmente se mide con operaciones de 4 KiB en lugares al azar." }
+    - { texto: "Cuántos MB por segundo transfiere leyendo un archivo grande", explicacion: "Eso es el throughput o rendimiento secuencial." }
+    - { texto: "Cuánto tarda una sola operación", explicacion: "Eso es la latencia." }
+    - { texto: "Cuántos TB se pueden escribir durante su vida útil", explicacion: "Eso es el TBW." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: Un disco hace 200 IOPS con operaciones de 4 KiB al azar. ¿Cuánto throughput logra en ese trabajo?
+  opciones:
+    - { texto: "Unos 800 KiB/s", correcta: true, explicacion: "Throughput = IOPS × tamaño: 200 × 4 KiB = 800 KiB/s." }
+    - { texto: "250 MB/s", explicacion: "Ese sería su rendimiento leyendo datos seguidos, no al azar." }
+    - { texto: "200 MB/s", explicacion: "Se confunden operaciones con megabytes." }
+    - { texto: "4 KiB/s", explicacion: "Sería el caso de una sola operación por segundo." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Qué limita la velocidad de un SSD SATA a unos 550 MB/s?
+  opciones:
+    - { texto: "El bus SATA, que llega a 6 Gbit/s", correcta: true, explicacion: "La misma memoria flash conectada por NVMe rinde mucho más." }
+    - { texto: "La velocidad de giro", explicacion: "Los SSD no giran." }
+    - { texto: "La cantidad de RAM del equipo", explicacion: "La RAM no limita la velocidad máxima del disco." }
+    - { texto: "El sistema de archivos", explicacion: "El sistema de archivos influye poco; el límite es la interfaz." }
+- id: p05
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Para cuáles de estos trabajos conviene usar SSD en vez de discos rígidos?
+  opciones:
+    - { texto: Una base de datos transaccional, correcta: true, explicacion: "Hace miles de operaciones pequeñas al azar: necesita IOPS y baja latencia." }
+    - { texto: El almacenamiento de muchas máquinas virtuales, correcta: true, explicacion: "Muchas VM generan muchas operaciones al azar simultáneas." }
+    - { texto: Un archivo de copias de seguridad que se lee pocas veces, explicacion: "Importa el costo por TB y la escritura secuencial: los discos rígidos son la opción lógica." }
+    - { texto: El disco de arranque de una PC de oficina, correcta: true, explicacion: "El arranque y la apertura de programas son lecturas al azar; un SSD cambia por completo la experiencia." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué formato de SSD vas a encontrar en las bahías frontales de un servidor actual, para cambiarlos en caliente?
+  opciones:
+    - { texto: "U.2/U.3 o EDSFF (E1.S, E3.S)", correcta: true, explicacion: "Son formatos NVMe pensados para bahías hot-swap de servidor." }
+    - { texto: M.2 solamente, explicacion: "M.2 se usa en servidores sobre todo para el disco de arranque, dentro del equipo, no en bahías frontales." }
+    - { texto: "Discos de 3,5 pulgadas NVMe", explicacion: "Los discos de 3,5 pulgadas son discos rígidos." }
+    - { texto: Tarjetas SD, explicacion: "No se usan para datos de producción." }
+- id: p07
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un SSD de 3,84 TB declara 1 DWPD durante 5 años de garantía. ¿Cuántos TB se pueden escribir en total (TBW), aproximadamente?
+  opciones:
+    - { texto: "Unos 7000 TB", correcta: true, explicacion: "3,84 × 1 × 365 × 5 ≈ 7008 TB." }
+    - { texto: "3,84 TB", explicacion: "Sería escribir el disco completo una sola vez." }
+    - { texto: "1825 TB", explicacion: "Es 365 × 5 sin multiplicar por la capacidad." }
+    - { texto: "19,2 TB", explicacion: "Es 3,84 × 5, sin contar los 365 días del año." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: Según esta salida de `smartctl` de un disco rígido, ¿qué conviene hacer?
+  salida: |
+    SMART overall-health self-assessment test result: PASSED
+    ID# ATTRIBUTE_NAME          VALUE WORST THRESH  RAW_VALUE
+      5 Reallocated_Sector_Ct   098   098   010     152
+    197 Current_Pending_Sector  100   100   000     24
+    199 UDMA_CRC_Error_Count    200   200   000     0
+  opciones:
+    - { texto: "Copiar los datos y reemplazar el disco cuanto antes", correcta: true, explicacion: "Hay 152 sectores reubicados y 24 pendientes: el disco se está dañando aunque el resumen diga PASSED." }
+    - { texto: "Nada, porque dice PASSED", explicacion: "PASSED solo indica que no se cruzó el umbral del fabricante, que es muy permisivo." }
+    - { texto: "Cambiar el cable SATA", explicacion: "Los errores de cable aparecen en UDMA_CRC_Error_Count, que está en 0." }
+    - { texto: "Desfragmentar el disco", explicacion: "Desfragmentar no repara sectores dañados y agrega trabajo a un disco que está fallando." }
+- id: p09
+  tipo: interpretar_salida
+  enunciado: ¿Qué indica esta parte de la salida de `smartctl` de un SSD NVMe?
+  salida: |
+    Available Spare:                    100%
+    Percentage Used:                    92%
+    Media and Data Integrity Errors:    0
+  opciones:
+    - { texto: "Que ya consumió casi toda la vida útil declarada y conviene planificar su reemplazo", correcta: true, explicacion: "Percentage Used en 92% indica que se escribió casi todo el TBW declarado. Todavía funciona sin errores, pero está cerca del final." }
+    - { texto: "Que está al 92% de su capacidad de almacenamiento", explicacion: "Percentage Used mide el desgaste, no el espacio ocupado." }
+    - { texto: "Que tiene errores graves de datos", explicacion: "Media and Data Integrity Errors está en 0." }
+    - { texto: "Que es un disco nuevo", explicacion: "Un disco nuevo tendría Percentage Used cerca de 0%." }
+- id: p10
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra toda la información SMART del disco /dev/sda (necesita permisos de administrador).
+  aceptadas: [sudo smartctl -a /dev/sda, sudo smartctl --all /dev/sda, sudo smartctl -x /dev/sda]
+  explicacion: "`smartctl -a` muestra identificación, salud y atributos; `-x` agrega todavía más detalle. Viene en el paquete smartmontools."
+- id: p11
+  tipo: opcion_multiple
+  enunciado: ¿Por qué los SSD de servidor tienen protección ante cortes de energía (condensadores)?
+  opciones:
+    - { texto: "Para terminar de guardar en la memoria flash lo que tenían en su memoria interna si se corta la luz", correcta: true, explicacion: "Sin esa protección, un corte puede perder escrituras que el sistema ya daba por guardadas." }
+    - { texto: "Para funcionar unas horas sin energía", explicacion: "Los condensadores dan energía solo por milisegundos, lo justo para guardar." }
+    - { texto: "Para escribir más rápido", explicacion: "Su objetivo es proteger los datos, aunque permiten aceptar escrituras con más seguridad." }
+    - { texto: "Para que el disco se pueda cambiar en caliente", explicacion: "El cambio en caliente depende de la bahía y el conector, no de los condensadores." }
+- id: p12
+  tipo: encontrar_error
+  enunciado: Una propuesta de compra tiene un error de criterio. Marca la línea.
+  archivo: |
+    Servidor de base de datos: 4 SSD NVMe de uso mixto (3 DWPD).
+    Servidor de backups: 8 discos rígidos de 20 TB (CMR).
+    Servidor de virtualización: 6 SSD NVMe de lectura intensiva.
+    Arreglo RAID de archivos: discos rígidos SMR por ser más baratos.
+  lineas_con_error: [4]
+  explicacion: Los discos SMR escriben muy lento al reescribir y pueden hacer que la reconstrucción de un RAID tarde días. Para RAID se usan discos CMR.

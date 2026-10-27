@@ -11,15 +11,14 @@ export interface DiskModel {
   latenciaMs: number
   /** Costo por TB relativo al disco rígido (aproximado). */
   costoRelativo: number
-  capacidadMaxTB: number
   nota: string
 }
 
 export const DISKS: DiskModel[] = [
-  { id: 'hdd', nombre: 'Disco rígido 7200 rpm (SATA)', secuencial: 250, iops: 150, latenciaMs: 8, costoRelativo: 1, capacidadMaxTB: 30, nota: 'Partes mecánicas: el cabezal tiene que moverse hasta los datos.' },
-  { id: 'sata', nombre: 'SSD SATA', secuencial: 550, iops: 90_000, latenciaMs: 0.1, costoRelativo: 3, capacidadMaxTB: 8, nota: 'Sin partes móviles, pero limitado por la interfaz SATA (6 Gbit/s).' },
-  { id: 'nvme4', nombre: 'SSD NVMe PCIe 4.0', secuencial: 7_000, iops: 1_000_000, latenciaMs: 0.06, costoRelativo: 3.5, capacidadMaxTB: 8, nota: 'Conectado directo por PCIe, con miles de colas en paralelo.' },
-  { id: 'nvme5', nombre: 'SSD NVMe PCIe 5.0', secuencial: 14_000, iops: 1_500_000, latenciaMs: 0.05, costoRelativo: 5, capacidadMaxTB: 30, nota: 'El doble de ancho de banda que PCIe 4.0; común en servidores nuevos.' },
+  { id: 'hdd', nombre: 'Disco rígido 7200 rpm (SATA)', secuencial: 250, iops: 150, latenciaMs: 8, costoRelativo: 1, nota: 'Partes mecánicas: el cabezal tiene que moverse hasta los datos.' },
+  { id: 'sata', nombre: 'SSD SATA', secuencial: 550, iops: 90_000, latenciaMs: 0.1, costoRelativo: 3, nota: 'Sin partes móviles, pero limitado por la interfaz SATA (6 Gbit/s).' },
+  { id: 'nvme4', nombre: 'SSD NVMe PCIe 4.0', secuencial: 7_000, iops: 1_000_000, latenciaMs: 0.06, costoRelativo: 3.5, nota: 'Conectado directo por PCIe, con miles de colas en paralelo.' },
+  { id: 'nvme5', nombre: 'SSD NVMe PCIe 5.0', secuencial: 14_000, iops: 1_500_000, latenciaMs: 0.05, costoRelativo: 5, nota: 'El doble de ancho de banda que PCIe 4.0; común en servidores nuevos.' },
 ]
 
 export interface Workload {

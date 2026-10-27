@@ -1,0 +1,79 @@
+tipo: troubleshooting
+titulo: La PC de contabilidad no arranca
+descripcion: >-
+  Lunes, 8:10. La PC de contabilidad no arranca y hay que cerrar el mes. Cada decisión suma
+  minutos: encuentra la causa sin perder tiempo ni empeorar las cosas.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Al apretar el botón, se encienden las luces y los ventiladores giran, pero la pantalla queda
+      negra y la PC emite pitidos que se repiten. El viernes la cambiaron de escritorio.
+    opciones:
+      - { texto: "Contar los pitidos y buscar qué significan en el manual de la placa madre", ir_a: n_codigo, minutos: 4 }
+      - texto: Probar con otro monitor
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Con otro monitor tampoco hay imagen y los pitidos siguen. Si el firmware no termina el
+          POST, ningún monitor va a mostrar nada: los pitidos ya estaban indicando que el problema
+          es anterior al video.
+      - texto: Arrancar desde un USB para reinstalar Windows
+        ir_a: fin_reinstalar
+        minutos: 20
+        consecuencia: >-
+          La PC no arranca desde el USB: tampoco termina el POST. Reinstalar no tenía sentido;
+          el sistema operativo ni siquiera llegaba a cargarse.
+  n_codigo:
+    situacion: Son tres pitidos largos que se repiten. La placa además tiene una luz de diagnóstico encendida con la etiqueta DRAM.
+    evidencia:
+      - titulo: Manual de la placa, códigos de pitidos
+        contenido: |
+          1 corto ............ POST correcto
+          1 largo, 2 cortos .. Error de video
+          3 largos ........... Memoria no detectada o con falla
+          5 cortos ........... Error del procesador
+          Luces de diagnóstico: CPU · DRAM · VGA · BOOT
+          La luz queda encendida en la etapa donde se detuvo el POST.
+    opciones:
+      - { texto: "Apagar, desenchufar, sacar los módulos de RAM y volver a colocarlos firmes en las ranuras indicadas", ir_a: n_reinsertar, minutos: 10 }
+      - texto: Cambiar la fuente de alimentación
+        ir_a: n_codigo
+        minutos: 30
+        consecuencia: >-
+          Con la fuente nueva pasa exactamente lo mismo. Los pitidos y la luz DRAM apuntaban a la
+          memoria: la fuente funcionaba bien.
+      - texto: Intentar actualizar el firmware de la placa
+        ir_a: n_codigo
+        minutos: 15
+        consecuencia: >-
+          No se puede: para actualizar el firmware la PC tiene que terminar el POST o, en algunas
+          placas, tener una función especial de recuperación. Además, actualizar firmware sin un
+          motivo claro agrega riesgo.
+  n_reinsertar:
+    situacion: >-
+      Uno de los dos módulos estaba levemente salido de la ranura: el traslado del viernes lo
+      movió. Lo colocas hasta que las trabas hacen clic y vuelves a encender.
+    evidencia:
+      - titulo: Lo que se ve al encender
+        contenido: |
+          (1 pitido corto)
+          Logo del fabricante
+          Windows se inicia con normalidad
+          Administrador de tareas > Rendimiento > Memoria: 16 GB (2 de 2 ranuras usadas)
+    opciones:
+      - { texto: "Confirmar que se ve toda la memoria y registrar el incidente", ir_a: fin_ok, minutos: 3 }
+  fin_ok:
+    final: exito
+    resumen: >-
+      El POST se detenía en la memoria porque un módulo había quedado mal insertado. La clave fue
+      leer lo que la propia PC informaba (pitidos y luz de diagnóstico) para saber en qué etapa
+      se detenía el arranque, en lugar de cambiar piezas al azar. Al registrar el incidente,
+      anotar la causa ayuda: si vuelve a pasar sin que nadie mueva la PC, el módulo o la ranura
+      pueden estar fallando.
+  fin_reinstalar:
+    final: fracaso
+    resumen: >-
+      Cuando la pantalla queda negra y hay pitidos, el problema está en el POST, antes de que
+      el firmware busque un sistema operativo. Ni el monitor ni Windows tienen que ver: hay que
+      leer el código de pitidos o las luces de diagnóstico.

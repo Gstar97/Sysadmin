@@ -1,0 +1,108 @@
+- id: p01
+  tipo: ordenar_pasos
+  diagnostico: true
+  enunciado: Ordena las etapas del arranque de una computadora.
+  pasos:
+    - Encendido y estabilización de la fuente
+    - POST
+    - Búsqueda del dispositivo de arranque
+    - Cargador de arranque (GRUB o Windows Boot Manager)
+    - Carga del kernel
+    - Inicio de los servicios
+  explicacion: Las tres primeras etapas son del firmware; desde el cargador en adelante, del sistema operativo.
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Una PC enciende sus ventiladores, la pantalla queda negra y emite pitidos. ¿En qué etapa se detiene?
+  opciones:
+    - { texto: En el POST, correcta: true, explicacion: "Los pitidos son la forma en que el firmware informa una falla de hardware antes de tener video." }
+    - { texto: En el cargador de arranque, explicacion: "Para llegar al cargador, el POST tiene que haber terminado y habría imagen." }
+    - { texto: En el inicio de los servicios, explicacion: "En esa etapa ya se ve el sistema operativo cargando." }
+    - { texto: En el encendido de la fuente, explicacion: "Si la fuente no encendiera, no girarían los ventiladores." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: Un servidor muestra "grub rescue>" al arrancar. ¿Qué etapa ya funcionó y cuál falló?
+  opciones:
+    - { texto: "El firmware encontró el disco y cargó GRUB, pero GRUB no encuentra sus archivos o el kernel", correcta: true, explicacion: "La consola de rescate de GRUB indica que el cargador se ejecutó pero no pudo seguir; suele ser una partición /boot dañada o cambiada." }
+    - { texto: "Falló el POST", explicacion: "Si el POST fallara, no se ejecutaría GRUB." }
+    - { texto: "El kernel se cargó y falló un servicio", explicacion: "El kernel todavía no se cargó: GRUB es el que lo carga." }
+    - { texto: "El firmware no encontró ningún disco", explicacion: "Si no encontrara el disco, no podría haber ejecutado GRUB, que está en ese disco." }
+- id: p04
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Cuáles son ventajas de UEFI frente al BIOS heredado?
+  opciones:
+    - { texto: Arranca desde discos de más de 2 TB con tabla GPT, correcta: true, explicacion: "MBR, que usa el BIOS heredado, llega solo a 2 TiB." }
+    - { texto: Permite Secure Boot, correcta: true, explicacion: "Secure Boot es una función de UEFI." }
+    - { texto: Entiende particiones y arranca archivos .efi, correcta: true, explicacion: "El BIOS solo ejecuta el código del primer sector del disco." }
+    - { texto: Hace que el sistema operativo funcione más rápido, explicacion: "El firmware afecta el arranque, no la velocidad del sistema una vez iniciado." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: ¿Dónde guarda un sistema instalado en modo UEFI su cargador de arranque?
+  opciones:
+    - { texto: "En la partición EFI, una partición FAT32 del disco, como un archivo .efi", correcta: true, explicacion: "Por ejemplo, \\EFI\\rocky\\shimx64.efi o \\EFI\\Microsoft\\Boot\\bootmgfw.efi." }
+    - { texto: "En el primer sector del disco (446 bytes de código)", explicacion: "Así funciona el arranque con BIOS heredado y MBR." }
+    - { texto: "En el chip del firmware", explicacion: "El firmware guarda las entradas de arranque, no los cargadores de cada sistema." }
+    - { texto: "En la memoria RAM", explicacion: "La RAM se borra al apagar; el cargador tiene que estar en el disco." }
+- id: p06
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: Según esta salida de `sudo fdisk -l`, ¿con qué modo de arranque se instaló el sistema?
+  salida: |
+    Disklabel type: dos
+    Device     Boot   Start      End  Sectors Size Id Type
+    /dev/sda1  *       2048  2099199  2097152   1G 83 Linux
+    /dev/sda2       2099200 41943039 39843840  19G 8e Linux LVM
+  opciones:
+    - { texto: "BIOS heredado: la tabla es MBR (dos) y no hay partición EFI", correcta: true, explicacion: "fdisk llama dos a la tabla MBR. Un sistema UEFI tendría tabla gpt y una partición EFI System." }
+    - { texto: "UEFI, porque la primera partición tiene la marca de arranque", explicacion: "La marca de arranque (*) es propia de MBR y la usa el BIOS heredado." }
+    - { texto: "UEFI con Secure Boot", explicacion: "No hay partición EFI, que es imprescindible para arrancar con UEFI." }
+    - { texto: "No se puede saber", explicacion: "La tabla MBR sin partición EFI indica claramente un arranque con BIOS heredado." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Instalas Windows en una PC nueva y el instalador dice que en sistemas EFI solo se puede instalar en discos GPT. El disco está vacío. ¿Qué haces?
+  opciones:
+    - { texto: "Convertir el disco a GPT desde el instalador (diskpart: clean y convert gpt)", correcta: true, explicacion: "Como el disco está vacío, borrarlo no es un problema y el equipo queda instalado en el modo moderno." }
+    - { texto: "Activar el modo heredado (CSM) para instalar con MBR", explicacion: "Funcionaría en algunos equipos, pero deja el sistema sin Secure Boot y en un modo que se está abandonando." }
+    - { texto: "Cambiar el disco por uno más grande", explicacion: "El tamaño no tiene que ver; el problema es la tabla de particiones." }
+    - { texto: "Desactivar Secure Boot", explicacion: "Secure Boot no influye en la tabla de particiones." }
+- id: p08
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué hace Secure Boot?
+  opciones:
+    - { texto: "Solo permite arrancar cargadores firmados con claves registradas en el firmware", correcta: true, explicacion: "Así impide que código malicioso se ejecute antes que el sistema operativo." }
+    - { texto: "Cifra el disco", explicacion: "El cifrado lo hacen BitLocker o LUKS; Secure Boot verifica firmas." }
+    - { texto: "Pide una contraseña al encender", explicacion: "Eso es una contraseña del firmware, una función distinta." }
+    - { texto: "Hace copias de seguridad del cargador", explicacion: "No guarda copias; verifica firmas." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: ¿Por qué Rocky Linux arranca con Secure Boot activo si el equipo solo trae claves de Microsoft?
+  opciones:
+    - { texto: "Porque su primer cargador, shim, está firmado por Microsoft y después verifica GRUB y el kernel con las claves de Rocky", correcta: true, explicacion: "Es el mecanismo que usan casi todas las distribuciones grandes." }
+    - { texto: "Porque Linux desactiva Secure Boot al instalarse", explicacion: "El instalador no puede cambiar esa opción del firmware." }
+    - { texto: "Porque Secure Boot no se aplica a Linux", explicacion: "Se aplica a cualquier cargador que el firmware ejecute." }
+    - { texto: "Porque GRUB no necesita firma", explicacion: "Con Secure Boot activo, todo lo que se ejecuta en el arranque debe estar firmado." }
+- id: p10
+  tipo: completar_comando
+  enunciado: En Linux, escribe el comando que muestra si Secure Boot está activo.
+  aceptadas: [mokutil --sb-state]
+  explicacion: "`mokutil --sb-state` responde SecureBoot enabled o disabled. En un sistema que arrancó con BIOS heredado avisa que no hay variables EFI."
+- id: p11
+  tipo: encontrar_error
+  enunciado: Un técnico escribió estas notas sobre un servidor. Marca la línea con el error.
+  archivo: |
+    Firmware: UEFI, con Secure Boot activo.
+    Disco de 4 TB con tabla de particiones MBR.
+    Partición 1: EFI System, 600 MB, FAT32.
+    Entrada de arranque: \EFI\rocky\shimx64.efi
+  lineas_con_error: [2]
+  explicacion: Con MBR solo se pueden usar 2 TiB del disco, y la partición EFI con arranque UEFI va con tabla GPT. Un disco de 4 TB arrancando con UEFI tiene que ser GPT.
+- id: p12
+  tipo: opcion_multiple
+  enunciado: Después de un corte de luz, un equipo viejo pierde la fecha y no arranca porque volvió al modo heredado. ¿Cuál es la causa más probable?
+  opciones:
+    - { texto: "La pila de la placa está agotada y el firmware volvió a su configuración de fábrica", correcta: true, explicacion: "Sin pila, al quedarse sin corriente se pierden la hora y la configuración del firmware." }
+    - { texto: "El disco se dañó por el corte", explicacion: "Un disco dañado no cambia el modo de arranque ni la fecha." }
+    - { texto: "Secure Boot bloqueó el arranque", explicacion: "Secure Boot no cambia el modo de arranque." }
+    - { texto: "El sistema operativo se desactualizó", explicacion: "La fecha y el modo de arranque los guarda el firmware, no el sistema operativo." }

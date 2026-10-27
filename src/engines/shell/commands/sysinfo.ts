@@ -3,7 +3,7 @@ import { BUILTINS, COMMANDS, formatPrintf, register, type CommandContext } from 
 import { priorityName, priorityNumber, type JournalEntry, type Service } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
-import { CPU_FLAGS } from '../hardware'
+import { CPU_FLAGS, dmiBiosText, efibootmgrText, fdiskText, lsblkText } from '../hardware'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -828,6 +828,9 @@ const MAN_DESC: Record<string, string> = {
   lsblk: 'list block devices',
   dmidecode: 'DMI table decoder',
   lspci: 'list all PCI devices',
+  fdisk: 'manipulate disk partition table',
+  efibootmgr: 'manipulate the UEFI Boot Manager',
+  mokutil: 'utility to manipulate machine owner keys',
   df: 'report file system space usage',
   du: 'estimate file space usage',
   ip: 'show / manipulate routing, network devices, interfaces and tunnels',
@@ -930,7 +933,7 @@ register('lscpu', {
 })
 
 const DMI: Record<string, string> = {
-  bios: 'Handle 0x0000, DMI type 0, 24 bytes\nBIOS Information\n\tVendor: SeaBIOS\n\tVersion: 1.16.3-debian-1.16.3-2\n\tRelease Date: 04/01/2014\n\tAddress: 0xE8000\n\tRuntime Size: 96 kB\n\tROM Size: 64 kB\n\tCharacteristics:\n\t\tBIOS characteristics not supported\n\t\tTargeted content distribution is supported\n\tBIOS Revision: 0.0\n',
+  bios: '',
   system:
     'Handle 0x0100, DMI type 1, 27 bytes\nSystem Information\n\tManufacturer: QEMU\n\tProduct Name: Standard PC (Q35 + ICH9, 2009)\n\tVersion: pc-q35-9.0\n\tSerial Number: Not Specified\n\tUUID: 4b0c2f1e-9a7d-4c55-b1e2-f30a8d6c7e91\n\tWake-up Type: Power Switch\n\tSKU Number: Not Specified\n\tFamily: Not Specified\n',
   processor:
@@ -952,7 +955,8 @@ register('dmidecode', {
     const a = parseArgs(ctx.args, { values: { t: ['t', 'type'], s: ['s', 'string'] } })
     const s = a.values.get('s')
     if (s) {
-      const keys: Record<string, string> = { 'system-manufacturer': 'QEMU', 'system-product-name': 'Standard PC (Q35 + ICH9, 2009)', 'bios-vendor': 'SeaBIOS', 'bios-version': '1.16.3-debian-1.16.3-2', 'system-uuid': '4b0c2f1e-9a7d-4c55-b1e2-f30a8d6c7e91' }
+      const uefi = ctx.sys.firmware === 'uefi'
+      const keys: Record<string, string> = { 'system-manufacturer': 'QEMU', 'system-product-name': 'Standard PC (Q35 + ICH9, 2009)', 'bios-vendor': uefi ? 'EDK II' : 'SeaBIOS', 'bios-version': uefi ? 'edk2-stable202408-prebuilt.qemu.org' : '1.16.3-debian-1.16.3-2', 'system-uuid': '4b0c2f1e-9a7d-4c55-b1e2-f30a8d6c7e91' }
       if (!keys[s]) {
         ctx.err(`Invalid string keyword: ${s}\nValid string keywords are:\n  ${Object.keys(keys).join('\n  ')}\n`)
         return 1
@@ -962,16 +966,17 @@ register('dmidecode', {
     }
     const t = a.values.get('t')
     const header = '# dmidecode 3.6\nGetting SMBIOS data from sysfs.\nSMBIOS 2.8 present.\n\n'
+    const dmi: Record<string, string> = { ...DMI, bios: dmiBiosText(ctx.sys.firmware) }
     if (!t) {
-      ctx.out(header + Object.values(DMI).join('\n'))
+      ctx.out(header + Object.values(dmi).join('\n'))
       return 0
     }
-    const key = DMI[t] ? t : DMI_TYPES[t]
+    const key = dmi[t] ? t : DMI_TYPES[t]
     if (!key) {
       ctx.err(`Invalid type keyword: ${t}\nValid type keywords are:\n  bios\n  system\n  processor\n  memory\n`)
       return 1
     }
-    ctx.out(header + DMI[key])
+    ctx.out(header + dmi[key])
     return 0
   },
 })
@@ -996,7 +1001,8 @@ register('df', {
     const fsType = ctx.sys.distro === 'rocky' ? 'xfs' : 'ext4'
     const rows = [
       [root, fsType, 17_811_456, 4_712_840, '/'],
-      ['/dev/sda1', ctx.sys.distro === 'rocky' ? 'xfs' : 'ext4', 983_040, 296_960, '/boot'],
+      ...(ctx.sys.firmware === 'uefi' ? ([['/dev/sda1', 'vfat', 613_160, 7_256, '/boot/efi']] as const) : []),
+      [ctx.sys.firmware === 'uefi' ? '/dev/sda2' : ctx.sys.distro === 'rocky' ? '/dev/sda1' : '/dev/sda2', ctx.sys.distro === 'rocky' ? 'xfs' : 'ext4', 983_040, 296_960, '/boot'],
       ['tmpfs', 'tmpfs', 1_921_788, 0, '/dev/shm'],
       ['tmpfs', 'tmpfs', 768_716, 8_840, '/run'],
     ] as const
@@ -1010,13 +1016,62 @@ register('df', {
 })
 
 register('lsblk', {
-  usage: 'lsblk [-f]',
+  usage: 'lsblk',
   run(ctx) {
-    if (ctx.sys.distro === 'rocky') {
-      ctx.out('NAME        MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS\nsda           8:0    0   20G  0 disk \n├─sda1        8:1    0    1G  0 part /boot\n└─sda2        8:2    0   19G  0 part \n  ├─rl-root 253:0    0   17G  0 lvm  /\n  └─rl-swap 253:1    0    2G  0 lvm  [SWAP]\nsr0          11:0    1 1024M  0 rom  \n')
-    } else {
-      ctx.out('NAME                      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS\nsda                         8:0    0   20G  0 disk \n├─sda1                      8:1    0    1M  0 part \n├─sda2                      8:2    0    2G  0 part /boot\n└─sda3                      8:3    0   18G  0 part \n  └─ubuntu--vg-ubuntu--lv 252:0    0   18G  0 lvm  /\n')
+    ctx.out(lsblkText(ctx.sys.distro, ctx.sys.firmware))
+    return 0
+  },
+})
+
+register('fdisk', {
+  usage: 'fdisk -l [DEVICE]',
+  summary: '  -l, --list  muestra las tablas de particiones',
+  path: '/usr/sbin',
+  run(ctx) {
+    if (!ctx.args.some((a) => a === '-l' || a === '--list')) {
+      ctx.err('[simulador] En este simulador fdisk solo lista las particiones: usa fdisk -l. Modificar particiones se practica en el nivel de Linux.\n')
+      return 1
     }
+    if (ctx.sh.user !== 'root') {
+      ctx.err('fdisk: cannot open /dev/sda: Permission denied\n')
+      return 1
+    }
+    const dev = ctx.args.find((a) => a.startsWith('/dev/'))
+    if (dev && dev !== '/dev/sda') {
+      ctx.err(`fdisk: cannot open ${dev}: No such file or directory\n`)
+      return 1
+    }
+    ctx.out(fdiskText(ctx.sys.distro, ctx.sys.firmware))
+    return 0
+  },
+})
+
+register('efibootmgr', {
+  usage: 'efibootmgr [-v]',
+  summary: '  -v  muestra la ruta de cada entrada de arranque',
+  path: '/usr/sbin',
+  run(ctx) {
+    if (ctx.sys.firmware !== 'uefi') {
+      ctx.err('EFI variables are not supported on this system.\n')
+      return 2
+    }
+    ctx.out(efibootmgrText(ctx.sys.distro, ctx.args.some((a) => /^-\w*v/.test(a))))
+    return 0
+  },
+})
+
+register('mokutil', {
+  usage: 'mokutil --sb-state',
+  run(ctx) {
+    if (!ctx.args.includes('--sb-state')) {
+      ctx.err('[simulador] Solo está disponible mokutil --sb-state.\n')
+      return 1
+    }
+    if (ctx.sys.firmware !== 'uefi') {
+      ctx.err('EFI variables are not supported on this system\n')
+      return 1
+    }
+    ctx.out(ctx.sys.secureBoot ? 'SecureBoot enabled\n' : 'SecureBoot disabled\n')
     return 0
   },
 })

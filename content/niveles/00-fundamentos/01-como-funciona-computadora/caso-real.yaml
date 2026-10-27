@@ -1,0 +1,150 @@
+tipo: troubleshooting
+titulo: El servidor no arranca después de cambiar el disco
+descripcion: >-
+  Incidente simulado en un servidor de rack con Rocky Linux 10. Cada decisión suma minutos: el
+  sistema de ventas abre a las 9:00 y son las 7:30.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Anoche se reemplazó el disco de sistema de srv-ventas01: el viejo (SSD SATA de 480 GB)
+      tenía sectores reubicados que crecían cada día. El técnico de guardia clonó el disco viejo
+      al nuevo (SSD SATA de 960 GB) con una herramienta de clonado desde un USB, cambió los
+      discos y se fue sin esperar a que el servidor terminara de arrancar. Hoy el servidor no
+      responde ni al ping. El disco viejo quedó en un cajón del centro de datos.
+    opciones:
+      - { texto: "Abrir la consola remota del BMC y ver qué muestra la pantalla", ir_a: n_consola, minutos: 2 }
+      - texto: Ir al centro de datos y volver a poner el disco viejo
+        ir_a: n_viejo
+        minutos: 45
+        consecuencia: >-
+          Viajar y cambiar el disco lleva tiempo, y todavía no sabes qué falló. El disco viejo
+          sirve como plan de emergencia, pero tiene sectores dañados que crecen: no puede quedar
+          en producción.
+      - texto: Reinstalar Rocky Linux en el disco nuevo y restaurar el sistema de ventas desde el backup
+        ir_a: fin_reinstalar
+        minutos: 180
+        consecuencia: >-
+          Reinstalar, configurar y restaurar lleva toda la mañana, y se pierden las ventas
+          registradas después del último backup de anoche.
+  n_viejo:
+    situacion: >-
+      Con el disco viejo, el servidor arranca y el sistema de ventas abre a tiempo. Ahora hay que
+      resolver el disco nuevo sin cortar el servicio: queda conectado como segundo disco para
+      investigarlo.
+    opciones:
+      - { texto: "Revisar el disco nuevo desde el sistema que está funcionando", ir_a: n_rescate, minutos: 15 }
+  n_consola:
+    situacion: El BMC muestra la pantalla del servidor detenida en un mensaje del firmware.
+    evidencia:
+      - titulo: Consola remota del BMC
+        contenido: |
+          Boot Mode: UEFI
+          Booting "Rocky Linux" (Disk 0) .............. Not Found
+          Booting "Integrated NIC 1 PXE IPv4" ......... PXE-E18: Server response timeout
+
+          No boot device available or Operating System detected.
+          Current boot mode is set to UEFI.
+          Ensure compatible bootable media is available.
+    opciones:
+      - { texto: "Entrar al setup del firmware y revisar los discos y el orden de arranque", ir_a: n_setup, minutos: 5 }
+      - { texto: "Arrancar desde la imagen de rescate de Rocky (montada por el BMC) y revisar el disco nuevo", ir_a: n_rescate, minutos: 10 }
+      - texto: Cambiar el modo de arranque a Legacy BIOS
+        ir_a: n_consola
+        minutos: 6
+        consecuencia: >-
+          El mensaje ahora dice "No boot device available" en modo BIOS. El sistema se instaló en
+          modo UEFI: con BIOS heredado no puede arrancar de ninguna manera. Vuelves a poner UEFI.
+  n_setup:
+    situacion: El disco nuevo aparece detectado, pero la entrada de arranque figura como no disponible.
+    evidencia:
+      - titulo: Setup del firmware
+        contenido: |
+          Boot Settings
+            Boot Mode ................ UEFI
+            UEFI Boot Sequence
+              1. Rocky Linux .................. (not available)
+              2. Integrated NIC 1 PXE IPv4
+          SATA Settings
+            Port 0 ................... SSD 960 GB   Detected
+    opciones:
+      - { texto: "Arrancar desde la imagen de rescate para ver qué tiene el disco nuevo", ir_a: n_rescate, minutos: 10 }
+      - texto: Crear una entrada de arranque nueva eligiendo el archivo .efi del disco nuevo
+        ir_a: n_setup
+        minutos: 5
+        consecuencia: >-
+          El explorador de archivos del firmware no muestra ninguna partición EFI en el disco
+          nuevo: no hay ningún archivo .efi para elegir. Eso ya es una pista importante.
+  n_rescate:
+    situacion: >-
+      Desde el sistema de rescate miras las tablas de particiones. Para comparar, buscas en la
+      documentación del servidor cómo estaba particionado el disco viejo.
+    evidencia:
+      - titulo: fdisk -l del disco nuevo
+        contenido: |
+          Disk /dev/sda: 894.25 GiB, 960197124096 bytes, 1875385008 sectors
+          Disklabel type: dos
+
+          Device     Boot   Start       End   Sectors   Size Id Type
+          /dev/sda1  *       2048   2099199   2097152     1G 83 Linux
+          /dev/sda2       2099200 937697279 935598080 446.1G 8e Linux LVM
+      - titulo: Documentación del servidor (disco viejo)
+        contenido: |
+          Disco de sistema: 480 GB, tabla GPT, arranque UEFI
+            sda1   600 MB   EFI System   /boot/efi
+            sda2     1 GB   xfs          /boot
+            sda3   446 GB   LVM          / y swap
+      - titulo: Registro de la herramienta de clonado
+        contenido: |
+          Mode: partition clone (default)
+          Source partitions: 2 of 3 selected (filesystem: xfs, LVM2)
+          Skipped: /dev/sdb1 (vfat)
+          Target: new partition table created (msdos)
+    opciones:
+      - { texto: "Clonar de nuevo el disco completo, sector por sector, desde el disco viejo", ir_a: n_reclonar, minutos: 40 }
+      - texto: Convertir la tabla del disco nuevo a GPT, crear la partición EFI y reinstalar el cargador
+        ir_a: n_rescate
+        minutos: 20
+        consecuencia: >-
+          No hay espacio libre al principio del disco para la partición EFI: habría que achicar y
+          mover particiones con los datos de ventas adentro, a minutos de abrir. Es posible, pero
+          mucho más riesgoso que repetir el clonado bien hecho.
+      - texto: Pasar el firmware a Legacy BIOS, que sí arranca discos MBR
+        ir_a: n_rescate
+        minutos: 8
+        consecuencia: >-
+          Tampoco arranca: el disco nuevo no tiene código de arranque para BIOS en su primer
+          sector. El GRUB del sistema era la versión UEFI, que estaba en la partición EFI que no se
+          copió.
+  n_reclonar:
+    situacion: >-
+      Conectas el disco viejo en la segunda bahía y lo clonas completo, sector por sector. La copia
+      incluye la tabla GPT, la partición EFI y los mismos identificadores de partición, así que la
+      entrada "Rocky Linux" del firmware vuelve a encontrar su archivo.
+    evidencia:
+      - titulo: Consola del BMC después de reiniciar
+        contenido: |
+          Booting "Rocky Linux" (Disk 0)
+          Rocky Linux 10.0 (Red Quartz)
+          Kernel 6.12.0-55.el10.x86_64 on x86_64
+
+          srv-ventas01 login:
+    opciones:
+      - { texto: "Verificar que el sistema de ventas responde, retirar el disco viejo y documentar lo que pasó", ir_a: fin_ok, minutos: 5 }
+  fin_ok:
+    final: exito
+    resumen: >-
+      La herramienta de clonado, en su modo por defecto, copió solo las particiones con datos,
+      omitió la partición EFI (vfat) y creó una tabla MBR nueva. Sin partición EFI, el firmware
+      UEFI no tenía ningún cargador para ejecutar. Con un clonado completo del disco el servidor
+      volvió a arrancar. Quedan dos tareas: ampliar la última partición para usar los 960 GB del
+      disco nuevo (el clonado copió el tamaño viejo) y destruir de forma segura el disco viejo.
+      La lección para la próxima vez: antes de cambiar un disco, anotar el modo de arranque y la
+      tabla de particiones, clonar el disco completo y no irse hasta ver el servidor arrancado.
+  fin_reinstalar:
+    final: fracaso
+    resumen: >-
+      Reinstalar resolvía el síntoma, pero a un costo enorme: una mañana sin ventas y la pérdida
+      de los datos posteriores al último backup. El disco viejo todavía funcionaba y los datos
+      del disco nuevo estaban intactos; solo faltaba la partición EFI. Mirar la consola del BMC y
+      la tabla de particiones habría llevado al problema en minutos.
