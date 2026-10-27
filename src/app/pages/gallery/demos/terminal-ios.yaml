@@ -1,0 +1,56 @@
+tipo: terminal
+shell: ios
+titulo: Separar Ventas e IT en VLAN distintas
+descripcion: >-
+  Hoy todas las PC están en la VLAN 1 del switch. Vas a crear una VLAN por área y asignar cada
+  puerto a la suya. Al final, las PC de Ventas se ven entre sí, pero no con IT.
+estado_inicial:
+  consola: SW1
+  topologia:
+    dispositivos:
+      - { id: PC-V1, nombre: PC-Ventas1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.11/24 }], puerta_enlace: 192.168.10.1 }
+      - { id: PC-V2, nombre: PC-Ventas2, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.12/24 }], puerta_enlace: 192.168.10.1 }
+      - { id: PC-IT, nombre: PC-IT1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.21/24 }], puerta_enlace: 192.168.10.1 }
+      - { id: SW1, nombre: Switch, tipo: switch }
+    enlaces:
+      - { a: "PC-V1:eth0", b: "SW1:Fa0/1" }
+      - { a: "PC-V2:eth0", b: "SW1:Fa0/2" }
+      - { a: "PC-IT:eth0", b: "SW1:Fa0/3" }
+pasos:
+  - consigna: >-
+      Entra al modo privilegiado y luego al de configuración global. Ponle al switch el nombre
+      `SW1` y crea la VLAN 10 llamada `VENTAS` y la VLAN 20 llamada `IT`.
+    verificar:
+      - { config_contiene: "hostname SW1" }
+      - { vlan: 10, nombre: VENTAS }
+      - { vlan: 20, nombre: IT }
+    pistas:
+      - "enable → configure terminal (se puede abreviar: conf t)"
+      - "vlan 10 entra al modo de la VLAN; ahí va name VENTAS"
+    solucion: [enable, configure terminal, hostname SW1, vlan 10, name VENTAS, vlan 20, name IT, exit]
+  - consigna: Pon Fa0/1 y Fa0/2 en modo acceso en la VLAN 10, y Fa0/3 en modo acceso en la VLAN 20.
+    verificar:
+      - { interfaz: Fa0/1, modo: acceso, vlan: 10 }
+      - { interfaz: Fa0/2, modo: acceso, vlan: 10 }
+      - { interfaz: Fa0/3, modo: acceso, vlan: 20 }
+      - { ping: { desde: PC-V1, hacia: PC-V2 } }
+      - { ping: { desde: PC-V1, hacia: PC-IT, resultado: falla } }
+    pistas:
+      - "interface range fa0/1 - 2 configura los dos puertos a la vez."
+      - "switchport mode access y después switchport access vlan 10"
+    solucion:
+      - interface range fa0/1 - 2
+      - switchport mode access
+      - switchport access vlan 10
+      - interface fa0/3
+      - switchport mode access
+      - switchport access vlan 20
+      - end
+  - consigna: Revisa el resultado con `show vlan brief` y guarda la configuración para que no se pierda al reiniciar.
+    verificar:
+      - { comando_usado: "^(do )?sh(o|ow)? vl" }
+      - { guardado: true }
+    solucion: [show vlan brief, copy running-config startup-config]
+    explicacion: >-
+      La PC de IT quedó con una IP de la misma red que Ventas, pero aun así no llega: está en otro
+      dominio de broadcast. Para que se comuniquen haría falta un router o un switch de capa 3.

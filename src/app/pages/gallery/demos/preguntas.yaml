@@ -1,0 +1,67 @@
+- id: d01
+  tipo: opcion_multiple
+  enunciado: Una PC puede hacer ping a su puerta de enlace pero no a 1.1.1.1. ¿Qué conviene revisar primero?
+  opciones:
+    - texto: La ruta por defecto y la salida a internet del router
+      correcta: true
+      explicacion: La red local funciona (llega a la puerta de enlace), así que el corte está más allá, en el router o en su conexión hacia afuera.
+    - texto: El cable de red de la PC
+      explicacion: Si el cable estuviera mal, tampoco llegaría a la puerta de enlace.
+    - texto: El servidor DNS
+      explicacion: Hacer ping a una IP no usa DNS; el DNS se revisa cuando fallan los nombres pero las IP funcionan.
+    - texto: La máscara de subred de la PC
+      explicacion: Con una máscara incorrecta normalmente fallaría también la comunicación con la puerta de enlace.
+- id: d02
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estas direcciones son privadas según el RFC 1918?
+  opciones:
+    - { texto: 10.20.30.40, correcta: true, explicacion: "Está dentro de 10.0.0.0/8." }
+    - { texto: 172.20.1.5, correcta: true, explicacion: "Está dentro de 172.16.0.0/12 (172.16.0.0 a 172.31.255.255)." }
+    - { texto: 192.168.100.1, correcta: true, explicacion: "Está dentro de 192.168.0.0/16." }
+    - { texto: 172.32.0.1, explicacion: "Está justo afuera del rango 172.16.0.0/12, que termina en 172.31.255.255." }
+    - { texto: 169.254.10.10, explicacion: "Es de enlace local (APIPA): aparece cuando el equipo no consiguió IP por DHCP. No es del RFC 1918." }
+- id: d03
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra las últimas 20 líneas del registro de nginx en un sistema con systemd.
+  prompt: "$ "
+  aceptadas: [journalctl -u nginx -n 20, journalctl -n 20 -u nginx, journalctl -u nginx.service -n 20, journalctl --unit nginx --lines 20, journalctl -u nginx --lines=20]
+  patrones: ["^journalctl\\s+(-u\\s*nginx(\\.service)?|--unit[= ]nginx(\\.service)?)\\s+(-n\\s*20|--lines[= ]20)$", "^journalctl\\s+(-n\\s*20|--lines[= ]20)\\s+(-u\\s*nginx(\\.service)?|--unit[= ]nginx(\\.service)?)$"]
+  errores_frecuentes:
+    - { patron: "^tail", explicacion: "En sistemas con systemd, nginx suele registrar en el journal; tail sirve para archivos de log como /var/log/nginx/error.log, pero aquí se pide el journal." }
+  explicacion: "journalctl -u filtra por unidad de systemd y -n limita la cantidad de líneas (las más recientes)."
+- id: d04
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para cambiar con seguridad la configuración de un servicio en producción.
+  pasos:
+    - Hacer una copia del archivo original
+    - Editar el archivo
+    - Validar la sintaxis (por ejemplo, nginx -t o sshd -t)
+    - Recargar el servicio
+    - Comprobar que funciona y revisar el log
+  explicacion: La copia permite volver atrás; validar antes de recargar evita dejar el servicio caído por un error de sintaxis.
+- id: d05
+  tipo: interpretar_salida
+  enunciado: Según esta salida, ¿por qué no arranca el servicio?
+  salida: |
+    $ systemctl status sshd
+    × sshd.service - OpenSSH server daemon
+         Active: failed (Result: exit-code)
+    sshd[912]: /etc/ssh/sshd_config line 21: Bad yes/no argument: si
+  opciones:
+    - texto: En la línea 21 de sshd_config hay un valor inválido, "si" en lugar de "yes" o "no"
+      correcta: true
+      explicacion: sshd valida su archivo al arrancar y dice la línea exacta. Las opciones sí/no se escriben en inglés.
+    - texto: El puerto 22 está ocupado por otro programa
+      explicacion: En ese caso el error diría "Address already in use".
+    - texto: Falta instalar OpenSSH
+      explicacion: El servicio existe y se intentó ejecutar; el error es de configuración.
+- id: d06
+  tipo: encontrar_error
+  enunciado: Este archivo /etc/fstab hace que el equipo no arranque. Marca la línea con el error.
+  lenguaje: fstab
+  archivo: |
+    UUID=3f9c2c1e-6c3a-4c0a-9b55-1d2f7e0a9c11 /     xfs   defaults 0 0
+    UUID=7A1B-2C3D                             /boot/efi vfat umask=0077 0 2
+    UUID=9b1e5c7d-2f4a-4e1b-8a3c-5d6e7f8a9b0c /datos ext5 defaults 0 2
+  lineas_con_error: [3]
+  explicacion: El tipo de sistema de archivos "ext5" no existe (sería ext4). Con un error así, systemd entra en modo de emergencia al arrancar; agregar "nofail" a los discos de datos evita que un problema en ellos impida el arranque.

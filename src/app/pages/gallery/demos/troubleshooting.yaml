@@ -1,0 +1,138 @@
+tipo: troubleshooting
+titulo: La intranet no carga
+descripcion: >-
+  Incidente simulado en un servidor Rocky Linux 10 con nginx. Cada decisión suma minutos, como
+  en la vida real: el objetivo es encontrar la causa sin empeorar las cosas.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 9:05. Varios usuarios avisan que la intranet (intranet.empresa.local) muestra "No
+      se puede acceder a este sitio". El sitio corre en srv-web01, un Rocky Linux 10 con nginx.
+      ¿Por dónde empiezas?
+    opciones:
+      - { texto: "Entrar por SSH a srv-web01 y ver el estado de nginx", ir_a: n2, minutos: 2 }
+      - { texto: "Comprobar desde tu PC si el nombre resuelve y el servidor responde", ir_a: n_dns, minutos: 3 }
+      - texto: Reiniciar el servidor completo
+        ir_a: n_reboot
+        minutos: 10
+        consecuencia: >-
+          El servidor tardó varios minutos en volver y la intranet sigue caída. Además cortaste
+          el servicio de archivos que corre en el mismo equipo. Reiniciar sin saber la causa
+          rara vez soluciona algo y puede tapar pistas.
+  n_dns:
+    situacion: El nombre resuelve a la IP correcta y el servidor responde al ping. La red y el DNS están bien.
+    evidencia:
+      - titulo: dig y ping desde tu PC
+        contenido: |
+          $ dig +short intranet.empresa.local
+          10.0.0.20
+          $ ping -c 2 10.0.0.20
+          64 bytes from 10.0.0.20: icmp_seq=1 ttl=63 time=0.61 ms
+          64 bytes from 10.0.0.20: icmp_seq=2 ttl=63 time=0.58 ms
+    opciones:
+      - { texto: "Entrar por SSH a srv-web01 y revisar nginx", ir_a: n2, minutos: 2 }
+  n_reboot:
+    situacion: El servidor volvió a arrancar, pero la intranet sigue sin cargar.
+    opciones:
+      - { texto: "Entrar por SSH y ver el estado de nginx", ir_a: n2, minutos: 2 }
+  n2:
+    situacion: El servicio está caído desde las 8:58. El journal dice exactamente qué falló.
+    evidencia:
+      - titulo: systemctl status nginx
+        contenido: |
+          × nginx.service - The nginx HTTP and reverse proxy server
+               Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: disabled)
+               Active: failed (Result: exit-code) since Tue 2026-10-27 08:58:12 -03; 7min ago
+              Process: 1342 ExecStartPre=/usr/sbin/nginx -t (code=exited, status=1/FAILURE)
+                  CPU: 18ms
+
+          Oct 27 08:58:12 srv-web01 nginx[1342]: nginx: [emerg] unexpected "}" in /etc/nginx/conf.d/intranet.conf:14
+          Oct 27 08:58:12 srv-web01 nginx[1342]: nginx: configuration file /etc/nginx/nginx.conf test failed
+          Oct 27 08:58:12 srv-web01 systemd[1]: nginx.service: Control process exited, code=exited, status=1/FAILURE
+          Oct 27 08:58:12 srv-web01 systemd[1]: Failed to start nginx.service - The nginx HTTP and reverse proxy server.
+    opciones:
+      - { texto: "Revisar el archivo que indica el error (intranet.conf, línea 14)", ir_a: n3, minutos: 3 }
+      - texto: Probar con systemctl restart nginx, a ver si vuelve
+        ir_a: n_restart
+        minutos: 1
+        consecuencia: Falla otra vez. El error está en la configuración y reiniciar no la cambia.
+  n_restart:
+    situacion: El reinicio falló igual que antes.
+    evidencia:
+      - titulo: systemctl restart nginx
+        contenido: |
+          Job for nginx.service failed because the control process exited with error code.
+          See "systemctl status nginx.service" and "journalctl -xeu nginx.service" for details.
+    opciones:
+      - { texto: "Revisar el archivo que indica el error (intranet.conf, línea 14)", ir_a: n3, minutos: 3 }
+  n3:
+    situacion: >-
+      El archivo se modificó a las 8:55, tres minutos antes de la caída. La línea 13 cierra
+      un bloque que ya estaba cerrado, así que la llave de la línea 14 sobra.
+    evidencia:
+      - titulo: cat -n /etc/nginx/conf.d/intranet.conf
+        contenido: |2
+               1  server {
+               2      listen 80;
+               3      server_name intranet.empresa.local;
+               4      root /var/www/intranet;
+               5
+               6      location / {
+               7          try_files $uri $uri/ =404;
+               8      }
+               9
+              10      location /api/ {
+              11          proxy_pass http://127.0.0.1:3000;
+              12      }
+              13      }
+              14  }
+      - titulo: ls -l /etc/nginx/conf.d/
+        contenido: |
+          -rw-r--r--. 1 root root 289 Oct 27 08:55 intranet.conf
+    opciones:
+      - { texto: "Quitar la llave sobrante y validar con nginx -t antes de tocar el servicio", ir_a: n_valid, minutos: 3 }
+      - texto: Quitar la llave y reiniciar nginx directamente, sin validar
+        ir_a: n_risky
+        minutos: 8
+        consecuencia: >-
+          Esta vez arrancó, pero no lo sabías de antemano: si quedaba otro error, nginx seguía
+          caído y no sabías por qué. "nginx -t" tarda un segundo y evita adivinar.
+  n_risky:
+    situacion: nginx está funcionando otra vez.
+    opciones:
+      - { texto: "Avisar a los usuarios y anotar la causa en el registro de incidentes", ir_a: fin_ok, minutos: 2 }
+  n_valid:
+    situacion: La configuración ya es válida. nginx sigue detenido desde la falla.
+    evidencia:
+      - titulo: nginx -t
+        contenido: |
+          nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+          nginx: configuration file /etc/nginx/nginx.conf test is successful
+    opciones:
+      - { texto: "Iniciar el servicio con systemctl start nginx", ir_a: n_check, minutos: 1 }
+      - texto: Aplicar la configuración con systemctl reload nginx
+        ir_a: n_valid
+        minutos: 1
+        consecuencia: >-
+          Error: "nginx.service is not active, cannot reload." reload solo sirve cuando el
+          servicio ya está corriendo; nginx está detenido desde la falla de las 8:58.
+  n_check:
+    situacion: El servicio está activo y la intranet responde.
+    evidencia:
+      - titulo: Comprobación
+        contenido: |
+          $ systemctl is-active nginx
+          active
+          $ curl -I http://intranet.empresa.local
+          HTTP/1.1 200 OK
+          Server: nginx/1.26.3
+    opciones:
+      - { texto: "Avisar a los usuarios y anotar la causa en el registro de incidentes", ir_a: fin_ok, minutos: 2 }
+  fin_ok:
+    final: exito
+    resumen: >-
+      Causa: una llave de más en intranet.conf, editado tres minutos antes de la caída. Lo que
+      conviene llevarse: (1) systemctl status y el journal suelen decir exactamente qué falló;
+      (2) antes de reiniciar o recargar, validar con nginx -t; (3) reload solo funciona con el
+      servicio en marcha; (4) un cambio reciente en la configuración es el primer sospechoso.

@@ -1,0 +1,103 @@
+tipo: paquetes
+titulo: Qué pasa al abrir http://intranet.empresa.local
+descripcion: >-
+  La PC primero pregunta al DNS la IP de la intranet y después abre una conexión TCP con el
+  servidor, que está en otra red. Mira qué encabezados cambian en cada tramo y cuáles no.
+nodos:
+  - { id: pc, etiqueta: "PC 192.168.1.10", tipo: pc, x: 0, y: 160 }
+  - { id: sw, etiqueta: Switch, tipo: switch, x: 170, y: 160 }
+  - { id: dns, etiqueta: "DNS 192.168.1.53", tipo: dns, x: 170, y: 20 }
+  - { id: r1, etiqueta: "R1 (puerta de enlace)", tipo: router, x: 360, y: 160 }
+  - { id: srv, etiqueta: "Intranet 10.0.0.20", tipo: servidor, x: 540, y: 160 }
+enlaces:
+  - { a: pc, b: sw }
+  - { a: sw, b: dns }
+  - { a: sw, b: r1 }
+  - { a: r1, b: srv }
+pasos:
+  - desde: pc
+    hacia: sw
+    titulo: Consulta DNS
+    explicacion: >-
+      La PC necesita la IP de intranet.empresa.local. Le pregunta al servidor DNS, que está en su
+      misma red, así que la trama va dirigida directamente a la MAC del DNS. DNS usa UDP en el
+      puerto 53; el puerto de origen es uno alto elegido al azar.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "Consulta tipo A: intranet.empresa.local" }
+      transporte: { protocolo: UDP, origen: 51514, destino: 53 }
+      red: { origen: 192.168.1.10, destino: 192.168.1.53, ttl: 64, protocolo: UDP }
+      enlace: { origen: "aa:aa:aa:00:00:10", destino: "dd:dd:dd:00:00:53" }
+  - desde: sw
+    hacia: dns
+    titulo: El switch reenvía la trama
+    explicacion: >-
+      El switch busca la MAC de destino en su tabla y saca la trama solo por el puerto del DNS.
+      No modifica nada: un switch trabaja en capa 2 y no toca los encabezados.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "Consulta tipo A: intranet.empresa.local" }
+      transporte: { protocolo: UDP, origen: 51514, destino: 53 }
+      red: { origen: 192.168.1.10, destino: 192.168.1.53, ttl: 64, protocolo: UDP }
+      enlace: { origen: "aa:aa:aa:00:00:10", destino: "dd:dd:dd:00:00:53" }
+  - desde: dns
+    hacia: pc
+    titulo: Respuesta DNS
+    explicacion: >-
+      El DNS responde con la IP del servidor. Los puertos se invierten: ahora el origen es el 53
+      y el destino el puerto alto que eligió la PC.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "Respuesta: intranet.empresa.local A 10.0.0.20" }
+      transporte: { protocolo: UDP, origen: 53, destino: 51514 }
+      red: { origen: 192.168.1.53, destino: 192.168.1.10, ttl: 64, protocolo: UDP }
+      enlace: { origen: "dd:dd:dd:00:00:53", destino: "aa:aa:aa:00:00:10" }
+  - desde: pc
+    hacia: sw
+    titulo: "TCP SYN: la PC pide abrir la conexión"
+    explicacion: >-
+      10.0.0.20 está en otra red, así que la PC no le manda la trama al servidor sino a su
+      puerta de enlace: la IP de destino es la del servidor, pero la MAC de destino es la del
+      router. Esta es la diferencia clave entre capa 2 y capa 3.
+    capas:
+      transporte: { protocolo: TCP, origen: 49832, destino: 80, flags: SYN }
+      red: { origen: 192.168.1.10, destino: 10.0.0.20, ttl: 64, protocolo: TCP }
+      enlace: { origen: "aa:aa:aa:00:00:10", destino: "11:11:11:00:00:01" }
+  - desde: sw
+    hacia: r1
+    titulo: Llega al router
+    explicacion: El switch entrega la trama al router sin modificarla.
+    capas:
+      transporte: { protocolo: TCP, origen: 49832, destino: 80, flags: SYN }
+      red: { origen: 192.168.1.10, destino: 10.0.0.20, ttl: 64, protocolo: TCP }
+      enlace: { origen: "aa:aa:aa:00:00:10", destino: "11:11:11:00:00:01" }
+  - desde: r1
+    hacia: srv
+    titulo: El router reenvía hacia la otra red
+    explicacion: >-
+      El router quita el encabezado Ethernet, mira la IP de destino en su tabla de rutas, baja el
+      TTL en 1 y arma una trama nueva hacia el servidor. Cambian las MAC (ahora el origen es el
+      router); las IP y los puertos siguen iguales.
+    capas:
+      transporte: { protocolo: TCP, origen: 49832, destino: 80, flags: SYN }
+      red: { origen: 192.168.1.10, destino: 10.0.0.20, ttl: 63, protocolo: TCP }
+      enlace: { origen: "11:11:11:00:00:02", destino: "ee:ee:ee:00:00:20" }
+  - desde: srv
+    hacia: r1
+    titulo: "SYN-ACK: el servidor acepta"
+    explicacion: >-
+      El servidor responde con SYN-ACK. Para volver a la PC, también se lo manda a su puerta de
+      enlace (el router), porque la PC está en otra red.
+    capas:
+      transporte: { protocolo: TCP, origen: 80, destino: 49832, flags: "SYN, ACK" }
+      red: { origen: 10.0.0.20, destino: 192.168.1.10, ttl: 64, protocolo: TCP }
+      enlace: { origen: "ee:ee:ee:00:00:20", destino: "11:11:11:00:00:02" }
+  - desde: pc
+    hacia: srv
+    titulo: Pedido HTTP
+    explicacion: >-
+      Después del ACK de la PC (el tercer paso del "saludo de tres vías"), la conexión está
+      abierta y viaja el pedido HTTP. En cada tramo se repite lo mismo: las MAC cambian salto a
+      salto, las IP y los puertos se mantienen de punta a punta.
+    capas:
+      aplicacion: { protocolo: HTTP/1.1, datos: "GET / HTTP/1.1 · Host: intranet.empresa.local" }
+      transporte: { protocolo: TCP, origen: 49832, destino: 80, flags: "PSH, ACK" }
+      red: { origen: 192.168.1.10, destino: 10.0.0.20, ttl: 64, protocolo: TCP }
+      enlace: { origen: "aa:aa:aa:00:00:10", destino: "11:11:11:00:00:01" }

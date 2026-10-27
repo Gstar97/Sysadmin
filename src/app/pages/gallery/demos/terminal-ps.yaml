@@ -1,0 +1,50 @@
+tipo: terminal
+shell: powershell
+titulo: Alta de una empleada en Active Directory
+descripcion: >-
+  Ingresa Laura Gómez al área de Ventas. Hay que crear su cuenta en la unidad organizativa
+  correcta y sumarla al grupo del área, igual que a sus compañeros. Estás en el controlador de
+  dominio DC01 del dominio empresa.local.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  directorio: C:\Users\Administrador
+  ad:
+    ous: [Empresa/Ventas, Empresa/IT]
+    grupos:
+      - { nombre: GG-Ventas, ou: Empresa/Ventas, miembros: [jperez] }
+      - { nombre: GG-IT, ou: Empresa/IT }
+    usuarios:
+      - { sam: jperez, nombre: Juan, apellido: Pérez, ou: Empresa/Ventas, departamento: Ventas }
+      - { sam: mlopez, nombre: María, apellido: López, ou: Empresa/IT, departamento: IT, grupos: [GG-IT] }
+pasos:
+  - consigna: >-
+      Antes de crear la cuenta, mira cómo está cargado `jperez`, un compañero del área. Usa
+      `Get-ADUser` y pide también la propiedad `Department`.
+    verificar:
+      - { comando_usado: "get-aduser.*jperez" }
+      - { salida_contiene: "Department" }
+    pistas:
+      - "Por defecto Get-ADUser no muestra todas las propiedades: hay que pedirlas con -Properties."
+    solucion: [Get-ADUser -Identity jperez -Properties Department]
+  - consigna: >-
+      Crea la cuenta `lgomez` (Laura Gómez) dentro de la OU Ventas, habilitada, con una
+      contraseña inicial que deba cambiar al iniciar sesión.
+    verificar:
+      - { usuario_ad: lgomez, habilitado: true, ou: Empresa/Ventas }
+    pistas:
+      - "La ruta de la OU se escribe al revés: OU=Ventas,OU=Empresa,DC=empresa,DC=local"
+      - "-AccountPassword necesita un SecureString: ConvertTo-SecureString \"Texto\" -AsPlainText -Force"
+      - "Sin contraseña, New-ADUser no deja crear la cuenta habilitada."
+    solucion:
+      - $clave = ConvertTo-SecureString "Inicio.2026!" -AsPlainText -Force
+      - New-ADUser -Name "Laura Gómez" -GivenName Laura -Surname Gómez -SamAccountName lgomez -UserPrincipalName lgomez@empresa.local -Department Ventas -Path "OU=Ventas,OU=Empresa,DC=empresa,DC=local" -AccountPassword $clave -ChangePasswordAtLogon $true -Enabled $true
+  - consigna: Suma a `lgomez` al grupo `GG-Ventas` y comprueba los miembros del grupo.
+    verificar:
+      - { usuario_ad: lgomez, en_grupos: [GG-Ventas] }
+    solucion:
+      - Add-ADGroupMember -Identity GG-Ventas -Members lgomez
+      - Get-ADGroupMember GG-Ventas | Select-Object name, SamAccountName
+    explicacion: >-
+      Los permisos se dan a los grupos y no a cada persona: así, cuando Laura entre o salga del
+      área, alcanza con cambiar su pertenencia al grupo.

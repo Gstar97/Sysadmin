@@ -1,0 +1,35 @@
+tipo: configuracion
+titulo: Publicar una aplicación detrás de nginx
+consigna: >-
+  La aplicación de turnos escucha en 127.0.0.1:3000. Corrige este archivo para que nginx
+  atienda `turnos.empresa.local` en el puerto 80 y le pase todas las peticiones a la aplicación.
+  El editor marca los errores mientras escribes.
+lenguaje: nginx
+nombre_archivo: /etc/nginx/conf.d/turnos.conf
+archivo_inicial: |
+  server {
+      listen 80
+      server_name turnos.empresa.local;
+
+      location / {
+          proxy_pass 127.0.0.1:3000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+      }
+  }
+reglas:
+  - { tipo: sin_errores, mensaje: "nginx -t no encuentra errores de sintaxis" }
+  - { tipo: directiva, contexto: server, nombre: listen, valor_regex: "^80\\b", mensaje: "El server escucha en el puerto 80" }
+  - { tipo: directiva, contexto: server, nombre: server_name, valor_regex: "turnos\\.empresa\\.local", mensaje: "Responde al nombre turnos.empresa.local" }
+  - { tipo: directiva, contexto: "server>location /", nombre: proxy_pass, valor_regex: "^http://127\\.0\\.0\\.1:3000/?$", mensaje: "location / pasa las peticiones a http://127.0.0.1:3000" }
+solucion: |
+  server {
+      listen 80;
+      server_name turnos.empresa.local;
+
+      location / {
+          proxy_pass http://127.0.0.1:3000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+      }
+  }

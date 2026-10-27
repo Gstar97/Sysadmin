@@ -57,7 +57,7 @@ function DeviceNode({ data, selected }: NodeProps<Node<DeviceNodeData>>) {
   return (
     <div className={cn('flex w-28 flex-col items-center rounded-lg px-1 py-1 text-center', selected && 'bg-accent-soft ring-2 ring-accent')}>
       {[Position.Top, Position.Right, Position.Bottom, Position.Left].map((p) => (
-        <Handle key={p} id={p} type="source" position={p} isConnectable={data.connectable} className="!h-2.5 !w-2.5 !border-0 !bg-muted/60" />
+        <Handle key={p} id={p} type="source" position={p} isConnectable={data.connectable} className={cn('!h-2.5 !w-2.5 !border-0 !bg-muted/60', !data.connectable && '!opacity-0')} />
       ))}
       <DeviceIcon type={d.type} className={TYPE_COLORS[d.type]} />
       <div className="max-w-full truncate text-xs font-semibold text-fg">{d.hostname}</div>

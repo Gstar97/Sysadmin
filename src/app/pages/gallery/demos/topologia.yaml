@@ -1,0 +1,29 @@
+tipo: topologia
+titulo: Router-on-a-stick para comunicar dos VLAN
+consigna: >-
+  El switch ya tiene las VLAN 10 (Ventas) y 20 (IT) y un enlace troncal hacia el router R1. Falta
+  configurar R1: crea en su interfaz Gi0/0 una subinterfaz por VLAN con la IP de la puerta de
+  enlace de cada red (192.168.10.1/24 y 192.168.20.1/24) y enciende la interfaz física. Puedes
+  hacerlo con el formulario o con la consola.
+editable: { equipos: false, enlaces: false, configuracion: true }
+dispositivos:
+  - { id: PC1, nombre: PC-Ventas, tipo: pc, x: 0, y: 260, interfaces: [{ nombre: eth0, ip: 192.168.10.11/24 }], puerta_enlace: 192.168.10.1 }
+  - { id: PC2, nombre: PC-IT, tipo: pc, x: 300, y: 260, interfaces: [{ nombre: eth0, ip: 192.168.20.11/24 }], puerta_enlace: 192.168.20.1 }
+  - id: SW1
+    tipo: switch
+    x: 150
+    y: 130
+    vlans: [{ id: 10, nombre: VENTAS }, { id: 20, nombre: IT }]
+    interfaces:
+      - { nombre: Fa0/1, modo: acceso, vlan: 10 }
+      - { nombre: Fa0/2, modo: acceso, vlan: 20 }
+      - { nombre: Gi0/1, modo: troncal, vlans_permitidas: [10, 20] }
+  - { id: R1, tipo: router, x: 150, y: 0 }
+enlaces:
+  - { a: "PC1:eth0", b: "SW1:Fa0/1" }
+  - { a: "PC2:eth0", b: "SW1:Fa0/2" }
+  - { a: "SW1:Gi0/1", b: "R1:Gi0/0" }
+objetivos:
+  - { desde: PC1, hacia: 192.168.10.1, descripcion: PC-Ventas llega a su puerta de enlace }
+  - { desde: PC2, hacia: 192.168.20.1, descripcion: PC-IT llega a su puerta de enlace }
+  - { desde: PC1, hacia: PC2, descripcion: PC-Ventas y PC-IT se comunican a través de R1 }

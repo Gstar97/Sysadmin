@@ -1,0 +1,45 @@
+tipo: terminal
+shell: bash
+titulo: Carpeta compartida para Contabilidad
+descripcion: >-
+  El equipo de Contabilidad (ana y luis) necesita una carpeta donde los dos puedan crear y
+  editar archivos, y que el resto de los usuarios no pueda ni mirar. Trabajas en un servidor
+  Rocky Linux con el usuario estudiante, que tiene permiso de sudo.
+estado_inicial:
+  distro: rocky
+  hostname: srv-archivos
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+    - { nombre: ana }
+    - { nombre: luis }
+    - { nombre: pedro }
+  grupos:
+    - { nombre: contabilidad, miembros: [ana, luis] }
+pasos:
+  - consigna: Crea la carpeta `/srv/contabilidad`. Como `/srv` pertenece a root, necesitas `sudo`.
+    verificar:
+      - { archivo: /srv/contabilidad, tipo: directorio }
+    pistas:
+      - "`mkdir` crea carpetas."
+      - "Antepone `sudo` al comando para ejecutarlo como administrador."
+    solucion: [sudo mkdir /srv/contabilidad]
+  - consigna: Haz que la carpeta pertenezca al grupo `contabilidad`.
+    verificar:
+      - { archivo: /srv/contabilidad, grupo: contabilidad }
+    pistas:
+      - "`chgrp GRUPO RUTA` cambia el grupo dueño de un archivo o carpeta."
+    solucion: [sudo chgrp contabilidad /srv/contabilidad]
+  - consigna: >-
+      Deja los permisos en `2770`: dueño y grupo con lectura, escritura y acceso; el resto sin
+      nada; y el bit SGID para que los archivos nuevos hereden el grupo de la carpeta.
+    verificar:
+      - { archivo: /srv/contabilidad, modo: "2770" }
+    pistas:
+      - "El primer dígito de los cuatro (el 2) es el bit SGID."
+      - "`chmod 2770 /srv/contabilidad`"
+    solucion: [sudo chmod 2770 /srv/contabilidad]
+    explicacion: >-
+      Con SGID en la carpeta, todo lo que creen ana o luis queda con grupo contabilidad y el otro
+      puede editarlo. pedro no está en el grupo, así que ni siquiera puede listar el contenido.
+      Prueba `sudo -u pedro ls /srv/contabilidad` para verlo.

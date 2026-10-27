@@ -1,0 +1,47 @@
+tipo: configuracion
+titulo: Una aplicación web con su base de datos
+consigna: >-
+  Este compose.yaml tiene errores. Corrígelo para que el servicio `web` publique el puerto 80
+  del contenedor en el 8080 del equipo, espere a la base de datos, y que la base `db` use
+  PostgreSQL 17 con sus datos en un volumen con nombre.
+lenguaje: compose
+nombre_archivo: compose.yaml
+archivo_inicial: |
+  services:
+    web:
+      image: nginx:1.27
+      ports:
+        - "8080"
+      depends_on:
+        - base
+    db:
+      image: postgres:17
+      restart: allways
+      environment:
+        POSTGRES_PASSWORD: cambiar-esta-clave
+      volumes:
+        - datos-db:/var/lib/postgresql/data
+reglas:
+  - { tipo: sin_errores, mensaje: "docker compose config no encuentra errores" }
+  - { tipo: yaml_ruta, ruta: services.web.ports, contiene: "8080:80", mensaje: "web publica el puerto 80 del contenedor en el 8080" }
+  - { tipo: yaml_ruta, ruta: services.web.depends_on, contiene: db, mensaje: "web espera a db (depends_on)" }
+  - { tipo: yaml_ruta, ruta: services.db.image, regex: "^postgres:17", mensaje: "db usa PostgreSQL 17" }
+  - { tipo: yaml_ruta, ruta: volumes.datos-db, mensaje: "El volumen datos-db está declarado en el primer nivel" }
+solucion: |
+  services:
+    web:
+      image: nginx:1.27
+      ports:
+        - "8080:80"
+      depends_on:
+        - db
+    db:
+      image: postgres:17
+      restart: always
+      environment:
+        POSTGRES_PASSWORD: cambiar-esta-clave
+      volumes:
+        - datos-db:/var/lib/postgresql/data
+
+  volumes:
+    datos-db:
