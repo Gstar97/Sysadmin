@@ -1,0 +1,94 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuántos bytes son 1 KiB?
+  opciones:
+    - { texto: "1024", correcta: true, explicacion: "Los prefijos binarios usan potencias de 2: 2^10 = 1024." }
+    - { texto: "1000", explicacion: "Eso es 1 KB (decimal)." }
+    - { texto: "8", explicacion: "8 son los bits de un byte." }
+    - { texto: "1 000 000", explicacion: "Eso es 1 MB." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Compras un disco de 2 TB y Windows muestra 1,81 "TB". ¿Por qué?
+  opciones:
+    - { texto: "Porque el fabricante cuenta en TB decimales y Windows calcula en TiB binarios", correcta: true, explicacion: "2 × 10^12 ÷ 1024^4 = 1,82 TiB. Son los mismos bytes." }
+    - { texto: "Porque el disco viene con sectores dañados", explicacion: "No falta capacidad; es una diferencia de unidades." }
+    - { texto: "Porque Windows reserva el 10% para el sistema", explicacion: "No hay tal reserva; la diferencia sale de la cuenta entre 1000 y 1024." }
+    - { texto: "Porque el disco es una falsificación", explicacion: "Cualquier disco de 2 TB se ve así en Windows." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Cuántos GiB son aproximadamente 1 TB?
+  opciones:
+    - { texto: "931", correcta: true, explicacion: "10^12 ÷ 1024^3 = 931,3." }
+    - { texto: "1000", explicacion: "1000 son los GB decimales en un TB." }
+    - { texto: "1024", explicacion: "1024 son los GiB en un TiB." }
+    - { texto: "1100", explicacion: "La cuenta da menos, no más." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: >-
+    En `free -h` aparece "Mem: total 15Gi". ¿Qué unidad es?
+  opciones:
+    - { texto: "Gibibytes: potencias de 1024", correcta: true, explicacion: "free escribe correctamente Gi y Mi para las unidades binarias." }
+    - { texto: "Gigabits", explicacion: "La memoria se mide en bytes." }
+    - { texto: "Gigabytes decimales", explicacion: "Gi indica el prefijo binario." }
+    - { texto: "Giga-instrucciones", explicacion: "No existe esa unidad en free." }
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Tu conexión es de 300 Mbps. ¿Cuál es la velocidad máxima de descarga que vas a ver en MB/s?
+  opciones:
+    - { texto: "Unos 37,5 MB/s (en la práctica, algo menos)", correcta: true, explicacion: "300 ÷ 8 = 37,5 MB/s. Los encabezados de los protocolos bajan un poco ese valor." }
+    - { texto: "300 MB/s", explicacion: "Mbps son bits; hay que dividir por 8." }
+    - { texto: "2400 MB/s", explicacion: "Se multiplicó por 8 en lugar de dividir." }
+    - { texto: "30 MB/s exactos", explicacion: "Se dividió por 10; la cuenta correcta es dividir por 8." }
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Copias un archivo entre dos servidores conectados a 1 Gbps. ¿Qué velocidad es normal ver en la copia?
+  opciones:
+    - { texto: "Entre 110 y 118 MB/s", correcta: true, explicacion: "125 MB/s es el máximo teórico; la sobrecarga de los protocolos se lleva un poco." }
+    - { texto: "1000 MB/s", explicacion: "1 Gbps son 125 MB/s como máximo." }
+    - { texto: "11 MB/s", explicacion: "Eso es lo que se ve en una red de 100 Mbps: si pasa en 1 Gbps, la placa negoció menos velocidad." }
+    - { texto: "125 MB/s exactos siempre", explicacion: "Es el máximo teórico, no lo que se ve en la práctica." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Cuánto tarda, en teoría, copiar 900 GB por una red de 1 Gbps?
+  opciones:
+    - { texto: "2 horas (7200 segundos)", correcta: true, explicacion: "900 GB × 8 = 7200 Gb; 7200 Gb ÷ 1 Gbps = 7200 s = 2 h. En la práctica, algo más." }
+    - { texto: "15 minutos (900 segundos)", explicacion: "Faltó multiplicar por 8 para pasar los bytes a bits." }
+    - { texto: "16 horas", explicacion: "Se multiplicó por 8 dos veces." }
+    - { texto: "90 segundos", explicacion: "Se usaron unidades mezcladas." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: Según estas dos salidas, ¿cuánto espacio total tiene el sistema de archivos raíz?
+  salida: |
+    $ df -h /
+    Filesystem           Size  Used Avail Use% Mounted on
+    /dev/mapper/rl-root   17G  4.5G   13G  27% /
+    $ df -H /
+    Filesystem           Size  Used Avail Use% Mounted on
+    /dev/mapper/rl-root   19G  4.9G   14G  27% /
+  opciones:
+    - { texto: "Las dos son correctas: 17 GiB son unos 18-19 GB decimales", correcta: true, explicacion: "df -h usa potencias de 1024 y df -H de 1000. Son los mismos bytes." }
+    - { texto: "17 GB; df -H tiene un error", explicacion: "df -H no tiene error: usa unidades decimales." }
+    - { texto: "36 GB, la suma de las dos", explicacion: "Es el mismo sistema de archivos medido dos veces." }
+    - { texto: "19 GB; df -h no cuenta parte del disco", explicacion: "df -h cuenta todo; solo usa otra unidad." }
+- id: p09
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estas medidas se expresan normalmente en unidades decimales?
+  opciones:
+    - { texto: "La capacidad de un disco que figura en la caja", correcta: true, explicacion: "Los fabricantes usan GB y TB decimales." }
+    - { texto: "La velocidad de una conexión a internet", correcta: true, explicacion: "Las redes se miden en bits por segundo con prefijos decimales." }
+    - { texto: "La capacidad de un módulo de memoria RAM", explicacion: "La RAM se fabrica en potencias de 2: es binaria aunque diga GB." }
+    - { texto: "El total de memoria que muestra free -h", explicacion: "free -h usa Gi y Mi, unidades binarias." }
+- id: p10
+  tipo: encontrar_error
+  enunciado: Este es el cálculo de una migración. Marca la línea con el error.
+  archivo: |
+    Datos a migrar: 2 TB.
+    Enlace disponible: 1 Gbps.
+    2 TB = 2000 GB = 2000 gigabits.
+    Tiempo: 2000 segundos, unos 33 minutos.
+  lineas_con_error: [3]
+  explicacion: 2000 GB son 16.000 gigabits (× 8). El tiempo real es de unas 4,5 horas, no 33 minutos.

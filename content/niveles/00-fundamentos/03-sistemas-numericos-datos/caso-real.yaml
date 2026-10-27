@@ -1,0 +1,100 @@
+tipo: troubleshooting
+titulo: El script funciona en una PC y falla en el servidor
+descripcion: >-
+  Incidente simulado en un servidor Rocky Linux. Cada decisión suma minutos: el respaldo de
+  anoche no se hizo y hay que tenerlo antes del mediodía.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Una analista escribió en su PC con Windows un script de respaldo y lo probó en su equipo:
+      funcionaba. Lo copió al servidor como /opt/scripts/respaldo.sh y lo programó en cron para
+      las 2:00. Hoy a la mañana no hay ningún respaldo en /backup.
+    evidencia:
+      - titulo: sudo grep respaldo /var/log/cron
+        contenido: |
+          Oct 27 02:00:01 srv-datos01 CROND[48211]: (analista) CMD (/opt/scripts/respaldo.sh)
+    opciones:
+      - { texto: "Ejecutar el script a mano en el servidor para ver el error", ir_a: n_error, minutos: 3 }
+      - texto: Darle permisos 777 al script por si es un problema de permisos
+        ir_a: n1
+        minutos: 2
+        consecuencia: >-
+          Nada cambia, y ahora cualquier usuario del servidor puede modificar un script que corre
+          automáticamente. Vuelves a dejar los permisos como estaban. El registro de cron muestra
+          que el script se ejecutó: el problema no es de permisos.
+      - texto: Reescribir el script desde cero directamente en el servidor
+        ir_a: fin_reescribir
+        minutos: 45
+        consecuencia: El script nuevo funciona, pero tardaste 45 minutos y no sabes por qué fallaba el original.
+  n_error:
+    situacion: El script falla de inmediato.
+    evidencia:
+      - titulo: Ejecución manual
+        contenido: |
+          $ /opt/scripts/respaldo.sh
+          /usr/bin/env: 'bash\r': No such file or directory
+          $ bash /opt/scripts/respaldo.sh
+          /opt/scripts/respaldo.sh: line 2: $'\r': command not found
+          tar: Removing leading `/' from member names
+          tar: >-
+            /backup\r/datos.tar.gz: Cannot open: No such file or directory
+    opciones:
+      - { texto: "Revisar el archivo con file y cat -A", ir_a: n_crlf, minutos: 2 }
+      - texto: Revisar si existe la carpeta /backup
+        ir_a: n_error
+        minutos: 2
+        consecuencia: >-
+          /backup existe y tiene espacio de sobra. Mira de nuevo el error: tar busca
+          "/backup\r", con un carácter de más.
+      - texto: Reinstalar bash
+        ir_a: n_error
+        minutos: 10
+        consecuencia: >-
+          bash funciona perfectamente. El error dice que env busca un programa llamado "bash\r":
+          el nombre tiene un carácter extra que viene del archivo.
+  n_crlf:
+    situacion: Las herramientas confirman lo que sugerían los errores.
+    evidencia:
+      - titulo: file y cat -A
+        contenido: |
+          $ file /opt/scripts/respaldo.sh
+          /opt/scripts/respaldo.sh: Bourne-Again shell script, ASCII text executable, with CRLF line terminators
+          $ cat -A /opt/scripts/respaldo.sh
+          #!/usr/bin/env bash^M$
+          DESTINO=/backup^M$
+          tar czf $DESTINO/datos.tar.gz /srv/datos^M$
+    opciones:
+      - { texto: "Convertir el archivo con dos2unix y ejecutar el script a mano", ir_a: n_ok, minutos: 3 }
+      - texto: Abrirlo con nano en el servidor, guardarlo y probar de nuevo
+        ir_a: n_crlf
+        minutos: 6
+        consecuencia: >-
+          nano muestra "Converted from DOS format" al abrirlo y, si no se cambia la opción, lo
+          vuelve a guardar en formato DOS: el archivo queda igual. Hace falta convertirlo de
+          verdad.
+  n_ok:
+    situacion: El script funciona.
+    evidencia:
+      - titulo: Ejecución manual después de dos2unix
+        contenido: |
+          $ dos2unix /opt/scripts/respaldo.sh
+          dos2unix: converting file /opt/scripts/respaldo.sh to Unix format...
+          $ /opt/scripts/respaldo.sh && ls -lh /backup/datos.tar.gz
+          -rw-r--r--. 1 analista analista 1.8G Oct 27 10:41 /backup/datos.tar.gz
+    opciones:
+      - { texto: "Explicarle a la analista la causa y cómo configurar su editor para guardar con LF", ir_a: fin_ok, minutos: 5 }
+  fin_ok:
+    final: exito
+    resumen: >-
+      El script tenía finales de línea de Windows (CRLF). En la PC funcionaba porque el entorno
+      donde lo probó tolera el CR, pero en Linux el CR queda pegado al final de cada línea:
+      "bash\r" no existe y "/backup\r" tampoco. Con dos2unix quedó corregido. Para que no se
+      repita: configurar el editor para guardar con LF los archivos que van a servidores y, si
+      usan Git, agregar un .gitattributes que fuerce LF en los scripts.
+  fin_reescribir:
+    final: fracaso
+    resumen: >-
+      El respaldo quedó funcionando, pero sin entender la causa el problema va a volver con el
+      próximo script que llegue desde Windows. Los mensajes con \r y la salida de cat -A
+      mostraban en minutos que el problema eran los finales de línea.

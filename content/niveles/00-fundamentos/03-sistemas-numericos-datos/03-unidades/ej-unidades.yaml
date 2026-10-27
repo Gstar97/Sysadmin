@@ -1,0 +1,40 @@
+tipo: terminal
+shell: bash
+titulo: El mismo disco, dos medidas
+descripcion: >-
+  Un usuario pregunta por qué el servidor dice tener menos espacio del que figura en la
+  factura. Compara las dos formas de medir en la terminal.
+estado_inicial:
+  distro: rocky
+  hostname: srv-datos01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: Mira el espacio de los sistemas de archivos con `df -h` (potencias de 1024).
+    verificar:
+      - { comando_usado: 'df\s+(-\w*h|--human)' }
+    pistas:
+      - "`df -h`"
+    solucion: [df -h]
+    explicacion: >-
+      `df -h` divide por 1024 y escribe `G`, aunque en rigor son GiB. La raíz mide 17G.
+  - consigna: Ahora mira lo mismo con `df -H`, que usa potencias de 1000 como los fabricantes.
+    verificar:
+      - { comando_usado: 'df\s+(-\w*H|--si)' }
+    pistas:
+      - "`df -H`"
+    solucion: [df -H]
+    explicacion: >-
+      La raíz ahora mide 19G: son los mismos bytes contados en GB decimales. Nada "desapareció".
+      Diferencias así son las que confunden a quien compara la factura del disco con lo que
+      muestra el sistema.
+  - consigna: Mira la memoria con `free -h` y fíjate en las unidades que escribe.
+    verificar:
+      - { comando_usado: '^\s*free' }
+    pistas:
+      - "`free -h`"
+    solucion: [free -h]
+    explicacion: >-
+      `free` sí escribe las unidades binarias correctas: `Gi` y `Mi`. Las memorias RAM siempre se
+      fabrican en potencias de 2, así que un módulo "de 4 GB" en realidad tiene 4 GiB.

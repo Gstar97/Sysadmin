@@ -1011,9 +1011,10 @@ register('lspci', {
 
 register('df', {
   usage: 'df [OPTION]... [FILE]...',
-  summary: '  -h, --human-readable  -T, --print-type  -i, --inodes',
+  summary: '  -h, --human-readable (potencias de 1024)  -H, --si (potencias de 1000)  -T, --print-type',
   run(ctx) {
-    const h = ctx.args.some((a) => a.includes('h'))
+    const si = ctx.args.some((a) => /^-\w*H/.test(a) || a === '--si')
+    const h = si || ctx.args.some((a) => /^-\w*h/.test(a) || a === '--human-readable')
     const T = ctx.args.some((a) => /^-\w*T/.test(a))
     const root = ctx.sys.distro === 'rocky' ? '/dev/mapper/rl-root' : '/dev/mapper/ubuntu--vg-ubuntu--lv'
     const fsType = ctx.sys.distro === 'rocky' ? 'xfs' : 'ext4'
@@ -1024,7 +1025,15 @@ register('df', {
       ['tmpfs', 'tmpfs', 1_921_788, 0, '/dev/shm'],
       ['tmpfs', 'tmpfs', 768_716, 8_840, '/run'],
     ] as const
-    const fmt = (kb: number) => (h ? (kb >= 1048576 ? `${(kb / 1048576).toFixed(kb / 1048576 < 10 ? 1 : 0)}G` : `${Math.round(kb / 1024)}M`) : String(kb))
+    // Como coreutils: redondea hacia arriba, con un decimal por debajo de 10.
+    const human = (v: number, suffix: string) => `${v < 10 ? (Math.ceil(v * 10) / 10).toFixed(1) : Math.ceil(v)}${suffix}`
+    const fmt = (kb: number) => {
+      if (!h) return String(kb)
+      if (kb === 0) return '0'
+      const base = si ? 1000 : 1024
+      const bytes = kb * 1024
+      return bytes >= base ** 3 ? human(bytes / base ** 3, 'G') : human(bytes / base ** 2, 'M')
+    }
     ctx.out(`${'Filesystem'.padEnd(36)}${T ? 'Type   ' : ''}${(h ? 'Size' : '1K-blocks').padStart(10)}${'Used'.padStart(10)}${'Avail'.padStart(10)} Use% Mounted on\n`)
     for (const [dev, type, size, used, mount] of rows) {
       ctx.out(`${dev.padEnd(36)}${T ? type.padEnd(7) : ''}${fmt(size).padStart(10)}${fmt(used).padStart(10)}${fmt(size - used).padStart(10)} ${String(Math.ceil((used / size) * 100)).padStart(3)}% ${mount}\n`)

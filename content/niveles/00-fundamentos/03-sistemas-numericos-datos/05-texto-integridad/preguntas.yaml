@@ -1,0 +1,108 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuántos bytes ocupa la letra ñ en UTF-8?
+  opciones:
+    - { texto: "2", correcta: true, explicacion: "En UTF-8 la ñ son los bytes C3 B1." }
+    - { texto: "1", explicacion: "Ocupa 1 byte en Latin-1 o Windows-1252 (F1), no en UTF-8." }
+    - { texto: "4", explicacion: "4 bytes ocupan, por ejemplo, los emojis." }
+    - { texto: "8", explicacion: "8 son los bits de un byte." }
+- id: p02
+  tipo: opcion_multiple
+  enunciado: ¿Qué característica de UTF-8 explica que un texto en inglés en UTF-8 sea idéntico a uno en ASCII?
+  opciones:
+    - { texto: "Los caracteres de ASCII ocupan 1 byte con el mismo valor que en ASCII", correcta: true, explicacion: "UTF-8 se diseñó para ser compatible con ASCII." }
+    - { texto: "UTF-8 solo tiene los caracteres del inglés", explicacion: "UTF-8 codifica todo Unicode, todos los idiomas." }
+    - { texto: "Los dos usan 2 bytes por carácter", explicacion: "ASCII usa 1 byte; UTF-8 usa entre 1 y 4." }
+    - { texto: "Es casualidad", explicacion: "Fue una decisión de diseño." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un informe muestra "DirecciÃ³n" en lugar de "Dirección". ¿Qué pasó?
+  opciones:
+    - { texto: "El texto está en UTF-8 y se leyó como Latin-1 o Windows-1252", correcta: true, explicacion: "Los dos bytes de la ó en UTF-8 (C3 B3) se interpretaron como dos caracteres sueltos: Ã y ³." }
+    - { texto: "El archivo está dañado", explicacion: "Los bytes son correctos; el problema es la interpretación." }
+    - { texto: "El texto está en Latin-1 y se leyó como UTF-8", explicacion: "En ese caso aparecería el carácter de reemplazo �." }
+    - { texto: "Falta instalar una fuente", explicacion: "Una fuente faltante muestra cuadrados, no estos pares de caracteres." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Cómo terminan las líneas de los archivos de texto en Windows?
+  opciones:
+    - { texto: "Con CR y LF (0D 0A)", correcta: true, explicacion: "Linux y macOS usan solo LF (0A)." }
+    - { texto: "Solo con LF", explicacion: "Así terminan en Linux y macOS." }
+    - { texto: "Solo con CR", explicacion: "Así terminaban en las Mac anteriores a macOS X." }
+    - { texto: "Con un punto y coma", explicacion: "El fin de línea es un carácter de control, no un signo visible." }
+- id: p05
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: Al ejecutar un script en el servidor aparece este error. ¿Cuál es la causa?
+  salida: |
+    $ ./respaldo.sh
+    bash: >-
+      ./respaldo.sh: /bin/bash^M: bad interpreter: No such file or directory
+  opciones:
+    - { texto: "El script tiene finales de línea de Windows (CRLF)", correcta: true, explicacion: "El ^M es el CR. Se corrige con dos2unix respaldo.sh." }
+    - { texto: "bash no está instalado", explicacion: "bash está; el sistema busca un programa llamado /bin/bash seguido de un CR." }
+    - { texto: "El script no tiene permiso de ejecución", explicacion: "Eso daría 'Permission denied'." }
+    - { texto: "El archivo no existe", explicacion: "El archivo existe: el que no existe es el intérprete con el CR al final." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: ¿Qué indica esta salida de `cat -A`?
+  salida: |
+    #!/bin/bash^M$
+    tar czf /backup/etc.tar.gz /etc^M$
+  opciones:
+    - { texto: "Que las líneas terminan con CRLF: ^M es el CR y $ el LF", correcta: true, explicacion: "cat -A muestra los caracteres invisibles: ^M es el retorno de carro." }
+    - { texto: "Que el archivo tiene errores de sintaxis", explicacion: "El contenido es correcto; lo que sobra son los CR." }
+    - { texto: "Que las líneas están vacías", explicacion: "Las líneas tienen contenido; $ marca el final de cada una." }
+    - { texto: "Que el archivo está en UTF-16", explicacion: "UTF-16 se vería con muchos caracteres extraños entre letras." }
+- id: p07
+  tipo: completar_comando
+  enunciado: Escribe el comando que convierte los finales de línea del archivo script.sh de formato Windows a formato Linux.
+  aceptadas: [dos2unix script.sh]
+  patrones: ["^sed\\s+-i\\s+['\"]s/\\\\r\\$//['\"]\\s+script\\.sh$"]
+  explicacion: "`dos2unix script.sh` quita los CR. Sin dos2unix, `sed -i 's/\\r$//' script.sh` hace lo mismo."
+- id: p08
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Cuáles de estas son propiedades de una función de hash como SHA-256?
+  opciones:
+    - { texto: "El mismo contenido da siempre el mismo hash", correcta: true, explicacion: "Por eso sirve para comparar." }
+    - { texto: "Un cambio mínimo en el contenido produce un hash completamente distinto", correcta: true, explicacion: "Así se detecta hasta un bit alterado." }
+    - { texto: "El resultado tiene siempre el mismo tamaño", correcta: true, explicacion: "SHA-256 da siempre 256 bits, sea el archivo de 1 KB o de 10 GB." }
+    - { texto: "Con el hash se puede reconstruir el archivo", explicacion: "No: el hash no tiene la información suficiente y no se puede invertir." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: ¿Por qué ya no se recomienda MD5 para verificar descargas?
+  opciones:
+    - { texto: "Porque se pueden fabricar dos archivos distintos con el mismo MD5", correcta: true, explicacion: "Sirve para detectar daños accidentales, pero no protege contra una modificación intencional." }
+    - { texto: "Porque es muy lento", explicacion: "MD5 es rápido; el problema es de seguridad." }
+    - { texto: "Porque Linux no lo soporta", explicacion: "md5sum existe en todas las distribuciones." }
+    - { texto: "Porque da resultados distintos cada vez", explicacion: "Da siempre el mismo resultado para el mismo contenido." }
+- id: p10
+  tipo: interpretar_salida
+  enunciado: Verificaste dos imágenes descargadas. ¿Qué haces?
+  salida: |
+    $ sha256sum -c SHA256SUMS
+    ubuntu-26.04-live-server-amd64.iso: OK
+    rocky-10.0-x86_64-minimal.iso: FAILED
+    sha256sum: WARNING: 1 computed checksum did NOT match
+  opciones:
+    - { texto: "Uso la de Ubuntu y vuelvo a descargar la de Rocky desde el sitio oficial", correcta: true, explicacion: "La de Rocky no coincide: puede estar incompleta, dañada o modificada." }
+    - { texto: "Uso las dos: una diferencia en el hash es normal", explicacion: "Cualquier diferencia significa que el contenido no es el publicado." }
+    - { texto: "Borro las dos", explicacion: "La de Ubuntu coincide con la lista oficial: está bien." }
+    - { texto: "Cambio el hash de la lista para que coincida", explicacion: "Eso anula la verificación: el archivo seguiría siendo distinto del original." }
+- id: p11
+  tipo: completar_comando
+  enunciado: En PowerShell, escribe el comando que calcula el hash SHA-256 del archivo imagen.iso.
+  aceptadas: [Get-FileHash imagen.iso -Algorithm SHA256, Get-FileHash -Path imagen.iso -Algorithm SHA256, Get-FileHash imagen.iso, Get-FileHash -Algorithm SHA256 imagen.iso, Get-FileHash -Algorithm SHA256 -Path imagen.iso, Get-FileHash .\imagen.iso -Algorithm SHA256]
+  explicacion: "`Get-FileHash` usa SHA256 por defecto; indicarlo con `-Algorithm SHA256` deja claro qué se calcula."
+- id: p12
+  tipo: opcion_multiple
+  enunciado: >-
+    En un archivo de configuración encuentras `password: c3VwZXJzZWNyZXRv`. ¿Qué tan protegida está esa contraseña?
+  opciones:
+    - { texto: "Nada: parece Base64, que se decodifica en un segundo", correcta: true, explicacion: "Base64 no es cifrado; es otra forma de escribir los mismos bytes." }
+    - { texto: "Está cifrada con un algoritmo seguro", explicacion: "Base64 no usa ninguna clave: no es cifrado." }
+    - { texto: "Es un hash y no se puede recuperar", explicacion: "Un hash SHA-256 tendría 64 dígitos hexadecimales; esto es Base64 y se revierte directamente." }
+    - { texto: "Está protegida porque no se entiende a simple vista", explicacion: "Que no se lea a simple vista no la protege." }

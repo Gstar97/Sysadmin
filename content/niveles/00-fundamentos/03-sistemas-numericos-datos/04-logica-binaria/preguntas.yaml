@@ -1,0 +1,94 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuánto da 1 AND 0?
+  opciones:
+    - { texto: "0", correcta: true, explicacion: "AND da 1 solo si los dos bits son 1." }
+    - { texto: "1", explicacion: "Ese sería el resultado de OR o de XOR." }
+    - { texto: "10", explicacion: "Las operaciones lógicas devuelven un solo bit." }
+    - { texto: "Depende del sistema", explicacion: "La regla es la misma en todos los sistemas." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuánto da 1 XOR 1?
+  opciones:
+    - { texto: "0", correcta: true, explicacion: "XOR da 1 solo cuando los bits son distintos." }
+    - { texto: "1", explicacion: "Eso daría OR." }
+    - { texto: "2", explicacion: "XOR no suma; compara." }
+    - { texto: "Error", explicacion: "Es una combinación válida." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Cuánto es 10110110 AND 11110000?
+  opciones:
+    - { texto: "10110000", correcta: true, explicacion: "Los cuatro bits de la izquierda se copian (la máscara tiene 1) y los de la derecha quedan en 0." }
+    - { texto: "11110110", explicacion: "Ese es el resultado de OR." }
+    - { texto: "01000110", explicacion: "Ese es el resultado de XOR." }
+    - { texto: "00000110", explicacion: "Se tomaron los bits contrarios." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Cuánto es 10100000 OR 00000101?
+  opciones:
+    - { texto: "10100101", correcta: true, explicacion: "OR enciende los bits que están en 1 en cualquiera de los dos." }
+    - { texto: "00000000", explicacion: "Ese es el resultado de AND." }
+    - { texto: "10100000", explicacion: "OR también enciende los bits del segundo número." }
+    - { texto: "01011010", explicacion: "Se aplicó NOT al primer número." }
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué operación se aplica entre una dirección IP y su máscara para obtener la dirección de la red?
+  opciones:
+    - { texto: "AND", correcta: true, explicacion: "Copia los bits de red (donde la máscara tiene 1) y pone en 0 los de equipo." }
+    - { texto: "OR", explicacion: "OR con la máscara invertida da el broadcast, no la red." }
+    - { texto: "XOR", explicacion: "XOR marcaría las diferencias, no la red." }
+    - { texto: "Una suma", explicacion: "No se suma: se opera bit a bit." }
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuál es la dirección de red de 10.20.30.200 con máscara 255.255.255.128?
+  opciones:
+    - { texto: "10.20.30.128", correcta: true, explicacion: "200 = 11001000; AND 10000000 = 10000000 = 128." }
+    - { texto: "10.20.30.0", explicacion: "Sería la red si la máscara fuera 255.255.255.0." }
+    - { texto: "10.20.30.200", explicacion: "Esa es la IP del equipo; la red pone en 0 los bits de equipo." }
+    - { texto: "10.20.30.72", explicacion: "72 es 200 − 128: se restó en lugar de aplicar AND." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Dos equipos tienen las IP 192.168.1.20 y 192.168.1.140, los dos con máscara 255.255.255.128. ¿Están en la misma red?
+  opciones:
+    - { texto: "No: uno está en la red 192.168.1.0 y el otro en la 192.168.1.128", correcta: true, explicacion: "20 AND 128 = 0 y 140 AND 128 = 128: las redes son distintas, así que necesitan un router para comunicarse." }
+    - { texto: "Sí, porque los tres primeros octetos son iguales", explicacion: "Con /25 también cuenta el primer bit del último octeto." }
+    - { texto: "Sí, porque tienen la misma máscara", explicacion: "La máscara igual no alcanza; hay que comparar el resultado del AND." }
+    - { texto: "No se puede saber sin la puerta de enlace", explicacion: "Con la IP y la máscara alcanza para saberlo." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Con umask 022, ¿con qué permisos se crea un archivo nuevo?
+  opciones:
+    - { texto: "644 (rw-r--r--)", correcta: true, explicacion: "666 AND NOT 022 = 644: se quita la escritura al grupo y al resto." }
+    - { texto: "022", explicacion: "La umask indica lo que se quita, no los permisos resultantes." }
+    - { texto: "666", explicacion: "Es el punto de partida antes de aplicar la umask." }
+    - { texto: "755", explicacion: "Los archivos no reciben permiso de ejecución al crearse." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: En un RAID 5 con dos discos de datos (A y B) y uno de paridad P = A XOR B, se rompe el disco A. ¿Cómo se recupera?
+  opciones:
+    - { texto: "Calculando P XOR B", correcta: true, explicacion: "XOR tiene esa propiedad: si P = A XOR B, entonces A = P XOR B." }
+    - { texto: "Calculando P AND B", explicacion: "AND pierde información; no permite reconstruir A." }
+    - { texto: "No se puede recuperar", explicacion: "Justamente para eso está la paridad." }
+    - { texto: "Copiando P en el disco nuevo", explicacion: "P no es A: hay que combinarla con B." }
+- id: p10
+  tipo: completar_comando
+  enunciado: En bash, escribe un comando que muestre el resultado de 77 AND 192.
+  aceptadas: ['echo $(( 77 & 192 ))', 'echo $((77 & 192))', 'echo $((77&192))', 'echo $(( 77&192 ))']
+  patrones: ['^echo\s+"?\$\(\(\s*77\s*&\s*192\s*\)\)"?$', '^echo\s+"?\$\(\(\s*192\s*&\s*77\s*\)\)"?$']
+  explicacion: "En la aritmética de bash, `&` es AND, `|` es OR, `^` es XOR y `~` es NOT. El resultado es 64."
+- id: p11
+  tipo: interpretar_salida
+  enunciado: Según este cálculo, ¿cuál es la última dirección de la red (broadcast)?
+  salida: |
+    IP          172.16.5.70      ...00000101.01000110
+    máscara     255.255.255.224  ...11111111.11100000
+    NOT máscara 0.0.0.31         ...00000000.00011111
+  opciones:
+    - { texto: "172.16.5.95", correcta: true, explicacion: "IP OR NOT máscara: 01000110 OR 00011111 = 01011111 = 95." }
+    - { texto: "172.16.5.64", explicacion: "Esa es la dirección de la red (IP AND máscara)." }
+    - { texto: "172.16.5.255", explicacion: "Sería el broadcast con máscara /24." }
+    - { texto: "172.16.5.101", explicacion: "Es 70 + 31: se sumó en lugar de aplicar OR." }

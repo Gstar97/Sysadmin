@@ -1,0 +1,157 @@
+---
+id: n0-m3-l5
+titulo: Texto, codificación e integridad
+minutos: 90
+objetivos:
+  - Explicar ASCII y UTF-8 y por qué aparecen caracteres extraños.
+  - Diferenciar finales de línea LF y CRLF y los problemas que causan en scripts.
+  - Verificar la integridad de un archivo descargado con un hash SHA-256.
+glosario: [ascii, utf-8, crlf, hash]
+verificado: 2026-10
+---
+
+import codificacion from './codificacion.svg?raw'
+import ejTexto from './ej-texto.yaml'
+
+Para la computadora, un archivo de texto es una fila de bytes como cualquier otra. Que esos bytes se vean como "año" o como "aÃ±o", que un script funcione o falle con un error incomprensible, o que una descarga sea la original o una modificada, depende de detalles de cómo se guardan y se interpretan esos bytes. Son problemas que un sysadmin encuentra seguido, y que se resuelven en minutos si se sabe qué buscar.
+
+## Del carácter al número: ASCII
+
+Cada carácter se guarda como un número. El primer estándar que se impuso fue **<Termino id="ascii">ASCII</Termino>** (1963): 128 caracteres, numerados del 0 al 127, que entran en 7 bits. Incluye las letras del inglés, los dígitos, los signos de puntuación y algunos **caracteres de control** invisibles:
+
+| Carácter | Decimal | Hexadecimal |
+| --- | --- | --- |
+| A | 65 | 41 |
+| a | 97 | 61 |
+| 0 (el dígito) | 48 | 30 |
+| espacio | 32 | 20 |
+| tabulación | 9 | 09 |
+| salto de línea (LF) | 10 | 0A |
+| retorno de carro (CR) | 13 | 0D |
+
+ASCII no tiene ñ, ni tildes, ni ningún carácter de otros idiomas.
+
+## Unicode y UTF-8
+
+**Unicode** asigna un número a cada carácter de todos los idiomas (y a los emojis): la ñ es U+00F1, el euro U+20AC. **<Termino id="utf-8">UTF-8</Termino>** es la forma de guardar esos números en bytes que se usa hoy en casi todas partes:
+
+- Los caracteres de ASCII ocupan **1 byte**, con el mismo valor que en ASCII. Un texto en inglés en UTF-8 es idéntico a uno en ASCII.
+- Las letras con tilde y la ñ ocupan **2 bytes**: la ñ es `C3 B1`.
+- El símbolo del euro ocupa 3 bytes y un emoji, 4.
+
+Antes de UTF-8, cada región usaba su propia codificación de 1 byte por carácter. En español, la más común era **Latin-1** (ISO-8859-1) o su variante de Windows, **Windows-1252**, donde la ñ es un solo byte: `F1`. Todavía aparecen en archivos y sistemas viejos.
+
+## Por qué aparecen caracteres extraños
+
+Si un programa lee los bytes con una codificación distinta de la que se usó para guardarlos, el texto se ve mal. No se perdió nada: los bytes son correctos, la interpretación no.
+
+<Diagrama svg={codificacion} alt="La palabra año en UTF-8 son los bytes 61 C3 B1 6F y en Latin-1 61 F1 6F. Si los bytes UTF-8 se leen como Latin-1 se ve aÃ±o; si los bytes Latin-1 se leen como UTF-8 se ve a con un signo de reemplazo y o" pie="Los dos errores más comunes: UTF-8 leído como Latin-1, y Latin-1 leído como UTF-8." />
+
+Algunos patrones que conviene reconocer a simple vista:
+
+| Se ve | Debería decir | Qué pasó |
+| --- | --- | --- |
+| `Ã±`, `Ã©`, `Ã³` | ñ, é, ó | Texto UTF-8 leído como Latin-1 o Windows-1252 |
+| `â‚¬` | € | Lo mismo, con un carácter de 3 bytes |
+| `�` | cualquier carácter con tilde | Texto Latin-1 leído como UTF-8 |
+
+En Linux, `file archivo.txt` informa la codificación (*UTF-8 text*, *ISO-8859 text*) e `iconv` convierte de una a otra: `iconv -f WINDOWS-1252 -t UTF-8 viejo.csv > nuevo.csv`. Un caso típico es un CSV exportado desde un programa de Windows que se ve mal al importarlo en un sistema Linux.
+
+## Finales de línea: LF y CRLF
+
+Hasta el salto de línea se guarda distinto según el sistema:
+
+- **Linux y macOS**: un solo carácter, **LF** (`0A`).
+- **Windows**: dos caracteres, **<Termino id="crlf">CR y LF</Termino>** (`0D 0A`).
+
+La mayoría de los programas se adaptan, pero bash no. Un script escrito con un editor de Windows y copiado a un servidor Linux falla con errores desconcertantes:
+
+```text
+$ ./backup.sh
+bash: ./backup.sh: /bin/bash^M: bad interpreter: No such file or directory
+$ bash backup.sh
+backup.sh: line 2: $'\r': command not found
+```
+
+El `^M` y el `\r` son el CR invisible al final de cada línea. Se detecta con `file` (que avisa *with CRLF line terminators*) o con `cat -A` (que muestra `^M$` al final de cada línea), y se corrige con `dos2unix archivo`. Para que no vuelva a pasar, los editores como VS Code permiten elegir el final de línea (abajo a la derecha dice *CRLF* o *LF*).
+
+<Pregunta id="p06" />
+
+## Integridad: comprobar que un archivo es el original
+
+Una **función de <Termino id="hash">hash</Termino>** calcula, a partir de cualquier cantidad de datos, una "huella" de tamaño fijo. Tiene tres propiedades que la hacen útil:
+
+- El mismo archivo da siempre el mismo hash.
+- Cambiar un solo bit del archivo da un hash completamente distinto.
+- A partir del hash no se puede reconstruir el archivo ni fabricar otro con el mismo hash.
+
+El estándar actual es **SHA-256**, que da 256 bits (64 dígitos hexadecimales). **MD5** y **SHA-1** son más viejos y ya no son seguros: se pueden fabricar dos archivos distintos con el mismo hash. Todavía sirven para detectar daños accidentales, pero no para protegerse de una modificación intencional.
+
+```text
+$ echo -n "hola" | sha256sum
+b221d9dbb083a7f33428d7c2a3c3198ae925614d70210e28716ccaa7cd4ddb79  -
+$ echo -n "Hola" | sha256sum
+e633f4fc79badea1dc5db970cf397c8248bac47cc3acf9915ba60b5d76b0e88f  -
+```
+
+Una sola letra en mayúscula cambia todo el resultado.
+
+### Verificar una descarga
+
+Las distribuciones publican, junto a cada imagen, un archivo con los hashes oficiales (`SHA256SUMS` en Ubuntu, `CHECKSUM` en Rocky). Antes de instalar se compara:
+
+<Distros>
+  <Distro nombre="Linux">
+    `sha256sum archivo.iso` calcula el hash; `sha256sum -c SHA256SUMS` compara automáticamente todos los archivos de la lista y dice OK o FAILED.
+  </Distro>
+  <Distro nombre="Windows">
+    En PowerShell: `Get-FileHash archivo.iso -Algorithm SHA256`. Compara el resultado con el valor publicado.
+  </Distro>
+  <Distro nombre="macOS">
+    En la Terminal: `shasum -a 256 archivo.iso`.
+  </Distro>
+</Distros>
+
+<Advertencia>
+El hash solo prueba que el archivo es igual al que describe la lista. Si un atacante modificó el sitio de descarga, pudo haber cambiado también la lista. Por eso las distribuciones **firman** la lista de hashes con GPG (por ejemplo, `SHA256SUMS.gpg` en Ubuntu): verificar la firma garantiza que la lista la publicó la distribución. Como mínimo, descarga siempre desde el sitio oficial, con HTTPS.
+</Advertencia>
+
+## Base64: texto que representa bytes
+
+A veces hay que pasar datos binarios por un medio que solo acepta texto: un adjunto de correo, un certificado en un archivo `.pem`, un secreto en un archivo de configuración. **Base64** representa cualquier secuencia de bytes con 64 caracteres seguros (letras, números, `+` y `/`):
+
+```text
+$ echo -n "clave123" | base64
+Y2xhdmUxMjM=
+$ echo "Y2xhdmUxMjM=" | base64 -d
+clave123
+```
+
+Base64 **no es cifrado**: cualquiera lo decodifica en un segundo. Si ves una contraseña en Base64 en un archivo de configuración, está tan expuesta como si estuviera escrita en texto plano.
+
+## Practicar
+
+<Terminal ejercicio={ejTexto} />
+
+<ErroresComunes>
+  <ErrorComun titulo="bad interpreter: /bin/bash^M o $'\r': command not found">
+    El script tiene finales de línea de Windows (CRLF). Confírmalo con `file script.sh` o `cat -A script.sh` y corrígelo con `dos2unix script.sh`. Configura tu editor para guardar con LF los archivos que van a servidores Linux.
+  </ErrorComun>
+  <ErrorComun titulo='Un CSV o un informe muestra "Ã±" en lugar de "ñ"'>
+    El archivo está en UTF-8 y el programa que lo abre lo interpreta como Windows-1252. Indica la codificación al importar (Excel y LibreOffice lo preguntan) o conviértelo con `iconv`. Si se ve `�`, es el caso contrario: el archivo está en Latin-1 o Windows-1252 y se leyó como UTF-8.
+  </ErrorComun>
+  <ErrorComun titulo="El hash no coincide">
+    No uses el archivo. Las causas más comunes son una descarga interrumpida o comparar con el hash de otra versión o de otra arquitectura. Vuelve a descargar desde el sitio oficial y verifica de nuevo; si sigue sin coincidir, puede ser una imagen modificada.
+  </ErrorComun>
+  <ErrorComun titulo="Una contraseña guardada en Base64 se considera protegida">
+    Base64 es una forma de escribir bytes, no un cifrado. Las contraseñas y los secretos se guardan cifrados o en un gestor de secretos, con permisos restringidos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- ASCII tiene 128 caracteres en 7 bits; UTF-8 codifica todo Unicode, con 1 byte para ASCII y 2 a 4 para el resto (la ñ es C3 B1).
+- Los caracteres extraños aparecen cuando se leen bytes con otra codificación: Ã± es UTF-8 leído como Latin-1; � es Latin-1 leído como UTF-8.
+- Linux termina las líneas con LF; Windows con CRLF. Un script con CRLF falla en Linux: se detecta con file o cat -A y se corrige con dos2unix.
+- Un hash SHA-256 identifica el contenido de un archivo; cualquier cambio lo altera por completo. MD5 y SHA-1 ya no son seguros.
+- Verificar una descarga: sha256sum -c en Linux, Get-FileHash en Windows. Base64 no es cifrado.
+</Resumen>

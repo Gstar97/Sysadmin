@@ -1,0 +1,94 @@
+---
+id: n0-m3-l3
+titulo: Unidades de medida
+minutos: 90
+objetivos:
+  - Diferenciar KB de KiB y explicar por qué un disco de 1 TB muestra unos 931 GiB.
+  - Diferenciar Mbps de MB/s y calcular cuánto tarda una transferencia.
+glosario: [prefijos-binarios, mbps]
+verificado: 2026-10
+---
+
+import prefijos from './prefijos.svg?raw'
+import ejUnidades from './ej-unidades.yaml'
+
+"Compramos discos de 4 TB y el servidor muestra 3,6". "Contratamos 1 Gbps y la copia va a 110". Son dos de las preguntas que más recibe un sysadmin, y las dos tienen la misma respuesta: hay más de una forma de contar bytes y bits. En esta lección vas a aprender a convertir entre ellas y a estimar cuánto tarda una transferencia, algo que se usa todo el tiempo para planificar copias de seguridad y migraciones.
+
+## Dos formas de contar
+
+En el sistema decimal (el **SI**, el de los kilómetros y los kilogramos), *kilo* significa 1000. Pero en informática, como todo se basa en potencias de 2, durante décadas se usó *kilo* para 1024 (2<sup>10</sup>), que está cerca de 1000. Para terminar con la confusión, en 1998 se crearon **<Termino id="prefijos-binarios">prefijos binarios</Termino>** propios: kibi (Ki), mebi (Mi), gibi (Gi), tebi (Ti).
+
+| Decimal (SI) | Valor | Binario (IEC) | Valor |
+| --- | --- | --- | --- |
+| kilobyte, KB | 1000 bytes | kibibyte, KiB | 1024 bytes |
+| megabyte, MB | 1000 KB | mebibyte, MiB | 1024 KiB |
+| gigabyte, GB | 1000 MB | gibibyte, GiB | 1024 MiB |
+| terabyte, TB | 1000 GB | tebibyte, TiB | 1024 GiB |
+
+En cada escalón la diferencia se acumula:
+
+<Diagrama svg={prefijos} alt="Comparación de prefijos decimales y binarios: la diferencia es 2,4% en kilo, 4,9% en mega, 7,4% en giga, 10% en tera y 12,6% en peta" pie="Con discos de varios TB, la diferencia entre unidades ya es de un 10%." />
+
+### Quién usa cada una
+
+- Los **fabricantes de discos**, las **velocidades de red** y **macOS** usan unidades decimales.
+- La **memoria RAM** se fabrica en potencias de 2: un módulo "de 16 GB" tiene 16 GiB.
+- **Windows** calcula en binario pero escribe "GB": por eso un disco de 1 TB aparece como "931 GB".
+- En **Linux** depende de la herramienta: `free -h` escribe `Gi` (binario, bien indicado); `df -h` y `lsblk` calculan en binario pero escriben solo `G`; `df -H` usa decimal.
+
+### Por qué un disco de 1 TB muestra 931 GiB
+
+1 TB son 1.000.000.000.000 bytes. Divididos por 1024³ (1.073.741.824) dan 931,3 GiB. No falta nada: es la misma cantidad de bytes. Después, el sistema de archivos ocupa una pequeña parte para su propia organización, así que el espacio libre al formatear es todavía un poco menor.
+
+<Terminal ejercicio={ejUnidades} />
+
+## Bits y bytes en las redes
+
+Las velocidades de red y de internet se miden en **bits** por segundo: **<Termino id="mbps">Mbps</Termino>** (megabits por segundo) o Gbps. Los programas de descarga y de copia muestran **bytes** por segundo: MB/s. Como un byte son 8 bits, **para pasar de Mbps a MB/s se divide por 8**:
+
+| Velocidad de la red | Máximo teórico | Lo que se ve en una copia real |
+| --- | --- | --- |
+| 100 Mbps | 12,5 MB/s | unos 11 a 12 MB/s |
+| 1 Gbps | 125 MB/s | unos 110 a 118 MB/s |
+| 10 Gbps | 1250 MB/s | unos 1100 MB/s, si los discos acompañan |
+
+La copia real siempre es un poco más lenta que el máximo teórico, porque cada paquete lleva encabezados de los protocolos (Ethernet, IP, TCP) que también ocupan la red. Y a veces el límite no es la red: un disco rígido que escribe a 200 MB/s no puede aprovechar una red de 10 Gbps.
+
+<Pregunta id="p06" />
+
+## Cuánto tarda una transferencia
+
+La cuenta es siempre la misma: **tiempo = tamaño ÷ velocidad**, con las dos cosas en la misma unidad. Lo más seguro es pasar todo a bits:
+
+```text
+Copia de seguridad de 500 GB por una red de 1 Gbps:
+  500 GB = 500 × 8 = 4000 gigabits
+  4000 Gb ÷ 1 Gbps = 4000 segundos ≈ 67 minutos (teórico)
+  con la sobrecarga de los protocolos, unos 75 minutos
+```
+
+La misma copia por un enlace de 100 Mbps tarda diez veces más: unas 11 horas. Y subida a la nube por una conexión de oficina con 50 Mbps de subida, unas 22 horas. Este cálculo decide si un backup entra en la ventana nocturna o si una migración necesita un fin de semana.
+
+Prueba la calculadora y después practica con ejercicios al azar:
+
+<CalculadoraUnidades />
+
+<ErroresComunes>
+  <ErrorComun titulo='"Compramos 4 TB y el servidor muestra 3,6 TB: el disco es defectuoso"'>
+    No lo es: 4 TB decimales son 3,64 TiB. El sistema muestra TiB (aunque escriba TB). Para comparar con la factura, usa la misma unidad: en Linux `df -H` o `lsblk -b` (en bytes); o haz la cuenta dividiendo por 1024 en cada escalón.
+  </ErrorComun>
+  <ErrorComun titulo="Calcular el tiempo de una copia sin dividir por 8">
+    Si divides 500 GB por 1 Gbps sin pasar a la misma unidad, obtienes 500 segundos en lugar de 4000: un error de 8 veces que puede hacer que un backup planificado para la noche termine a media mañana.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar 125 MB/s en una red de 1 Gbps">
+    Ese es el máximo teórico. Con la sobrecarga de los protocolos, lo normal en una copia es entre 110 y 118 MB/s. Si ves mucho menos (por ejemplo 11 MB/s), revisa si la placa negoció 100 Mbps en lugar de 1 Gbps: suele ser un cable dañado o de categoría vieja.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Decimal: KB, MB, GB, TB (potencias de 1000). Binario: KiB, MiB, GiB, TiB (potencias de 1024). La diferencia crece: 7% en GB, 10% en TB.
+- Los fabricantes de discos y las redes usan decimal; la RAM y Windows, binario (Windows escribe "GB" aunque calcula GiB).
+- 1 TB = 931 GiB: son los mismos bytes en otra unidad.
+- Las redes se miden en bits: Mbps ÷ 8 = MB/s. Una red de 1 Gbps copia a unos 110-118 MB/s reales.
+- Tiempo de transferencia = tamaño ÷ velocidad, con las dos en la misma unidad (convenientemente, en bits).
+</Resumen>

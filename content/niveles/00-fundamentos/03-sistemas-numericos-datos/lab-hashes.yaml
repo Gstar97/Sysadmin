@@ -1,0 +1,44 @@
+tipo: pasos
+titulo: Verificar las imágenes de tu laboratorio
+descripcion: Comprueba que las imágenes ISO que descargaste en el módulo anterior son exactamente las que publicó cada proveedor.
+pasos:
+  - titulo: Descarga la lista de hashes de Ubuntu
+    detalle: >-
+      En **releases.ubuntu.com**, entra a la carpeta de tu versión (por ejemplo `26.04/`) y
+      descarga el archivo `SHA256SUMS` a la misma carpeta donde está la ISO. Ábrelo con un editor
+      de texto: cada línea tiene un hash y el nombre de una imagen.
+    comprobar: Tienes `SHA256SUMS` en la misma carpeta que la ISO de Ubuntu Server.
+  - titulo: Verifica la ISO de Ubuntu
+    variantes:
+      - nombre: Windows
+        detalle: 'En PowerShell, en la carpeta de la ISO. Reemplaza el nombre del archivo y pega el valor de la línea correspondiente de `SHA256SUMS`; el resultado tiene que ser `True`:'
+        comandos:
+          - Get-FileHash .\ubuntu-26.04-live-server-amd64.iso -Algorithm SHA256
+          - (Get-FileHash .\ubuntu-26.04-live-server-amd64.iso).Hash -eq "VALOR_DE_SHA256SUMS"
+      - nombre: Linux
+        detalle: '`--ignore-missing` evita errores por las imágenes de la lista que no descargaste:'
+        comandos:
+          - sha256sum -c SHA256SUMS --ignore-missing
+      - nombre: macOS
+        detalle: 'Compara el resultado con la línea de la ISO en `SHA256SUMS`:'
+        comandos:
+          - shasum -a 256 ubuntu-26.04-live-server-arm64.iso
+    comprobar: El hash coincide (`True` en Windows, `OK` en Linux, el mismo valor en macOS).
+    si_falla: Si no coincide, revisa que compares con la línea de la misma versión y arquitectura. Si sigue sin coincidir, borra la ISO y descárgala de nuevo.
+  - titulo: Verifica la ISO de Rocky Linux o AlmaLinux
+    detalle: >-
+      En la misma página de descarga de Rocky (o de AlmaLinux) está el archivo `CHECKSUM` de cada
+      versión. Su formato es distinto (`SHA256 (archivo.iso) = valor`), pero el valor se compara
+      igual. En Linux, `sha256sum -c CHECKSUM --ignore-missing` entiende los dos formatos.
+    comprobar: El hash de tu ISO coincide con el publicado.
+  - titulo: Calcula el hash de la ISO de Windows Server
+    detalle: >-
+      Calcula el SHA-256 de la ISO de Windows Server 2025 con `Get-FileHash`. Si la página de
+      descarga no muestra un hash para comparar, anótalo igual: te sirve para comprobar que una
+      copia futura (por ejemplo, la que pases a un disco externo) es idéntica.
+    comandos:
+      - Get-FileHash .\WindowsServer2025.iso -Algorithm SHA256
+    comprobar: El hash quedó anotado en tu cuaderno técnico.
+  - titulo: Registra los resultados
+    detalle: 'En tu cuaderno técnico, anota para cada imagen: nombre del archivo, fecha de descarga, hash SHA-256 y resultado de la verificación.'
+    comprobar: Las tres imágenes tienen su hash y su resultado registrados.

@@ -1,0 +1,71 @@
+tipo: terminal
+shell: bash
+titulo: Un script que no arranca y una descarga sospechosa
+descripcion: >-
+  Dos problemas reales de texto y bytes: un script escrito en Windows que falla en Linux, y dos
+  imágenes de instalación que hay que verificar antes de usarlas.
+estado_inicial:
+  distro: rocky
+  hostname: srv-texto01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+  paquetes:
+    instalados: [dos2unix]
+  archivos:
+    /home/estudiante/saludo.sh: { contenido: "#!/bin/bash\r\n# Muestra un saludo y la fecha\r\necho \"Hola desde $(hostname)\"\r\ndate\r\n", modo: "0755" }
+    /home/estudiante/descargas/rocky-a.iso: { contenido: "Imagen de instalación de prueba\nversión 10.0, contenido original\n" }
+    /home/estudiante/descargas/rocky-b.iso: { contenido: "Imagen de instalación de prueba\nversión 10.0, contenido ALTERADO\n" }
+    /home/estudiante/descargas/SHA256SUMS: { contenido: "9f5e3fdd8ff62c5edabeb61757b9ea72b70994bf1dd7659fc34b335e74c2a391  rocky-a.iso\n4c824b6b4119c93def6b8d63c1757370f43af99ff4ddfdbdcd929c2487f3ad62  rocky-b.iso\n" }
+pasos:
+  - consigna: Un compañero escribió `saludo.sh` en su PC con Windows y lo copió al servidor. Ejecútalo con `./saludo.sh`.
+    verificar:
+      - { comando_usado: '\./saludo\.sh' }
+    pistas:
+      - "`./saludo.sh`"
+    solucion: [./saludo.sh]
+    explicacion: >-
+      Falla con *bad interpreter: /bin/bash^M*. El sistema busca un programa llamado "/bin/bash"
+      seguido de un carácter invisible, y ese programa no existe.
+  - consigna: Averigua qué tiene el archivo con `file saludo.sh` y después muestra los caracteres invisibles con `cat -A saludo.sh`.
+    verificar:
+      - { comando_usado: 'cat\s+-\w*A' }
+    pistas:
+      - "`file saludo.sh` y `cat -A saludo.sh`"
+    solucion: [file saludo.sh, cat -A saludo.sh]
+    explicacion: >-
+      `file` avisa *with CRLF line terminators* y `cat -A` muestra cada fin de línea como `^M$`:
+      `^M` es el retorno de carro (CR) que agrega Windows y `$` es el salto de línea (LF).
+  - consigna: Convierte los finales de línea a formato Linux con `dos2unix saludo.sh` y vuelve a ejecutar el script.
+    verificar:
+      - { salida_contiene: Hola desde }
+    pistas:
+      - "`dos2unix saludo.sh` y después `./saludo.sh`"
+    solucion: [dos2unix saludo.sh, ./saludo.sh]
+    explicacion: >-
+      Sin los CR, el script funciona. Si `dos2unix` no está instalado, se instala con
+      `sudo dnf install dos2unix` (o `sudo apt install dos2unix` en Ubuntu).
+  - consigna: Ve a la carpeta de descargas y mira la lista de sumas publicada por el proveedor con `cd descargas` y `cat SHA256SUMS`.
+    verificar:
+      - { comando_usado: 'cat\s+SHA256SUMS' }
+    pistas:
+      - "`cd descargas` y `cat SHA256SUMS`"
+    solucion: [cd descargas, cat SHA256SUMS]
+    explicacion: Cada línea tiene la suma SHA-256 esperada y el nombre del archivo.
+  - consigna: Verifica las dos imágenes contra esa lista con `sha256sum -c SHA256SUMS`.
+    verificar:
+      - { salida_contiene: FAILED }
+    pistas:
+      - "`sha256sum -c SHA256SUMS`"
+    solucion: [sha256sum -c SHA256SUMS]
+    explicacion: >-
+      `rocky-a.iso` coincide (OK). `rocky-b.iso` no: su contenido no es el que publicó el
+      proveedor. Puede ser una descarga incompleta, un archivo dañado o una imagen modificada. No
+      importa cuál de las tres: no se usa.
+  - consigna: Borra la imagen que no pasó la verificación con `rm rocky-b.iso`.
+    verificar:
+      - { archivo: /home/estudiante/descargas/rocky-b.iso, existe: false }
+    pistas:
+      - "`rm rocky-b.iso`"
+    solucion: [rm rocky-b.iso]
+    explicacion: Lo correcto es volver a descargarla desde el sitio oficial y verificarla otra vez.

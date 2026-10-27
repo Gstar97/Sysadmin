@@ -1,0 +1,102 @@
+---
+id: n0-m3-l4
+titulo: Lógica binaria
+minutos: 90
+objetivos:
+  - Aplicar AND, OR, XOR y NOT bit a bit.
+  - Usar AND para obtener la red de una dirección IP con su máscara (adelanto del nivel de redes).
+glosario: [operacion-logica, mascara-red, umask]
+verificado: 2026-10
+---
+
+import tablas from './tablas.svg?raw'
+import ejBits from './ej-bits.yaml'
+
+Con cuatro operaciones muy simples sobre bits se resuelven tareas que un sysadmin hace todo el tiempo: saber si dos equipos están en la misma red, calcular los permisos con los que se crea un archivo o entender cómo un arreglo RAID reconstruye un disco que falló. Esta lección es el puente entre el binario y el cálculo de subredes del nivel de redes.
+
+## Las cuatro operaciones
+
+Una **<Termino id="operacion-logica">operación lógica</Termino>** toma bits y devuelve un bit según una regla fija:
+
+- **AND** (Y): el resultado es 1 solo si los dos bits son 1.
+- **OR** (O): el resultado es 1 si al menos uno de los dos es 1.
+- **XOR** (O exclusivo): el resultado es 1 si los bits son distintos.
+- **NOT** (NO): invierte el bit; trabaja sobre uno solo.
+
+<Diagrama svg={tablas} alt="Tablas de verdad de AND, OR, XOR y NOT: para cada combinación de bits A y B, el resultado R" pie="Las tablas de verdad: todas las combinaciones posibles y su resultado." />
+
+## Bit a bit
+
+Aplicadas a números, las operaciones se hacen **posición por posición**: el primer bit de un número con el primer bit del otro, el segundo con el segundo, y así.
+
+```text
+      11001010   (202)
+AND   11110000   (240)
+      --------
+      11000000   (192)
+```
+
+Prueba las cuatro operaciones tocando los bits de A y B. Fíjate en lo que tiene de especial cada una: con AND, donde B tiene ceros el resultado siempre es 0; con OR, donde B tiene unos el resultado siempre es 1; con XOR, donde B tiene unos el bit de A se invierte.
+
+<OperacionesBits />
+
+## Para qué sirve cada una
+
+Esas tres propiedades son justamente las que se aprovechan en la práctica:
+
+- **AND para quedarse con una parte**: se arma un número (llamado máscara) con unos en las posiciones que interesan y ceros en el resto. El AND copia esas posiciones y borra las demás. Es lo que hace la máscara de red.
+- **OR para encender bits**: sirve para sumar opciones sin tocar las que ya estaban. En los permisos de Linux, leer (4) OR escribir (2) da 6, lectura y escritura.
+- **NOT para invertir una máscara**: la **umask** de Linux y las máscaras comodín (*wildcard*) de las listas de acceso de Cisco son máscaras invertidas.
+- **XOR para comparar y recuperar**: XOR de dos valores marca dónde difieren. Y tiene una propiedad muy útil: si P = A XOR B, entonces A = P XOR B. Los arreglos **RAID 5** guardan P (la paridad) en otro disco; si el disco de A se rompe, lo reconstruyen calculando P XOR B.
+
+## La máscara de red
+
+Una dirección IPv4 tiene dos partes: la de **red** (compartida por todos los equipos de esa red) y la de **equipo**. La **<Termino id="mascara-red">máscara de red</Termino>** indica dónde termina una y empieza la otra: tiene unos en los bits de la red y ceros en los del equipo.
+
+Aplicando **IP AND máscara** se obtiene la dirección de la red:
+
+```text
+IP        192.168.10.77    11000000.10101000.00001010.01001101
+máscara   255.255.255.192  11111111.11111111.11111111.11000000
+AND       192.168.10.64    11000000.10101000.00001010.01000000
+```
+
+La máscara 255.255.255.192 tiene 26 unos seguidos, por eso también se escribe `/26`. Los últimos 6 bits son del equipo.
+
+Así decide cada equipo cómo enviar un paquete: calcula la red de su propia IP y la de la IP de destino. Si coinciden, el destino está en la misma red y le envía el paquete directamente; si no, se lo envía a la puerta de enlace (el router). Una máscara mal configurada hace que un equipo crea que otro está "lejos" cuando está al lado, o al revés, y es una causa clásica de "veo a algunos equipos y a otros no".
+
+La última dirección de la red (la de **broadcast**) se calcula con las otras dos operaciones: **IP OR (NOT máscara)**. Para el ejemplo: 192.168.10.127.
+
+Prueba el modo **IP y máscara** con distintas direcciones y prefijos:
+
+<OperacionesBits modo="red" />
+
+<Pregunta id="p06" />
+
+## La umask
+
+Cuando un programa crea un archivo en Linux, pide los permisos 666 (lectura y escritura para todos) y el sistema le quita los que indique la **<Termino id="umask">umask</Termino>**. La cuenta es un AND con la umask invertida: **permisos = 666 AND NOT umask**.
+
+Con la umask habitual de root, 022, los archivos nuevos quedan en 644 (`rw-r--r--`). Para los usuarios comunes de Rocky y Ubuntu la umask es 002, y sus archivos quedan en 664.
+
+<Terminal ejercicio={ejBits} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Hacer AND con la IP y la máscara en decimal">
+    AND se hace bit a bit, no con los números decimales "a ojo". 77 AND 192 no es 77 ni 192: hay que pasar a binario (o confiar en la regla: con 255 el octeto se copia, con 0 queda en 0, y solo el octeto "mixto" de la máscara necesita la cuenta).
+  </ErrorComun>
+  <ErrorComun titulo="Confundir la máscara con la máscara comodín">
+    En las listas de acceso de equipos Cisco se usa la máscara invertida: 0.0.0.255 en lugar de 255.255.255.0. Si se pone la máscara normal donde va la comodín, la regla aplica a direcciones que no se esperaba.
+  </ErrorComun>
+  <ErrorComun titulo="Archivos que otros usuarios no pueden leer (o que todos pueden modificar)">
+    Si un proceso o un script crea archivos con permisos inesperados, revisa la umask con la que corre. Un servicio con umask 077 crea archivos que solo su dueño puede leer; uno con 000, archivos que cualquiera puede modificar.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- AND: 1 solo si los dos son 1. OR: 1 si alguno es 1. XOR: 1 si son distintos. NOT: invierte.
+- Bit a bit: se opera posición por posición.
+- AND con una máscara se queda con una parte; OR enciende bits; NOT invierte máscaras; XOR compara y permite reconstruir datos (RAID 5).
+- Red = IP AND máscara. Broadcast = IP OR (NOT máscara). Dos equipos están en la misma red si sus redes coinciden.
+- Permisos de un archivo nuevo = 666 AND NOT umask.
+</Resumen>

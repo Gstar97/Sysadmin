@@ -1,0 +1,62 @@
+tipo: terminal
+shell: bash
+titulo: Operaciones de bits en la terminal
+descripcion: >-
+  bash sabe hacer operaciones de bits con `$(( ))`: `&` es AND, `|` es OR, `^` es XOR y `~` es
+  NOT. Úsalas para calcular la red de una IP y para entender la umask.
+estado_inicial:
+  distro: rocky
+  hostname: srv-bits01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: >-
+      La IP 192.168.10.77 tiene máscara 255.255.255.192. Los tres primeros octetos de la máscara
+      son 255, así que se copian tal cual. Calcula el último octeto de la red con
+      `echo $(( 77 & 192 ))`.
+    verificar:
+      - { salida_contiene: "64" }
+    pistas:
+      - "`echo $(( 77 & 192 ))`"
+    solucion: [echo $(( 77 & 192 ))]
+    explicacion: >-
+      77 = 01001101 y 192 = 11000000. AND deja solo los bits que están en 1 en los dos: 01000000 =
+      64. La red es 192.168.10.64.
+  - consigna: >-
+      Calcula el último octeto de la última dirección de esa red (el broadcast): IP OR (NOT
+      máscara). NOT 192 en 8 bits es 63, así que usa `echo $(( 77 | 63 ))`.
+    verificar:
+      - { salida_contiene: "127" }
+    pistas:
+      - "`echo $(( 77 | 63 ))`"
+    solucion: [echo $(( 77 | 63 ))]
+    explicacion: >-
+      63 = 00111111. OR enciende todos los bits de la parte de equipo: 01111111 = 127. La red va
+      de 192.168.10.64 a 192.168.10.127.
+  - consigna: Mira tu máscara de creación de archivos con `umask`.
+    verificar:
+      - { comando_usado: '^\s*umask\s*$' }
+    pistas:
+      - "`umask`"
+    solucion: [umask]
+    explicacion: >-
+      La umask indica qué permisos se **quitan** a los archivos nuevos. Para un usuario común en
+      Rocky y Ubuntu vale 0002: se le quita la escritura al resto.
+  - consigna: >-
+      Los archivos nuevos parten de 666 (rw-rw-rw-) y se les aplica AND con NOT umask. Calcula el
+      resultado en octal con `printf "%o\n" $(( 8#666 & ~8#002 ))`.
+    verificar:
+      - { salida_contiene: "664" }
+    pistas:
+      - "`printf \"%o\\n\" $(( 8#666 & ~8#002 ))`"
+    solucion: ['printf "%o\n" $(( 8#666 & ~8#002 ))']
+    explicacion: NOT 002 deja en 1 todos los bits salvo el de escritura del resto; el AND lo apaga. 666 queda en 664, rw-rw-r--.
+  - consigna: Compruébalo creando un archivo con `touch nuevo.txt` y mirando sus permisos con `ls -l nuevo.txt`.
+    verificar:
+      - { archivo: /home/estudiante/nuevo.txt, modo: "0664" }
+      - { comando_usado: 'ls\s+-\w*l' }
+    pistas:
+      - "`touch nuevo.txt` y después `ls -l nuevo.txt`"
+    solucion: [touch nuevo.txt, ls -l nuevo.txt]
+    explicacion: "`-rw-rw-r--`: exactamente lo que calculaste. Para root la umask es 0022 y sus archivos nuevos quedan en 644."
