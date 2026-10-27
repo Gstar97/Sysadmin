@@ -640,3 +640,132 @@ register('column', {
     return 0
   },
 })
+
+// ---------------------------------------------------------------------------------------
+// Ver los bytes de un archivo: od, hexdump, xxd
+// ---------------------------------------------------------------------------------------
+
+function bytesOf(data: string): Uint8Array {
+  return new TextEncoder().encode(data)
+}
+
+const printable = (b: number) => b >= 0x20 && b < 0x7f
+
+register('od', {
+  usage: 'od [-c] [-An] [-t x1] [FILE]...',
+  run(ctx) {
+    let mode = 'o2' as 'c' | 'x1' | 'o2'
+    let addr = 'o' as 'o' | 'd' | 'x' | 'n'
+    const files: string[] = []
+    for (let i = 0; i < ctx.args.length; i++) {
+      const a = ctx.args[i]
+      if (a === '-c') mode = 'c'
+      else if (a === '-b') mode = 'o2'
+      else if (a === '-t' || a.startsWith('-t')) {
+        const t = a === '-t' ? ctx.args[++i] : a.slice(2)
+        if (t === 'x1' || t === 'x1z') mode = 'x1'
+        else if (t === 'c') mode = 'c'
+        else {
+          ctx.err(`od: invalid type string '${t}'\n[simulador] Tipos disponibles: -t x1 (hexadecimal) y -c (caracteres)\n`)
+          return 1
+        }
+      } else if (a === '-A' || a.startsWith('-A')) {
+        const v = a === '-A' ? ctx.args[++i] : a.slice(2)
+        addr = (v as typeof addr) ?? 'o'
+      } else files.push(a)
+    }
+    const inputs = readInputs(ctx, files)
+    if (typeof inputs === 'number') return inputs
+    const bytes = bytesOf(inputs.map((x) => x.data).join(''))
+    const fmtAddr = (n: number) => (addr === 'n' ? '' : addr === 'd' ? String(n).padStart(7, '0') : addr === 'x' ? n.toString(16).padStart(6, '0') : n.toString(8).padStart(7, '0'))
+    const ESC: Record<number, string> = { 0: '\\0', 7: '\\a', 8: '\\b', 9: '\\t', 10: '\\n', 11: '\\v', 12: '\\f', 13: '\\r' }
+    for (let off = 0; off < bytes.length; off += 16) {
+      const chunk = [...bytes.slice(off, off + 16)]
+      let cells: string
+      if (mode === 'c') cells = chunk.map((b) => (ESC[b] ?? (printable(b) ? String.fromCharCode(b) : b.toString(8).padStart(3, '0'))).padStart(4)).join('')
+      else if (mode === 'x1') cells = chunk.map((b) => ` ${b.toString(16).padStart(2, '0')}`).join('')
+      else {
+        const words: string[] = []
+        for (let i = 0; i < chunk.length; i += 2) words.push((chunk[i] | ((chunk[i + 1] ?? 0) << 8)).toString(8).padStart(6, '0'))
+        cells = words.map((w) => ` ${w}`).join('')
+      }
+      ctx.out(`${fmtAddr(off)}${cells}\n`)
+    }
+    if (addr !== 'n') ctx.out(`${fmtAddr(bytes.length)}\n`)
+    return 0
+  },
+})
+
+register('hexdump', {
+  usage: 'hexdump -C [FILE]...',
+  run(ctx) {
+    const files = ctx.args.filter((a) => !a.startsWith('-'))
+    if (!ctx.args.includes('-C')) ctx.err('[simulador] El simulador muestra siempre el formato canónico (-C), que es el que se usa en la práctica.\n')
+    const inputs = readInputs(ctx, files)
+    if (typeof inputs === 'number') return inputs
+    const bytes = bytesOf(inputs.map((x) => x.data).join(''))
+    for (let off = 0; off < bytes.length; off += 16) {
+      const chunk = [...bytes.slice(off, off + 16)]
+      const hex = chunk.map((b) => b.toString(16).padStart(2, '0'))
+      const left = hex.slice(0, 8).join(' ')
+      const right = hex.slice(8).join(' ')
+      const ascii = chunk.map((b) => (printable(b) ? String.fromCharCode(b) : '.')).join('')
+      ctx.out(`${off.toString(16).padStart(8, '0')}  ${left.padEnd(23)}  ${right.padEnd(23)}  |${ascii}|\n`)
+    }
+    ctx.out(`${bytes.length.toString(16).padStart(8, '0')}\n`)
+    return 0
+  },
+})
+
+register('xxd', {
+  usage: 'xxd [FILE]',
+  run(ctx) {
+    const inputs = readInputs(ctx, ctx.args.filter((a) => !a.startsWith('-')))
+    if (typeof inputs === 'number') return inputs
+    const bytes = bytesOf(inputs.map((x) => x.data).join(''))
+    for (let off = 0; off < bytes.length; off += 16) {
+      const chunk = [...bytes.slice(off, off + 16)]
+      const groups: string[] = []
+      for (let i = 0; i < chunk.length; i += 2) groups.push(chunk.slice(i, i + 2).map((b) => b.toString(16).padStart(2, '0')).join(''))
+      const ascii = chunk.map((b) => (printable(b) ? String.fromCharCode(b) : '.')).join('')
+      ctx.out(`${off.toString(16).padStart(8, '0')}: ${groups.join(' ').padEnd(39)}  ${ascii}\n`)
+    }
+    return 0
+  },
+})
+
+// ---------------------------------------------------------------------------------------
+// Finales de línea: dos2unix y unix2dos
+// ---------------------------------------------------------------------------------------
+
+for (const [name, toUnix] of [
+  ['dos2unix', true],
+  ['unix2dos', false],
+] as const) {
+  register(name, {
+    usage: `${name} FILE...`,
+    run(ctx) {
+      const files = ctx.args.filter((a) => !a.startsWith('-'))
+      if (!files.length) {
+        ctx.err(`${name}: [simulador] indica el archivo a convertir, por ejemplo: ${name} script.sh\n`)
+        return 1
+      }
+      let code = 0
+      for (const f of files) {
+        const abs = ctx.sh.resolve(f)
+        try {
+          const data = ctx.sys.vfs.readFile(abs, ctx.sh.cred)
+          const converted = toUnix ? data.replace(/\r\n/g, '\n') : data.replace(/\r?\n/g, '\r\n')
+          ctx.sys.vfs.writeFile(abs, converted, ctx.sh.cred)
+          ctx.err(`${name}: converting file ${f} to ${toUnix ? 'Unix' : 'DOS'} format...\n`)
+        } catch (e) {
+          if (e instanceof FsError) {
+            ctx.err(`${name}: Failed to open ${f}: ${e.message}\n`)
+            code = 1
+          } else throw e
+        }
+      }
+      return code
+    },
+  })
+}

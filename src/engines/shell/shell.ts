@@ -932,8 +932,36 @@ export class ExpansionError extends Error {}
 // Aritmética $(( ))
 // ---------------------------------------------------------------------------------------
 
+/** Número de bash: decimal, octal (017), hexadecimal (0x1F) o en cualquier base (2#1010, 16#ff). */
+function parseBashNumber(t: string): number {
+  const bad = () => new ExpansionError(`bash: ${t}: value too great for base (error token is "${t}")`)
+  if (/^0[xX]/.test(t)) {
+    if (!/^0[xX][0-9a-fA-F]+$/.test(t)) throw bad()
+    return parseInt(t.slice(2), 16)
+  }
+  const m = /^(\d+)#([0-9a-zA-Z@_]+)$/.exec(t)
+  if (m) {
+    const base = Number(m[1])
+    if (base < 2 || base > 64) throw new ExpansionError(`bash: ${t}: invalid arithmetic base (error token is "${t}")`)
+    const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@_'
+    let v = 0
+    for (const ch of m[2]) {
+      const d = base <= 36 ? alphabet.indexOf(ch.toLowerCase()) : alphabet.indexOf(ch)
+      if (d < 0 || d >= base) throw bad()
+      v = v * base + d
+    }
+    return v
+  }
+  if (/^0\d+$/.test(t)) {
+    if (/[89]/.test(t)) throw bad()
+    return parseInt(t, 8)
+  }
+  return parseInt(t, 10)
+}
+
+/** Aritmética de bash ($(( )) y let), con la misma precedencia de operadores que bash. */
 export function evalArith(expr: string, sh?: Shell): number {
-  const tokens = expr.match(/\d+|[A-Za-z_][A-Za-z0-9_]*|\*\*|<=|>=|==|!=|&&|\|\||[-+*/%()<>!]/g) ?? []
+  const tokens = expr.match(/0[xX][0-9a-zA-Z]+|\d+#[0-9a-zA-Z@_]+|\d+|[A-Za-z_][A-Za-z0-9_]*|\*\*|<<|>>|<=|>=|==|!=|&&|\|\||[-+*/%()<>!~&|^]/g) ?? []
   let pos = 0
   const peek = () => tokens[pos]
   const next = () => tokens[pos++]
@@ -948,9 +976,11 @@ export function evalArith(expr: string, sh?: Shell): number {
     if (t === '-') return -primary()
     if (t === '+') return primary()
     if (t === '!') return primary() ? 0 : 1
-    if (/^\d+$/.test(t)) return parseInt(t, 10)
+    if (t === '~') return ~primary()
+    if (/^\d/.test(t)) return parseBashNumber(t)
     const v = sh?.getVar(t)
-    return v ? parseInt(v, 10) || 0 : 0
+    if (!v) return 0
+    return /^\s*-?\d/.test(v) ? (/^-?(0[xX]|\d+#|0\d)/.test(v.trim()) ? parseBashNumber(v.trim()) : parseInt(v, 10) || 0) : 0
   }
   const power = (): number => {
     const base = primary()
@@ -960,48 +990,27 @@ export function evalArith(expr: string, sh?: Shell): number {
     }
     return base
   }
-  const mul = (): number => {
-    let v = power()
-    while (['*', '/', '%'].includes(peek())) {
+  const binary = (sub: () => number, ops: string[], apply: (op: string, a: number, b: number) => number) => (): number => {
+    let v = sub()
+    while (ops.includes(peek())) {
       const op = next()
-      const r = power()
-      if ((op === '/' || op === '%') && r === 0) throw new ExpansionError('bash: division by 0 (error token is "0")')
-      v = op === '*' ? v * r : op === '/' ? Math.trunc(v / r) : v % r
+      v = apply(op, v, sub())
     }
     return v
   }
-  const add = (): number => {
-    let v = mul()
-    while (peek() === '+' || peek() === '-') v = next() === '+' ? v + mul() : v - mul()
-    return v
-  }
-  const cmp = (): number => {
-    let v = add()
-    while (['<', '>', '<=', '>=', '==', '!='].includes(peek())) {
-      const op = next()
-      const r = add()
-      v = Number(op === '<' ? v < r : op === '>' ? v > r : op === '<=' ? v <= r : op === '>=' ? v >= r : op === '==' ? v === r : v !== r)
-    }
-    return v
-  }
-  const and = (): number => {
-    let v = cmp()
-    while (peek() === '&&') {
-      next()
-      const r = cmp()
-      v = Number(!!v && !!r)
-    }
-    return v
-  }
-  const or = (): number => {
-    let v = and()
-    while (peek() === '||') {
-      next()
-      const r = and()
-      v = Number(!!v || !!r)
-    }
-    return v
-  }
+  const mul = binary(power, ['*', '/', '%'], (op, a, b) => {
+    if ((op === '/' || op === '%') && b === 0) throw new ExpansionError('bash: division by 0 (error token is "0")')
+    return op === '*' ? a * b : op === '/' ? Math.trunc(a / b) : a % b
+  })
+  const add = binary(mul, ['+', '-'], (op, a, b) => (op === '+' ? a + b : a - b))
+  const shift = binary(add, ['<<', '>>'], (op, a, b) => (op === '<<' ? a << b : a >> b))
+  const rel = binary(shift, ['<', '>', '<=', '>='], (op, a, b) => Number(op === '<' ? a < b : op === '>' ? a > b : op === '<=' ? a <= b : a >= b))
+  const eq = binary(rel, ['==', '!='], (op, a, b) => Number(op === '==' ? a === b : a !== b))
+  const band = binary(eq, ['&'], (_, a, b) => a & b)
+  const bxor = binary(band, ['^'], (_, a, b) => a ^ b)
+  const bor = binary(bxor, ['|'], (_, a, b) => a | b)
+  const and = binary(bor, ['&&'], (_, a, b) => Number(!!a && !!b))
+  const or: () => number = binary(and, ['||'], (_, a, b) => Number(!!a || !!b))
   return or()
 }
 

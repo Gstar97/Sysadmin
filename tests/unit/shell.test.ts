@@ -65,3 +65,27 @@ describe('editor de la terminal', () => {
     expect(checkCrontab('@daily')?.message).toBe('bad command')
   })
 })
+
+describe('detalles que usa el Nivel 0', () => {
+  it('Ubuntu arranca y ls no muestra el punto de SELinux', async () => {
+    const { run } = await session({ distro: 'ubuntu' })
+    expect((await run('cat /etc/os-release')).out).toMatch(/Ubuntu/)
+    expect((await run('ls -ld /tmp')).out).toMatch(/^drwxrwxrwt \d/)
+  })
+
+  it('aritmética en otras bases y operadores de bits', async () => {
+    const { run } = await session()
+    expect((await run('echo $((2#11000000)) $((16#ff)) $((0x1F)) $((017)) $((192 & 255)) $((10 | 5)) $((6 ^ 3)) $((1 << 4))')).out).toBe('192 255 31 15 192 15 5 16\n')
+    expect((await run('echo $((08))')).err).toMatch(/value too great for base/)
+  })
+
+  it('bytes, codificación y finales de línea', async () => {
+    const { run } = await session({ archivos: { '/home/estudiante/s.sh': { contenido: '#!/bin/bash\r\necho hola\r\n', modo: '0755' } }, paquetes: { instalados: ['dos2unix'], disponibles: [] } })
+    expect((await run('echo -n "ñ" | od -An -tx1')).out).toBe(' c3 b1\n')
+    expect((await run('cat -A s.sh')).out).toBe('#!/bin/bash^M$\necho hola^M$\n')
+    expect((await run('./s.sh')).err).toMatch(/bad interpreter/)
+    await run('dos2unix s.sh')
+    expect((await run('./s.sh')).out).toBe('hola\n')
+    expect((await run('free -h')).out.split('\n')[0]).toBe('               total        used        free      shared  buff/cache   available')
+  })
+})

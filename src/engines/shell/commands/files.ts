@@ -60,7 +60,7 @@ register('ls', {
           const target = e.node.type === 'symlink' ? ` -> ${e.node.data}` : ''
           return {
             ino: String(e.node.ino),
-            perm: modeString(e.node) + '.',
+            perm: modeString(e.node) + (ctx.sys.distro === 'rocky' ? '.' : ''),
             links: String(e.node.nlink),
             user: ctx.sys.userName(e.node.uid),
             group: ctx.sys.groupName(e.node.gid),

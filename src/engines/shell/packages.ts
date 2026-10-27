@@ -74,6 +74,8 @@ const common: Record<string, PackageInfo> = {
   sysstat: { summary: 'Collection of performance monitoring tools for Linux', version: '12.7.5', commands: ['iostat', 'sar', 'mpstat'] },
   iotop: { summary: 'Top like utility for I/O', version: '0.6', commands: ['iotop'] },
   traceroute: { summary: 'Traces the route taken by packets over an IPv4/IPv6 network', version: '2.1.5', commands: ['traceroute'] },
+  dos2unix: { summary: 'Text file format converters', version: '7.5.2', commands: ['dos2unix', 'unix2dos'] },
+  xxd: { summary: 'A hex dump utility', version: '9.1.083', commands: ['xxd'] },
 }
 
 export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
@@ -242,7 +244,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
 
 export const BASE_INSTALLED = {
   rocky: ['bash', 'coreutils', 'sudo', 'curl', 'nano', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'firewalld', 'cronie', 'lsof'],
-  ubuntu: ['bash', 'coreutils', 'sudo', 'curl', 'wget', 'nano', 'vim', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'ufw', 'cron', 'rsyslog', 'lsof'],
+  ubuntu: ['bash', 'coreutils', 'sudo', 'curl', 'wget', 'nano', 'vim', 'xxd', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'ufw', 'cron', 'rsyslog', 'lsof'],
 }
 
 /** Comandos que solo existen si su paquete está instalado. */

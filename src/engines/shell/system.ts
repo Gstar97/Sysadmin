@@ -189,9 +189,24 @@ export class System {
       const node = this.vfs.stat(abs, ROOT_CRED, false)
       if (s.modo) node.mode = parseInt(s.modo, 8)
       else if (s.tipo === 'directorio') node.mode = 0o755
-      if (s.dueno) node.uid = this.users.get(s.dueno)?.uid ?? 0
+      // Sin dueño indicado, lo que está dentro del home de un usuario es de ese usuario
+      // (incluidas las carpetas intermedias que se crearon para el archivo).
+      const homeUser = [...this.users.values()].find((u) => u.uid >= 1000 && (abs === u.home || abs.startsWith(`${u.home}/`)))
+      if (homeUser) {
+        let dir = abs.slice(0, abs.lastIndexOf('/'))
+        while (dir.length > homeUser.home.length) {
+          const d = this.vfs.stat(dir, ROOT_CRED, false)
+          if (d.uid === 0) {
+            d.uid = homeUser.uid
+            d.gid = homeUser.gid
+          }
+          dir = dir.slice(0, dir.lastIndexOf('/'))
+        }
+      }
+      const owner = s.dueno ?? homeUser?.name
+      if (owner) node.uid = this.users.get(owner)?.uid ?? 0
       if (s.grupo) node.gid = this.groups.get(s.grupo)?.gid ?? 0
-      else if (s.dueno) node.gid = this.users.get(s.dueno)?.gid ?? 0
+      else if (owner) node.gid = this.users.get(owner)?.gid ?? 0
     }
 
     // Servicios del ejercicio
@@ -516,7 +531,10 @@ export class System {
       files['/var/log/auth.log'] = ''
       files['/etc/netplan/50-cloud-init.yaml'] = 'network:\n  version: 2\n  ethernets:\n    enp0s3:\n      dhcp4: true\n'
     }
-    for (const [p, c] of Object.entries(files)) v.writeFile(p, c, ROOT_CRED)
+    for (const [p, c] of Object.entries(files)) {
+      v.mkdirp(p.slice(0, p.lastIndexOf('/')) || '/', ROOT_CRED)
+      v.writeFile(p, c, ROOT_CRED)
+    }
     v.stat('/etc/sudoers', ROOT_CRED).mode = 0o440
     v.stat('/dev/null', ROOT_CRED).mode = 0o666
     v.stat('/etc/ssh/sshd_config', ROOT_CRED).mode = 0o600

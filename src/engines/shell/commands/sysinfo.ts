@@ -594,17 +594,24 @@ register('free', {
     const h = ctx.args.includes('-h')
     const m = ctx.args.includes('-m')
     const g = ctx.args.includes('-g')
-    const row = (kb: number) => (h ? (kb > 1048576 ? `${(kb / 1048576).toFixed(1)}Gi` : `${Math.round(kb / 1024)}Mi`) : m ? String(Math.round(kb / 1024)) : g ? String(Math.round(kb / 1048576)) : String(kb))
-    const total = 3843580
-    const used = 1008840
-    const free = 1520332
-    const shared = 9620
-    const cache = 1314408
-    const avail = 2788416
-    const w = h ? 10 : 12
-    ctx.out(`${''.padEnd(15)}${'total'.padStart(w)}${'used'.padStart(w)}${'free'.padStart(w)}${'shared'.padStart(w)}${'buff/cache'.padStart(w)}${'available'.padStart(w)}\n`)
-    ctx.out(`${'Mem:'.padEnd(15)}${row(total).padStart(w)}${row(used).padStart(w)}${row(free).padStart(w)}${row(shared).padStart(w)}${row(cache).padStart(w)}${row(avail).padStart(w)}\n`)
-    ctx.out(`${'Swap:'.padEnd(15)}${row(2097148).padStart(w)}${row(0).padStart(w)}${row(2097148).padStart(w)}\n`)
+    // Valores en KiB, como los informa el kernel en /proc/meminfo.
+    const human = (kb: number) => {
+      if (kb === 0) return '0B'
+      const units = ['Ki', 'Mi', 'Gi', 'Ti']
+      let v = kb
+      let u = 0
+      while (v >= 1024 && u < units.length - 1) {
+        v /= 1024
+        u++
+      }
+      return `${v < 10 ? v.toFixed(1) : Math.round(v)}${units[u]}`
+    }
+    const row = (kb: number) => (h ? human(kb) : m ? String(Math.round(kb / 1024)) : g ? String(Math.round(kb / 1048576)) : String(kb))
+    const mem = [3843580, 1008840, 1520332, 9620, 1314408, 2788416]
+    const cols = ['total', 'used', 'free', 'shared', 'buff/cache', 'available']
+    ctx.out(`${''.padEnd(8)}${cols.map((c) => c.padStart(12)).join('')}\n`)
+    ctx.out(`${'Mem:'.padEnd(8)}${mem.map((v) => row(v).padStart(12)).join('')}\n`)
+    ctx.out(`${'Swap:'.padEnd(8)}${[2097148, 0, 2097148].map((v) => row(v).padStart(12)).join('')}\n`)
     return 0
   },
 })
