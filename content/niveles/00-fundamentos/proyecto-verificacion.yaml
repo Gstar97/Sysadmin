@@ -1,0 +1,78 @@
+tipo: pasos
+titulo: Verificación final del laboratorio
+descripcion: >-
+  Comprueba de punta a punta que el laboratorio funciona antes de darlo por entregado. Cada paso
+  usa comandos que ya viste en el nivel.
+pasos:
+  - titulo: Enciende las tres VMs y anota sus direcciones
+    detalle: Compara lo que ves con tu inventario; si algo cambió, actualiza el inventario.
+    variantes:
+      - nombre: ubuntu01 y rocky01
+        detalle: 'En cada VM Linux:'
+        comandos:
+          - hostnamectl
+          - ip -br address
+      - nombre: win2025
+        detalle: 'En PowerShell:'
+        comandos:
+          - hostname
+          - ipconfig
+    comprobar: Cada VM tiene una IP en la red de solo anfitrión y otra en la red NAT, y coinciden con el inventario.
+  - titulo: Conéctate por SSH desde tu PC a las dos VMs Linux
+    detalle: Desde PowerShell (Windows) o la terminal (macOS y Linux), con las IP de solo anfitrión de tu inventario.
+    comandos:
+      - ssh tu_usuario@192.168.56.101
+      - ssh tu_usuario@192.168.56.102
+    comprobar: Entras a las dos VMs y el prompt muestra el nombre correcto de cada una.
+    si_falla: Revisa que el servicio SSH esté activo (`systemctl status ssh` en Ubuntu, `systemctl status sshd` en Rocky) y que estés usando la IP de solo anfitrión, no la de NAT.
+  - titulo: Prueba la red entre las VMs
+    detalle: >-
+      Windows Server bloquea por defecto el ping entrante. Para poder probar desde las VMs Linux,
+      habilita esa regla del firewall en win2025 (PowerShell como administrador) y después haz
+      los ping.
+    variantes:
+      - nombre: En win2025
+        detalle: 'Habilita la respuesta al ping y prueba hacia rocky01:'
+        comandos:
+          - Enable-NetFirewallRule -Name FPS-ICMP4-ERQ-In
+          - Test-Connection 192.168.56.102 -Count 3
+      - nombre: En rocky01
+        detalle: 'Prueba hacia ubuntu01 y hacia win2025:'
+        comandos:
+          - ping -c 3 192.168.56.101
+          - ping -c 3 192.168.56.103
+    comprobar: Las tres VMs se responden entre sí por la red de solo anfitrión.
+    si_falla: Si una sola VM no responde, revisa que su segunda placa esté conectada a la red de solo anfitrión y que tenga IP en ese rango.
+  - titulo: Comprueba la salida a internet
+    variantes:
+      - nombre: ubuntu01 y rocky01
+        detalle: 'Primero el DNS y después una conexión HTTPS completa:'
+        comandos:
+          - dig +short www.example.com
+          - curl -I https://www.example.com
+      - nombre: win2025
+        detalle: 'Tiene que responder `TcpTestSucceeded : True`:'
+        comandos:
+          - Test-NetConnection www.example.com -Port 443
+    comprobar: Las tres VMs resuelven nombres y llegan a un sitio por el puerto 443.
+    si_falla: Recorre el camino de la lección 0.4.5 en orden (IP, puerta de enlace, DNS, conexión) para encontrar en qué pieza falla.
+  - titulo: Aplica las actualizaciones
+    variantes:
+      - nombre: ubuntu01
+        detalle: 'Actualiza la lista de paquetes e instala las actualizaciones:'
+        comandos:
+          - sudo apt update && sudo apt full-upgrade -y
+      - nombre: rocky01
+        detalle: 'Un solo comando:'
+        comandos:
+          - sudo dnf upgrade -y
+      - nombre: win2025
+        detalle: >-
+          Desde *Configuración > Windows Update*, o con `sconfig` en PowerShell como administrador
+          (opción de actualizaciones). Reinicia si lo pide.
+    comprobar: Las tres VMs quedaron actualizadas y reiniciadas si hacía falta.
+  - titulo: Toma la instantánea del final del nivel
+    detalle: >-
+      Con las VMs apagadas, toma en cada una una instantánea llamada `fin-nivel-0` y anótala en el
+      inventario con la fecha y qué contiene. Es tu punto de partida limpio para el Nivel 1.
+    comprobar: Cada VM tiene las instantáneas `instalación limpia` y `fin-nivel-0`, y las dos están en el inventario.
