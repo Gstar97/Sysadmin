@@ -1,0 +1,205 @@
+id: '0'
+titulo: Fundamentos
+descripcion: >-
+  La base sobre la que se apoya todo lo demás: cómo funciona una computadora por dentro,
+  qué hace un sistema operativo, cómo se representan los datos en binario y hexadecimal,
+  y qué significa trabajar como sysadmin. Al final de este nivel queda armado el
+  laboratorio personal (máquinas virtuales) que se usa durante toda la carrera.
+perfil_salida: >-
+  Explicar cómo arranca y funciona una computadora, moverse con soltura entre decimal,
+  binario y hexadecimal, entender el rol de un sysadmin y tener un laboratorio de
+  máquinas virtuales funcionando.
+modulos:
+  - id: '0.1'
+    titulo: Cómo funciona una computadora
+    requiere: []
+    lecciones:
+      - t: Las piezas de una computadora y cómo se conectan
+        h: 1.5
+        obj:
+          - Identificar CPU, RAM, almacenamiento, placa madre, fuente y placas de expansión, y explicar qué hace cada una.
+          - Explicar cómo viajan los datos entre componentes (buses, chipset, PCIe).
+          - Leer la ficha técnica de una PC o de un servidor y entender cada dato.
+        ui: Diagrama interactivo de una placa madre (clic en cada parte) + emparejar componente con su función.
+      - t: El procesador
+        h: 2
+        obj:
+          - Explicar el ciclo buscar-decodificar-ejecutar y el papel de los registros y la caché.
+          - Diferenciar núcleos, hilos (SMT/Hyper-Threading), frecuencia y caché, y su efecto en el rendimiento.
+          - Distinguir las arquitecturas x86-64 y ARM64 (y los niveles x86-64-v2/v3) y por qué importan al instalar software.
+        ui: Simulador paso a paso de una CPU ejecutando un programa mínimo.
+      - t: La memoria
+        h: 1.5
+        obj:
+          - Ordenar la jerarquía de memoria (registros, caché, RAM, disco) por velocidad, tamaño y costo.
+          - Explicar qué pasa cuando la RAM se llena y por qué un servidor se pone lento.
+          - Entender qué es la memoria ECC y por qué se usa en servidores.
+        ui: Arrastrar y soltar para ordenar la jerarquía con latencias reales + comparador de escalas de tiempo.
+      - t: Almacenamiento
+        h: 2
+        obj:
+          - Comparar HDD, SSD SATA y SSD NVMe en latencia, IOPS, rendimiento y costo.
+          - Explicar qué son IOPS, throughput y latencia, y cuál importa en cada tipo de carga.
+          - Interpretar datos de durabilidad (TBW, DWPD) y el estado SMART de un disco.
+        ui: Comparador interactivo de discos frente a cargas típicas (base de datos, backups, archivos).
+      - t: Firmware y arranque
+        h: 2
+        obj:
+          - Describir la secuencia de arranque completa, del encendido al sistema operativo.
+          - Diferenciar BIOS heredado y UEFI, MBR y GPT, y explicar qué hace Secure Boot.
+          - Ubicar en qué etapa se detiene una máquina que no arranca.
+        ui: Ordenar las etapas del arranque + escenario de troubleshooting "la máquina no arranca".
+    lab:
+      t: Inventario de hardware del propio equipo con las herramientas de Windows, Linux o macOS (CPU, RAM, discos, firmware, modo de arranque) y ficha técnica documentada.
+      h: 2
+    caso:
+      t: El servidor nuevo no arranca después de cambiar el disco (modo UEFI/Legacy, tabla de particiones y orden de arranque).
+      h: 1
+
+  - id: '0.2'
+    titulo: Sistemas operativos
+    requiere: ['0.1']
+    lecciones:
+      - t: Qué es un sistema operativo
+        h: 1.5
+        obj:
+          - Explicar qué hace el kernel y la diferencia entre espacio de kernel y espacio de usuario.
+          - Entender qué son los drivers y las llamadas al sistema.
+          - Ubicar las familias principales (distribuciones Linux, Windows y Windows Server, macOS y BSD) y dónde se usa cada una.
+        ui: Diagrama interactivo de capas (hardware, kernel, bibliotecas, aplicaciones).
+      - t: Procesos e hilos
+        h: 2
+        obj:
+          - Diferenciar programa, proceso e hilo, e identificar un proceso por su PID.
+          - Explicar los estados de un proceso y cómo el planificador reparte la CPU.
+          - Entender la multitarea y por qué un proceso puede perjudicar a los demás.
+        ui: Simulador de planificador de CPU (turnos rotativos y prioridades).
+      - t: Memoria virtual
+        h: 1.5
+        obj:
+          - Explicar memoria virtual, páginas y swap.
+          - Entender qué hace el OOM killer cuando se agota la memoria.
+          - Interpretar el uso de memoria de un sistema sin confundir caché con memoria ocupada.
+        ui: Animación de paginación entre RAM y swap con un proceso que crece.
+      - t: Archivos y sistemas de archivos
+        h: 2
+        obj:
+          - Recorrer una jerarquía de directorios usando rutas absolutas y relativas.
+          - Explicar qué es un sistema de archivos y comparar ext4, XFS, NTFS, FAT32 y exFAT.
+          - Entender los metadatos (dueño, permisos, fechas) y que la extensión no define el tipo real de un archivo.
+        ui: Terminal simulada (primeros comandos pwd, ls, cd) + explorador de árbol de directorios.
+      - t: Usuarios y privilegios
+        h: 1.5
+        obj:
+          - Explicar por qué existen cuentas separadas y por qué no se usa la cuenta administradora para todo.
+          - Diferenciar root/Administrador, usuario común y cuenta de servicio.
+          - Entender a nivel conceptual cómo funcionan UAC en Windows y sudo en Linux.
+        ui: Escenarios de decisión "¿con qué cuenta harías esto?".
+      - t: 'Tu laboratorio: máquinas virtuales'
+        h: 3
+        obj:
+          - Elegir e instalar un hipervisor de escritorio (VirtualBox, VMware Workstation Pro, Hyper-V, o UTM en Mac con Apple Silicon).
+          - Crear una máquina virtual con CPU, RAM, disco y red (NAT, puente, solo anfitrión) y usar instantáneas.
+          - Instalar el primer Linux en una máquina virtual.
+        ui: Lista de pasos guiada con verificación + troubleshooting "la VM no arranca o no tiene red".
+    lab:
+      t: Instalar Linux (Ubuntu Server LTS y Rocky o AlmaLinux) y Windows Server 2025 de evaluación en máquinas virtuales; tomar instantáneas y restaurarlas.
+      h: 4
+    caso:
+      t: La máquina virtual no tiene internet (modos de red del hipervisor y virtualización desactivada en el firmware).
+      h: 1
+
+  - id: '0.3'
+    titulo: Sistemas numéricos y datos
+    requiere: []
+    lecciones:
+      - t: Binario
+        h: 2
+        obj:
+          - Explicar qué son un bit y un byte.
+          - Convertir de decimal a binario y de binario a decimal sin calculadora.
+          - Entender por qué 8 bits representan valores de 0 a 255 (clave para IPv4).
+        ui: Tablero de bits interactivo (encender y apagar bits) + ejercicios generados al azar.
+      - t: Hexadecimal y octal
+        h: 1.5
+        obj:
+          - Convertir entre binario, hexadecimal, octal y decimal.
+          - Reconocer dónde aparecen (direcciones MAC, IPv6, colores, permisos de Linux).
+        ui: Conversor con ejercicios generados al azar y medición de racha.
+      - t: Unidades de medida
+        h: 1.5
+        obj:
+          - Diferenciar KB de KiB y explicar por qué un disco de 1 TB muestra unos 931 GiB.
+          - Diferenciar Mbps de MB/s y calcular cuánto tarda una transferencia.
+        ui: Calculadora de tiempos de transferencia y de capacidad con ejercicios.
+      - t: Lógica binaria
+        h: 1.5
+        obj:
+          - Aplicar AND, OR, XOR y NOT bit a bit.
+          - Usar AND para obtener la red de una dirección IP con su máscara (adelanto del nivel de redes).
+        ui: Simulador de AND bit a bit entre una IP y su máscara.
+      - t: Texto, codificación e integridad
+        h: 1.5
+        obj:
+          - Explicar ASCII y UTF-8 y por qué aparecen caracteres extraños.
+          - Diferenciar finales de línea LF y CRLF y los problemas que causan en scripts.
+          - Verificar la integridad de un archivo descargado con un hash SHA-256.
+        ui: Terminal simulada (sha256sum, file, cat -A) + ejercicio de detectar un archivo alterado.
+    lab:
+      t: Ejercitación intensiva de conversiones y cálculos con el entrenador (meta 20 aciertos seguidos) y verificación del hash de las imágenes ISO del laboratorio.
+      h: 2
+    caso:
+      t: El script funciona en una PC y falla en el servidor (finales de línea CRLF).
+      h: 1
+
+  - id: '0.4'
+    titulo: El trabajo del sysadmin
+    requiere: []
+    lecciones:
+      - t: Qué hace un sysadmin
+        h: 1.5
+        obj:
+          - Describir las tareas habituales (altas de usuarios, parches, backups, monitoreo, incidentes y proyectos).
+          - Diferenciar trabajo planificado de interrupciones y entender cómo se organiza una semana real.
+        ui: Simulación de un día de trabajo para priorizar tareas que van llegando (arrastrar y soltar).
+      - t: Roles y caminos en IT
+        h: 1.5
+        obj:
+          - Diferenciar mesa de ayuda, soporte de nivel 1/2/3, sysadmin, redes, DevOps, SRE, cloud, seguridad y DBA.
+          - Trazar un camino de carrera posible según los propios intereses.
+        ui: Emparejar tareas con roles.
+      - t: Ética y responsabilidad
+        h: 1.5
+        obj:
+          - Entender qué implica tener acceso privilegiado y por qué se trabaja siempre con autorización explícita.
+          - Aplicar criterios de privacidad y confidencialidad con datos de personas y de la empresa.
+          - Reconocer pedidos irregulares (por ejemplo, leer el correo de otra persona) y cómo actuar.
+        ui: Escenarios de decisión ética con consecuencias.
+      - t: Cómo resolver problemas y aprender por cuenta propia
+        h: 2
+        obj:
+          - Aplicar un método de troubleshooting (síntoma, hipótesis, prueba, conclusión, registro).
+          - Leer documentación oficial y páginas de manual, y buscar mensajes de error con criterio.
+          - Escribir una buena pregunta técnica y tomar notas útiles.
+        ui: Troubleshooting guiado "la impresora de contabilidad no imprime".
+      - t: 'El mapa completo: qué pasa al abrir una página web'
+        h: 2
+        obj:
+          - Seguir el recorrido de una visita a una web (DNS, IP, TCP, TLS, HTTP, servidor, base de datos).
+          - Ubicar en qué nivel de la carrera se estudia cada pieza.
+        ui: Simulador de paquetes en versión introductoria + diagrama clicable del recorrido.
+    lab:
+      t: Crear el cuaderno técnico personal y documentar el laboratorio armado en el módulo 0.2 con un diagrama.
+      h: 2
+    caso:
+      t: Piden acceso al correo de una persona despedida (procedimiento, autorización por escrito y registro).
+      h: 1
+
+proyecto:
+  t: Ficha técnica y laboratorio listo
+  h: 8
+  entregables:
+    - Inventario completo del equipo propio (hardware, firmware, sistema operativo).
+    - Laboratorio con al menos una VM Linux y una VM Windows Server funcionando, con instantáneas.
+    - Diagrama del laboratorio (red del hipervisor y direcciones).
+    - Documento de una página sobre el rol de IT que interesa y por qué.

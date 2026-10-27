@@ -1,0 +1,210 @@
+id: '8'
+titulo: Seguridad
+descripcion: >-
+  Seguridad desde la mirada de quien administra la infraestructura: fortalecimiento
+  (hardening) de Linux, Windows y Active Directory, gestión de vulnerabilidades y parches,
+  identidades y accesos, segmentación y monitoreo de seguridad, y respuesta a incidentes.
+  Todo lo que se practica se hace sobre el laboratorio propio y con autorización.
+perfil_salida: >-
+  Auditar y fortalecer servidores y dominios con referencias reconocidas (CIS, líneas base
+  de Microsoft), gestionar vulnerabilidades por riesgo, aplicar mínimo privilegio,
+  segmentar la red, detectar actividad sospechosa y actuar ante un incidente.
+modulos:
+  - id: '8.1'
+    titulo: Fundamentos de seguridad
+    requiere: ['1.6', '2.6']
+    lecciones:
+      - t: Conceptos de seguridad
+        h: 2
+        obj:
+          - Explicar confidencialidad, integridad y disponibilidad.
+          - Diferenciar amenaza, vulnerabilidad y riesgo, y aplicar defensa en profundidad y confianza cero.
+        ui: Emparejar conceptos con ejemplos.
+      - t: Cómo atacan en la realidad
+        h: 2.5
+        obj:
+          - Reconocer los vectores más frecuentes (phishing, credenciales robadas, servicios expuestos, ransomware y cadena de suministro).
+          - Usar MITRE ATT&CK para entender las etapas de un ataque.
+        ui: Ordenar las etapas de un ataque real.
+      - t: Marcos y referencias
+        h: 1.5
+        obj:
+          - Conocer los CIS Benchmarks y CIS Controls, NIST CSF 2.0 e ISO/IEC 27001.
+          - Usarlos como guía práctica y no como trámite.
+        ui: Tarjetas de repaso + emparejar marco con uso.
+    lab:
+      t: Mapa de la superficie de ataque del laboratorio (qué expone cada servidor y a quién).
+      h: 2
+    caso:
+      t: Un correo falso de facturación termina en una cuenta comprometida (cadena de ataque y dónde se podía cortar).
+      h: 1.5
+
+  - id: '8.2'
+    titulo: Hardening
+    requiere: ['8.1', '3.3']
+    lecciones:
+      - t: Hardening de Linux, parte 1
+        h: 3
+        obj:
+          - Minimizar paquetes y servicios, endurecer SSH y activar actualizaciones automáticas (dnf-automatic, unattended-upgrades).
+          - Aplicar políticas de contraseñas y bloqueo de cuentas.
+        ui: Lista de verificación con validación en la terminal simulada.
+      - t: Hardening de Linux, parte 2
+        h: 3
+        obj:
+          - Auditar con auditd, Lynis y OpenSCAP (perfiles CIS).
+          - Ajustar parámetros de red con sysctl, usar fail2ban y cifrar discos con LUKS.
+        ui: Interpretar un reporte de Lynis.
+      - t: Hardening de Windows
+        h: 3
+        obj:
+          - Aplicar las líneas base de seguridad de Microsoft (Security Compliance Toolkit) por GPO.
+          - Desactivar SMBv1 y NTLMv1, exigir firma SMB y usar Windows LAPS.
+          - Configurar Microsoft Defender Antivirus y el firewall de Windows.
+        ui: Troubleshooting de directivas de seguridad.
+      - t: Protección de Active Directory
+        h: 3
+        obj:
+          - Aplicar el modelo de niveles de administración y cuentas administrativas separadas.
+          - Usar el grupo Protected Users y mitigar ataques comunes (Kerberoasting, pass-the-hash).
+          - Evaluar el dominio con PingCastle o Purple Knight.
+        ui: Diagrama interactivo del modelo de niveles.
+      - t: Hardening de red y servicios
+        h: 2
+        obj:
+          - Asegurar los equipos de red (SSH, SNMPv3, AAA) y eliminar protocolos inseguros.
+          - Exigir TLS en los servicios internos.
+        ui: Encontrar el error en configuraciones de equipos.
+    lab:
+      t: Aplicar la línea base CIS a un Linux con OpenSCAP y a Windows por GPO, y comparar los puntajes antes y después.
+      h: 4
+    caso:
+      t: La auditoría encontró SMBv1 activo y la misma contraseña de administrador local en todos los equipos (plan de remediación).
+      h: 1.5
+
+  - id: '8.3'
+    titulo: Vulnerabilidades y parches
+    requiere: ['8.1']
+    lecciones:
+      - t: Gestión de vulnerabilidades
+        h: 2
+        obj:
+          - Entender CVE, CVSS (versión 4.0), EPSS y el catálogo KEV de CISA.
+          - Priorizar por riesgo real y no solo por puntaje.
+        ui: Priorizar una lista de vulnerabilidades (arrastrar y soltar).
+      - t: Greenbone y OpenVAS
+        h: 3
+        obj:
+          - Instalar Greenbone Community Edition con contenedores.
+          - Ejecutar escaneos con y sin credenciales.
+          - Interpretar los reportes y descartar falsos positivos.
+        ui: Interpretar un reporte simulado.
+      - t: Ciclo de parches
+        h: 2
+        obj:
+          - Definir una política con plazos por severidad, pruebas, ventanas de mantenimiento y vuelta atrás.
+          - Medir el cumplimiento en Linux y Windows.
+        ui: Escenarios de decisión.
+    lab:
+      t: Escaneo completo del laboratorio, priorización, remediación y nuevo escaneo de verificación.
+      h: 3
+    caso:
+      t: Un viernes a la tarde se publica una vulnerabilidad crítica explotada activamente (priorizar y mitigar mientras llega el parche).
+      h: 1.5
+
+  - id: '8.4'
+    titulo: Identidades y accesos
+    requiere: ['8.1', '3.3']
+    lecciones:
+      - t: Principios de gestión de identidades
+        h: 2
+        obj:
+          - Aplicar mínimo privilegio, separación de funciones y necesidad de saber.
+          - Gestionar el ciclo de vida de las identidades (altas, cambios y bajas) y las revisiones periódicas de accesos.
+        ui: Escenarios de decisión.
+      - t: Autenticación fuerte y acceso único
+        h: 2.5
+        obj:
+          - Implementar MFA (TOTP, FIDO2 y passkeys) y entender el acceso único con SAML y OpenID Connect.
+          - Unir Linux a Active Directory con SSSD y realmd.
+        ui: Diagrama interactivo de un flujo de acceso único.
+      - t: Accesos privilegiados
+        h: 2.5
+        obj:
+          - Usar bastiones, cuentas de administración separadas y acceso temporal bajo demanda.
+          - Guardar secretos en gestores (HashiCorp Vault u OpenBao, Bitwarden o Vaultwarden, KeePassXC) y definir cuentas de emergencia.
+        ui: Troubleshooting de accesos.
+    lab:
+      t: Linux unido al dominio con SSSD, sudo por grupos de AD, MFA en el acceso al bastión y gestor de contraseñas del equipo.
+      h: 3
+    caso:
+      t: Una persona que dejó la empresa sigue teniendo acceso tres meses después (proceso de bajas).
+      h: 1.5
+
+  - id: '8.5'
+    titulo: Seguridad de red y detección
+    requiere: ['8.1', '2.6']
+    lecciones:
+      - t: Segmentación
+        h: 2
+        obj:
+          - Diseñar zonas (usuarios, servidores, DMZ, gestión, invitados) y microsegmentación.
+          - Conocer el control de acceso a la red con 802.1X.
+        ui: Constructor de topologías con zonas de seguridad.
+      - t: Firewalls avanzados e IDS/IPS
+        h: 3
+        obj:
+          - Escribir políticas entre zonas y filtrado del tráfico de salida.
+          - Desplegar Suricata como IDS/IPS y filtrado por DNS.
+        ui: Simulador de reglas entre zonas.
+      - t: Monitoreo de seguridad
+        h: 3
+        obj:
+          - Desplegar Wazuh como plataforma abierta de detección y entender qué es un EDR.
+          - Crear detecciones basadas en logs (fuerza bruta, cambios en grupos privilegiados).
+        ui: Interpretar y clasificar alertas.
+    lab:
+      t: Red de gestión aislada, Suricata en OPNsense y Wazuh con agentes en Linux y Windows.
+      h: 4
+    caso:
+      t: Tráfico extraño saliendo de un servidor a las 3 de la mañana (detección y aislamiento).
+      h: 1.5
+
+  - id: '8.6'
+    titulo: Respuesta a incidentes
+    requiere: ['8.5']
+    lecciones:
+      - t: El proceso de respuesta
+        h: 2
+        obj:
+          - Aplicar las fases de preparación, detección, contención, erradicación, recuperación y lecciones aprendidas.
+          - Conocer NIST SP 800-61 revisión 3 (2025), alineada con NIST CSF 2.0.
+        ui: Ordenar las fases de la respuesta.
+      - t: Forense básica para sysadmins
+        h: 2.5
+        obj:
+          - Preservar evidencia respetando el orden de volatilidad y la cadena de custodia.
+          - Saber qué no hacer antes de tiempo (apagar, reinstalar, borrar logs).
+        ui: Escenarios de decisión.
+      - t: Simulacro de incidente
+        h: 3
+        obj:
+          - Manejar un incidente completo tomando decisiones bajo presión.
+          - Escribir el informe final.
+        ui: Troubleshooting de varias etapas con reloj.
+    lab:
+      t: Procedimiento de respuesta a incidentes para el laboratorio y simulacro con recolección de evidencias.
+      h: 3
+    caso:
+      t: Se comprometió una cuenta de administrador del dominio (contención, doble restablecimiento de krbtgt y recuperación).
+      h: 2
+
+proyecto:
+  t: Auditoría y hardening de la infraestructura
+  h: 24
+  entregables:
+    - Escaneo de la infraestructura construida en la carrera con Greenbone, Lynis y PingCastle.
+    - Priorización por riesgo y remediación documentada.
+    - Líneas base CIS aplicadas y red de gestión segmentada.
+    - Wazuh con alertas útiles.
+    - Simulacro de incidente con informe final.

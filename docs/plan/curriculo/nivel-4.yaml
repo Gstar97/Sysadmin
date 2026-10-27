@@ -1,0 +1,232 @@
+id: '4'
+titulo: Servicios e infraestructura
+descripcion: >-
+  Los servicios que sostienen una empresa: servidores web y proxies inversos, certificados
+  TLS, bases de datos desde el punto de vista de la administración, correo, recursos
+  compartidos con NFS y Samba, y el hardware físico donde todo corre (servidores, RAID,
+  gestión fuera de banda, rack, energía y UPS).
+perfil_salida: >-
+  Publicar aplicaciones web con HTTPS correctamente configurado, administrar y respaldar
+  bases de datos MySQL/MariaDB y PostgreSQL, operar servicios de correo y de archivos, y
+  planificar el hardware físico de una sala de servidores.
+modulos:
+  - id: '4.1'
+    titulo: Servidores web
+    requiere: ['1.6', '2.3']
+    lecciones:
+      - t: HTTP por dentro
+        h: 2
+        obj:
+          - Explicar solicitud y respuesta HTTP (métodos, códigos de estado, encabezados y cookies).
+          - Diferenciar HTTP/1.1, HTTP/2 y HTTP/3 (sobre QUIC y UDP).
+          - Inspeccionar tráfico con curl -v y las herramientas del navegador.
+        ui: Constructor de solicitudes HTTP + interpretar respuestas.
+      - t: Nginx
+        h: 3
+        obj:
+          - Instalar Nginx y entender su estructura de configuración (contextos, server y location).
+          - Publicar varios sitios con bloques server y revisar sus logs.
+          - Validar la configuración con nginx -t y recargar sin cortar el servicio.
+        ui: Editor de nginx.conf con validación.
+      - t: Apache HTTP Server
+        h: 2
+        obj:
+          - Configurar hosts virtuales, módulos y archivos .htaccess.
+          - Entender los MPM (prefork, worker, event) y las diferencias con Nginx.
+        ui: Encontrar el error en una configuración de Apache.
+      - t: Proxy inverso y balanceo de carga
+        h: 3
+        obj:
+          - Configurar Nginx como proxy inverso con los encabezados correctos (Host, X-Forwarded-For, X-Forwarded-Proto).
+          - Balancear entre varios servidores de aplicación y soportar WebSockets.
+          - Conocer HAProxy para balanceo dedicado.
+        ui: Editor de configuración + diagrama del flujo de una solicitud.
+      - t: Publicar aplicaciones
+        h: 2.5
+        obj:
+          - Servir aplicaciones PHP con PHP-FPM y aplicaciones Python o Node detrás del proxy.
+          - Manejar la aplicación como servicio de systemd con sus logs.
+        ui: Troubleshooting "502 Bad Gateway".
+    lab:
+      t: Dos sitios en Nginx, uno estático y otro con una aplicación detrás de proxy inverso balanceada entre dos instancias.
+      h: 3
+    caso:
+      t: La web devuelve 502 después de una actualización (aplicación caída, socket incorrecto y SELinux).
+      h: 1.5
+
+  - id: '4.2'
+    titulo: Certificados y TLS
+    requiere: ['4.1']
+    lecciones:
+      - t: Criptografía para sysadmins
+        h: 2
+        obj:
+          - Diferenciar cifrado simétrico y asimétrico, hash y firma digital.
+          - Explicar la infraestructura de clave pública y la cadena de confianza.
+        ui: Diagrama interactivo de la cadena de confianza.
+      - t: Certificados X.509 y OpenSSL
+        h: 2.5
+        obj:
+          - Generar claves y solicitudes de firma (CSR) y leer certificados con openssl.
+          - Entender SAN, comodines, certificados intermedios y formatos (PEM, DER, PFX/PKCS#12).
+        ui: Interpretar la salida de openssl x509 -text.
+      - t: Let's Encrypt y ACME
+        h: 2
+        obj:
+          - Obtener certificados con certbot u otro cliente ACME mediante desafíos HTTP-01 y DNS-01.
+          - Automatizar la renovación, cada vez más importante (la vigencia máxima bajó a 200 días en marzo de 2026, baja a 100 días en 2027 y a 47 días en 2029).
+        ui: Ordenar el flujo de emisión ACME.
+      - t: HTTPS bien configurado
+        h: 2
+        obj:
+          - Configurar TLS 1.2 y 1.3, redirección a HTTPS y HSTS.
+          - Probar con openssl s_client y testssl.sh e interpretar los resultados.
+        ui: Editor de configuración + interpretar un reporte de testssl.sh.
+      - t: PKI interna
+        h: 2
+        obj:
+          - Montar una autoridad certificante interna (OpenSSL o step-ca) y conocer AD CS en entornos Windows.
+          - Distribuir el certificado raíz interno a los equipos.
+        ui: Troubleshooting de errores de certificado en el navegador y en curl.
+    lab:
+      t: HTTPS con certificado de la CA interna y con Let's Encrypt (entorno de staging), renovación automática y calificación alta en testssl.sh.
+      h: 3
+    caso:
+      t: El sitio de la empresa amaneció con aviso de conexión no segura (certificado vencido, renovación rota o intermedio faltante).
+      h: 1.5
+
+  - id: '4.3'
+    titulo: Bases de datos para administradores
+    requiere: ['1.3']
+    lecciones:
+      - t: Conceptos y SQL básico
+        h: 2.5
+        obj:
+          - Entender el modelo relacional, tablas, índices y transacciones.
+          - Escribir SQL básico (SELECT, INSERT, UPDATE, DELETE y JOIN simple) para verificar datos.
+        ui: Consola SQL simulada en el navegador.
+      - t: MySQL y MariaDB
+        h: 3
+        obj:
+          - Instalar y asegurar el servidor, y crear bases, usuarios y privilegios (GRANT).
+          - Configurar el acceso remoto de forma segura y ajustar my.cnf.
+          - Conocer las versiones vigentes (MySQL 8.4 LTS, ya que 8.0 llegó a fin de vida en abril de 2026, y las versiones LTS de MariaDB).
+        ui: Consola SQL simulada + editor de configuración.
+      - t: PostgreSQL
+        h: 3
+        obj:
+          - Instalar PostgreSQL, crear roles y bases, y usar psql.
+          - Configurar la autenticación en pg_hba.conf y los parámetros en postgresql.conf.
+        ui: Encontrar el error en un pg_hba.conf.
+      - t: Backup y restauración de bases de datos
+        h: 3
+        obj:
+          - Hacer respaldos lógicos (mysqldump o mariadb-dump, pg_dump) y físicos (mariabackup, pg_basebackup).
+          - Entender la recuperación a un punto en el tiempo con binlogs y WAL.
+          - Restaurar y verificar, porque un backup que nunca se restauró no está probado.
+        ui: Ordenar un procedimiento de restauración.
+      - t: Rendimiento y replicación
+        h: 2.5
+        obj:
+          - Detectar consultas lentas (slow query log, pg_stat_statements) y conexiones agotadas.
+          - Configurar replicación primaria-réplica y entender sus límites.
+        ui: Troubleshooting "la base está lenta".
+    lab:
+      t: MariaDB y PostgreSQL con usuarios de mínimo privilegio, backups automáticos y restauración probada en otro servidor.
+      h: 3
+    caso:
+      t: Se borró una tabla en producción a las 11:42 (recuperación a un punto en el tiempo).
+      h: 1.5
+
+  - id: '4.4'
+    titulo: Correo y servicios de archivos
+    requiere: ['2.3', '1.6']
+    lecciones:
+      - t: Cómo funciona el correo
+        h: 2
+        obj:
+          - Explicar el recorrido de un correo (cliente, servidor de envío, servidor de entrega) y los registros MX.
+          - Conocer puertos y protocolos (SMTP 25, 587 y 465, IMAP 993, POP3).
+        ui: Simulador del recorrido de un correo.
+      - t: Autenticación de correo
+        h: 2
+        obj:
+          - Configurar y verificar SPF, DKIM, DMARC y el registro PTR del servidor.
+          - Entender por qué los correos caen en spam y los requisitos de Gmail y Yahoo para remitentes masivos (vigentes desde 2024).
+        ui: Encontrar el error en registros SPF y DMARC.
+      - t: Postfix como relay
+        h: 2.5
+        obj:
+          - Configurar Postfix para enviar notificaciones a través de un relay autenticado.
+          - Leer la cola y los logs de correo.
+          - Entender por qué el correo de las personas suele tercerizarse (Microsoft 365, Google Workspace).
+        ui: Interpretar logs de Postfix.
+      - t: NFS
+        h: 2
+        obj:
+          - Exportar y montar recursos NFS (versión 4) y entender root_squash.
+          - Montar bajo demanda con autofs o systemd.automount.
+        ui: Editor de /etc/exports con validación.
+      - t: Samba
+        h: 2.5
+        obj:
+          - Compartir carpetas con clientes Windows mediante smb.conf.
+          - Gestionar usuarios y permisos, y conocer la integración con Active Directory.
+        ui: Encontrar el error en un smb.conf.
+    lab:
+      t: Servidor de notificaciones con Postfix como relay, recurso NFS para servidores Linux y recurso Samba para usuarios Windows.
+      h: 3
+    caso:
+      t: Los correos de la empresa llegan a spam (SPF, DKIM y DMARC).
+      h: 1.5
+
+  - id: '4.5'
+    titulo: Hardware de servidor y sala de servidores
+    requiere: ['0.1']
+    lecciones:
+      - t: Servidores físicos
+        h: 2
+        obj:
+          - Diferenciar formatos (torre, rack 1U y 2U, blade) y componentes redundantes.
+          - Entender memoria ECC, procesadores de servidor, discos intercambiables en caliente y controladoras.
+        ui: Diagrama interactivo de un servidor 2U.
+      - t: RAID
+        h: 3
+        obj:
+          - Explicar RAID 0, 1, 5, 6 y 10 (capacidad, rendimiento y tolerancia a fallas).
+          - Diferenciar RAID por hardware y por software (mdadm) y entender la reconstrucción.
+          - Explicar por qué RAID no es backup.
+        ui: Simulador de RAID (hacer fallar discos y ver qué pasa).
+      - t: Gestión fuera de banda
+        h: 2
+        obj:
+          - Usar iDRAC, iLO o IPMI para consola remota, montaje de ISO y lectura de sensores.
+          - Conocer Redfish y por qué la interfaz de gestión va en una red aislada.
+        ui: Diagrama interactivo de la red de gestión.
+      - t: Rack y sala de servidores
+        h: 2
+        obj:
+          - Planificar un rack (unidades, peso, cableado estructurado, patcheras y etiquetado).
+          - Entender la refrigeración (pasillo frío y pasillo caliente) y la seguridad física.
+        ui: Constructor de rack (arrastrar equipos a sus unidades).
+      - t: Energía y UPS
+        h: 2
+        obj:
+          - Diferenciar UPS offline, interactiva y online.
+          - Calcular potencia (VA y W) y autonomía, y configurar el apagado ordenado con NUT.
+        ui: Calculadora de UPS.
+    lab:
+      t: RAID 1 y RAID 5 con mdadm en VMs, falla y reconstrucción simuladas, y NUT configurado con una UPS simulada.
+      h: 3
+    caso:
+      t: Falló un disco del RAID 5 y durante la reconstrucción falló otro (RAID 6 o 10, monitoreo y backup).
+      h: 1.5
+
+proyecto:
+  t: Plataforma web de producción
+  h: 20
+  entregables:
+    - Nginx como proxy inverso con HTTPS bien configurado, balanceo y aplicación detrás.
+    - Base de datos con backup automático y restauración probada.
+    - Almacenamiento compartido con NFS y correo de alertas con Postfix.
+    - Diseño físico documentado (rack, energía y UPS calculados).

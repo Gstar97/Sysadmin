@@ -1,0 +1,392 @@
+id: '1'
+titulo: Linux
+descripcion: >-
+  Administración de servidores Linux desde cero hasta un nivel profesional. Se trabaja con
+  dos distribuciones de referencia: Rocky Linux 10 o AlmaLinux 10 (familia Red Hat) y
+  Ubuntu Server LTS (familia Debian). Cada vez que un comando o archivo cambia entre
+  familias o versiones, la lección lo aclara.
+perfil_salida: >-
+  Instalar, configurar, asegurar y mantener un servidor Linux; administrar usuarios,
+  permisos, software, servicios, discos y procesos; acceder de forma remota y segura, y
+  automatizar tareas con scripts de Bash. Es el nivel que prepara la base de RHCSA y LPIC-1.
+modulos:
+  - id: '1.1'
+    titulo: Primeros pasos en la terminal
+    requiere: ['0.2']
+    lecciones:
+      - t: Distribuciones Linux y cómo elegir
+        h: 2
+        obj:
+          - Diferenciar las familias Red Hat (RHEL, Rocky, AlmaLinux, Fedora) y Debian (Debian, Ubuntu).
+          - Entender los ciclos de soporte (LTS, fin de vida) y por qué en servidores se usan versiones estables.
+          - Conocer los requisitos actuales, por ejemplo que RHEL 10 y Rocky 10 exigen CPU x86-64-v3 (AlmaLinux 10 publica además una edición x86-64-v2).
+        ui: Emparejar distribución con uso típico + tarjetas de repaso.
+      - t: La terminal y el shell
+        h: 2
+        obj:
+          - Entender qué es un shell (bash) y la estructura comando, opciones y argumentos.
+          - Usar el historial, el autocompletado con Tab y los atajos de teclado.
+          - Trabajar con comodidad en la consola de la máquina virtual.
+        ui: Terminal Linux simulada con ejercicios validados.
+      - t: Navegación y jerarquía de directorios
+        h: 2
+        obj:
+          - Moverse por el sistema con pwd, cd y ls (con sus opciones más usadas).
+          - Explicar para qué sirve cada directorio del estándar FHS (/etc, /var, /home, /usr, /tmp, /opt, /proc, /dev).
+        ui: Terminal simulada + diagrama clicable del árbol FHS.
+      - t: Archivos y directorios
+        h: 2.5
+        obj:
+          - Crear, copiar, mover, renombrar y borrar archivos y directorios (touch, mkdir, cp, mv, rm).
+          - Usar comodines (*, ?, [ ]) sin riesgos.
+          - Diferenciar enlaces duros y simbólicos y crearlos con ln.
+        ui: Terminal simulada que valida el estado final del sistema de archivos.
+      - t: Ver y buscar
+        h: 2
+        obj:
+          - Ver contenido con cat, less, head y tail (incluido tail -f para seguir logs en vivo).
+          - Buscar archivos con find por nombre, tamaño, fecha y dueño.
+          - Identificar archivos y comandos con file, stat, which y type.
+        ui: Terminal simulada con el desafío "encontrar el archivo de configuración perdido".
+      - t: Obtener ayuda
+        h: 1
+        obj:
+          - Usar man (secciones y búsqueda), --help y la documentación de /usr/share/doc.
+          - Encontrar el comando adecuado con man -k (apropos).
+        ui: Preguntas sobre una página de manual real.
+      - t: Redirecciones, tuberías y filtros
+        h: 3
+        obj:
+          - Entender stdin, stdout y stderr y redirigirlos (>, >>, 2>, &>, <).
+          - Encadenar comandos con | y tee.
+          - Filtrar y resumir texto con grep, sort, uniq, wc, cut y tr.
+        ui: Terminal simulada con desafíos sobre logs reales.
+      - t: 'Editores de texto: nano y vim'
+        h: 2.5
+        obj:
+          - Editar archivos de configuración con nano.
+          - Usar vim (modos, desplazamiento, edición, búsqueda, reemplazo, guardar y salir).
+          - Recuperarse de un archivo .swp o de un cierre sin guardar.
+        ui: Simulador de vim con ejercicios progresivos.
+    lab:
+      t: 'Primer día en el servidor: organizar un árbol de proyecto, buscar archivos, extraer datos de logs y editar configuraciones en la VM.'
+      h: 3
+    caso:
+      t: La aplicación dejó de arrancar después de que alguien editó su configuración (comparar con la copia y encontrar el error).
+      h: 1.5
+
+  - id: '1.2'
+    titulo: Usuarios, grupos y permisos
+    requiere: ['1.1']
+    lecciones:
+      - t: Usuarios y grupos
+        h: 2.5
+        obj:
+          - Leer /etc/passwd, /etc/shadow y /etc/group y entender cada campo.
+          - Crear, modificar y eliminar usuarios y grupos (useradd, usermod, userdel, groupadd, passwd).
+          - Configurar el vencimiento de contraseñas con chage.
+        ui: Terminal simulada con validación del resultado.
+      - t: Permisos básicos
+        h: 3
+        obj:
+          - Interpretar la salida de ls -l y los permisos rwx de dueño, grupo y otros.
+          - Cambiar permisos en notación simbólica y octal con chmod, y dueños con chown y chgrp.
+          - Explicar qué significan r, w y x sobre un directorio (no es lo mismo que sobre un archivo) y cómo influye umask.
+        ui: Calculadora de permisos + terminal simulada.
+      - t: Permisos especiales
+        h: 1.5
+        obj:
+          - Explicar SUID, SGID y sticky bit, y sus riesgos.
+          - Crear directorios compartidos por grupo con SGID.
+        ui: Terminal simulada con el caso "carpeta compartida de contabilidad".
+      - t: Listas de control de acceso (ACL)
+        h: 1.5
+        obj:
+          - Dar permisos a usuarios y grupos adicionales con setfacl y revisarlos con getfacl.
+          - Entender la máscara de ACL y las ACL por defecto.
+        ui: Terminal simulada.
+      - t: sudo y privilegios
+        h: 2
+        obj:
+          - Configurar sudo de forma segura con visudo y archivos en /etc/sudoers.d.
+          - Dar permisos acotados a ciertos comandos en lugar de acceso total.
+          - Diferenciar su, su - y sudo -i, y revisar en los logs quién usó sudo.
+          - Saber que Ubuntu 26.04 usa sudo-rs por defecto y qué cambia en la práctica.
+        ui: Editor de sudoers con validación de sintaxis.
+      - t: Autenticación y políticas de contraseñas
+        h: 1.5
+        obj:
+          - Entender el papel de PAM en la autenticación.
+          - Aplicar políticas de complejidad (pwquality) y bloqueo por intentos fallidos (faillock).
+        ui: Encontrar el error en una configuración de PAM.
+    lab:
+      t: 'Estructura de una oficina: usuarios por departamento, carpetas compartidas con SGID y ACL, y sudo delegado al equipo de soporte.'
+      h: 3
+    caso:
+      t: Nadie de ventas puede guardar archivos en la carpeta compartida (permisos, SGID y umask).
+      h: 1.5
+
+  - id: '1.3'
+    titulo: Software, servicios y logs
+    requiere: ['1.2']
+    lecciones:
+      - t: Paquetes y repositorios
+        h: 3
+        obj:
+          - Instalar, actualizar, buscar y quitar software con dnf (familia Red Hat) y apt (familia Debian).
+          - Entender repositorios, claves GPG y repositorios extra (EPEL, PPA) con sus riesgos.
+          - Averiguar qué paquete instaló un archivo y revisar el historial de cambios (dnf history, historial de apt).
+          - Conocer cambios recientes como el formato deb822 de los repositorios (archivos .sources, por defecto desde Ubuntu 24.04 y recomendado en Debian 13) y DNF5 en Fedora.
+        ui: Terminal simulada con gestor de paquetes simulado.
+      - t: Otros formatos de software
+        h: 1
+        obj:
+          - Diferenciar paquetes nativos, Snap, Flatpak, AppImage y binarios sueltos.
+          - Entender cuándo compilar desde el código fuente y por qué se evita en producción.
+        ui: Escenarios de decisión.
+      - t: systemd y servicios
+        h: 3
+        obj:
+          - Arrancar, detener, reiniciar, habilitar y consultar servicios con systemctl.
+          - Entender unidades, targets y dependencias.
+          - Diagnosticar un servicio que no arranca con systemctl status y journalctl.
+        ui: Terminal simulada con servicios que fallan.
+      - t: Unidades propias y timers
+        h: 2
+        obj:
+          - Escribir un archivo .service para un programa propio.
+          - Modificar servicios sin tocar el archivo original con systemctl edit.
+          - Programar tareas con timers de systemd.
+        ui: Editor de unidades de systemd con validación.
+      - t: Logs del sistema
+        h: 2.5
+        obj:
+          - Filtrar el journal por unidad, prioridad, tiempo y arranque (journalctl -u, -p, --since, -b).
+          - Entender rsyslog y los archivos de /var/log, con sus diferencias entre distribuciones.
+          - Configurar la rotación de logs con logrotate.
+        ui: Ejercicios de interpretar salidas reales de journalctl.
+      - t: El arranque de Linux y la recuperación
+        h: 2.5
+        obj:
+          - Describir el arranque (firmware, GRUB2, kernel, initramfs, systemd, target).
+          - Arrancar en modo rescate o emergencia y recuperar la contraseña de root.
+          - Cambiar el target por defecto y los parámetros del kernel.
+        ui: Troubleshooting "el servidor no termina de arrancar".
+    lab:
+      t: Instalar un servidor web simple como servicio, crear una unidad propia con su timer y revisar y rotar sus logs.
+      h: 3
+    caso:
+      t: El servicio se cae todas las noches a las 3:00 (timer, journal y logrotate).
+      h: 1.5
+
+  - id: '1.4'
+    titulo: Discos y almacenamiento
+    requiere: ['1.3']
+    lecciones:
+      - t: Dispositivos de bloque
+        h: 1.5
+        obj:
+          - Identificar discos y particiones con lsblk, blkid y fdisk -l.
+          - Entender los nombres de dispositivos (/dev/sda, /dev/nvme0n1p1, /dev/vda) y por qué usar UUID.
+        ui: Terminal simulada con discos virtuales.
+      - t: Particionado
+        h: 2
+        obj:
+          - Crear tablas de particiones GPT y MBR.
+          - Particionar con fdisk, gdisk y parted.
+        ui: Terminal simulada + diagrama interactivo de la estructura de un disco GPT.
+      - t: Sistemas de archivos
+        h: 2
+        obj:
+          - Crear sistemas de archivos ext4 y XFS y conocer sus diferencias (por ejemplo, XFS no se puede reducir).
+          - Verificar y reparar con fsck y xfs_repair.
+          - Saber qué es Btrfs y en qué distribuciones aparece por defecto.
+        ui: Emparejar características con sistema de archivos + terminal simulada.
+      - t: Montajes y /etc/fstab
+        h: 2
+        obj:
+          - Montar y desmontar a mano y con /etc/fstab usando UUID y opciones (nofail, noexec).
+          - Probar fstab antes de reiniciar (mount -a, findmnt --verify).
+          - Recuperar un servidor que no arranca por un fstab mal escrito.
+        ui: Editor de fstab con validación + troubleshooting.
+      - t: LVM
+        h: 3
+        obj:
+          - Explicar volúmenes físicos, grupos de volúmenes y volúmenes lógicos.
+          - Crear, extender y, cuando se puede, reducir volúmenes junto con su sistema de archivos (lvextend -r).
+          - Usar snapshots de LVM para respaldos consistentes.
+        ui: Diagrama interactivo PV/VG/LV + terminal simulada.
+      - t: Swap y espacio en disco
+        h: 2
+        obj:
+          - Crear y activar swap en partición o en archivo.
+          - Encontrar qué ocupa el disco con df, du y ncdu, incluido el agotamiento de inodos.
+          - Detectar archivos borrados que siguen ocupando espacio (lsof +L1).
+        ui: Terminal simulada con el caso "disco lleno".
+    lab:
+      t: Agregar dos discos a la VM, crear un grupo de volúmenes con volúmenes para /srv/datos y /var/log, montarlos por UUID y extenderlos en caliente.
+      h: 3
+    caso:
+      t: El disco está al 100% pero du no muestra nada grande (archivo borrado que un proceso mantiene abierto).
+      h: 1.5
+
+  - id: '1.5'
+    titulo: Procesos, rendimiento y tareas programadas
+    requiere: ['1.3']
+    lecciones:
+      - t: Procesos y señales
+        h: 2.5
+        obj:
+          - Ver procesos con ps, pstree, top y htop e interpretar sus columnas.
+          - Enviar señales (SIGTERM, SIGKILL, SIGHUP) y saber cuándo usar cada una.
+          - Cambiar prioridades con nice y renice, y manejar trabajos en segundo plano (bg, fg, nohup).
+        ui: Terminal simulada con procesos simulados.
+      - t: Rendimiento del sistema
+        h: 3
+        obj:
+          - Interpretar el load average en relación con la cantidad de CPUs.
+          - Leer free (buff/cache, available) sin sacar conclusiones equivocadas.
+          - Identificar cuellos de botella de CPU, memoria y disco con vmstat, iostat, iotop y sar.
+        ui: Ejercicios de interpretar salidas de comandos.
+      - t: Tareas programadas
+        h: 2
+        obj:
+          - Escribir expresiones de cron y usar crontab, /etc/cron.d y anacron.
+          - Elegir entre cron y timers de systemd.
+          - Evitar errores clásicos (PATH distinto, % sin escapar, salida que nadie lee).
+        ui: Constructor y validador de expresiones de cron.
+      - t: Hora y sincronización
+        h: 1
+        obj:
+          - Configurar zona horaria y NTP con timedatectl y chrony.
+          - Entender por qué una hora mal puesta rompe logs, certificados y Kerberos.
+        ui: Troubleshooting con relojes desfasados.
+      - t: Kernel, módulos, /proc y /sys
+        h: 1.5
+        obj:
+          - Ver la versión y los mensajes del kernel (uname, dmesg).
+          - Cargar módulos (lsmod, modprobe) y ajustar parámetros persistentes con sysctl.
+          - Obtener información del sistema desde /proc y /sys.
+        ui: Terminal simulada.
+    lab:
+      t: Detectar y frenar un proceso que consume toda la CPU, programar un reporte diario de uso y configurar chrony.
+      h: 2.5
+    caso:
+      t: El servidor está lento desde el lunes (separar problemas de disco, CPU y memoria).
+      h: 1.5
+
+  - id: '1.6'
+    titulo: Acceso remoto y seguridad básica
+    requiere: ['1.3']
+    lecciones:
+      - t: Lo justo de redes para empezar
+        h: 2
+        obj:
+          - Ver y configurar IP, máscara, puerta de enlace y DNS con ip y nmcli (Rocky/Alma) o netplan (Ubuntu).
+          - Probar conectividad con ping y resolver nombres con /etc/hosts.
+          - Saber que ifconfig (net-tools) es obsoleto y qué se usa en su lugar.
+        ui: Terminal simulada con una red simulada.
+      - t: SSH, conexión segura
+        h: 2
+        obj:
+          - Conectarse por SSH y entender la huella del servidor y known_hosts.
+          - Configurar sshd (acceso de root, usuarios permitidos, puerto) y aplicar cambios sin perder el acceso.
+        ui: Editor de sshd_config con validación.
+      - t: Claves SSH
+        h: 2
+        obj:
+          - Generar claves ed25519, instalarlas con ssh-copy-id y proteger la clave privada con frase de paso.
+          - Usar ssh-agent y desactivar el acceso por contraseña de forma segura.
+          - Conocer los cambios de OpenSSH 10 (DSA eliminado e intercambio de claves poscuántico por defecto).
+        ui: Diagrama interactivo de autenticación por clave + terminal simulada.
+      - t: SSH avanzado y transferencia de archivos
+        h: 2
+        obj:
+          - Usar ~/.ssh/config, ProxyJump (bastión) y túneles (-L, -R, -D).
+          - Copiar y sincronizar archivos con scp, sftp y rsync.
+        ui: Terminal simulada con varios equipos.
+      - t: Firewall del host
+        h: 2
+        obj:
+          - Administrar firewalld (zonas, servicios, puertos, cambios permanentes) y ufw.
+          - Entender que ambos usan nftables por debajo y comprobar las reglas efectivas.
+        ui: Simulador "¿pasa este paquete?" con reglas de firewalld.
+      - t: SELinux y AppArmor
+        h: 2.5
+        obj:
+          - Explicar el control de acceso obligatorio y por qué no se desactiva.
+          - En SELinux, manejar modos, contextos, booleanos, restorecon y semanage, y diagnosticar con ausearch.
+          - En AppArmor (Ubuntu), entender perfiles y los modos enforce y complain.
+        ui: Troubleshooting "Nginx no puede leer el sitio aunque los permisos están bien".
+    lab:
+      t: Servidor accesible solo por SSH con claves y a través de un bastión, con firewall mínimo y SELinux en enforcing sirviendo un sitio desde un directorio no estándar.
+      h: 3
+    caso:
+      t: Quedar sin acceso al servidor después de cambiar sshd_config (consola de emergencia y cómo prevenirlo).
+      h: 1.5
+
+  - id: '1.7'
+    titulo: Scripting en Bash
+    requiere: ['1.2', '1.5']
+    lecciones:
+      - t: El primer script
+        h: 2
+        obj:
+          - Escribir y ejecutar un script con shebang y permiso de ejecución.
+          - Usar variables, comillas simples y dobles, y sustitución de comandos $( ).
+          - Entender $PATH y por qué se escribe ./script.sh.
+        ui: Terminal simulada con editor y ejecución de scripts.
+      - t: Argumentos, entrada y códigos de salida
+        h: 2
+        obj:
+          - Leer argumentos ($1, $@, $#) y entrada del usuario (read).
+          - Usar códigos de salida, $? y los operadores && y ||.
+          - Hacer scripts más seguros con set -euo pipefail y conocer sus trampas.
+        ui: Ejercicios de completar código.
+      - t: Condicionales
+        h: 2
+        obj:
+          - Usar if, test, [[ ]] y case.
+          - Comparar números y cadenas y verificar archivos (-f, -d, -r).
+        ui: Ejercicios con validación de salida.
+      - t: Bucles
+        h: 2
+        obj:
+          - Recorrer listas, archivos y salidas de comandos con for, while y until.
+          - Leer archivos línea por línea de forma correcta (while IFS= read -r).
+        ui: Ejercicios con validación de salida.
+      - t: Funciones y buenas prácticas
+        h: 2
+        obj:
+          - Organizar scripts con funciones, variables locales y arrays.
+          - Manejar errores y limpieza con trap, y registrar con logger.
+          - Revisar scripts con ShellCheck.
+        ui: Encontrar el error en scripts reales.
+      - t: Procesamiento de texto con grep, sed y awk
+        h: 3
+        obj:
+          - Escribir expresiones regulares básicas y extendidas.
+          - Transformar archivos con sed y extraer columnas y totales con awk.
+        ui: Probador de expresiones regulares + terminal simulada.
+      - t: Scripts del mundo real
+        h: 3
+        obj:
+          - Escribir un backup con rotación, un control de espacio con alerta y un alta masiva de usuarios desde CSV.
+          - Programarlos con cron o timers y registrar su resultado.
+        ui: Terminal simulada que valida el resultado de cada script.
+    lab:
+      t: Kit de scripts de administración (reporte de salud del servidor, limpieza de logs viejos y alta de usuarios desde CSV) versionados en una carpeta y programados.
+      h: 4
+    caso:
+      t: El script de backup termina sin errores pero los backups están vacíos desde hace un mes (códigos de salida, set -e y registro).
+      h: 1.5
+
+proyecto:
+  t: Servidor Linux para una pequeña oficina
+  h: 16
+  entregables:
+    - Rocky Linux o AlmaLinux 10, o Ubuntu Server LTS, instalado con LVM.
+    - Usuarios y grupos por departamento con carpetas compartidas y permisos correctos.
+    - SSH solo con claves, firewall mínimo y SELinux o AppArmor activo.
+    - Backup diario automático con rotación, verificación y registro.
+    - Documento de entrega con qué se hizo, cómo se opera y cómo se recupera.

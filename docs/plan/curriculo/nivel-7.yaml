@@ -1,0 +1,254 @@
+id: '7'
+titulo: Contenedores y cloud
+descripcion: >-
+  Contenedores con Docker y Podman, fundamentos de Kubernetes, nube pública (AWS y Azure,
+  con equivalencias entre ambos) e infraestructura como código con Terraform u OpenTofu.
+  Todo con foco en la operación: redes, identidades, costos y seguridad.
+perfil_salida: >-
+  Empaquetar y operar aplicaciones en contenedores, desplegar en Kubernetes a nivel
+  inicial, administrar recursos básicos en AWS y Azure cuidando identidades y costos, y
+  crear infraestructura reproducible con Terraform u OpenTofu.
+modulos:
+  - id: '7.1'
+    titulo: Docker y contenedores
+    requiere: ['1.6', '2.3']
+    lecciones:
+      - t: Qué es un contenedor
+        h: 2
+        obj:
+          - Explicar qué son los contenedores (namespaces y cgroups) y en qué se diferencian de las VMs.
+          - Diferenciar imagen, contenedor y registro, y conocer el estándar OCI y Podman.
+        ui: Diagrama interactivo contenedor frente a VM.
+      - t: Uso básico de Docker
+        h: 2.5
+        obj:
+          - Ejecutar, listar, detener y borrar contenedores, publicar puertos y pasar variables de entorno.
+          - Ver logs y entrar a un contenedor (logs y exec).
+        ui: Terminal simulada con Docker simulado.
+      - t: Imágenes y Dockerfile
+        h: 3
+        obj:
+          - Escribir Dockerfiles eficientes (capas, caché y construcción en varias etapas).
+          - Aplicar buenas prácticas (usuario sin privilegios, imágenes mínimas y etiquetas fijas).
+          - Analizar vulnerabilidades de imágenes con Trivy.
+        ui: Editor de Dockerfile con validación.
+      - t: Volúmenes y redes
+        h: 2.5
+        obj:
+          - Persistir datos con volúmenes y montajes de directorios.
+          - Conectar contenedores con redes definidas por el usuario y su DNS interno.
+        ui: Diagrama interactivo + terminal simulada.
+      - t: Docker Compose
+        h: 3
+        obj:
+          - Definir aplicaciones de varios contenedores en compose.yaml.
+          - Usar depends_on con healthchecks, perfiles y variables en .env.
+          - Saber que el campo version es obsoleto y que el comando actual es docker compose.
+        ui: Editor de docker-compose.yml con validación.
+      - t: Operar contenedores
+        h: 2.5
+        obj:
+          - Limitar recursos, definir políticas de reinicio y actualizar imágenes sin perder datos.
+          - Usar un registro privado y Podman sin root con Quadlet (integración con systemd).
+        ui: Troubleshooting "el contenedor se reinicia en bucle".
+    lab:
+      t: Aplicación web, base de datos y proxy inverso con Compose, con imagen propia construida en varias etapas, analizada y con datos persistentes.
+      h: 4
+    caso:
+      t: Se actualizó el contenedor y se perdieron los datos (volúmenes).
+      h: 1.5
+
+  - id: '7.2'
+    titulo: Kubernetes, fundamentos
+    requiere: ['7.1']
+    lecciones:
+      - t: Arquitectura de Kubernetes
+        h: 2.5
+        obj:
+          - Explicar el plano de control (API server, etcd, scheduler, controladores) y los nodos (kubelet y runtime).
+          - Montar un cluster de laboratorio con k3s o kind y usar kubectl.
+        ui: Diagrama interactivo de la arquitectura.
+      - t: Pods y Deployments
+        h: 3
+        obj:
+          - Crear Pods, Deployments y ReplicaSets con manifiestos YAML.
+          - Hacer actualizaciones graduales y volver atrás.
+        ui: Editor de manifiestos con validación.
+      - t: Services, Ingress y Gateway API
+        h: 3
+        obj:
+          - Exponer aplicaciones con Services (ClusterIP, NodePort y LoadBalancer).
+          - Publicar HTTP con Ingress y con Gateway API (el controlador ingress-nginx se retiró en 2026 y Gateway API es el reemplazo recomendado).
+        ui: Diagrama interactivo del recorrido del tráfico.
+      - t: Configuración y almacenamiento
+        h: 2.5
+        obj:
+          - Usar ConfigMaps y Secrets (y entender que los Secrets no están cifrados por defecto).
+          - Usar volúmenes persistentes (PV, PVC y StorageClass).
+        ui: Editor de manifiestos con validación.
+      - t: Operación y troubleshooting
+        h: 3
+        obj:
+          - Usar namespaces, requests y limits y sondas de salud.
+          - Diagnosticar CrashLoopBackOff, ImagePullBackOff y Pending.
+          - Instalar aplicaciones con Helm.
+        ui: Troubleshooting de decisiones (elige tu camino).
+    lab:
+      t: Desplegar la aplicación del módulo anterior en k3s con Deployment, Service, Gateway o Ingress, Secret y volumen persistente.
+      h: 4
+    caso:
+      t: Los pods quedan en Pending después de escalar (recursos insuficientes y volúmenes sin asignar).
+      h: 1.5
+
+  - id: '7.3'
+    titulo: Fundamentos de la nube
+    requiere: ['2.3']
+    lecciones:
+      - t: Qué es la nube
+        h: 2
+        obj:
+          - Diferenciar IaaS, PaaS y SaaS, y nube pública, privada e híbrida.
+          - Entender el modelo de responsabilidad compartida, las regiones y las zonas de disponibilidad.
+        ui: Emparejar servicio con modelo.
+      - t: AWS y Azure lado a lado
+        h: 1.5
+        obj:
+          - Relacionar los servicios equivalentes entre proveedores (EC2 y Virtual Machines, VPC y VNet, S3 y Blob Storage, IAM y Entra ID con RBAC).
+          - Elegir proveedor según el contexto de la empresa.
+        ui: Emparejar equivalencias.
+      - t: Costos y cuentas de práctica
+        h: 2
+        obj:
+          - Entender los modelos de precio (bajo demanda, reservas o planes de ahorro, instancias spot) y el costo de la salida de datos.
+          - Crear presupuestos y alertas antes de practicar, y usar etiquetas.
+          - Practicar sin sorpresas (las capas gratuitas cambian seguido y hay que apagar lo que no se usa).
+        ui: Calculadora de costos simplificada.
+    lab:
+      t: Cuentas de práctica en AWS y Azure con MFA, presupuesto, alerta de gasto y un usuario administrativo separado de la cuenta raíz o propietaria.
+      h: 2
+    caso:
+      t: Llegó una factura de 3.000 dólares por un laboratorio olvidado (recursos huérfanos, NAT Gateway, IPs públicas y presupuestos).
+      h: 1.5
+
+  - id: '7.4'
+    titulo: AWS
+    requiere: ['7.3']
+    lecciones:
+      - t: Identidad en AWS
+        h: 2.5
+        obj:
+          - Proteger la cuenta raíz y usar IAM Identity Center o IAM con MFA.
+          - Escribir políticas IAM de mínimo privilegio y usar roles.
+        ui: Encontrar el error en una política JSON.
+      - t: Redes en AWS
+        h: 3
+        obj:
+          - Diseñar una VPC con subredes públicas y privadas, tablas de rutas, Internet Gateway y NAT Gateway.
+          - Diferenciar Security Groups y Network ACLs.
+        ui: Constructor de topologías en modo nube.
+      - t: Cómputo
+        h: 2.5
+        obj:
+          - Lanzar instancias EC2 (tipos, AMI, pares de claves y user data) con discos EBS.
+          - Escalar con Auto Scaling y balancear con Elastic Load Balancing.
+        ui: Escenarios de decisión de tipo de instancia.
+      - t: Almacenamiento y bases de datos
+        h: 2.5
+        obj:
+          - Usar S3 (clases, políticas, versionado y ciclo de vida) y EFS.
+          - Conocer RDS y cuándo conviene frente a una base instalada en EC2.
+        ui: Encontrar el error en una política de bucket.
+      - t: Operar en AWS
+        h: 2.5
+        obj:
+          - Usar AWS CLI, CloudWatch, CloudTrail y Systems Manager.
+          - Configurar AWS Backup.
+        ui: Interpretar eventos de CloudTrail.
+    lab:
+      t: VPC de dos capas con servidor web público y base privada, acceso por Systems Manager sin SSH expuesto, backups y alarmas.
+      h: 4
+    caso:
+      t: Un bucket de S3 quedó público (políticas, bloqueo de acceso público y CloudTrail).
+      h: 1.5
+
+  - id: '7.5'
+    titulo: Azure
+    requiere: ['7.3', '3.3']
+    lecciones:
+      - t: Identidad en Azure
+        h: 2.5
+        obj:
+          - Entender inquilinos, suscripciones, grupos de recursos y Microsoft Entra ID.
+          - Asignar roles con Azure RBAC y conocer la identidad híbrida con Entra Connect Sync y Cloud Sync.
+        ui: Diagrama interactivo de la jerarquía de Azure.
+      - t: Redes en Azure
+        h: 2.5
+        obj:
+          - Diseñar VNets, subredes, grupos de seguridad de red y emparejamientos.
+          - Conectar la red local con VPN Gateway.
+        ui: Constructor de topologías en modo nube.
+      - t: Cómputo y almacenamiento
+        h: 2.5
+        obj:
+          - Crear VMs con discos administrados.
+          - Usar cuentas de almacenamiento (Blob y Files) y Azure Backup.
+        ui: Escenarios de decisión.
+      - t: Operar en Azure
+        h: 2.5
+        obj:
+          - Usar Azure CLI y el módulo Az de PowerShell.
+          - Usar Azure Monitor y Log Analytics con consultas KQL básicas.
+          - Gestionar servidores locales con Azure Arc y Azure Update Manager.
+        ui: Consola KQL simulada.
+    lab:
+      t: Red hub-and-spoke simple, VM Windows unida a un dominio sincronizado con Entra ID y monitoreo con Log Analytics.
+      h: 4
+    caso:
+      t: Después de cambiar la contraseña nadie puede entrar a Microsoft 365 (sincronización de identidad híbrida).
+      h: 1.5
+
+  - id: '7.6'
+    titulo: Infraestructura como código con Terraform
+    requiere: ['7.3', '6.1']
+    lecciones:
+      - t: Infraestructura como código
+        h: 2
+        obj:
+          - Explicar la diferencia entre enfoque declarativo e imperativo.
+          - Conocer Terraform y OpenTofu (bifurcación abierta tras el cambio de licencia de 2023).
+          - Entender providers, recursos y el lenguaje HCL.
+        ui: Diagrama interactivo del flujo de trabajo.
+      - t: Flujo de trabajo
+        h: 3
+        obj:
+          - Ejecutar init, plan, apply y destroy.
+          - Usar variables, outputs y data sources.
+          - Leer un plan con atención antes de aplicarlo.
+        ui: Interpretar la salida de terraform plan.
+      - t: El estado
+        h: 2.5
+        obj:
+          - Entender el archivo de estado, los backends remotos y el bloqueo.
+          - Importar recursos existentes y detectar desvíos.
+        ui: Troubleshooting de problemas de estado.
+      - t: Módulos y buenas prácticas
+        h: 2.5
+        obj:
+          - Crear y reutilizar módulos y separar entornos.
+          - Integrar plan y apply en un pipeline de CI y manejar secretos.
+        ui: Encontrar el error en código HCL.
+    lab:
+      t: Terraform u OpenTofu creando la red y las VMs del módulo de nube, con estado remoto, módulos y destrucción completa al final.
+      h: 4
+    caso:
+      t: Alguien cambió algo a mano en la consola y el plan quiere destruir producción (desvío de configuración).
+      h: 1.5
+
+proyecto:
+  t: Aplicación en contenedores desplegada en la nube con infraestructura como código
+  h: 24
+  entregables:
+    - Aplicación de varios contenedores funcionando con Compose en local.
+    - Red, cómputo y almacenamiento en AWS o Azure creados con Terraform u OpenTofu.
+    - Despliegue automatizado con cloud-init o Ansible y monitoreo básico.
+    - Presupuesto con alertas y destrucción completa del entorno al terminar.

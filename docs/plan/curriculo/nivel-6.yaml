@@ -1,0 +1,240 @@
+id: '6'
+titulo: Automatización y operación
+descripcion: >-
+  Dejar de hacer las cosas a mano: Git para versionar configuraciones, Python para
+  herramientas propias, Ansible para configurar flotas de servidores de forma repetible, y
+  monitoreo, alertas y centralización de logs para enterarse de los problemas antes que
+  las personas usuarias.
+perfil_salida: >-
+  Mantener la infraestructura como código en Git, automatizar configuraciones con Ansible,
+  escribir herramientas en Python y operar un sistema de monitoreo, alertas y logs
+  centralizados.
+modulos:
+  - id: '6.1'
+    titulo: Git y control de versiones
+    requiere: ['1.7']
+    lecciones:
+      - t: Por qué versionar
+        h: 1.5
+        obj:
+          - Explicar para qué sirve el control de versiones en infraestructura.
+          - Instalar y configurar Git (nombre, correo y editor).
+        ui: Diagrama interactivo de las zonas de Git (directorio de trabajo, área de preparación, repositorio).
+      - t: Flujo básico
+        h: 2.5
+        obj:
+          - Usar init, add, commit, status, log, diff y restore.
+          - Escribir buenos mensajes de commit y usar .gitignore.
+        ui: Terminal simulada con Git simulado.
+      - t: Ramas y fusiones
+        h: 2.5
+        obj:
+          - Crear ramas, fusionarlas y resolver conflictos.
+          - Entender rebase a nivel conceptual y cuándo evitarlo.
+        ui: Visualizador interactivo de ramas.
+      - t: Repositorios remotos y colaboración
+        h: 2
+        obj:
+          - Trabajar con GitHub, GitLab o Gitea (clone, push, pull, fetch).
+          - Revisar cambios mediante pull requests o merge requests.
+        ui: Ordenar el flujo de colaboración.
+      - t: Git para infraestructura
+        h: 2
+        obj:
+          - Mantener los secretos fuera del repositorio y saber qué hacer si se filtró uno.
+          - Versionar /etc con etckeeper y usar hooks de pre-commit con validadores.
+        ui: Encontrar el secreto expuesto en un repositorio.
+    lab:
+      t: Repositorio de configuraciones del laboratorio con ramas, pull requests y hooks de validación.
+      h: 2.5
+    caso:
+      t: Alguien subió la contraseña de la base de datos a GitHub (rotar la credencial, limpiar el historial y prevenir).
+      h: 1.5
+
+  - id: '6.2'
+    titulo: Python para sysadmins
+    requiere: ['1.7']
+    lecciones:
+      - t: Fundamentos de Python
+        h: 3
+        obj:
+          - Instalar Python y usar el intérprete, entornos virtuales (venv) y pip.
+          - Usar tipos, variables, listas, diccionarios y estructuras de control.
+        ui: Consola de Python en el navegador (Pyodide) con ejercicios validados.
+      - t: Funciones, módulos y errores
+        h: 2.5
+        obj:
+          - Escribir funciones y módulos reutilizables.
+          - Manejar excepciones y leer y escribir archivos.
+        ui: Ejercicios validados en Pyodide.
+      - t: Python y el sistema operativo
+        h: 2.5
+        obj:
+          - Usar pathlib, shutil, subprocess, argparse y logging.
+          - Escribir herramientas de línea de comandos.
+        ui: Ejercicios validados en Pyodide con sistema de archivos virtual.
+      - t: Formatos de datos
+        h: 2.5
+        obj:
+          - Leer y escribir JSON, YAML y CSV.
+          - Analizar logs con expresiones regulares.
+        ui: Ejercicios validados con logs de ejemplo.
+      - t: Redes y APIs
+        h: 2.5
+        obj:
+          - Consumir APIs REST con requests o httpx y autenticación por token.
+          - Ejecutar comandos remotos por SSH (paramiko o Fabric).
+        ui: Ejercicios contra una API simulada.
+      - t: Scripts de producción
+        h: 2
+        obj:
+          - Estructurar un proyecto y separar configuración y secretos.
+          - Agregar pruebas con pytest y ejecutar la herramienta con un timer de systemd.
+          - Entender el error externally-managed-environment (PEP 668) y por qué se usan entornos virtuales o pipx.
+        ui: Encontrar el error en un script.
+    lab:
+      t: Herramienta en Python que consulta el estado de varios servidores por SSH o API y genera un reporte JSON y HTML, con pruebas.
+      h: 4
+    caso:
+      t: El script dejó de funcionar después de actualizar el servidor (versión de Python del sistema y entornos virtuales).
+      h: 1.5
+
+  - id: '6.3'
+    titulo: Ansible
+    requiere: ['6.1', '1.6']
+    lecciones:
+      - t: Gestión de configuración y Ansible
+        h: 2
+        obj:
+          - Explicar idempotencia, configuración declarativa y el modelo sin agentes.
+          - Instalar Ansible (diferencia entre ansible-core y el paquete ansible) y preparar el nodo de control.
+        ui: Diagrama interactivo de la arquitectura de Ansible.
+      - t: Inventarios y comandos ad hoc
+        h: 2
+        obj:
+          - Escribir inventarios en INI y YAML con grupos y variables.
+          - Ejecutar módulos ad hoc (ping, command, package).
+        ui: Editor de inventarios con validación.
+      - t: Playbooks
+        h: 3
+        obj:
+          - Escribir playbooks con tareas, módulos comunes (package, service, copy, template, user, file, lineinfile) y handlers.
+          - Probar con --check, --diff y más detalle de salida.
+        ui: Editor de playbooks de Ansible con validación.
+      - t: Variables, facts, condicionales y plantillas
+        h: 3
+        obj:
+          - Usar variables, facts, when, loops y register.
+          - Generar archivos de configuración con plantillas Jinja2.
+        ui: Editor con validación + vista previa de plantillas.
+      - t: Roles y colecciones
+        h: 2.5
+        obj:
+          - Organizar el código en roles y usar colecciones de Ansible Galaxy.
+          - Estructurar un repositorio de Ansible para varios entornos.
+        ui: Arrastrar y soltar la estructura de un rol.
+      - t: Secretos y calidad
+        h: 2
+        obj:
+          - Proteger secretos con Ansible Vault.
+          - Revisar con ansible-lint y conocer las pruebas de roles con Molecule.
+        ui: Encontrar el error en un playbook.
+      - t: Ansible para Windows
+        h: 2
+        obj:
+          - Conectarse a Windows por WinRM o SSH y usar la colección ansible.windows.
+          - Automatizar tareas comunes (características, servicios, usuarios y actualizaciones).
+        ui: Editor de playbooks con validación.
+    lab:
+      t: Roles que configuran desde cero servidores web y de base de datos, y un playbook para Windows, todo versionado en Git.
+      h: 5
+    caso:
+      t: El playbook informa cambios en cada ejecución y reinicia servicios de producción (idempotencia, handlers y modo de prueba).
+      h: 1.5
+
+  - id: '6.4'
+    titulo: Monitoreo y alertas
+    requiere: ['1.5', '2.3']
+    lecciones:
+      - t: Qué monitorear
+        h: 2
+        obj:
+          - Diferenciar métricas, logs y trazas.
+          - Aplicar los métodos USE y RED y las cuatro señales doradas.
+          - Definir indicadores y objetivos de nivel de servicio (SLI y SLO).
+        ui: Emparejar métrica con síntoma.
+      - t: Zabbix
+        h: 3.5
+        obj:
+          - Instalar Zabbix en su versión LTS y desplegar Zabbix agent 2.
+          - Usar hosts, plantillas, ítems, disparadores y notificaciones.
+        ui: Diagrama interactivo + troubleshooting.
+      - t: Prometheus
+        h: 3
+        obj:
+          - Entender el modelo de recolección por consulta, los exporters (node_exporter) y el descubrimiento de servicios.
+          - Escribir consultas PromQL básicas (rate, sum, avg by).
+        ui: Consola PromQL simulada con datos de ejemplo.
+      - t: Grafana
+        h: 2
+        obj:
+          - Crear tableros con fuentes de datos, variables y paneles útiles.
+          - Diseñar paneles que se entiendan de un vistazo.
+        ui: Constructor de tablero simulado.
+      - t: Alertas que sirven
+        h: 2
+        obj:
+          - Configurar Alertmanager (rutas, agrupación y silencios).
+          - Evitar la fatiga de alertas con buenos umbrales, severidades y procedimientos enlazados.
+        ui: Escenarios de decisión "¿esto debería despertar a alguien?".
+    lab:
+      t: Zabbix monitoreando Linux y Windows, y Prometheus con node_exporter y Grafana con alertas por correo o chat.
+      h: 4
+    caso:
+      t: Nadie se enteró de que el disco se llenó (monitoreo de tendencias y predicción).
+      h: 1.5
+
+  - id: '6.5'
+    titulo: Centralización de logs
+    requiere: ['1.3', '6.4']
+    lecciones:
+      - t: Por qué centralizar
+        h: 1.5
+        obj:
+          - Explicar retención, correlación y auditoría de logs.
+          - Conocer los formatos (syslog RFC 5424, JSON) y la importancia de la hora sincronizada.
+        ui: Diagrama interactivo de una arquitectura de logs.
+      - t: Envío de logs
+        h: 2.5
+        obj:
+          - Reenviar logs con rsyslog y journald.
+          - Centralizar eventos de Windows con Windows Event Forwarding.
+        ui: Editor de configuración de rsyslog con validación.
+      - t: Plataformas de logs
+        h: 3
+        obj:
+          - Desplegar Grafana Loki con Grafana Alloy como recolector (Promtail llegó a fin de vida en marzo de 2026).
+          - Conocer las alternativas Elastic, OpenSearch y Graylog.
+        ui: Diagrama interactivo comparativo.
+      - t: Buscar y alertar sobre logs
+        h: 2
+        obj:
+          - Consultar con LogQL y crear alertas sobre patrones.
+          - Definir la retención y controlar costos.
+        ui: Consola LogQL simulada.
+    lab:
+      t: Loki y Alloy recolectando logs de todos los servidores del laboratorio, con alerta por intentos de inicio de sesión fallidos.
+      h: 3
+    caso:
+      t: ¿Quién borró el usuario ayer a la tarde? (correlación de logs de Active Directory y Linux).
+      h: 1.5
+
+proyecto:
+  t: Infraestructura como código y observabilidad
+  h: 24
+  entregables:
+    - Repositorio Git con roles de Ansible que despliegan desde cero servidores web, de base de datos y de monitoreo.
+    - Zabbix o Prometheus con Grafana y alertas configuradas.
+    - Loki con logs centralizados de toda la infraestructura.
+    - Herramienta en Python que genera un reporte de estado, programada.
+    - Prueba de reconstrucción completa del entorno desde el repositorio.

@@ -1,0 +1,366 @@
+id: '2'
+titulo: Redes
+descripcion: >-
+  Redes desde el cable hasta la VPN: modelos de capas, Ethernet, IPv4 con mucha práctica de
+  subnetting, IPv6, servicios de red (DNS, DHCP, NAT), switching, routing, firewalls, VPN,
+  Wi-Fi empresarial y diagnóstico con capturas de tráfico. La configuración de equipos se
+  practica con sintaxis tipo Cisco IOS (la más pedida en el mercado y en CCNA) y con Linux
+  como router y firewall.
+perfil_salida: >-
+  Diseñar el direccionamiento de una empresa, configurar VLANs, routing estático y OSPF,
+  montar DNS, DHCP, firewall y VPN, y diagnosticar fallas de red con método y con
+  capturas de tráfico. Cubre la mayor parte de los temas de CCNA y Network+.
+modulos:
+  - id: '2.1'
+    titulo: Fundamentos de redes
+    requiere: ['0.3']
+    lecciones:
+      - t: Qué es una red
+        h: 1.5
+        obj:
+          - Diferenciar LAN, WAN e Internet, y reconocer los equipos (placa de red, switch, router, punto de acceso, firewall).
+          - Entender el modelo cliente-servidor y las topologías físicas y lógicas.
+        ui: Diagrama interactivo de la red de una oficina.
+      - t: Modelos OSI y TCP/IP
+        h: 2.5
+        obj:
+          - Nombrar las capas de OSI y de TCP/IP y qué se resuelve en cada una.
+          - Explicar la encapsulación y las unidades de datos (trama, paquete, segmento).
+          - Usar el modelo de capas para ubicar un problema.
+        ui: Simulador de paquetes que encapsula y desencapsula capa por capa.
+      - t: Medios físicos
+        h: 2
+        obj:
+          - Elegir cobre (Cat5e, Cat6, Cat6A) o fibra (monomodo, multimodo) según distancia y velocidad.
+          - Reconocer conectores y módulos SFP/SFP+, y entender PoE (802.3af/at/bt).
+          - Entender la negociación de velocidad y dúplex.
+        ui: Emparejar medio con uso + calculadora de presupuesto PoE.
+      - t: Ethernet y direcciones MAC
+        h: 2
+        obj:
+          - Leer una dirección MAC e identificar al fabricante (OUI).
+          - Explicar cómo un switch aprende direcciones y decide reenviar, inundar o descartar.
+          - Diferenciar dominio de colisión y dominio de broadcast.
+        ui: Simulación del aprendizaje de la tabla MAC de un switch.
+      - t: ARP
+        h: 1.5
+        obj:
+          - Explicar cómo ARP obtiene la MAC a partir de la IP dentro de la red local.
+          - Ver y limpiar la tabla de vecinos (ip neigh, arp -a).
+          - Reconocer los síntomas de una IP duplicada y el ARP gratuito.
+        ui: Animación de ARP en el simulador de paquetes.
+    lab:
+      t: Red mínima en el constructor de topologías y con VMs (dos equipos y un switch), observando las tablas ARP y MAC.
+      h: 2
+    caso:
+      t: Dos equipos se quitan la conexión entre sí de forma intermitente (IP duplicada).
+      h: 1
+
+  - id: '2.2'
+    titulo: IPv4, subnetting e IPv6
+    requiere: ['2.1', '0.3']
+    lecciones:
+      - t: Direcciones IPv4
+        h: 2
+        obj:
+          - Explicar la estructura de una IPv4 y sus partes de red y de host.
+          - Reconocer rangos privados (RFC 1918), loopback, APIPA (169.254.0.0/16), CGNAT (100.64.0.0/10) y multicast.
+          - Entender por qué las clases son historia y hoy se usa CIDR.
+        ui: Clasificador de direcciones con ejercicios al azar.
+      - t: Máscaras y CIDR
+        h: 2.5
+        obj:
+          - Convertir máscaras entre notación decimal y prefijo (/24 equivale a 255.255.255.0).
+          - Calcular dirección de red, broadcast, rango utilizable y cantidad de hosts.
+        ui: Calculadora de subredes paso a paso que muestra el binario.
+      - t: Subnetting paso a paso
+        h: 4
+        obj:
+          - Dividir una red en subredes iguales según la cantidad de hosts o de subredes necesarias.
+          - Listar todas las subredes resultantes con sus rangos.
+        ui: Entrenador de subnetting con ejercicios generados al azar.
+      - t: Subnetting rápido
+        h: 3
+        obj:
+          - Resolver subnetting mentalmente con el método del tamaño de bloque.
+          - Responder preguntas tipo examen en menos de un minuto.
+        ui: Entrenador contrarreloj con estadísticas de aciertos y tiempos.
+      - t: VLSM
+        h: 3
+        obj:
+          - Diseñar un plan de direccionamiento con subredes de distinto tamaño y sin solapamientos.
+          - Documentar el plan en una tabla de direccionamiento.
+        ui: Diseñador VLSM interactivo con validación de solapamientos.
+      - t: Sumarización y máscaras wildcard
+        h: 1.5
+        obj:
+          - Sumarizar rutas contiguas en una sola.
+          - Calcular máscaras wildcard (se usan en ACL y OSPF).
+        ui: Ejercicios generados al azar.
+      - t: IPv6 básico
+        h: 3
+        obj:
+          - Escribir y abreviar direcciones IPv6 correctamente.
+          - Reconocer los tipos (unicast global, link-local fe80::/10, ULA fc00::/7, multicast).
+          - Explicar el prefijo /64, SLAAC frente a DHCPv6, NDP (que reemplaza a ARP) y la doble pila.
+        ui: Abreviador y expansor de IPv6 + entrenador.
+    lab:
+      t: Plan VLSM para una empresa de cinco áreas, configurado en VMs Linux, con pruebas de conectividad en IPv4 e IPv6.
+      h: 3
+    caso:
+      t: La subred nueva no llega a internet (máscara mal calculada y puerta de enlace fuera de la subred).
+      h: 1.5
+
+  - id: '2.3'
+    titulo: Transporte y servicios de red
+    requiere: ['2.2']
+    lecciones:
+      - t: TCP y UDP
+        h: 2.5
+        obj:
+          - Explicar puertos y sockets y la diferencia entre TCP y UDP.
+          - Describir el saludo de tres pasos, el cierre de conexión y las retransmisiones.
+          - Saber qué transporte usa cada aplicación y por qué.
+        ui: Animación del saludo de tres pasos en el simulador de paquetes.
+      - t: Puertos y protocolos comunes
+        h: 1.5
+        obj:
+          - Conocer los puertos más usados (22, 25, 53, 67/68, 80, 123, 389, 443, 445, 3389, entre otros).
+          - Diferenciar protocolos seguros e inseguros (Telnet y SSH, FTP y SFTP, HTTP y HTTPS).
+        ui: Tarjetas de repaso + emparejar puerto con protocolo.
+      - t: DNS
+        h: 3
+        obj:
+          - Explicar la jerarquía de DNS y la resolución recursiva e iterativa.
+          - Conocer los registros A, AAAA, CNAME, MX, TXT, NS, SOA, PTR y SRV, y el efecto del TTL.
+          - Consultar con dig y nslookup e interpretar las respuestas.
+        ui: Animación de una resolución DNS + interpretar salidas de dig.
+      - t: DHCP
+        h: 2
+        obj:
+          - Explicar el proceso DORA, ámbitos, reservas, opciones y tiempo de concesión.
+          - Entender el relay de DHCP y por qué hace falta entre VLANs.
+          - Diagnosticar equipos sin IP (dirección APIPA).
+        ui: Animación de DORA + troubleshooting.
+      - t: NAT y PAT
+        h: 2
+        obj:
+          - Explicar por qué existe NAT y diferenciar NAT de origen, de destino y PAT.
+          - Configurar una redirección de puertos y entender sus riesgos.
+          - Entender CGNAT y por qué a veces no se puede publicar un servicio desde casa.
+        ui: Simulador de tabla de traducciones NAT.
+      - t: Servidor DNS en Linux
+        h: 3
+        obj:
+          - Montar un DNS autoritativo con BIND 9 (zona directa e inversa).
+          - Montar un resolvedor con caché (Unbound) y reenviadores.
+          - Validar zonas con named-checkzone y diagnosticar con dig.
+        ui: Editor de archivos de zona con validación.
+      - t: Servidor DHCP en Linux
+        h: 2
+        obj:
+          - Configurar Kea DHCP, el reemplazo de ISC DHCP (que llegó a fin de vida en 2022).
+          - Crear reservas y opciones, y conocer dnsmasq para redes chicas.
+        ui: Editor de configuración de Kea con validación.
+    lab:
+      t: DNS (BIND y Unbound) y DHCP (Kea) en Linux para la red del laboratorio, con resolución inversa y reservas.
+      h: 4
+    caso:
+      t: Hay internet pero no abre ninguna página (resolvedor caído o mal configurado).
+      h: 1.5
+
+  - id: '2.4'
+    titulo: Switching
+    requiere: ['2.1', '2.2']
+    lecciones:
+      - t: Switches administrables y la consola
+        h: 2.5
+        obj:
+          - Diferenciar switches no administrables, administrables y de capa 3.
+          - Acceder por consola y SSH, moverse por los modos de Cisco IOS y guardar la configuración (running y startup).
+          - Conocer las herramientas de laboratorio (Cisco Packet Tracer, GNS3, EVE-NG, containerlab).
+        ui: Consola simulada tipo Cisco IOS.
+      - t: VLANs
+        h: 3
+        obj:
+          - Explicar para qué sirven las VLAN (seguridad, broadcast, organización).
+          - Crear VLANs y asignar puertos de acceso.
+          - Predecir qué equipos se comunican según su VLAN.
+        ui: Constructor de topologías con VLANs y ping entre nodos.
+      - t: Enlaces troncales 802.1Q
+        h: 2.5
+        obj:
+          - Explicar el etiquetado 802.1Q y la VLAN nativa.
+          - Configurar troncales y VLANs permitidas.
+          - Diagnosticar VLAN nativa distinta en cada extremo y VLAN no permitida en el troncal.
+        ui: Constructor de topologías + consola tipo IOS.
+      - t: Enrutamiento entre VLANs
+        h: 2.5
+        obj:
+          - Configurar router-on-a-stick con subinterfaces.
+          - Configurar un switch de capa 3 con interfaces SVI.
+        ui: Constructor de topologías con router y switch de capa 3.
+      - t: Spanning Tree
+        h: 3
+        obj:
+          - Explicar por qué un bucle de capa 2 tumba la red (tormenta de broadcast).
+          - Describir la elección del puente raíz, roles y estados de puerto, y las mejoras de RSTP.
+          - Aplicar PortFast y BPDU Guard en puertos de usuario.
+        ui: Simulador de elección del puente raíz y bloqueo de puertos.
+      - t: EtherChannel y redundancia de puerta de enlace
+        h: 2
+        obj:
+          - Agrupar enlaces con LACP (EtherChannel).
+          - Entender la redundancia de puerta de enlace con HSRP y VRRP.
+        ui: Constructor de topologías con fallas de enlace simuladas.
+    lab:
+      t: Red de oficina con tres VLANs, troncal entre dos switches, enrutamiento entre VLANs y STP verificado (en Packet Tracer o en el simulador de la plataforma).
+      h: 4
+    caso:
+      t: Se cayó toda la red cuando alguien conectó un switch de escritorio (bucle, STP y BPDU Guard).
+      h: 1.5
+
+  - id: '2.5'
+    titulo: Routing
+    requiere: ['2.4']
+    lecciones:
+      - t: Cómo decide un router
+        h: 2.5
+        obj:
+          - Leer una tabla de rutas e identificar rutas conectadas, estáticas y dinámicas.
+          - Aplicar la coincidencia más específica, la distancia administrativa y la métrica.
+        ui: Ejercicio "¿por dónde sale este paquete?" con tablas generadas al azar.
+      - t: Rutas estáticas
+        h: 2.5
+        obj:
+          - Configurar rutas estáticas y ruta por defecto en Cisco IOS y en Linux (ip route, ip_forward).
+          - Usar rutas flotantes como respaldo.
+          - Tener siempre presente la ruta de vuelta.
+        ui: Constructor de topologías con routers.
+      - t: Routing dinámico, conceptos
+        h: 1.5
+        obj:
+          - Diferenciar vector distancia y estado de enlace, IGP y EGP.
+          - Entender qué es BGP y por qué sostiene Internet (sin configuración en profundidad).
+        ui: Animación de convergencia ante la caída de un enlace.
+      - t: OSPF básico
+        h: 3.5
+        obj:
+          - Explicar router ID, vecinos, adyacencias, áreas, DR/BDR y costo.
+          - Configurar OSPF de área única en Cisco IOS y en Linux con FRRouting.
+          - Verificar vecinos y rutas aprendidas.
+        ui: Consola tipo IOS + constructor de topologías.
+      - t: Troubleshooting de routing
+        h: 2
+        obj:
+          - Diagnosticar falta de ruta de vuelta, rutas asimétricas y máscaras mal configuradas.
+          - Usar traceroute y las tablas de rutas para ubicar dónde se pierde el tráfico.
+        ui: Troubleshooting de decisiones (elige tu camino).
+    lab:
+      t: Tres sedes conectadas con rutas estáticas y luego migradas a OSPF, con un Linux con FRRouting como uno de los routers.
+      h: 4
+    caso:
+      t: La sucursal llega al servidor pero el servidor no llega a la sucursal (ruta de vuelta).
+      h: 1.5
+
+  - id: '2.6'
+    titulo: Firewalls, VPN y Wi-Fi empresarial
+    requiere: ['2.3', '2.5']
+    lecciones:
+      - t: Firewalls, conceptos
+        h: 2
+        obj:
+          - Diferenciar firewall sin estado, con estado y de nueva generación.
+          - Diseñar políticas con denegación por defecto, zonas y DMZ.
+          - Leer reglas y predecir si un paquete pasa.
+        ui: Simulador "¿pasa este paquete?".
+      - t: Firewall perimetral con OPNsense
+        h: 3
+        obj:
+          - Instalar OPNsense (o pfSense CE) con interfaces WAN, LAN y DMZ.
+          - Crear reglas, alias, NAT de salida y redirección de puertos.
+        ui: Editor de reglas con validación + diagrama de zonas.
+      - t: nftables en Linux
+        h: 2.5
+        obj:
+          - Escribir reglas con nftables (tablas, cadenas, hooks y sets).
+          - Convertir un router Linux en firewall con NAT.
+          - Entender la relación con iptables (capa de compatibilidad iptables-nft).
+        ui: Editor de configuración de nftables con validación.
+      - t: ACL en equipos de red
+        h: 2
+        obj:
+          - Escribir ACL estándar y extendidas en Cisco IOS usando wildcards.
+          - Ubicarlas en la interfaz y el sentido correctos, recordando la denegación implícita al final.
+        ui: Encontrar el error en una ACL.
+      - t: VPN
+        h: 3
+        obj:
+          - Diferenciar VPN sitio a sitio y de acceso remoto, y túnel completo o dividido.
+          - Comparar IPsec con IKEv2, WireGuard y OpenVPN.
+          - Configurar WireGuard entre dos sedes y para un cliente remoto.
+        ui: Diagrama interactivo + editor de configuración de WireGuard.
+      - t: Wi-Fi empresarial
+        h: 2.5
+        obj:
+          - Conocer los estándares (Wi-Fi 5, 6, 6E y 7), bandas y canales, y planificar evitando interferencias.
+          - Diferenciar WPA2/WPA3 Personal y Enterprise, y entender 802.1X con RADIUS (FreeRADIUS o NPS).
+          - Asociar SSIDs a VLANs y entender controladoras y roaming.
+        ui: Simulador de solapamiento de canales + diagrama de 802.1X.
+    lab:
+      t: OPNsense como firewall del laboratorio con DMZ, publicación de un servidor web y VPN WireGuard de acceso remoto.
+      h: 4
+    caso:
+      t: Se abrió el puerto pero desde afuera no conecta (orden de reglas, NAT, firewall del servidor y CGNAT).
+      h: 1.5
+
+  - id: '2.7'
+    titulo: Diagnóstico y análisis de tráfico
+    requiere: ['2.3']
+    lecciones:
+      - t: Método de troubleshooting de redes
+        h: 1.5
+        obj:
+          - Aplicar enfoques por capas (de abajo hacia arriba, de arriba hacia abajo, dividir y descartar).
+          - Registrar hallazgos y no cambiar varias cosas a la vez.
+        ui: Troubleshooting de decisiones (elige tu camino).
+      - t: Herramientas esenciales
+        h: 2.5
+        obj:
+          - Usar ping, traceroute/tracert, mtr, ip, ss, dig, curl y nc.
+          - Interpretar sus salidas (pérdidas, latencias, saltos sin respuesta, puertos en escucha).
+        ui: Ejercicios de interpretar salidas de comandos.
+      - t: Captura de tráfico con tcpdump
+        h: 2.5
+        obj:
+          - Capturar con tcpdump usando filtros (host, port, net, protocolo).
+          - Guardar y abrir archivos pcap.
+        ui: Terminal simulada con capturas de ejemplo.
+      - t: Wireshark
+        h: 3
+        obj:
+          - Usar filtros de visualización y seguir conversaciones TCP.
+          - Analizar un saludo TCP, una consulta DNS, un intercambio DHCP y retransmisiones.
+        ui: Visor de capturas simulado con filtros.
+      - t: Problemas clásicos de red
+        h: 2.5
+        obj:
+          - Reconocer por sus síntomas los problemas más frecuentes (MTU incorrecta, DNS que falla, puerta de enlace mal puesta, IP duplicada, dúplex mal negociado y bucles).
+          - Confirmar cada sospecha con la herramienta adecuada antes de cambiar nada.
+        ui: Escenarios de troubleshooting encadenados.
+    lab:
+      t: Capturar y analizar el tráfico de una visita web completa (DHCP, ARP, DNS, TCP y TLS) en el laboratorio.
+      h: 3
+    caso:
+      t: La VPN conecta pero algunas páginas no cargan (MTU y MSS).
+      h: 1.5
+
+proyecto:
+  t: Red de una empresa con dos sedes
+  h: 24
+  entregables:
+    - Plan de direccionamiento VLSM en IPv4 y de prefijos IPv6, documentado.
+    - VLANs por área, troncales, enrutamiento entre VLANs y STP protegido.
+    - OSPF entre sedes, OPNsense con DMZ y VPN WireGuard sitio a sitio.
+    - DNS y DHCP en Linux.
+    - Diagramas lógico y físico y pruebas de conectividad respaldadas con capturas.

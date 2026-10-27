@@ -1,0 +1,233 @@
+id: '5'
+titulo: Virtualización y almacenamiento
+descripcion: >-
+  Cómo se consolidan servidores en pocos equipos físicos y cómo se protege todo:
+  hipervisores (Proxmox VE, VMware vSphere, Hyper-V), clusters con alta disponibilidad y
+  migración en vivo, almacenamiento en red (NAS, SAN, iSCSI, ZFS, Ceph) y una estrategia
+  de backup y recuperación ante desastres que funcione de verdad.
+perfil_salida: >-
+  Diseñar y operar una plataforma de virtualización en cluster con almacenamiento
+  compartido, alta disponibilidad, backups verificados y un plan de recuperación ante
+  desastres probado con simulacros.
+modulos:
+  - id: '5.1'
+    titulo: Fundamentos de virtualización
+    requiere: ['0.2', '1.4', '2.4']
+    lecciones:
+      - t: Hipervisores
+        h: 2
+        obj:
+          - Diferenciar hipervisores de tipo 1 y de tipo 2.
+          - Entender las extensiones VT-x/AMD-V, IOMMU (VT-d/AMD-Vi) y la virtualización anidada.
+          - Diferenciar virtualización completa, paravirtualización (virtio) y contenedores.
+        ui: Diagrama interactivo de capas de virtualización.
+      - t: Recursos virtuales
+        h: 2.5
+        obj:
+          - Planificar vCPU, memoria (ballooning, KSM) y sobreasignación.
+          - Elegir formatos de disco (raw, qcow2, VMDK, VHDX) y aprovisionamiento fino o completo.
+          - Configurar redes virtuales (bridges, switches virtuales y etiquetado de VLAN).
+        ui: Calculadora de sobreasignación + diagrama de redes virtuales.
+      - t: Ciclo de vida de una máquina virtual
+        h: 2
+        obj:
+          - Usar plantillas y clones completos o enlazados.
+          - Automatizar la configuración inicial con cloud-init.
+          - Usar instantáneas sabiendo que no reemplazan al backup.
+        ui: Ordenar pasos + editor de cloud-init con validación.
+    lab:
+      t: KVM y libvirt en Linux con virsh y virt-manager, creando VMs desde una plantilla con cloud-init.
+      h: 3
+    caso:
+      t: El host tiene RAM libre pero las VMs van lentas (sobreasignación de CPU, ballooning y swap del host).
+      h: 1.5
+
+  - id: '5.2'
+    titulo: Proxmox VE
+    requiere: ['5.1']
+    lecciones:
+      - t: Instalación y primeros pasos
+        h: 2.5
+        obj:
+          - Instalar Proxmox VE 9 (basado en Debian 13) y configurar los repositorios (enterprise o no-subscription).
+          - Recorrer la interfaz web, el almacenamiento local y la red (vmbr0).
+        ui: Diagrama interactivo de la arquitectura de Proxmox.
+      - t: Máquinas virtuales y contenedores LXC
+        h: 3
+        obj:
+          - Crear VMs y contenedores LXC, plantillas y clones con cloud-init.
+          - Elegir entre VM y contenedor LXC según el caso.
+        ui: Escenarios de decisión.
+      - t: Redes en Proxmox
+        h: 2.5
+        obj:
+          - Configurar bridges con VLAN, agregaciones de enlaces y redes separadas (gestión, VMs y almacenamiento).
+          - Conocer la red definida por software (SDN) de Proxmox.
+        ui: Constructor de topologías con hosts de virtualización.
+      - t: Proxmox Backup Server
+        h: 2.5
+        obj:
+          - Instalar Proxmox Backup Server y configurar almacenes, retención y verificación.
+          - Respaldar y restaurar VMs completas y archivos sueltos.
+        ui: Ordenar el flujo de backup y restauración.
+    lab:
+      t: Proxmox anidado con VMs y contenedores LXC en VLANs distintas, backups en Proxmox Backup Server y restauración.
+      h: 4
+    caso:
+      t: Después de una actualización mayor de Proxmox no arranca ninguna VM (repositorios, notas de versión y procedimiento de actualización).
+      h: 1.5
+
+  - id: '5.3'
+    titulo: VMware vSphere y Hyper-V
+    requiere: ['5.1', '3.1']
+    lecciones:
+      - t: VMware vSphere
+        h: 3
+        obj:
+          - Explicar el hipervisor ESX/ESXi, vCenter, switches estándar y distribuidos, y datastores.
+          - Entender el panorama tras la compra de VMware por Broadcom (licencias por suscripción en paquetes VCF y VVF, cambios en la edición gratuita) y por qué muchas empresas evalúan migrar.
+        ui: Diagrama interactivo de vSphere.
+      - t: Hyper-V
+        h: 3
+        obj:
+          - Instalar Hyper-V en Windows Server 2025 y crear switches virtuales (externo, interno y privado).
+          - Diferenciar VMs de generación 1 y 2, y usar puntos de control.
+          - Administrar Hyper-V con PowerShell.
+        ui: Terminal PowerShell simulada con el módulo Hyper-V.
+      - t: Elegir una plataforma
+        h: 1.5
+        obj:
+          - Comparar Proxmox VE, VMware vSphere, Hyper-V, XCP-ng y Nutanix por costo, funciones y soporte.
+          - Planificar una migración entre plataformas (conversión de discos y drivers).
+        ui: Escenarios de decisión con presupuesto.
+    lab:
+      t: Hyper-V con dos VMs y switches interno y externo, y migración de una VM de Hyper-V a Proxmox.
+      h: 3
+    caso:
+      t: En la renovación de licencias el costo de virtualización se triplicó (evaluar alternativas y armar un plan de migración).
+      h: 1.5
+
+  - id: '5.4'
+    titulo: Clusters y alta disponibilidad
+    requiere: ['5.2']
+    lecciones:
+      - t: Conceptos de alta disponibilidad
+        h: 2
+        obj:
+          - Explicar punto único de falla, quórum, split-brain y fencing.
+          - Calcular disponibilidad (los "nueves") y relacionarla con RPO y RTO.
+        ui: Calculadora de disponibilidad.
+      - t: Cluster de Proxmox
+        h: 3
+        obj:
+          - Crear un cluster con corosync y entender el quórum (y el QDevice para dos nodos).
+          - Configurar alta disponibilidad para VMs y probar la caída de un nodo.
+        ui: Simulador de quórum.
+      - t: Migración en vivo
+        h: 2
+        obj:
+          - Entender los requisitos de la migración en vivo (almacenamiento compartido o replicado, CPU compatible, red).
+          - Migrar en Proxmox y conocer los equivalentes (vMotion y Live Migration de Hyper-V).
+        ui: Animación de una migración en vivo.
+      - t: Clúster de conmutación por error de Windows
+        h: 2.5
+        obj:
+          - Crear un clúster de conmutación por error con testigo y volúmenes compartidos de clúster (CSV).
+          - Validar el clúster e interpretar sus registros.
+        ui: Troubleshooting de un clúster que pierde quórum.
+    lab:
+      t: Cluster Proxmox de tres nodos con alta disponibilidad y migración en vivo; apagar un nodo y medir el tiempo de recuperación.
+      h: 4
+    caso:
+      t: El cluster de dos nodos se congeló al reiniciar uno de ellos (quórum).
+      h: 1.5
+
+  - id: '5.5'
+    titulo: Almacenamiento
+    requiere: ['5.1', '2.3']
+    lecciones:
+      - t: DAS, NAS, SAN y almacenamiento de objetos
+        h: 2
+        obj:
+          - Diferenciar almacenamiento de bloque, de archivos y de objetos.
+          - Conocer los protocolos (NFS, SMB, iSCSI, Fibre Channel, NVMe-oF y S3).
+          - Elegir según la carga (latencia, IOPS y throughput).
+        ui: Emparejar caso con tipo de almacenamiento.
+      - t: iSCSI
+        h: 2.5
+        obj:
+          - Configurar un target (targetcli) y un iniciador (iscsiadm en Linux y el iniciador de Windows).
+          - Entender IQN, LUN, autenticación CHAP y multipath.
+        ui: Diagrama interactivo + terminal simulada.
+      - t: ZFS
+        h: 3.5
+        obj:
+          - Crear pools con vdevs mirror y RAIDZ, y datasets con compresión.
+          - Usar instantáneas, send/receive y scrub, y entender el ARC.
+          - Conocer TrueNAS y la expansión de RAIDZ (disponible desde OpenZFS 2.3).
+        ui: Simulador de pool ZFS + terminal simulada.
+      - t: Ceph
+        h: 3.5
+        obj:
+          - Explicar los componentes MON, MGR, OSD y MDS y el algoritmo CRUSH.
+          - Diferenciar réplicas y erasure coding, y los servicios RBD, CephFS y RGW.
+          - Desplegar Ceph en Proxmox y conocer sus requisitos (mínimo tres nodos y red rápida dedicada).
+        ui: Diagrama interactivo de un cluster Ceph.
+    lab:
+      t: ZFS con instantáneas y replicación entre dos nodos, una LUN iSCSI usada por Proxmox y Windows, y Ceph en el cluster del laboratorio.
+      h: 4
+    caso:
+      t: El pool ZFS aparece DEGRADED y los usuarios notan lentitud (resilver y reemplazo de disco).
+      h: 1.5
+
+  - id: '5.6'
+    titulo: Backups y recuperación ante desastres
+    requiere: ['5.2']
+    lecciones:
+      - t: Estrategia de backup
+        h: 2.5
+        obj:
+          - Aplicar la regla 3-2-1 y su variante 3-2-1-1-0 (una copia inmutable o fuera de línea y cero errores en la verificación).
+          - Diferenciar backups completos, incrementales y diferenciales, y diseñar la retención (abuelo, padre, hijo).
+          - Acordar RPO y RTO con el negocio.
+        ui: Diseñador de esquema de backup con cálculo de espacio.
+      - t: Herramientas de backup
+        h: 3
+        obj:
+          - Usar rsync, restic y BorgBackup para archivos, y Proxmox Backup Server o Veeam para VMs.
+          - Lograr backups consistentes de aplicaciones (VSS, fsfreeze y volcado previo de bases de datos).
+        ui: Terminal simulada con restic.
+      - t: Instantáneas, réplicas y backups
+        h: 1.5
+        obj:
+          - Diferenciar qué protege cada uno (error humano, falla de hardware, pérdida del sitio) y qué no.
+          - Combinar los tres de forma adecuada para un servicio concreto.
+        ui: Escenarios de decisión.
+      - t: Restauración probada
+        h: 2
+        obj:
+          - Programar pruebas de restauración y verificar la integridad de forma automática.
+          - Documentar los tiempos reales de restauración contra el RTO acordado.
+        ui: Lista de pasos guiada con verificación.
+      - t: Plan de recuperación ante desastres
+        h: 2.5
+        obj:
+          - Hacer un análisis de impacto en el negocio y priorizar servicios.
+          - Escribir procedimientos de recuperación y planificar simulacros.
+          - Prepararse para ransomware con copias inmutables y fuera de línea.
+        ui: Troubleshooting de varias etapas "lunes a la mañana, ransomware".
+    lab:
+      t: Esquema 3-2-1-1-0 con Proxmox Backup Server local, copia externa con restic a almacenamiento de objetos, una copia inmutable y un simulacro de restauración cronometrado.
+      h: 4
+    caso:
+      t: Un ransomware cifró los servidores y también la carpeta de backups (recuperación desde la copia inmutable).
+      h: 2
+
+proyecto:
+  t: Cluster de virtualización con recuperación ante desastres
+  h: 24
+  entregables:
+    - Tres nodos Proxmox (pueden ser anidados) con almacenamiento compartido (Ceph, o ZFS con replicación).
+    - Alta disponibilidad probada con migración en vivo y caída de nodo.
+    - Proxmox Backup Server con copia inmutable y copia fuera del sitio.
+    - Plan de recuperación ante desastres escrito y simulacro de restauración medido contra RPO y RTO.

@@ -1,0 +1,582 @@
+############################################################################################
+#                                                                                          #
+#          ARQUITECTURA TÉCNICA DE LA PLATAFORMA                                           #
+#          Etapa 1 (propuesta para aprobación)                                             #
+#                                                                                          #
+############################################################################################
+
+Índice
+  1.  Resumen
+  2.  Stack elegido y por qué
+  3.  Alternativas descartadas
+  4.  Estructura del repositorio
+  5.  Contenido separado del código (formatos de archivo)
+  6.  Motores y componentes interactivos
+  7.  Evaluaciones, diagnóstico y salteo (reglas exactas)
+  8.  Progreso y almacenamiento (hoy local, mañana con usuarios y base de datos)
+  9.  Funciones de la plataforma
+  10. Calidad, pruebas y accesibilidad
+  11. Cómo se va a correr localmente
+  12. Riesgos y cómo se mitigan
+  13. Etapas siguientes
+  14. Decisiones a confirmar
+
+
+============================================================================================
+1. RESUMEN
+============================================================================================
+
+Una aplicación web de una sola página (SPA) hecha con React y TypeScript, construida con
+Vite, que se publica como archivos estáticos. No necesita servidor ni base de datos para
+funcionar: el contenido viaja con la aplicación y el progreso se guarda en el navegador
+(IndexedDB), con exportación e importación a un archivo para no perderlo.
+
+El contenido vive en la carpeta content/, separado del código:
+  - Lecciones en MDX (Markdown con componentes interactivos insertados donde hacen falta).
+  - Preguntas, tarjetas, ejercicios, escenarios y glosario en YAML.
+  - Diagramas en SVG dentro de la carpeta de cada lección.
+Agregar una lección es agregar una carpeta con sus archivos: la aplicación la descubre
+sola al compilar, sin tocar código.
+
+Toda la lógica de los simuladores (terminal, red, subnetting, validadores, exámenes,
+diagnóstico, repetición espaciada) va en módulos de TypeScript puro, separados de la
+interfaz, para poder probarlos a fondo con pruebas automáticas y reutilizarlos.
+
+
+============================================================================================
+2. STACK ELEGIDO Y POR QUÉ
+============================================================================================
+
+Base
+  - React + TypeScript (modo estricto). React tiene el mejor ecosistema para los
+    componentes complejos que pide la carrera (editor de código, grafos arrastrables,
+    arrastrar y soltar accesible) y TypeScript evita errores en motores con mucha lógica.
+  - Vite. Arranque y recarga instantáneos, configuración mínima y una función clave:
+    import.meta.glob, que permite descubrir automáticamente todos los archivos de
+    content/ al compilar. Eso es lo que hace que agregar una lección no requiera código.
+  - MDX (con @mdx-js/rollup). Quien escribe contenido usa Markdown normal y, cuando
+    necesita, inserta un componente: <Terminal ejercicio="./ej-permisos.yaml" />.
+  - React Router para la navegación.
+  - Tailwind CSS con variables CSS para el tema claro y oscuro y el diseño adaptable.
+
+Datos y estado
+  - YAML para datos estructurados (es cómodo de escribir a mano y admite comentarios),
+    validado con Zod: si un archivo tiene un error, la compilación dice qué archivo, qué
+    campo y qué está mal.
+  - Dexie (sobre IndexedDB) para el progreso: más espacio que localStorage, consultas
+    ordenadas y un modelo de tablas igual al que tendrá la base de datos futura.
+  - Zustand para el estado de la interfaz (chico, simple y sin ceremonia).
+
+Componentes de terceros (todos con licencias abiertas: MIT, Apache 2.0, ISC o MPL 2.0)
+  - CodeMirror 6: editor de archivos de configuración con marcas de error en línea.
+  - React Flow (@xyflow/react): constructor de topologías y mapa de la carrera.
+  - dnd-kit: arrastrar y soltar, con soporte táctil y de teclado.
+  - MiniSearch: buscador de texto completo en el navegador, tolerante a errores de tipeo.
+  - ts-fsrs: algoritmo FSRS de repetición espaciada (más preciso que el clásico SM-2).
+  - Ajv: validación de YAML contra esquemas JSON oficiales (Compose, Kubernetes).
+  - yaml (eemeli/yaml): lectura de YAML conservando números de línea para los errores.
+  - Pyodide (Python compilado a WebAssembly) y sql.js (SQLite en WebAssembly) para las
+    consolas de Python y SQL. Se cargan solo en las lecciones que las usan.
+  - Mermaid para diagramas de secuencia y de flujo generados con código; el resto de los
+    diagramas son SVG propios.
+
+Herramientas de desarrollo
+  - Vitest y Testing Library (pruebas unitarias), Playwright (pruebas de punta a punta;
+    el entorno ya trae Chromium), ESLint y Prettier, y GitHub Actions para correr todo en
+    cada cambio.
+
+Las versiones exactas se fijan en package.json al comenzar la Etapa 2, usando las
+versiones estables vigentes en ese momento.
+
+
+============================================================================================
+3. ALTERNATIVAS DESCARTADAS
+============================================================================================
+
+  - Next.js: su punto fuerte es el renderizado en servidor, que acá no hace falta. Suma
+    complejidad hoy y, cuando haya usuarios, conviene una API separada.
+  - Astro: excelente para sitios de contenido, pero esta plataforma es sobre todo una
+    aplicación: progreso, notas, repaso y exámenes se comparten entre todas las páginas, y
+    con las "islas" de Astro ese estado compartido se vuelve incómodo.
+  - Docusaurus o VitePress: pensados para documentación; habría que pelear contra ellos
+    para tener exámenes, progreso y simuladores.
+  - Moodle u Open edX: requieren servidor y base de datos desde el día uno, el contenido
+    no queda como archivos simples en el repositorio y los simuladores a medida son
+    difíciles de integrar.
+  - Linux real dentro del navegador (emuladores x86 en WebAssembly): se evaluó para la
+    terminal. Exige descargar decenas de MB, es lento en celulares y no permite guiar ni
+    validar ejercicios paso a paso. Queda como posible componente opcional a futuro; la
+    práctica con sistemas reales se hace en los laboratorios con máquinas virtuales.
+
+
+============================================================================================
+4. ESTRUCTURA DEL REPOSITORIO
+============================================================================================
+
+El código (nombres de carpetas, variables y funciones) va en inglés, como es habitual en
+la industria. El contenido y los campos de los archivos de contenido van en español, para
+que escribir lecciones sea natural.
+
+  /
+  ├── LEEME.txt                        instrucciones generales
+  ├── docs/
+  │   ├── PLAN_DE_CARRERA.txt          plan completo (generado)
+  │   ├── ARQUITECTURA.txt             este documento
+  │   └── plan/                        fuente del plan (YAML) y generador
+  ├── content/                         TODO el contenido de la carrera
+  │   ├── carrera.yaml                 nombre, orden de niveles y configuración general
+  │   ├── glosario.yaml                términos con su definición y lección de origen
+  │   └── niveles/
+  │       └── 00-fundamentos/
+  │           ├── nivel.yaml           título, descripción, insignia
+  │           ├── proyecto.mdx         proyecto integrador del nivel
+  │           └── 01-como-funciona-una-computadora/
+  │               ├── modulo.yaml      título, requisitos, configuración del examen
+  │               ├── laboratorio.mdx  laboratorio guiado
+  │               ├── caso-real.yaml   escenario de troubleshooting
+  │               └── 01-piezas-de-una-computadora/
+  │                   ├── leccion.mdx      la lección
+  │                   ├── preguntas.yaml   banco de preguntas
+  │                   ├── tarjetas.yaml    tarjetas de repaso
+  │                   ├── placa-madre.svg  diagramas propios de la lección
+  │                   └── *.yaml           ejercicios de los interactivos
+  ├── src/
+  │   ├── app/                         rutas, páginas y diseño general
+  │   ├── ui/                          piezas visuales reutilizables
+  │   ├── interactive/                 componentes interactivos (interfaz)
+  │   ├── engines/                     lógica pura, sin React (ver sección 6)
+  │   ├── content/                     carga de contenido, esquemas Zod, componentes MDX
+  │   ├── progress/                    repositorio de progreso, IndexedDB, migraciones
+  │   └── search/                      índice y búsqueda
+  ├── scripts/                         validar contenido, generar índice de búsqueda
+  └── tests/                           pruebas de punta a punta
+
+El orden de niveles, módulos y lecciones sale del número al principio de cada carpeta
+(01-, 02-...). Cada pieza tiene además un id fijo en su archivo, así que renombrar o
+reordenar carpetas no rompe el progreso guardado de nadie.
+
+
+============================================================================================
+5. CONTENIDO SEPARADO DEL CÓDIGO (FORMATOS DE ARCHIVO)
+============================================================================================
+
+5.1 Lección (leccion.mdx)
+
+  ---
+  id: n0-m1-l1
+  titulo: Las piezas de una computadora y cómo se conectan
+  minutos: 90
+  objetivos:
+    - Identificar CPU, RAM, almacenamiento, placa madre, fuente y placas de expansión.
+    - Explicar cómo viajan los datos entre componentes (buses, chipset, PCIe).
+  glosario: [cpu, ram, placa-madre, pcie, chipset]
+  verificado: 2026-10          # fecha en que se verificaron versiones y datos de actualidad
+  ---
+
+  ## Qué hay adentro del gabinete
+  Texto en Markdown...
+
+  <DiagramaInteractivo svg="./placa-madre.svg" puntos="./placa-madre-puntos.yaml" />
+
+  Más explicación, con <Termino id="pcie">PCIe</Termino> enlazado al glosario...
+
+  <ErroresComunes>
+  ...
+  </ErroresComunes>
+
+  <Resumen>
+  ...
+  </Resumen>
+
+  El mini test, las tarjetas y las notas se agregan solos al final de la página a partir
+  de preguntas.yaml y tarjetas.yaml.
+
+5.2 Banco de preguntas (preguntas.yaml)
+
+  Cada lección tiene entre 8 y 15 preguntas. El mini test muestra entre 5 y 10 y el resto
+  queda para exámenes y diagnóstico, que prefieren preguntas que el estudiante todavía no
+  vio. Las opciones se mezclan en cada intento. Ejemplos de cada tipo:
+
+  - id: p01
+    tipo: opcion_multiple
+    enunciado: ¿Qué componente guarda los datos aunque se apague el equipo?
+    opciones:
+      - texto: El SSD
+        correcta: true
+        explicacion: Es almacenamiento no volátil, conserva los datos sin energía.
+      - texto: La RAM
+        explicacion: Es volátil; al cortar la energía se pierde su contenido.
+    dificultad: 1                    # 1 básica, 2 intermedia, 3 avanzada
+    diagnostico: true                # puede usarse en el diagnóstico inicial
+    etiquetas: [almacenamiento]
+
+  - id: p02
+    tipo: respuesta_multiple         # varias correctas; se explica cada opción
+  - id: p03
+    tipo: completar_comando
+    enunciado: Mostrar las últimas 20 líneas de /var/log/messages.
+    validacion: simulador            # se ejecuta en la terminal simulada y se compara
+    escenario: ./ej-logs.yaml        # el resultado, así valen todas las formas correctas
+    esperado: { salida_igual_a: "tail -n 20 /var/log/messages" }
+    explicacion: ...
+  - id: p04
+    tipo: ordenar_pasos
+    pasos: [Encendido, POST, Firmware busca el gestor de arranque, Kernel, systemd]
+  - id: p05
+    tipo: interpretar_salida
+    salida: |
+      Filesystem      Size  Used Avail Use% Mounted on
+      /dev/sda2        50G   50G     0 100% /
+    opciones: [...]
+  - id: p06
+    tipo: encontrar_error
+    lenguaje: nginx
+    archivo: |
+      server {
+          listen 80
+          server_name ejemplo.com;
+      }
+    lineas_con_error: [2]
+    explicacion: Falta el punto y coma al final de la directiva listen.
+
+5.3 Ejercicio de terminal (cualquier .yaml referenciado desde la lección)
+
+  shell: bash                        # bash | powershell | ios
+  estado_inicial:
+    usuario: estudiante
+    directorio: /home/estudiante
+    grupos: { contabilidad: [ana, luis] }
+    archivos:
+      /srv/compartido: { tipo: directorio, modo: "0755", dueno: root, grupo: root }
+    servicios: { nginx: { activo: false, habilitado: false } }
+  pasos:
+    - consigna: Lograr que el grupo contabilidad pueda crear archivos en /srv/compartido
+                y que esos archivos hereden el grupo.
+      verificar:
+        - { archivo: /srv/compartido, grupo: contabilidad, modo: "2770" }
+      pistas: [Revisar chgrp y chmod., El bit SGID en directorios hace heredar el grupo.]
+      solucion: [chgrp contabilidad /srv/compartido, chmod 2770 /srv/compartido]
+
+5.4 Escenario de troubleshooting (caso-real.yaml o cualquier escenario)
+
+  titulo: El servicio web no responde
+  inicio: n1
+  nodos:
+    n1:
+      situacion: Avisan que la intranet no carga. ¿Qué conviene revisar primero?
+      opciones:
+        - { texto: Ver el estado del servicio con systemctl, ir_a: n2, minutos: 2 }
+        - { texto: Reiniciar el servidor, ir_a: n9, minutos: 10,
+            consecuencia: Se cortó el servicio a toda la empresa sin conocer la causa. }
+    n2: ...
+    fin_ok: { final: exito, resumen: Qué se aprendió y qué se debió revisar primero. }
+
+  La plataforma suma el tiempo de cada decisión y al final muestra el camino óptimo.
+
+5.5 Ejercicio de topología, editor de configuración y otros
+  - Topología: equipos, interfaces, cables y configuración inicial; objetivos del tipo
+    "pc1 llega por ping a srv1" o "invitados NO llega a servidores".
+  - Editor de configuración: lenguaje, archivo inicial y reglas que debe cumplir
+    (sintaxis válida, directivas obligatorias, valores esperados).
+  - Tarjetas (tarjetas.yaml): frente, dorso y lección de origen.
+  - Glosario (glosario.yaml): término, alias, definición breve e id de la lección donde se
+    explica a fondo.
+
+5.6 Validación automática del contenido (npm run validar)
+  Corre antes de cada compilación y en cada cambio subido al repositorio. Falla si:
+  - Algún archivo no cumple su esquema (indica archivo, línea y campo).
+  - Una lección no tiene objetivos, tiempo estimado, al menos un diagrama, al menos un
+    interactivo, errores comunes, resumen o entre 8 y 15 preguntas en su banco.
+  - Alguna pregunta no explica todas sus opciones.
+  - Hay referencias rotas (requisitos de módulos, términos del glosario, archivos SVG o
+    ejercicios inexistentes, ids repetidos).
+  - Aparece texto de relleno ("lorem ipsum", "contenido pendiente", TODO).
+  - Un ejercicio de terminal no se puede resolver: el validador ejecuta la solución de
+    referencia en el simulador y comprueba que cumple las verificaciones.
+  Además avisa (sin fallar) si la fecha de verificación de una lección tiene más de un
+  año.
+
+
+============================================================================================
+6. MOTORES Y COMPONENTES INTERACTIVOS
+============================================================================================
+
+Cada interactivo tiene dos partes: un motor en src/engines (lógica pura con pruebas
+automáticas) y un componente en src/interactive (la interfaz). Así, por ejemplo, la
+terminal y el constructor de topologías comparten el mismo motor de red: un ping desde la
+terminal y un ping en el diagrama dan exactamente el mismo resultado.
+
+6.1 Terminal simulada (Linux, PowerShell y consola tipo Cisco IOS)
+  - Sistema de archivos virtual con inodos: dueño, grupo, permisos (incluidos SUID, SGID
+    y sticky), fechas, enlaces duros y simbólicos. Los permisos se aplican de verdad: si
+    el estudiante no tiene permiso, recibe el mismo error que en un sistema real.
+  - Intérprete de bash: comillas, escapes, variables, comodines, tuberías, redirecciones
+    (>, >>, 2>, &>, <), &&, ||, ; y sustitución de comandos. Soporta scripts simples.
+  - Comandos como módulos independientes con sus opciones más usadas y mensajes de error
+    fieles a GNU coreutils. Subsistemas simulados: usuarios y grupos, sudo, procesos y
+    señales, servicios de systemd con su journal, paquetes, discos y particiones, red.
+  - PowerShell: intérprete propio con pipeline de objetos reales (Where-Object,
+    Select-Object, Sort-Object, Format-Table...) y módulos simulados (ActiveDirectory,
+    Hyper-V, DnsServer, DhcpServer).
+  - Consola tipo IOS: modos (usuario, privilegiado, configuración global, interfaz,
+    router), running-config y startup-config, conectada al motor de red.
+  - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
+    practicarlo en el laboratorio real.
+  - En el celular aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
+
+6.2 Subnetting
+  - Cálculos de IPv4 con enteros de 32 bits e IPv6 con BigInt; explicación paso a paso en
+    binario de cada resultado.
+  - Generador de ejercicios al azar por tipo y dificultad (red, broadcast, rango, cantidad
+    de hosts, máscara necesaria, VLSM, sumarización, wildcard, IPv6), modo contrarreloj y
+    estadísticas. Se prueba contra una implementación de referencia con miles de casos.
+
+6.3 Motor de red, constructor de topologías y simulador de paquetes
+  - Equipos: PC, servidor, switch de capa 2 y 3, router, firewall y punto de acceso, cada
+    uno con sus interfaces.
+  - Simula: tablas MAC, VLANs de acceso y troncales (VLAN nativa y permitidas), ARP,
+    enrutamiento (rutas conectadas, estáticas y OSPF de área única simplificado), ACL,
+    NAT simple y reglas de firewall.
+  - Un ping produce una traza salto por salto; el constructor la muestra sobre el diagrama
+    y el simulador de paquetes la anima capa por capa (qué encabezados se agregan y
+    quitan en cada equipo).
+  - Interfaz: arrastrar equipos y cables, configurar con formularios o con la consola.
+
+6.4 Diagramas interactivos
+  - SVG con zonas clicables definidas en YAML; al tocar una parte se abre su explicación.
+    Funcionan con teclado y lector de pantalla.
+
+6.5 Arrastrar y soltar
+  - Ordenar pasos y emparejar conceptos, con mouse, pantalla táctil o teclado.
+
+6.6 Troubleshooting "elige tu camino"
+  - Máquina de estados que recorre el grafo del escenario, suma tiempo y consecuencias, y
+    al final compara con el camino óptimo. Puede abrir una terminal o un editor dentro
+    de un paso para que el diagnóstico sea práctico.
+
+6.7 Editor de configuración con validación
+  - CodeMirror 6 con resaltado y errores en línea (línea, columna, mensaje y explicación).
+  - Validadores por formato: nginx.conf (analizador propio con tabla de directivas y sus
+    contextos válidos), docker-compose.yml y manifiestos de Kubernetes (esquemas JSON
+    oficiales), playbooks e inventarios de Ansible (estructura y argumentos de los módulos
+    más usados), sshd_config, fstab, sudoers, smb.conf, zonas DNS, unidades de systemd,
+    nftables, WireGuard, cloud-init y HCL básico.
+  - Cada ejercicio agrega sus propias reglas (por ejemplo, "debe escuchar en 443 con
+    TLS").
+
+6.8 Tarjetas de repaso
+  - Algoritmo FSRS. Las tarjetas de una lección se suman al mazo cuando se completa la
+    lección. Cola diaria con límite configurable.
+
+6.9 Componentes específicos
+  - Simuladores de CPU, planificador, RAID, STP, quórum y migración; consolas de Python
+    (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
+    simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; visor de capturas de
+    tráfico; constructor de rack y calculadoras (UPS, disponibilidad, permisos, cron,
+    transferencia, costos).
+  - Los componentes pesados se cargan solo cuando una lección los usa.
+
+
+============================================================================================
+7. EVALUACIONES, DIAGNÓSTICO Y SALTEO (REGLAS EXACTAS)
+============================================================================================
+
+7.1 Mini test de lección
+  - Entre 5 y 10 preguntas del banco de la lección. Se completa la lección con 70% o más
+    (vale el mejor intento). Se puede repetir; cada intento mezcla preguntas y opciones.
+
+7.2 Examen del módulo
+  - 20 preguntas por defecto (configurable en modulo.yaml), repartidas entre todas las
+    lecciones en proporción a sus horas y con al menos una por lección. Se priorizan
+    preguntas no vistas y se mezclan los tipos.
+  - Si el estudiante ya completó todas las lecciones del módulo, se aprueba con 70%.
+  - Si no las completó, el examen cuenta como examen de salteo y se aprueba con 85%. La
+    plataforma lo avisa antes de empezar.
+
+7.3 Módulo completado
+  - Por cursada: lecciones completadas + examen con 70% o más + caso real resuelto +
+    laboratorio marcado como hecho (con su lista de verificación).
+  - Por salteo: examen con 85% o más. El laboratorio y el caso real quedan sugeridos.
+
+7.4 Recomendaciones después de un examen
+  - Se calcula el porcentaje de aciertos por lección dentro del examen. Las lecciones por
+    debajo de 70% se recomiendan (no el módulo entero), con enlace directo a las secciones
+    relacionadas con las preguntas falladas.
+
+7.5 Diagnóstico inicial (opcional, se puede pausar y retomar)
+  - Por nivel: 10 preguntas marcadas como aptas para diagnóstico, al menos una por
+    módulo y el resto según las horas de cada módulo.
+  - Corte: si en las primeras 5 preguntas de un nivel hay 4 errores, o si el nivel
+    termina con menos de 40% de aciertos, el diagnóstico se detiene y los niveles
+    siguientes quedan como "estudiar".
+  - Marca por módulo: todas sus preguntas correctas = "dominado" (se sugiere el examen de
+    salteo); 50% o más = "repasar"; menos de 50% = "estudiar".
+  - El diagnóstico nunca da un módulo por aprobado.
+
+7.6 Próximo paso recomendado (panel del estudiante)
+  En este orden:
+    1. Tarjetas de repaso vencidas, si hay.
+    2. Lecciones recomendadas por exámenes fallados.
+    3. Continuar el módulo en curso.
+    4. Siguiente módulo en el orden de la carrera; si está "dominado", sugerir su examen de
+       salteo; si le faltan requisitos, avisarlo.
+
+7.7 Fortalezas y temas débiles
+  - Se calculan por lección y por etiqueta a partir de todas las respuestas, dando más
+    peso a las recientes y exigiendo un mínimo de 3 respuestas para opinar.
+
+
+============================================================================================
+8. PROGRESO Y ALMACENAMIENTO
+============================================================================================
+
+8.1 Qué se guarda
+  - Perfil: nombre visible y preferencias (tema, tamaño de letra, límite diario de
+    tarjetas).
+  - Progreso de lección: estado, mejor puntaje, intentos, tiempo activo y última visita.
+  - Intentos de evaluación: tipo (mini test, examen, salteo, diagnóstico, simulacro),
+    fecha, cada pregunta con su respuesta y si fue correcta, puntaje y resultado.
+  - Estado de módulo: estado, marca del diagnóstico, laboratorio y caso real.
+  - Notas personales por lección.
+  - Estado de cada tarjeta de repaso (datos de FSRS).
+  - Tiempo dedicado por día y por lección.
+  - Insignias y certificados obtenidos.
+
+8.2 Cómo se mide el tiempo
+  - Solo cuenta el tiempo activo: pestaña visible y alguna interacción en los últimos 2
+    minutos.
+
+8.3 Repositorio de progreso
+  - Toda la aplicación usa una única interfaz (ProgressRepository) con operaciones como
+    guardar intento, leer progreso de módulo o actualizar nota. Hoy la implementa
+    IndexedDB; mañana la implementará una API, sin cambiar el resto de la aplicación.
+  - Los datos tienen número de versión y migraciones automáticas.
+  - Exportar e importar el progreso a un archivo JSON desde Ajustes. La aplicación pide al
+    navegador almacenamiento persistente para que no lo borre por falta de espacio.
+  - Los intentos se guardan como eventos que no se modifican; eso simplifica la futura
+    sincronización entre dispositivos.
+
+8.4 Cuando haya usuarios y base de datos (fuera del alcance actual)
+  - Una API separada (por ejemplo Node.js con Fastify) con PostgreSQL, con las mismas
+    tablas que hoy tiene IndexedDB, e inicio de sesión con OpenID Connect.
+  - Sincronización: el navegador sigue funcionando sin conexión y sube sus eventos cuando
+    puede.
+  - El contenido sigue siendo estático; solo el progreso pasa a la base de datos.
+  - Certificados verificables con un código firmado (hoy los certificados son locales y
+    no verificables por terceros, y así se aclara en el propio certificado).
+
+
+============================================================================================
+9. FUNCIONES DE LA PLATAFORMA
+============================================================================================
+
+  - Mapa de la carrera: niveles y módulos como un mapa con conexiones de requisitos,
+    coloreado según el progreso y las marcas del diagnóstico.
+  - Panel del estudiante: próximo paso, progreso por nivel, tiempo dedicado (semana y
+    total), fortalezas, temas débiles, tarjetas pendientes e historial de exámenes.
+  - Página de lección: objetivos y tiempo arriba, contenido, interactivos, errores
+    comunes, resumen, mini test, tarjetas y notas. Índice lateral en pantallas grandes.
+  - Buscador: índice generado al compilar con todo el texto de lecciones y glosario;
+    cada resultado lleva a la sección exacta.
+  - Glosario: lista alfabética con buscador; cada término enlaza a la lección donde se
+    explica. Dentro de las lecciones, los términos muestran su definición al tocarlos.
+  - Notas personales por lección, con una vista de todas las notas.
+  - Tema claro y oscuro (sigue la preferencia del sistema y se puede cambiar a mano).
+  - Diseño pensado primero para celular.
+  - Insignia y certificado por nivel, para descargar como PDF desde el navegador.
+  - Modo simulacro de certificaciones (nivel 9).
+
+
+============================================================================================
+10. CALIDAD, PRUEBAS Y ACCESIBILIDAD
+============================================================================================
+
+  - Pruebas unitarias de todos los motores: subnetting, comandos de la terminal, motor
+    de red, validadores, armado de exámenes, diagnóstico, recomendaciones y repetición
+    espaciada.
+  - Validación de contenido (sección 5.6) en cada compilación.
+  - Pruebas de punta a punta con Playwright: recorrer una lección, rendir un examen,
+    hacer el diagnóstico, exportar e importar progreso, en tamaño de escritorio y de
+    celular.
+  - Integración continua con GitHub Actions: lint, tipos, pruebas, validación y
+    compilación en cada cambio.
+  - Accesibilidad: todo usable con teclado, alternativas de teclado para arrastrar y
+    soltar, textos alternativos en diagramas, contraste suficiente en ambos temas y
+    animaciones reducidas si el sistema lo pide.
+
+
+============================================================================================
+11. CÓMO SE VA A CORRER LOCALMENTE (DESDE LA ETAPA 2)
+============================================================================================
+
+  Requisitos: Node.js 22 LTS o posterior y Git.
+
+    git clone https://github.com/Gstar97/Sysadmin.git
+    cd Sysadmin
+    npm install
+    npm run dev          -> abrir http://localhost:5173
+
+  Otros comandos:
+    npm run build        -> genera la versión estática en dist/
+    npm run preview      -> sirve dist/ localmente para probarla
+    npm run validar      -> valida todo el contenido
+    npm test             -> pruebas unitarias
+
+  La carpeta dist/ se puede publicar en cualquier servidor web (Nginx, Apache) o en
+  servicios de páginas estáticas. Opcionalmente se incluirá un compose.yaml para
+  servirla con Nginx en un contenedor.
+
+
+============================================================================================
+12. RIESGOS Y CÓMO SE MITIGAN
+============================================================================================
+
+  - Alcance enorme: trabajo por etapas; el nivel 0 funciona como piloto y fija la calidad
+    y el formato de todo lo que sigue.
+  - Simuladores con menos funciones que un sistema real: cubren lo que se enseña en cada
+    lección, avisan cuando algo no está soportado, y cada módulo tiene laboratorio en
+    máquinas virtuales reales.
+  - Contenido que envejece: fecha de verificación por lección, aviso automático a los 12
+    meses y anexo de fuentes en el plan.
+  - Tamaño de la aplicación: cada lección y cada componente pesado se cargan solo cuando
+    se usan.
+  - Pérdida del progreso local: exportación e importación, y pedido de almacenamiento
+    persistente al navegador.
+
+
+============================================================================================
+13. ETAPAS SIGUIENTES
+============================================================================================
+
+  Etapa 2 - Base de la plataforma
+    - Aplicación, navegación, temas, diseño para celular.
+    - Carga y validación de contenido, índice de búsqueda y glosario.
+    - Motor de evaluaciones con los seis tipos de pregunta, mini tests, exámenes de
+      módulo, salteo, diagnóstico y recomendaciones.
+    - Todos los componentes interactivos de la sección 6, cada uno con ejercicios de
+      demostración reales en una página de galería.
+    - Progreso en IndexedDB con exportación e importación, panel, mapa, notas, repaso
+      espaciado, insignias y certificados.
+    - Pruebas automáticas, integración continua y LEEME.txt con instrucciones.
+
+  Etapa 3 - Nivel 0 completo como piloto
+    - 21 lecciones, 4 módulos con laboratorio, examen y caso real, y el proyecto
+      integrador. Banco de entre 170 y 300 preguntas y sus tarjetas. Pausa para revisión.
+
+  Etapa 4 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
+  Los niveles más largos (Linux y Redes) se pueden entregar en dos partes dentro de la
+  misma etapa para poder revisarlos a mitad de camino.
+
+
+============================================================================================
+14. DECISIONES A CONFIRMAR
+============================================================================================
+
+  1. Nube: el plan cubre AWS y Azure (con equivalencias entre ambos). Alternativa: elegir
+     uno solo y profundizar más en él.
+  2. Distribuciones Linux de referencia: Rocky Linux 10 o AlmaLinux 10 más Ubuntu Server
+     LTS.
+  3. Consola simulada tipo Cisco IOS: no estaba en la lista original de componentes; se
+     propone porque la mayor parte del mercado y la certificación CCNA la usan.
+  4. Código en inglés y contenido en español.
+  5. Stack: React + TypeScript + Vite + MDX/YAML, como se describe arriba.

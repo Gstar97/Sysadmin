@@ -1,0 +1,257 @@
+id: '3'
+titulo: Windows Server
+descripcion: >-
+  Administración de Windows Server 2025 (versión LTSC vigente, con soporte hasta 2034):
+  instalación, PowerShell, Active Directory, directivas de grupo, DNS, DHCP, servidor de
+  archivos, actualizaciones y despliegue de equipos. PowerShell se enseña al principio del
+  nivel porque es la herramienta con la que se administra todo lo demás.
+perfil_salida: >-
+  Montar y operar un dominio de Active Directory completo para una empresa chica o
+  mediana, administrarlo con PowerShell, aplicar directivas de grupo, publicar archivos con
+  permisos correctos y mantener los equipos actualizados.
+modulos:
+  - id: '3.1'
+    titulo: Instalación y administración básica
+    requiere: ['0.2']
+    lecciones:
+      - t: Ediciones, licencias y opciones de instalación
+        h: 1.5
+        obj:
+          - Diferenciar Windows Server 2025 Standard y Datacenter, el licenciamiento por núcleo y las CAL.
+          - Elegir entre Server Core y Experiencia de escritorio.
+          - Entender el canal LTSC, el Annual Channel y los ciclos de soporte.
+        ui: Escenarios de decisión de licenciamiento.
+      - t: Instalación y configuración inicial
+        h: 2.5
+        obj:
+          - Instalar Windows Server en una VM con la versión de evaluación de 180 días.
+          - Configurar nombre, IP fija, DNS, zona horaria y actualizaciones con sconfig y con la interfaz gráfica.
+        ui: Lista de pasos guiada + terminal PowerShell simulada.
+      - t: Herramientas de administración
+        h: 2
+        obj:
+          - Usar el Administrador del servidor, las consolas MMC, Windows Admin Center y RSAT desde un cliente.
+          - Usar el Visor de eventos, el Administrador de tareas, el Monitor de recursos y la consola de Servicios.
+        ui: Diagrama interactivo de herramientas y para qué sirve cada una.
+      - t: Roles y características
+        h: 1.5
+        obj:
+          - Instalar y quitar roles y características desde la interfaz y con Install-WindowsFeature.
+          - Saber qué rol resuelve cada necesidad.
+        ui: Emparejar necesidad con rol + terminal PowerShell simulada.
+      - t: Almacenamiento en Windows
+        h: 2
+        obj:
+          - Administrar discos y volúmenes (Administración de discos, diskpart y cmdlets de Storage).
+          - Comparar NTFS y ReFS, y conocer Espacios de almacenamiento.
+        ui: Terminal PowerShell simulada.
+    lab:
+      t: Instalar un Windows Server Core y uno con escritorio, configurarlos y administrar el Core de forma remota con Windows Admin Center o RSAT.
+      h: 3
+    caso:
+      t: El servidor recién instalado no responde en la red (perfil de red, firewall e IP).
+      h: 1
+
+  - id: '3.2'
+    titulo: PowerShell
+    requiere: ['3.1']
+    lecciones:
+      - t: Fundamentos de PowerShell
+        h: 2
+        obj:
+          - Entender los cmdlets (verbo-sustantivo), los parámetros y los alias.
+          - Encontrar comandos y ayuda con Get-Command y Get-Help (y Update-Help).
+          - Diferenciar Windows PowerShell 5.1 de PowerShell 7 (pwsh).
+        ui: Terminal PowerShell simulada.
+      - t: Objetos y pipeline
+        h: 3
+        obj:
+          - Entender que PowerShell pasa objetos y no texto, y explorarlos con Get-Member.
+          - Filtrar, seleccionar, ordenar y agrupar con Where-Object, Select-Object, Sort-Object y Group-Object.
+          - Dar formato y exportar (Format-Table, Export-Csv, ConvertTo-Html, ConvertTo-Json).
+        ui: Terminal PowerShell simulada con desafíos.
+      - t: Variables, tipos y estructuras
+        h: 2
+        obj:
+          - Usar variables, arrays, tablas hash y objetos personalizados ([PSCustomObject]).
+          - Aplicar operadores de comparación (-eq, -like, -match, -in).
+        ui: Ejercicios de completar comandos.
+      - t: Scripts
+        h: 3
+        obj:
+          - Escribir scripts .ps1 con if, foreach, switch y funciones con parámetros.
+          - Manejar errores con try/catch/finally y -ErrorAction.
+          - Entender que las directivas de ejecución no son una barrera de seguridad.
+        ui: Editor con validación + terminal PowerShell simulada.
+      - t: Administración remota y módulos
+        h: 2
+        obj:
+          - Ejecutar comandos remotos con WinRM (Enter-PSSession, Invoke-Command) y con PowerShell sobre SSH.
+          - Instalar módulos de PowerShell Gallery con criterio.
+        ui: Terminal simulada con varios equipos.
+    lab:
+      t: Script de inventario que recorre varios servidores y genera un reporte HTML y CSV de discos, servicios y actualizaciones.
+      h: 3
+    caso:
+      t: El script funciona en el equipo propio y falla en el servidor (versión de PowerShell, directiva de ejecución y módulo faltante).
+      h: 1
+
+  - id: '3.3'
+    titulo: Active Directory
+    requiere: ['3.2', '2.3']
+    lecciones:
+      - t: Conceptos de Active Directory
+        h: 2
+        obj:
+          - Explicar dominio, árbol, bosque, controlador de dominio y catálogo global.
+          - Entender el papel de DNS, LDAP y Kerberos (y de NTLM como protocolo heredado).
+        ui: Diagrama interactivo de un bosque.
+      - t: Crear el primer dominio
+        h: 2.5
+        obj:
+          - Instalar AD DS y promover el primer controlador de dominio en un bosque nuevo.
+          - Elegir el nombre del dominio y los niveles funcionales (Windows Server 2025 introduce uno nuevo).
+          - Verificar la salud con dcdiag y la resolución DNS.
+        ui: Lista de pasos guiada + terminal PowerShell simulada.
+      - t: Unidades organizativas y delegación
+        h: 2
+        obj:
+          - Diseñar una estructura de unidades organizativas pensada para administrar y aplicar directivas.
+          - Delegar tareas (por ejemplo, restablecer contraseñas) sin dar permisos de administrador del dominio.
+        ui: Arrastrar y soltar para diseñar la estructura de OUs.
+      - t: Usuarios, grupos y equipos
+        h: 3
+        obj:
+          - Crear usuarios, grupos y cuentas de equipo, y unir clientes al dominio.
+          - Diferenciar tipos y ámbitos de grupo (global, local de dominio, universal) y aplicar AGDLP.
+          - Usar cuentas de servicio administradas de grupo (gMSA).
+        ui: Emparejar escenario con tipo de grupo.
+      - t: Administrar Active Directory con PowerShell
+        h: 3
+        obj:
+          - Consultar y modificar objetos con Get-ADUser, Set-ADUser, New-ADUser y filtros.
+          - Dar de alta usuarios masivamente desde CSV.
+          - Encontrar cuentas inactivas y contraseñas que nunca vencen.
+        ui: Terminal PowerShell simulada con módulo de AD simulado.
+      - t: Directivas de grupo (GPO), parte 1
+        h: 3
+        obj:
+          - Explicar qué es una GPO, cómo se vincula y el orden de aplicación (local, sitio, dominio, OU).
+          - Usar herencia, bloqueo, exigencia y filtrado por seguridad o WMI.
+        ui: Simulador "¿qué GPO gana?".
+      - t: Directivas de grupo (GPO), parte 2
+        h: 3
+        obj:
+          - Resolver casos reales (contraseñas, unidades de red, instalación de software, restricciones, preferencias).
+          - Diagnosticar con gpupdate, gpresult y el conjunto resultante de directivas.
+        ui: Troubleshooting "la directiva no se aplica".
+      - t: Operación de Active Directory
+        h: 3
+        obj:
+          - Agregar un segundo controlador de dominio y verificar la replicación (repadmin).
+          - Conocer los roles FSMO y cuándo moverlos.
+          - Respaldar y restaurar AD (estado del sistema y papelera de reciclaje de AD).
+        ui: Ejercicios de interpretar salidas de repadmin y dcdiag.
+    lab:
+      t: Dominio con dos controladores, estructura de OUs, alta masiva desde CSV, grupos AGDLP, directivas de seguridad y unidades de red, con un cliente Windows 11 unido.
+      h: 5
+    caso:
+      t: Nadie puede iniciar sesión esta mañana (hora desincronizada y Kerberos, cliente apuntando a un DNS público).
+      h: 1.5
+
+  - id: '3.4'
+    titulo: Servicios de red y archivos en Windows
+    requiere: ['3.3']
+    lecciones:
+      - t: DNS en Windows Server
+        h: 2
+        obj:
+          - Crear zonas integradas en AD, zonas inversas y reenviadores condicionales.
+          - Configurar la limpieza de registros antiguos y diagnosticar registros.
+        ui: Ejercicios de interpretar salidas de Resolve-DnsName y nslookup.
+      - t: DHCP en Windows Server
+        h: 2
+        obj:
+          - Autorizar el servidor DHCP en AD y crear ámbitos, reservas y opciones.
+          - Configurar la conmutación por error de DHCP.
+        ui: Terminal PowerShell simulada + troubleshooting.
+      - t: Permisos NTFS
+        h: 2.5
+        obj:
+          - Aplicar permisos básicos y avanzados, herencia y propiedad.
+          - Calcular permisos efectivos y usar icacls.
+        ui: Simulador de permisos efectivos.
+      - t: Recursos compartidos y servidor de archivos
+        h: 3
+        obj:
+          - Compartir carpetas por SMB y combinar permisos de recurso compartido y NTFS (gana el más restrictivo).
+          - Usar enumeración basada en acceso, cuotas y filtros de archivos (FSRM).
+          - Conocer los espacios de nombres y la replicación de DFS.
+        ui: Simulador de permisos efectivos combinados (recurso compartido + NTFS).
+      - t: Acceso remoto e impresión
+        h: 1.5
+        obj:
+          - Configurar Escritorio remoto de forma segura (NLA, grupos autorizados, sin exponerlo a internet).
+          - Conocer Remote Desktop Services y los servidores de impresión, y sus riesgos (PrintNightmare).
+        ui: Escenarios de decisión.
+    lab:
+      t: Servidor de archivos por departamento con DFS, permisos NTFS y de recurso compartido, cuotas, y DHCP con conmutación por error entre dos servidores.
+      h: 4
+    caso:
+      t: Una persona ve carpetas que no debería ver (herencia de permisos y grupos anidados).
+      h: 1.5
+
+  - id: '3.5'
+    titulo: Actualizaciones, despliegue y mantenimiento
+    requiere: ['3.3']
+    lecciones:
+      - t: Actualizaciones en la empresa
+        h: 1.5
+        obj:
+          - Entender los tipos de actualizaciones, el segundo martes de cada mes (Patch Tuesday) y los anillos de despliegue.
+          - Diseñar una política de parches por grupos (pruebas, piloto y producción).
+        ui: Arrastrar y soltar para ordenar un despliegue por anillos.
+      - t: WSUS
+        h: 3
+        obj:
+          - Instalar WSUS, sincronizar, elegir productos y clasificaciones y aprobar actualizaciones.
+          - Configurar los clientes por GPO y crear grupos de equipos.
+          - Hacer el mantenimiento que evita que WSUS se degrade con el tiempo.
+          - Conocer su situación actual (Microsoft lo declaró obsoleto en 2024; sigue incluido y con soporte, pero sin funciones nuevas) y las alternativas (Azure Update Manager, Intune y Windows Autopatch, hotpatch con Azure Arc).
+        ui: Diagrama interactivo del flujo de WSUS + troubleshooting.
+      - t: Despliegue de equipos
+        h: 3
+        obj:
+          - Preparar imágenes con Sysprep y archivos de respuesta (unattend.xml).
+          - Entender el arranque por red (PXE) y WDS, con sus limitaciones actuales.
+          - Conocer el panorama vigente (Microsoft retiró MDT en enero de 2026; hoy se usa Windows Autopilot con Intune o Configuration Manager).
+        ui: Ordenar los pasos de un despliegue.
+      - t: Monitoreo y diagnóstico en Windows
+        h: 2.5
+        obj:
+          - Usar el Visor de eventos y Get-WinEvent con filtros, y conocer eventos clave (4624, 4625, 4740, 7034, 41).
+          - Usar el Monitor de rendimiento y el Monitor de confiabilidad.
+        ui: Interpretar eventos + troubleshooting "el servidor se reinició solo".
+      - t: Backup en Windows Server
+        h: 2
+        obj:
+          - Configurar Windows Server Backup y respaldar el estado del sistema.
+          - Restaurar archivos sueltos y un servidor completo.
+        ui: Ordenar los pasos de una restauración.
+    lab:
+      t: WSUS con grupos piloto y producción y clientes configurados por GPO, imagen de Windows 11 con Sysprep y unattend.xml, y backup del estado del sistema de un controlador de dominio.
+      h: 4
+    caso:
+      t: Una actualización rompió la aplicación de facturación (anillos, desinstalar una KB y rechazarla en WSUS).
+      h: 1.5
+
+proyecto:
+  t: Dominio para una PyME
+  h: 20
+  entregables:
+    - Dos controladores de dominio con DNS integrado y DHCP con conmutación por error.
+    - Unidades organizativas, alta masiva de usuarios con PowerShell desde CSV y grupos AGDLP.
+    - Directivas de seguridad, unidades de red y restricciones.
+    - Servidor de archivos con permisos NTFS, recursos compartidos, cuotas y DFS.
+    - WSUS con anillos, backup de AD y restauración probada.
+    - Documentación y script de verificación de salud del dominio.
