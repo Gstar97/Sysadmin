@@ -1,0 +1,113 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué componente guarda los programas y datos que se están usando en este momento y se borra al apagar el equipo?
+  opciones:
+    - { texto: La memoria RAM, correcta: true, explicacion: "Es memoria volátil: muy rápida, pero pierde su contenido sin energía." }
+    - { texto: El disco SSD, explicacion: "El SSD guarda los datos de forma permanente, aunque el equipo se apague." }
+    - { texto: La caché del disco rígido, explicacion: "Es un búfer pequeño dentro del disco; no es donde se ejecutan los programas." }
+    - { texto: El chip del firmware, explicacion: "Guarda el firmware (UEFI o BIOS) de forma permanente y casi nunca cambia." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué un SSD NVMe es mucho más rápido que un SSD SATA?
+  opciones:
+    - { texto: "Porque se conecta por varias líneas PCIe, en general directo a la CPU, en vez del bus SATA que llega a unos 550 MB/s", correcta: true, explicacion: "El límite del SSD SATA es el propio bus SATA (6 Gbit/s). Un NVMe PCIe 4.0 x4 puede llegar a unos 7 GB/s." }
+    - { texto: Porque gira más rápido, explicacion: "Ningún SSD gira: no tiene partes móviles. Los que giran son los discos rígidos." }
+    - { texto: Porque usa memoria RAM en vez de memoria flash, explicacion: "Los dos tipos de SSD guardan los datos en memoria flash." }
+    - { texto: "Porque se conecta por USB 3", explicacion: "Los NVMe internos se conectan por PCIe; USB sería más lento." }
+- id: p03
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Cuáles de estas características son típicas de un servidor y no de una PC de escritorio común?
+  opciones:
+    - { texto: Memoria ECC, correcta: true, explicacion: "Detecta y corrige errores de bits en la memoria; es estándar en servidores." }
+    - { texto: Fuentes de alimentación redundantes, correcta: true, explicacion: "Si una fuente falla, la otra sostiene el equipo sin apagarlo." }
+    - { texto: Un BMC con puerto de red propio, correcta: true, explicacion: "Permite administrar el servidor a distancia aunque el sistema operativo no responda." }
+    - { texto: Discos que se cambian en caliente, correcta: true, explicacion: "Las bahías hot-swap permiten reemplazar un disco sin apagar el servidor." }
+    - { texto: Una placa de video de alta gama, explicacion: "Los servidores suelen tener un video integrado básico; solo llevan placas gráficas potentes si se usan para cálculo o inteligencia artificial." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: Instalas una placa de red PCIe 4.0 x8 en una ranura PCIe 3.0 x16. ¿Qué pasa?
+  opciones:
+    - { texto: "Funciona con 8 líneas a la velocidad de PCIe 3.0", correcta: true, explicacion: "Se usa la generación más vieja de las dos (3.0) y el ancho de la placa (8 líneas)." }
+    - { texto: "No funciona: las generaciones no son compatibles", explicacion: "PCIe es compatible entre generaciones hacia adelante y hacia atrás." }
+    - { texto: "Funciona con 16 líneas a la velocidad de PCIe 4.0", explicacion: "La placa solo tiene 8 líneas y la ranura solo da velocidad 3.0." }
+    - { texto: "Funciona con 8 líneas a la velocidad de PCIe 4.0", explicacion: "La ranura es 3.0: no puede dar velocidad 4.0." }
+- id: p05
+  tipo: interpretar_salida
+  enunciado: Según esta parte de la ficha técnica, ¿cuántas ranuras de memoria quedan libres y qué módulos hay que comprar para ampliar?
+  salida: |
+    Memoria: 64 GB (2× 32 GB) DDR5-5600 RDIMM ECC
+             16 ranuras, máximo 1 TB
+  opciones:
+    - { texto: "14 ranuras libres; módulos DDR5 RDIMM ECC", correcta: true, explicacion: "Hay 2 de 16 ranuras ocupadas. Los módulos nuevos tienen que ser del mismo tipo: DDR5, con registro (RDIMM) y ECC." }
+    - { texto: "14 ranuras libres; cualquier módulo DDR5", explicacion: "Los módulos de PC (UDIMM) no son compatibles con una placa que usa RDIMM." }
+    - { texto: "2 ranuras libres; módulos DDR5 RDIMM ECC", explicacion: "2 es la cantidad de módulos instalados, no de ranuras libres." }
+    - { texto: "No se puede ampliar: ya tiene la memoria máxima", explicacion: "El máximo es 1 TB y tiene 64 GB." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: Esta es parte de la salida de `lscpu` en un servidor. ¿Cuántas CPU ve el sistema operativo?
+  salida: |
+    CPU(s):                   ?
+    Thread(s) per core:       2
+    Core(s) per socket:       8
+    Socket(s):                2
+  opciones:
+    - { texto: "32", correcta: true, explicacion: "2 zócalos × 8 núcleos × 2 hilos por núcleo = 32 CPU lógicas." }
+    - { texto: "16", explicacion: "16 son los núcleos físicos (2 × 8); con 2 hilos por núcleo el sistema ve el doble." }
+    - { texto: "8", explicacion: "8 son los núcleos de un solo procesador; hay dos zócalos." }
+    - { texto: "4", explicacion: "No hay ninguna combinación de estos datos que dé 4." }
+- id: p07
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un servidor dejó de responder a la red y el sistema operativo parece colgado. Estás a 300 km. ¿Qué te permite ver su pantalla y reiniciarlo?
+  opciones:
+    - { texto: "El BMC (iDRAC, iLO o similar) por su puerto de gestión", correcta: true, explicacion: "Es independiente del sistema operativo y tiene su propia conexión de red." }
+    - { texto: Una conexión SSH al servidor, explicacion: "SSH depende del sistema operativo, que es justamente lo que está colgado." }
+    - { texto: El escritorio remoto de Windows, explicacion: "También depende del sistema operativo." }
+    - { texto: El chipset, explicacion: "El chipset conecta dispositivos dentro del equipo; no ofrece gestión remota." }
+- id: p08
+  tipo: encontrar_error
+  enunciado: Esta lista describe cómo se conecta cada pieza. Una línea es incorrecta. Márcala.
+  archivo: |
+    RAM          → conectada directamente a la CPU
+    SSD NVMe     → ranura M.2 o U.2, usa 4 líneas PCIe
+    Disco SATA   → puerto SATA, hasta 6 Gbit/s
+    Placa de red → ranura PCIe
+    Fuente       → convierte 12 V continua en 220 V alterna
+  lineas_con_error: [5]
+  explicacion: Es al revés. La fuente recibe la corriente alterna del enchufe (220 V o 110 V) y la convierte en tensiones continuas (12 V, 5 V, 3,3 V) para los componentes.
+- id: p09
+  tipo: ordenar_pasos
+  enunciado: Un programa abre un archivo que está en un disco SATA. Ordena el recorrido de los datos.
+  pasos:
+    - El disco SATA lee los datos pedidos
+    - Los datos pasan por el chipset
+    - Viajan por el enlace entre el chipset y la CPU
+    - El controlador de memoria de la CPU los guarda en la RAM
+    - El programa trabaja con los datos desde la RAM
+  explicacion: El disco SATA cuelga del chipset, que comparte un único enlace con la CPU. La CPU nunca trabaja directo sobre el disco; primero copia los datos a la RAM.
+- id: p10
+  tipo: completar_comando
+  enunciado: En Linux, ¿qué comando muestra el modelo del procesador, la cantidad de núcleos y la caché?
+  aceptadas: [lscpu]
+  patrones: ['^cat\s+/proc/cpuinfo$']
+  explicacion: "`lscpu` resume la información del procesador. El archivo `/proc/cpuinfo` tiene los mismos datos, repetidos para cada CPU lógica."
+- id: p11
+  tipo: opcion_multiple
+  enunciado: El manual de una placa dice que una ranura es "x16 física, x4 eléctrica". ¿Qué significa?
+  opciones:
+    - { texto: "Tiene el largo de una ranura x16, pero solo 4 líneas PCIe conectadas", correcta: true, explicacion: "Entra una placa x16, pero funciona con 4 líneas: un cuarto del ancho de banda." }
+    - { texto: "Recibe 16 V y entrega 4 V", explicacion: "x16 y x4 se refieren a líneas PCIe, no a voltajes." }
+    - { texto: "Solo acepta placas x4", explicacion: "Acepta placas de cualquier ancho que entren físicamente; el ancho real es 4 líneas." }
+    - { texto: "Funciona como x16 si se le conecta una fuente extra", explicacion: "Las líneas que no están cableadas en la placa no se pueden agregar." }
+- id: p12
+  tipo: opcion_multiple
+  enunciado: En un rack de 42U ya hay 30U ocupadas. ¿Cuántos servidores de 2U entran como máximo en el espacio libre?
+  opciones:
+    - { texto: "6", correcta: true, explicacion: "Quedan 12U libres; 12 ÷ 2 = 6 servidores (sin contar espacio para patcheras o switches)." }
+    - { texto: "12", explicacion: "12 son las U libres; cada servidor ocupa 2." }
+    - { texto: "21", explicacion: "21 servidores de 2U ocuparían el rack entero." }
+    - { texto: "4", explicacion: "Con 12U libres entran 6 equipos de 2U." }

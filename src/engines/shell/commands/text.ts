@@ -122,6 +122,8 @@ register(['grep', 'egrep'], {
         if (a.flags.has('q')) return 0
         if (a.flags.has('c') || a.flags.has('l')) continue
         if (a.flags.has('o') && !a.flags.has('v')) {
+          // matchAll copia lastIndex del test anterior: hay que empezar desde el principio de la línea.
+          re.lastIndex = 0
           for (const m of ls[i].matchAll(re)) ctx.out((showName ? `${f.name}:` : '') + (a.flags.has('n') ? `${i + 1}:` : '') + (color ? `${COLOR.match}${m[0]}${COLOR.reset}` : m[0]) + '\n')
           continue
         }

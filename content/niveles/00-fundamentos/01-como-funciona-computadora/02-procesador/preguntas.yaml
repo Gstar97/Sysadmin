@@ -1,0 +1,106 @@
+- id: p01
+  tipo: ordenar_pasos
+  diagnostico: true
+  enunciado: Ordena las fases del ciclo que repite el procesador con cada instrucción.
+  pasos:
+    - Leer de la memoria la instrucción a la que apunta el contador de programa
+    - Avanzar el contador de programa a la instrucción siguiente
+    - Decodificar qué operación es y con qué datos trabaja
+    - Ejecutar la operación
+  explicacion: Es el ciclo buscar, decodificar, ejecutar. El contador de programa avanza durante la búsqueda; si la instrucción es un salto, la ejecución lo vuelve a cambiar.
+- id: p02
+  tipo: opcion_multiple
+  enunciado: ¿Qué guarda el contador de programa (PC)?
+  opciones:
+    - { texto: La posición de memoria de la próxima instrucción, correcta: true, explicacion: "Por eso un salto (JMP) funciona cambiando el valor del PC." }
+    - { texto: La cantidad de programas abiertos, explicacion: "Eso lo lleva el sistema operativo, no un registro de la CPU." }
+    - { texto: El resultado del último cálculo, explicacion: "El resultado queda en un registro de datos, como el acumulador del simulador." }
+    - { texto: La cantidad de ciclos ejecutados desde el arranque, explicacion: "Existen contadores de ciclos, pero no es lo que hace el contador de programa." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué la caché acelera mucho un bucle pero casi nada un programa que lee cada dato una sola vez?
+  opciones:
+    - { texto: "Porque la caché guarda copias de lo usado recientemente: solo ayuda cuando se vuelve a usar lo mismo", correcta: true, explicacion: "En un bucle se repiten las mismas instrucciones y datos; si cada dato se usa una vez, la primera lectura igual tiene que ir a la RAM." }
+    - { texto: "Porque la caché solo funciona con instrucciones de salto", explicacion: "La caché guarda cualquier dato o instrucción, no solo saltos." }
+    - { texto: "Porque los bucles se ejecutan en la caché L3 y el resto en la RAM", explicacion: "Todos los programas pasan por la caché; la diferencia es cuánto la reaprovechan." }
+    - { texto: "Porque la caché aumenta la frecuencia del procesador", explicacion: "La caché no cambia la frecuencia; evita esperas a la memoria." }
+- id: p04
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: Según esta salida de `lscpu`, ¿cuántos núcleos físicos tiene el servidor en total?
+  salida: |
+    CPU(s):                   48
+    Thread(s) per core:       2
+    Core(s) per socket:       12
+    Socket(s):                2
+  opciones:
+    - { texto: "24", correcta: true, explicacion: "2 zócalos × 12 núcleos = 24 núcleos físicos. Con 2 hilos por núcleo, el sistema ve 48 CPU lógicas." }
+    - { texto: "48", explicacion: "48 son las CPU lógicas (incluye los dos hilos de cada núcleo)." }
+    - { texto: "12", explicacion: "12 son los núcleos de cada procesador; hay dos." }
+    - { texto: "96", explicacion: "Sería contar dos veces los hilos." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Activas SMT (Hyper-Threading) en un servidor de 16 núcleos. ¿Qué es lo más esperable?
+  opciones:
+    - { texto: "El sistema ve 32 CPU y el rendimiento sube algo, típicamente entre 10 y 30%", correcta: true, explicacion: "Los dos hilos comparten las unidades del núcleo: aprovechan las esperas, pero no duplican la capacidad." }
+    - { texto: "El rendimiento se duplica", explicacion: "Los hilos de un núcleo comparten sus unidades de cálculo; no es un segundo núcleo." }
+    - { texto: "El sistema sigue viendo 16 CPU", explicacion: "Cada hilo aparece como una CPU lógica: se ven 32." }
+    - { texto: "Se duplica la caché", explicacion: "La caché es la misma; ahora la comparten dos hilos." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Una aplicación vieja usa un solo hilo y va lenta. ¿Qué servidor la va a ejecutar más rápido?
+  opciones:
+    - { texto: "Uno con 8 núcleos de alto rendimiento por núcleo y alta frecuencia", correcta: true, explicacion: "Un programa de un solo hilo usa un núcleo: importa cuánto rinde ese núcleo." }
+    - { texto: "Uno con 128 núcleos de frecuencia baja", explicacion: "La aplicación usaría uno solo de esos 128 núcleos, y de los más lentos." }
+    - { texto: "Cualquiera con SMT activado", explicacion: "SMT ayuda cuando hay varios hilos para repartir; aquí hay uno solo." }
+    - { texto: "Uno con más RAM, sin importar el procesador", explicacion: "Si el límite es la CPU, más memoria no cambia nada." }
+- id: p07
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Al instalar Rocky Linux 10 en una máquina virtual aparece "Fatal glibc error - CPU does not support x86-64-v3". ¿Cuál es la causa?
+  opciones:
+    - { texto: "El procesador que ve la VM no tiene las instrucciones de nivel v3 (AVX2) que exige Rocky 10", correcta: true, explicacion: "Puede ser un procesador viejo o un hipervisor que no pasa esas instrucciones a la VM." }
+    - { texto: La imagen ISO está dañada, explicacion: "Una ISO dañada da otros errores; este mensaje describe una falta de instrucciones del procesador." }
+    - { texto: La VM tiene poca memoria RAM, explicacion: "La falta de memoria no produce este mensaje." }
+    - { texto: Se descargó la imagen ARM en vez de la x86-64, explicacion: "Una imagen de otra arquitectura ni siquiera llegaría a ejecutar glibc." }
+- id: p08
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estos nombres se refieren a la misma arquitectura, x86 de 64 bits?
+  opciones:
+    - { texto: amd64, correcta: true, explicacion: "Es el nombre que usan Debian y Ubuntu, también para procesadores Intel." }
+    - { texto: x86_64, correcta: true, explicacion: "Es el nombre que usan Red Hat, Rocky, AlmaLinux y el comando uname." }
+    - { texto: aarch64, explicacion: "Es ARM de 64 bits." }
+    - { texto: arm64, explicacion: "También es ARM de 64 bits, con el nombre que usan Debian y Ubuntu." }
+- id: p09
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra solo la arquitectura de la máquina (por ejemplo, x86_64 o aarch64).
+  aceptadas: [uname -m, arch, uname --machine]
+  explicacion: "`uname -m` muestra el tipo de máquina. `arch` hace lo mismo."
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Una imagen de contenedor da "exec format error" en un servidor AWS Graviton. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "La imagen es amd64 y Graviton es un procesador ARM64", correcta: true, explicacion: "Hay que usar la variante arm64 de la imagen; muchas imágenes publican las dos." }
+    - { texto: "Al servidor le falta memoria", explicacion: "La falta de memoria no produce un error de formato." }
+    - { texto: "El contenedor no tiene permisos de ejecución", explicacion: "Eso daría 'permission denied', no 'exec format error'." }
+    - { texto: "Graviton no puede ejecutar contenedores", explicacion: "Graviton ejecuta contenedores sin problema, siempre que sean de su arquitectura." }
+- id: p11
+  tipo: encontrar_error
+  enunciado: Un compañero anotó estas afirmaciones sobre la caché. Marca la línea incorrecta.
+  archivo: |
+    La caché L1 es la más rápida y la más pequeña.
+    Cada núcleo tiene su propia caché L1 y L2.
+    La caché L3 la comparten todos los núcleos.
+    La caché L3 es más lenta que la memoria RAM.
+    Todas las cachés están dentro del procesador.
+  lineas_con_error: [4]
+  explicacion: La L3 es la caché más lenta, pero sigue siendo varias veces más rápida que la RAM. Si no lo fuera, no tendría sentido usarla.
+- id: p12
+  tipo: opcion_multiple
+  enunciado: Para Windows Server 2025, ¿qué servidor necesita más licencias de núcleo?
+  opciones:
+    - { texto: "Uno con 2 procesadores de 16 núcleos", correcta: true, explicacion: "Se licencian los 32 núcleos físicos." }
+    - { texto: "Uno con 1 procesador de 16 núcleos y SMT", explicacion: "Se licencian los 16 núcleos físicos; los hilos no cuentan." }
+    - { texto: "Uno con 1 procesador de 8 núcleos", explicacion: "Por el mínimo de 16 por servidor, se licencian 16 núcleos." }
+    - { texto: "Todos necesitan la misma cantidad", explicacion: "El mínimo es 16 por servidor, pero el de 32 núcleos necesita 32." }

@@ -1,0 +1,145 @@
+---
+id: n0-m1-l1
+titulo: Las piezas de una computadora y cómo se conectan
+minutos: 90
+objetivos:
+  - Identificar CPU, RAM, almacenamiento, placa madre, fuente y placas de expansión, y explicar qué hace cada una.
+  - Explicar cómo viajan los datos entre componentes (buses, chipset, PCIe).
+  - Leer la ficha técnica de una PC o de un servidor y entender cada dato.
+glosario: [cpu, ram, placa-madre, chipset, pcie, bmc, unidad-rack]
+verificado: 2026-10
+---
+
+import placa from './placa-madre.svg?raw'
+import placaDatos from './placa-madre.yaml'
+import buses from './buses.svg?raw'
+import componentes from './componentes.yaml'
+import inventario from './ej-inventario.yaml'
+
+Un sysadmin no arma computadoras todos los días, pero sí compra servidores, cambia discos, agrega memoria, revisa por qué un equipo rinde menos de lo esperado y habla con el soporte del fabricante. Para todo eso hace falta saber qué hace cada pieza y cómo se comunican entre ellas. Esta lección es la base de todo el módulo: las siguientes profundizan en el procesador, la memoria, los discos y el arranque.
+
+## Las piezas principales
+
+Toda computadora, desde una notebook hasta un servidor de un centro de datos, tiene las mismas piezas básicas:
+
+- **Procesador** (<Termino id="cpu">CPU</Termino>): ejecuta las instrucciones de los programas. Hace cálculos, compara valores y decide qué hacer después. Es la pieza que más se nombra al describir un equipo.
+- **Memoria** (<Termino id="ram">RAM</Termino>): guarda los programas y los datos que se están usando en este momento. Es muy rápida, pero se borra al apagar el equipo.
+- **Almacenamiento** (discos rígidos y SSD): guarda todo de forma permanente: el sistema operativo, los programas, las bases de datos. Es mucho más lento que la RAM.
+- **<Termino id="placa-madre">Placa madre</Termino>**: la placa grande donde se conecta todo lo demás. Define qué procesador se puede usar, cuánta memoria entra y cuántos discos y placas de expansión se pueden agregar.
+- **Fuente de alimentación**: convierte la corriente alterna del enchufe (220 V o 110 V según el país) en las tensiones continuas que usan los componentes (12 V, 5 V y 3,3 V).
+- **Placas de expansión**: placas de red, de video, controladoras de discos. Se conectan en las ranuras de la placa madre.
+- **Refrigeración**: disipadores y ventiladores. No hacen ningún cálculo, pero sin ellos el procesador se apaga o baja su velocidad para no quemarse. En un servidor, un ventilador que falla es una alerta importante.
+
+Toca cada parte del diagrama para ver qué es y qué detalle conviene conocer:
+
+<DiagramaInteractivo datos={placaDatos} svg={placa} alt="Esquema de una placa madre con el zócalo de la CPU, las ranuras de memoria, las ranuras PCIe, el chipset, los puertos SATA y los conectores de alimentación" />
+
+<Emparejar ejercicio={componentes} />
+
+## Cómo viajan los datos
+
+Las piezas no están todas conectadas con todas. Los datos viajan por caminos llamados **buses**, y cada camino tiene una velocidad máxima. Entender este mapa explica muchos problemas de rendimiento.
+
+<Diagrama svg={buses} alt="Diagrama de bloques: la CPU conectada directamente a la RAM y a las ranuras PCIe rápidas, y al chipset, del que cuelgan SATA, USB y la red integrada" pie="Lo que necesita más velocidad va directo a la CPU; lo más lento pasa por el chipset y comparte un único enlace." />
+
+1. **CPU y RAM** están conectadas directamente: el controlador de memoria está dentro del procesador. La memoria se organiza en **canales**; cada canal de DDR5 mueve unos 45 GB/s, y un procesador de servidor puede tener 8 o 12 canales. Por eso importa en qué ranuras se ponen los módulos.
+2. **PCI Express** (<Termino id="pcie">PCIe</Termino>) es el bus de las placas de expansión y de los discos NVMe. Funciona por **líneas** (lanes): una ranura x4 tiene 4 líneas, una x16 tiene 16. Cada generación duplica la velocidad por línea.
+3. El **<Termino id="chipset">chipset</Termino>** concentra los dispositivos más lentos (SATA, USB, la red integrada, algunas ranuras PCIe) y se comunica con la CPU por un único enlace que todos comparten.
+
+| Generación PCIe | Velocidad aproximada por línea | Una ranura x4 | Una ranura x16 |
+| --- | --- | --- | --- |
+| 3.0 | 1 GB/s | 4 GB/s | 16 GB/s |
+| 4.0 | 2 GB/s | 8 GB/s | 32 GB/s |
+| 5.0 | 4 GB/s | 16 GB/s | 64 GB/s |
+
+Un ejemplo concreto: un SSD NVMe PCIe 4.0 lee hasta unos 7 GB/s porque usa 4 líneas de 2 GB/s. Si lo pones en una ranura PCIe 3.0, funciona igual, pero con la mitad de velocidad. Un disco SATA, en cambio, nunca pasa de unos 550 MB/s, porque ese es el límite del propio bus SATA.
+
+<Consejo>
+Las placas se pueden mezclar entre generaciones: una placa PCIe 4.0 funciona en una ranura 5.0 y al revés. Siempre se usa la velocidad de la generación más vieja de las dos. Lo mismo pasa con el ancho: una placa x8 funciona en una ranura x16, usando solo 8 líneas.
+</Consejo>
+
+## Una PC y un servidor
+
+Un servidor tiene las mismas piezas que una PC, pero está pensado para funcionar sin parar durante años y para que se pueda reparar sin apagarlo. Estas son las diferencias que vas a encontrar en cualquier ficha técnica:
+
+| Característica | PC de escritorio | Servidor |
+| --- | --- | --- |
+| Procesadores | Uno | Uno o dos (a veces cuatro), con muchos más núcleos |
+| Memoria | 2 a 4 ranuras, sin corrección de errores | 8 a 32 ranuras, memoria **ECC** que detecta y corrige errores |
+| Discos | Conectados con cables, dentro del gabinete | En bahías frontales que se cambian **en caliente** (hot-swap), sin apagar |
+| Fuente | Una | Dos fuentes **redundantes**: si una falla, la otra sostiene todo |
+| Gestión remota | No tiene | **BMC**: encender, apagar y ver la pantalla a distancia |
+| Formato | Torre | Torre o **rack** (1U, 2U, 4U) |
+
+El <Termino id="bmc">BMC</Termino> (*Baseboard Management Controller*) es una pequeña computadora independiente dentro del servidor, con su propio puerto de red. Cada fabricante le pone un nombre: iDRAC en Dell, iLO en HPE, XClarity Controller en Lenovo. Funciona aunque el servidor esté apagado (mientras tenga corriente) y permite ver la pantalla, montar una imagen de instalación, leer los sensores de temperatura y el registro de fallas. Cuando un servidor deja de responder a las tres de la mañana, el BMC es lo que evita tener que ir al centro de datos.
+
+Los servidores de rack se miden en **<Termino id="unidad-rack">unidades de rack</Termino>** (U): una U son 44,45 mm de alto. Un rack estándar tiene 42 U; un servidor típico ocupa 1U o 2U.
+
+## Cómo leer una ficha técnica
+
+Esta es la ficha de un servidor de rack como los que se compran hoy. Cada línea tiene algo que decir:
+
+```text
+Servidor de rack 1U
+Procesador:   1× Xeon de 16 núcleos / 32 hilos, 2,4 GHz (hasta 4,2 GHz), 72 MB de caché L3
+Memoria:      128 GB (4× 32 GB) DDR5-6400 RDIMM ECC; 16 ranuras, máximo 2 TB
+Discos:       2× SSD NVMe U.2 de 1,92 TB hot-swap; 8 bahías frontales de 2,5"
+Controladora: RAID por hardware con 4 GB de caché protegida
+Red:          2× 1 GbE integradas + placa OCP 3.0 con 2× 25 GbE SFP28
+Expansión:    2 ranuras PCIe 5.0 x16
+Fuentes:      2× 800 W redundantes hot-plug, 80 PLUS Titanium
+Gestión:      BMC con puerto dedicado, consola remota y API Redfish
+```
+
+- **Procesador**: 16 núcleos que, con hilos simultáneos, el sistema ve como 32 CPU. La frecuencia base (2,4 GHz) es la que sostiene con todos los núcleos trabajando; la máxima (4,2 GHz) la alcanza por momentos en pocos núcleos. Lo vas a ver en detalle en la lección del procesador.
+- **Memoria**: 128 GB en 4 módulos de 32 GB. Quedan 12 ranuras libres para crecer. **RDIMM** (memoria con registro) es el tipo de módulo de servidor y no es compatible con las placas de PC, que usan UDIMM. **ECC** corrige errores de bits.
+- **Discos**: **U.2** es un formato de SSD NVMe de 2,5 pulgadas que entra en bahías frontales y se cambia en caliente. Hay 2 discos y 6 bahías libres.
+- **Controladora RAID**: combina varios discos para que la falla de uno no haga perder datos. Se estudia en el nivel de virtualización y almacenamiento.
+- **Red**: **GbE** es Gigabit Ethernet: 1 GbE son 1 Gbit/s, 25 GbE son 25 Gbit/s. **SFP28** es el tipo de conector (para fibra óptica o cables de cobre cortos). **OCP 3.0** es un formato de placa de red que se cambia sin abrir el servidor.
+- **Fuentes**: dos de 800 W, y el servidor funciona con una sola. *80 PLUS Titanium* indica la eficiencia: cuanto más eficiente, menos energía se pierde en calor.
+- **Gestión**: el BMC. **Redfish** es el estándar moderno para automatizar el BMC por la red (reemplaza a IPMI).
+
+<Pregunta id="p05" />
+
+## Hacer el inventario de un equipo
+
+Saber qué hardware tiene un equipo es tarea diaria: para pedir una ampliación, para abrir un caso de garantía o para saber si un sistema operativo se puede instalar. Cada sistema operativo tiene sus herramientas:
+
+<Distros>
+  <Distro nombre="Linux">
+    `lscpu` (procesador), `free -h` (memoria), `lsblk` (discos), `lspci` (placas PCIe) y `sudo dmidecode` (datos del firmware: modelo, número de serie, módulos de memoria).
+  </Distro>
+  <Distro nombre="Windows">
+    **Información del sistema** (`msinfo32`), el **Administrador de tareas** (pestaña Rendimiento) o PowerShell: `Get-CimInstance Win32_Processor`, `Get-CimInstance Win32_PhysicalMemory`, `Get-PhysicalDisk` y `Get-CimInstance Win32_BIOS`.
+  </Distro>
+  <Distro nombre="macOS">
+    Menú Apple, **Acerca de esta Mac** y luego **Más información**, o en la Terminal: `system_profiler SPHardwareDataType`.
+  </Distro>
+</Distros>
+
+Practica con una máquina virtual Linux. No te preocupes por entender la terminal todavía: la vas a aprender en detalle más adelante.
+
+<Terminal ejercicio={inventario} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Se agregó memoria y el equipo no arranca o emite pitidos">
+    Casi siempre es un módulo incompatible. Revisa tres cosas en la ficha de la placa: la generación (DDR4 y DDR5 tienen la muesca en otro lugar y no entran), el tipo (**RDIMM** de servidor o **UDIMM** de PC: no se mezclan) y la lista de módulos probados por el fabricante. Si el tipo es correcto, prueba con un solo módulo en la primera ranura que indica el manual.
+  </ErrorComun>
+  <ErrorComun titulo="Una placa de red de 10 GbE rinde la mitad de lo esperado">
+    Puede estar en una ranura con el largo de una x16 pero solo 1 o 2 líneas conectadas, o en una ranura que cuelga del chipset y comparte el enlace con los discos. En Linux, `sudo lspci -vv` muestra en la línea *LnkSta* la velocidad y el ancho que negoció la placa. Muévela a una ranura conectada a la CPU según el manual.
+  </ErrorComun>
+  <ErrorComun titulo="El servidor no ve el disco nuevo que se agregó">
+    Si el servidor tiene una controladora RAID, un disco nuevo no aparece en el sistema operativo hasta que se lo configura en la controladora (como parte de un arreglo o en modo de paso directo). Se hace desde la utilidad de la controladora al arrancar o desde el BMC.
+  </ErrorComun>
+  <ErrorComun titulo="El equipo se apaga solo cuando trabaja mucho">
+    Las dos causas típicas son el calor (ventiladores sucios o detenidos, disipador mal apoyado) y una fuente que no da la potencia necesaria o está fallando. En un servidor, el registro del BMC suele decir cuál de las dos fue.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- CPU, RAM, almacenamiento, placa madre, fuente y placas de expansión están en todas las computadoras.
+- La RAM y las ranuras PCIe rápidas se conectan directamente a la CPU; lo más lento pasa por el chipset y comparte un enlace.
+- PCIe se mide en generaciones y líneas: cada generación duplica la velocidad por línea.
+- Un servidor agrega memoria ECC, discos hot-swap, fuentes redundantes y un BMC para gestión remota.
+- En Linux, `lscpu`, `free -h`, `lsblk`, `lspci` y `dmidecode` arman el inventario de un equipo.
+</Resumen>

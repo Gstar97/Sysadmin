@@ -51,25 +51,28 @@ export function InteractiveDiagram({ datos, svg, src, alt }: InteractiveProps) {
     <div className="my-6 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
       {datos.titulo && <div className="border-b border-line px-4 py-2 font-semibold">{datos.titulo}</div>}
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="relative p-3 text-fg">
-          {svg ? <div role="img" aria-label={alt} className="[&_svg]:h-auto [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: svg }} /> : src ? <img src={src} alt={alt} className="h-auto w-full" /> : null}
-          {withAreas &&
-            datos.puntos.map((p, i) =>
-              p.area ? (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => open(p.id)}
-                  aria-controls={panelId}
-                  aria-pressed={active === p.id}
-                  aria-label={p.titulo}
-                  className={cn('absolute rounded-md border-2 transition', active === p.id ? 'border-accent bg-accent/15' : 'border-transparent hover:border-accent/60 hover:bg-accent/10')}
-                  style={{ left: `calc(0.75rem + (100% - 1.5rem) * ${p.area.x / 100})`, top: `calc(0.75rem + (100% - 1.5rem) * ${p.area.y / 100})`, width: `calc((100% - 1.5rem) * ${p.area.ancho / 100})`, height: `calc((100% - 1.5rem) * ${p.area.alto / 100})` }}
-                >
-                  <span className={cn('absolute -left-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold', visited.has(p.id) ? 'bg-accent text-accent-fg' : 'bg-warn text-white')}>{i + 1}</span>
-                </button>
-              ) : null,
-            )}
+        <div className="self-start p-3 text-fg">
+          {/* Las zonas se ubican en porcentaje sobre la imagen, sin contar el relleno del contenedor. */}
+          <div className="relative">
+            {svg ? <div role="img" aria-label={alt} className="[&_svg]:block [&_svg]:h-auto [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: svg }} /> : src ? <img src={src} alt={alt} className="block h-auto w-full" /> : null}
+            {withAreas &&
+              datos.puntos.map((p, i) =>
+                p.area ? (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => open(p.id)}
+                    aria-controls={panelId}
+                    aria-pressed={active === p.id}
+                    aria-label={p.titulo}
+                    className={cn('absolute rounded-md border-2 transition', active === p.id ? 'border-accent bg-accent/15' : 'border-transparent hover:border-accent/60 hover:bg-accent/10')}
+                    style={{ left: `${p.area.x}%`, top: `${p.area.y}%`, width: `${p.area.ancho}%`, height: `${p.area.alto}%` }}
+                  >
+                    <span className={cn('absolute -left-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold', visited.has(p.id) ? 'bg-accent text-accent-fg' : 'bg-warn text-white')}>{i + 1}</span>
+                  </button>
+                ) : null,
+              )}
+          </div>
         </div>
         <div className="border-t border-line p-4 lg:border-l lg:border-t-0">
           <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Partes del diagrama">

@@ -1,0 +1,153 @@
+---
+id: n0-m1-l2
+titulo: El procesador
+minutos: 120
+objetivos:
+  - Explicar el ciclo buscar-decodificar-ejecutar y el papel de los registros y la caché.
+  - Diferenciar núcleos, hilos (SMT/Hyper-Threading), frecuencia y caché, y su efecto en el rendimiento.
+  - Distinguir las arquitecturas x86-64 y ARM64 (y los niveles x86-64-v2/v3) y por qué importan al instalar software.
+glosario: [registro, cache, nucleo, smt, x86-64, arm64]
+verificado: 2026-10
+---
+
+import nucleos from './nucleos.svg?raw'
+import arquitecturas from './arquitecturas.yaml'
+import ejCpu from './ej-cpu.yaml'
+
+El procesador es la pieza que más se nombra cuando se describe un equipo, y también la que más se malinterpreta. Un servidor con "más GHz" no siempre es más rápido, uno con más núcleos no siempre ayuda y un sistema operativo puede negarse a arrancar en un procesador perfectamente funcional. En esta lección vas a ver qué hace la CPU por dentro y cómo leer sus datos para tomar buenas decisiones.
+
+## Qué hace un procesador
+
+Un procesador ejecuta **instrucciones** muy simples, una detrás de otra: copiar un número de la memoria, sumar dos números, comparar, saltar a otra parte del programa. Cualquier programa, desde un navegador hasta una base de datos, termina convertido en millones de estas instrucciones (lo que se llama **código máquina**).
+
+Para trabajar, la CPU usa los **<Termino id="registro">registros</Termino>**: unas pocas celdas de memoria dentro del propio procesador, que son lo más rápido que existe en una computadora. Dos registros importan para entender el funcionamiento:
+
+- El **contador de programa** (PC): indica en qué posición de la memoria está la próxima instrucción.
+- Los registros de datos (en el simulador hay uno solo, el **acumulador**): guardan los valores con los que se está calculando.
+
+## El ciclo buscar, decodificar, ejecutar
+
+Todo procesador repite el mismo ciclo, miles de millones de veces por segundo:
+
+1. **Buscar**: lee de la memoria la instrucción a la que apunta el PC y avanza el PC a la siguiente.
+2. **Decodificar**: interpreta la instrucción: qué operación es y con qué datos trabaja.
+3. **Ejecutar**: hace la operación (sumar, guardar, saltar) y vuelve a empezar.
+
+Este simulador es una CPU mínima con 16 celdas de memoria. Ejecuta el programa **Sumar dos números** con el botón **Paso** y mira cómo cambian el PC, el registro de instrucción (IR) y el acumulador:
+
+<SimuladorCpu programa="suma" />
+
+Fíjate en el contador de **ciclos**: cada acceso a la memoria cuesta 100 ciclos, mientras que operar con los registros es casi gratis. Eso no es exageración del simulador: en un procesador real, leer la RAM tarda alrededor de 90 nanosegundos, mientras que un ciclo de una CPU de 3 GHz dura 0,33 nanosegundos. El procesador pasaría la mayor parte del tiempo esperando a la memoria si no fuera por la caché.
+
+### La caché
+
+La **<Termino id="cache">caché</Termino>** es una memoria pequeña y muy rápida dentro del procesador que guarda copias de lo que se usó hace poco. Funciona porque los programas repiten: un bucle ejecuta las mismas instrucciones una y otra vez, y una base de datos consulta los mismos registros muchas veces.
+
+Hay tres niveles:
+
+- **L1**: la más rápida y pequeña (decenas de KB por núcleo), a unos pocos ciclos.
+- **L2**: más grande (de 1 a 3 MB por núcleo) y algo más lenta.
+- **L3**: compartida por todos los núcleos, de decenas o cientos de MB. Sigue siendo varias veces más rápida que la RAM.
+
+Prueba en el simulador el programa **Cuenta regresiva (bucle)** primero sin caché y después con la casilla **Con caché** marcada. Sin caché tarda 2838 ciclos; con caché, 1014: casi tres veces menos, porque desde la segunda vuelta las instrucciones del bucle ya están en la caché. En cambio, el programa **Sumar dos números** tarda lo mismo con y sin caché: no repite nada, así que la caché no tiene qué aprovechar.
+
+<Pregunta id="p03" />
+
+## Núcleos, hilos y frecuencia
+
+Un procesador moderno tiene varios **<Termino id="nucleo">núcleos</Termino>**: cada uno es un procesador completo, con sus registros y su caché L1 y L2, que ejecuta su propio programa. Un servidor con 32 núcleos puede atender 32 tareas exactamente al mismo tiempo.
+
+<Diagrama svg={nucleos} alt="Esquema de un procesador con cuatro núcleos, cada uno con dos hilos y sus cachés L1 y L2, una caché L3 compartida, el controlador de memoria y las líneas PCIe" pie="Cada núcleo tiene su caché L1 y L2; la L3 es compartida. La RAM está fuera del procesador." />
+
+### Hilos simultáneos (SMT)
+
+Muchos procesadores permiten que cada núcleo ejecute **dos hilos** al mismo tiempo. Intel lo llama *Hyper-Threading* y en general se llama **<Termino id="smt">SMT</Termino>**. La idea es aprovechar los momentos en que un hilo espera (por ejemplo, un dato de la RAM) para avanzar con el otro.
+
+El sistema operativo ve cada hilo como una CPU separada. La cuenta es:
+
+```text
+CPU lógicas = zócalos × núcleos por zócalo × hilos por núcleo
+```
+
+Un servidor con 2 procesadores de 16 núcleos y SMT muestra 2 × 16 × 2 = 64 CPU. Pero ojo: los dos hilos de un núcleo comparten las mismas unidades de cálculo, así que el segundo hilo suma, según el tipo de trabajo, entre un 10 y un 30% de rendimiento, no el doble.
+
+<Nota>
+Algunos procesadores de PC (y las Mac con Apple Silicon) mezclan núcleos de alto rendimiento con núcleos de bajo consumo. En la ficha aparecen como "8P + 16E" o similar. Los procesadores de servidor suelen tener un solo tipo de núcleo.
+</Nota>
+
+### Frecuencia
+
+La **frecuencia** dice cuántos ciclos por segundo hace cada núcleo: 3 GHz son 3000 millones de ciclos por segundo. Las fichas dan dos valores:
+
+- **Base**: la que el procesador sostiene con todos los núcleos trabajando.
+- **Turbo o máxima**: la que alcanza por momentos, en pocos núcleos, si la temperatura y el consumo lo permiten.
+
+La frecuencia solo sirve para comparar procesadores de la misma generación. Un procesador nuevo a 3 GHz hace más trabajo por ciclo que uno de hace diez años a la misma frecuencia, porque su diseño es mejor y tiene más caché.
+
+### Qué conviene según el trabajo
+
+| Trabajo | Qué importa más |
+| --- | --- |
+| Servidor web con muchos usuarios a la vez | Cantidad de núcleos: cada pedido puede ir a un núcleo distinto |
+| Programa viejo que usa un solo hilo | Frecuencia y rendimiento por núcleo: los demás núcleos no lo ayudan |
+| Base de datos | Caché grande, memoria rápida y discos rápidos, además de núcleos |
+| Muchas máquinas virtuales | Núcleos y, sobre todo, cantidad de RAM |
+
+Hay un factor que en la práctica pesa tanto como el rendimiento: las **licencias**. Windows Server y muchas bases de datos comerciales se licencian por núcleo físico. Windows Server 2025, por ejemplo, exige licenciar todos los núcleos, con un mínimo de 8 por procesador y 16 por servidor. Un servidor con más núcleos de los necesarios puede costar mucho más en licencias que en hardware.
+
+## Arquitecturas: x86-64 y ARM64
+
+Cada familia de procesadores entiende su propio conjunto de instrucciones, llamado **arquitectura**. Un programa compilado para una arquitectura no funciona en otra. Hoy dominan dos:
+
+- **<Termino id="x86-64">x86-64</Termino>**: Intel y AMD. Es la arquitectura de casi todos los servidores y PC.
+- **<Termino id="arm64">ARM64</Termino>**: celulares, las Mac con Apple Silicon, la Raspberry Pi y cada vez más servidores en la nube (AWS Graviton, Azure Cobalt, Google Axion), porque consumen menos energía por el mismo trabajo.
+
+Al descargar una imagen de instalación, un paquete o una imagen de contenedor, hay que elegir la arquitectura correcta. Cada familia de distribuciones las nombra distinto:
+
+<Emparejar ejercicio={arquitecturas} />
+
+### Los niveles de x86-64
+
+Con los años, Intel y AMD agregaron instrucciones nuevas a x86-64. Para ordenarlas se definieron **niveles**:
+
+| Nivel | Instrucciones que agrega | Procesadores desde |
+| --- | --- | --- |
+| x86-64 (v1) | Las originales de 64 bits | 2003 |
+| x86-64-v2 | SSE4.2, POPCNT | Intel 2009, AMD 2011 aproximadamente |
+| x86-64-v3 | AVX2, FMA, BMI | Intel 2013 (Haswell), AMD 2015 aproximadamente |
+| x86-64-v4 | AVX-512 | Algunos procesadores de servidor y de alta gama |
+
+Esto importa porque las distribuciones nuevas dejan de funcionar en procesadores viejos. **RHEL 10 y Rocky Linux 10 exigen x86-64-v3**: en un procesador sin AVX2 no arrancan. AlmaLinux 10 publica además una versión para v2, pensada justamente para hardware más viejo. Ubuntu y Debian siguen funcionando en cualquier x86-64.
+
+Para saber qué niveles soporta un procesador en Linux:
+
+```bash
+/lib64/ld-linux-x86-64.so.2 --help | grep supported
+```
+
+La salida lista cada nivel marcado como `supported` si el procesador lo cumple. Otra forma rápida es buscar `avx2` en `/proc/cpuinfo`, como en el siguiente ejercicio.
+
+<Terminal ejercicio={ejCpu} />
+
+<ErroresComunes>
+  <ErrorComun titulo='El instalador de Rocky Linux 10 se detiene con "CPU does not support x86-64-v3"'>
+    El procesador, o lo que la máquina virtual le muestra al sistema, no tiene AVX2. En una PC con Windows pasa a menudo con VirtualBox cuando está activo Hyper-V (por ejemplo, por WSL2 o por la *integridad de memoria*): VirtualBox funciona encima de Hyper-V y puede no pasar esas instrucciones a la VM. Opciones: usar Hyper-V o VMware Workstation directamente, desactivar Hyper-V, o instalar AlmaLinux 10 en su versión x86-64-v2.
+  </ErrorComun>
+  <ErrorComun titulo='"exec format error" al ejecutar un programa o un contenedor'>
+    El programa es de otra arquitectura: por ejemplo, una imagen de contenedor amd64 en un servidor ARM (como AWS Graviton) o en una Mac con Apple Silicon. Revisa la arquitectura con `uname -m` y descarga la versión que corresponde (arm64/aarch64 o amd64/x86_64).
+  </ErrorComun>
+  <ErrorComun titulo="El servidor tiene 64 CPU y la aplicación igual va lenta, con un núcleo al 100%">
+    La aplicación usa un solo hilo: solo puede aprovechar un núcleo, por más que haya 64. En `top`, apretando `1`, se ve un núcleo al 100% y el resto casi libres. Más núcleos no la van a acelerar; ayuda un procesador con más rendimiento por núcleo o cambiar la forma en que trabaja la aplicación.
+  </ErrorComun>
+  <ErrorComun titulo="Se cambió a un procesador con más GHz y el sistema no mejoró">
+    El cuello de botella estaba en otro lado: el disco, la memoria o la red. Antes de cambiar hardware hay que medir dónde se espera; lo vas a aprender en el nivel de Linux con herramientas como `top`, `vmstat` e `iostat`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- La CPU repite el ciclo buscar, decodificar y ejecutar; los registros guardan lo que está usando en ese momento.
+- La caché (L1, L2 y L3) evita esperar a la RAM, que es decenas de veces más lenta. Funciona porque los programas repiten.
+- CPU lógicas = zócalos × núcleos × hilos. Un segundo hilo por núcleo (SMT) suma poco, no duplica.
+- La frecuencia solo compara procesadores de la misma generación; el tipo de trabajo decide si importan más núcleos o más rendimiento por núcleo.
+- x86-64 y ARM64 no son compatibles entre sí. Rocky Linux 10 y RHEL 10 exigen x86-64-v3 (AVX2).
+</Resumen>

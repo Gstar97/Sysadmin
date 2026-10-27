@@ -1,0 +1,54 @@
+tipo: terminal
+shell: bash
+titulo: ¿Esta máquina puede correr Rocky Linux 10?
+descripcion: >-
+  Rocky Linux 10 necesita un procesador x86-64 de nivel v3 (con instrucciones AVX2) o un ARM de
+  64 bits. Revisa la máquina virtual antes de planificar una actualización.
+estado_inicial:
+  distro: ubuntu
+  hostname: vm-lab02
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: Averigua la arquitectura con `uname -m`.
+    verificar:
+      - { comando_usado: 'uname\s+(-\w*m|--machine)' }
+    pistas:
+      - "`uname -m` muestra el tipo de máquina (machine)."
+    solucion: [uname -m]
+    explicacion: >-
+      `x86_64` es un procesador Intel o AMD de 64 bits. En un ARM de 64 bits diría `aarch64`.
+  - consigna: Averigua cuántas CPU lógicas tiene con `nproc`.
+    verificar:
+      - { comando_usado: '^\s*nproc' }
+    pistas:
+      - "`nproc` muestra la cantidad de CPU lógicas que puede usar el sistema."
+    solucion: [nproc]
+    explicacion: >-
+      `nproc` es lo más rápido cuando solo importa el número. Para el detalle (núcleos, hilos y
+      zócalos) se usa `lscpu`.
+  - consigna: >-
+      Busca la instrucción AVX2 en la lista de capacidades del procesador. La lista está en el
+      archivo `/proc/cpuinfo`: usa `grep -o avx2 /proc/cpuinfo` (grep busca un texto dentro de
+      un archivo y `-o` muestra solo la parte encontrada).
+    verificar:
+      - { comando_usado: 'grep.*avx2.*/proc/cpuinfo' }
+      - { salida_contiene: avx2 }
+    pistas:
+      - "`grep -o avx2 /proc/cpuinfo`"
+    solucion: [grep -o avx2 /proc/cpuinfo]
+    explicacion: >-
+      Aparece una vez por cada CPU lógica: el procesador tiene AVX2, así que cumple el nivel
+      x86-64-v3 y Rocky 10 puede arrancar. Si el comando no mostrara nada, habría que usar
+      AlmaLinux 10 en su versión x86-64-v2 o quedarse en una versión anterior.
+  - consigna: Mira el detalle completo con `lscpu` y fíjate en *Thread(s) per core*, *Core(s) per socket* y *Socket(s)*.
+    verificar:
+      - { comando_usado: '^\s*lscpu' }
+    pistas:
+      - "`lscpu`"
+    solucion: [lscpu]
+    explicacion: >-
+      1 zócalo × 2 núcleos × 1 hilo por núcleo = 2 CPU lógicas, lo mismo que dijo `nproc`. Las
+      máquinas virtuales suelen mostrar 1 hilo por núcleo aunque el servidor físico tenga
+      hyper-threading: el hipervisor decide qué le muestra a cada VM.

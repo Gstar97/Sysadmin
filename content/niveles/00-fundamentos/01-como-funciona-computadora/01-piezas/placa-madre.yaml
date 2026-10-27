@@ -1,0 +1,80 @@
+tipo: diagrama
+titulo: Una placa madre, parte por parte
+puntos:
+  - id: cpu
+    titulo: Zócalo de la CPU
+    area: { x: 31.2, y: 12.5, ancho: 20.4, alto: 27.1 }
+    texto: >-
+      El procesador se apoya en el zócalo (socket) y encima lleva un disipador o un ventilador,
+      porque genera mucho calor. Cada familia de procesadores usa un zócalo distinto: un
+      procesador solo entra en una placa con su zócalo y con un chipset que lo soporte. Los
+      servidores de dos procesadores tienen dos zócalos. El conector de 8 pines de arriba le
+      da energía directamente a la CPU.
+  - id: ram
+    titulo: Ranuras de memoria RAM
+    area: { x: 56.2, y: 8.3, ancho: 13.4, alto: 38 }
+    texto: >-
+      Los módulos de memoria (DIMM) se insertan en estas ranuras, que están cableadas
+      directamente a la CPU: el controlador de memoria está dentro del procesador. Las ranuras
+      se agrupan en **canales**; con un módulo por canal la CPU lee de varios a la vez, por eso
+      el manual indica en qué ranuras ir poniendo los módulos. Las PC de escritorio suelen tener
+      2 o 4 ranuras; un servidor de dos procesadores puede tener 32.
+  - id: alimentacion
+    titulo: Conectores de alimentación
+    area: { x: 72.2, y: 12.5, ancho: 7.8, alto: 26 }
+    texto: >-
+      La fuente convierte la corriente alterna del enchufe en las tensiones continuas que usa la
+      placa (12 V, 5 V y 3,3 V). El conector grande de 24 pines alimenta la placa y el de 8 pines
+      junto a la CPU, al procesador. En los servidores la fuente suele ser **redundante**: dos
+      fuentes, cada una capaz de alimentar todo el equipo, conectadas a circuitos eléctricos
+      distintos. Si una falla, el servidor sigue funcionando y avisa.
+  - id: m2
+    titulo: Ranura M.2
+    area: { x: 22.5, y: 43.7, ancho: 24.4, alto: 5.4 }
+    texto: >-
+      Aquí se instalan los SSD NVMe con forma de tira. M.2 es solo el formato físico: por dentro
+      el disco usa 4 líneas PCIe conectadas, en general, directamente a la CPU. Por eso un NVMe
+      es mucho más rápido que un disco SATA. Ojo: algunas ranuras M.2 aceptan discos SATA en vez
+      de NVMe, y la ficha de la placa dice cuál soporta cada una.
+  - id: pcie
+    titulo: Ranuras PCIe
+    area: { x: 4.4, y: 50.4, ancho: 53.6, alto: 35.4 }
+    texto: >-
+      Las placas de expansión (placas de red, de video, controladoras de discos) se conectan por
+      **PCI Express**. Cada ranura tiene un ancho en líneas (x1, x4, x8, x16): más líneas, más
+      velocidad. Atención con un detalle que confunde mucho: una ranura puede tener el largo de
+      una x16 pero solo 4 líneas conectadas ("x16 físico, x4 eléctrico"). El manual de la placa
+      lo indica, y también si comparte líneas con otra ranura o con una M.2.
+  - id: chipset
+    titulo: Chipset
+    area: { x: 67.2, y: 62.5, ancho: 12.5, alto: 16.7 }
+    texto: >-
+      Es el "concentrador" de los dispositivos más lentos: puertos SATA, USB, algunas ranuras
+      PCIe y la red integrada. Se comunica con la CPU por un único enlace, así que todo lo que
+      cuelga del chipset comparte ese camino. Por eso conviene conectar lo que necesita más
+      velocidad (un NVMe, una placa de red de 25 GbE) en las ranuras que van directo a la CPU.
+  - id: sata
+    titulo: Puertos SATA
+    area: { x: 84.4, y: 60.4, ancho: 9.4, alto: 21.3 }
+    texto: >-
+      Conectan discos rígidos, SSD de 2,5 pulgadas y lectoras ópticas. SATA III llega a 6 Gbit/s,
+      unos 550 MB/s reales: alcanza de sobra para un disco rígido, pero es el límite de un SSD
+      SATA. En los servidores los discos no se enchufan con cables sueltos sino en bahías
+      frontales conectadas a una placa trasera (backplane), que permite cambiarlos en caliente.
+  - id: firmware
+    titulo: Firmware y pila
+    area: { x: 68.7, y: 83.3, ancho: 19.5, alto: 11.5 }
+    texto: >-
+      Un pequeño chip de memoria flash guarda el firmware (UEFI o BIOS): el programa que arranca
+      primero y prepara el hardware para cargar el sistema operativo. La pila mantiene el reloj
+      cuando el equipo está desenchufado. Si un equipo pierde la hora cada vez que se desconecta,
+      lo primero que se cambia es esa pila.
+  - id: io
+    titulo: Panel trasero
+    area: { x: 4.7, y: 6.2, ancho: 14.1, alto: 35.4 }
+    texto: >-
+      Los conectores que se ven desde atrás del gabinete: USB, red, audio y video integrados. En
+      un servidor aparece además un puerto de red **de gestión** dedicado, que conecta con el BMC
+      (iDRAC en Dell, iLO en HPE, XClarity en Lenovo): una pequeña computadora dentro del
+      servidor que permite encenderlo, apagarlo y ver su pantalla a distancia, aunque el sistema
+      operativo esté colgado.

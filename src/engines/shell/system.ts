@@ -1,4 +1,5 @@
 import type { BashState } from './schema'
+import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
 import { normalizePath, ROOT_CRED, VFS, type Cred } from './vfs'
 
@@ -515,7 +516,7 @@ export class System {
           ? 'Defaults   !visiblepw\nDefaults    secure_path = /sbin:/bin:/usr/sbin:/usr/bin\nroot    ALL=(ALL)       ALL\n%wheel  ALL=(ALL)       ALL\n#includedir /etc/sudoers.d\n'
           : 'Defaults\tenv_reset\nDefaults\tsecure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"\nroot\tALL=(ALL:ALL) ALL\n%sudo\tALL=(ALL:ALL) ALL\n@includedir /etc/sudoers.d\n',
       '/etc/motd': '',
-      '/proc/cpuinfo': 'processor\t: 0\nmodel name\t: Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\ncpu cores\t: 2\n\nprocessor\t: 1\nmodel name\t: Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\ncpu cores\t: 2\n',
+      '/proc/cpuinfo': cpuinfoText(),
       '/proc/meminfo': 'MemTotal:        3843580 kB\nMemFree:         1520332 kB\nMemAvailable:    2788416 kB\nBuffers:            4268 kB\nCached:          1381420 kB\nSwapTotal:       2097148 kB\nSwapFree:        2097148 kB\n',
       '/proc/loadavg': '0.08 0.12 0.09 1/187 1450\n',
       '/proc/version': 'Linux version 6.12.0-55.el10.x86_64 (mockbuild@rocky) (gcc 14.2.1) #1 SMP PREEMPT_DYNAMIC\n',

@@ -47,6 +47,15 @@ function Loading() {
   return <Spinner label="Cargando el ejercicio…" />
 }
 
+/** Contenedor de cada interactivo: carga diferida y sin los estilos de texto de la lección. */
+function Island({ children }: { children: ReactNode }) {
+  return (
+    <div className="no-prosa">
+      <Suspense fallback={<Loading />}>{children}</Suspense>
+    </div>
+  )
+}
+
 /** Valida los datos de un ejercicio con su esquema y muestra un aviso claro si están mal. */
 function useExercise<T extends keyof typeof exerciseSchemas>(tipo: T, data: unknown): { value?: z.infer<(typeof exerciseSchemas)[T]>; error?: string } {
   return useMemo(() => {
@@ -252,9 +261,9 @@ export function Distro({ children }: { nombre: string; children: ReactNode }) {
 
 export function Diagrama(props: { svg?: string; src?: string; alt: string; pie?: string }) {
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <StaticDiagram {...props} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -262,9 +271,9 @@ export function DiagramaInteractivo({ datos, svg, src, alt }: { datos: unknown; 
   const { value, error } = useExercise('diagrama', datos)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <InteractiveDiagram datos={value!} svg={svg} src={src} alt={alt} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -272,17 +281,17 @@ export function Terminal({ ejercicio, shell = 'bash', estado, titulo }: { ejerci
   const parsed = useMemo(() => terminalExerciseSchema.safeParse(ejercicio ?? { tipo: 'terminal', shell, titulo, ...(estado !== undefined ? { estado_inicial: estado } : {}) }), [ejercicio, shell, titulo, estado])
   if (!parsed.success) return <ExerciseError error={parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <TerminalExercise exercise={parsed.data} />
-    </Suspense>
+    </Island>
   )
 }
 
 export function Subnetting(props: ComponentProps<typeof SubnettingTool>) {
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <SubnettingTool {...props} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -290,9 +299,9 @@ export function Topologia({ ejercicio }: { ejercicio: unknown }) {
   const { value, error } = useExercise('topologia', ejercicio)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <TopologyBuilder exercise={value!} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -300,9 +309,9 @@ export function SimuladorPaquetes({ escenario }: { escenario: unknown }) {
   const { value, error } = useExercise('paquetes', escenario)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <PacketSimulator scenario={value!} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -310,9 +319,9 @@ export function Ordenar({ ejercicio }: { ejercicio: unknown }) {
   const { value, error } = useExercise('ordenar', ejercicio)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <OrderExercise exercise={value!} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -320,9 +329,9 @@ export function Emparejar({ ejercicio }: { ejercicio: unknown }) {
   const { value, error } = useExercise('emparejar', ejercicio)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <MatchExercise exercise={value!} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -330,9 +339,9 @@ export function Troubleshooting({ escenario }: { escenario: unknown }) {
   const { value, error } = useExercise('troubleshooting', escenario)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <TroubleshootingRunner scenario={value!} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -340,18 +349,18 @@ export function EditorConfig({ ejercicio }: { ejercicio: unknown }) {
   const { value, error } = useExercise('configuracion', ejercicio)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <ConfigEditor exercise={value!} />
-    </Suspense>
+    </Island>
   )
 }
 
 function withSuspense<P extends object>(Component: ComponentType<P>) {
   return function Wrapped(props: P) {
     return (
-      <Suspense fallback={<Loading />}>
+      <Island>
         <Component {...props} />
-      </Suspense>
+      </Island>
     )
   }
 }
@@ -373,9 +382,9 @@ export function PasosGuiados({ ejercicio }: { ejercicio: unknown }) {
   const { value, error } = useExercise('pasos', ejercicio)
   if (error) return <ExerciseError error={error} />
   return (
-    <Suspense fallback={<Loading />}>
+    <Island>
       <GuidedSteps data={value!} storageKey={`${lesson?.id ?? 'suelto'}:${slugify(value!.titulo)}`} />
-    </Suspense>
+    </Island>
   )
 }
 
@@ -407,7 +416,7 @@ export function Pregunta({ id }: { id: string }) {
   const q: Question = question
   const check = async () => setResult(await gradeQuestion(q, response))
   return (
-    <div className="my-6 rounded-xl border border-line bg-surface p-4 shadow-card">
+    <div className="no-prosa my-6 rounded-xl border border-line bg-surface p-4 shadow-card">
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-accent">
         <Icon name="target" className="h-4 w-4" />
         Para practicar

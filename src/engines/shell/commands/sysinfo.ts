@@ -3,6 +3,7 @@ import { BUILTINS, COMMANDS, formatPrintf, register, type CommandContext } from 
 import { priorityName, priorityNumber, type JournalEntry, type Service } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
+import { CPU_FLAGS } from '../hardware'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -823,6 +824,10 @@ const MAN_DESC: Record<string, string> = {
   kill: 'send a signal to a process',
   top: 'display Linux processes',
   free: 'Display amount of free and used memory in the system',
+  lscpu: 'display information about the CPU architecture',
+  lsblk: 'list block devices',
+  dmidecode: 'DMI table decoder',
+  lspci: 'list all PCI devices',
   df: 'report file system space usage',
   du: 'estimate file space usage',
   ip: 'show / manipulate routing, network devices, interfaces and tunnels',
@@ -917,7 +922,66 @@ register('nproc', { usage: 'nproc', run: (ctx) => (ctx.out('2\n'), 0) })
 register('lscpu', {
   usage: 'lscpu',
   run(ctx) {
-    ctx.out('Architecture:             x86_64\n  CPU op-mode(s):         32-bit, 64-bit\n  Byte Order:             Little Endian\nCPU(s):                   2\nVendor ID:                GenuineIntel\n  Model name:             Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\n    Thread(s) per core:   1\n    Core(s) per socket:   2\nVirtualization features:\n  Hypervisor vendor:      KVM\n  Virtualization type:    full\n')
+    ctx.out(
+      `Architecture:             x86_64\n  CPU op-mode(s):         32-bit, 64-bit\n  Address sizes:          46 bits physical, 48 bits virtual\n  Byte Order:             Little Endian\nCPU(s):                   2\n  On-line CPU(s) list:    0,1\nVendor ID:                GenuineIntel\n  BIOS Vendor ID:         QEMU\n  Model name:             Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\n    BIOS Model name:      pc-q35-9.0  CPU @ 2.0GHz\n    CPU family:           6\n    Model:                79\n    Thread(s) per core:   1\n    Core(s) per socket:   2\n    Socket(s):            1\n    Stepping:             1\n    BogoMIPS:             4799.99\n    Flags:                ${CPU_FLAGS}\nVirtualization features:  \n  Hypervisor vendor:      KVM\n  Virtualization type:    full\nCaches (sum of all):      \n  L1d:                    64 KiB (2 instances)\n  L1i:                    64 KiB (2 instances)\n  L2:                     512 KiB (2 instances)\n  L3:                     35 MiB (1 instance)\nNUMA:                     \n  NUMA node(s):           1\n  NUMA node0 CPU(s):      0,1\n`,
+    )
+    return 0
+  },
+})
+
+const DMI: Record<string, string> = {
+  bios: 'Handle 0x0000, DMI type 0, 24 bytes\nBIOS Information\n\tVendor: SeaBIOS\n\tVersion: 1.16.3-debian-1.16.3-2\n\tRelease Date: 04/01/2014\n\tAddress: 0xE8000\n\tRuntime Size: 96 kB\n\tROM Size: 64 kB\n\tCharacteristics:\n\t\tBIOS characteristics not supported\n\t\tTargeted content distribution is supported\n\tBIOS Revision: 0.0\n',
+  system:
+    'Handle 0x0100, DMI type 1, 27 bytes\nSystem Information\n\tManufacturer: QEMU\n\tProduct Name: Standard PC (Q35 + ICH9, 2009)\n\tVersion: pc-q35-9.0\n\tSerial Number: Not Specified\n\tUUID: 4b0c2f1e-9a7d-4c55-b1e2-f30a8d6c7e91\n\tWake-up Type: Power Switch\n\tSKU Number: Not Specified\n\tFamily: Not Specified\n',
+  processor:
+    'Handle 0x0400, DMI type 4, 48 bytes\nProcessor Information\n\tSocket Designation: CPU 0\n\tType: Central Processor\n\tFamily: Other\n\tManufacturer: QEMU\n\tVersion: pc-q35-9.0\n\tMax Speed: 2000 MHz\n\tCurrent Speed: 2000 MHz\n\tStatus: Populated, Enabled\n\tCore Count: 2\n\tCore Enabled: 2\n\tThread Count: 1\n',
+  memory:
+    'Handle 0x1000, DMI type 16, 23 bytes\nPhysical Memory Array\n\tLocation: Other\n\tUse: System Memory\n\tError Correction Type: Multi-bit ECC\n\tMaximum Capacity: 4 GB\n\tNumber Of Devices: 1\n\nHandle 0x1100, DMI type 17, 40 bytes\nMemory Device\n\tArray Handle: 0x1000\n\tSize: 4 GB\n\tForm Factor: DIMM\n\tLocator: DIMM 0\n\tType: RAM\n\tSpeed: Unknown\n\tManufacturer: QEMU\n',
+}
+const DMI_TYPES: Record<string, string> = { '0': 'bios', '1': 'system', '4': 'processor', '16': 'memory', '17': 'memory' }
+
+register('dmidecode', {
+  usage: 'dmidecode [-t TYPE] [-s KEYWORD]',
+  summary: '  -t bios | system | processor | memory   (o el número de tipo: 0, 1, 4, 17)\n  -s system-manufacturer | system-product-name | bios-version | bios-vendor',
+  path: '/usr/sbin',
+  run(ctx) {
+    if (ctx.sh.user !== 'root') {
+      ctx.err('/sys/firmware/dmi/tables/smbios_entry_point: Permission denied\nScanning /dev/mem for entry point.\n/dev/mem: Permission denied\n')
+      return 1
+    }
+    const a = parseArgs(ctx.args, { values: { t: ['t', 'type'], s: ['s', 'string'] } })
+    const s = a.values.get('s')
+    if (s) {
+      const keys: Record<string, string> = { 'system-manufacturer': 'QEMU', 'system-product-name': 'Standard PC (Q35 + ICH9, 2009)', 'bios-vendor': 'SeaBIOS', 'bios-version': '1.16.3-debian-1.16.3-2', 'system-uuid': '4b0c2f1e-9a7d-4c55-b1e2-f30a8d6c7e91' }
+      if (!keys[s]) {
+        ctx.err(`Invalid string keyword: ${s}\nValid string keywords are:\n  ${Object.keys(keys).join('\n  ')}\n`)
+        return 1
+      }
+      ctx.out(keys[s] + '\n')
+      return 0
+    }
+    const t = a.values.get('t')
+    const header = '# dmidecode 3.6\nGetting SMBIOS data from sysfs.\nSMBIOS 2.8 present.\n\n'
+    if (!t) {
+      ctx.out(header + Object.values(DMI).join('\n'))
+      return 0
+    }
+    const key = DMI[t] ? t : DMI_TYPES[t]
+    if (!key) {
+      ctx.err(`Invalid type keyword: ${t}\nValid type keywords are:\n  bios\n  system\n  processor\n  memory\n`)
+      return 1
+    }
+    ctx.out(header + DMI[key])
+    return 0
+  },
+})
+
+register('lspci', {
+  usage: 'lspci',
+  run(ctx) {
+    ctx.out(
+      '00:00.0 Host bridge: Intel Corporation 82G33/G31/P35/P31 Express DRAM Controller\n00:01.0 VGA compatible controller: Device 1234:1111 (rev 02)\n00:02.0 Ethernet controller: Red Hat, Inc. Virtio network device\n00:03.0 SCSI storage controller: Red Hat, Inc. Virtio SCSI\n00:1f.0 ISA bridge: Intel Corporation 82801IB (ICH9) LPC Interface Controller (rev 02)\n00:1f.2 SATA controller: Intel Corporation 82801IR/IO/IH (ICH9R/DO/DH) 6 port SATA Controller [AHCI mode] (rev 02)\n00:1f.3 SMBus: Intel Corporation 82801I (ICH9 Family) SMBus Controller (rev 02)\n',
+    )
     return 0
   },
 })

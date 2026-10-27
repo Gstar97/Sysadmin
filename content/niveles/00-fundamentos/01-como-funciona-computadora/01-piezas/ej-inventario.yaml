@@ -1,0 +1,70 @@
+tipo: terminal
+shell: bash
+titulo: Inventario de una máquina virtual Linux
+descripcion: >-
+  Estás conectado a una máquina virtual con Rocky Linux. Todavía no hace falta saber usar la
+  terminal: escribe cada comando tal como aparece en la consigna, presiona Enter y lee lo que
+  responde el sistema. Al final vas a tener una ficha con los datos principales del equipo.
+estado_inicial:
+  distro: rocky
+  hostname: vm-lab01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: >-
+      Mira el procesador con `lscpu`. Busca tres datos: *Model name* (el modelo), *CPU(s)*
+      (cuántas CPU ve el sistema) y *Hypervisor vendor* (si aparece, es una máquina virtual).
+    verificar:
+      - { comando_usado: '^\s*lscpu' }
+    pistas:
+      - Escribe `lscpu` y presiona Enter.
+    solucion: [lscpu]
+    explicacion: >-
+      El sistema ve 2 CPU: 1 zócalo con 2 núcleos y 1 hilo por núcleo. El modelo es el del
+      procesador del servidor físico donde corre la VM; la línea *Hypervisor vendor: KVM* indica
+      que es una máquina virtual. Las líneas de *Caches* muestran el tamaño de la caché L1, L2 y L3.
+  - consigna: Mira cuánta memoria RAM tiene con `free -h` (la opción `-h` muestra las cantidades en unidades legibles).
+    verificar:
+      - { comando_usado: '^\s*free' }
+    pistas:
+      - "`free -h`"
+    solucion: [free -h]
+    explicacion: >-
+      La columna *total* dice 3,7 Gi aunque a la VM se le asignaron 4 GB: el firmware y el kernel
+      reservan una parte antes de que el sistema la pueda usar, y además `free` cuenta en GiB
+      (potencias de 1024). La fila *Swap* es el espacio de disco que se usa cuando la RAM no alcanza.
+  - consigna: Lista los discos y sus particiones con `lsblk`.
+    verificar:
+      - { comando_usado: '^\s*lsblk' }
+    pistas:
+      - "`lsblk` (list block devices)"
+    solucion: [lsblk]
+    explicacion: >-
+      `sda` es el disco virtual de 20 GB, dividido en particiones (`sda1`, `sda2`). `sr0` es la
+      lectora de DVD virtual (rom). En un servidor con discos NVMe los nombres son `nvme0n1`,
+      `nvme1n1` y así.
+  - consigna: Lista las placas conectadas al bus PCI con `lspci` y busca cuál es la placa de red (*Ethernet controller*).
+    verificar:
+      - { comando_usado: '^\s*lspci' }
+    pistas:
+      - "`lspci`"
+    solucion: [lspci]
+    explicacion: >-
+      Cada línea es un dispositivo PCIe: el puente principal, la placa de video, la de red, la
+      controladora de discos y los dispositivos del chipset (*ICH9*). Las placas *Virtio* son
+      dispositivos virtuales pensados para máquinas virtuales, más rápidos que imitar hardware real.
+  - consigna: >-
+      Por último, mira el fabricante y el modelo del equipo con `sudo dmidecode -t system`. Este
+      comando lee la información que guarda el firmware y necesita permisos de administrador
+      (`sudo`). Si te pide contraseña, cualquier texto sirve en este simulador.
+    verificar:
+      - { comando_usado: 'sudo\s+dmidecode' }
+    pistas:
+      - "`sudo dmidecode -t system`"
+      - Sin `sudo` el comando falla con *Permission denied*.
+    solucion: [sudo dmidecode -t system]
+    explicacion: >-
+      *Manufacturer: QEMU* y *Product Name: Standard PC* confirman que es una máquina virtual. En
+      un servidor físico aquí aparecen la marca, el modelo y el **número de serie**, que es lo que
+      pide el fabricante para abrir un caso de garantía.

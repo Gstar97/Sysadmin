@@ -88,4 +88,15 @@ describe('detalles que usa el Nivel 0', () => {
     expect((await run('./s.sh')).out).toBe('hola\n')
     expect((await run('free -h')).out.split('\n')[0]).toBe('               total        used        free      shared  buff/cache   available')
   })
+
+  it('inventario de hardware: lscpu, cpuinfo, dmidecode y firmware BIOS', async () => {
+    const { run } = await session({ usuarios: [{ nombre: 'estudiante', sudo: true }] })
+    expect((await run('grep -o avx2 /proc/cpuinfo | sort -u')).out).toBe('avx2\n')
+    expect((await run('grep -c processor /proc/cpuinfo')).out).toBe('2\n')
+    expect((await run('lscpu')).out).toContain('Core(s) per socket:   2')
+    expect((await run('dmidecode -t system')).code).toBe(1)
+    expect((await run('sudo dmidecode -t memory')).out).toContain('Error Correction Type: Multi-bit ECC')
+    expect((await run('sudo dmidecode -s bios-vendor')).out).toBe('SeaBIOS\n')
+    expect((await run('ls /sys/firmware/efi')).err).toContain('No such file or directory')
+  })
 })
