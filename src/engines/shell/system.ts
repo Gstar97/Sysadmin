@@ -412,6 +412,7 @@ export class System {
     const info = this.catalog[name]
     if (!info) return false
     this.installed.add(name)
+    if (info.user && !this.users.has(info.user.name)) this.addSystemUser(info.user.name, info.user.uid, info.user.home, info.user.gecos)
     for (const [path, content] of Object.entries(info.files ?? {})) {
       this.vfs.mkdirp(path.slice(0, path.lastIndexOf('/')) || '/', ROOT_CRED)
       if (!this.vfs.exists(path)) this.vfs.writeFile(path, content, ROOT_CRED)
@@ -639,10 +640,7 @@ export class System {
             ['nobody', 65534, '/nonexistent', '/usr/sbin/nologin'],
             ['sshd', 109, '/run/sshd', '/usr/sbin/nologin'],
           ]
-    for (const [name, id, home, shell] of system) {
-      this.addGroup(name, id)
-      this.users.set(name, { name, uid: id, gid: id, home, shell, gecos: name, locked: true, hasPassword: false, maxDays: 99999, minDays: 0, warnDays: 7, expire: '', lastChange: 19800 })
-    }
+    for (const [name, id, home] of system) this.addSystemUser(name, id, home, name)
     this.addGroup(this.adminGroup, this.distro === 'rocky' ? 10 : 27)
     if (this.distro === 'rocky') {
       this.addGroup('nginx', 990)
@@ -650,6 +648,14 @@ export class System {
     } else {
       this.addGroup('adm', 4)
     }
+  }
+
+  /** Cuenta de sistema o de servicio: bloqueada, sin contraseña y sin shell de inicio de sesión. */
+  addSystemUser(name: string, uid: number, home: string, gecos: string) {
+    if (!this.groups.has(name)) this.addGroup(name, uid)
+    const gid = this.groups.get(name)!.gid
+    const shell = this.distro === 'rocky' ? '/sbin/nologin' : '/usr/sbin/nologin'
+    this.users.set(name, { name, uid, gid, home, shell, gecos, locked: true, hasPassword: false, maxDays: 99999, minDays: 0, warnDays: 7, expire: '', lastChange: 19800 })
   }
 
   private createBaseProcesses(user: string) {

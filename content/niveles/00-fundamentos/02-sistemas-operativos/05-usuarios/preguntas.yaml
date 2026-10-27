@@ -1,0 +1,102 @@
+- id: p01
+  tipo: respuesta_multiple
+  diagnostico: true
+  enunciado: ¿Por qué cada persona debe tener su propia cuenta en lugar de compartir una?
+  opciones:
+    - { texto: Para saber quién hizo cada cosa, correcta: true, explicacion: "Los registros quedan asociados a una persona concreta." }
+    - { texto: Para poder quitarle el acceso a una sola persona, correcta: true, explicacion: "Se desactiva su cuenta sin afectar a las demás." }
+    - { texto: Para limitar el daño de un error o de un programa malicioso, correcta: true, explicacion: "Cada cuenta tiene solo los permisos que necesita." }
+    - { texto: Para que el equipo funcione más rápido, explicacion: "La cantidad de cuentas no afecta el rendimiento." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué le da a root todos los poderes en Linux?
+  opciones:
+    - { texto: "Tener el UID 0", correcta: true, explicacion: "El kernel otorga todos los permisos al UID 0, se llame como se llame la cuenta." }
+    - { texto: "Llamarse root", explicacion: "El nombre es solo una etiqueta; lo que importa es el UID." }
+    - { texto: "Pertenecer al grupo wheel", explicacion: "wheel permite usar sudo, pero no convierte a la cuenta en root." }
+    - { texto: "Tener la carpeta /root", explicacion: "Es solo su carpeta personal." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué contraseña pide sudo?
+  opciones:
+    - { texto: "La del usuario que lo ejecuta", correcta: true, explicacion: "Así nadie necesita conocer la contraseña de root." }
+    - { texto: "La de root", explicacion: "Esa es la que pide su para pasar a root." }
+    - { texto: "Ninguna, nunca", explicacion: "Pide la contraseña, salvo que se haya configurado lo contrario o se haya ingresado hace pocos minutos." }
+    - { texto: "La del último usuario que usó sudo", explicacion: "Cada persona usa su propia contraseña." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Por qué nginx corre con su propia cuenta de servicio y no como root?
+  opciones:
+    - { texto: "Para que, si alguien encuentra una falla en el sitio, solo obtenga los permisos limitados de nginx", correcta: true, explicacion: "Es el principio de mínimo privilegio aplicado a un servicio expuesto a internet." }
+    - { texto: "Porque root no puede abrir puertos de red", explicacion: "root puede abrir cualquier puerto; de hecho nginx arranca como root para abrir el puerto 80 y después atiende con la cuenta nginx." }
+    - { texto: "Para que nginx funcione más rápido", explicacion: "La cuenta no cambia el rendimiento." }
+    - { texto: "Porque así lo exige la licencia de nginx", explicacion: "Es una decisión de seguridad, no de licencia." }
+- id: p05
+  tipo: interpretar_salida
+  enunciado: Según esta línea de /etc/passwd, ¿qué tipo de cuenta es?
+  salida: |
+    mysql:x:27:27:MySQL Server:/var/lib/mysql:/sbin/nologin
+  opciones:
+    - { texto: "Una cuenta de servicio, con la que no se puede iniciar sesión", correcta: true, explicacion: "UID bajo, carpeta de datos del servicio y shell nologin." }
+    - { texto: "Una cuenta de una persona", explicacion: "Las personas tienen UID desde 1000 y un shell como /bin/bash." }
+    - { texto: "El superusuario", explicacion: "El superusuario tiene UID 0." }
+    - { texto: "Una cuenta bloqueada por error", explicacion: "nologin es intencional en las cuentas de servicio." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué grupo permite usar sudo en Rocky Linux y cuál en Ubuntu?
+  opciones:
+    - { texto: "wheel en Rocky y sudo en Ubuntu", correcta: true, explicacion: "Las dos distribuciones traen esa regla en /etc/sudoers por defecto." }
+    - { texto: "sudo en los dos", explicacion: "En Rocky el grupo es wheel." }
+    - { texto: "admin en los dos", explicacion: "Ninguna de las dos usa admin por defecto en sus versiones actuales." }
+    - { texto: "root en los dos", explicacion: "root es la cuenta del superusuario, no el grupo que habilita sudo." }
+- id: p07
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En Windows, Juan es administrador. ¿Qué pasa cuando abre un instalador de un programa?
+  opciones:
+    - { texto: "Aparece el aviso de UAC y tiene que confirmar para que el instalador corra como administrador", correcta: true, explicacion: "Hasta los administradores trabajan sin privilegios hasta que confirman." }
+    - { texto: "Se instala sin preguntar nada, porque es administrador", explicacion: "Eso solo pasa con la cuenta Administrador incorporada o con UAC desactivado." }
+    - { texto: "Tiene que escribir la contraseña de otro administrador", explicacion: "Eso es lo que pasa con una cuenta estándar." }
+    - { texto: "No puede instalarlo", explicacion: "Puede, confirmando el aviso." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Una persona de la mesa de ayuda solo necesita reiniciar un servicio en un servidor. ¿Qué es lo correcto?
+  opciones:
+    - { texto: "Una regla de sudoers que le permita solo ese comando", correcta: true, explicacion: "Tiene exactamente el permiso que necesita, con registro de cada uso." }
+    - { texto: "Agregarla al grupo wheel", explicacion: "Le daría sudo para cualquier comando." }
+    - { texto: "Darle la contraseña de root", explicacion: "Le daría control total y sin registro de quién hizo qué." }
+    - { texto: "Que te llame cada vez y lo hagas tú", explicacion: "Funciona, pero no escala y te interrumpe sin necesidad: sudoers lo resuelve bien." }
+- id: p09
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra qué comandos puedes ejecutar con sudo.
+  aceptadas: [sudo -l, sudo --list]
+  explicacion: "`sudo -l` lista las reglas de sudoers que se aplican a tu usuario."
+- id: p10
+  tipo: encontrar_error
+  enunciado: Estas son las reglas de un equipo de trabajo. Marca la que va en contra del mínimo privilegio.
+  archivo: |
+    Cada administrador tiene una cuenta personal y una administrativa.
+    El correo se lee siempre con la cuenta personal.
+    Los servicios corren con cuentas de servicio propias.
+    Para no perder tiempo, todos comparten la contraseña de root.
+  lineas_con_error: [4]
+  explicacion: Una contraseña compartida no deja saber quién hizo qué y no se puede quitar el acceso a una sola persona. Para eso está sudo.
+- id: p11
+  tipo: opcion_multiple
+  enunciado: ¿Por qué falla `sudo echo "nameserver 1.1.1.1" > /etc/resolv.conf`?
+  opciones:
+    - { texto: "Porque la redirección la hace tu shell, sin privilegios; sudo solo afecta a echo", correcta: true, explicacion: "Se resuelve con echo ... | sudo tee /etc/resolv.conf." }
+    - { texto: "Porque echo no se puede usar con sudo", explicacion: "Se puede, pero echo no es el que escribe el archivo." }
+    - { texto: "Porque el archivo no existe", explicacion: "Aunque exista, falla por permisos." }
+    - { texto: "Porque falta la contraseña de root", explicacion: "sudo pide tu contraseña, y aun así la redirección no tendría permisos." }
+- id: p12
+  tipo: ordenar_pasos
+  enunciado: Ordena lo que ocurre cuando ana ejecuta `sudo systemctl restart nginx`.
+  pasos:
+    - sudo revisa en sudoers si ana puede ejecutar ese comando
+    - sudo pide la contraseña de ana
+    - El comando se ejecuta como root
+    - Queda registrado quién lo ejecutó, desde dónde y qué comando fue
+  explicacion: Si ana no tiene permiso, sudo se detiene en el primer paso y registra el intento.

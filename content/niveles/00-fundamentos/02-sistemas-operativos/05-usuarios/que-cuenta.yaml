@@ -1,0 +1,102 @@
+tipo: troubleshooting
+titulo: ¿Con qué cuenta harías esto?
+descripcion: >-
+  Cinco situaciones de una semana de trabajo. En cada una, elige la cuenta o el permiso
+  adecuado. Si eliges mal, vas a ver qué podría salir mal y vuelves a elegir.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:00. Tienes que leer el correo y armar una planilla con el inventario de equipos.
+      Tienes dos cuentas: la personal (ana.perez) y una administrativa (ana.perez-adm).
+    opciones:
+      - { texto: "Con la cuenta personal, sin privilegios", ir_a: n2, minutos: 0 }
+      - texto: Con la cuenta administrativa, así no hay que cambiar después
+        ir_a: n1
+        minutos: 0
+        consecuencia: >-
+          Un adjunto malicioso abierto con esa cuenta tendría permisos de administrador sobre el
+          equipo, y desde ahí podría usar tus credenciales para llegar a los servidores. La cuenta
+          administrativa se usa solo para tareas administrativas, nunca para correo ni navegación.
+  n2:
+    situacion: Lunes, 11:00. Hay que instalar las actualizaciones de seguridad en un servidor Rocky Linux.
+    opciones:
+      - { texto: "Entrar con tu usuario y ejecutar sudo dnf upgrade", ir_a: n3, minutos: 0 }
+      - texto: Entrar directamente como root por SSH
+        ir_a: n2
+        minutos: 0
+        consecuencia: >-
+          Si todos entran como root, los registros solo dicen "root hizo esto": no se sabe quién
+          fue. Además, el acceso de root por SSH con contraseña suele estar deshabilitado, porque
+          es el usuario que todos los ataques prueban primero.
+      - texto: Pedirle a un compañero la contraseña de root
+        ir_a: n2
+        minutos: 0
+        consecuencia: >-
+          Una contraseña compartida no se puede revocar para una sola persona y no deja registro de
+          quién la usó. Con sudo, cada uno usa su propia contraseña y queda todo registrado.
+  n3:
+    situacion: >-
+      Martes. Vas a poner en marcha el servidor web nginx. Tienes que decidir con qué usuario
+      corren sus procesos de trabajo, los que atienden los pedidos de internet.
+    opciones:
+      - { texto: "Con la cuenta de servicio nginx, sin contraseña ni inicio de sesión", ir_a: n4, minutos: 0 }
+      - texto: Como root, para evitar problemas de permisos
+        ir_a: n3
+        minutos: 0
+        consecuencia: >-
+          El servidor web está expuesto a internet. Si alguien encuentra una falla en la aplicación,
+          obtiene los permisos con los que corre: como root, sería dueño de todo el servidor. Con la
+          cuenta nginx, solo de lo que nginx puede tocar.
+      - texto: Con tu cuenta personal, que ya tiene los permisos necesarios
+        ir_a: n3
+        minutos: 0
+        consecuencia: >-
+          El servicio quedaría atado a una persona: si te vas de la empresa y se desactiva tu
+          cuenta, el sitio deja de funcionar. Y un atacante que comprometa el sitio tendría acceso a
+          todos tus archivos y tus credenciales.
+  n4:
+    situacion: >-
+      Miércoles. Un compañero de la mesa de ayuda necesita poder reiniciar el servicio de
+      impresión de un servidor cuando se traba, y nada más.
+    opciones:
+      - { texto: "Darle permiso de sudo solo para ese comando (systemctl restart cups)", ir_a: n5, minutos: 0 }
+      - texto: Agregarlo al grupo wheel para que tenga sudo
+        ir_a: n4
+        minutos: 0
+        consecuencia: >-
+          El grupo wheel da sudo para todo: podría borrar usuarios, leer cualquier archivo o
+          apagar el servidor. Necesitaba un solo comando; sudoers permite dar exactamente eso.
+      - texto: Pasarle la contraseña de root anotada en un papel
+        ir_a: n4
+        minutos: 0
+        consecuencia: >-
+          Le estarías dando control total del servidor, sin registro y con una contraseña que ya no
+          es secreta. Habría que cambiarla, y avisar a todos los que la usan.
+  n5:
+    situacion: >-
+      Jueves. Hay que programar una tarea en un servidor Windows que copia todas las noches una
+      carpeta compartida a otro servidor.
+    opciones:
+      - { texto: "Una cuenta de servicio dedicada, con permisos solo sobre esas carpetas", ir_a: fin_ok, minutos: 0 }
+      - texto: Tu propia cuenta administrativa
+        ir_a: n5
+        minutos: 0
+        consecuencia: >-
+          Cuando cambies tu contraseña, la tarea va a fallar sin que nadie se entere; y si te vas de
+          la empresa, deja de funcionar. Además, la tarea tendría muchos más permisos de los que
+          necesita. En dominios de Active Directory existen las cuentas de servicio administradas
+          (gMSA), que cambian su contraseña solas.
+      - texto: La cuenta Administrador incorporada del servidor
+        ir_a: n5
+        minutos: 0
+        consecuencia: >-
+          Es la cuenta más poderosa del equipo, compartida por definición, y suele estar
+          renombrada o desactivada justamente para que nadie la use en el día a día.
+  fin_ok:
+    final: exito
+    resumen: >-
+      En todas las decisiones aplicaste el mismo principio, el de **mínimo privilegio**: cada
+      persona, servicio y tarea tiene solo los permisos que necesita, con una cuenta propia que
+      deja registro. Es lo que limita el daño cuando algo sale mal y lo que permite saber quién
+      hizo qué.

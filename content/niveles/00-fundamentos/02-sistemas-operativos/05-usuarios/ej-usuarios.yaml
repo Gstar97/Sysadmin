@@ -1,0 +1,79 @@
+tipo: terminal
+shell: bash
+titulo: Cuentas y privilegios en un servidor
+descripcion: >-
+  Conoce las cuentas de un servidor Rocky Linux con nginx instalado: quién eres, qué puedes
+  hacer, cómo se usa sudo y cómo son las cuentas de servicio.
+estado_inicial:
+  distro: rocky
+  hostname: srv-web01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true, comentario: Estudiante }
+    - { nombre: ana, comentario: Ana Pérez }
+  paquetes:
+    instalados: [nginx]
+pasos:
+  - consigna: Averigua con qué usuario estás trabajando y a qué grupos perteneces con `id`.
+    verificar:
+      - { comando_usado: '^\s*id\s*$' }
+    pistas:
+      - "`id`"
+    solucion: [id]
+    explicacion: >-
+      Tu usuario tiene el UID 1000 (el primero creado en la instalación) y pertenece al grupo
+      **wheel**: en Rocky, los miembros de wheel pueden usar sudo. En Ubuntu ese grupo se llama
+      **sudo**.
+  - consigna: Intenta leer el archivo de contraseñas cifradas con `cat /etc/shadow`.
+    verificar:
+      - { comando_usado: '^\s*cat\s+/etc/shadow' }
+    pistas:
+      - "`cat /etc/shadow`"
+    solucion: [cat /etc/shadow]
+    explicacion: >-
+      *Permission denied*: solo root puede leerlo. Que tu usuario pueda usar sudo no significa que
+      trabaje como administrador todo el tiempo.
+  - consigna: Ahora léelo con privilegios de administrador usando `sudo cat /etc/shadow`.
+    verificar:
+      - { comando_usado: 'sudo\s+cat\s+/etc/shadow' }
+    pistas:
+      - "`sudo cat /etc/shadow`"
+      - Si pide contraseña, es la tuya, no la de root.
+    solucion: [sudo cat /etc/shadow]
+    explicacion: >-
+      sudo ejecutó solo ese comando como root. Las cuentas de sistema muestran `!!` o `*` en lugar
+      de una contraseña: no se puede iniciar sesión con ellas.
+  - consigna: Mira qué te permite hacer sudo con `sudo -l`.
+    verificar:
+      - { comando_usado: 'sudo\s+-l' }
+    pistas:
+      - "`sudo -l`"
+    solucion: [sudo -l]
+    explicacion: "`(ALL) ALL` significa que puedes ejecutar cualquier comando como cualquier usuario. A otra persona se le podría permitir solo un comando concreto."
+  - consigna: Busca la cuenta de servicio de nginx en la lista de usuarios con `grep nginx /etc/passwd`.
+    verificar:
+      - { salida_contiene: nologin }
+    pistas:
+      - "`grep nginx /etc/passwd`"
+    solucion: [grep nginx /etc/passwd]
+    explicacion: >-
+      Los campos son: nombre, contraseña (la `x` indica que está en /etc/shadow), UID, GID,
+      descripción, carpeta personal y shell. El shell `/sbin/nologin` impide iniciar sesión: la
+      cuenta existe solo para que el servicio corra con permisos limitados.
+  - consigna: Comprueba que no se puede iniciar sesión con esa cuenta, ni siquiera siendo administrador, con `sudo su - nginx`.
+    verificar:
+      - { comando_usado: 'sudo\s+su\s+-?\s*nginx' }
+    pistas:
+      - "`sudo su - nginx`"
+    solucion: [sudo su - nginx]
+    explicacion: "*This account is currently not available*: es el mensaje de nologin. Así, aunque alguien consiga la cuenta, no puede usarla para entrar al servidor."
+  - consigna: Por último, mira cómo quedó registrado lo que hiciste con sudo con `sudo tail /var/log/secure`.
+    verificar:
+      - { comando_usado: 'sudo\s+tail.*/var/log/secure' }
+    pistas:
+      - "`sudo tail /var/log/secure`"
+    solucion: [sudo tail /var/log/secure]
+    explicacion: >-
+      Cada uso de sudo queda registrado con el usuario, la carpeta y el comando completo. En
+      Ubuntu el mismo registro está en `/var/log/auth.log`. Es la diferencia clave con entrar
+      directamente como root: se sabe quién hizo qué.

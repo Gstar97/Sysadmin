@@ -1,0 +1,115 @@
+---
+id: n0-m2-l5
+titulo: Usuarios y privilegios
+minutos: 90
+objetivos:
+  - Explicar por qué existen cuentas separadas y por qué no se usa la cuenta administradora para todo.
+  - Diferenciar root/Administrador, usuario común y cuenta de servicio.
+  - Entender a nivel conceptual cómo funcionan UAC en Windows y sudo en Linux.
+glosario: [root, cuenta-servicio, minimo-privilegio, sudo, uac]
+verificado: 2026-10
+---
+
+import elevar from './elevar.svg?raw'
+import queCuenta from './que-cuenta.yaml'
+import ejUsuarios from './ej-usuarios.yaml'
+
+Un sysadmin tiene las llaves de todo: puede leer cualquier archivo, crear y borrar usuarios, apagar servidores. Justamente por eso, una de las primeras cosas que se aprenden es a **no** usar esos privilegios todo el tiempo. En esta lección vas a ver qué tipos de cuentas hay, cómo se piden privilegios solo cuando hacen falta y por qué esta disciplina evita tantos problemas.
+
+## Por qué cada uno tiene su cuenta
+
+Una computadora con varias personas y varios servicios podría funcionar con una sola cuenta compartida. No se hace así por cuatro razones muy concretas:
+
+- **Saber quién hizo qué**: si cada persona tiene su cuenta, los registros dicen "ana borró este archivo a las 14:32". Con una cuenta compartida, solo dicen "alguien".
+- **Proteger los datos de cada uno**: los archivos de una persona no quedan al alcance de todas las demás.
+- **Limitar el daño**: un programa malicioso o un error corre con los permisos de quien lo ejecutó. Si la cuenta tiene pocos permisos, el daño es acotado.
+- **Poder quitar el acceso a una persona** cuando cambia de puesto o deja la empresa, sin afectar a nadie más.
+
+## Tipos de cuenta
+
+| Tipo | En Linux | En Windows | Para qué se usa |
+| --- | --- | --- | --- |
+| Superusuario | **root** (UID 0) | **Administrador** y los miembros del grupo *Administradores* | Administrar el sistema. Puede hacer cualquier cosa |
+| Usuario común | Usuarios con UID desde 1000 | Usuarios estándar | El trabajo diario de las personas |
+| Cuenta de servicio | nginx, mysql, apache, postgres | LocalSystem, NetworkService, cuentas de servicio administradas (gMSA) | Que un servicio corra con permisos propios y limitados |
+
+En Linux, las cuentas están en el archivo `/etc/passwd`, una por línea:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+ana:x:1001:1001:Ana Pérez:/home/ana:/bin/bash
+nginx:x:990:990:Nginx web server:/var/lib/nginx:/sbin/nologin
+```
+
+Los campos, separados por `:`, son el nombre, una `x` (la contraseña cifrada está aparte, en `/etc/shadow`, que solo root puede leer), el número de usuario (UID), el de su grupo principal (GID), la descripción, la carpeta personal y el programa que se abre al iniciar sesión. Para el **<Termino id="root">root</Termino>**, el UID 0 es lo que le da todos los poderes. Las **<Termino id="cuenta-servicio">cuentas de servicio</Termino>** como nginx tienen como shell `/sbin/nologin`: existen para que el servicio corra con ellas, pero nadie puede iniciar sesión.
+
+## El principio de mínimo privilegio
+
+La regla que ordena todo lo anterior es el **<Termino id="minimo-privilegio">mínimo privilegio</Termino>**: cada persona, servicio o tarea recibe solo los permisos que necesita, y solo mientras los necesita. En la práctica:
+
+- El trabajo diario (correo, documentos, navegación) se hace con una cuenta común, también la del sysadmin.
+- En muchas empresas, cada administrador tiene **dos cuentas**: la personal (`ana.perez`) y una administrativa separada (`ana.perez-adm`) que solo usa para administrar.
+- Cada servicio corre con su propia cuenta de servicio, no como root ni como una persona.
+- Si alguien necesita hacer una sola tarea de administrador, se le permite esa tarea y nada más.
+
+## Pedir privilegios solo cuando hacen falta
+
+Linux y Windows resuelven el problema de la misma forma: se trabaja sin privilegios y se **elevan** solo para la acción que los requiere.
+
+<Diagrama svg={elevar} alt="Flujo de sudo en Linux: el usuario ejecuta sudo, se revisan las reglas, se pide su propia contraseña, el comando corre como root y queda registrado. Flujo de UAC en Windows: un administrador trabaja con permisos de usuario hasta que el aviso de UAC autoriza un programa" pie="sudo y UAC: privilegios de administrador solo para la acción que los necesita." />
+
+### sudo en Linux
+
+**<Termino id="sudo">sudo</Termino>** ejecuta un comando como root (o como otro usuario) si las reglas lo permiten:
+
+```bash
+sudo dnf upgrade              # actualizar el sistema como root
+sudo systemctl restart nginx  # reiniciar un servicio
+sudo -l                       # ver qué me permite sudo
+```
+
+- Pide **tu propia contraseña**, no la de root. Así nadie necesita conocer la contraseña de root, y en Ubuntu la cuenta root ni siquiera tiene contraseña: está bloqueada.
+- Las reglas están en `/etc/sudoers` (se edita con el comando `visudo`, que revisa que no tenga errores). En Rocky, los miembros del grupo **wheel** pueden usar sudo; en Ubuntu, los del grupo **sudo**. También se puede permitir un único comando a una persona.
+- Cada uso queda registrado con el usuario y el comando completo, en `/var/log/secure` (Rocky) o `/var/log/auth.log` (Ubuntu).
+- Después de escribir la contraseña, sudo no la vuelve a pedir durante unos minutos.
+
+El comando `su` hace algo parecido pero distinto: abre una sesión como otro usuario pidiendo **la contraseña de ese usuario**. Hoy se prefiere sudo, porque no obliga a compartir la contraseña de root y registra cada comando. Para una sesión de root, cuando de verdad hace falta, se usa `sudo -i`, y se sale con `exit` en cuanto se termina.
+
+### UAC en Windows
+
+En Windows, incluso una cuenta de administrador trabaja normalmente con permisos de usuario común. Cuando un programa necesita permisos de administrador (instalar software, cambiar la configuración del sistema), aparece el aviso de **<Termino id="uac">UAC</Termino>** (*Control de cuentas de usuario*): "¿Quieres permitir que esta aplicación haga cambios en el dispositivo?".
+
+- Si la cuenta es administradora, basta con confirmar.
+- Si es una cuenta estándar, hay que escribir el usuario y la contraseña de un administrador.
+- Para abrir una consola con privilegios: clic derecho, **Ejecutar como administrador**.
+
+La cuenta **Administrador** incorporada de Windows funciona distinto: por defecto no pasa por UAC y tiene todos los permisos siempre. Por eso en las empresas se desactiva o se renombra, y cada administrador usa su propia cuenta.
+
+## Practicar
+
+<Terminal ejercicio={ejUsuarios} />
+
+<Troubleshooting escenario={queCuenta} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"usuario is not in the sudoers file"'>
+    Tu cuenta no tiene permiso para usar sudo. Un administrador tiene que agregarte al grupo correspondiente (`wheel` en Rocky, `sudo` en Ubuntu) o crear una regla en sudoers. Para que el cambio de grupo tenga efecto, hay que cerrar la sesión y volver a entrar. El intento queda registrado en el log de seguridad.
+  </ErrorComun>
+  <ErrorComun titulo="Un servicio deja de funcionar al cambiar o desactivar la cuenta de una persona">
+    El servicio o la tarea programada corría con la cuenta de esa persona. Hay que pasarlo a una cuenta de servicio propia y revisar si hay otros en la misma situación. Es un problema clásico cuando alguien deja la empresa.
+  </ErrorComun>
+  <ErrorComun titulo='"Permission denied" incluso con sudo al usar una redirección'>
+    En `sudo echo "texto" > /etc/archivo`, el `sudo` solo afecta a `echo`: la redirección `>` la hace tu propia shell, sin privilegios. Se resuelve con `echo "texto" | sudo tee /etc/archivo`, donde `tee` es el que escribe y corre como root.
+  </ErrorComun>
+  <ErrorComun titulo="Quedarse trabajando horas en una sesión de root">
+    Después de un `sudo -i` es fácil olvidarse de que se está como root y ejecutar un comando destructivo en el lugar equivocado. Usa la sesión de root solo para lo necesario y sal con `exit`. El símbolo del prompt ayuda: `$` para un usuario común, `#` para root.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Cada persona y cada servicio tienen su propia cuenta: permite saber quién hizo qué, proteger datos, limitar daños y quitar accesos.
+- root (UID 0) y Administrador pueden todo; los usuarios comunes, solo lo suyo; las cuentas de servicio existen para que un servicio corra con permisos limitados y no permiten iniciar sesión.
+- Mínimo privilegio: cada uno con los permisos justos, solo mientras los necesita.
+- sudo ejecuta un comando como root con tu propia contraseña y lo registra; las reglas están en /etc/sudoers (grupo wheel en Rocky, sudo en Ubuntu).
+- UAC hace que hasta los administradores de Windows trabajen sin privilegios hasta confirmar una acción.
+</Resumen>

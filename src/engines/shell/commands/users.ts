@@ -567,10 +567,12 @@ register('su', {
     const args = [...ctx.args]
     let login = false
     let cmd: string | undefined
+    let shell: string | undefined
     while (args.length && args[0].startsWith('-')) {
       const o = args.shift()!
       if (o === '-' || o === '-l' || o === '--login') login = true
       else if (o === '-c') cmd = args.shift()
+      else if (o === '-s' || o === '--shell') shell = args.shift()
     }
     const target = args[0] ?? 'root'
     if (!ctx.sys.users.has(target)) {
@@ -580,6 +582,11 @@ register('su', {
     if (ctx.sh.user !== 'root') {
       ctx.out('Password: \n')
       ctx.err(`[simulador] su pide la contraseña de ${target}. En este simulador se usa sudo: sudo -i (root) o sudo su - ${target}.\n`)
+      return 1
+    }
+    // Las cuentas de servicio tienen nologin como shell: no se puede iniciar sesión con ellas.
+    if (/nologin$/.test(shell ?? ctx.sys.users.get(target)!.shell)) {
+      ctx.out('This account is currently not available.\n')
       return 1
     }
     if (cmd) {

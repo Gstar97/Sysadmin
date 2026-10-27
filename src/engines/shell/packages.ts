@@ -10,6 +10,8 @@ export interface PackageService {
 
 export interface PackageInfo {
   summary: string
+  /** Cuenta de servicio que crea el paquete al instalarse (sin contraseña ni shell de inicio de sesión). */
+  user?: { name: string; uid: number; home: string; gecos: string }
   services?: PackageService[]
   files?: Record<string, string>
   commands?: string[]
@@ -82,6 +84,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   ...common,
   nginx: {
     summary: 'A high performance web server and reverse proxy server',
+    user: { name: 'nginx', uid: 990, home: '/var/lib/nginx', gecos: 'Nginx web server' },
     version: '1.26.3',
     services: [{ name: 'nginx', description: 'The nginx HTTP and reverse proxy server', ports: [80] }],
     files: {
@@ -95,6 +98,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   },
   httpd: {
     summary: 'Apache HTTP Server',
+    user: { name: 'apache', uid: 48, home: '/usr/share/httpd', gecos: 'Apache' },
     version: '2.4.63',
     services: [{ name: 'httpd', description: 'The Apache HTTP Server', ports: [80] }],
     files: {
@@ -105,6 +109,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   },
   'mariadb-server': {
     summary: 'The MariaDB server and related files',
+    user: { name: 'mysql', uid: 27, home: '/var/lib/mysql', gecos: 'MySQL Server' },
     version: '10.11.11',
     services: [{ name: 'mariadb', description: 'MariaDB 10.11 database server', ports: [3306] }],
     files: { '/etc/my.cnf.d/mariadb-server.cnf': '[mysqld]\ndatadir=/var/lib/mysql\nsocket=/var/lib/mysql/mysql.sock\nlog-error=/var/log/mariadb/mariadb.log\n' },
@@ -112,6 +117,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   },
   'postgresql-server': {
     summary: 'The programs needed to create and run a PostgreSQL server',
+    user: { name: 'postgres', uid: 26, home: '/var/lib/pgsql', gecos: 'PostgreSQL Server' },
     version: '16.8',
     services: [{ name: 'postgresql', description: 'PostgreSQL database server', ports: [5432] }],
     commands: ['postgresql-setup', 'psql'],
@@ -119,6 +125,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   'bind-utils': { summary: 'Utilities for querying DNS name servers', version: '9.18.33', commands: ['dig', 'nslookup', 'host'] },
   bind: {
     summary: 'The Berkeley Internet Name Domain (BIND) DNS server',
+    user: { name: 'named', uid: 25, home: '/var/named', gecos: 'Named' },
     version: '9.18.33',
     services: [{ name: 'named', description: 'Berkeley Internet Name Domain (DNS)', ports: [53] }],
     files: { '/etc/named.conf': 'options {\n\tlisten-on port 53 { 127.0.0.1; };\n\tdirectory \t"/var/named";\n\trecursion yes;\n};\n' },
@@ -186,12 +193,14 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     commands: ['apache2ctl', 'a2ensite', 'a2dissite'],
   },
   'mariadb-server': {
+    user: { name: 'mysql', uid: 112, home: '/nonexistent', gecos: 'MySQL Server' },
     summary: 'MariaDB database server',
     version: '11.4.5',
     services: [{ name: 'mariadb', description: 'MariaDB 11.4 database server', ports: [3306], enabledByDefault: true, activeAfterInstall: true }],
     commands: ['mariadb', 'mysql'],
   },
   postgresql: {
+    user: { name: 'postgres', uid: 113, home: '/var/lib/postgresql', gecos: 'PostgreSQL administrator' },
     summary: 'object-relational SQL database',
     version: '16.8',
     services: [{ name: 'postgresql', description: 'PostgreSQL RDBMS', ports: [5432], enabledByDefault: true, activeAfterInstall: true }],
@@ -199,11 +208,13 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   },
   dnsutils: { summary: 'Clients provided with BIND 9', version: '9.20.4', commands: ['dig', 'nslookup', 'host'] },
   bind9: {
+    user: { name: 'bind', uid: 114, home: '/var/cache/bind', gecos: '' },
     summary: 'Internet Domain Name Server',
     version: '9.20.4',
     services: [{ name: 'named', description: 'BIND Domain Name Server', ports: [53], enabledByDefault: true, activeAfterInstall: true }],
   },
   chrony: {
+    user: { name: '_chrony', uid: 111, home: '/var/lib/chrony', gecos: 'Chrony daemon' },
     summary: 'Versatile implementation of the Network Time Protocol',
     version: '4.6.1',
     services: [{ name: 'chrony', description: 'chrony, an NTP client/server', ports: [123], enabledByDefault: true, activeAfterInstall: true }],
@@ -222,6 +233,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     commands: ['crontab'],
   },
   rsyslog: {
+    user: { name: 'syslog', uid: 104, home: '/nonexistent', gecos: '' },
     summary: 'reliable system and kernel logging daemon',
     version: '8.2406.0',
     services: [{ name: 'rsyslog', description: 'System Logging Service', ports: [], enabledByDefault: true, activeAfterInstall: true }],
