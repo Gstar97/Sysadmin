@@ -1,7 +1,7 @@
 import { formatIpv4, maskToPrefix, networkOf, parseCidr, parseIpv4 } from './ip'
 import { IosSession, runningConfig } from './ios'
 import { Network } from './model'
-import { iosCheckSchema, iosStateSchema, type IosCheck, type ObjectiveSpec, type TopologySpec } from './schema'
+import { iosCheckSchema, iosStateSchema, type IosCheckInput, type ObjectiveSpec, type TopologySpec } from './schema'
 
 export { Network } from './model'
 export { IosSession, runningConfig } from './ios'
@@ -37,7 +37,7 @@ function normalizeConfig(text: string) {
 }
 
 /** Comprueba una verificación de ejercicio IOS contra el estado de la red. */
-export function verifyIos(s: IosSession, raw: IosCheck, defaultDevice?: string): CheckResult {
+export function verifyIos(s: IosSession, raw: IosCheckInput, defaultDevice?: string): CheckResult {
   const check = iosCheckSchema.parse(raw)
   const devName = ('equipo' in check && check.equipo) || defaultDevice || s.dev.id
   const d = s.net.device(devName)

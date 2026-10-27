@@ -108,3 +108,4 @@ export type TopologySpec = z.infer<typeof topologySpecSchema>
 export type TopologyExercise = z.infer<typeof topologyExerciseSchema>
 export type IosState = z.infer<typeof iosStateSchema>
 export type IosCheck = z.infer<typeof iosCheckSchema>
+export type IosCheckInput = z.input<typeof iosCheckSchema>

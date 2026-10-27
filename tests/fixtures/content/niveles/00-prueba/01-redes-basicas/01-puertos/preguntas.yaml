@@ -1,0 +1,64 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué identifica un número de puerto?
+  opciones:
+    - { texto: "El programa al que va el tráfico dentro de un equipo", correcta: true, explicacion: "La IP lleva el tráfico al equipo y el puerto, al programa." }
+    - { texto: "El equipo dentro de la red", explicacion: "Eso lo hace la dirección IP." }
+    - { texto: "La placa de red", explicacion: "La placa se identifica con la dirección MAC." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué puerto usa HTTPS por defecto?
+  opciones:
+    - { texto: "443", correcta: true, explicacion: "HTTPS usa TCP 443." }
+    - { texto: "80", explicacion: "80 es HTTP sin cifrar." }
+    - { texto: "22", explicacion: "22 es SSH." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Qué protocolo de transporte usa normalmente una consulta DNS?
+  opciones:
+    - { texto: "UDP", correcta: true, explicacion: "Las consultas DNS normales usan UDP 53; TCP se usa para respuestas grandes o transferencias de zona." }
+    - { texto: "TCP siempre", explicacion: "TCP se usa en casos puntuales, no en la consulta normal." }
+    - { texto: "ICMP", explicacion: "ICMP es el protocolo de ping, no de DNS." }
+- id: p04
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estos servicios usan TCP?
+  opciones:
+    - { texto: SSH, correcta: true, explicacion: "SSH usa TCP 22." }
+    - { texto: HTTPS, correcta: true, explicacion: "HTTPS usa TCP 443 (HTTP/3 usa UDP, pero lo habitual sigue siendo TCP)." }
+    - { texto: "Consultas DNS normales", explicacion: "Usan UDP 53." }
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando que lista los sockets TCP en escucha mostrando números de puerto.
+  aceptadas: [ss -tln, ss -ltn, ss -nlt, ss -tnl, ss -lnt, ss -ntl]
+  explicacion: "-t filtra TCP, -l muestra solo los que escuchan y -n evita traducir puertos a nombres."
+- id: p06
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para comprobar por qué un servicio no responde desde otra máquina.
+  pasos:
+    - Ver si el servicio está activo
+    - Ver en qué dirección y puerto escucha
+    - Revisar el firewall del servidor
+    - Probar la conexión desde la otra máquina
+  explicacion: Se va de lo local a lo remoto; si el servicio no está activo, el resto no importa.
+- id: p07
+  tipo: interpretar_salida
+  enunciado: Según esta salida, ¿desde dónde se puede conectar a la base de datos?
+  salida: |
+    State   Recv-Q  Send-Q  Local Address:Port
+    LISTEN  0       128     127.0.0.1:5432
+  opciones:
+    - { texto: "Solo desde el mismo servidor", correcta: true, explicacion: "127.0.0.1 es la interfaz de loopback: solo acepta conexiones locales." }
+    - { texto: "Desde cualquier equipo de la red", explicacion: "Para eso tendría que escuchar en 0.0.0.0 o en la IP de la red." }
+    - { texto: "Desde ningún lado", explicacion: "Está en LISTEN: acepta conexiones, pero solo locales." }
+- id: p08
+  tipo: encontrar_error
+  enunciado: Esta lista de puertos por defecto tiene un error. Marca la línea.
+  archivo: |
+    SSH    22
+    HTTP   80
+    HTTPS  8443
+    DNS    53
+  lineas_con_error: [3]
+  explicacion: HTTPS usa 443 por defecto; 8443 es un puerto alternativo habitual, pero no el estándar.

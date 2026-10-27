@@ -1,0 +1,49 @@
+---
+id: n0-m1-l1
+titulo: Puertos y protocolos de transporte
+minutos: 40
+objetivos:
+  - Explicar para qué sirve un puerto y en qué se diferencian TCP y UDP.
+  - Reconocer los puertos por defecto de los servicios más comunes.
+  - Ver qué servicios escuchan en un servidor Linux con ss.
+glosario: [puerto, tcp, udp]
+verificado: 2026-10
+---
+
+import puertos from './ej-puertos.yaml'
+import ss from './ej-ss.yaml'
+import modelo from './modelo-tcpip.svg?raw'
+
+## Para qué sirve un puerto
+
+Una IP identifica a un equipo; el <Termino id="puerto">puerto</Termino> identifica a qué programa de ese equipo va el tráfico. Un mismo servidor puede atender la web en el 443 y el acceso remoto en el 22 al mismo tiempo.
+
+<Diagrama svg={modelo} alt="Las cuatro capas del modelo TCP/IP" pie="Los puertos viven en la capa de transporte." />
+
+## TCP y UDP
+
+<Termino id="tcp">TCP</Termino> confirma cada entrega y mantiene el orden; <Termino id="udp">UDP</Termino> no espera confirmaciones y es más ligero.
+
+<Emparejar ejercicio={puertos} />
+
+## Ver qué escucha en un servidor
+
+```bash
+ss -tln
+```
+
+<Terminal ejercicio={ss} />
+
+<Pregunta id="p01" />
+
+<ErroresComunes>
+  <ErrorComun titulo="El servicio está activo pero no responde desde otra máquina">
+    Revisa con `ss -tln` si escucha en `0.0.0.0` o solo en `127.0.0.1`, y si el firewall permite el puerto.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El puerto indica a qué programa va el tráfico.
+- TCP confirma la entrega; UDP no.
+- `ss -tln` muestra los puertos TCP en escucha.
+</Resumen>

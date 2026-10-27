@@ -173,7 +173,7 @@ export default function HomePage() {
       <Card as="section">
         <h2 className="mb-3 text-lg font-semibold">Evaluaciones recientes</h2>
         {recent.length === 0 ? (
-          <EmptyState title="Todavía no hay evaluaciones">Los mini tests, exámenes y el diagnóstico aparecen acá.</EmptyState>
+          <EmptyState title="Todavía no hay evaluaciones">Los mini tests, exámenes y el diagnóstico aparecen aquí.</EmptyState>
         ) : (
           <ul className="divide-y divide-line">
             {recent.map((a) => (

@@ -1,7 +1,7 @@
 ############################################################################################
 #                                                                                          #
 #          ARQUITECTURA TÉCNICA DE LA PLATAFORMA                                           #
-#          Etapa 1 (propuesta para aprobación)                                             #
+#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 2                       #
 #                                                                                          #
 ############################################################################################
 
@@ -16,7 +16,7 @@
   8.  Progreso y almacenamiento (hoy local, mañana con usuarios y base de datos)
   9.  Funciones de la plataforma
   10. Calidad, pruebas y accesibilidad
-  11. Cómo se va a correr localmente
+  11. Cómo se corre localmente
   12. Riesgos y cómo se mitigan
   13. Etapas siguientes
   14. Decisiones a confirmar
@@ -65,7 +65,7 @@ Datos y estado
     campo y qué está mal.
   - Dexie (sobre IndexedDB) para el progreso: más espacio que localStorage, consultas
     ordenadas y un modelo de tablas igual al que tendrá la base de datos futura.
-  - Zustand para el estado de la interfaz (chico, simple y sin ceremonia).
+  - Zustand para el estado de la interfaz (pequeño, simple y sin ceremonia).
 
 Componentes de terceros (todos con licencias abiertas: MIT, Apache 2.0, ISC o MPL 2.0)
   - CodeMirror 6: editor de archivos de configuración con marcas de error en línea.
@@ -93,7 +93,7 @@ versiones estables vigentes en ese momento.
 3. ALTERNATIVAS DESCARTADAS
 ============================================================================================
 
-  - Next.js: su punto fuerte es el renderizado en servidor, que acá no hace falta. Suma
+  - Next.js: su punto fuerte es el renderizado en servidor, que aquí no hace falta. Suma
     complejidad hoy y, cuando haya usuarios, conviene una API separada.
   - Astro: excelente para sitios de contenido, pero esta plataforma es sobre todo una
     aplicación: progreso, notas, repaso y exámenes se comparten entre todas las páginas, y
@@ -141,15 +141,22 @@ que escribir lecciones sea natural.
   │                   ├── placa-madre.svg  diagramas propios de la lección
   │                   └── *.yaml           ejercicios de los interactivos
   ├── src/
-  │   ├── app/                         rutas, páginas y diseño general
+  │   ├── app/                         rutas, páginas, diseño general y componentes MDX
+  │   │   ├── mdx/components.tsx       todo lo que se puede usar dentro de una lección
+  │   │   └── pages/gallery/           galería de interactivos con ejercicios de ejemplo
   │   ├── ui/                          piezas visuales reutilizables
   │   ├── interactive/                 componentes interactivos (interfaz)
   │   ├── engines/                     lógica pura, sin React (ver sección 6)
-  │   ├── content/                     carga de contenido, esquemas Zod, componentes MDX
-  │   ├── progress/                    repositorio de progreso, IndexedDB, migraciones
-  │   └── search/                      índice y búsqueda
-  ├── scripts/                         validar contenido, generar índice de búsqueda
-  └── tests/                           pruebas de punta a punta
+  │   ├── content/                     carga de contenido y esquemas Zod
+  │   ├── progress/                    repositorio de progreso, IndexedDB, reglas de avance
+  │   └── search/                      búsqueda
+  ├── build/                           plugins de Vite: lectura y validación del contenido,
+  │                                    índice de búsqueda e importación de YAML
+  ├── scripts/validar-contenido.ts     validación completa (npm run validar)
+  └── tests/
+      ├── unit/                        pruebas de motores, validadores y reglas (Vitest)
+      ├── e2e/                         pruebas de punta a punta (Playwright)
+      └── fixtures/content/            contenido mínimo y completo para las pruebas
 
 El orden de niveles, módulos y lecciones sale del número al principio de cada carpeta
 (01-, 02-...). Cada pieza tiene además un id fijo en su archivo, así que renombrar o
@@ -173,10 +180,13 @@ reordenar carpetas no rompe el progreso guardado de nadie.
   verificado: 2026-10          # fecha en que se verificaron versiones y datos de actualidad
   ---
 
+  import placa from './placa-madre.svg?raw'
+  import puntos from './placa-madre-puntos.yaml'
+
   ## Qué hay adentro del gabinete
   Texto en Markdown...
 
-  <DiagramaInteractivo svg="./placa-madre.svg" puntos="./placa-madre-puntos.yaml" />
+  <DiagramaInteractivo svg={placa} datos={puntos} alt="Placa madre con sus partes" />
 
   Más explicación, con <Termino id="pcie">PCIe</Termino> enlazado al glosario...
 
@@ -189,7 +199,10 @@ reordenar carpetas no rompe el progreso guardado de nadie.
   </Resumen>
 
   El mini test, las tarjetas y las notas se agregan solos al final de la página a partir
-  de preguntas.yaml y tarjetas.yaml.
+  de preguntas.yaml y tarjetas.yaml. Los archivos de ejercicios y los SVG se importan al
+  principio de la lección con import (como arriba) y se pasan al componente; así, si un
+  archivo no existe, la compilación avisa. Los SVG se importan con "?raw" para que se
+  inserten en la página y tomen los colores del tema claro u oscuro.
 
 5.2 Banco de preguntas (preguntas.yaml)
 
@@ -215,9 +228,15 @@ reordenar carpetas no rompe el progreso guardado de nadie.
   - id: p03
     tipo: completar_comando
     enunciado: Mostrar las últimas 20 líneas de /var/log/messages.
-    validacion: simulador            # se ejecuta en la terminal simulada y se compara
-    escenario: ./ej-logs.yaml        # el resultado, así valen todas las formas correctas
-    esperado: { salida_igual_a: "tail -n 20 /var/log/messages" }
+    aceptadas: [tail -n 20 /var/log/messages]   # respuestas exactas (sin importar espacios)
+    patrones: []                     # expresiones regulares que también valen
+    simulador:                       # o: ejecutar la respuesta en la terminal simulada
+      shell: bash                    #    (bash o powershell) y comparar el resultado,
+      estado_inicial: { ... }        #    así valen todas las formas correctas
+      comparar_con: tail -n 20 /var/log/messages
+      verificar: []                  # verificaciones extra, como en los ejercicios
+    errores_frecuentes:
+      - { patron: "^cat ", explicacion: "cat muestra el archivo entero, no las últimas líneas." }
     explicacion: ...
   - id: p04
     tipo: ordenar_pasos
@@ -241,24 +260,44 @@ reordenar carpetas no rompe el progreso guardado de nadie.
 
 5.3 Ejercicio de terminal (cualquier .yaml referenciado desde la lección)
 
+  tipo: terminal
   shell: bash                        # bash | powershell | ios
-  estado_inicial:
-    usuario: estudiante
-    directorio: /home/estudiante
-    grupos: { contabilidad: [ana, luis] }
+  titulo: Carpeta compartida para Contabilidad
+  estado_inicial:                    # cada shell tiene su formato (ver src/engines/*/schema.ts)
+    distro: rocky                    # rocky | ubuntu (cambia dnf/apt, firewalld/ufw, rutas)
+    usuarios:
+      - { nombre: estudiante, sudo: true }
+      - { nombre: ana }
+    grupos:
+      - { nombre: contabilidad, miembros: [ana] }
     archivos:
-      /srv/compartido: { tipo: directorio, modo: "0755", dueno: root, grupo: root }
-    servicios: { nginx: { activo: false, habilitado: false } }
+      /srv/notas.txt: { contenido: "...", modo: "0640", dueno: ana, grupo: contabilidad }
+    servicios:
+      nginx: { activo: false, habilitado: false, puertos: [80] }
   pasos:
     - consigna: Lograr que el grupo contabilidad pueda crear archivos en /srv/compartido
                 y que esos archivos hereden el grupo.
       verificar:
         - { archivo: /srv/compartido, grupo: contabilidad, modo: "2770" }
       pistas: [Revisar chgrp y chmod., El bit SGID en directorios hace heredar el grupo.]
-      solucion: [chgrp contabilidad /srv/compartido, chmod 2770 /srv/compartido]
+      solucion: [sudo mkdir /srv/compartido, sudo chgrp contabilidad /srv/compartido, sudo chmod 2770 /srv/compartido]
+      explicacion: Se muestra al completar el paso.
+
+  Verificaciones disponibles:
+    bash        archivo (tipo, modo, dueño, grupo, contenido), usuario, grupo, servicio,
+                paquete, proceso, salida_contiene, salida_regex, comando_usado,
+                directorio_actual, usuario_actual
+    powershell  archivo, servicio, proceso, caracteristica (roles de Windows Server),
+                usuario_ad, grupo_ad, ou, salida_contiene, salida_regex, comando_usado
+    ios         config_contiene, vlan, interfaz (modo, VLAN, apagada, IP), ruta, ping
+                (entre equipos de la topología), guardado, salida_contiene, comando_usado
+
+  El validador ejecuta la solución de referencia de cada paso y comprueba que cumpla sus
+  verificaciones: un ejercicio sin solución posible no llega a publicarse.
 
 5.4 Escenario de troubleshooting (caso-real.yaml o cualquier escenario)
 
+  tipo: troubleshooting
   titulo: El servicio web no responde
   inicio: n1
   nodos:
@@ -268,19 +307,54 @@ reordenar carpetas no rompe el progreso guardado de nadie.
         - { texto: Ver el estado del servicio con systemctl, ir_a: n2, minutos: 2 }
         - { texto: Reiniciar el servidor, ir_a: n9, minutos: 10,
             consecuencia: Se cortó el servicio a toda la empresa sin conocer la causa. }
-    n2: ...
+    n2:
+      situacion: ...
+      evidencia:                     # salidas de comandos y logs, como en un caso real
+        - { titulo: systemctl status nginx, contenido: "..." }
+      opciones: [...]
     fin_ok: { final: exito, resumen: Qué se aprendió y qué se debió revisar primero. }
 
   La plataforma suma el tiempo de cada decisión y al final muestra el camino óptimo.
 
-5.5 Ejercicio de topología, editor de configuración y otros
-  - Topología: equipos, interfaces, cables y configuración inicial; objetivos del tipo
-    "pc1 llega por ping a srv1" o "invitados NO llega a servidores".
-  - Editor de configuración: lenguaje, archivo inicial y reglas que debe cumplir
-    (sintaxis válida, directivas obligatorias, valores esperados).
-  - Tarjetas (tarjetas.yaml): frente, dorso y lección de origen.
-  - Glosario (glosario.yaml): término, alias, definición breve e id de la lección donde se
-    explica a fondo.
+5.5 Componentes que se pueden usar dentro de una lección
+
+  Bloques de texto
+    <Nota>, <Consejo>, <Advertencia>, <Importante>      avisos (titulo="..." opcional)
+    <ErroresComunes> con <ErrorComun titulo="síntoma"> adentro   (obligatorio)
+    <Resumen>                                                    (obligatorio)
+    <Termino id="dns">DNS</Termino>     enlaza al glosario y muestra la definición
+    <Distros> con <Distro nombre="Rocky / AlmaLinux 10"> ... </Distro> adentro
+                                        pestañas para diferencias entre distribuciones
+                                        o versiones
+    Bloques de código con ```bash, ```powershell, etc.: llevan botón para copiar.
+
+  Diagramas (al menos uno por lección)
+    <Diagrama svg={x} alt="..." pie="..." />
+    <DiagramaInteractivo svg={x} datos={puntos} alt="..." />   zonas en % de la imagen
+
+  Interactivos (al menos uno por lección); los datos van en un .yaml importado
+    <Terminal ejercicio={ej} />      o sin ejercicio: <Terminal shell="powershell" />
+    <Subnetting modo="practica" tipos={['red', 'broadcast']} dificultad={2} />
+    <Topologia ejercicio={ej} />     equipos, interfaces, cables, configuración inicial y
+                                     objetivos ("pc1 llega a srv1", "invitados NO llega
+                                     a servidores"); se puede limitar qué se edita
+    <SimuladorPaquetes escenario={ej} />   pasos con los encabezados de cada capa
+    <Ordenar ejercicio={ej} />  <Emparejar ejercicio={ej} />
+    <Troubleshooting escenario={ej} />
+    <EditorConfig ejercicio={ej} />  lenguaje (nginx, compose, ansible, yaml, sshd,
+                                     fstab, texto), archivo inicial, solución y reglas:
+                                     sin_errores, contiene, no_contiene, directiva
+                                     (nginx por contexto, sshd por nombre) y yaml_ruta
+                                     (por ejemplo services.web.ports contiene "8080:80")
+    <Pregunta id="p03" />            una pregunta del banco de la lección, en el medio
+                                     de la explicación
+
+  Tarjetas (tarjetas.yaml): id, frente y dorso.
+  Glosario (glosario.yaml): id, término, alias, definición breve e id de la lección donde
+  se explica a fondo.
+
+  La página /galeria muestra todos estos componentes funcionando, con ejercicios de
+  ejemplo en src/app/pages/gallery/demos/ que sirven de modelo para escribir los nuevos.
 
 5.6 Validación automática del contenido (npm run validar)
   Corre antes de cada compilación y en cada cambio subido al repositorio. Falla si:
@@ -293,6 +367,8 @@ reordenar carpetas no rompe el progreso guardado de nadie.
   - Aparece texto de relleno ("lorem ipsum", "contenido pendiente", TODO).
   - Un ejercicio de terminal no se puede resolver: el validador ejecuta la solución de
     referencia en el simulador y comprueba que cumple las verificaciones.
+  - La solución de un ejercicio de configuración no pasa sus propias reglas, o una
+    topología menciona equipos o interfaces que no existen.
   Además avisa (sin fallar) si la fecha de verificación de una lección tiene más de un
   año.
 
@@ -315,28 +391,46 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
   - Comandos como módulos independientes con sus opciones más usadas y mensajes de error
     fieles a GNU coreutils. Subsistemas simulados: usuarios y grupos, sudo, procesos y
     señales, servicios de systemd con su journal, paquetes, discos y particiones, red.
-  - PowerShell: intérprete propio con pipeline de objetos reales (Where-Object,
-    Select-Object, Sort-Object, Format-Table...) y módulos simulados (ActiveDirectory,
-    Hyper-V, DnsServer, DhcpServer).
+  - PowerShell (formato de Windows PowerShell 5.1): intérprete propio con pipeline de
+    objetos reales (Where-Object, Select-Object, Sort-Object, Group-Object,
+    Measure-Object, Format-Table/List, Export/Import-Csv, ConvertTo-Json...), variables,
+    hashtables, if/foreach/while, funciones y scripts .ps1 con política de ejecución.
+    Módulos: archivos, servicios, procesos, eventos, red (Get-NetIPAddress,
+    Test-NetConnection, Resolve-DnsName), usuarios y grupos locales, roles y
+    características (Install-WindowsFeature) y ActiveDirectory (usuarios, grupos, OU,
+    equipos, filtros -Filter y -LDAPFilter, contraseñas como SecureString). Los módulos
+    Hyper-V, DnsServer y DhcpServer se suman con las lecciones del Nivel 3 que los usan.
   - Consola tipo IOS: modos (usuario, privilegiado, configuración global, interfaz,
-    router), running-config y startup-config, conectada al motor de red.
+    subinterfaz, VLAN, router OSPF y línea), abreviaturas, ayuda con "?", autocompletado
+    con Tab, mensajes de error con el ^ en la posición exacta, eventos del sistema
+    (%LINK, %LINEPROTO, %OSPF), running-config y startup-config (reload pierde lo no
+    guardado), enable secret, contraseñas tipo 7 y claves RSA para SSH. Comandos show:
+    running-config, ip interface brief, vlan brief, interfaces trunk, ip route, ip ospf
+    neighbor, ip protocols, cdp neighbors, arp, mac address-table, version. Conectada al
+    motor de red: el ping desde la consola usa las mismas VLAN y rutas que el diagrama.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el celular aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
 
 6.2 Subnetting
-  - Cálculos de IPv4 con enteros de 32 bits e IPv6 con BigInt; explicación paso a paso en
-    binario de cada resultado.
+  - Calculadora IPv4 (red, broadcast, rango, máscara, wildcard, tipo de dirección, vista
+    binaria y división en subredes) y calculadora IPv6 (forma completa y abreviada según
+    RFC 5952, tipo, prefijo de red, EUI-64).
   - Generador de ejercicios al azar por tipo y dificultad (red, broadcast, rango, cantidad
     de hosts, máscara necesaria, VLSM, sumarización, wildcard, IPv6), modo contrarreloj y
     estadísticas. Se prueba contra una implementación de referencia con miles de casos.
 
 6.3 Motor de red, constructor de topologías y simulador de paquetes
-  - Equipos: PC, servidor, switch de capa 2 y 3, router, firewall y punto de acceso, cada
-    uno con sus interfaces.
-  - Simula: tablas MAC, VLANs de acceso y troncales (VLAN nativa y permitidas), ARP,
-    enrutamiento (rutas conectadas, estáticas y OSPF de área única simplificado), ACL,
-    NAT simple y reglas de firewall.
+  - Equipos: PC, servidor, switch de capa 2 y 3, y router, cada uno con sus interfaces
+    (con los nombres reales: FastEthernet0/1, GigabitEthernet0/0/0...).
+  - Simula: VLAN de acceso y troncales (VLAN nativa, permitidas y negociación DTP),
+    subinterfaces 802.1Q (router-on-a-stick), interfaces VLAN en switches de capa 3, ARP,
+    enrutamiento con rutas conectadas, estáticas y OSPF (adyacencias por área y máscara,
+    DR/BDR, interfaces pasivas, ruta por defecto). Cuando un ping falla, explica en
+    lenguaje claro dónde y por qué (troncal que no permite la VLAN, puerto en la VLAN
+    equivocada, interfaz apagada, falta de ruta, respuesta que no vuelve...).
+  - Se suman con las lecciones que los usan: firewall y punto de acceso como equipos,
+    ACL y NAT (Nivel 2) y reglas de firewall (Nivel 8).
   - Un ping produce una traza salto por salto; el constructor la muestra sobre el diagrama
     y el simulador de paquetes la anima capa por capa (qué encabezados se agregan y
     quitan en cada equipo).
@@ -356,11 +450,14 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 
 6.7 Editor de configuración con validación
   - CodeMirror 6 con resaltado y errores en línea (línea, columna, mensaje y explicación).
-  - Validadores por formato: nginx.conf (analizador propio con tabla de directivas y sus
-    contextos válidos), docker-compose.yml y manifiestos de Kubernetes (esquemas JSON
-    oficiales), playbooks e inventarios de Ansible (estructura y argumentos de los módulos
-    más usados), sshd_config, fstab, sudoers, smb.conf, zonas DNS, unidades de systemd,
-    nftables, WireGuard, cloud-init y HCL básico.
+  - Validadores hechos: nginx (analizador propio con tabla de directivas y contextos,
+    mensajes como los de "nginx -t" pero explicados), docker compose (Compose
+    Specification: opciones, puertos, restart, depends_on, volúmenes y redes declarados),
+    playbooks de Ansible (estructura, módulos más usados y sus argumentos, handlers),
+    sshd_config (opciones y valores, como "sshd -t"), fstab y YAML en general. En la
+    terminal, visudo y crontab -e validan antes de guardar.
+  - Se suman con el nivel que los usa: manifiestos de Kubernetes, inventarios de Ansible,
+    smb.conf, zonas DNS, unidades de systemd, nftables, WireGuard, cloud-init y HCL.
   - Cada ejercicio agrega sus propias reglas (por ejemplo, "debe escuchar en 443 con
     TLS").
 
@@ -491,13 +588,18 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 10. CALIDAD, PRUEBAS Y ACCESIBILIDAD
 ============================================================================================
 
-  - Pruebas unitarias de todos los motores: subnetting, comandos de la terminal, motor
-    de red, validadores, armado de exámenes, diagnóstico, recomendaciones y repetición
-    espaciada.
+  - Pruebas unitarias (Vitest) de los motores: direcciones IP contra una implementación
+    de referencia con miles de casos al azar, entrenador de subnetting, terminal bash,
+    PowerShell, motor de red y consola IOS, validadores de configuración, corrección de
+    los seis tipos de pregunta (incluida la corrección con el simulador), armado de
+    exámenes y diagnóstico, reglas de avance completas (lección, examen, salteo,
+    laboratorio, caso real, insignia) y los ejercicios de la galería.
   - Validación de contenido (sección 5.6) en cada compilación.
-  - Pruebas de punta a punta con Playwright: recorrer una lección, rendir un examen,
-    hacer el diagnóstico, exportar e importar progreso, en tamaño de escritorio y de
-    celular.
+  - Pruebas de punta a punta con Playwright, en escritorio y en celular, sobre el
+    contenido de tests/fixtures/content: recorrer el mapa y una lección, resolver un
+    ejercicio de terminal, responder una pregunta, empezar el mini test, notas que
+    persisten al recargar, buscador, glosario, caso real, examen, modo oscuro y la
+    galería completa.
   - Integración continua con GitHub Actions: lint, tipos, pruebas, validación y
     compilación en cada cambio.
   - Accesibilidad: todo usable con teclado, alternativas de teclado para arrastrar y
@@ -506,7 +608,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 
 
 ============================================================================================
-11. CÓMO SE VA A CORRER LOCALMENTE (DESDE LA ETAPA 2)
+11. CÓMO SE CORRE LOCALMENTE
 ============================================================================================
 
   Requisitos: Node.js 22 LTS o posterior y Git.
@@ -517,14 +619,21 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     npm run dev          -> abrir http://localhost:5173
 
   Otros comandos:
-    npm run build        -> genera la versión estática en dist/
+    npm run dev:demo     -> la plataforma con el contenido de prueba (una lección
+                            completa, laboratorio, caso real, examen y proyecto)
+    npm run build        -> valida el contenido, revisa tipos y genera dist/
     npm run preview      -> sirve dist/ localmente para probarla
     npm run validar      -> valida todo el contenido
     npm test             -> pruebas unitarias
+    npm run test:e2e     -> pruebas de punta a punta (la primera vez:
+                            npx playwright install chromium)
+    npm run lint         -> revisión de estilo y errores comunes
+    npm run typecheck    -> revisión de tipos
 
   La carpeta dist/ se puede publicar en cualquier servidor web (Nginx, Apache) o en
-  servicios de páginas estáticas. Opcionalmente se incluirá un compose.yaml para
-  servirla con Nginx en un contenedor.
+  servicios de páginas estáticas. Como la aplicación usa rutas del lado del navegador,
+  el servidor tiene que devolver index.html para cualquier ruta que no sea un archivo
+  (en Nginx: try_files $uri /index.html;).
 
 
 ============================================================================================
@@ -548,7 +657,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 13. ETAPAS SIGUIENTES
 ============================================================================================
 
-  Etapa 2 - Base de la plataforma
+  Etapa 2 - Base de la plataforma (HECHA)
     - Aplicación, navegación, temas, diseño para celular.
     - Carga y validación de contenido, índice de búsqueda y glosario.
     - Motor de evaluaciones con los seis tipos de pregunta, mini tests, exámenes de
@@ -559,7 +668,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       espaciado, insignias y certificados.
     - Pruebas automáticas, integración continua y LEEME.txt con instrucciones.
 
-  Etapa 3 - Nivel 0 completo como piloto
+  Etapa 3 - Nivel 0 completo como piloto (EN CURSO)
     - 21 lecciones, 4 módulos con laboratorio, examen y caso real, y el proyecto
       integrador. Banco de entre 170 y 300 preguntas y sus tarjetas. Pausa para revisión.
 
@@ -569,14 +678,12 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 
 
 ============================================================================================
-14. DECISIONES A CONFIRMAR
+14. DECISIONES CONFIRMADAS
 ============================================================================================
 
-  1. Nube: el plan cubre AWS y Azure (con equivalencias entre ambos). Alternativa: elegir
-     uno solo y profundizar más en él.
-  2. Distribuciones Linux de referencia: Rocky Linux 10 o AlmaLinux 10 más Ubuntu Server
-     LTS.
-  3. Consola simulada tipo Cisco IOS: no estaba en la lista original de componentes; se
-     propone porque la mayor parte del mercado y la certificación CCNA la usan.
-  4. Código en inglés y contenido en español.
-  5. Stack: React + TypeScript + Vite + MDX/YAML, como se describe arriba.
+  1. Nube: AWS y Azure, con equivalencias entre ambos.
+  2. Distribuciones Linux de referencia: Rocky Linux 10 / AlmaLinux 10 y Ubuntu Server
+     LTS (24.04).
+  3. Consola simulada tipo Cisco IOS incluida.
+  4. Código en inglés y contenido en español neutro.
+  5. Stack: React + TypeScript + Vite + MDX/YAML.

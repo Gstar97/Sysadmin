@@ -120,3 +120,4 @@ export const psCheckSchema = z.union([
 export type PsState = z.infer<typeof psStateSchema>
 export type PsStateInput = z.input<typeof psStateSchema>
 export type PsCheck = z.infer<typeof psCheckSchema>
+export type PsCheckInput = z.input<typeof psCheckSchema>

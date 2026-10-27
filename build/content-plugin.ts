@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { Plugin, ViteDevServer } from 'vite'
-import { scanContent } from './content-scan'
+import { scanContent } from './content-scan.ts'
 
 const INDEX_ID = 'virtual:content'
 const SEARCH_ID = 'virtual:search-docs'

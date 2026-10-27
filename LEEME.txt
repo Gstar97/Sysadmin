@@ -10,13 +10,96 @@ práctica profesional. Todo el material de estudio vive dentro de la plataforma.
 ESTADO ACTUAL
 -------------
 
-Etapa 1 de 4+ terminada: plan de la carrera y arquitectura técnica, a la espera de
-aprobación. Todavía no hay código de la plataforma; empieza en la Etapa 2.
-
-  Etapa 1  Plan completo y arquitectura ................... HECHA (en revisión)
-  Etapa 2  Base de la plataforma e interactivos ........... pendiente
-  Etapa 3  Nivel 0 completo como piloto ................... pendiente
+  Etapa 1  Plan completo y arquitectura ................... HECHA (aprobada)
+  Etapa 2  Base de la plataforma e interactivos ........... HECHA
+  Etapa 3  Nivel 0 completo como piloto ................... en curso
   Etapa 4+ Un nivel completo por etapa .................... pendiente
+
+La plataforma ya funciona completa (navegación, progreso, evaluaciones, diagnóstico,
+salteo de módulos, repaso espaciado, buscador, glosario, notas, insignias y todos los
+interactivos). Las lecciones de la carrera se publican nivel por nivel; mientras tanto,
+el mapa muestra cada módulo con sus lecciones planificadas.
+
+
+CÓMO SE CORRE
+-------------
+
+Requisitos: Node.js 22 LTS o posterior y Git.
+
+  git clone https://github.com/Gstar97/Sysadmin.git
+  cd Sysadmin
+  npm install
+  npm run dev
+
+y abrir http://localhost:5173 en el navegador.
+
+Para probar ya mismo todo el recorrido de un estudiante (lección con interactivos, mini
+test, laboratorio, caso real, examen y proyecto) con un contenido de ejemplo:
+
+  npm run dev:demo
+
+La página /galeria (menú "Galería") muestra todos los componentes interactivos con
+ejercicios de ejemplo.
+
+Otros comandos:
+
+  npm run build        valida el contenido, revisa tipos y genera la versión final en dist/
+  npm run preview      sirve dist/ localmente
+  npm run validar      valida todo el contenido sin compilar
+  npm test             pruebas unitarias
+  npm run test:e2e     pruebas en navegador, en tamaño escritorio y celular
+                       (la primera vez: npx playwright install chromium)
+  npm run lint         revisión del código
+  npm run typecheck    revisión de tipos
+
+dist/ es un sitio estático: se puede publicar en Nginx, Apache o cualquier servicio de
+páginas estáticas. El servidor tiene que devolver index.html para las rutas que no sean
+archivos (en Nginx: try_files $uri /index.html;).
+
+El progreso se guarda en el navegador (IndexedDB). Desde Ajustes se puede exportar a un
+archivo e importarlo en otro navegador o equipo.
+
+
+QUÉ HAY EN LA PLATAFORMA
+------------------------
+
+  - Mapa de la carrera, panel con el próximo paso recomendado, tiempo de estudio,
+    fortalezas y temas débiles.
+  - Lecciones con objetivos, explicación, diagramas, interactivos, errores comunes,
+    resumen, mini test con explicación de cada opción, tarjetas de repaso y notas.
+  - Exámenes de módulo (70%), salteo de módulos (85%) con recomendación de solo las
+    lecciones falladas, y diagnóstico inicial opcional por nivel.
+  - Interactivos: terminal Linux, PowerShell y consola tipo Cisco IOS; calculadora y
+    entrenador de subnetting (IPv4 e IPv6); armador de topologías con simulación de
+    conectividad; simulador de paquetes por capas; diagramas clicables; ordenar y
+    emparejar; casos de troubleshooting "elige tu camino"; editor de configuración con
+    validación (nginx, docker compose, Ansible, sshd_config, fstab, YAML).
+  - Buscador, glosario, tema claro y oscuro, diseño para celular, insignia y certificado
+    por nivel.
+
+
+CÓMO SE AGREGA UNA LECCIÓN
+--------------------------
+
+Agregar contenido no requiere tocar código. Cada lección es una carpeta dentro de su
+módulo, por ejemplo:
+
+  content/niveles/00-fundamentos/01-como-funciona-computadora/01-piezas/
+    leccion.mdx       texto en Markdown con encabezado (id, título, minutos, objetivos,
+                      términos del glosario, fecha de verificación) y componentes
+    preguntas.yaml    banco de 8 a 15 preguntas, cada opción con su explicación
+    tarjetas.yaml     tarjetas de repaso
+    *.yaml, *.svg     ejercicios y diagramas que la lección importa
+
+Los formatos completos, con ejemplos, están en docs/ARQUITECTURA.txt (sección 5). Los
+ejercicios de src/app/pages/gallery/demos/ sirven de modelo. Después de escribir:
+
+  npm run validar
+
+El validador avisa en español qué archivo y qué campo tienen un problema, exige los
+bloques obligatorios de cada lección (diagrama, interactivo, errores comunes, resumen,
+preguntas, tarjetas), detecta texto de relleno y ejecuta en el simulador la solución de
+cada ejercicio de terminal para comprobar que se puede resolver.
 
 
 QUÉ LEER
@@ -26,8 +109,8 @@ QUÉ LEER
                              objetivos, horas estimadas, interactivo principal,
                              laboratorios, exámenes, casos reales y proyectos.
   docs/ARQUITECTURA.txt      Stack técnico, formato del contenido, componentes
-                             interactivos, reglas de exámenes, diagnóstico y salteo, y
-                             almacenamiento del progreso.
+                             interactivos, reglas de exámenes, diagnóstico y salteo,
+                             almacenamiento del progreso y pruebas.
 
 
 CÓMO SE MODIFICA EL PLAN
@@ -43,18 +126,21 @@ Después de editar esos archivos, regenerarlo con:
 
   python3 docs/plan/generar_plan.py
 
-(Requiere Python 3 y PyYAML: pip install pyyaml.) El generador además valida que cada
-lección tenga objetivos, horas e interactivo, que cada módulo tenga laboratorio y caso
-real, que los requisitos entre módulos existan y que no haya texto de relleno. Para solo
-validar y ver los totales:
+(Requiere Python 3 y PyYAML: pip install pyyaml.) Para solo validar y ver los totales:
 
   python3 docs/plan/generar_plan.py --check
 
 
-CÓMO SE VA A CORRER LA PLATAFORMA
----------------------------------
+ESTRUCTURA DEL REPOSITORIO
+--------------------------
 
-A partir de la Etapa 2 (detalle en docs/ARQUITECTURA.txt, sección 11):
-
-  npm install
-  npm run dev        y abrir http://localhost:5173
+  content/        todo el contenido de la carrera (YAML y MDX)
+  docs/           plan de la carrera y arquitectura
+  src/app/        páginas, navegación y componentes de las lecciones
+  src/engines/    simuladores y lógica (terminales, red, subnetting, validadores,
+                  evaluaciones), sin interfaz
+  src/interactive/ componentes interactivos
+  src/progress/   progreso del estudiante y reglas de avance
+  build/          lectura y validación del contenido al compilar
+  scripts/        validador de contenido
+  tests/          pruebas unitarias, pruebas en navegador y contenido de prueba

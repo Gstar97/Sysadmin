@@ -1,6 +1,6 @@
 import './cmdlets'
 import { buildAdStore, ouPathToDn, store } from './ad'
-import { psCheckSchema, psStateSchema, type PsCheck, type PsStateInput } from './schema'
+import { psCheckSchema, psStateSchema, type PsCheckInput, type PsStateInput } from './schema'
 import { asArray, PsSession } from './session'
 import { psObject, toText, type PsObject } from './values'
 
@@ -193,7 +193,7 @@ export interface CheckResult {
 }
 
 /** Comprueba una verificación de ejercicio contra el estado actual de la sesión. */
-export function verifyPs(s: PsSession, raw: PsCheck): CheckResult {
+export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
   const check = psCheckSchema.parse(raw)
   if ('archivo' in check) {
     const node = s.fs.get(s.resolvePath(check.archivo))

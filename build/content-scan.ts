@@ -6,8 +6,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
-import { DIAGRAM_COMPONENTS, INTERACTIVE_COMPONENTS, REQUIRED_BLOCKS } from '../src/content/component-names'
-import { exerciseSchemas, troubleshootingSchema } from '../src/content/exercise-schemas'
+import { DIAGRAM_COMPONENTS, INTERACTIVE_COMPONENTS, REQUIRED_BLOCKS } from '../src/content/component-names.ts'
+import { exerciseSchemas, troubleshootingSchema } from '../src/content/exercise-schemas.ts'
 import {
   careerSchema,
   flashcardDeckSchema,
@@ -19,9 +19,9 @@ import {
   projectFrontmatterSchema,
   questionBankSchema,
   type GlossaryEntry,
-} from '../src/content/schemas'
-import type { ContentIndex, LessonEntry, LevelEntry, ModuleEntry, SearchDoc } from '../src/content/types'
-import { slugify } from '../src/lib/slug'
+} from '../src/content/schemas.ts'
+import type { ContentIndex, LessonEntry, LevelEntry, ModuleEntry, SearchDoc } from '../src/content/types.ts'
+import { slugify } from '../src/lib/slug.ts'
 
 // Mensajes de validación en español (solo del lado de Node, para no sumar peso a la aplicación).
 z.config(z.locales.es())

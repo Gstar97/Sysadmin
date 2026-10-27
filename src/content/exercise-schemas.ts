@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { iosCheckSchema, iosStateSchema, topologyExerciseSchema } from '../engines/network/schema'
-import { psCheckSchema, psStateSchema } from '../engines/powershell/schema'
-import { bashCheckSchema, bashStateSchema } from '../engines/shell/schema'
+import { iosCheckSchema, iosStateSchema, topologyExerciseSchema } from '../engines/network/schema.ts'
+import { psCheckSchema, psStateSchema } from '../engines/powershell/schema.ts'
+import { bashCheckSchema, bashStateSchema } from '../engines/shell/schema.ts'
 
 function stepSchema<T extends z.ZodType>(check: T) {
   return z.strictObject({

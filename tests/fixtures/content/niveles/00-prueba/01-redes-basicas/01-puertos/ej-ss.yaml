@@ -1,0 +1,18 @@
+tipo: terminal
+shell: bash
+titulo: ¿Qué escucha en este servidor?
+estado_inicial:
+  hostname: srv-web
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+  servicios:
+    sshd: { activo: true, habilitado: true, puertos: [22] }
+    nginx: { activo: true, habilitado: true, puertos: [80, 443] }
+pasos:
+  - consigna: Lista los sockets TCP en escucha con sus números de puerto (sin traducir a nombres).
+    verificar:
+      - { comando_usado: "ss\\s+-[a-z]*t[a-z]*" }
+      - { salida_contiene: ":443" }
+    pistas:
+      - "ss muestra los sockets; -t filtra TCP, -l los que escuchan y -n muestra números."
+    solucion: [ss -tln]

@@ -6,8 +6,8 @@ import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 import { defineConfig } from 'vite'
-import { contentPlugin } from './build/content-plugin'
-import { yamlPlugin } from './build/yaml-plugin'
+import { contentPlugin } from './build/content-plugin.ts'
+import { yamlPlugin } from './build/yaml-plugin.ts'
 
 // CONTENT_DIR permite usar otra carpeta de contenido (por ejemplo, la de pruebas).
 const contentDir = path.resolve(process.env.CONTENT_DIR ?? 'content')
