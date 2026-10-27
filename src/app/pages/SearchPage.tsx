@@ -13,16 +13,17 @@ export default function SearchPage() {
   const navigate = useNavigate()
   const q = params.get('q') ?? ''
   const [input, setInput] = useState(q)
-  const [hits, setHits] = useState<Hit[] | null>(null)
+  const [hits, setHits] = useState<Hit[] | null>(() => (q.trim() ? null : []))
+  const [prevQ, setPrevQ] = useState(q)
+  if (q !== prevQ) {
+    setPrevQ(q)
+    setInput(q)
+    setHits(q.trim() ? null : [])
+  }
 
   useEffect(() => {
-    setInput(q)
-    if (!q.trim()) {
-      setHits([])
-      return
-    }
+    if (!q.trim()) return
     let cancelled = false
-    setHits(null)
     void getSearchIndex().then((ms) => {
       if (cancelled) return
       let results = ms.search(q)

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { emptyResponse, gradeQuestion, isAnswered, type GradeResult, type Response } from '@/engines/assessment/grading'
 import { presentationFor, type ExamQuestion } from '@/engines/assessment/sampling'
 import { cn } from '@/lib/cn'
@@ -29,7 +29,8 @@ interface Props {
 }
 
 export function QuizRunner({ questions, mode, seed, onFinish, shouldStop, finishLabel }: Props) {
-  const rng = useMemo(() => createRng(seed ?? Date.now()), [seed])
+  const [fallbackSeed] = useState(() => Date.now())
+  const rng = useMemo(() => createRng(seed ?? fallbackSeed), [seed, fallbackSeed])
   const presentations = useMemo(() => questions.map((q) => presentationFor(rng, q.question)), [questions, rng])
   const [responses, setResponses] = useState<Response[]>(() =>
     questions.map((q, i) => emptyResponse(q.question, presentations[i].stepOrder)),
@@ -38,7 +39,7 @@ export function QuizRunner({ questions, mode, seed, onFinish, shouldStop, finish
   const [index, setIndex] = useState(0)
   const [busy, setBusy] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
-  const started = useRef(Date.now())
+  const [started] = useState(() => Date.now())
 
   const current = questions[index]
   const answeredCount = responses.filter(isAnswered).length
@@ -51,7 +52,7 @@ export function QuizRunner({ questions, mode, seed, onFinish, shouldStop, finish
     onFinish({
       answers,
       score: answers.length ? correct / answers.length : 0,
-      durationSeconds: Math.round((Date.now() - started.current) / 1000),
+      durationSeconds: Math.round((Date.now() - started) / 1000),
     })
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { content } from '@/content'
 import { cn } from '@/lib/cn'
@@ -19,13 +19,14 @@ const THEME_NEXT: Record<ThemePreference, ThemePreference> = { sistema: 'claro',
 const THEME_LABEL: Record<ThemePreference, string> = { sistema: 'Tema del sistema', claro: 'Tema claro', oscuro: 'Tema oscuro' }
 
 export function Layout({ children }: { children: ReactNode }) {
-  const [menuOpen, setMenuOpen] = useState(false)
+  // El menú se abre para la página actual; al navegar a otra se cierra solo.
+  const [menuOpenAt, setMenuOpenAt] = useState<string | null>(null)
   const location = useLocation()
   const { pref, setPref, isDark } = useTheme()
   const due = useProgress((s) => dueCards(s.snap).length)
   const storageWarning = useProgress((s) => s.storageWarning)
 
-  useEffect(() => setMenuOpen(false), [location.pathname])
+  const menuOpen = menuOpenAt === location.pathname
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -65,7 +66,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <button
               type="button"
               className="rounded-lg p-2 text-muted hover:bg-surface-2 lg:hidden"
-              onClick={() => setMenuOpen((o) => !o)}
+              onClick={() => setMenuOpenAt(menuOpen ? null : location.pathname)}
               aria-expanded={menuOpen}
               aria-label="Menú"
             >

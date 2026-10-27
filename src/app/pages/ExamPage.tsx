@@ -12,6 +12,11 @@ import NotFoundPage from './NotFoundPage'
 
 type Phase = { name: 'intro' } | { name: 'loading' } | { name: 'running'; questions: ExamQuestion[]; seed: number } | { name: 'done'; result: QuizResult; passed: boolean }
 
+/** Semilla para mezclar preguntas y opciones de cada intento. */
+function newSeed() {
+  return Date.now()
+}
+
 export default function ExamPage() {
   const { moduleId = '' } = useParams()
   const mod = getModule(moduleId)
@@ -31,7 +36,7 @@ export default function ExamPage() {
       mod.lessons.map(async (l) => ({ lessonId: l.id, weight: l.minutos, bank: await loadQuestionBank(l) })),
     )
     const seen = new Set(snap.attempts.flatMap((a) => a.answers.map((x) => x.questionKey)))
-    const seed = Date.now()
+    const seed = newSeed()
     setPhase({ name: 'running', seed, questions: buildModuleExam(createRng(seed), banks, mod.examen.preguntas, seen) })
   }
 

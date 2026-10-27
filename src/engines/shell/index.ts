@@ -131,26 +131,23 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
     return { ok: stripAnsi(sh.lastOutput).includes(check.salida_contiene), label: `la salida muestra "${check.salida_contiene}"` }
   }
   if ('salida_regex' in check) {
-    let ok = false
-    try {
-      ok = new RegExp(check.salida_regex, 'm').test(stripAnsi(sh.lastOutput))
-    } catch {
-      ok = false
-    }
-    return { ok, label: 'la salida tiene el formato esperado' }
+    const re = safeRegex(check.salida_regex, 'm')
+    return { ok: !!re && re.test(stripAnsi(sh.lastOutput)), label: 'la salida tiene el formato esperado' }
   }
   if ('comando_usado' in check) {
-    let ok = false
-    try {
-      const re = new RegExp(check.comando_usado)
-      ok = sh.history.some((h) => re.test(h))
-    } catch {
-      ok = false
-    }
-    return { ok, label: 'se usó el comando pedido' }
+    const re = safeRegex(check.comando_usado)
+    return { ok: !!re && sh.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
   }
   if ('directorio_actual' in check) {
     return { ok: sh.cwd === check.directorio_actual, label: `estar en ${check.directorio_actual}` }
   }
   return { ok: sh.user === check.usuario_actual, label: `sesión como ${check.usuario_actual}` }
+}
+
+function safeRegex(pattern: string, flags?: string): RegExp | undefined {
+  try {
+    return new RegExp(pattern, flags)
+  } catch {
+    return undefined
+  }
 }

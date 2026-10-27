@@ -410,6 +410,7 @@ register('file', {
         else if (node.data.startsWith('#!/usr/bin/python3') || node.data.startsWith('#!/usr/bin/env python3')) kind = 'Python script, ASCII text executable'
         else if (node.data.startsWith('#!/bin/sh')) kind = 'POSIX shell script, ASCII text executable'
         else if (/^\s*<(!DOCTYPE )?html/i.test(node.data)) kind = 'HTML document, ASCII text'
+        // eslint-disable-next-line no-control-regex
         else if (/[^\x00-\x7f]/.test(node.data)) kind = `Unicode text, UTF-8 text${node.data.includes('\r\n') ? ', with CRLF line terminators' : ''}`
         else kind = `ASCII text${node.data.includes('\r\n') ? ', with CRLF line terminators' : ''}`
         ctx.out(`${f}: ${kind}\n`)
@@ -726,6 +727,7 @@ register('chmod', {
       ctx.args.map((x) => (/^-[rwxXst]+$/.test(x) ? `\u0000${x}` : x)),
       { flags: { recursive: ['R', 'recursive'], verbose: ['v', 'verbose'], changes: ['c', 'changes'] } },
     )
+    // eslint-disable-next-line no-control-regex
     const rest = a.rest.map((x) => x.replace(/^\u0000/, ''))
     if (rest.length < 2) {
       ctx.err(rest.length ? `chmod: missing operand after '${rest[0]}'\n` : 'chmod: missing operand\n')

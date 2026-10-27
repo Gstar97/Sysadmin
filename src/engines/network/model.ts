@@ -349,6 +349,15 @@ export class Network {
     this.links.push({ a, b })
   }
 
+  removeDevice(id: string) {
+    this.devices.delete(id)
+    this.links = this.links.filter((l) => l.a.dev !== id && l.b.dev !== id)
+  }
+
+  removeLink(index: number) {
+    this.links.splice(index, 1)
+  }
+
   // -------------------------------------------------------------------------------------
   // Estado de interfaces
   // -------------------------------------------------------------------------------------
