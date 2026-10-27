@@ -1,0 +1,112 @@
+---
+titulo: Tu cuaderno técnico y la documentación del laboratorio
+horas: 2
+verificacion:
+  - Tengo una carpeta (o una herramienta) para el cuaderno técnico, con un índice.
+  - El inventario del laboratorio tiene cada VM con sistema, versión, IP de cada placa, usuarios (sin contraseñas) e instantáneas.
+  - Dibujé el diagrama de red del laboratorio y lo guardé editable y como imagen.
+  - Escribí un procedimiento y lo seguí sin necesitar otra fuente.
+  - Registré al menos un problema resuelto con error textual, causa, solución y verificación.
+  - Tengo una chuleta de comandos y una copia del cuaderno fuera de mi PC.
+---
+
+import pasos from './lab-cuaderno.yaml'
+import red from './lab-red.svg?raw'
+
+## Objetivo
+
+En la lección 0.4.4 viste que el cuaderno técnico es tu memoria de trabajo. En este laboratorio lo armas de verdad y lo estrenas con algo concreto: documentar el laboratorio del módulo 0.2 para que otra persona (o tú dentro de seis meses) pueda usarlo sin preguntarte nada. Si en los módulos anteriores ya venías anotando cosas, este es el momento de ordenarlas.
+
+## Qué necesitas
+
+- Las tres VMs del módulo 0.2 (`ubuntu01`, `rocky01` y `win2025`) encendidas, o al menos accesibles.
+- Un editor de texto. Se recomienda Visual Studio Code, que muestra la vista previa de Markdown.
+- Unas dos horas.
+
+## Markdown en cinco minutos
+
+Markdown es texto común con algunas marcas que se convierten en formato. Es el formato de la documentación de muchísimos proyectos y lo vas a usar toda la carrera:
+
+````markdown
+# Título principal
+## Subtítulo
+
+Texto normal, con **negrita** y `comandos` dentro de una línea.
+
+- Un elemento de una lista
+- Otro elemento
+
+| VM       | IP              |
+| -------- | --------------- |
+| rocky01  | 192.168.56.102  |
+
+```
+bloque de código: varias líneas de comandos o de salida
+```
+````
+
+## Plantillas
+
+**Inventario del laboratorio** (`laboratorio/inventario.md`):
+
+```markdown
+# Inventario del laboratorio
+
+Actualizado: 2026-10-27
+Hipervisor: VirtualBox 7.2 en Windows 11 (16 GB de RAM)
+Red solo anfitrión: 192.168.56.0/24 (mi PC: 192.168.56.1)
+
+| VM       | Sistema y versión       | CPU | RAM  | Disco | IP solo anfitrión | IP NAT    |
+| -------- | ----------------------- | --- | ---- | ----- | ----------------- | --------- |
+| ubuntu01 | Ubuntu Server 26.04 LTS | 2   | 2 GB | 25 GB | 192.168.56.101    | 10.0.2.15 |
+
+## Usuarios
+- ubuntu01: ana (sudo). Contraseña en el gestor de contraseñas.
+
+## Instantáneas
+- instalación limpia (2026-10-12): recién instalada y actualizada, con SSH.
+```
+
+**Procedimiento** (`procedimientos/...`):
+
+```markdown
+# Restaurar una VM a una instantánea
+
+Objetivo: volver la VM a un estado guardado.
+Antes de empezar: se pierde todo lo hecho después de la instantánea.
+
+1. Apagar la VM.
+2. ...
+
+Verificación: ...
+Fuentes: enlace a la documentación del hipervisor.
+```
+
+**Problema resuelto** (`problemas/AAAA-MM-DD-tema.md`):
+
+```markdown
+# VM sin internet (2026-10-20)
+
+Sistema: rocky01 (Rocky Linux 10.0) en VirtualBox 7.2
+Problema: dnf upgrade falla con "Could not resolve host: mirrors.rockylinux.org"
+Causa: ...
+Solución: ... (comandos exactos)
+Verificación: ...
+Fuentes: ...
+```
+
+## Un diagrama de ejemplo
+
+Así podría verse el diagrama de tu laboratorio. Las IP de solo anfitrión las asigna el DHCP del hipervisor, así que las tuyas pueden ser otras: anota las reales.
+
+<Diagrama svg={red} alt="Diagrama del laboratorio: la PC anfitriona con el hipervisor, una red de solo anfitrión 192.168.56.0/24 con la PC en 192.168.56.1 y las VMs ubuntu01, rocky01 y win2025 en .101, .102 y .103; además, cada VM tiene una placa NAT con 10.0.2.15 que sale a internet a través de la PC" pie="Diagrama del laboratorio. En VirtualBox, cada VM tiene su propia red NAT, por eso todas pueden tener la misma IP 10.0.2.15 en esa placa." />
+
+## Pasos
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Imagina que mañana te enfermas y un compañero tiene que usar tu laboratorio. ¿Qué le faltaría saber que no está en tu cuaderno?
+2. El inventario dice "Actualizado: fecha". ¿Por qué un inventario sin fecha es casi tan malo como no tener inventario?
+3. ¿Qué ventajas tiene guardar el diagrama en un formato editable (`.drawio`) además de la imagen?

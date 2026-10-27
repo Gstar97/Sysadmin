@@ -1,0 +1,93 @@
+tipo: pasos
+titulo: Tu cuaderno técnico y la documentación del laboratorio
+descripcion: >-
+  Vas a dejar listo el lugar donde vas a anotar todo durante la carrera y a documentar el
+  laboratorio del módulo 0.2 como si se lo fueras a entregar a otra persona.
+pasos:
+  - titulo: Elige dónde vas a escribir
+    detalle: >-
+      Lo importante es que puedas buscar rápido, que no dependa de una sola aplicación y que
+      puedas hacer copias. La opción recomendada es una carpeta con archivos de texto en formato
+      Markdown (`.md`): se abren con cualquier editor, se buscan con cualquier buscador y, en el
+      Nivel 6, los vas a poner bajo control de versiones con Git.
+    variantes:
+      - nombre: Carpeta con Markdown (recomendada)
+        detalle: >-
+          Usa un editor de texto con vista previa de Markdown, como Visual Studio Code (gratuito,
+          para Windows, macOS y Linux). Abre la carpeta del cuaderno con *Archivo > Abrir
+          carpeta*.
+      - nombre: Obsidian o Joplin
+        detalle: >-
+          Son aplicaciones de notas que guardan todo como archivos Markdown en una carpeta tuya:
+          tienen buscador, enlaces entre notas y siguen siendo archivos comunes.
+      - nombre: OneNote o Notion
+        detalle: >-
+          Sirven, pero los datos quedan dentro de la aplicación. Si eliges una de estas, exporta
+          tu cuaderno de vez en cuando para no depender de ella.
+    comprobar: Tienes la herramienta instalada y sabes en qué carpeta quedan guardados los archivos.
+  - titulo: Crea la estructura de carpetas
+    detalle: 'Una carpeta para el laboratorio, otra para procedimientos y otra para problemas resueltos:'
+    variantes:
+      - nombre: Windows (PowerShell)
+        detalle: 'Crea las tres carpetas dentro de tu carpeta de usuario:'
+        comandos:
+          - New-Item -ItemType Directory -Path ~\cuaderno\laboratorio, ~\cuaderno\procedimientos, ~\cuaderno\problemas
+      - nombre: Linux o macOS
+        detalle: 'Las llaves crean las tres carpetas de una vez:'
+        comandos:
+          - mkdir -p ~/cuaderno/{laboratorio,procedimientos,problemas}
+    comprobar: Dentro de `cuaderno` hay tres carpetas.
+  - titulo: Escribe el inventario del laboratorio
+    detalle: >-
+      Crea `laboratorio/inventario.md` con la plantilla de inventario de esta página y completa
+      cada dato mirándolo en tus VMs, no de memoria: `hostnamectl` e `ip -br address` en Linux,
+      `hostname` e `ipconfig` en Windows. Las contraseñas no van en el cuaderno: van en un gestor
+      de contraseñas (por ejemplo, Bitwarden o KeePassXC).
+    comprobar: El inventario tiene las tres VMs con sistema, versión, IP de cada placa, usuarios e instantáneas.
+    si_falla: Si alguna VM no tiene IP de solo anfitrión, revisa la segunda placa de red como en el laboratorio del módulo 0.2.
+  - titulo: Dibuja el diagrama de red
+    detalle: >-
+      Dibuja tu laboratorio con la misma información que el diagrama de ejemplo: tu PC, la red de
+      solo anfitrión con su rango, la salida NAT y cada VM con su nombre, sistema e IP. Guarda
+      el archivo editable y una imagen exportada en la carpeta `laboratorio`.
+    variantes:
+      - nombre: draw.io
+        detalle: >-
+          Usa draw.io (también llamado diagrams.net), gratuito, en el navegador o como aplicación
+          de escritorio. Guarda `red.drawio` y exporta `red.png` con *Archivo > Exportar como >
+          PNG*.
+      - nombre: A mano
+        detalle: >-
+          Un diagrama a mano, prolijo y legible, también sirve: sácale una foto y guárdala como
+          `red.jpg`. Cuando cambie el laboratorio, vas a tener que redibujarlo, así que conviene
+          pasarlo a draw.io más adelante.
+    comprobar: Otra persona puede entender con el diagrama qué VMs hay, en qué redes están y cómo llegar a cada una.
+  - titulo: Escribe tu primer procedimiento
+    detalle: >-
+      Crea `procedimientos/restaurar-instantanea.md` con la plantilla de procedimiento: cómo
+      volver una VM a la instantánea `instalación limpia` en tu hipervisor, paso por paso y con lo
+      que hay que verificar al final. Después, síguelo tú mismo leyendo solo el documento.
+    comprobar: Seguiste tu procedimiento sin abrir otra fuente y funcionó.
+    si_falla: Si tuviste que buscar algo que no estaba escrito, agrégalo al procedimiento. Así se mejoran.
+  - titulo: Registra un problema resuelto
+    detalle: >-
+      Crea un archivo en `problemas/` con la fecha en el nombre (por ejemplo,
+      `2026-10-20-vm-sin-internet.md`) y la plantilla de problema resuelto. Usa un problema real
+      que te haya pasado durante el nivel. Si no tuviste ninguno, usa el caso real del módulo 0.2
+      (la VM sin internet).
+    comprobar: La nota tiene el error textual, la causa, la solución con comandos exactos y cómo se verificó.
+  - titulo: Arma tu chuleta de comandos
+    detalle: |-
+      Crea `comandos.md` con los comandos que usaste en el nivel, agrupados por tema, y una línea que diga para qué sirve cada uno. Como mínimo:
+      - Hardware y arranque: `lscpu`, `free -h`, `lsblk`, `df -hT`.
+      - Procesos y memoria: `ps aux`, `top`, `kill`.
+      - Archivos y usuarios: `ls -l`, `id`, `sudo`.
+      - Red: `ip -br address`, `ip route`, `dig`, `ping`, `curl -I`.
+      - Integridad: `sha256sum` y `Get-FileHash`.
+    comprobar: Encuentras cualquiera de esos comandos en menos de diez segundos con el buscador de tu editor.
+  - titulo: Crea el índice y haz una copia
+    detalle: >-
+      Crea `indice.md` en la raíz del cuaderno con un enlace o una línea por cada archivo y qué
+      contiene. Después copia toda la carpeta a otro lugar (un disco externo, un pendrive o tu
+      almacenamiento en la nube). El cuaderno también necesita backup.
+    comprobar: Tienes una copia del cuaderno fuera de tu PC y el índice lista todos los archivos.

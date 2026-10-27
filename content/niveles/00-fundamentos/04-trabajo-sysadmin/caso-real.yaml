@@ -1,0 +1,124 @@
+tipo: troubleshooting
+titulo: Piden acceso al correo de una persona despedida
+descripcion: >-
+  Un pedido muy común que mezcla una necesidad legítima del negocio con la privacidad de una
+  persona. No hay reloj: lo que importa es cada decisión. Los detalles dependen de la ley de cada
+  país y de la política de cada empresa, pero los principios son los mismos en todas partes.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:05. Laura Gómez, gerente de Ventas, te escribe por chat: "Ayer desvinculamos a
+      Martín Pérez. Necesito que me des acceso a su correo ya mismo: tiene conversaciones con
+      clientes que no podemos perder."
+    evidencia:
+      - titulo: Política de uso de cuentas (extracto)
+        contenido: |
+          6.3 El acceso al buzón de una persona desvinculada requiere la
+              autorización escrita de Recursos Humanos y del área Legal.
+              Se limita a lo necesario para la continuidad del negocio,
+              tiene fecha de finalización y se registra en un ticket.
+          6.4 Las cuentas de personas desvinculadas se bloquean el día
+              de la baja. Los buzones se conservan según la política
+              de retención; no se eliminan sin aprobación de Legal.
+    opciones:
+      - { texto: "Pedirle que abra un ticket y explicarle que, según la política, hace falta la autorización escrita de RRHH y Legal", ir_a: n2, minutos: 0 }
+      - texto: Darle acceso completo al buzón ahora, porque es la jefa de Martín y es urgente
+        ir_a: n1
+        minutos: 0
+        consecuencia: >-
+          Un buzón tiene mucho más que correos con clientes: puede haber temas de salud, asuntos
+          familiares o conversaciones con RRHH y abogados. Ser la jefa no la convierte en dueña de
+          esos datos. Sin la autorización que pide la política, quien queda expuesto eres tú, y en
+          muchos países es una infracción a la ley de protección de datos.
+      - texto: Responderle que eso no se puede hacer y no hacer nada más
+        ir_a: n1
+        minutos: 0
+        consecuencia: >-
+          La necesidad es real: hay clientes esperando respuesta. Tu trabajo no es bloquear el
+          pedido sino encauzarlo por el procedimiento correcto y explicar qué hace falta.
+  n2:
+    situacion: >-
+      Laura abre el ticket y RRHH dice que la autorización llega en el día. Mientras tanto, ves
+      que la cuenta de Martín sigue activa: anoche hubo un inicio de sesión desde su celular.
+    opciones:
+      - { texto: "Bloquear el inicio de sesión de la cuenta, cerrar sus sesiones abiertas y registrarlo en el ticket, sin tocar el contenido del buzón", ir_a: n3, minutos: 0 }
+      - texto: Eliminar la cuenta para que no pueda volver a entrar
+        ir_a: n2
+        minutos: 0
+        consecuencia: >-
+          En la mayoría de los sistemas de correo, eliminar la cuenta elimina (o empieza a
+          eliminar) su buzón: perderías justamente los correos que se necesitan, y quizás existe
+          la obligación de conservarlos. Se bloquea, no se borra.
+      - texto: Cambiarle la contraseña y entrar a revisar el buzón para adelantar trabajo
+        ir_a: n2
+        minutos: 0
+        consecuencia: >-
+          Todavía no hay autorización para que nadie lea ese buzón, y tú tampoco la tienes: ser
+          administrador te da la posibilidad técnica, no el permiso. Además, entrar con la cuenta
+          de otra persona hace que en los registros parezca que fue ella.
+  n3:
+    situacion: >-
+      Llega la autorización por correo, firmada por RRHH y Legal: "Se autoriza a Laura Gómez a
+      acceder en modo de solo lectura al buzón de Martín Pérez durante 30 días, para dar
+      continuidad a la atención de clientes." ¿Cómo le das el acceso?
+    opciones:
+      - { texto: "Darle a Laura un permiso delegado de solo lectura sobre el buzón (con su propia cuenta), anotar la fecha de fin y adjuntar la autorización al ticket", ir_a: n4, minutos: 0 }
+      - texto: Pasarle a Laura la contraseña de la cuenta de Martín
+        ir_a: n3
+        minutos: 0
+        consecuencia: >-
+          Con la contraseña, Laura podría enviar correos haciéndose pasar por Martín, y los
+          registros mostrarían a Martín como autor. Las credenciales nunca se comparten: se otorga
+          un permiso delegado que queda a nombre de quien lo usa.
+      - texto: Reenviar todo el buzón a la cuenta personal de Gmail de Laura, que le resulta más cómoda
+        ir_a: n3
+        minutos: 0
+        consecuencia: >-
+          Acabas de sacar correo de la empresa, con datos de clientes y datos personales de
+          Martín, a una cuenta que la empresa no controla. Es una fuga de datos.
+  n4:
+    situacion: >-
+      Una semana después, Laura te pide por chat: "Ya que estás, ¿puedes hacer que todo lo nuevo
+      que le llegue a Martín me llegue directo a mí?"
+    opciones:
+      - { texto: "Explicarle que eso amplía lo autorizado y pedir que se apruebe en el mismo ticket; mientras tanto, proponer una respuesta automática con el contacto nuevo", ir_a: n5, minutos: 0 }
+      - texto: Activar el reenvío enseguida, porque tiene sentido para el negocio
+        ir_a: n4
+        minutos: 0
+        consecuencia: >-
+          Puede tener sentido, pero la autorización era de solo lectura por 30 días. El reenvío
+          también traería correos personales que le sigan llegando a Martín. Cualquier ampliación
+          se pide por el mismo canal y queda registrada.
+      - texto: Rechazarlo sin más explicación
+        ir_a: n4
+        minutos: 0
+        consecuencia: >-
+          El pedido puede ser válido: lo que falta es la aprobación. Explicar el camino evita que
+          Laura busque atajos y mantiene la confianza en el área de IT.
+  n5:
+    situacion: Pasaron los 30 días autorizados.
+    opciones:
+      - { texto: "Quitar el permiso de Laura en la fecha acordada, registrar el cierre en el ticket y aplicar al buzón la política de retención", ir_a: fin_ok, minutos: 0 }
+      - texto: Dejar el permiso activo, porque nadie se quejó
+        ir_a: n5
+        minutos: 0
+        consecuencia: >-
+          Los permisos que nadie quita se acumulan, y son una de las causas más comunes de
+          accesos indebidos que aparecen en las auditorías. La autorización tenía fecha de fin.
+      - texto: Eliminar el buzón para liberar la licencia
+        ir_a: n5
+        minutos: 0
+        consecuencia: >-
+          La política dice que los buzones se conservan según la retención y que no se eliminan
+          sin aprobación de Legal. Un juicio laboral, por ejemplo, puede necesitar esos correos
+          dentro de un año.
+  fin_ok:
+    final: exito
+    resumen: >-
+      Atendiste una necesidad legítima del negocio sin pasar por encima de la privacidad de una
+      persona: autorización escrita de quien corresponde, cuenta bloqueada pero no borrada,
+      permiso delegado y limitado en lugar de compartir la contraseña, ampliaciones consultadas,
+      cierre en la fecha acordada y todo registrado en el ticket. Si dentro de un año alguien
+      pregunta quién accedió a ese buzón, por qué y con qué autorización, la respuesta está
+      escrita.
