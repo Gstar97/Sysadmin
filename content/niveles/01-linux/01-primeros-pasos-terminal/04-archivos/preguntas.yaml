@@ -1,0 +1,86 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué hace `mv informe.txt informe-final.txt` si informe-final.txt no existe?
+  opciones:
+    - { texto: "Renombra el archivo", correcta: true, explicacion: "Si el destino no es una carpeta existente, se usa como nombre nuevo." }
+    - { texto: "Crea una copia con el nombre nuevo", explicacion: "Eso hace cp; mv no duplica." }
+    - { texto: "Da error porque el destino no existe", explicacion: "mv crea el nombre nuevo." }
+    - { texto: "Crea una carpeta llamada informe-final.txt", explicacion: "mv no crea carpetas." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Quieres copiar la carpeta /etc/nginx completa como respaldo. ¿Qué comando usas?
+  opciones:
+    - { texto: "sudo cp -a /etc/nginx /root/nginx-respaldo", correcta: true, explicacion: "-a copia todo el contenido y conserva dueños, permisos y fechas." }
+    - { texto: "sudo cp /etc/nginx /root/nginx-respaldo", explicacion: "Sin -r o -a, cp omite las carpetas." }
+    - { texto: "sudo mv /etc/nginx /root/nginx-respaldo", explicacion: "Eso la mueve: nginx se quedaría sin configuración." }
+    - { texto: "sudo ln -s /etc/nginx /root/nginx-respaldo", explicacion: "Un enlace no es una copia: si cambias el original, el enlace muestra lo cambiado." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Qué archivos selecciona `foto?.jpg`?
+  opciones:
+    - { texto: "foto1.jpg y fotoA.jpg, pero no foto10.jpg", correcta: true, explicacion: "? reemplaza exactamente un carácter." }
+    - { texto: "Todos los .jpg que empiezan con foto", explicacion: "Eso sería foto*.jpg." }
+    - { texto: "Solo un archivo llamado foto?.jpg", explicacion: "Sin comillas, el shell lo trata como comodín." }
+    - { texto: "foto.jpg", explicacion: "? exige un carácter; no coincide con ninguno." }
+- id: p04
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para borrar de forma segura todos los .tmp de una carpeta.
+  pasos:
+    - Comprobar en qué carpeta estás con pwd
+    - Ver qué archivos coinciden con ls *.tmp
+    - Revisar que la lista sea la esperada
+    - Borrar con rm *.tmp
+  explicacion: Probar el patrón con ls antes de usar rm es el hábito que evita borrar lo que no correspondía.
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué pasa si borras un archivo con rm por error?
+  opciones:
+    - { texto: "Se pierde: rm no usa papelera, solo queda recuperarlo de un backup", correcta: true, explicacion: "Por eso conviene revisar antes y tener copias." }
+    - { texto: "Va a la papelera del usuario", explicacion: "En la terminal no hay papelera." }
+    - { texto: "Se puede recuperar con undo", explicacion: "No existe ese comando." }
+    - { texto: "Queda en /tmp unos días", explicacion: "rm no lo mueve a ningún lado." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: ¿Qué es "actual" y qué pasa si se borra la carpeta app-2.4?
+  salida: |
+    $ ls -l /opt/app
+    lrwxrwxrwx. 1 root root   15 Oct 20 10:02 actual -> /opt/app/app-2.4
+    drwxr-xr-x. 5 root root 4.0K Oct 20 10:01 app-2.4
+    drwxr-xr-x. 5 root root 4.0K Sep 02 15:30 app-2.3
+  opciones:
+    - { texto: "Es un enlace simbólico a app-2.4; si se borra app-2.4, queda roto", correcta: true, explicacion: "Empieza con l y muestra a dónde apunta. Así se cambia de versión moviendo solo el enlace." }
+    - { texto: "Es una copia de app-2.4; seguiría funcionando", explicacion: "Una copia sería un directorio (d), no un enlace (l)." }
+    - { texto: "Es un enlace duro a app-2.4", explicacion: "Los enlaces duros no pueden apuntar a carpetas y no muestran flecha." }
+    - { texto: "Es un archivo vacío", explicacion: "La l inicial indica un enlace." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Creaste un enlace duro b.txt de a.txt y después borraste a.txt. ¿Qué pasa con b.txt?
+  opciones:
+    - { texto: "Sigue funcionando con todo el contenido", correcta: true, explicacion: "Los dos nombres apuntaban al mismo inodo; el archivo existe mientras quede un nombre." }
+    - { texto: "Queda roto", explicacion: "Eso le pasa a un enlace simbólico." }
+    - { texto: "Se borra también", explicacion: "Solo se borró un nombre." }
+    - { texto: "Queda vacío", explicacion: "El contenido sigue intacto." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe el comando que crea en tu carpeta actual un enlace simbólico llamado logs que apunte a /var/log/nginx.
+  aceptadas: [ln -s /var/log/nginx logs, ln -sv /var/log/nginx logs, ln -s /var/log/nginx/ logs]
+  explicacion: "Primero el destino al que apunta, después el nombre del enlace: ln -s /var/log/nginx logs."
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Antes de editar /etc/ssh/sshd_config, ¿qué conviene hacer?
+  opciones:
+    - { texto: "sudo cp -a /etc/ssh/sshd_config /etc/ssh/sshd_config.bak", correcta: true, explicacion: "Una copia te permite volver atrás en segundos si el cambio sale mal." }
+    - { texto: "sudo mv /etc/ssh/sshd_config /etc/ssh/sshd_config.bak", explicacion: "Lo movería: SSH quedaría sin configuración." }
+    - { texto: "sudo ln -s /etc/ssh/sshd_config sshd.bak", explicacion: "El enlace muestra el mismo archivo: no sirve como respaldo." }
+    - { texto: "Nada, siempre se puede deshacer", explicacion: "No hay deshacer en la terminal." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: "¿Qué crea `mkdir -p datos/{2025,2026}/{ventas,compras}`?"
+  opciones:
+    - { texto: "Cuatro carpetas: datos/2025/ventas, datos/2025/compras, datos/2026/ventas y datos/2026/compras (y las intermedias)", correcta: true, explicacion: "Cada par de llaves multiplica las combinaciones, y -p crea datos, datos/2025 y datos/2026." }
+    - { texto: "Una carpeta con llaves en el nombre", explicacion: "Sin comillas, el shell expande las llaves." }
+    - { texto: "Dos carpetas", explicacion: "Son 2 × 2 combinaciones." }
+    - { texto: "Da error porque datos no existe", explicacion: "-p crea las carpetas intermedias." }

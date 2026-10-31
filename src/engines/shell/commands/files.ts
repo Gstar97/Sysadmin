@@ -171,10 +171,51 @@ register('rmdir', {
   },
 })
 
+/**
+ * Pregunta de confirmación (rm -i, cp -i, mv -i). Si no hay respuesta en la entrada, la terminal
+ * simulada responde "y" y lo aclara, porque no puede quedarse esperando.
+ */
+function askYes(ctx: CommandContext, question: string, noteShown: { v: boolean }): boolean {
+  ctx.err(question)
+  let answer = ctx.stdin.readLine()
+  if (answer === null) {
+    answer = 'y'
+    ctx.err(noteShown.v ? 'y\n' : 'y\n[simulador] En un servidor real, el comando espera tu respuesta: y para seguir, n (o Enter) para cancelar.\n')
+    noteShown.v = true
+  } else ctx.err('\n')
+  return /^y(es)?$/i.test(answer.trim())
+}
+
+/** Ruta final cuando el destino es una carpeta existente (cp y mv). */
+function finalTarget(ctx: CommandContext, src: string, dest: string): string {
+  const abs = ctx.sh.resolve(dest)
+  const isDir = ctx.sys.vfs.exists(abs, ctx.sh.cred) && ctx.sys.vfs.stat(abs, ctx.sh.cred).type === 'dir'
+  return isDir ? `${dest.replace(/\/+$/, '')}/${src.replace(/\/+$/, '').split('/').pop()}` : dest
+}
+
+/** Fechas de touch -d: "2026-01-15", "2026-01-15 10:30", "3 days ago", "yesterday". */
+function parseTouchDate(text: string): number | undefined {
+  const rel = /^(\d+)\s+(minute|hour|day|week)s?\s+ago$/i.exec(text.trim())
+  if (rel) return Date.now() - Number(rel[1]) * { minute: 60e3, hour: 3600e3, day: 86400e3, week: 604800e3 }[rel[2].toLowerCase() as 'minute']
+  if (/^yesterday$/i.test(text.trim())) return Date.now() - 86400e3
+  const t = Date.parse(text.trim().replace(' ', 'T'))
+  return Number.isNaN(t) ? undefined : t
+}
+
 register('touch', {
   usage: 'touch [OPTION]... FILE...',
+  summary: '  -d, --date=STRING  use STRING instead of current time',
   run(ctx) {
-    const files = ctx.args.filter((x) => !x.startsWith('-'))
+    const a = parseArgs(ctx.args, { flags: {}, values: { date: ['d', 'date'] } })
+    let when: number | undefined
+    if (a.values.has('date')) {
+      when = parseTouchDate(a.values.get('date')!)
+      if (when === undefined) {
+        ctx.err(`touch: invalid date format '${a.values.get('date')}'\n`)
+        return 1
+      }
+    }
+    const files = a.rest
     if (!files.length) {
       ctx.err("touch: missing file operand\nTry 'touch --help' for more information.\n")
       return 1
@@ -186,6 +227,7 @@ register('touch', {
         const existed = ctx.sys.vfs.exists(abs, ctx.sh.cred)
         ctx.sys.vfs.touch(abs, ctx.sh.cred)
         if (!existed) ctx.sys.vfs.stat(abs, ctx.sh.cred).mode = 0o666 & ~ctx.sh.umask
+        if (when !== undefined) ctx.sys.vfs.stat(abs, ctx.sh.cred).mtime = when
       } catch (e) {
         code = fsErr(ctx, e, 'cannot touch', f)
       }
@@ -212,17 +254,20 @@ register('cp', {
       return 1
     }
     let code = 0
+    const note = { v: false }
     for (const s of sources) {
       const abs = ctx.sh.resolve(s)
       try {
         const node = vfs.stat(abs, ctx.sh.cred)
+        const target = finalTarget(ctx, s, dest)
+        if (a.flags.has('interactive') && node.type !== 'dir' && vfs.exists(ctx.sh.resolve(target), ctx.sh.cred) && !askYes(ctx, `cp: overwrite '${target}'? `, note)) continue
         if (node.type === 'dir' && !a.flags.has('recursive') && !a.flags.has('archive')) {
           ctx.err(`cp: -r not specified; omitting directory '${s}'\n`)
           code = 1
           continue
         }
         vfs.copy(abs, destAbs, ctx.sh.cred, { recursive: a.flags.has('recursive') || a.flags.has('archive'), preserve: a.flags.has('archive') || a.flags.has('preserve') })
-        if (a.flags.has('verbose')) ctx.out(`'${s}' -> '${dest}'\n`)
+        if (a.flags.has('verbose')) ctx.out(`'${s}' -> '${target}'\n`)
       } catch (e) {
         code = fsErr(ctx, e, 'cannot stat', s)
       }
@@ -240,11 +285,20 @@ register('mv', {
       return 1
     }
     const dest = a.rest[a.rest.length - 1]
+    const destAbs = ctx.sh.resolve(dest)
+    const destIsDir = ctx.sys.vfs.exists(destAbs, ctx.sh.cred) && ctx.sys.vfs.stat(destAbs, ctx.sh.cred).type === 'dir'
+    if (a.rest.length > 2 && !destIsDir) {
+      ctx.err(`mv: target '${dest}': Not a directory\n`)
+      return 1
+    }
     let code = 0
+    const note = { v: false }
     for (const s of a.rest.slice(0, -1)) {
       try {
-        ctx.sys.vfs.rename(ctx.sh.resolve(s), ctx.sh.resolve(dest), ctx.sh.cred)
-        if (a.flags.has('verbose')) ctx.out(`renamed '${s}' -> '${dest}'\n`)
+        const target = finalTarget(ctx, s, dest)
+        if (a.flags.has('interactive') && ctx.sys.vfs.exists(ctx.sh.resolve(target), ctx.sh.cred) && !askYes(ctx, `mv: overwrite '${target}'? `, note)) continue
+        ctx.sys.vfs.rename(ctx.sh.resolve(s), destAbs, ctx.sh.cred)
+        if (a.flags.has('verbose')) ctx.out(`renamed '${s}' -> '${target}'\n`)
       } catch (e) {
         if (e instanceof FsError && e.code === 'ENOENT') {
           ctx.err(`mv: cannot stat '${s}': No such file or directory\n`)
@@ -267,6 +321,7 @@ register('rm', {
       return 1
     }
     let code = 0
+    const note = { v: false }
     for (const f of a.rest) {
       const abs = ctx.sh.resolve(f)
       if (abs === '/' ) {
@@ -278,14 +333,7 @@ register('rm', {
         const node = ctx.sys.vfs.stat(abs, ctx.sh.cred, false)
         if (a.flags.has('interactive') && !a.flags.has('force')) {
           const kind = node.type === 'dir' ? 'directory' : node.type === 'symlink' ? 'symbolic link' : node.data.length === 0 ? 'regular empty file' : 'regular file'
-          ctx.err(`rm: remove ${kind} '${f}'? `)
-          let answer = ctx.stdin.readLine()
-          if (answer === null) {
-            // La terminal simulada no puede quedarse esperando: responde por el estudiante.
-            answer = 'y'
-            ctx.err('y\n[simulador] En un servidor real, rm -i espera tu respuesta: y para borrar, n (o Enter) para conservar.\n')
-          } else ctx.err('\n')
-          if (!/^y(es)?$/i.test(answer.trim())) continue
+          if (!askYes(ctx, `rm: remove ${kind} '${f}'? `, note)) continue
         }
         if (node.type === 'dir') {
           if (a.flags.has('recursive')) ctx.sys.vfs.removeTree(abs, ctx.sh.cred)

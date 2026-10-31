@@ -1,0 +1,86 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Estás en /etc/nginx y escribes `cd -`. ¿Adónde vas?
+  opciones:
+    - { texto: "A la carpeta donde estabas antes de entrar a /etc/nginx", correcta: true, explicacion: "cd - vuelve a la carpeta anterior." }
+    - { texto: "A /etc", explicacion: "Eso sería cd .." }
+    - { texto: "A tu carpeta personal", explicacion: "Eso es cd o cd ~." }
+    - { texto: "A la raíz /", explicacion: "Eso es cd /." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Estás en /home/ana. ¿A qué carpeta lleva `cd ../..`?
+  opciones:
+    - { texto: "A /", correcta: true, explicacion: ".. es /home y ../.. es /." }
+    - { texto: "A /home", explicacion: "Eso sería un solo nivel: cd .." }
+    - { texto: "A /home/ana/..", explicacion: "El shell resuelve los .. hasta llegar a una carpeta real." }
+    - { texto: "Da error, no se puede subir dos niveles", explicacion: "Se puede encadenar .. todas las veces que haga falta." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: En una carpeta de logs quieres ver los archivos con el más reciente al final, justo arriba del prompt. ¿Qué usas?
+  opciones:
+    - { texto: "ls -ltr", correcta: true, explicacion: "-t ordena por fecha y -r invierte el orden: lo más nuevo queda abajo." }
+    - { texto: "ls -lt", explicacion: "Deja lo más nuevo arriba, que en una carpeta grande queda fuera de la pantalla." }
+    - { texto: "ls -lS", explicacion: "Ordena por tamaño, no por fecha." }
+    - { texto: "ls -la", explicacion: "Muestra los ocultos, pero en orden alfabético." }
+- id: p04
+  tipo: interpretar_salida
+  enunciado: ¿Qué es "certs" en esta salida?
+  salida: |
+    $ ls -l /etc/pki/tls
+    lrwxrwxrwx. 1 root root   49 Oct 28 11:20 cert.pem -> /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+    drwxr-xr-x. 2 root root 4.0K Oct 28 11:20 certs
+    -rw-r--r--. 1 root root  12K Oct 28 11:20 openssl.cnf
+  opciones:
+    - { texto: "Un directorio", correcta: true, explicacion: "Su línea empieza con d." }
+    - { texto: "Un archivo común", explicacion: "Los archivos comunes empiezan con -, como openssl.cnf." }
+    - { texto: "Un enlace", explicacion: "El enlace es cert.pem: empieza con l y muestra la flecha." }
+    - { texto: "Un archivo oculto", explicacion: "Los ocultos empiezan con punto en el nombre." }
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: El servidor web no arranca y quieres ver qué errores registró. ¿Dónde buscas primero?
+  opciones:
+    - { texto: "En /var/log", correcta: true, explicacion: "Ahí están los registros del sistema y de los servicios, por ejemplo /var/log/nginx." }
+    - { texto: "En /usr/bin", explicacion: "Ahí están los programas, no sus registros." }
+    - { texto: "En /tmp", explicacion: "Es para archivos temporales." }
+    - { texto: "En /boot", explicacion: "Tiene los archivos de arranque." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Quieres ver los permisos de la carpeta /srv/datos, no la lista de lo que tiene adentro. ¿Qué comando usas?
+  opciones:
+    - { texto: "ls -ld /srv/datos", correcta: true, explicacion: "-d muestra la carpeta misma." }
+    - { texto: "ls -l /srv/datos", explicacion: "Muestra el contenido de la carpeta." }
+    - { texto: "ls -la /srv/datos", explicacion: "Muestra el contenido, incluidos los ocultos; la carpeta aparece como . pero mezclada con todo lo demás." }
+    - { texto: "cd /srv/datos", explicacion: "Entra a la carpeta, pero no muestra sus permisos." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Por qué `ls` no muestra el archivo .bashrc de tu carpeta personal?
+  opciones:
+    - { texto: "Porque su nombre empieza con punto y es un archivo oculto; se ve con ls -a", correcta: true, explicacion: "Es una convención para no llenar la vista con archivos de configuración." }
+    - { texto: "Porque no tienes permiso para verlo", explicacion: "Es tuyo; solo está oculto." }
+    - { texto: "Porque no existe en Rocky", explicacion: "Existe en las dos distribuciones." }
+    - { texto: "Porque está en /etc", explicacion: "~/.bashrc está en tu carpeta personal." }
+- id: p08
+  tipo: respuesta_multiple
+  enunciado: ¿Qué carpetas contienen datos que conviene incluir en los backups de un servidor?
+  opciones:
+    - { texto: "/etc (la configuración)", correcta: true, explicacion: "Sin ella habría que configurar todo de nuevo." }
+    - { texto: "/var/lib (los datos de los servicios, como las bases de datos)", correcta: true, explicacion: "Es donde los servicios guardan su información." }
+    - { texto: "/home (los archivos de los usuarios)", correcta: true, explicacion: "Son datos que no se pueden regenerar." }
+    - { texto: "/var/cache", explicacion: "Son copias que el sistema regenera solo." }
+    - { texto: "/run", explicacion: "Vive en memoria y se borra en cada reinicio." }
+- id: p09
+  tipo: completar_comando
+  enunciado: Escribe el comando que lista /var/log en formato largo con tamaños legibles (K, M, G).
+  aceptadas: [ls -lh /var/log, ls -hl /var/log, ls -l -h /var/log, ls -h -l /var/log]
+  explicacion: "-l da el formato largo y -h convierte los tamaños a unidades legibles."
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Instalaste a mano un script propio para que lo use todo el equipo. ¿Dónde conviene guardarlo?
+  opciones:
+    - { texto: "/usr/local/bin", correcta: true, explicacion: "Es la carpeta para lo que se instala sin el gestor de paquetes, y está en el PATH." }
+    - { texto: "/usr/bin", explicacion: "Es del gestor de paquetes; una actualización podría pisar o mezclar tu archivo." }
+    - { texto: "/tmp", explicacion: "Se borra periódicamente." }
+    - { texto: "/root", explicacion: "Solo root puede entrar." }

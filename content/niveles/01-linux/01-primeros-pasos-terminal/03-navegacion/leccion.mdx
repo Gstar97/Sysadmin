@@ -1,0 +1,124 @@
+---
+id: n1-m1-l3
+titulo: Navegación y jerarquía de directorios
+minutos: 120
+objetivos:
+  - Moverse por el sistema con pwd, cd y ls, con sus opciones más usadas.
+  - Explicar para qué sirve cada directorio del estándar FHS y sus subcarpetas más importantes.
+  - Encontrar dónde está la configuración, los logs y los datos de un servicio.
+glosario: [fhs, ruta-absoluta, archivo-oculto]
+verificado: 2026-10
+---
+
+import carpetas from './carpetas.svg?raw'
+import carpetasDatos from './carpetas.yaml'
+import ejNavegar from './ej-navegar.yaml'
+
+En el Nivel 0 recorriste el árbol de directorios desde arriba. Ahora vas a moverte por él con soltura, que es lo que más hace un sysadmin en un día de trabajo: entrar a la carpeta de configuración de un servicio, ir a sus logs, volver, comparar. Cuanto más rápido te muevas, más rápido vas a resolver problemas.
+
+<AntesDeEmpezar>
+- En Linux todo cuelga de una sola raíz, `/`. No hay letras de unidad como `C:`.
+- Una **ruta absoluta** empieza en `/` (`/var/log`); una **relativa** parte de donde estás (`log/nginx`).
+- `.` es la carpeta actual, `..` la de arriba y `~` tu carpeta personal.
+- `pwd` dice dónde estás, `ls` lista y `cd` cambia de carpeta (lección 0.2.4).
+</AntesDeEmpezar>
+
+## Moverse rápido con cd
+
+Ya conoces `cd carpeta` y `cd ..`. Estos atajos completan el repertorio:
+
+| Comando | Adónde te lleva |
+| --- | --- |
+| `cd` (solo) o `cd ~` | A tu carpeta personal, estés donde estés |
+| `cd -` | A la carpeta donde estabas antes |
+| `cd ../..` | Dos niveles más arriba |
+| `cd ~ana` | A la carpeta personal del usuario ana |
+| `cd /` | A la raíz del sistema |
+
+<EnSimple>
+`cd -` es el botón de "canal anterior" del control remoto: te lleva a donde estabas, y si lo vuelves a apretar, regresas. Sirve muchísimo cuando trabajas entre dos lugares, por ejemplo la configuración de un servicio (`/etc/nginx`) y sus logs (`/var/log/nginx`).
+</EnSimple>
+
+## ls con todas sus opciones útiles
+
+`ls` sin opciones muestra solo los nombres. Sus opciones se combinan libremente, y en el trabajo vas a usar casi siempre estas:
+
+| Opción | Qué hace | Cuándo la usas |
+| --- | --- | --- |
+| `-l` | Formato largo: permisos, dueño, tamaño, fecha | Casi siempre |
+| `-a` | Incluye los archivos ocultos | Para ver configuración personal |
+| `-h` | Tamaños en K, M, G (junto con `-l`) | Para leer tamaños sin hacer cuentas |
+| `-t` | Ordena por fecha, lo más nuevo primero | En carpetas de logs |
+| `-r` | Invierte el orden | Con `-t`, para ver lo más nuevo al final |
+| `-S` | Ordena por tamaño, lo más grande primero | Para buscar qué ocupa espacio |
+| `-d` | Muestra la carpeta, no su contenido | Para ver los permisos de una carpeta |
+| `-R` | Entra en todas las subcarpetas | Para ver una estructura completa (con cuidado: puede ser enorme) |
+
+Las combinaciones típicas son `ls -lh`, `ls -la` y `ls -ltr` (lo más nuevo abajo, justo arriba del prompt).
+
+### Leer una línea de ls -l
+
+```text
+-rw-r--r--. 1 root root  2.1K Oct 30 09:58 hosts
+drwxr-xr-x. 2 root root  4.0K Oct 28 11:20 ssh
+lrwxrwxrwx. 1 root root    10 Oct 28 11:20 localtime -> ../usr/share/zoneinfo/America/Bogota
+```
+
+El **primer carácter** dice qué es cada cosa: `-` un archivo común, `d` un directorio, `l` un enlace (y la flecha muestra a dónde apunta). Después vienen los permisos (los vas a estudiar a fondo en el próximo módulo), la cantidad de enlaces, el dueño, el grupo, el tamaño, la fecha de la última modificación y el nombre. El punto después de los permisos aparece en Rocky e indica que el archivo tiene una etiqueta de SELinux.
+
+### Los archivos ocultos
+
+Un archivo o carpeta cuyo nombre empieza con punto es un **<Termino id="archivo-oculto">archivo oculto</Termino>**: `ls` no lo muestra salvo que agregues `-a`. No es una protección (cualquiera con permiso puede leerlo), sino una forma de mantener prolija la vista. Se usa sobre todo para configuración personal: `~/.bashrc` (tu shell), `~/.ssh/` (tus claves y los servidores conocidos).
+
+## Un nivel más adentro
+
+En el Nivel 0 viste qué hay en cada carpeta principal (`/etc`, `/var`, `/usr`...), según el estándar **<Termino id="fhs">FHS</Termino>** que siguen todas las distribuciones. Ahora, las subcarpetas que más vas a visitar. Toca cada una:
+
+<DiagramaInteractivo datos={carpetasDatos} svg={carpetas} alt="Dieciséis carpetas importantes: /etc/ssh, /etc/hosts, /etc/passwd, /var/log, /var/lib, /var/cache, /var/spool, /usr/bin, /usr/sbin, /usr/local, /usr/share, /run, /mnt y /media, /opt, /srv y el archivo oculto ~/.bashrc, cada una con su uso." />
+
+Con eso alcanza para responder la pregunta que te vas a hacer todos los días: **¿dónde busco?**
+
+| Busco... | Voy a... |
+| --- | --- |
+| La configuración de un servicio | `/etc/nombre-del-servicio` o `/etc/nombre.conf` |
+| Lo que pasó (errores, accesos) | `/var/log` |
+| Los datos que guarda un servicio | `/var/lib/nombre-del-servicio` |
+| El programa en sí | `/usr/bin` o `/usr/sbin` (`which nombre` te lo dice) |
+| Mis archivos y mi configuración | `~` |
+
+<EnSimple titulo="Dicho más simple: el servidor como una casa">
+`/etc` es el cajón de los manuales de instrucciones: cómo tiene que funcionar cada aparato. `/var/log` es el libro de visitas, donde queda anotado quién vino y qué pasó. `/var/lib` es la despensa, con lo que cada servicio guarda para seguir funcionando. `/usr/bin` es la caja de herramientas. Y `/home` son los dormitorios, uno por persona.
+</EnSimple>
+
+<Pregunta id="p05" />
+
+## Practicar
+
+<Terminal ejercicio={ejNavegar} />
+
+<Consejo>
+`tree` dibuja una carpeta y sus subcarpetas como un árbol; `tree -L 2 /etc/ssh` limita la profundidad a dos niveles. No viene instalado en las instalaciones mínimas: se agrega con `sudo dnf install tree` o `sudo apt install tree`.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo='"No such file or directory" con una ruta relativa'>
+    Una ruta relativa depende de dónde estás. `cd log/nginx` funciona desde `/var`, pero no desde tu carpeta personal. Si dudas, usa `pwd` para ver dónde estás, o escribe la ruta absoluta (`cd /var/log/nginx`), que funciona desde cualquier lado.
+  </ErrorComun>
+  <ErrorComun titulo='"Not a directory"'>
+    Intentaste entrar con `cd` a un archivo. `cd` solo entra a carpetas; para ver un archivo se usa `cat` o `less` (próximas lecciones). En `ls -l`, las carpetas empiezan con `d`.
+  </ErrorComun>
+  <ErrorComun titulo="El archivo de configuración que buscas no aparece">
+    Si su nombre empieza con punto, `ls` no lo muestra. Usa `ls -a` (o `ls -la`). Pasa mucho con `.bashrc`, `.ssh` y `.htaccess`.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir / con ~">
+    `cd /` te lleva a la raíz de todo el sistema; `cd ~` (o `cd` solo) a tu carpeta personal. Crear archivos de prueba en `/` en lugar de en `~` llena la raíz de basura (y, como root, se puede hacer sin que nada te avise).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `cd` solo o `cd ~` lleva a tu carpeta personal; `cd -` a la anterior; `cd ..` sube un nivel.
+- `ls -l` formato largo, `-a` ocultos, `-h` tamaños legibles, `-t` por fecha, `-S` por tamaño, `-r` invierte, `-d` la carpeta misma.
+- En `ls -l`, el primer carácter dice el tipo: `-` archivo, `d` directorio, `l` enlace.
+- Los nombres que empiezan con punto son ocultos; no es seguridad, es prolijidad.
+- Configuración en `/etc`, registros en `/var/log`, datos de servicios en `/var/lib`, programas en `/usr/bin` y `/usr/sbin`, lo tuyo en `~`.
+</Resumen>

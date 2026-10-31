@@ -1,0 +1,76 @@
+tipo: terminal
+shell: bash
+titulo: Recorrer el servidor
+descripcion: >-
+  Muévete por el servidor como lo harías en tu primer día: encuentra los logs del servidor web,
+  vuelve atrás, mira los archivos ocultos y revisa una carpeta sin entrar en ella.
+estado_inicial:
+  distro: rocky
+  hostname: rocky01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  archivos:
+    /var/log/nginx/access.log: "192.168.56.1 - - [30/Oct/2026:10:01:12] \"GET / HTTP/1.1\" 200 615\n"
+    /var/log/nginx/error.log: "2026/10/30 09:58:01 [notice] 812#812: start worker processes\n"
+    /home/ana/informe.txt: "Informe de la semana\n"
+pasos:
+  - consigna: Muestra en qué carpeta estás con `pwd`.
+    verificar:
+      - { comando_usado: '^\s*pwd' }
+      - { salida_contiene: /home/ana }
+    pistas:
+      - "`pwd` (print working directory)"
+    solucion: [pwd]
+    explicacion: Al iniciar sesión, siempre arrancas en tu carpeta personal.
+  - consigna: Entra a la carpeta de los logs del servidor web, `/var/log/nginx`. Prueba escribir `cd /var/log/ng` y apretar Tab.
+    verificar:
+      - { directorio_actual: /var/log/nginx }
+    pistas:
+      - "`cd /var/log/nginx`"
+    solucion: [cd /var/log/nginx]
+    explicacion: Con Tab no hace falta escribir el nombre completo, y si no completa, sabes que algo está mal escrito.
+  - consigna: Lista los archivos con los más recientes primero, en formato largo, con `ls -lt`.
+    verificar:
+      - { comando_usado: 'l[sl]\s+(-\w*t\w*|.*-t)' }
+    pistas:
+      - "`-l` formato largo, `-t` ordena por fecha de modificación"
+    solucion: [ls -lt]
+    explicacion: Es lo primero que se hace en una carpeta de logs durante un incidente, porque el archivo que se está escribiendo ahora queda arriba.
+  - consigna: Vuelve a la carpeta donde estabas antes con `cd -`.
+    verificar:
+      - { comando_usado: '^\s*cd\s+-\s*$' }
+      - { directorio_actual: /home/ana }
+    pistas:
+      - "`cd -` (cd guion) vuelve a la carpeta anterior"
+    solucion: [cd -]
+    explicacion: Es como el botón de "canal anterior" del control remoto. Muy útil cuando vas y vienes entre dos carpetas.
+  - consigna: Muestra todos los archivos de tu carpeta, incluidos los ocultos, con `ls -a`.
+    verificar:
+      - { comando_usado: 'l[sl]\s+-\w*a' }
+      - { salida_contiene: .bashrc }
+    pistas:
+      - "`ls -a` (a de all, todos)"
+    solucion: [ls -a]
+    explicacion: Los nombres que empiezan con punto son ocultos. Aparecen además `.` (esta carpeta) y `..` (la de arriba).
+  - consigna: Sube dos niveles con una ruta relativa, `cd ../..`, y comprueba con `pwd` dónde quedaste.
+    verificar:
+      - { directorio_actual: / }
+    pistas:
+      - "Desde `/home/ana`, `..` es `/home` y `../..` es `/`"
+    solucion: [cd ../.., pwd]
+    explicacion: "`..` siempre es la carpeta de arriba. Puedes encadenarlo: `../..` sube dos niveles."
+  - consigna: Muestra los datos de la carpeta `/etc` misma (no de su contenido) con `ls -ld /etc`.
+    verificar:
+      - { comando_usado: '(ls\s+(-(ld|dl)|-l\s+-d|-d\s+-l)|ll\s+-d)\s+/etc/?\s*$' }
+    pistas:
+      - "`-d` hace que ls muestre la carpeta en lugar de su contenido"
+    solucion: [ls -ld /etc]
+    explicacion: Sin `-d`, `ls -l /etc` mostraría decenas de líneas, una por archivo. Con `-d` ves solo los permisos, el dueño y la fecha de la carpeta.
+  - consigna: Vuelve a tu carpeta personal con `cd` sin argumentos.
+    verificar:
+      - { directorio_actual: /home/ana }
+    pistas:
+      - "`cd` solo, o `cd ~`"
+    solucion: [cd]
+    explicacion: "`cd` sin nada siempre te lleva a casa, estés donde estés."

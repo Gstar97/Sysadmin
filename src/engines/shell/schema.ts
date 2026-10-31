@@ -118,6 +118,8 @@ export const bashCheckSchema = z.union([
     contenido_incluye: z.string().optional(),
     contenido_igual: z.string().optional(),
     destino: z.string().optional(),
+    /** Cantidad de nombres (enlaces duros) que apuntan al mismo archivo. */
+    enlaces: z.number().int().min(1).optional(),
   }),
   z.strictObject({
     usuario: z.string(),

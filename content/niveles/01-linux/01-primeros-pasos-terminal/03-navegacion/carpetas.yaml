@@ -1,0 +1,107 @@
+tipo: diagrama
+titulo: Un nivel más adentro
+puntos:
+  - id: etc-ssh
+    titulo: "/etc/ssh"
+    area: { x: 1.67, y: 3.81, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Aquí está la configuración del acceso remoto. El archivo que más vas a tocar es
+      `/etc/ssh/sshd_config`, que dice quién puede entrar y cómo. Casi todo servicio tiene su
+      carpeta o su archivo dentro de `/etc`: `/etc/nginx`, `/etc/chrony.conf`, `/etc/fstab`.
+  - id: etc-hosts
+    titulo: "/etc/hosts"
+    area: { x: 26.11, y: 3.81, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Una tabla simple de "nombre → IP" que el sistema consulta antes que el DNS. Sirve para
+      pruebas y para que un servidor encuentre a otro sin depender del DNS. Una línea olvidada
+      aquí es una causa clásica de "a este servidor le funciona y a los demás no".
+  - id: etc-passwd
+    titulo: "/etc/passwd"
+    area: { x: 50.56, y: 3.81, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Una línea por usuario: nombre, número de usuario, carpeta personal y shell. Lo vas a leer
+      campo por campo en el módulo de usuarios. Las contraseñas no están aquí sino en
+      `/etc/shadow`, que solo root puede leer.
+  - id: var-log
+    titulo: "/var/log"
+    area: { x: 75.0, y: 3.81, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Lo primero que se revisa en un incidente. En Rocky, `/var/log/messages` y
+      `/var/log/secure`; en Ubuntu, `/var/log/syslog` y `/var/log/auth.log`. Los servicios
+      guardan aquí sus propios registros, por ejemplo `/var/log/nginx/`.
+  - id: var-lib
+    titulo: "/var/lib"
+    area: { x: 1.67, y: 27.62, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Los datos que los programas necesitan guardar entre reinicios: las bases de datos de
+      MariaDB o PostgreSQL, el estado de los contenedores, la información de los paquetes
+      instalados. Es de las carpetas que más crecen y la que más importa respaldar.
+  - id: var-cache
+    titulo: "/var/cache"
+    area: { x: 26.11, y: 27.62, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Datos guardados para no volver a descargarlos o calcularlos, como los paquetes que bajó
+      `dnf` o `apt`. Se pueden borrar sin perder nada importante: el programa los vuelve a
+      generar.
+  - id: var-spool
+    titulo: "/var/spool"
+    area: { x: 50.56, y: 27.62, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Tareas que esperan ser procesadas: correos por enviar, trabajos de impresión y las tareas
+      programadas de cada usuario (`/var/spool/cron`).
+  - id: usr-bin
+    titulo: "/usr/bin"
+    area: { x: 75.0, y: 27.62, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Aquí están casi todos los comandos: `ls`, `cp`, `grep`, `bash`. En las distribuciones
+      actuales, `/bin` es solo un enlace a esta carpeta.
+  - id: usr-sbin
+    titulo: "/usr/sbin"
+    area: { x: 1.67, y: 51.43, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Comandos pensados para el administrador: `useradd`, `fdisk`, `sshd`. Un usuario común
+      puede verlos, pero la mayoría no funciona sin `sudo`.
+  - id: usr-local
+    titulo: "/usr/local"
+    area: { x: 26.11, y: 51.43, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Lo que el administrador instala sin el gestor de paquetes (por ejemplo, un script propio
+      en `/usr/local/bin`). Las actualizaciones del sistema no tocan esta carpeta.
+  - id: usr-share
+    titulo: "/usr/share"
+    area: { x: 50.56, y: 51.43, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Manuales (`/usr/share/man`), documentación de los paquetes (`/usr/share/doc`), íconos y
+      archivos de datos que no dependen del procesador.
+  - id: run
+    titulo: "/run"
+    area: { x: 75.0, y: 51.43, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Información de los servicios en ejecución: archivos con el número de proceso, sockets,
+      bloqueos. Vive en memoria: se borra en cada reinicio.
+  - id: mnt-media
+    titulo: "/mnt · /media"
+    area: { x: 1.67, y: 75.24, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Carpetas vacías para montar discos a mano: `/mnt` para lo que monta el administrador y
+      `/media` para lo que se monta solo, como un pendrive en un escritorio.
+  - id: opt
+    titulo: "/opt"
+    area: { x: 26.11, y: 75.24, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Aplicaciones que vienen "todo en una carpeta", típicas de software comercial:
+      `/opt/nombre-del-producto/`.
+  - id: srv
+    titulo: "/srv"
+    area: { x: 50.56, y: 75.24, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Un lugar ordenado para los datos que el servidor sirve a otros: archivos compartidos,
+      sitios web, repositorios. Cada vez más empresas lo usan en lugar de `/var/www` o carpetas
+      inventadas.
+  - id: bashrc
+    titulo: "~/.bashrc"
+    area: { x: 75.0, y: 75.24, ancho: 23.33, alto: 20.95 }
+    texto: >-
+      Los archivos que empiezan con punto están ocultos: `ls` no los muestra sin `-a`. En tu
+      carpeta personal guardan tu configuración: `.bashrc` (alias y variables de tu shell),
+      `.ssh/` (tus claves y los servidores conocidos).

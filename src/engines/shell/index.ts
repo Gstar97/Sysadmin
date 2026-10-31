@@ -95,6 +95,10 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
         ok &&= own.type === 'symlink' && own.data === check.destino
         parts.push(`apunta a ${check.destino}`)
       }
+      if (check.enlaces !== undefined) {
+        ok &&= node.nlink === check.enlaces
+        parts.push(`${check.enlaces} ${check.enlaces === 1 ? 'nombre' : 'nombres (enlaces duros)'}`)
+      }
     } else {
       if (check.tipo) parts.push(check.tipo)
     }
@@ -161,7 +165,7 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
   }
   if ('comando_usado' in check) {
     const re = safeRegex(check.comando_usado)
-    return { ok: !!re && sh.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
+    return { ok: !!re && (sh.history.some((h) => re.test(h)) || sh.typed.some((h) => re.test(h))), label: 'se usó el comando pedido' }
   }
   if ('directorio_actual' in check) {
     return { ok: sh.cwd === check.directorio_actual, label: `estar en ${check.directorio_actual}` }

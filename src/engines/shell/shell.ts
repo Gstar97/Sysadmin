@@ -186,6 +186,8 @@ export class Shell {
   scriptName = '-bash'
   functions = new Map<string, Node>()
   history: string[] = []
+  /** Líneas tal como se escribieron, antes de expandir !! y compañía (para verificar ejercicios). */
+  typed: string[] = []
   /** Alias del shell interactivo (los que define ~/.bashrc en cada distribución, más los del estudiante). */
   aliases = new Map<string, string>()
   lastExit = 0
@@ -317,6 +319,7 @@ export class Shell {
       if (last && last.stream === stream) last.text += text
       else chunks.push({ text, stream })
     }
+    if (source.trim()) this.typed.push(source.replace(/\n$/, ''))
     const hist = this.expandHistory(source)
     if ('error' in hist) {
       push('err')(hist.error + '\n')

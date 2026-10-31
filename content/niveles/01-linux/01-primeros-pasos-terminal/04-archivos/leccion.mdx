@@ -1,0 +1,131 @@
+---
+id: n1-m1-l4
+titulo: Archivos y directorios
+minutos: 150
+objetivos:
+  - Crear, copiar, mover, renombrar y borrar archivos y directorios (touch, mkdir, cp, mv, rm).
+  - Usar comodines (*, ?, [ ]) sin riesgos.
+  - Diferenciar enlaces duros y simbólicos y crearlos con ln.
+glosario: [comodin, enlace-simbolico, enlace-duro, inodo]
+verificado: 2026-10
+---
+
+import enlaces from './enlaces.svg?raw'
+import ejArchivos from './ej-archivos.yaml'
+
+Ya te mueves por el servidor. Ahora vas a cambiarlo: crear carpetas para un proyecto, copiar configuraciones antes de editarlas, mover archivos a su lugar y borrar lo que sobra. Son comandos muy simples, pero en un servidor un error con `rm` no tiene vuelta atrás, así que esta lección pone tanto énfasis en hacerlo bien como en hacerlo rápido.
+
+<AntesDeEmpezar>
+- Te mueves con `cd`, sabes dónde estás con `pwd` y listas con `ls -l`.
+- Las rutas pueden ser absolutas (`/home/ana/proyecto`) o relativas (`proyecto`).
+- Cada archivo tiene un **inodo**: el registro con sus datos (dueño, permisos, fechas) y dónde está su contenido. El nombre es solo una etiqueta que apunta a ese inodo (lección 0.2.4).
+</AntesDeEmpezar>
+
+## Crear: touch y mkdir
+
+- `touch archivo` crea un archivo vacío. Si ya existe, solo actualiza su fecha de modificación (de ahí el nombre: "tocarlo").
+- `mkdir carpeta` crea una carpeta. Con `-p` crea también las carpetas intermedias que falten y no da error si ya existe: `mkdir -p /srv/datos/ventas/2026`.
+
+Las **llaves** ahorran mucho trabajo al crear estructuras: el shell las expande antes de ejecutar el comando.
+
+```bash
+mkdir -p proyecto/{docs,src,logs}    # crea las tres subcarpetas
+touch informe-{enero,febrero,marzo}.txt
+echo dia{1..5}                       # dia1 dia2 dia3 dia4 dia5
+```
+
+## Copiar, mover y renombrar
+
+| Comando | Qué hace | Ejemplo |
+| --- | --- | --- |
+| `cp origen destino` | Copia un archivo | `cp sshd_config sshd_config.bak` |
+| `cp -r origen destino` | Copia una carpeta con todo su contenido | `cp -r proyecto proyecto-viejo` |
+| `cp -a origen destino` | Copia conservando dueño, permisos y fechas | `cp -a /etc/nginx /root/nginx-respaldo` |
+| `mv origen destino` | Mueve, o renombra si el destino es un nombre nuevo | `mv informe.txt informe-final.txt` |
+
+La regla para el destino es la misma en `cp` y `mv`: si es una **carpeta que existe**, el archivo va adentro con el mismo nombre; si no, se usa como **nombre nuevo**. Por eso `mv viejo.txt nuevo.txt` renombra y `mv viejo.txt docs/` mueve.
+
+<EnSimple>
+`cp` es la fotocopiadora: el original queda donde estaba y aparece una copia. `mv` es mudar una caja o cambiarle la etiqueta: no se duplica nada, la misma caja cambia de lugar o de nombre.
+</EnSimple>
+
+<Importante titulo="Antes de editar, copia">
+Antes de modificar cualquier archivo de configuración, haz una copia: `sudo cp -a /etc/ssh/sshd_config /etc/ssh/sshd_config.bak`. Si el cambio sale mal, vuelves atrás en segundos. Es el hábito que más problemas evita en este trabajo.
+</Importante>
+
+Tanto `cp` como `mv` sobrescriben el destino si ya existe, sin preguntar. Con `-i` (*interactive*) piden confirmación, y con `-v` (*verbose*) muestran lo que hacen.
+
+## Borrar: rm y rmdir
+
+- `rm archivo` borra archivos.
+- `rm -r carpeta` borra una carpeta con todo su contenido.
+- `rmdir carpeta` borra una carpeta solo si está vacía.
+- `-i` pide confirmación por cada elemento; `-f` (*force*) no pregunta nunca y no avisa si algo no existe.
+
+<Advertencia titulo="rm no tiene papelera">
+Lo que borras con `rm` desaparece. No hay papelera ni "deshacer". Y `rm -rf` como root no pide ninguna confirmación: un espacio de más o una variable vacía en un script (`rm -rf /$CARPETA` con `CARPETA` vacía) pueden borrar el sistema entero. Revisa dos veces cualquier `rm -r` antes de apretar Enter, sobre todo con `sudo`.
+</Advertencia>
+
+## Comodines: seleccionar varios archivos a la vez
+
+Los **<Termino id="comodin">comodines</Termino>** permiten nombrar muchos archivos con un patrón. El shell los reemplaza por la lista de nombres que coinciden antes de ejecutar el comando.
+
+| Comodín | Coincide con | Ejemplo | Selecciona |
+| --- | --- | --- | --- |
+| `*` | Cualquier cantidad de caracteres (incluso ninguno) | `*.log` | `app.log`, `error.log` |
+| `?` | Exactamente un carácter | `foto?.jpg` | `foto1.jpg`, `fotoA.jpg` (no `foto10.jpg`) |
+| `[ ]` | Un carácter de la lista o el rango | `informe-[12].pdf` | `informe-1.pdf`, `informe-2.pdf` |
+
+<EnSimple titulo="Dicho más simple: los comodines">
+Es como pedirle a alguien en un archivo de papel: "traeme todas las carpetas que terminan en 2025". No nombras cada una: das una regla y la persona busca las que la cumplen. `*` es "cualquier cosa", `?` es "una letra cualquiera".
+</EnSimple>
+
+La regla de oro: **antes de usar un comodín con `rm` o `mv`, pruébalo con `ls`**. `ls *.tmp` te muestra exactamente qué archivos va a afectar. Si la lista es la que esperabas, cambias `ls` por `rm`.
+
+<Pregunta id="p05" />
+
+## Enlaces: un archivo con varios nombres
+
+A veces conviene que un archivo o una carpeta sea accesible desde otro lugar, sin copiarlo. Para eso existen los enlaces, y hay dos tipos muy distintos:
+
+<Diagrama svg={enlaces} alt="A la izquierda, dos nombres (notas.txt y copia-dura.txt) apuntan al mismo inodo 207 y a los mismos datos: es un enlace duro. A la derecha, el enlace simbólico atajo contiene el texto /home/ana/notas.txt, que lleva al nombre notas.txt y de ahí al inodo." pie="Un enlace duro es otro nombre para el mismo inodo; un enlace simbólico es un archivo pequeño que contiene una ruta." />
+
+- Un **<Termino id="enlace-simbolico">enlace simbólico</Termino>** (`ln -s destino nombre`) es como un acceso directo: un archivo pequeño que dice "lo que buscas está en tal ruta". Puede apuntar a carpetas y a otros discos. Si borras el original, el enlace queda **roto**. En `ls -l` empieza con `l` y muestra la flecha: `logs -> /var/log/app`.
+- Un **<Termino id="enlace-duro">enlace duro</Termino>** (`ln original nombre`) es otro nombre para el mismo inodo. Los dos nombres valen lo mismo: si borras uno, el archivo sigue existiendo con el otro. Solo funciona con archivos (no carpetas) y dentro del mismo sistema de archivos. En `ls -l`, la segunda columna cuenta cuántos nombres tiene.
+
+En el trabajo diario se usan casi siempre los simbólicos: para tener a mano una carpeta de logs, para activar un sitio en algunos servidores web (`sites-enabled` → `sites-available`) o para cambiar de versión de un programa sin tocar las rutas.
+
+<Consejo>
+El orden de `ln -s` confunde a todo el mundo al principio. Piénsalo como `cp`: primero lo que ya existe (a dónde apunta), después lo nuevo (el enlace). `ln -s /var/log/app logs` crea `logs`, que apunta a `/var/log/app`.
+</Consejo>
+
+## Practicar
+
+<Terminal ejercicio={ejArchivos} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"cp: -r not specified; omitting directory"'>
+    Intentaste copiar una carpeta sin `-r`. `cp` solo copia carpetas si se lo pides explícitamente: `cp -r carpeta destino` (o `cp -a` para conservar dueños y fechas).
+  </ErrorComun>
+  <ErrorComun titulo="Un mv o un cp sobrescribió un archivo sin avisar">
+    Si el destino ya existía, se reemplazó. En adelante, usa `-i` cuando no estés seguro, o `ls` el destino antes. Si era una configuración y hiciste la copia `.bak`, la recuperas de ahí.
+  </ErrorComun>
+  <ErrorComun titulo="Un comodín afectó más archivos de los esperados">
+    `rm *.log` borra todos los .log de la carpeta en la que estás, que quizás no era la que creías. Revisa con `pwd` y prueba el patrón con `ls` antes de usarlo con `rm` o `mv`.
+  </ErrorComun>
+  <ErrorComun titulo="El enlace simbólico aparece en rojo o da &quot;No such file or directory&quot;">
+    Está roto: el destino se borró, se movió o la ruta se escribió mal. `ls -l` muestra a dónde apunta. Si usaste una ruta relativa en `ln -s`, se interpreta desde la carpeta del enlace, no desde donde estabas: con rutas absolutas no hay sorpresas.
+  </ErrorComun>
+  <ErrorComun titulo='"rmdir: failed to remove: Directory not empty"'>
+    La carpeta tiene algo adentro, quizás archivos ocultos. Mira con `ls -la`. Si de verdad quieres borrarla con todo, `rm -r` (revisando bien la ruta).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `touch` crea archivos vacíos; `mkdir -p` crea carpetas con sus intermedias; las llaves `{a,b,c}` generan varios nombres.
+- `cp` copia (`-r` para carpetas, `-a` conservando todo); `mv` mueve o renombra. Si el destino es una carpeta, van adentro.
+- `rm` borra para siempre; `rm -r` borra carpetas; `rmdir` solo carpetas vacías. `-i` pregunta, `-f` nunca.
+- Comodines: `*` cualquier cosa, `?` un carácter, `[ ]` uno de una lista. Pruébalos con `ls` antes de usarlos con `rm`.
+- Enlace simbólico (`ln -s`): un acceso directo que se rompe si se borra el original. Enlace duro (`ln`): otro nombre del mismo inodo.
+- Antes de editar una configuración, copia: `cp -a archivo archivo.bak`.
+</Resumen>

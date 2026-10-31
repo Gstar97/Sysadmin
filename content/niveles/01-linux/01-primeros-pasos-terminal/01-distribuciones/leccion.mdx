@@ -1,0 +1,144 @@
+---
+id: n1-m1-l1
+titulo: Distribuciones Linux y cómo elegir
+minutos: 120
+objetivos:
+  - Diferenciar las familias Red Hat (RHEL, Rocky, AlmaLinux, Fedora) y Debian (Debian, Ubuntu).
+  - Entender los ciclos de soporte (LTS, fin de vida) y por qué en servidores se usan versiones estables.
+  - Conocer los requisitos actuales, como el x86-64-v3 que exigen RHEL 10 y Rocky 10.
+glosario: [distribucion, lts, fin-de-vida, kernel]
+verificado: 2026-10
+---
+
+import familias from './familias.svg?raw'
+import usos from './usos.yaml'
+import ejIdentificar from './ej-identificar.yaml'
+
+Empieza el nivel de Linux. Durante todo este nivel vas a trabajar con las dos máquinas Linux de tu laboratorio: `rocky01` y `ubuntu01`. Antes de escribir el primer comando, conviene entender por qué son distintas y qué cambia en el trabajo diario según cuál te toque.
+
+<AntesDeEmpezar>
+- El **kernel** es el núcleo del sistema operativo: reparte la CPU, la memoria y los dispositivos.
+- Una **distribución** es el kernel Linux más todo lo demás: herramientas, instalador, gestor de paquetes y configuración (lo viste en la lección 0.2.1).
+- En el laboratorio del módulo 0.2 instalaste Ubuntu Server y Rocky Linux (o AlmaLinux).
+</AntesDeEmpezar>
+
+## El mismo motor, distintos autos
+
+Muchas marcas de autos usan el mismo motor, y aun así cada auto es distinto: cambian el tablero, los repuestos, el manual y el servicio técnico. Con Linux pasa lo mismo. Todas las distribuciones usan el kernel Linux (el motor), pero cada una decide qué programas trae, cómo se instala software, dónde guarda la configuración y cuántos años recibe actualizaciones.
+
+Hay cientos de distribuciones, pero en servidores casi todo se reparte entre tres **familias**. Dentro de una familia, lo que aprendes en una distribución sirve casi igual en las otras.
+
+<Diagrama svg={familias} alt="Tres familias de distribuciones. Red Hat: Fedora, luego CentOS Stream, luego RHEL, y de RHEL salen Rocky, AlmaLinux y Oracle Linux, usan paquetes rpm con dnf. Debian: Debian, Ubuntu y Linux Mint, usan paquetes deb con apt. SUSE: openSUSE y SUSE Linux Enterprise, usan rpm con zypper." pie="Las tres familias más usadas en servidores. Las flechas indican de dónde sale cada una." />
+
+### La familia Red Hat
+
+- **Red Hat Enterprise Linux (RHEL)** es el producto comercial de la empresa Red Hat: se paga una suscripción que incluye soporte técnico y certificaciones. Es muy común en bancos, gobiernos y empresas grandes.
+- **Fedora** es donde se prueban las novedades: sale una versión nueva cada seis meses. Es buena para aprender lo que viene, no para un servidor que tiene que durar años.
+- **CentOS Stream** muestra lo que va a traer la próxima versión menor de RHEL, antes de que salga.
+- **Rocky Linux** y **AlmaLinux** son reconstrucciones gratuitas compatibles con RHEL: mismos paquetes, mismos comandos, mismos archivos de configuración. Nacieron cuando, a fines de 2020, Red Hat anunció el fin anticipado de CentOS Linux, que hasta ese momento cumplía ese papel. **Oracle Linux** también es compatible y gratuito.
+
+En esta carrera, cuando decimos "Rocky", vale igual para AlmaLinux y casi siempre para RHEL.
+
+### La familia Debian
+
+- **Debian** es una distribución hecha por una comunidad, sin una empresa detrás, conocida por su estabilidad.
+- **Ubuntu** se basa en Debian y la mantiene la empresa Canonical. Es la distribución con más tutoriales, más imágenes listas en la nube y más software que la menciona en su documentación.
+- **Linux Mint** y otras derivadas de Ubuntu apuntan al escritorio, no a servidores.
+
+### Otras que vas a cruzarte
+
+**SUSE Linux Enterprise** es común en empresas europeas y en servidores que corren SAP. **Alpine** es diminuta y se usa mucho dentro de contenedores (Nivel 7). **Arch** es popular en escritorios de entusiastas, pero casi no se usa en servidores.
+
+<Emparejar ejercicio={usos} />
+
+## Qué cambia entre Rocky y Ubuntu
+
+Los comandos básicos (los de este módulo) son idénticos en todas las distribuciones. Lo que cambia es la "administración": cómo se instala software, qué nombres tienen los servicios y qué herramientas de seguridad vienen activadas.
+
+| | Rocky / AlmaLinux 10 | Ubuntu Server LTS |
+| --- | --- | --- |
+| Instalar software | `dnf` (paquetes `.rpm`) | `apt` (paquetes `.deb`) |
+| Grupo que puede usar `sudo` | `wheel` | `sudo` |
+| Firewall | firewalld, activo | ufw, instalado pero desactivado |
+| Seguridad adicional | SELinux | AppArmor |
+| Sistema de archivos al instalar | XFS | ext4 |
+| Servicio de SSH | `sshd` | `ssh` |
+| Servidor web Apache | paquete `httpd` | paquete `apache2` |
+
+<EnSimple>
+Es como manejar dos autos de marcas distintas: el volante, los pedales y las reglas de tránsito son los mismos (los comandos básicos), pero la palanca de luces está en otro lado y los repuestos tienen otro nombre (paquetes, servicios y herramientas de seguridad). Cada vez que algo cambie entre Rocky y Ubuntu, la lección te lo va a mostrar en pestañas.
+</EnSimple>
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    Para instalar el editor nano: `sudo dnf install nano`
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    Para instalar el editor nano: `sudo apt install nano`
+  </Distro>
+</Distros>
+
+## Cuántos años dura una versión
+
+Un servidor se instala para que funcione años. Por eso lo primero que se mira de una versión no es qué trae de nuevo, sino **hasta cuándo recibe actualizaciones de seguridad**.
+
+- **RHEL, Rocky y AlmaLinux**: cada versión principal tiene unos **10 años** de soporte. RHEL 10 salió en mayo de 2025, así que tiene soporte hasta 2035. Dentro de esos años salen versiones "menores" (10.0, 10.1, 10.2...) que se instalan como actualizaciones normales, sin reinstalar.
+- **Ubuntu**: cada dos años, en abril, sale una versión **<Termino id="lts">LTS</Termino>** (*Long Term Support*, soporte de largo plazo), como la 24.04 y la 26.04. Tiene **5 años** de actualizaciones gratuitas, que se pueden extender a 10 con la suscripción Ubuntu Pro (gratis para uso personal en hasta cinco equipos). Las versiones intermedias, como la 25.10, duran solo nueve meses: no son para servidores.
+- **Debian**: una versión estable cada unos dos años, con unos cinco años de soporte entre el equipo de Debian y el proyecto Debian LTS.
+- **Fedora**: cada versión dura alrededor de un año.
+
+Cuando una versión llega a su **<Termino id="fin-de-vida">fin de vida</Termino>** (*EOL*, *end of life*), deja de recibir parches. Sigue arrancando y funcionando, pero cada falla de seguridad nueva queda abierta para siempre. Un servidor así no debería estar conectado a internet. Ejemplos reales: CentOS 7 llegó a su fin de vida el 30 de junio de 2024 y el soporte estándar de Ubuntu 20.04 terminó en mayo de 2025, y todavía hay muchos servidores con esas versiones en empresas.
+
+<EnSimple titulo="Dicho más simple: el fin de vida">
+Es como un auto cuyo modelo dejó de fabricarse hace años y del que ya nadie vende repuestos. Puede seguir andando, pero el día que se rompa algo, no hay con qué arreglarlo. Con un sistema operativo, ese "algo que se rompe" es una falla de seguridad que cualquiera puede aprovechar.
+</EnSimple>
+
+## Requisitos de hardware actuales
+
+Las distribuciones nuevas dejan de funcionar en procesadores viejos. **RHEL 10 y Rocky 10** exigen procesadores x86-64 de nivel **v3** (en Intel, de la generación Haswell de 2013 en adelante, salvo algunos modelos económicos; en AMD, de 2015 en adelante). Si el procesador es más viejo, el sistema ni siquiera arranca y muestra un error como `Fatal glibc error: CPU does not support x86-64-v3`. **AlmaLinux 10** publica además una edición para x86-64-v2, que sirve para equipos más viejos. Ubuntu sigue funcionando en procesadores x86-64 más antiguos.
+
+Esto importa también en las máquinas virtuales: algunos hipervisores muestran a la VM un procesador "genérico" sin las instrucciones v3, aunque el equipo real las tenga. En el laboratorio del módulo 0.2 viste cómo comprobarlo con `lscpu`.
+
+## Cómo se elige en una empresa
+
+En la práctica, casi nunca se elige desde cero. Las preguntas que deciden son:
+
+1. **¿Qué usa ya la empresa?** Mantener una sola familia simplifica todo: los procedimientos, la automatización y la capacitación.
+2. **¿Qué pide el software?** Muchos productos comerciales (bases de datos, ERP, sistemas de monitoreo) solo dan soporte en ciertas distribuciones y versiones.
+3. **¿Hace falta soporte del fabricante?** Si un problema grave tiene que tener a quién llamar, se paga RHEL, Ubuntu Pro o SUSE.
+4. **¿Dónde va a correr?** En la nube, todas las grandes ofrecen imágenes listas de Ubuntu, RHEL, Rocky, AlmaLinux y Debian.
+5. **¿Cuánto falta para el fin de vida?** Instalar hoy una versión a la que le queda un año obliga a migrar enseguida.
+
+## Practicar: identificar un sistema
+
+Lo primero que hace un sysadmin al entrar a un servidor desconocido es averiguar qué es.
+
+<Terminal ejercicio={ejIdentificar} />
+
+<Consejo>
+En Ubuntu, `lsb_release -a` también muestra la versión, y en cualquier distribución con systemd, `hostnamectl` muestra el sistema, el kernel y la arquitectura en un solo comando.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Seguir un tutorial de la otra familia">
+    Ejecutas `apt install` en Rocky y responde `apt: command not found`, o `dnf` en Ubuntu. Antes de copiar un comando de internet, fíjate para qué distribución está escrito y busca el equivalente: en general, `dnf` ↔ `apt`, `httpd` ↔ `apache2`, `wheel` ↔ `sudo`.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar en producción una versión de corta duración">
+    Fedora o un Ubuntu intermedio (como 25.10) quedan sin soporte en menos de un año. En un servidor se usan versiones LTS o la versión estable de la familia Red Hat.
+  </ErrorComun>
+  <ErrorComun titulo='"Fatal glibc error: CPU does not support x86-64-v3" al arrancar'>
+    El procesador (real o el que muestra el hipervisor a la VM) es más viejo de lo que exige RHEL 10 o Rocky 10. En una VM, configura el tipo de CPU como "host" (o el equivalente en tu hipervisor); en hardware viejo, usa la edición x86-64-v2 de AlmaLinux 10 o una versión anterior con soporte vigente.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir la versión del kernel con la de la distribución">
+    `uname -r` muestra el kernel (por ejemplo, 6.12), no la distribución. Para saber qué sistema es y hasta cuándo tiene soporte, mira `/etc/os-release`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Todas las distribuciones usan el kernel Linux; cambian los programas, el gestor de paquetes, la configuración y los años de soporte.
+- Familia Red Hat: Fedora → CentOS Stream → RHEL, y Rocky, AlmaLinux y Oracle Linux compatibles y gratuitas. Familia Debian: Debian y Ubuntu. Familia SUSE: SLES y openSUSE.
+- Los comandos básicos son iguales; cambian `dnf`/`apt`, `wheel`/`sudo`, firewalld/ufw, SELinux/AppArmor y algunos nombres de paquetes y servicios.
+- Soporte: RHEL y derivadas, unos 10 años; Ubuntu LTS, 5 años (10 con Ubuntu Pro). Una versión en fin de vida no recibe más parches de seguridad.
+- RHEL 10 y Rocky 10 exigen CPU x86-64-v3; AlmaLinux 10 tiene también una edición x86-64-v2.
+- `/etc/os-release` dice qué distribución, qué versión y de qué familia es un sistema.
+</Resumen>

@@ -1,0 +1,132 @@
+---
+id: n1-m1-l2
+titulo: La terminal y el shell
+minutos: 120
+objetivos:
+  - Entender qué es un shell (bash) y la estructura comando, opciones y argumentos.
+  - Usar el historial, el autocompletado con Tab y los atajos de teclado.
+  - Trabajar con comodidad en la consola de la máquina virtual y por SSH.
+glosario: [shell, terminal, prompt, variable-entorno]
+verificado: 2026-10
+---
+
+import anatomia from './anatomia.svg?raw'
+import atajos from './atajos.yaml'
+import ejShell from './ej-shell.yaml'
+
+Un servidor Linux casi nunca tiene interfaz gráfica: se administra escribiendo comandos. Al principio parece más difícil que hacer clic, pero tiene ventajas enormes: un comando se puede copiar, repetir, guardar en un documento, mandar a un compañero o convertir en un script que lo hace solo. En esta lección vas a perderle el miedo a la pantalla negra.
+
+<AntesDeEmpezar>
+- Un **proceso** es un programa en ejecución, y cada uno corre con los permisos de un usuario.
+- En el laboratorio del módulo 0.2 te conectaste a tus VMs por **SSH** desde la terminal de tu PC.
+- **root** es el administrador del sistema, y `sudo` permite ejecutar un comando con sus permisos.
+</AntesDeEmpezar>
+
+## Terminal, consola y shell
+
+Piensa en un restaurante. Tú hablas con el mozo; el mozo lleva el pedido a la cocina y vuelve con el plato. Tú nunca entras a la cocina.
+
+- La **<Termino id="terminal">terminal</Termino>** es la ventana donde escribes y lees: la mesa del restaurante. Puede ser la ventana de la VM, PowerShell en Windows o la Terminal de macOS conectada por SSH.
+- El **<Termino id="shell">shell</Termino>** es el mozo: el programa que lee lo que escribes, lo interpreta y le pide al sistema operativo que lo haga. En Rocky y en Ubuntu el shell es **bash**.
+- El **kernel** es la cocina: hace el trabajo real (leer archivos, arrancar programas).
+
+La **consola** es la terminal "física" del equipo: la pantalla y el teclado conectados directamente al servidor, o la ventana de la VM en el hipervisor. Es la que se usa cuando la red no funciona y no queda otra forma de entrar.
+
+## El prompt y la forma de un comando
+
+Cuando el shell está listo para recibir una orden, muestra el **<Termino id="prompt">prompt</Termino>**: el texto que aparece antes del cursor. Te dice quién eres, en qué servidor estás y en qué carpeta. El último carácter es importante: `$` significa que eres un usuario común y `#` que eres **root**. Si ves `#`, cada comando tiene poder total sobre el servidor.
+
+<Diagrama svg={anatomia} alt="El prompt [ana@rocky01 ~]$ seguido del comando ls -lh /var/log. Están señalados el usuario ana, el servidor rocky01, la carpeta actual ~, el signo $ de usuario común, el comando ls, las opciones -lh y el argumento /var/log. Debajo, el prompt de Ubuntu ana@ubuntu01:~$ con el mismo comando." pie="Las partes del prompt y de un comando. El formato del prompt cambia entre distribuciones; la forma del comando, no." />
+
+Después del prompt escribes una línea con tres partes, separadas por espacios:
+
+1. **El comando**: qué programa ejecutar (`ls` lista archivos).
+2. **Las opciones**: cómo hacerlo. Empiezan con guion: `-l` (formato largo), `-h` (tamaños legibles). Las opciones de una letra se pueden juntar: `-lh` es lo mismo que `-l -h`. Muchas tienen además una forma larga con dos guiones: `--human-readable`.
+3. **Los argumentos**: sobre qué trabajar (`/var/log`, la carpeta a listar).
+
+<EnSimple>
+Es como pedir en el restaurante: "un café (el comando), cortado y sin azúcar (las opciones), para la mesa 4 (el argumento)". El orden habitual es comando, opciones, argumentos, y cada parte va separada por un espacio.
+</EnSimple>
+
+Tres reglas que evitan la mayoría de los errores al principio:
+
+- **Mayúsculas y minúsculas importan**: `ls` funciona, `LS` no existe. `-r` y `-R` son opciones distintas.
+- **Los espacios separan**: `ls-l` es un comando que no existe. Si un nombre de archivo tiene espacios, va entre comillas: `ls "mis documentos"`.
+- **Silencio es éxito**: muchos comandos no muestran nada cuando funcionan bien. Si no apareció un mensaje de error, salió bien.
+
+## Escribir menos: Tab y el historial
+
+Un sysadmin experimentado escribe muy poco. Usa dos herramientas todo el tiempo:
+
+- **Tab** completa lo que estás escribiendo: nombres de comandos, archivos y carpetas. Si hay una sola opción, la completa; si hay varias, al apretar Tab dos veces las muestra. Además de ahorrar tiempo, evita errores de tipeo: si Tab no completa, probablemente el nombre está mal escrito o el archivo no existe.
+- **El historial**: el shell guarda los comandos que escribiste. Con la flecha arriba recorres los anteriores; `history` los lista numerados; `!!` repite el último y `!ls` el último que empezó con "ls". En un servidor real, **Ctrl+R** busca dentro del historial mientras escribes.
+
+<Consejo>
+`sudo !!` es probablemente el atajo más usado en el trabajo: ejecutaste un comando, falló por falta de permisos, y lo repites como administrador sin volver a escribirlo. Antes de apretar Enter, el shell te muestra el comando completo que va a ejecutar.
+</Consejo>
+
+<Emparejar ejercicio={atajos} />
+
+## Practicar
+
+<Terminal ejercicio={ejShell} />
+
+## Variables del shell y el PATH
+
+El shell guarda datos en **variables**: nombres en mayúsculas cuyo valor se lee anteponiendo `$`. Algunas las define el sistema al iniciar sesión, y se llaman **<Termino id="variable-entorno">variables de entorno</Termino>**:
+
+```bash
+echo $USER     # tu usuario
+echo $HOME     # tu carpeta personal
+echo $PATH     # dónde busca el shell los programas
+```
+
+La más importante es **PATH**: una lista de carpetas separadas por `:`. Cuando escribes `ls`, el shell busca un programa llamado `ls` en cada una de esas carpetas, en orden, y ejecuta el primero que encuentra. `which ls` te dice cuál encontró.
+
+<EnSimple titulo="Dicho más simple: el PATH">
+Es como la lista de cajones donde guardas las herramientas. Cuando pides "el destornillador", alguien revisa los cajones en ese orden hasta encontrarlo. Si la herramienta está en un cajón que no figura en la lista, para el shell no existe: aparece `command not found`, aunque el programa esté instalado.
+</EnSimple>
+
+No todo lo que escribes es un programa del disco. Algunos comandos, como `cd`, `echo` y `history`, son **internos** del shell (*builtins*); otros son **alias**, atajos que define el sistema (por ejemplo, `ll` equivale a `ls -l`). `type nombre` te dice qué es cada uno.
+
+## Trabajar cómodo con tu laboratorio
+
+Hay dos formas de usar la terminal de tus VMs:
+
+- **La consola del hipervisor** (la ventana de VirtualBox, VMware o Hyper-V): sirve siempre, incluso si la red de la VM no funciona. Su contra: copiar y pegar suele no funcionar y el teclado puede venir en inglés.
+- **SSH desde la terminal de tu PC** (`ssh ana@192.168.56.101`): permite copiar y pegar, abrir varias ventanas y usar tu teclado tal cual. Es como se trabaja con servidores reales, que están en otro edificio o en la nube.
+
+Usa SSH para el trabajo diario y deja la consola para cuando la red falle.
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    Para cambiar la distribución del teclado de la consola a español latinoamericano: `sudo localectl set-keymap latam` (o `es` para el de España).
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    Para cambiar la distribución del teclado de la consola: `sudo dpkg-reconfigure keyboard-configuration` y elegir el modelo en el menú.
+  </Distro>
+</Distros>
+
+<ErroresComunes>
+  <ErrorComun titulo='"command not found"'>
+    El shell no encontró ningún programa con ese nombre en las carpetas del PATH. Las causas, de más a menos frecuentes: un error de escritura (prueba con Tab), mayúsculas donde no van, un comando de otra distribución (`apt` en Rocky) o un programa que todavía no está instalado.
+  </ErrorComun>
+  <ErrorComun titulo="La terminal no responde y no vuelve el prompt">
+    Hay un comando esperando algo: que termine de trabajar, que le escribas datos (por ejemplo, `cat` sin argumentos lee del teclado) o que cierres unas comillas que quedaron abiertas (el prompt cambia a `>`). Ctrl+C cancela y te devuelve el prompt.
+  </ErrorComun>
+  <ErrorComun titulo="Trabajar como root sin darte cuenta">
+    Si el prompt termina en `#`, cada comando se ejecuta sin ningún límite de permisos. Usa tu usuario y `sudo` solo para lo que lo necesita, y sal de una sesión de root (`exit`) apenas termines.
+  </ErrorComun>
+  <ErrorComun titulo="Escribir el nombre de un archivo con espacios sin comillas">
+    `cat mis notas.txt` busca dos archivos: `mis` y `notas.txt`. Usa comillas (`cat "mis notas.txt"`) o deja que Tab lo complete, que agrega las barras necesarias (`mis\ notas.txt`).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- La terminal es donde escribes; el shell (bash) interpreta lo que escribes; el kernel hace el trabajo.
+- El prompt muestra usuario, servidor y carpeta; `$` es usuario común y `#` es root.
+- Un comando tiene la forma `comando opciones argumentos`, separados por espacios. Mayúsculas y minúsculas importan.
+- Tab completa nombres; la flecha arriba, `history`, `!!` y Ctrl+R reutilizan comandos anteriores. Ctrl+C cancela.
+- PATH es la lista de carpetas donde el shell busca los programas; `type` dice si algo es un programa, un comando interno o un alias.
+- Para trabajar a diario, SSH desde tu PC; la consola del hipervisor, para cuando falla la red.
+</Resumen>

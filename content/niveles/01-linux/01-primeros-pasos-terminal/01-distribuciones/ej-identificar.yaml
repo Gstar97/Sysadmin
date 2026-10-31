@@ -1,0 +1,41 @@
+tipo: terminal
+shell: bash
+titulo: ¿Qué sistema es este?
+descripcion: >-
+  Te dan acceso a un servidor que nunca viste. Antes de tocar nada, averigua qué distribución y
+  qué versión tiene, y de qué familia es.
+estado_inicial:
+  distro: rocky
+  hostname: srv-web01
+  usuario: estudiante
+  usuarios:
+    - { nombre: estudiante, sudo: true }
+pasos:
+  - consigna: Muestra el archivo que describe la distribución con `cat /etc/os-release`.
+    verificar:
+      - { comando_usado: 'cat\s+/etc/os-release' }
+      - { salida_contiene: Rocky Linux }
+    pistas:
+      - "`cat` muestra el contenido de un archivo: `cat /etc/os-release`"
+    solucion: [cat /etc/os-release]
+    explicacion: >-
+      `NAME` y `VERSION_ID` dicen la distribución y la versión. `ID_LIKE` dice de qué familia es:
+      aquí, `rhel centos fedora`, o sea, familia Red Hat. En Ubuntu vas a ver `ID_LIKE=debian`.
+  - consigna: Filtra solo la línea de la familia con `grep ID_LIKE /etc/os-release`.
+    verificar:
+      - { comando_usado: 'grep\s+.*ID_LIKE' }
+      - { salida_contiene: rhel }
+    pistas:
+      - "`grep palabra archivo` muestra solo las líneas que contienen esa palabra"
+    solucion: [grep ID_LIKE /etc/os-release]
+    explicacion: Con `grep` vas a buscar texto todo el tiempo; lo vas a ver a fondo en este módulo.
+  - consigna: Mira la versión del kernel con `uname -r`.
+    verificar:
+      - { comando_usado: 'uname\s+-\w*r' }
+    pistas:
+      - "`uname -r` (r de release)"
+    solucion: [uname -r]
+    explicacion: >-
+      El kernel tiene su propia numeración. Rocky Linux 10 usa un kernel 6.12 con muchas
+      correcciones agregadas por Red Hat, así que el número solo no alcanza para saber qué
+      parches tiene: lo que cuenta es la versión de la distribución.
