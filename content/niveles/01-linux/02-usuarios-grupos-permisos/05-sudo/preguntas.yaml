@@ -1,0 +1,86 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué se prefiere sudo antes que compartir la contraseña de root?
+  opciones:
+    - { texto: "Cada uno usa su contraseña, se puede limitar qué hace cada persona y queda registrado quién hizo cada cosa", correcta: true, explicacion: "Con su, todos comparten una contraseña y los registros solo dicen root." }
+    - { texto: "Porque sudo es más rápido", explicacion: "La velocidad no es la razón." }
+    - { texto: "Porque su no existe en Ubuntu", explicacion: "su existe; lo que no tiene contraseña por defecto es root." }
+    - { texto: "Porque con sudo no hace falta contraseña", explicacion: "sudo pide la contraseña de cada usuario." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "¿Qué permite la regla `%soporte ALL=(root) /usr/bin/systemctl restart nginx`?"
+  opciones:
+    - { texto: "Que los miembros del grupo soporte ejecuten como root exactamente systemctl restart nginx", correcta: true, explicacion: "Cualquier otro comando o argumento se rechaza." }
+    - { texto: "Que el usuario soporte haga cualquier cosa", explicacion: "El % indica un grupo, y la regla limita el comando." }
+    - { texto: "Que soporte use systemctl con cualquier argumento", explicacion: "Al escribir argumentos, solo se permiten esos." }
+    - { texto: "Que root reinicie nginx", explicacion: "root ya puede todo; la regla es para soporte." }
+- id: p03
+  tipo: encontrar_error
+  enunciado: Este archivo de /etc/sudoers.d tiene una línea que visudo va a rechazar. Márcala.
+  archivo: |
+    # Reglas del equipo de bases de datos
+    Cmnd_Alias DB = /usr/bin/systemctl restart postgresql, /usr/bin/systemctl status postgresql
+    %dba ALL=(root) DB
+    %dba ALL=(postgres) psql
+  lineas_con_error: [4]
+  explicacion: Los comandos tienen que ir con la ruta completa (/usr/bin/psql). visudo marca "syntax error".
+- id: p04
+  tipo: opcion_multiple
+  enunciado: Guardaste una regla nueva en /etc/sudoers.d/soporte.conf y sudo la ignora. ¿Por qué?
+  opciones:
+    - { texto: "sudo ignora los archivos de sudoers.d que tienen un punto en el nombre", correcta: true, explicacion: "Hay que llamarlo soporte, sin extensión." }
+    - { texto: "Hay que reiniciar sudo", explicacion: "sudo lee la configuración en cada uso." }
+    - { texto: "Las reglas solo pueden ir en /etc/sudoers", explicacion: "sudoers.d es la forma recomendada." }
+    - { texto: "Falta reiniciar el servidor", explicacion: "No hace falta." }
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra qué puede ejecutar con sudo el usuario carlos (ejecutado por un administrador).
+  aceptadas: [sudo -l -U carlos, sudo -U carlos -l]
+  explicacion: "-l lista y -U indica de qué usuario."
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un desarrollador pide "sudo para vim" para editar la configuración de nginx. ¿Qué haces?
+  opciones:
+    - { texto: "No: desde vim se abre una terminal de root. Le das sudoedit para ese archivo o una regla para el comando que realmente necesita", correcta: true, explicacion: "Una regla con un editor equivale a dar root completo." }
+    - { texto: "Se lo das, es solo un editor", explicacion: "Con :!bash dentro de vim tendría una terminal de root." }
+    - { texto: "Le das sudo con NOPASSWD: ALL", explicacion: "Es acceso total sin contraseña." }
+    - { texto: "Le das la contraseña de root", explicacion: "Es peor todavía: sin registro y sin límites." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta línea del registro?
+  salida: |
+    Oct 30 11:02:13 web01 sudo[3301]: pedro : command not allowed ; TTY=pts/2 ; PWD=/home/pedro ; USER=root ; COMMAND=/usr/bin/cat /etc/shadow
+  opciones:
+    - { texto: "Que pedro intentó leer /etc/shadow como root y sudo se lo rechazó", correcta: true, explicacion: "El intento queda registrado aunque no se haya permitido." }
+    - { texto: "Que pedro leyó /etc/shadow", explicacion: "Dice command not allowed." }
+    - { texto: "Que root bloqueó a pedro", explicacion: "Fue sudo, según sus reglas." }
+    - { texto: "Que hay un error en sudoers", explicacion: "Un error de sintaxis daría otro mensaje." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: ¿Qué diferencia hay entre su y su -?
+  opciones:
+    - { texto: "su - abre una sesión completa del otro usuario (su carpeta y su entorno); su conserva tu entorno", correcta: true, explicacion: "Para administrar, su - (o sudo -i) evita sorpresas con variables y rutas." }
+    - { texto: "Ninguna", explicacion: "El entorno cambia." }
+    - { texto: "su - no pide contraseña", explicacion: "Las dos piden la contraseña del usuario de destino." }
+    - { texto: "su - solo funciona en Ubuntu", explicacion: "Funciona en todas." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: En Ubuntu 26.04, ¿qué cambia para un administrador con sudo-rs?
+  opciones:
+    - { texto: "Casi nada: usa /etc/sudoers y /etc/sudoers.d con las mismas reglas, y visudo funciona igual", correcta: true, explicacion: "Algunas opciones poco usadas no están; la versión clásica sigue disponible como sudo.ws." }
+    - { texto: "Hay que reescribir todas las reglas en otro formato", explicacion: "El formato es el mismo." }
+    - { texto: "sudo deja de pedir contraseña", explicacion: "Sigue pidiéndola." }
+    - { texto: "Hay que usar su en lugar de sudo", explicacion: "sudo sigue siendo la forma recomendada." }
+- id: p10
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para delegar un comando a un grupo de forma segura.
+  pasos:
+    - Abrir otra sesión de root de respaldo
+    - Escribir la regla con sudo visudo -f /etc/sudoers.d/nombre
+    - Dejar que visudo valide la sintaxis al guardar
+    - Comprobar con sudo -l -U de un miembro del grupo
+    - Probar el comando permitido y uno prohibido como ese usuario
+  explicacion: La sesión de respaldo te protege si algo sale mal, y probar el caso permitido y el prohibido confirma que la regla hace exactamente lo que querías.

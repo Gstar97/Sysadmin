@@ -1,0 +1,96 @@
+---
+id: n1-m2-l4
+titulo: Listas de control de acceso (ACL)
+minutos: 90
+objetivos:
+  - Dar permisos a usuarios y grupos adicionales con setfacl y revisarlos con getfacl.
+  - Entender la máscara de ACL y las ACL por defecto.
+  - Saber cuándo conviene usar ACL y cuándo alcanza con los permisos básicos.
+glosario: [acl]
+verificado: 2026-10
+---
+
+import getfacl from './getfacl.svg?raw'
+import getfaclDatos from './getfacl.yaml'
+import ejAcl from './ej-acl.yaml'
+
+Los permisos básicos tienen un límite: cada archivo tiene **un** dueño y **un** grupo. ¿Qué pasa cuando un segundo grupo necesita leer una carpeta que ya es de otro, o cuando una sola persona de afuera necesita acceso por unos días? Cambiar el grupo rompería el trabajo de quienes ya la usan, y dar permisos al "resto" la abriría a todos. Para eso existen las listas de control de acceso.
+
+<AntesDeEmpezar>
+- Cada archivo tiene permisos para el dueño, el grupo y el resto.
+- En una carpeta compartida, el SGID hace que lo nuevo herede el grupo de la carpeta (lección anterior).
+- Para entrar a una carpeta hace falta x; para ver su lista, r.
+</AntesDeEmpezar>
+
+## Más nombres en la lista
+
+Piensa en la lista de invitados de una fiesta privada. Normalmente entran el anfitrión (el dueño) y su familia (el grupo). Una **<Termino id="acl">ACL</Termino>** (*Access Control List*) es poder agregar a esa lista nombres puntuales: "y también Laura", "y también la gente de auditoría, pero solo para mirar".
+
+```bash
+sudo setfacl -m u:laura:rx /srv/contabilidad        # un usuario más
+sudo setfacl -m g:auditoria:rx /srv/contabilidad    # un grupo más
+getfacl /srv/contabilidad                           # ver la lista completa
+```
+
+Cuando un archivo tiene ACL, `ls -l` lo marca con un **+** al final de los permisos (`drwxrws---+`). Es la señal para mirar con `getfacl`, porque los nueve caracteres de `ls` ya no cuentan toda la historia.
+
+| Comando | Qué hace |
+| --- | --- |
+| `setfacl -m u:nombre:rwx archivo` | Agrega o cambia una entrada de usuario |
+| `setfacl -m g:grupo:rx archivo` | Agrega o cambia una entrada de grupo |
+| `setfacl -x u:nombre archivo` | Quita una entrada |
+| `setfacl -b archivo` | Quita todas las entradas extra |
+| `setfacl -d -m g:grupo:rx carpeta` | Define la ACL por defecto de una carpeta |
+| `setfacl -k carpeta` | Quita la ACL por defecto |
+| `setfacl -R ...` | Aplica a todo el contenido |
+
+## Leer getfacl, la máscara y las ACL por defecto
+
+Toca cada parte de la salida:
+
+<DiagramaInteractivo datos={getfaclDatos} svg={getfacl} alt="Salida de getfacl de /srv/contabilidad: el encabezado con archivo, dueño, grupo y flags; las entradas user::rwx, user:laura:r-x, group::rwx, group:auditoria:r-x, mask::rwx y other::---; y las entradas default para los archivos nuevos." />
+
+Dos conceptos merecen un repaso aparte:
+
+- **La máscara** es un techo para todas las entradas con nombre y para el grupo dueño. Se calcula sola cuando agregas entradas, pero si después haces `chmod g-w` sobre el archivo, la máscara baja a `r` y nadie de las entradas con nombre puede escribir, aunque su entrada diga `rw-`. getfacl lo avisa con `#effective:r--`.
+- **La ACL por defecto** de una carpeta no da acceso a la carpeta: es el modelo que copian los archivos nuevos. Sin ella, el acceso de auditoría alcanzaría a lo que ya existe, pero no a lo que se cree mañana.
+
+<EnSimple titulo="Dicho más simple: la máscara">
+Es el volumen máximo de un parlante: cada entrada de la lista tiene su propio volumen, pero ninguna suena más fuerte que el máximo. Si el máximo es "solo leer", nadie de la lista puede escribir, diga lo que diga su entrada.
+</EnSimple>
+
+## ¿ACL o permisos básicos?
+
+Las ACL son potentes, pero agregan complejidad: hay que acordarse de mirarlas (el + es fácil de pasar por alto), algunas herramientas de copia no las conservan (`cp -a` sí; `tar` necesita `--acls`; `rsync` necesita `-A`) y una carpeta con muchas entradas sueltas se vuelve difícil de auditar.
+
+Una regla práctica: si el acceso es para un **área entera** y permanente, lo correcto es un grupo y los permisos básicos (con SGID). Si es para **un segundo grupo**, una persona puntual o algo **temporal**, una ACL es la herramienta justa. Y cuando termina la necesidad, se quita.
+
+<Pregunta id="p04" />
+
+## Practicar
+
+<Terminal ejercicio={ejAcl} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Agregué la ACL pero el usuario sigue sin acceso">
+    Revisa tres cosas: la máscara (getfacl muestra `#effective`), las carpetas del camino (también necesitan x para esa persona, con ACL o con permisos básicos) y que el usuario haya vuelto a iniciar sesión si el acceso es por un grupo nuevo.
+  </ErrorComun>
+  <ErrorComun titulo="Los archivos nuevos no tienen la ACL">
+    Las ACL comunes solo afectan a lo que ya existe. Para lo que se cree después hace falta la ACL por defecto en la carpeta: `setfacl -d -m g:grupo:rx carpeta`.
+  </ErrorComun>
+  <ErrorComun titulo="Después de un chmod, las personas de la ACL perdieron la escritura">
+    Con ACL, los permisos de grupo de `chmod` y de `ls -l` son la máscara. `chmod 750` dejó la máscara en `r-x`. Vuelve a subirla con `setfacl -m m::rwx archivo` o con `chmod g+w archivo`.
+  </ErrorComun>
+  <ErrorComun titulo="Restauré un backup y desaparecieron los permisos especiales">
+    La herramienta de copia no guardó las ACL. Para respaldos con ACL: `tar --acls`, `rsync -A`, o guarda la lista con `getfacl -R carpeta > acl.txt` y restáurala con `setfacl --restore=acl.txt`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una ACL agrega entradas para usuarios o grupos extra sin cambiar el dueño ni el grupo: `setfacl -m u:laura:rx` o `g:auditoria:rx`.
+- `getfacl` muestra la lista completa; `ls -l` marca los archivos con ACL con un +.
+- La máscara limita a todas las entradas con nombre y al grupo dueño; `chmod` sobre el grupo la cambia.
+- La ACL por defecto (`setfacl -d`) define qué heredan los archivos nuevos de una carpeta.
+- `-x` quita una entrada, `-b` todas, `-k` la por defecto, `-R` aplica a todo el contenido.
+- Para un área entera, grupos y permisos básicos; para un segundo grupo, una persona o algo temporal, ACL.
+</Resumen>

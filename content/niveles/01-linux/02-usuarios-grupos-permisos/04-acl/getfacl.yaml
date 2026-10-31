@@ -1,0 +1,53 @@
+tipo: diagrama
+titulo: Cómo se lee la salida de getfacl
+puntos:
+  - id: meta
+    titulo: "Encabezado"
+    area: { x: 2.78, y: 3.42, ancho: 94.44, alto: 23.16 }
+    texto: >-
+      El archivo, su dueño y su grupo. La línea flags aparece si hay bits especiales: -s-
+      significa SGID. getfacl quita la / inicial de la ruta para que la salida se pueda usar con
+      setfacl --restore desde otra carpeta.
+  - id: owner
+    titulo: "user:: (el dueño)"
+    area: { x: 2.78, y: 26.58, ancho: 94.44, alto: 5.79 }
+    texto: >-
+      Los permisos del dueño. Son los mismos que muestra ls -l en el primer grupo de rwx: las
+      ACL no los reemplazan.
+  - id: named
+    titulo: "user:laura: (un usuario con nombre)"
+    area: { x: 2.78, y: 32.37, ancho: 94.44, alto: 5.79 }
+    texto: >-
+      Una entrada extra para un usuario puntual, aunque no sea el dueño ni esté en el grupo. Se
+      agrega con setfacl -m u:laura:rx. Sus permisos efectivos están limitados por la máscara.
+  - id: gobj
+    titulo: "group:: (el grupo dueño)"
+    area: { x: 2.78, y: 38.16, ancho: 94.44, alto: 5.79 }
+    texto: >-
+      Los permisos del grupo dueño del archivo, el mismo que aparece en ls -l.
+  - id: ngroup
+    titulo: "group:auditoria: (un grupo con nombre)"
+    area: { x: 2.78, y: 43.95, ancho: 94.44, alto: 5.79 }
+    texto: >-
+      Una entrada extra para otro grupo. Así se da acceso a un segundo grupo sin cambiar el
+      grupo dueño. Se agrega con setfacl -m g:auditoria:rx.
+  - id: mask
+    titulo: "mask:: (la máscara)"
+    area: { x: 2.78, y: 49.74, ancho: 94.44, alto: 5.79 }
+    texto: >-
+      El límite máximo para todas las entradas con nombre y para el grupo dueño. Si la máscara
+      es r--, nadie de esas entradas puede escribir, aunque su entrada diga rw-: getfacl lo
+      marca con #effective. Ojo: con ACL, los permisos de grupo que muestra ls -l son la
+      máscara, y chmod g-w la cambia.
+  - id: other
+    titulo: "other:: (el resto)"
+    area: { x: 2.78, y: 55.53, ancho: 94.44, alto: 5.79 }
+    texto: >-
+      Los permisos de todos los demás, como en los permisos básicos.
+  - id: default
+    titulo: "default: (ACL por defecto)"
+    area: { x: 2.78, y: 61.32, ancho: 94.44, alto: 28.95 }
+    texto: >-
+      Solo existen en carpetas. No dan acceso a la carpeta: son el modelo que copian los
+      archivos y subcarpetas que se creen adentro. Se agregan con setfacl -d -m. Sin ellas, los
+      archivos nuevos no tendrían la entrada de auditoria.

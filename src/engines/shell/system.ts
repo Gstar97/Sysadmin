@@ -636,6 +636,7 @@ export class System {
       // authselect mantiene system-auth y password-auth y los enlaza desde /etc/pam.d.
       v.mkdirp('/etc/pam.d', ROOT_CRED)
       for (const f of ['system-auth', 'password-auth']) v.symlink(`/etc/authselect/${f}`, `/etc/pam.d/${f}`, ROOT_CRED)
+      v.mkdirp('/etc/security/pwquality.conf.d', ROOT_CRED)
     }
   }
 

@@ -1,0 +1,75 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué hace PAM?
+  opciones:
+    - { texto: "Decide la autenticación de programas como sshd, sudo y passwd mediante módulos configurables", correcta: true, explicacion: "Cada programa tiene su archivo en /etc/pam.d/." }
+    - { texto: "Guarda las contraseñas", explicacion: "Las contraseñas están en /etc/shadow; PAM las consulta." }
+    - { texto: "Es el firewall del sistema", explicacion: "No tiene relación con el firewall." }
+    - { texto: "Es un gestor de paquetes", explicacion: "No instala software." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En Rocky Linux quieres activar el bloqueo por intentos fallidos. ¿Cuál es la forma correcta?
+  opciones:
+    - { texto: "sudo authselect enable-feature with-faillock", correcta: true, explicacion: "authselect genera los archivos de PAM con las líneas necesarias." }
+    - { texto: "Editar /etc/pam.d/system-auth con vi", explicacion: "authselect lo reescribe y perderías el cambio." }
+    - { texto: "sudo usermod -L para cada usuario", explicacion: "Eso bloquea cuentas a mano, no por intentos." }
+    - { texto: "sudo passwd -l root", explicacion: "Bloquearía a root, no activaría el control." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando que desbloquea a la usuaria marta después de que faillock la bloqueó.
+  aceptadas: [sudo faillock --user marta --reset, sudo faillock --reset --user marta]
+  explicacion: "--reset borra sus intentos fallidos y la desbloquea."
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Qué exige minclass = 3 en pwquality?
+  opciones:
+    - { texto: "Al menos tres tipos de caracteres entre minúsculas, mayúsculas, números y símbolos", correcta: true, explicacion: "Por ejemplo, minúsculas, números y un símbolo." }
+    - { texto: "Al menos 3 caracteres", explicacion: "El largo se controla con minlen." }
+    - { texto: "Cambiar la contraseña cada 3 meses", explicacion: "El vencimiento se configura con chage." }
+    - { texto: "Tres intentos antes de bloquear", explicacion: "Eso es deny en faillock." }
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Con deny = 5 y unlock_time = 900, ¿qué pasa si alguien falla 5 veces la contraseña de pedro?
+  opciones:
+    - { texto: "La cuenta queda bloqueada 15 minutos, aunque después se escriba la contraseña correcta", correcta: true, explicacion: "900 segundos son 15 minutos; un administrador puede desbloquearla antes con faillock --reset." }
+    - { texto: "Se borra la cuenta", explicacion: "Solo se bloquea temporalmente." }
+    - { texto: "Se bloquea para siempre", explicacion: "Para siempre sería unlock_time = 0." }
+    - { texto: "No pasa nada hasta el intento 900", explicacion: "deny es la cantidad de intentos." }
+- id: p06
+  tipo: encontrar_error
+  enunciado: Alguien editó /etc/pam.d/sudo en un servidor Ubuntu y ahora nadie puede usar sudo. Marca la línea que lo causa.
+  archivo: |
+    #%PAM-1.0
+    session    required   pam_limits.so
+    @include common-auth
+    auth       required   pam_deny.so
+    @include common-account
+    @include common-session-noninteractive
+  lineas_con_error: [4]
+  explicacion: pam_deny.so siempre rechaza. Como es required, cualquier autenticación de sudo falla aunque la contraseña sea correcta.
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Vas a modificar la configuración de PAM en un servidor remoto. ¿Qué precaución tomas?
+  opciones:
+    - { texto: "Dejar abierta una sesión de root y probar desde otra terminal que se puede entrar y usar sudo", correcta: true, explicacion: "Si algo falla, desde la sesión abierta lo arreglas." }
+    - { texto: "Cerrar todas las sesiones para que se apliquen los cambios", explicacion: "Si el cambio está mal, quedas afuera." }
+    - { texto: "Reiniciar el servidor después del cambio", explicacion: "PAM se lee en cada autenticación; reiniciar solo arriesga dejarte afuera." }
+    - { texto: "Desactivar SSH mientras tanto", explicacion: "Te cortaría el acceso." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    $ sudo faillock --user carlos
+    carlos:
+    When                Type  Source                                           Valid
+    2026-10-30 03:12:01 RHOST 203.0.113.45                                         V
+    2026-10-30 03:12:03 RHOST 203.0.113.45                                         V
+    2026-10-30 03:12:05 RHOST 203.0.113.45                                         V
+  opciones:
+    - { texto: "Hubo tres intentos fallidos seguidos a las 3 de la mañana desde una IP externa: probablemente alguien probando contraseñas", correcta: true, explicacion: "Antes de desbloquear, conviene investigar y avisar a seguridad." }
+    - { texto: "carlos cambió su contraseña tres veces", explicacion: "faillock registra intentos fallidos de autenticación." }
+    - { texto: "carlos inició sesión correctamente", explicacion: "Son fallos." }
+    - { texto: "Hay un error en faillock", explicacion: "Es la salida normal." }

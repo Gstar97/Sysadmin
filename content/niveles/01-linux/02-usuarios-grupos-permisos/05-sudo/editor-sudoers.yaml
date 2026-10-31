@@ -1,0 +1,22 @@
+tipo: configuracion
+titulo: Corregir la regla de sudo del equipo de soporte
+consigna: >-
+  Soporte tiene que poder reiniciar nginx, ver su estado y leer sus logs con
+  `journalctl -u nginx`, y nada más. Este archivo, escrito apurado, tiene errores y además da
+  demasiado. Corrígelo: el editor marca los problemas como lo haría visudo.
+lenguaje: sudoers
+nombre_archivo: /etc/sudoers.d/soporte
+archivo_inicial: |
+  # Soporte puede reiniciar el servidor web y ver sus registros
+  SOPORTE ALL=(root) systemctl restart nginx, systemctl status nginx
+  %soporte ALL=(ALL) NOPASSWD: ALL
+reglas:
+  - { tipo: sin_errores, mensaje: "visudo no encuentra errores" }
+  - { tipo: contiene, regex: "^%soporte\\s+ALL\\s*=\\s*\\(root\\)", mensaje: "La regla es para el grupo soporte (con %) y ejecuta como root" }
+  - { tipo: contiene, regex: "/usr/bin/systemctl restart nginx", mensaje: "Permite reiniciar nginx con la ruta completa" }
+  - { tipo: contiene, regex: "/usr/bin/systemctl status nginx", mensaje: "Permite ver el estado de nginx" }
+  - { tipo: contiene, regex: "/usr/bin/journalctl -u nginx", mensaje: "Permite leer los logs de nginx" }
+  - { tipo: no_contiene, regex: "NOPASSWD:\\s*ALL|\\)\\s*ALL\\s*$", mensaje: "No le da a soporte permiso para cualquier comando" }
+solucion: |
+  # Soporte puede reiniciar el servidor web y ver sus registros
+  %soporte ALL=(root) /usr/bin/systemctl restart nginx, /usr/bin/systemctl status nginx, /usr/bin/journalctl -u nginx

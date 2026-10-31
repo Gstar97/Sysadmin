@@ -1,0 +1,125 @@
+---
+id: n1-m2-l6
+titulo: Autenticación y políticas de contraseñas
+minutos: 90
+objetivos:
+  - Entender el papel de PAM en la autenticación.
+  - Aplicar políticas de complejidad (pwquality) y bloqueo por intentos fallidos (faillock).
+  - Desbloquear una cuenta y revisar sus intentos fallidos.
+glosario: [pam]
+verificado: 2026-10
+---
+
+import pam from './pam.svg?raw'
+import ejPam from './ej-pam.yaml'
+
+Cuando entras por SSH, usas sudo o cambias tu contraseña, alguien tiene que decidir si la contraseña es correcta, si la cuenta está habilitada y si la contraseña nueva es lo bastante segura. En Linux, ese "alguien" es un sistema de piezas intercambiables llamado PAM. Las auditorías de seguridad casi siempre piden dos cosas que se configuran ahí: contraseñas robustas y bloqueo después de varios intentos fallidos.
+
+<AntesDeEmpezar>
+- Las contraseñas se guardan cifradas en `/etc/shadow`; `passwd` las cambia y `chage` controla su vencimiento.
+- `sudo` pide la contraseña de quien lo usa.
+- Los registros de inicio de sesión están en `/var/log/secure` (Rocky) o `/var/log/auth.log` (Ubuntu).
+</AntesDeEmpezar>
+
+## PAM: los controles de la entrada
+
+Piensa en la entrada de un edificio de oficinas. Primero muestras tu credencial (¿eres quien dices?); después el guardia revisa si tu credencial está vigente y si a esta hora puedes entrar; si tienes que renovarla, te piden que cumpla ciertas reglas; y al entrar, se anota en el registro. Cada control lo hace alguien distinto, y el edificio puede agregar o cambiar controles sin rehacer la entrada.
+
+**<Termino id="pam">PAM</Termino>** (*Pluggable Authentication Modules*) funciona así: los programas que necesitan autenticar (sshd, sudo, login, passwd) no deciden por su cuenta, sino que le preguntan a PAM, que sigue una lista de **módulos** configurada en `/etc/pam.d/` para cada programa.
+
+<Diagrama svg={pam} alt="Los programas sshd, sudo y passwd consultan a PAM, que lee /etc/pam.d/ y hace cuatro preguntas en orden: auth (¿eres quien dices ser?, con pam_unix y pam_faillock), account (¿puedes entrar ahora?), password (¿la clave nueva es aceptable?, con pam_pwquality) y session (preparar la sesión)." pie="PAM separa la autenticación en cuatro tipos de control, cada uno con sus módulos." />
+
+Cada línea de un archivo de PAM dice el tipo, qué tan importante es el módulo y cuál es:
+
+```text
+auth        required      pam_faillock.so preauth silent
+auth        sufficient    pam_unix.so nullok
+auth        required      pam_deny.so
+password    requisite     pam_pwquality.so local_users_only
+```
+
+| Control | Qué significa |
+| --- | --- |
+| `required` | Tiene que aprobar, pero se siguen revisando los demás (para no dar pistas de cuál falló) |
+| `requisite` | Tiene que aprobar; si falla, se corta ahí |
+| `sufficient` | Si aprueba (y nada obligatorio falló antes), alcanza: se deja de revisar |
+| `optional` | Su resultado casi nunca importa |
+| `include` / `substack` | Incluye las líneas de otro archivo (por ejemplo, `system-auth`) |
+
+<Advertencia titulo="PAM puede dejarte afuera">
+Un error en PAM puede impedir que **nadie** inicie sesión, ni por SSH ni con sudo. Antes de tocarlo, abre una sesión de root (`sudo -i`) y no la cierres hasta probar desde **otra** terminal que puedes entrar y usar sudo. Si algo falla, desde la sesión abierta lo arreglas.
+</Advertencia>
+
+## Quién escribe los archivos de PAM
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    Los archivos centrales (`/etc/pam.d/system-auth` y `password-auth`) los genera **authselect** y no se editan a mano: authselect los reescribe. Se trabaja con sus comandos: `sudo authselect current` muestra el perfil y las funciones activas; `sudo authselect enable-feature with-faillock` agrega el bloqueo por intentos; `sudo authselect list-features` muestra las disponibles.
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    Los archivos centrales son `/etc/pam.d/common-auth`, `common-account`, `common-password` y `common-session`, y los mantiene `pam-auth-update` para los módulos de los paquetes instalados. Algunas funciones, como faillock, requieren agregar líneas a mano en `common-auth` siguiendo el ejemplo de `man pam_faillock`, con todas las precauciones de la advertencia de arriba.
+  </Distro>
+</Distros>
+
+## Contraseñas robustas con pwquality
+
+El módulo `pam_pwquality` revisa las contraseñas nuevas cuando alguien usa `passwd`. Su configuración está en `/etc/security/pwquality.conf` (todo comentado, con los valores por defecto) y en archivos propios dentro de `/etc/security/pwquality.conf.d/`:
+
+| Opción | Qué exige |
+| --- | --- |
+| `minlen = 12` | Largo mínimo |
+| `minclass = 3` | Al menos tres tipos entre minúsculas, mayúsculas, números y símbolos |
+| `dictcheck = 1` | Que no sea una palabra del diccionario (activado por defecto) |
+| `maxrepeat = 3` | No más de tres caracteres iguales seguidos |
+| `enforce_for_root` | Aplicar la política también cuando root cambia contraseñas |
+
+En Rocky viene instalado; en Ubuntu hay que instalarlo con `sudo apt install libpam-pwquality`, y se activa solo.
+
+<EnSimple>
+pwquality es el empleado que, cuando renuevas tu credencial, revisa que la nueva no sea "1234" ni tu nombre. faillock (que viene a continuación) es el guardia que, después de varios intentos con una credencial equivocada, no deja pasar a nadie con ese nombre por un rato, aunque después traiga la correcta.
+</EnSimple>
+
+## Bloqueo por intentos fallidos con faillock
+
+`pam_faillock` cuenta los intentos fallidos de cada cuenta y, al llegar a un límite, la bloquea por un tiempo. Frena a quien intenta adivinar contraseñas probando miles por minuto. Se configura en `/etc/security/faillock.conf`:
+
+| Opción | Por defecto | Qué hace |
+| --- | --- | --- |
+| `deny` | 3 | Intentos fallidos antes de bloquear |
+| `fail_interval` | 900 | Ventana de tiempo (en segundos) en la que se cuentan los fallos |
+| `unlock_time` | 600 | Segundos que dura el bloqueo (0 = hasta que un administrador lo quite) |
+| `even_deny_root` | (desactivado) | Bloquear también a root |
+
+Y se administra con el comando `faillock`:
+
+```bash
+sudo faillock --user laura           # ver sus intentos fallidos
+sudo faillock --user laura --reset   # desbloquearla
+```
+
+<Pregunta id="p05" />
+
+## Practicar
+
+<Terminal ejercicio={ejPam} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Una persona no puede entrar aunque escribe bien la contraseña">
+    Puede estar bloqueada por faillock tras varios intentos fallidos (los de un celular con la contraseña vieja guardada son un clásico). `sudo faillock --user nombre` muestra los fallos y de dónde vinieron; `--reset` la desbloquea. Si los intentos vienen de IP desconocidas, primero investiga.
+  </ErrorComun>
+  <ErrorComun titulo="Edité system-auth a mano y mis cambios desaparecieron">
+    En la familia Red Hat lo genera authselect, que lo reescribe al activar o desactivar funciones. Usa `authselect enable-feature`. Si necesitas algo que authselect no ofrece, se crea un perfil propio con `authselect create-profile`.
+  </ErrorComun>
+  <ErrorComun titulo="passwd acepta contraseñas débiles aunque configuré pwquality">
+    En Ubuntu, falta instalar `libpam-pwquality`. En ambas, root puede saltarse la política salvo con `enforce_for_root`. Y revisa que no haya un error de escritura en la opción: pwquality ignora en silencio las líneas que no entiende.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- PAM decide la autenticación de sshd, sudo, login y passwd según `/etc/pam.d/`, en cuatro tipos: auth, account, password y session.
+- Controles: required (tiene que aprobar), requisite (corta si falla), sufficient (alcanza si aprueba), optional.
+- En Rocky, authselect genera los archivos de PAM: `authselect current`, `enable-feature with-faillock`. En Ubuntu, `common-*` y `pam-auth-update`.
+- pwquality: `minlen`, `minclass`, `dictcheck`, en `/etc/security/pwquality.conf` o `pwquality.conf.d/`.
+- faillock: `deny`, `unlock_time`, `fail_interval` en `/etc/security/faillock.conf`; `faillock --user x` y `--reset`.
+- Antes de tocar PAM, deja abierta una sesión de root y prueba desde otra terminal.
+</Resumen>

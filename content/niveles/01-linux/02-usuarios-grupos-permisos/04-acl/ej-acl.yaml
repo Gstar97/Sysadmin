@@ -1,0 +1,79 @@
+tipo: terminal
+shell: bash
+titulo: Acceso de lectura para auditoría
+descripcion: >-
+  Llega una auditoría externa. Laura, del grupo auditoria, necesita leer (sin modificar) todo lo
+  que hay en la carpeta de contabilidad durante un mes, y también lo que se cree en ese tiempo.
+  No puedes cambiar el grupo de la carpeta, porque contabilidad sigue trabajando ahí.
+estado_inicial:
+  distro: rocky
+  hostname: rocky01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: marta, grupos: [contabilidad] }
+    - { nombre: laura, grupos: [auditoria] }
+  grupos:
+    - { nombre: contabilidad }
+    - { nombre: auditoria }
+  archivos:
+    /srv/contabilidad: { tipo: directorio, modo: "2770", grupo: contabilidad }
+    /srv/contabilidad/balance.txt: { contenido: "Activo: 120000\nPasivo: 45000\n", modo: "0660", dueno: marta, grupo: contabilidad }
+pasos:
+  - consigna: Comprueba que laura hoy no puede leer el balance.
+    verificar:
+      - { comando_usado: 'sudo\s+-u\s+laura\s+(cat|less|head)\s+/srv/contabilidad/balance\.txt' }
+      - { salida_contiene: Permission denied }
+    pistas:
+      - "`sudo -u laura cat /srv/contabilidad/balance.txt`"
+    solucion: [sudo -u laura cat /srv/contabilidad/balance.txt]
+    explicacion: Laura no es la dueña ni está en contabilidad, y el resto no tiene permisos.
+  - consigna: Dale al grupo auditoria permiso para entrar a la carpeta y ver la lista (r y x).
+    verificar:
+      - { archivo: /srv/contabilidad, acl_incluye: "group:auditoria:r-x" }
+    pistas:
+      - "`setfacl -m g:GRUPO:PERMISOS ruta`"
+      - "`sudo setfacl -m g:auditoria:rx /srv/contabilidad`"
+    solucion: [sudo setfacl -m g:auditoria:rx /srv/contabilidad]
+    explicacion: La carpeta sigue siendo del grupo contabilidad; auditoria tiene una entrada extra. `ls -ld` ahora muestra un + al final de los permisos.
+  - consigna: Dale permiso de lectura sobre el balance que ya existe, y comprueba que laura ya puede leerlo.
+    verificar:
+      - { archivo: /srv/contabilidad/balance.txt, acl_incluye: "group:auditoria:r--" }
+      - { salida_contiene: "Activo: 120000" }
+    pistas:
+      - "`sudo setfacl -m g:auditoria:r /srv/contabilidad/balance.txt`"
+      - "Después: `sudo -u laura cat /srv/contabilidad/balance.txt`"
+    solucion: [sudo setfacl -m g:auditoria:r /srv/contabilidad/balance.txt, sudo -u laura cat /srv/contabilidad/balance.txt]
+    explicacion: Con muchos archivos se haría de una vez con `sudo setfacl -R -m g:auditoria:rX /srv/contabilidad` (la X mayúscula da ejecución solo a las carpetas).
+  - consigna: Agrega una ACL por defecto para que lo que se cree desde ahora también lo pueda leer auditoria.
+    verificar:
+      - { archivo: /srv/contabilidad, acl_incluye: "default:group:auditoria:r-x" }
+    pistas:
+      - "La opción -d trabaja sobre la ACL por defecto"
+      - "`sudo setfacl -d -m g:auditoria:rx /srv/contabilidad`"
+    solucion: [sudo setfacl -d -m g:auditoria:rx /srv/contabilidad]
+    explicacion: >-
+      La ACL por defecto no da acceso a la carpeta: es el modelo que copian los archivos nuevos.
+  - consigna: Como marta, crea `/srv/contabilidad/marzo.txt` y revisa su ACL con getfacl.
+    verificar:
+      - { archivo: /srv/contabilidad/marzo.txt, acl_incluye: "group:auditoria:r-x" }
+      - { comando_usado: 'getfacl\s+.*marzo\.txt' }
+    pistas:
+      - "`sudo -u marta touch /srv/contabilidad/marzo.txt` y `sudo getfacl /srv/contabilidad/marzo.txt`"
+    solucion: [sudo -u marta touch /srv/contabilidad/marzo.txt, sudo getfacl /srv/contabilidad/marzo.txt]
+    explicacion: >-
+      El archivo heredó la entrada de auditoria. Fíjate en el comentario #effective: como un
+      archivo nuevo se pide sin permiso de ejecución, la máscara queda en rw- y auditoria tiene en
+      la práctica r--, que es justo lo que se quería.
+  - consigna: Terminó la auditoría. Quita todas las ACL de la carpeta y de su contenido.
+    verificar:
+      - { archivo: /srv/contabilidad, acl_no_incluye: auditoria }
+      - { archivo: /srv/contabilidad/balance.txt, acl_no_incluye: auditoria }
+    pistas:
+      - "-b quita todas las ACL extra y -R lo aplica a todo el contenido"
+      - "`sudo setfacl -R -b /srv/contabilidad`"
+    solucion: [sudo setfacl -R -b /srv/contabilidad]
+    explicacion: >-
+      Quitar los accesos temporales cuando ya no hacen falta es tan importante como darlos. Si
+      solo quisieras quitar a auditoria y dejar otras ACL, sería `setfacl -R -x g:auditoria` más
+      `setfacl -k` para la ACL por defecto.

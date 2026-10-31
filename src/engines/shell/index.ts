@@ -8,7 +8,7 @@ import { commandPackage } from './packages'
 import { bashStateSchema, type BashCheck, type BashStateInput } from './schema'
 import { COMMANDS, Shell } from './shell'
 import { System } from './system'
-import { modeString, ROOT_CRED } from './vfs'
+import { modeString, ROOT_CRED, type Inode } from './vfs'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
@@ -56,6 +56,28 @@ export interface CheckResult {
   label: string
 }
 
+/** Entradas de la ACL de un archivo, con el formato de getfacl (sin comentarios). */
+function aclEntries(sys: System, node: Inode): string[] {
+  const t = (p: number) => (p & 4 ? 'r' : '-') + (p & 2 ? 'w' : '-') + (p & 1 ? 'x' : '-')
+  const out = [`user::${t((node.mode >> 6) & 7)}`]
+  if (node.acl) {
+    for (const [uid, p] of node.acl.users) out.push(`user:${sys.userName(uid)}:${t(p)}`)
+    out.push(`group::${t(node.acl.groupObj)}`)
+    for (const [gid, p] of node.acl.groups) out.push(`group:${sys.groupName(gid)}:${t(p)}`)
+    out.push(`mask::${t(node.acl.mask)}`)
+  } else out.push(`group::${t((node.mode >> 3) & 7)}`)
+  out.push(`other::${t(node.mode & 7)}`)
+  const d = node.defaultAcl
+  if (d) {
+    out.push(`default:user::${t(d.user)}`)
+    for (const [uid, p] of d.users) out.push(`default:user:${sys.userName(uid)}:${t(p)}`)
+    out.push(`default:group::${t(d.group)}`)
+    for (const [gid, p] of d.groups) out.push(`default:group:${sys.groupName(gid)}:${t(p)}`)
+    out.push(`default:other::${t(d.other)}`)
+  }
+  return out
+}
+
 /** Comprueba una verificación de ejercicio contra el estado actual del sistema simulado. */
 export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
   const sys = sh.sys
@@ -95,6 +117,17 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
       if (check.destino) {
         ok &&= own.type === 'symlink' && own.data === check.destino
         parts.push(`apunta a ${check.destino}`)
+      }
+      if (check.acl_incluye !== undefined || check.acl_no_incluye !== undefined) {
+        const text = aclEntries(sys, node).join('\n')
+        if (check.acl_incluye !== undefined) {
+          ok &&= text.split('\n').includes(check.acl_incluye)
+          parts.push(`ACL con ${check.acl_incluye}`)
+        }
+        if (check.acl_no_incluye !== undefined) {
+          ok &&= !text.includes(check.acl_no_incluye)
+          parts.push(`ACL sin ${check.acl_no_incluye}`)
+        }
       }
       if (check.enlaces !== undefined) {
         ok &&= node.nlink === check.enlaces

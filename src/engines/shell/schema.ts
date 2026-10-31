@@ -122,6 +122,9 @@ export const bashCheckSchema = z.union([
     destino: z.string().optional(),
     /** Cantidad de nombres (enlaces duros) que apuntan al mismo archivo. */
     enlaces: z.number().int().min(1).optional(),
+    /** Entrada que tiene que aparecer en la ACL, como la muestra getfacl (ej.: group:auditoria:r-x). */
+    acl_incluye: z.string().optional(),
+    acl_no_incluye: z.string().optional(),
   }),
   z.strictObject({
     usuario: z.string(),

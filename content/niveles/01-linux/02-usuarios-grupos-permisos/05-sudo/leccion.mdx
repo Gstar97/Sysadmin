@@ -1,0 +1,128 @@
+---
+id: n1-m2-l5
+titulo: sudo y privilegios
+minutos: 120
+objetivos:
+  - Configurar sudo de forma segura con visudo y archivos en /etc/sudoers.d.
+  - Dar permisos acotados a ciertos comandos en lugar de acceso total.
+  - Diferenciar su, su - y sudo -i, y revisar en los logs quién usó sudo.
+  - Saber que Ubuntu 26.04 usa sudo-rs por defecto y qué cambia en la práctica.
+glosario: [sudo, sudoers, minimo-privilegio]
+verificado: 2026-10
+---
+
+import regla from './regla.svg?raw'
+import editorSudoers from './editor-sudoers.yaml'
+import ejSudo from './ej-sudo.yaml'
+
+Desde la primera lección del nivel vienes usando `sudo` delante de los comandos administrativos. Ahora vas a ver cómo funciona por dentro y, sobre todo, cómo configurarlo para que cada persona tenga exactamente los privilegios que necesita: ni uno más. Es uno de los controles de seguridad más importantes de un servidor, y uno de los que más revisan las auditorías.
+
+<AntesDeEmpezar>
+- **root** puede todo; el resto de las cuentas tiene permisos limitados.
+- En Rocky, los miembros del grupo `wheel` pueden usar sudo; en Ubuntu, los del grupo `sudo`.
+- El principio de **mínimo privilegio**: cada uno, solo lo que su tarea necesita (lección 0.2.5).
+</AntesDeEmpezar>
+
+## su y sudo: dos formas de ser otro usuario
+
+| Comando | Qué hace | Contraseña que pide |
+| --- | --- | --- |
+| `su` | Abre un shell como root, pero conserva tu entorno (tu carpeta, tus variables) | La de root |
+| `su -` | Abre una sesión de root completa, como si root hubiera iniciado sesión | La de root |
+| `sudo comando` | Ejecuta **un** comando como root y vuelve | La tuya |
+| `sudo -i` | Abre una sesión de root completa | La tuya |
+| `sudo -u laura comando` | Ejecuta un comando como otro usuario | La tuya |
+
+La diferencia de fondo es enorme. Con `su`, todos los administradores comparten la contraseña de root: si alguien se va de la empresa, hay que cambiarla y avisar a todos, y en los registros solo queda "root hizo esto". Con `sudo`, cada uno usa su propia contraseña, se puede limitar qué puede hacer cada persona y cada comando queda registrado con su nombre. Por eso en Ubuntu la cuenta root ni siquiera tiene contraseña, y en Rocky el instalador recomienda no habilitarla.
+
+<EnSimple>
+`su` es prestarle a alguien la llave maestra del edificio: puede abrir todo y nadie sabe qué puerta abrió. `sudo` es la recepción con un registro: cada persona pide la llave de una oficina concreta, firma, y solo le dan las que tiene autorizadas.
+</EnSimple>
+
+## Cómo se escribe una regla
+
+La configuración de sudo está en `/etc/sudoers` y en los archivos de la carpeta `/etc/sudoers.d/`. Cada regla responde cuatro preguntas: quién, en qué equipos, como quién y qué comandos.
+
+<Diagrama svg={regla} alt="La regla %soporte ALL=(root) NOPASSWD: /usr/bin/systemctl restart nginx, con sus partes: quién (el grupo soporte), en qué equipos (ALL), como quién (root), una etiqueta opcional (NOPASSWD) y los comandos con su ruta completa." pie="Las partes de una regla de sudo." />
+
+Algunos ejemplos reales:
+
+```text
+%wheel     ALL=(ALL)  ALL                                    # el grupo wheel puede todo (Rocky)
+%soporte   ALL=(root) /usr/bin/systemctl restart nginx       # solo ese comando
+laura      ALL=(root) /usr/bin/journalctl -u nginx           # una persona, un comando
+backup     ALL=(root) NOPASSWD: /usr/local/bin/respaldo.sh   # una tarea automática, sin contraseña
+Cmnd_Alias WEB = /usr/bin/systemctl restart nginx, /usr/bin/systemctl status nginx
+%web       ALL=(root) WEB                                    # un alias agrupa comandos
+```
+
+Reglas para escribirlas bien:
+
+- **Los comandos van con la ruta completa** (`/usr/bin/systemctl`, no `systemctl`). `which systemctl` te la dice.
+- Si escribes argumentos, solo se permite exactamente eso. Sin argumentos, se permite el comando con **cualquier** argumento.
+- Nunca permitas editores, shells, `less` o `su` con sudo: desde cualquiera de ellos se abre una terminal de root, y la regla acotada deja de servir.
+- `NOPASSWD` solo para comandos puntuales que corren tareas automáticas. Nunca con `ALL`.
+
+## Editar sin romper nada: visudo y sudoers.d
+
+Un error de sintaxis en sudoers puede dejar a **todos** sin poder usar sudo, incluido tú. Por eso nunca se edita con un editor común:
+
+- **`sudo visudo`** abre `/etc/sudoers` y, al guardar, revisa la sintaxis. Si hay un error, no guarda y te pregunta qué hacer.
+- **`sudo visudo -f /etc/sudoers.d/soporte`** hace lo mismo con un archivo propio. Es la forma recomendada: no se toca el archivo principal (que las actualizaciones pueden reemplazar), y cada regla queda en un archivo con un nombre que dice qué es.
+- **`sudo visudo -c`** revisa todos los archivos sin abrir nada.
+
+Los archivos de `/etc/sudoers.d/` tienen que ser de root, con permisos 440, y su nombre **no puede tener puntos**: sudo ignora `soporte.conf` o `soporte.bak`, lo cual es útil para dejar copias, pero confunde a quien no lo sabe.
+
+Practica con un archivo real: el editor marca los errores como lo haría visudo.
+
+<EditorConfig ejercicio={editorSudoers} />
+
+<Advertencia titulo="Antes de tocar sudo, deja una puerta abierta">
+Cuando cambias la configuración de sudo en un servidor remoto, deja abierta otra sesión de root (por ejemplo con `sudo -i`) hasta comprobar que todo funciona. Si te quedas sin sudo y sin contraseña de root, la única salida es la consola del servidor.
+</Advertencia>
+
+## Quién hizo qué
+
+Cada uso de sudo queda registrado con el usuario, la carpeta y el comando, incluidos los intentos rechazados:
+
+```text
+Oct 30 10:14:02 web01 sudo[2210]: laura : TTY=pts/1 ; PWD=/home/laura ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+Oct 30 10:14:40 web01 sudo[2236]: laura : command not allowed ; TTY=pts/1 ; PWD=/home/laura ; USER=root ; COMMAND=/usr/bin/cat /etc/shadow
+```
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    En `/var/log/secure` (`sudo grep sudo /var/log/secure`) y en el journal: `sudo journalctl _COMM=sudo`.
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    En `/var/log/auth.log` y en el journal: `sudo journalctl _COMM=sudo`. Desde Ubuntu 25.10 (y por lo tanto en 26.04 LTS), el comando `sudo` es **sudo-rs**, una reimplementación en el lenguaje Rust pensada para tener menos fallas de seguridad. Usa los mismos archivos (`/etc/sudoers` y `/etc/sudoers.d`), `visudo` funciona igual y las reglas de esta lección valen tal cual. Algunas opciones poco usadas de `Defaults` no están disponibles; si una configuración heredada no funciona, la versión clásica sigue instalada como `sudo.ws`.
+  </Distro>
+</Distros>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejSudo} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"usuario is not in the sudoers file. This incident will be reported."'>
+    La cuenta no está en el grupo con permisos de sudo (wheel en Rocky, sudo en Ubuntu) ni tiene una regla propia. Desde otra cuenta administradora: `sudo usermod -aG wheel usuario` (o `sudo`), y que vuelva a iniciar sesión.
+  </ErrorComun>
+  <ErrorComun titulo='"&gt;&gt;&gt; /etc/sudoers: syntax error near line 12 &lt;&lt;&lt;"'>
+    Hay un error en la regla de esa línea: casi siempre falta la ruta completa del comando, un paréntesis o el % de un grupo. visudo te ofrece volver a editar (e): corrígelo ahí. Nunca elijas guardar igual.
+  </ErrorComun>
+  <ErrorComun titulo="La regla está bien escrita pero no se aplica">
+    Revisa que el archivo de `/etc/sudoers.d/` no tenga un punto en el nombre, que sea de root con permisos 440, y que la persona haya vuelto a iniciar sesión si la regla es para un grupo al que la agregaste recién. `sudo -l -U usuario` muestra lo que sudo realmente ve.
+  </ErrorComun>
+  <ErrorComun titulo="Dar sudo para vim, less o bash">
+    Desde vim (`:!bash`), less (`!bash`) o cualquier shell se abre una terminal de root, y la regla acotada pasa a ser acceso total. Para editar un archivo protegido, existe `sudoedit archivo` (o `sudo -e`), que deja editar sin dar un shell.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `su -` usa la contraseña de root y no deja rastro de quién fue; `sudo` usa la de cada uno, limita qué se puede hacer y registra todo.
+- Una regla dice quién, en qué equipos, como quién y qué comandos: `%soporte ALL=(root) /usr/bin/systemctl restart nginx`.
+- Comandos con ruta completa; nada de editores, shells ni less; NOPASSWD solo para tareas puntuales.
+- Se edita con `visudo` o `visudo -f /etc/sudoers.d/nombre` (sin puntos en el nombre, root, 440). `visudo -c` revisa todo.
+- `sudo -l -U usuario` muestra sus permisos; los usos quedan en `/var/log/secure` (Rocky), `/var/log/auth.log` (Ubuntu) y el journal.
+- Ubuntu 26.04 usa sudo-rs: mismos archivos y mismas reglas.
+</Resumen>

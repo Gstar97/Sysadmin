@@ -1,0 +1,77 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Una carpeta pertenece al grupo ventas y además el grupo auditoria necesita leerla, sin cambiar nada para ventas. ¿Qué usas?
+  opciones:
+    - { texto: "Una ACL: sudo setfacl -m g:auditoria:rx carpeta", correcta: true, explicacion: "Agrega un grupo más sin tocar el dueño ni el grupo." }
+    - { texto: "sudo chgrp auditoria carpeta", explicacion: "Ventas perdería su acceso." }
+    - { texto: "sudo chmod o+rx carpeta", explicacion: "Lo abriría para todos los usuarios del servidor." }
+    - { texto: "Agregar a todos los de auditoría al grupo ventas", explicacion: "Les daría también permiso de escritura y acceso a todo lo de ventas." }
+- id: p02
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: ¿Qué te indica el + al final de los permisos?
+  salida: |
+    $ ls -ld /srv/proyectos
+    drwxrws---+ 6 root desarrollo 4096 Oct 30 12:01 /srv/proyectos
+  opciones:
+    - { texto: "Que la carpeta tiene una ACL: hay que mirar getfacl para ver todos los permisos", correcta: true, explicacion: "Los nueve caracteres de ls ya no muestran toda la información." }
+    - { texto: "Que tiene el sticky bit", explicacion: "El sticky aparece como t." }
+    - { texto: "Que tiene una etiqueta de SELinux", explicacion: "Eso es el punto (.)." }
+    - { texto: "Que está en otro disco", explicacion: "ls no muestra eso con un +." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: ¿Qué puede hacer pedro con este archivo?
+  salida: |
+    $ getfacl presupuesto.ods
+    # file: presupuesto.ods
+    # owner: marta
+    # group: finanzas
+    user::rw-
+    user:pedro:rw-            #effective:r--
+    group::rw-                #effective:r--
+    mask::r--
+    other::---
+  opciones:
+    - { texto: "Solo leerlo: la máscara r-- limita su entrada rw-", correcta: true, explicacion: "Los permisos efectivos son los que cuentan." }
+    - { texto: "Leerlo y modificarlo", explicacion: "La máscara no deja pasar la escritura." }
+    - { texto: "Nada", explicacion: "Tiene r efectivo." }
+    - { texto: "Todo, porque tiene una entrada con su nombre", explicacion: "La entrada está limitada por la máscara." }
+- id: p04
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Agregaste una ACL para auditoria en una carpeta y funciona con los archivos existentes, pero no con los nuevos. ¿Qué falta?
+  opciones:
+    - { texto: "La ACL por defecto: sudo setfacl -d -m g:auditoria:rx carpeta", correcta: true, explicacion: "Es la que heredan los archivos que se crean después." }
+    - { texto: "Repetir el comando cada vez que se cree un archivo", explicacion: "Para eso existe la ACL por defecto." }
+    - { texto: "El sticky bit", explicacion: "No tiene relación con la herencia de ACL." }
+    - { texto: "Reiniciar el servidor", explicacion: "No hace falta." }
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando que da a la usuaria laura permiso de lectura y escritura sobre /srv/datos/informe.txt con una ACL (con sudo).
+  aceptadas: [sudo setfacl -m u:laura:rw /srv/datos/informe.txt, sudo setfacl -m u:laura:rw- /srv/datos/informe.txt, sudo setfacl -m user:laura:rw /srv/datos/informe.txt]
+  explicacion: "-m modifica la ACL; u:usuario:permisos agrega la entrada."
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Una carpeta con ACL tenía permisos rwx para varios grupos. Alguien ejecutó chmod 750 y ahora nadie de la ACL puede escribir. ¿Por qué?
+  opciones:
+    - { texto: "Con ACL, chmod sobre el grupo cambia la máscara, que quedó en r-x", correcta: true, explicacion: "Se arregla con setfacl -m m::rwx o chmod g+w." }
+    - { texto: "chmod borró la ACL", explicacion: "La ACL sigue; lo que cambió es la máscara." }
+    - { texto: "Hace falta reiniciar", explicacion: "No tiene relación." }
+    - { texto: "Porque 750 tiene sticky", explicacion: "750 no tiene bits especiales." }
+- id: p07
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estas herramientas conservan las ACL al copiar o respaldar?
+  opciones:
+    - { texto: "cp -a", correcta: true, explicacion: "-a conserva permisos, dueños, fechas y ACL." }
+    - { texto: "tar --acls", correcta: true, explicacion: "Sin --acls, tar no las guarda." }
+    - { texto: "rsync -A", correcta: true, explicacion: "-A es la opción de ACL de rsync." }
+    - { texto: "cp sin opciones", explicacion: "No conserva ni dueños ni ACL." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Terminó un acceso temporal y quieres quitar todas las ACL de una carpeta y su contenido. ¿Qué comando usas?
+  opciones:
+    - { texto: "sudo setfacl -R -b carpeta", correcta: true, explicacion: "-b quita todas las entradas extra y la por defecto; -R lo aplica a todo." }
+    - { texto: "sudo chmod -R 770 carpeta", explicacion: "Cambia la máscara, pero las entradas siguen ahí." }
+    - { texto: "sudo rm -r carpeta", explicacion: "Borraría los datos." }
+    - { texto: "sudo setfacl -m carpeta", explicacion: "-m agrega o cambia entradas, no las quita." }
