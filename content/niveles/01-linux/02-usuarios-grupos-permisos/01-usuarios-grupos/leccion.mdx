@@ -1,0 +1,133 @@
+---
+id: n1-m2-l1
+titulo: Usuarios y grupos
+minutos: 150
+objetivos:
+  - Leer /etc/passwd, /etc/shadow y /etc/group y entender cada campo.
+  - Crear, modificar y eliminar usuarios y grupos (useradd, usermod, userdel, groupadd, passwd).
+  - Configurar el vencimiento de contraseñas con chage.
+glosario: [uid, grupo-principal, cuenta-servicio]
+verificado: 2026-10
+---
+
+import cuentas from './cuentas.svg?raw'
+import cuentasDatos from './cuentas.yaml'
+import ejUsuarios from './ej-usuarios.yaml'
+
+Dar de alta a alguien que entra a la empresa, sacarle el acceso a quien se va, agregar a una persona al grupo de su área: son de los pedidos más frecuentes que recibe un sysadmin. En esta lección vas a ver dónde guarda Linux las cuentas y cómo se administran. Es la base de todo el módulo: los permisos, sudo y las políticas de contraseñas se apoyan en usuarios y grupos.
+
+<AntesDeEmpezar>
+- **root** es el administrador; las demás cuentas tienen permisos limitados y usan `sudo` para lo administrativo.
+- Hay cuentas de personas y **cuentas de servicio**, que usan los programas (nginx, mysql) y no sirven para iniciar sesión (lección 0.2.5).
+- Los archivos de configuración están en `/etc` y se leen con `cat` o `less`.
+</AntesDeEmpezar>
+
+## Usuarios, números y grupos
+
+Piensa en el legajo de una empresa. Cada empleado tiene un número de legajo, y el sistema de la empresa trabaja con ese número: el nombre es para las personas. Además, cada empleado pertenece a un área (ventas, contabilidad, soporte), y muchas cosas se habilitan por área: la puerta de un piso, una carpeta compartida.
+
+En Linux pasa lo mismo:
+
+- Cada usuario tiene un número, el **<Termino id="uid">UID</Termino>**. Los permisos de los archivos se guardan con ese número, no con el nombre.
+- Cada usuario pertenece a uno o más **grupos**, que también tienen número (GID). Los grupos sirven para dar permisos a varias personas a la vez.
+- Cada usuario tiene un **<Termino id="grupo-principal">grupo principal</Termino>** (con el que se crean sus archivos) y puede tener grupos **secundarios**. En Rocky y Ubuntu, cada usuario nuevo tiene un grupo principal propio, con su mismo nombre.
+
+Los rangos de UID dicen qué tipo de cuenta es:
+
+| UID | Tipo de cuenta |
+| --- | --- |
+| 0 | root |
+| 1 a 999 | Cuentas de sistema y de servicios (nginx, sshd, chrony) |
+| 1000 en adelante | Personas |
+
+<EnSimple>
+El UID es el número de legajo y el grupo es el área. Si dos cuentas tuvieran el mismo UID, para el sistema serían la misma persona con dos nombres. Por eso, cuando se borra un usuario y se crea otro con su número, el nuevo "hereda" todos los archivos que quedaron del anterior.
+</EnSimple>
+
+## Los tres archivos de las cuentas
+
+- **`/etc/passwd`**: una línea por cuenta, con su nombre, número, carpeta y shell. Lo pueden leer todos.
+- **`/etc/shadow`**: las contraseñas cifradas y su vencimiento. Solo lo lee root.
+- **`/etc/group`**: una línea por grupo, con sus miembros secundarios: `ventas:x:1002:laura,carlos`.
+
+Toca cada campo para ver qué significa:
+
+<DiagramaInteractivo datos={cuentasDatos} svg={cuentas} alt="La línea laura:x:1001:1001:Laura Gómez:/home/laura:/bin/bash de /etc/passwd con sus siete campos, y la línea de laura en /etc/shadow con el nombre, la contraseña cifrada, el último cambio y los días mínimos, máximos y de aviso." />
+
+<Advertencia>
+Estos archivos no se editan a mano: si se rompe una línea, puede que nadie pueda iniciar sesión. Se modifican con los comandos de esta lección, que además los mantienen sincronizados entre sí. Para consultarlos, `getent passwd laura` y `getent group ventas` muestran la línea de una cuenta o un grupo.
+</Advertencia>
+
+## Crear, modificar y borrar
+
+| Tarea | Comando |
+| --- | --- |
+| Crear un grupo | `sudo groupadd ventas` |
+| Crear un usuario | `sudo useradd -m -c "Laura Gómez" -s /bin/bash laura` |
+| Ponerle o cambiarle la contraseña | `sudo passwd laura` |
+| Agregarlo a un grupo secundario | `sudo usermod -aG ventas laura` |
+| Cambiarle el shell | `sudo usermod -s /sbin/nologin laura` |
+| Bloquear / desbloquear la contraseña | `sudo usermod -L laura` / `sudo usermod -U laura` |
+| Borrar el usuario y su carpeta | `sudo userdel -r laura` |
+| Borrar un grupo | `sudo groupdel ventas` |
+| Ver los datos de una cuenta | `id laura`, `groups laura` |
+
+<Importante titulo="La -a de usermod -aG">
+`usermod -G ventas laura` (sin la `-a`) deja a laura **solo** en el grupo ventas y la saca de todos los demás grupos secundarios, incluido `wheel` o `sudo` si los tenía. Es un error clásico que deja a un administrador sin poder usar sudo. Usa siempre `-aG` (*append*), o `gpasswd -a usuario grupo`.
+</Importante>
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    `useradd` crea la carpeta personal aunque no uses `-m` y pone `/bin/bash` como shell. Para dar permiso de usar sudo: `sudo usermod -aG wheel laura`.
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    `useradd` solo crea la carpeta con `-m` y usa `/bin/sh` si no indicas otro shell. Ubuntu tiene además `adduser`, que pregunta todo de forma interactiva y crea la carpeta y la contraseña en un paso. Para sudo: `sudo usermod -aG sudo laura`.
+  </Distro>
+</Distros>
+
+Los cambios de grupo se aplican en el **próximo inicio de sesión**. Si agregas a alguien a un grupo mientras está conectado, `id` lo muestra en el grupo, pero sus procesos actuales siguen sin él hasta que cierre la sesión y vuelva a entrar.
+
+## Vencimiento de contraseñas con chage
+
+`chage` (*change age*) controla cuándo vencen las contraseñas de una cuenta:
+
+| Comando | Qué hace |
+| --- | --- |
+| `sudo chage -l laura` | Muestra la configuración actual |
+| `sudo chage -M 90 laura` | La contraseña vence cada 90 días |
+| `sudo chage -W 7 laura` | Avisa 7 días antes |
+| `sudo chage -d 0 laura` | Obliga a cambiarla en el próximo inicio de sesión |
+| `sudo chage -E 2026-12-31 laura` | La cuenta entera vence ese día (útil para contratos temporales) |
+
+Los valores por defecto para las cuentas nuevas están en `/etc/login.defs` (`PASS_MAX_DAYS`, `UID_MIN`), y solo se aplican a las cuentas que se crean después de cambiarlos.
+
+<Nota>
+Las guías de seguridad actuales (como la NIST SP 800-63B) ya no recomiendan obligar a cambiar la contraseña cada cierto tiempo si no hay sospecha de que se filtró: lleva a que las personas elijan contraseñas más débiles y predecibles. Igual vas a encontrar muchas empresas con políticas de vencimiento, y `chage -d 0` sigue siendo la forma correcta de que una persona cambie la contraseña inicial que le diste.
+</Nota>
+
+## Practicar
+
+<Terminal ejercicio={ejUsuarios} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Un administrador perdió el acceso a sudo después de agregarlo a un grupo">
+    Se usó `usermod -G grupo usuario` sin `-a`, que reemplaza todos los grupos secundarios. Desde otra cuenta con sudo (o como root desde la consola), devuélvelo al grupo: `usermod -aG wheel usuario` en Rocky, `usermod -aG sudo usuario` en Ubuntu.
+  </ErrorComun>
+  <ErrorComun titulo="El usuario está en el grupo pero sigue sin poder acceder">
+    Los grupos se cargan al iniciar sesión. Tiene que cerrar la sesión (incluidas las de SSH) y volver a entrar. Para comprobarlo en la sesión actual, `id` sin argumentos muestra los grupos que realmente tiene ese proceso.
+  </ErrorComun>
+  <ErrorComun titulo="En Ubuntu el usuario nuevo no tiene carpeta o tiene un shell raro">
+    `useradd` sin `-m` no crea la carpeta y sin `-s` usa `/bin/sh`. Créala con `sudo mkhomedir_helper laura` (o borra y vuelve a crear la cuenta con `-m -s /bin/bash`), o usa `adduser`.
+  </ErrorComun>
+  <ErrorComun titulo='"userdel: user laura is currently used by process 2381"'>
+    La persona tiene una sesión abierta o procesos corriendo. Revisa con `ps -u laura` (o `who`), pide que cierre la sesión o termina sus procesos, y después borra la cuenta.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Cada cuenta tiene un UID (0 root, 1 a 999 sistema, 1000+ personas) y un grupo principal; puede tener grupos secundarios.
+- `/etc/passwd` tiene las cuentas (7 campos), `/etc/shadow` las contraseñas cifradas y su vencimiento, `/etc/group` los grupos. No se editan a mano.
+- `useradd -m -c -s`, `passwd`, `usermod -aG` (siempre con -a), `usermod -L/-U`, `userdel -r`, `groupadd`, `groupdel`, `id`.
+- `chage -l` muestra el vencimiento; `-M` días máximos, `-W` aviso, `-d 0` obliga a cambiar la contraseña, `-E` vence la cuenta.
+- Los cambios de grupo se aplican en el próximo inicio de sesión.
+</Resumen>

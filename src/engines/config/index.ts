@@ -5,6 +5,7 @@ import { validateCompose } from './compose'
 import { validateFstab } from './fstab'
 import { findDirectives, validateNginx } from './nginx'
 import { validateSshd } from './sshd'
+import { validateSudoers } from './sudoers'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -33,6 +34,8 @@ export function validateConfig(lang: ConfigLanguage, text: string): Validation {
       return validateSshd(text)
     case 'fstab':
       return { diagnostics: validateFstab(text).diagnostics }
+    case 'sudoers':
+      return { diagnostics: validateSudoers(text).diagnostics }
     case 'texto':
       return { diagnostics: [] }
   }

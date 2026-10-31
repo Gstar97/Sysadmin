@@ -1,0 +1,72 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué un usuario común puede cambiar su contraseña si /etc/shadow solo lo modifica root?
+  opciones:
+    - { texto: "Porque /usr/bin/passwd tiene SUID y se ejecuta con los permisos de root", correcta: true, explicacion: "El programa controla que cada uno cambie solo su propia contraseña." }
+    - { texto: "Porque /etc/shadow tiene permisos 777", explicacion: "Solo root puede leerlo y modificarlo." }
+    - { texto: "Porque passwd usa sudo por dentro", explicacion: "No necesita sudo: lo resuelve el bit SUID." }
+    - { texto: "Porque todos los usuarios están en el grupo shadow", explicacion: "No es así." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En una carpeta compartida, los archivos que crea cada persona quedan con su grupo personal y los demás no pueden modificarlos. ¿Qué falta?
+  opciones:
+    - { texto: "El bit SGID en la carpeta", correcta: true, explicacion: "Con SGID, lo que se crea adentro hereda el grupo de la carpeta." }
+    - { texto: "El sticky bit", explicacion: "El sticky controla quién borra, no el grupo de los archivos nuevos." }
+    - { texto: "El SUID en la carpeta", explicacion: "El SUID en carpetas no tiene efecto en Linux." }
+    - { texto: "Permisos 777", explicacion: "Abrirían la carpeta a todos sin resolver el grupo." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: ¿Qué permisos especiales tiene cada uno?
+  salida: |
+    $ ls -ld /tmp /srv/ventas /usr/bin/su
+    drwxrwxrwt. 12 root root   4096 Oct 30 10:12 /tmp
+    drwxrws---.  4 root ventas 4096 Oct 30 09:40 /srv/ventas
+    -rwsr-xr-x.  1 root root  57224 Oct 20 08:00 /usr/bin/su
+  opciones:
+    - { texto: "/tmp sticky, /srv/ventas SGID, /usr/bin/su SUID", correcta: true, explicacion: "t al final es sticky; s en el grupo es SGID; s en el dueño es SUID." }
+    - { texto: "Los tres tienen SUID", explicacion: "La posición de la s o la t indica el bit." }
+    - { texto: "/tmp SUID, /srv/ventas sticky, su SGID", explicacion: "Está mezclado: mira la posición de cada letra." }
+    - { texto: "Ninguno tiene permisos especiales", explicacion: "s y t son justamente los permisos especiales." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que deja /srv/proyectos con permisos rwxrws--- (en octal, con sudo).
+  aceptadas: [sudo chmod 2770 /srv/proyectos]
+  explicacion: "2 es el SGID y 770 los permisos de dueño, grupo y resto."
+- id: p05
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En /srv/publico (permisos 1777), Pedro intenta borrar un archivo de Marta. ¿Qué pasa?
+  opciones:
+    - { texto: "No puede: el sticky bit solo deja borrar al dueño del archivo, al de la carpeta y a root", correcta: true, explicacion: "Aunque tenga w en la carpeta." }
+    - { texto: "Lo borra, porque tiene w en la carpeta", explicacion: "Sin sticky sí; con sticky, no." }
+    - { texto: "Lo borra solo si el archivo tiene w para el resto", explicacion: "Los permisos del archivo no deciden quién lo borra." }
+    - { texto: "No puede crear archivos ahí", explicacion: "1777 deja crear a todos." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué comando busca todos los programas con SUID del sistema?
+  opciones:
+    - { texto: "sudo find / -perm -4000 -type f 2>/dev/null", correcta: true, explicacion: "-perm -4000 busca el bit SUID." }
+    - { texto: "ls -l / | grep s", explicacion: "Solo mira la raíz y encontraría cualquier s." }
+    - { texto: "find / -name suid", explicacion: "Busca archivos llamados suid." }
+    - { texto: "chmod -R u-s /", explicacion: "Eso quitaría el SUID a todo, rompiendo passwd, sudo y su." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: ¿Qué indica la S mayúscula?
+  salida: |
+    $ ls -ld /srv/equipo
+    drwxrwS---. 2 root equipo 4096 Oct 30 10:12 /srv/equipo
+  opciones:
+    - { texto: "Que el SGID está puesto, pero el grupo no tiene x: probablemente un error de permisos", correcta: true, explicacion: "Sin x, los del grupo ni siquiera pueden entrar a la carpeta." }
+    - { texto: "Que el SGID es más fuerte", explicacion: "La mayúscula indica que falta la x debajo." }
+    - { texto: "Que es un enlace simbólico", explicacion: "Los enlaces empiezan con l." }
+    - { texto: "Que tiene SUID", explicacion: "El SUID va en la posición del dueño." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Un compañero propone poner SUID a un script de backup para que pueda leer archivos de root. ¿Qué respondes?
+  opciones:
+    - { texto: "Linux ignora el SUID en scripts; lo correcto es una regla de sudo acotada o ejecutarlo como root desde una tarea programada", correcta: true, explicacion: "Y aunque funcionara, un SUID root es un riesgo de seguridad." }
+    - { texto: "Que es buena idea", explicacion: "No funciona en scripts y sería un riesgo." }
+    - { texto: "Que use 777 en lugar de SUID", explicacion: "Tampoco le daría acceso a los archivos de root y abriría el script a todos." }
+    - { texto: "Que lo ponga en /tmp", explicacion: "No cambia nada y es peor." }

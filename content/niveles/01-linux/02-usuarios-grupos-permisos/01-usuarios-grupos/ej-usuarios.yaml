@@ -1,0 +1,96 @@
+tipo: terminal
+shell: bash
+titulo: Altas, cambios y bajas de un día normal
+descripcion: >-
+  Llegan tres pedidos de Recursos Humanos: dar de alta a Laura, que entra al área de ventas;
+  bloquear temporalmente a Pedro, que se va de licencia; y dar de baja la cuenta "temporal" de un
+  pasante que terminó su contrato.
+estado_inicial:
+  distro: rocky
+  hostname: rocky01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: pedro, comentario: Pedro Ruiz }
+    - { nombre: temporal, comentario: Pasante }
+  archivos:
+    /home/temporal/notas.txt: "pendientes del pasante\n"
+pasos:
+  - consigna: Crea el grupo `ventas`.
+    verificar:
+      - { grupo: ventas }
+    pistas:
+      - "`sudo groupadd ventas`"
+    solucion: [sudo groupadd ventas]
+    explicacion: Como casi todo lo que cambia cuentas, necesita sudo. Quedó registrado al final de /etc/group.
+  - consigna: >-
+      Crea la cuenta `laura` con su carpeta personal, el comentario "Laura Gómez" y bash como
+      shell.
+    verificar:
+      - { usuario: laura, shell: /bin/bash, home: /home/laura }
+      - { archivo: /home/laura, tipo: directorio, dueno: laura }
+    pistas:
+      - "-m crea la carpeta personal, -c el comentario y -s el shell"
+      - "`sudo useradd -m -c \"Laura Gómez\" -s /bin/bash laura`"
+    solucion: ['sudo useradd -m -c "Laura Gómez" -s /bin/bash laura']
+    explicacion: >-
+      En Rocky, useradd crea la carpeta aunque no pongas -m, pero en Ubuntu no: escribirlo
+      siempre evita sorpresas. Ubuntu, además, usa /bin/sh como shell si no lo indicas.
+  - consigna: Asígnale una contraseña inicial con `passwd`.
+    verificar:
+      - { comando_usado: 'passwd\s+laura' }
+    pistas:
+      - "`sudo passwd laura`"
+    solucion: [sudo passwd laura]
+    explicacion: Hasta que tenga contraseña, la cuenta no puede iniciar sesión (en /etc/shadow figura !! en lugar de la contraseña cifrada).
+  - consigna: Agrega a laura al grupo `ventas` sin sacarla de los grupos que ya tiene.
+    verificar:
+      - { usuario: laura, en_grupos: [ventas] }
+      - { comando_usado: 'usermod\s+.*-a\w*G|usermod\s+.*-G\s+\S+\s+-a|gpasswd\s+-a' }
+    pistas:
+      - "La `-a` (append) es la clave: sin ella, -G reemplaza todos los grupos secundarios"
+      - "`sudo usermod -aG ventas laura`"
+    solucion: [sudo usermod -aG ventas laura]
+    explicacion: "`sudo gpasswd -a laura ventas` hace lo mismo. Laura va a ver el grupo nuevo la próxima vez que inicie sesión."
+  - consigna: Comprueba a qué grupos pertenece laura con `id`.
+    verificar:
+      - { comando_usado: 'id\s+laura' }
+      - { salida_contiene: ventas }
+    pistas:
+      - "`id laura`"
+    solucion: [id laura]
+    explicacion: Muestra el UID, el grupo principal (laura) y los secundarios (ventas).
+  - consigna: >-
+      La política dice que la contraseña vence cada 90 días y que la primera hay que cambiarla al
+      entrar. Configúralo con `chage -M 90` y `chage -d 0`, y revisa el resultado con `chage -l`.
+    verificar:
+      - { comando_usado: 'chage\s+.*-M\s*90' }
+      - { comando_usado: 'chage\s+.*-d\s*0' }
+      - { salida_contiene: password must be changed }
+    pistas:
+      - "Se pueden juntar: `sudo chage -M 90 -d 0 laura`"
+      - "Después: `sudo chage -l laura`"
+    solucion: [sudo chage -M 90 -d 0 laura, sudo chage -l laura]
+    explicacion: Así Laura elige una contraseña que solo ella conoce en su primer inicio de sesión, y la va a renovar cada 90 días.
+  - consigna: Bloquea la cuenta de pedro mientras está de licencia, sin borrarla.
+    verificar:
+      - { usuario: pedro, bloqueado: true }
+    pistas:
+      - "`sudo usermod -L pedro` (L de lock; -U la desbloquea)"
+    solucion: [sudo usermod -L pedro]
+    explicacion: >-
+      Bloquear agrega un ! delante de la contraseña cifrada: deja de funcionar, pero se conserva
+      todo. Cuando vuelva, `sudo usermod -U pedro`. Ojo: bloquear la contraseña no impide entrar
+      con una clave SSH; para eso, además, `sudo usermod -s /sbin/nologin pedro` o expirar la cuenta.
+  - consigna: Da de baja la cuenta `temporal` junto con su carpeta personal.
+    verificar:
+      - { usuario: temporal, existe: false }
+      - { archivo: /home/temporal, existe: false }
+    pistas:
+      - "-r borra también la carpeta personal y el correo"
+      - "`sudo userdel -r temporal`"
+    solucion: [sudo userdel -r temporal]
+    explicacion: >-
+      Antes de borrar en una empresa real, confirma que no haya archivos que haya que conservar
+      (y respáldalos): userdel -r no pregunta. Los archivos que la cuenta tenía fuera de su carpeta
+      quedan con un número de usuario huérfano, que `find / -nouser` encuentra.

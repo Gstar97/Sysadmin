@@ -1,0 +1,86 @@
+---
+id: n1-m2-l3
+titulo: Permisos especiales
+minutos: 90
+objetivos:
+  - Explicar SUID, SGID y sticky bit, y sus riesgos.
+  - Crear directorios compartidos por grupo con SGID.
+  - Auditar los programas con SUID de un servidor.
+glosario: [suid, sgid, sticky-bit]
+verificado: 2026-10
+---
+
+import especiales from './especiales.svg?raw'
+import ejCompartida from './ej-compartida.yaml'
+
+Con los permisos básicos se resuelve casi todo, pero hay tres situaciones que no alcanzan a cubrir: que un usuario común pueda cambiar su propia contraseña (que está en un archivo que solo root puede modificar), que en una carpeta compartida todos puedan editar lo que crean los demás, y que en una carpeta pública nadie pueda borrar lo ajeno. Para eso existen tres permisos especiales.
+
+<AntesDeEmpezar>
+- Los permisos se escriben en octal con tres dígitos: dueño, grupo y resto (750).
+- Para borrar un archivo alcanza con tener w en la carpeta que lo contiene.
+- Los archivos nuevos toman el grupo principal de quien los crea, y la umask decide sus permisos.
+</AntesDeEmpezar>
+
+## Los tres bits especiales
+
+Se agregan como un cuarto dígito **adelante** del octal: SUID vale 4, SGID vale 2 y sticky vale 1. Así, `chmod 2770` es 770 con SGID, y `chmod 1777` es 777 con sticky. En notación simbólica: `u+s`, `g+s` y `+t`.
+
+<Diagrama svg={especiales} alt="Tres columnas. SUID (4): en programas, se ejecutan con los permisos de su dueño, como /usr/bin/passwd, que se ve -rwsr-xr-x. SGID (2): en carpetas, lo que se crea adentro hereda el grupo, como /srv/contabilidad, drwxrws---. Sticky (1): en carpetas, cada uno solo borra lo suyo, como /tmp, drwxrwxrwt." pie="En ls -l, los bits especiales reemplazan a la x: s en el dueño o en el grupo, t en el resto." />
+
+### SUID: ejecutar con los permisos del dueño
+
+Las contraseñas están en `/etc/shadow`, que solo root puede modificar. Pero cualquier usuario puede cambiar la suya con `passwd`. ¿Cómo? `/usr/bin/passwd` tiene el bit **<Termino id="suid">SUID</Termino>**: quien lo ejecuta lo hace con los permisos de su dueño, root. El programa, a su vez, se encarga de que cada uno solo pueda cambiar su propia contraseña.
+
+<EnSimple>
+Es como el cajero de un banco: tú no puedes entrar a la bóveda, pero el cajero sí, y cuando le pides tu dinero entra y te trae exactamente eso, ni un billete más. SUID le presta al programa la llave del dueño, y el programa decide qué hacer con ella. Si el programa tiene un error, quien lo use puede terminar con la llave en la mano: por eso un SUID root es un riesgo.
+</EnSimple>
+
+Por ese riesgo, los programas con SUID root son lo primero que revisa una auditoría de seguridad (y lo primero que busca un atacante). Linux ignora el SUID en los scripts por seguridad: solo funciona en programas compilados. Nunca se agrega SUID a un programa "para que ande".
+
+### SGID: la herencia del grupo en carpetas compartidas
+
+En una carpeta, el bit **<Termino id="sgid">SGID</Termino>** hace que todo lo que se crea adentro **herede el grupo de la carpeta**, en lugar del grupo principal de quien lo crea. Es la pieza clave de una carpeta compartida por un área:
+
+```bash
+sudo groupadd contabilidad
+sudo usermod -aG contabilidad marta
+sudo mkdir /srv/contabilidad
+sudo chgrp contabilidad /srv/contabilidad
+sudo chmod 2770 /srv/contabilidad
+```
+
+Sin el SGID, un archivo que crea Marta queda en el grupo `marta`, y Diego no puede modificarlo aunque estén en la misma área. Con el SGID, queda en el grupo `contabilidad`, y con la umask de los usuarios (002) nace con escritura para el grupo. Las subcarpetas también heredan el bit.
+
+### Sticky: cada uno borra lo suyo
+
+En una carpeta donde todos pueden escribir, cualquiera podría borrar los archivos de los demás. El **<Termino id="sticky-bit">sticky bit</Termino>** lo impide: solo el dueño del archivo, el dueño de la carpeta y root pueden borrarlo o renombrarlo. Es lo que tiene `/tmp` (`drwxrwxrwt`).
+
+<Pregunta id="p05" />
+
+## Practicar
+
+<Terminal ejercicio={ejCompartida} />
+
+<Consejo>
+Una mayúscula en lugar de la minúscula avisa que algo está mal: `S` o `T` significan que el bit especial está puesto pero falta la x debajo (por ejemplo `rwS`). Un SUID sin x no hace nada, y un SGID sin x del grupo en una carpeta casi siempre es un error de permisos.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="En la carpeta compartida, nadie puede modificar los archivos de los demás">
+    Falta el SGID (los archivos quedan con el grupo personal de cada uno) o la umask de las personas es 022 (los archivos nacen sin escritura para el grupo). Revisa con `ls -l`: el grupo de los archivos tiene que ser el del área y sus permisos `rw-` para el grupo. Corrige los existentes con `chgrp -R` y `chmod -R g+w`, y pon el SGID con `chmod g+s`.
+  </ErrorComun>
+  <ErrorComun titulo="Agregar SUID a un script para que ejecute cosas como root">
+    Linux ignora el SUID en scripts, así que no funciona, y si alguien lo copia a un programa compilado, abre una puerta para que cualquier usuario sea root. Para dar a alguien permiso de ejecutar un comando como root, se usa sudo con una regla acotada (lección 1.2.5).
+  </ErrorComun>
+  <ErrorComun titulo="Alguien borra archivos de otros en una carpeta común">
+    La carpeta tiene escritura para todos y no tiene sticky. `sudo chmod +t carpeta` lo resuelve. Mejor aún, revisa si de verdad necesita escritura para el resto.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Los bits especiales van como cuarto dígito adelante: SUID 4, SGID 2, sticky 1 (`chmod 2770`, `chmod 1777`).
+- SUID: el programa se ejecuta con los permisos de su dueño (`passwd`). Es un riesgo: se audita con `find / -perm -4000`.
+- SGID en carpetas: lo que se crea adentro hereda el grupo de la carpeta. Con 2770 y umask 002, es la base de una carpeta compartida.
+- Sticky en carpetas: cada uno solo borra lo suyo (`/tmp`).
+- En `ls -l` aparecen como s y t en el lugar de la x; en mayúscula, falta la x.
+</Resumen>

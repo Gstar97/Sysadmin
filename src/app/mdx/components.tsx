@@ -41,6 +41,7 @@ const BitBoard = lazy(() => import('@/interactive/fundamentos/BitBoard').then((m
 const BaseConverter = lazy(() => import('@/interactive/fundamentos/BaseConverter').then((m) => ({ default: m.BaseConverter })))
 const UnitsCalculator = lazy(() => import('@/interactive/fundamentos/UnitsCalculator').then((m) => ({ default: m.UnitsCalculator })))
 const BitOps = lazy(() => import('@/interactive/fundamentos/BitOps').then((m) => ({ default: m.BitOps })))
+const PermissionsCalcView = lazy(() => import('@/interactive/linux/PermissionsCalc').then((m) => ({ default: m.PermissionsCalc })))
 const VimSimulatorView = lazy(() => import('@/interactive/vim/VimSimulator').then((m) => ({ default: m.VimSimulator })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
@@ -314,6 +315,14 @@ export function Terminal({ ejercicio, shell = 'bash', estado, titulo }: { ejerci
   )
 }
 
+export function CalculadoraPermisos(props: ComponentProps<typeof PermissionsCalcView>) {
+  return (
+    <Island>
+      <PermissionsCalcView {...props} />
+    </Island>
+  )
+}
+
 export function SimuladorVim({ ejercicio }: { ejercicio: unknown }) {
   const { value, error } = useExercise('vim', ejercicio)
   if (error) return <ExerciseError error={error} />
@@ -493,6 +502,7 @@ export const mdxComponents = {
   EnSimple,
   AntesDeEmpezar,
   SimuladorVim,
+  CalculadoraPermisos,
   ErroresComunes,
   ErrorComun,
   Resumen,

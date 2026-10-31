@@ -1,0 +1,87 @@
+tipo: terminal
+shell: bash
+titulo: La carpeta compartida de contabilidad
+descripcion: >-
+  Contabilidad necesita una carpeta donde Marta y Diego trabajen juntos: los dos tienen que poder
+  abrir y modificar lo que crea el otro, y nadie de fuera del área tiene que ver nada. Además,
+  necesitan una carpeta pública de intercambio donde nadie pueda borrar lo de los demás.
+estado_inicial:
+  distro: rocky
+  hostname: rocky01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: marta }
+    - { nombre: diego }
+    - { nombre: pedro }
+pasos:
+  - consigna: Crea el grupo `contabilidad` y agrega a marta y a diego.
+    verificar:
+      - { grupo: contabilidad, miembros: [marta, diego] }
+    pistas:
+      - "`sudo groupadd contabilidad`, y después `sudo usermod -aG contabilidad` para cada uno"
+    solucion: [sudo groupadd contabilidad, sudo usermod -aG contabilidad marta, sudo usermod -aG contabilidad diego]
+    explicacion: Los permisos se dan al grupo, no a cada persona. Cuando entre alguien nuevo al área, alcanza con agregarlo al grupo.
+  - consigna: Crea la carpeta `/srv/contabilidad`, cuyo grupo sea contabilidad.
+    verificar:
+      - { archivo: /srv/contabilidad, tipo: directorio, grupo: contabilidad }
+    pistas:
+      - "`sudo mkdir /srv/contabilidad` y `sudo chgrp contabilidad /srv/contabilidad`"
+    solucion: [sudo mkdir /srv/contabilidad, sudo chgrp contabilidad /srv/contabilidad]
+    explicacion: La carpeta sigue siendo de root, pero el grupo ahora es contabilidad.
+  - consigna: Deja permisos 2770 en la carpeta (todo para el dueño y el grupo, nada para el resto, y el bit SGID).
+    verificar:
+      - { archivo: /srv/contabilidad, modo: "2770" }
+    pistas:
+      - "El primer dígito, 2, es el SGID"
+      - "`sudo chmod 2770 /srv/contabilidad`"
+    solucion: [sudo chmod 2770 /srv/contabilidad]
+    explicacion: >-
+      En `ls -ld` vas a ver `drwxrws---`: la s en lugar de la x del grupo es el SGID.
+  - consigna: Como marta, crea un archivo `balance.txt` en la carpeta y mira de qué grupo quedó.
+    verificar:
+      - { archivo: /srv/contabilidad/balance.txt, dueno: marta, grupo: contabilidad }
+    pistas:
+      - "`sudo -u marta touch /srv/contabilidad/balance.txt` y `sudo ls -l /srv/contabilidad`"
+    solucion: [sudo -u marta touch /srv/contabilidad/balance.txt, sudo ls -l /srv/contabilidad]
+    explicacion: >-
+      Sin el SGID, el archivo habría quedado con el grupo marta (su grupo principal) y diego no
+      podría modificarlo. Con el SGID, hereda el grupo contabilidad, y como la umask de los usuarios
+      es 002, nace con escritura para el grupo.
+  - consigna: Comprueba que diego puede agregar una línea al archivo de marta.
+    verificar:
+      - { archivo: /srv/contabilidad/balance.txt, contenido_incluye: revisado }
+    pistas:
+      - "Como diego: `echo revisado | sudo -u diego tee -a /srv/contabilidad/balance.txt`"
+    solucion: ['echo revisado | sudo -u diego tee -a /srv/contabilidad/balance.txt']
+    explicacion: Diego no es el dueño, pero está en el grupo del archivo, que tiene rw-.
+  - consigna: Crea la carpeta pública `/srv/intercambio` con permisos 1777 (todos pueden crear archivos, pero cada uno solo borra los suyos).
+    verificar:
+      - { archivo: /srv/intercambio, tipo: directorio, modo: "1777" }
+    pistas:
+      - "El 1 adelante es el sticky bit"
+      - "`sudo mkdir /srv/intercambio` y `sudo chmod 1777 /srv/intercambio`"
+    solucion: [sudo mkdir /srv/intercambio, sudo chmod 1777 /srv/intercambio]
+    explicacion: Es lo mismo que tiene /tmp. En `ls -ld` aparece una t al final.
+  - consigna: >-
+      Como marta, crea `/srv/intercambio/aviso.txt`; después intenta borrarlo como pedro y
+      comprueba que no puede.
+    verificar:
+      - { archivo: /srv/intercambio/aviso.txt, dueno: marta }
+      - { comando_usado: 'sudo\s+-u\s+pedro\s+rm' }
+    pistas:
+      - "`sudo -u marta touch /srv/intercambio/aviso.txt`"
+      - "`sudo -u pedro rm -f /srv/intercambio/aviso.txt`"
+    solucion: [sudo -u marta touch /srv/intercambio/aviso.txt, sudo -u pedro rm -f /srv/intercambio/aviso.txt]
+    explicacion: Pedro tiene w en la carpeta, pero el sticky bit solo deja borrar al dueño del archivo, al dueño de la carpeta y a root.
+  - consigna: Busca los programas con SUID en /usr/bin, como haría una auditoría de seguridad.
+    verificar:
+      - { comando_usado: 'find\s+/usr/bin\s+.*-perm\s+(-4000|-u=s|/4000|/u=s)' }
+      - { salida_contiene: /usr/bin/passwd }
+    pistas:
+      - "`-perm -4000` busca los que tienen el bit SUID"
+      - "`find /usr/bin -perm -4000 2>/dev/null`"
+    solucion: [find /usr/bin -perm -4000 2>/dev/null]
+    explicacion: >-
+      Conviene conocer esta lista y revisar que no aparezcan programas nuevos. Un SUID root que no
+      debería estar ahí es una de las primeras cosas que busca un atacante para convertirse en root.

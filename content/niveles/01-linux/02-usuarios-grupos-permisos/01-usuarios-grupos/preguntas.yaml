@@ -1,0 +1,90 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué guarda el archivo /etc/shadow?
+  opciones:
+    - { texto: "Las contraseñas cifradas y su información de vencimiento", correcta: true, explicacion: "Por eso solo lo puede leer root." }
+    - { texto: "La lista de usuarios con su carpeta y su shell", explicacion: "Eso es /etc/passwd." }
+    - { texto: "Los grupos y sus miembros", explicacion: "Eso es /etc/group." }
+    - { texto: "Los permisos de sudo", explicacion: "Eso es /etc/sudoers." }
+- id: p02
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: ¿Qué dice esta línea sobre la cuenta nginx?
+  salida: |
+    $ getent passwd nginx
+    nginx:x:990:990:Nginx web server:/var/lib/nginx:/sbin/nologin
+  opciones:
+    - { texto: "Es una cuenta de servicio (UID menor a 1000) que no puede iniciar sesión", correcta: true, explicacion: "El UID 990 está en el rango de sistema y el shell /sbin/nologin impide iniciar sesión." }
+    - { texto: "Es una persona llamada Nginx web server", explicacion: "Ese es el comentario; el UID y el shell muestran que es una cuenta de servicio." }
+    - { texto: "Tiene la contraseña x", explicacion: "La x significa que la contraseña está en /etc/shadow." }
+    - { texto: "Es un administrador", explicacion: "Solo root tiene UID 0." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "Ana ya estaba en el grupo wheel. Ejecutas `sudo usermod -G ventas ana`. ¿Qué pasa?"
+  opciones:
+    - { texto: "Ana queda solo en ventas como grupo secundario y pierde wheel (y con eso, sudo)", correcta: true, explicacion: "Sin -a, -G reemplaza la lista. Había que usar -aG." }
+    - { texto: "Ana queda en wheel y en ventas", explicacion: "Eso hace usermod -aG." }
+    - { texto: "Da error porque ya tiene grupos", explicacion: "No da error: reemplaza la lista sin avisar." }
+    - { texto: "Cambia el grupo principal de ana a ventas", explicacion: "El grupo principal se cambia con -g (minúscula)." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que agrega al usuario carlos al grupo soporte sin sacarlo de sus otros grupos.
+  aceptadas: [sudo usermod -aG soporte carlos, sudo usermod -a -G soporte carlos, sudo gpasswd -a carlos soporte]
+  explicacion: "usermod -aG agrega; gpasswd -a hace lo mismo."
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Le diste a una persona nueva una contraseña inicial y quieres que la cambie al entrar por primera vez. ¿Qué haces?
+  opciones:
+    - { texto: "sudo chage -d 0 usuario", correcta: true, explicacion: "Marca la contraseña como vencida: el sistema obliga a cambiarla en el próximo inicio de sesión." }
+    - { texto: "sudo chage -M 0 usuario", explicacion: "Haría que la contraseña venza siempre, todos los días." }
+    - { texto: "sudo usermod -L usuario", explicacion: "Bloquea la cuenta: no podría entrar." }
+    - { texto: "sudo userdel usuario", explicacion: "Borra la cuenta." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice el segundo campo de cada línea?
+  salida: |
+    $ sudo grep -E "^(laura|pedro|backup):" /etc/shadow
+    laura:$6$Kp2rT...$Xc9fq...:20391:0:90:7:::
+    pedro:!$6$aB7mQ...$Lr2pw...:20380:0:99999:7:::
+    backup:!!:20100:0:99999:7:::
+  opciones:
+    - { texto: "laura tiene contraseña activa, pedro está bloqueado y backup nunca tuvo contraseña", correcta: true, explicacion: "El ! delante del hash indica bloqueo; !! significa que nunca se le asignó contraseña." }
+    - { texto: "Los tres tienen la misma contraseña", explicacion: "Son valores distintos." }
+    - { texto: "pedro tiene la contraseña más segura", explicacion: "El ! indica que está bloqueado." }
+    - { texto: "backup es root", explicacion: "No hay forma de saberlo por este campo; root se reconoce por el UID 0 en /etc/passwd." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Agregaste a laura al grupo ventas mientras estaba conectada por SSH, y sigue sin poder entrar a la carpeta del grupo. ¿Qué pasa?
+  opciones:
+    - { texto: "Los grupos se cargan al iniciar sesión: tiene que cerrar la sesión y volver a entrar", correcta: true, explicacion: "Los procesos que ya estaban corriendo mantienen los grupos viejos." }
+    - { texto: "Hay que reiniciar el servidor", explicacion: "Alcanza con que vuelva a iniciar sesión." }
+    - { texto: "usermod no funcionó", explicacion: "id laura la muestra en el grupo: el cambio está hecho." }
+    - { texto: "Hay que borrar y crear la cuenta de nuevo", explicacion: "No hace falta." }
+- id: p08
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para dar de alta a una persona nueva del área de soporte.
+  pasos:
+    - Crear el grupo si no existe (groupadd soporte)
+    - Crear la cuenta con carpeta, comentario y shell (useradd -m -c -s)
+    - Asignar una contraseña inicial (passwd)
+    - Agregarla al grupo del área (usermod -aG soporte)
+    - Obligarla a cambiar la contraseña al entrar (chage -d 0)
+  explicacion: El grupo tiene que existir antes de agregar a alguien; la contraseña inicial antes de marcarla como vencida.
+- id: p09
+  tipo: opcion_multiple
+  enunciado: ¿Qué rango de UID usan normalmente las cuentas de personas en Rocky y Ubuntu?
+  opciones:
+    - { texto: "Desde 1000", correcta: true, explicacion: "De 1 a 999 son cuentas de sistema; 0 es root." }
+    - { texto: "Desde 0", explicacion: "0 es root." }
+    - { texto: "De 1 a 99", explicacion: "Es parte del rango de sistema." }
+    - { texto: "Cualquiera, es al azar", explicacion: "Se asignan en orden según /etc/login.defs." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Alguien se va de licencia tres meses y quieres impedir que entre con su contraseña, sin borrar nada. ¿Qué usas?
+  opciones:
+    - { texto: "sudo usermod -L usuario", correcta: true, explicacion: "Bloquea la contraseña y conserva todo. Para impedir también el acceso con claves SSH, se cambia el shell a nologin o se vence la cuenta con chage -E." }
+    - { texto: "sudo userdel -r usuario", explicacion: "Borra la cuenta y sus archivos." }
+    - { texto: "sudo groupdel usuario", explicacion: "Borra un grupo, no bloquea la cuenta." }
+    - { texto: "sudo chage -M 90 usuario", explicacion: "Solo define cada cuánto vence la contraseña." }

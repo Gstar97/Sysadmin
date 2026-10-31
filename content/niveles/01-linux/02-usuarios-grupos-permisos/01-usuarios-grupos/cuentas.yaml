@@ -1,0 +1,83 @@
+tipo: diagrama
+titulo: Las líneas de /etc/passwd y /etc/shadow
+puntos:
+  - id: p-nombre
+    titulo: "Nombre de usuario"
+    area: { x: 3.06, y: 20.42, ancho: 9.58, alto: 12.5 }
+    texto: >-
+      El nombre con el que la persona inicia sesión. Va en minúsculas, sin espacios ni acentos.
+      El sistema en realidad trabaja con el número (UID): el nombre es para las personas.
+  - id: p-x
+    titulo: "Contraseña: x"
+    area: { x: 13.89, y: 20.42, ancho: 2.36, alto: 12.5 }
+    texto: >-
+      Antes, aquí estaba la contraseña cifrada. Como /etc/passwd lo pueden leer todos los
+      usuarios, hoy solo hay una x que significa "la contraseña está en /etc/shadow", que solo
+      puede leer root.
+  - id: p-uid
+    titulo: "UID"
+    area: { x: 17.5, y: 20.42, ancho: 7.78, alto: 12.5 }
+    texto: >-
+      El número de usuario. 0 es root; de 1 a 999 son cuentas de sistema (servicios); desde
+      1000, personas. Los permisos de los archivos se guardan con este número: si dos cuentas
+      tuvieran el mismo UID, serían la misma para el sistema.
+  - id: p-gid
+    titulo: "GID del grupo principal"
+    area: { x: 26.53, y: 20.42, ancho: 7.78, alto: 12.5 }
+    texto: >-
+      El número del grupo principal: el grupo con el que se crean los archivos de este usuario.
+      En Rocky y Ubuntu cada usuario tiene un grupo propio con su mismo nombre (y casi siempre
+      el mismo número).
+  - id: p-gecos
+    titulo: "Comentario (GECOS)"
+    area: { x: 35.56, y: 20.42, ancho: 20.42, alto: 12.5 }
+    texto: >-
+      Un comentario libre, normalmente el nombre completo y a veces el teléfono o el área. Se
+      carga con useradd -c o usermod -c.
+  - id: p-home
+    titulo: "Carpeta personal"
+    area: { x: 57.22, y: 20.42, ancho: 20.42, alto: 12.5 }
+    texto: >-
+      La carpeta personal. Ahí aparece la persona al iniciar sesión, y ahí van sus archivos y su
+      configuración (.bashrc, .ssh).
+  - id: p-shell
+    titulo: "Shell"
+    area: { x: 78.89, y: 20.42, ancho: 16.81, alto: 12.5 }
+    texto: >-
+      El programa que se abre al iniciar sesión. Para personas, /bin/bash; para cuentas de
+      servicio, /sbin/nologin (o /usr/sbin/nologin), que impide iniciar sesión con ellas.
+  - id: s-nombre
+    titulo: "Nombre de usuario"
+    area: { x: 3.06, y: 67.08, ancho: 9.58, alto: 12.5 }
+    texto: >-
+      El mismo nombre que en /etc/passwd: así se relacionan las dos líneas.
+  - id: s-hash
+    titulo: "Contraseña cifrada"
+    area: { x: 13.89, y: 67.08, ancho: 29.44, alto: 12.5 }
+    texto: >-
+      La contraseña cifrada con un algoritmo de un solo sentido: no se puede "descifrar", solo
+      comparar. El prefijo dice el algoritmo: $6$ es SHA-512 y $y$ es yescrypt. Si empieza con !
+      la cuenta está bloqueada; !! o * significa que nunca se le puso contraseña.
+  - id: s-ultimo
+    titulo: "Último cambio"
+    area: { x: 44.58, y: 67.08, ancho: 9.58, alto: 12.5 }
+    texto: >-
+      Fecha del último cambio de contraseña, contada en días desde el 1 de enero de 1970. Un 0
+      obliga a cambiarla en el próximo inicio de sesión (chage -d 0).
+  - id: s-min
+    titulo: "Días mínimos"
+    area: { x: 55.42, y: 67.08, ancho: 2.36, alto: 12.5 }
+    texto: >-
+      Cuántos días tienen que pasar antes de poder cambiarla otra vez. 0 permite cambiarla
+      cuando quiera.
+  - id: s-max
+    titulo: "Días máximos"
+    area: { x: 59.03, y: 67.08, ancho: 4.17, alto: 12.5 }
+    texto: >-
+      Cada cuántos días hay que cambiar la contraseña. 99999 significa "nunca vence". Se cambia
+      con chage -M.
+  - id: s-aviso
+    titulo: "Días de aviso"
+    area: { x: 64.44, y: 67.08, ancho: 2.36, alto: 12.5 }
+    texto: >-
+      Cuántos días antes del vencimiento se empieza a avisar al iniciar sesión.

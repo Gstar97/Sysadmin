@@ -1,0 +1,89 @@
+- id: p01
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: Laura pertenece al grupo ventas y no es la dueña. ¿Qué puede hacer con este archivo?
+  salida: |
+    $ ls -l precios.xlsx
+    -rw-r-----. 1 carlos ventas 48K Oct 30 11:02 precios.xlsx
+  opciones:
+    - { texto: "Leerlo, pero no modificarlo", correcta: true, explicacion: "Se usan los permisos del grupo: r--." }
+    - { texto: "Leerlo y modificarlo", explicacion: "El grupo no tiene w." }
+    - { texto: "Nada", explicacion: "El grupo tiene r." }
+    - { texto: "Todo, porque está en el grupo", explicacion: "Estar en el grupo da solo los permisos del grupo." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué número octal corresponde a rwxr-x---?
+  opciones:
+    - { texto: "750", correcta: true, explicacion: "rwx = 4+2+1 = 7, r-x = 4+1 = 5, --- = 0." }
+    - { texto: "760", explicacion: "6 sería rw-." }
+    - { texto: "570", explicacion: "El orden es dueño, grupo, resto." }
+    - { texto: "755", explicacion: "755 da r-x también al resto." }
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un usuario tiene permiso rw sobre un archivo, pero la carpeta que lo contiene tiene r-x para él. ¿Puede borrar el archivo?
+  opciones:
+    - { texto: "No: para borrar hace falta w en la carpeta", correcta: true, explicacion: "Borrar cambia la lista de la carpeta, no el archivo." }
+    - { texto: "Sí, porque tiene w en el archivo", explicacion: "w en el archivo deja modificar su contenido, no borrarlo." }
+    - { texto: "Sí, porque tiene r en la carpeta", explicacion: "r en la carpeta solo deja ver la lista." }
+    - { texto: "Solo si es root", explicacion: "Cualquiera con w y x en la carpeta puede borrar (salvo con sticky)." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando (con notación simbólica) que agrega permiso de ejecución al dueño de deploy.sh.
+  aceptadas: [chmod u+x deploy.sh]
+  explicacion: "u es el dueño, + agrega, x es ejecutar."
+- id: p05
+  tipo: opcion_multiple
+  enunciado: ¿Qué comando deja informe.txt como propiedad de laura y del grupo ventas?
+  opciones:
+    - { texto: "sudo chown laura:ventas informe.txt", correcta: true, explicacion: "chown usuario:grupo cambia los dos a la vez." }
+    - { texto: "sudo chmod laura:ventas informe.txt", explicacion: "chmod cambia permisos, no dueños." }
+    - { texto: "sudo chgrp laura ventas informe.txt", explicacion: "chgrp solo cambia el grupo y recibe un grupo." }
+    - { texto: "chown ventas:laura informe.txt", explicacion: "El orden es usuario:grupo, y hace falta sudo para cambiar el dueño." }
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Con umask 022, ¿con qué permisos se crea un archivo nuevo?
+  opciones:
+    - { texto: "644 (rw-r--r--)", correcta: true, explicacion: "666 menos la escritura del grupo y del resto." }
+    - { texto: "755", explicacion: "Ese es el resultado para una carpeta (777 con umask 022)." }
+    - { texto: "022", explicacion: "La umask es lo que se quita, no el resultado." }
+    - { texto: "666", explicacion: "La umask siempre quita algo." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: Pedro (que no es dueño ni está en el grupo) intenta `cd /srv/proyectos`. ¿Qué pasa?
+  salida: |
+    $ ls -ld /srv/proyectos
+    drwxr-xr--. 4 root desarrollo 4096 Oct 28 09:10 /srv/proyectos
+  opciones:
+    - { texto: "No puede entrar: el resto tiene r-- y para entrar hace falta x", correcta: true, explicacion: "Podría ver los nombres con ls, pero no entrar ni abrir nada adentro." }
+    - { texto: "Entra y puede leer todo", explicacion: "Sin x en la carpeta no se entra." }
+    - { texto: "Entra, pero no puede ver la lista", explicacion: "Es al revés: tiene r (listar) pero no x (entrar)." }
+    - { texto: "Entra y puede crear archivos", explicacion: "No tiene ni w ni x." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Un servicio web no puede leer un archivo y alguien propone "chmod 777". ¿Qué haces?
+  opciones:
+    - { texto: "Ver con qué usuario corre el servicio y darle solo el permiso que necesita (por grupo o dueño)", correcta: true, explicacion: "Así se resuelve sin dejar el archivo abierto a todos." }
+    - { texto: "Aplicar 777, es lo más rápido", explicacion: "Deja que cualquier proceso del servidor lo modifique o borre." }
+    - { texto: "Ejecutar el servicio como root", explicacion: "Es mucho peor: un fallo del servicio compromete todo el servidor." }
+    - { texto: "Copiar el archivo a /tmp", explicacion: "No resuelve el problema y deja una copia en un lugar compartido." }
+- id: p09
+  tipo: respuesta_multiple
+  enunciado: "¿Cuáles de estos comandos dejan privado.txt con permisos 600?"
+  opciones:
+    - { texto: "chmod 600 privado.txt", correcta: true, explicacion: "rw- para el dueño, nada para los demás." }
+    - { texto: "chmod u=rw,g=,o= privado.txt", correcta: true, explicacion: "Es lo mismo en notación simbólica." }
+    - { texto: "chmod u+rw privado.txt", explicacion: "Agrega rw al dueño, pero no quita lo que tuvieran el grupo y el resto." }
+    - { texto: "chmod 006 privado.txt", explicacion: "Daría rw al resto y nada al dueño." }
+- id: p10
+  tipo: encontrar_error
+  enunciado: Estos comandos tenían que dejar una carpeta compartida de soporte, sin acceso para el resto. Marca la línea equivocada.
+  archivo: |
+    sudo mkdir /srv/soporte
+    sudo chgrp soporte /srv/soporte
+    sudo chmod 777 /srv/soporte
+    ls -ld /srv/soporte
+  lineas_con_error: [3]
+  explicacion: 777 da todo al resto. Para que solo el dueño y el grupo trabajen, va 770.

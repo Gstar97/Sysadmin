@@ -1,0 +1,127 @@
+---
+id: n1-m2-l2
+titulo: Permisos básicos
+minutos: 180
+objetivos:
+  - Interpretar la salida de ls -l y los permisos rwx de dueño, grupo y otros.
+  - Cambiar permisos en notación simbólica y octal con chmod, y dueños con chown y chgrp.
+  - Explicar qué significan r, w y x sobre un directorio y cómo influye umask.
+glosario: [permisos, umask, chmod]
+verificado: 2026-10
+---
+
+import permisos from './permisos.svg?raw'
+import ejPermisos from './ej-permisos.yaml'
+
+En un servidor conviven muchas personas y servicios: el servidor web no debería poder leer los archivos de Recursos Humanos, y un usuario de ventas no debería poder borrar la configuración del sistema. Los permisos son el mecanismo que lo impide, y "Permission denied" es probablemente el mensaje que más vas a ver en tu carrera. Esta lección te enseña a leerlo, entenderlo y arreglarlo sin abrir agujeros de seguridad.
+
+<AntesDeEmpezar>
+- Cada archivo tiene un **dueño** (un usuario) y un **grupo**.
+- Los usuarios pertenecen a grupos, y `id` muestra los de cada uno.
+- En el Nivel 0 viste que los permisos se escriben en octal: r = 4, w = 2, x = 1 (lección 0.3.2).
+</AntesDeEmpezar>
+
+## Tres preguntas, tres clases de personas
+
+Piensa en una oficina con un archivero. El dueño del archivero tiene una llave que abre todo; las personas de su área tienen otra llave que quizás solo abre algunos cajones; y el resto de la empresa tiene una tercera llave, o ninguna. Para cada archivo, Linux responde lo mismo: qué puede hacer **el dueño**, qué puede hacer **el grupo** y qué puede hacer **el resto**. Y para cada uno, tres permisos: **leer (r)**, **escribir (w)** y **ejecutar (x)**.
+
+<Diagrama svg={permisos} alt="La línea -rwxr-x---. 1 ana ventas de ls -l, con el tipo, los permisos del dueño (rwx), del grupo (r-x) y del resto (---), y el dueño ana y el grupo ventas. Debajo, una tabla con lo que permiten r, w y x en un archivo y en una carpeta." pie="Los nueve caracteres después del tipo son tres grupos de rwx: dueño, grupo y resto." />
+
+Linux revisa en orden: si eres el dueño, se usan los permisos del dueño (y nada más); si no, si perteneces al grupo, los del grupo; si no, los del resto. Root puede todo, salvo ejecutar un archivo que no tiene ninguna x.
+
+### En una carpeta, las letras significan otra cosa
+
+Esta es la parte que más confunde, y la causa de muchos "Permission denied" que parecen inexplicables:
+
+- **r** en una carpeta deja **ver la lista** de nombres.
+- **w** deja **crear, borrar y renombrar** lo que hay adentro. Por eso, para borrar un archivo no hace falta permiso sobre el archivo: hace falta **w en la carpeta** que lo contiene.
+- **x** deja **entrar** a la carpeta y acceder a lo que tiene. Sin x, no sirve de nada tener r o w.
+
+<EnSimple>
+Una carpeta es como un salón con un listado pegado en la puerta. **x** es la llave para entrar al salón; **r** es poder leer el listado de lo que hay; **w** es poder agregar o sacar cosas. Si tienes la llave pero no puedes leer el listado, puedes buscar algo cuyo nombre ya conoces, pero no ver qué más hay. Y si no tienes la llave, no importa lo demás: no entras.
+</EnSimple>
+
+## Cambiar permisos con chmod
+
+`chmod` acepta dos notaciones.
+
+**Simbólica**: quién (`u` dueño, `g` grupo, `o` resto, `a` todos), una operación (`+` agregar, `-` quitar, `=` dejar exactamente) y los permisos.
+
+```bash
+chmod u+x script.sh        # el dueño puede ejecutarlo
+chmod g-w informe.txt      # el grupo ya no puede modificarlo
+chmod o= privado.txt       # el resto no puede nada
+chmod u=rwx,g=rx,o= carpeta
+```
+
+**Octal**: tres dígitos, uno por clase, sumando r = 4, w = 2, x = 1.
+
+| Octal | Permisos | Uso típico |
+| --- | --- | --- |
+| 644 | `rw-r--r--` | Archivos que todos leen y solo el dueño modifica (configuraciones públicas) |
+| 600 | `rw-------` | Archivos privados (claves, contraseñas) |
+| 755 | `rwxr-xr-x` | Programas y carpetas que todos usan |
+| 750 | `rwxr-x---` | Carpetas y scripts del dueño y su grupo |
+| 770 | `rwxrwx---` | Carpetas compartidas de un grupo |
+
+La simbólica sirve para cambiar una cosa puntual sin tocar el resto; la octal, para dejar los permisos exactamente como quieres. Con `-R`, `chmod` cambia una carpeta y todo su contenido (con cuidado: los archivos y las carpetas casi nunca deberían tener los mismos permisos).
+
+Prueba combinaciones en la calculadora:
+
+<CalculadoraPermisos />
+
+## Cambiar el dueño y el grupo
+
+- `sudo chown laura informe.txt` cambia el dueño.
+- `sudo chown laura:ventas informe.txt` cambia el dueño y el grupo.
+- `sudo chgrp ventas carpeta` (o `chown :ventas carpeta`) cambia solo el grupo.
+- `-R` aplica a todo el contenido de una carpeta.
+
+Solo root puede regalar archivos a otro usuario (si no, cualquiera podría "culpar" a otro de un archivo). El dueño puede cambiar el grupo, pero solo a uno al que pertenezca.
+
+## umask: los permisos con los que nacen los archivos
+
+Cuando un programa crea un archivo, pide permisos amplios (666 para archivos, 777 para carpetas) y el sistema le **quita** los que indique la **<Termino id="umask">umask</Termino>**. Con la umask habitual de un usuario en Rocky y Ubuntu, 002, los archivos nacen 664 y las carpetas 775; la de root, 022, da 644 y 755.
+
+```bash
+umask          # muestra la actual
+umask 027      # solo para esta sesión: archivos 640, carpetas 750
+```
+
+Para que dure, se pone en `~/.bashrc` (para una persona) o en la configuración del servicio (para un programa).
+
+<Pregunta id="p06" />
+
+## Practicar
+
+Primero entrena la lectura con ejercicios al azar (en la pestaña **Practicar**, prueba sobre todo "¿Quién puede?"):
+
+<CalculadoraPermisos modo="practicar" />
+
+Y ahora en la terminal:
+
+<Terminal ejercicio={ejPermisos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="chmod 777 para que &quot;ande&quot;">
+    777 deja que cualquier usuario y cualquier servicio del servidor lea, modifique o borre. Si un servicio web es atacado, el atacante también. Averigua qué usuario necesita qué permiso (con `ls -l` en cada carpeta del camino y `id` del usuario) y da exactamente eso: casi siempre alcanza con ajustar el grupo y usar 770, 750 o 640.
+  </ErrorComun>
+  <ErrorComun titulo="Tengo permiso sobre el archivo pero igual da &quot;Permission denied&quot;">
+    Revisa las carpetas del camino: para llegar a `/srv/datos/informe.txt` hace falta x en `/srv` y en `/srv/datos`. `namei -l /srv/datos/informe.txt` muestra los permisos de cada parte de la ruta.
+  </ErrorComun>
+  <ErrorComun titulo="Alguien borró un archivo que no podía modificar">
+    Para borrar alcanza con w en la carpeta. Si en una carpeta compartida no quieres que cada uno pueda borrar lo de los demás, hace falta el bit sticky (próxima lección).
+  </ErrorComun>
+  <ErrorComun titulo="chmod -R 644 dejó las carpetas inaccesibles">
+    Las carpetas necesitan x para poder entrar. Para dar permisos distintos a archivos y carpetas: `find ruta -type d -exec chmod 755 {} +` y `find ruta -type f -exec chmod 644 {} +`, o en simbólico `chmod -R u=rwX,g=rX,o= ruta` (la X mayúscula agrega ejecución solo a las carpetas).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Cada archivo tiene permisos para el dueño, el grupo y el resto; se usa la primera clase que corresponde, en ese orden.
+- En archivos: r leer, w modificar, x ejecutar. En carpetas: r listar, w crear y borrar adentro, x entrar.
+- `chmod u+x`, `g-w`, `o=` (simbólica) o `chmod 750` (octal: r 4, w 2, x 1). `-R` es recursivo.
+- `chown usuario:grupo` y `chgrp grupo` cambian dueño y grupo; regalar archivos solo lo hace root.
+- La umask quita permisos a lo que se crea: 002 da 664/775; 022 da 644/755; 027 da 640/750.
+- Nunca 777 "para que ande": se ajusta el grupo y se da el mínimo necesario.
+</Resumen>
