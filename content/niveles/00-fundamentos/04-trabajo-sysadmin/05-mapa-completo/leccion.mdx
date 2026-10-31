@@ -18,6 +18,25 @@ import ejCamino from './ej-camino.yaml'
 
 Abres el navegador, escribes `tienda.example.com` y en menos de un segundo aparece la página. En ese segundo participan más de diez sistemas distintos, y cada uno es parte de esta carrera. Esta lección es el mapa: no vas a dominar ninguna pieza todavía (para eso están los niveles siguientes), pero vas a saber qué hace cada una, en qué orden actúan y dónde se aprende. Y vas a ganar algo muy práctico: cuando alguien diga "la página no carga", vas a saber por dónde empezar a mirar.
 
+<AntesDeEmpezar>
+- Una **dirección IP** identifica a un equipo en una red, y se divide en una parte de red y otra de equipo (lo viste en la lección de lógica binaria).
+- Un **servidor** es una computadora que atiende pedidos de otras, con programas llamados **servicios**.
+- Un **hash** y la verificación de imágenes te mostraron una idea que vuelve aquí: comprobar que algo es lo que dice ser.
+</AntesDeEmpezar>
+
+## Primero, sin tecnología: pedir comida por teléfono
+
+Todo el recorrido se parece a pedir comida a un restaurante que no conoces:
+
+1. **Buscas el número** del restaurante en la guía, porque sabes el nombre pero no el teléfono.
+2. **Llamas**, y la central del restaurante te pasa con el sector que corresponde (pedidos, reservas, reclamos). Hay una recepcionista que solo pasa llamadas a algunos sectores.
+3. **Confirmas que llamaste al lugar correcto** antes de dar tu dirección y tu tarjeta.
+4. **Haces el pedido**, y te dicen si lo pueden preparar o no.
+5. **En la cocina** preparan el plato con ingredientes que sacan del depósito.
+6. **El pedido vuelve** hasta tu casa.
+
+Con esa idea en mente, la mayoría de las piezas técnicas de esta lección corresponden a uno de esos pasos. Donde el ejemplo deja de servir, lo vas a ver en el recorrido paso a paso: en la red, todo esto pasa en milisegundos y cada paso tiene sus propias reglas.
+
 ## Las piezas del camino
 
 Haz clic en cada pieza para ver qué hace, qué puede fallar y en qué nivel la vas a estudiar.
@@ -28,22 +47,26 @@ Haz clic en cada pieza para ver qué hace, qué puede fallar y en qué nivel la 
 
 **1. La PC ya tiene red.** Al conectarse, la PC recibió por DHCP su **<Termino id="direccion-ip">dirección IP</Termino>** (por ejemplo, 192.168.1.20), la máscara, la puerta de enlace (el router, 192.168.1.1) y el servidor DNS. Una IP identifica a un equipo dentro de una red, como una dirección postal.
 
-**2. DNS: del nombre a la IP.** La PC no sabe dónde está `tienda.example.com`; necesita su IP. Se la pregunta al servidor **<Termino id="dns">DNS</Termino>**, que responde `198.51.100.20`. Si el DNS falla, nada funciona aunque la red esté perfecta: por eso en el trabajo vas a escuchar mucho la frase "siempre es el DNS".
+**2. DNS: del nombre a la IP.** Es buscar el número en la guía. La PC no sabe dónde está `tienda.example.com`; necesita su IP. Se la pregunta al servidor **<Termino id="dns">DNS</Termino>**, que responde `198.51.100.20`. Si el DNS falla, nada funciona aunque la red esté perfecta: por eso en el trabajo vas a escuchar mucho la frase "siempre es el DNS".
 
 **3. Salir de la red local.** La IP del servidor no está en la red de la PC, así que el paquete se entrega a la puerta de enlace. El router hace **NAT**: reemplaza la IP privada de la PC por la IP pública de la conexión. Después, el paquete cruza Internet de router en router hasta la red del servidor.
 
-**4. TCP: abrir la conexión.** Un servidor puede ofrecer muchos servicios a la vez, y cada uno escucha en un número de **<Termino id="puerto">puerto</Termino>** distinto: 443 para HTTPS, 80 para HTTP, 22 para SSH, 53 para DNS. Antes de enviar datos, la PC y el servidor hacen el saludo de **<Termino id="tcp">TCP</Termino>** en tres pasos (SYN, SYN-ACK, ACK). TCP se ocupa de que todo llegue completo y en orden: si un paquete se pierde, se vuelve a enviar. En el medio, el **<Termino id="firewall">firewall</Termino>** decide si deja pasar la conexión a ese puerto.
+**4. TCP: abrir la conexión.** Es la llamada, y el puerto es el sector al que te pasan. Un servidor puede ofrecer muchos servicios a la vez, y cada uno escucha en un número de **<Termino id="puerto">puerto</Termino>** distinto: 443 para HTTPS, 80 para HTTP, 22 para SSH, 53 para DNS. Antes de enviar datos, la PC y el servidor hacen el saludo de **<Termino id="tcp">TCP</Termino>** en tres pasos (SYN, SYN-ACK, ACK). TCP se ocupa de que todo llegue completo y en orden: si un paquete se pierde, se vuelve a enviar. En el medio, el **<Termino id="firewall">firewall</Termino>** decide si deja pasar la conexión a ese puerto: es la recepcionista que solo pasa llamadas a algunos sectores.
 
-**5. TLS: verificar y cifrar.** Antes de hablar HTTP, el navegador y el servidor hacen el saludo **<Termino id="tls">TLS</Termino>**. El servidor presenta su **<Termino id="certificado">certificado</Termino>**: un documento digital que dice "soy tienda.example.com", firmado por una autoridad en la que el navegador confía (por ejemplo, Let's Encrypt). Si el certificado venció o es de otro sitio, el navegador muestra una advertencia. Si está bien, acuerdan claves y desde ahí todo viaja cifrado: es el candado de la barra de direcciones.
+<EnSimple titulo="Dicho más simple: la IP y el puerto">
+La IP es la dirección del edificio y el puerto es el número de oficina dentro del edificio. Con la IP llegas al servidor; con el puerto llegas al servicio que buscas (la web en el 443, el acceso remoto en el 22). El saludo de TCP en tres pasos es como empezar una llamada: "¿me escuchas?", "sí, te escucho, ¿y tú a mí?", "sí, empecemos".
+</EnSimple>
 
-**6. HTTP: el pedido y la respuesta.** Ahora sí, el navegador pide la página con **<Termino id="http">HTTP</Termino>** ("dame `/` del sitio tienda.example.com") y el servidor responde con un **código de estado** y el contenido. HTTPS es exactamente eso: HTTP dentro de TLS.
+**5. TLS: verificar y cifrar.** Es confirmar que llamaste al lugar correcto antes de dar tus datos, y hablar de forma que nadie más entienda. Antes de hablar HTTP, el navegador y el servidor hacen el saludo **<Termino id="tls">TLS</Termino>**. El servidor presenta su **<Termino id="certificado">certificado</Termino>**: un documento digital que dice "soy tienda.example.com", firmado por una autoridad en la que el navegador confía (por ejemplo, Let's Encrypt). Si el certificado venció o es de otro sitio, el navegador muestra una advertencia. Si está bien, acuerdan claves y desde ahí todo viaja cifrado: es el candado de la barra de direcciones.
 
-**7. Dentro del servidor.** El servidor web (Nginx, Apache o IIS) recibe el pedido. Si es un archivo fijo, lo entrega; si es una página dinámica, actúa como **<Termino id="proxy-inverso">proxy inverso</Termino>** y se lo pasa a la aplicación, que consulta la **<Termino id="base-datos">base de datos</Termino>** y arma el HTML.
+**6. HTTP: el pedido y la respuesta.** Es hacer el pedido. Ahora sí, el navegador pide la página con **<Termino id="http">HTTP</Termino>** ("dame `/` del sitio tienda.example.com") y el servidor responde con un **código de estado** y el contenido. HTTPS es exactamente eso: HTTP dentro de TLS.
+
+**7. Dentro del servidor.** Es la cocina y el depósito. El servidor web (Nginx, Apache o IIS) recibe el pedido. Si es un archivo fijo, lo entrega; si es una página dinámica, actúa como **<Termino id="proxy-inverso">proxy inverso</Termino>** y se lo pasa a la aplicación, que consulta la **<Termino id="base-datos">base de datos</Termino>** y arma el HTML.
 
 **8. La respuesta vuelve** por el mismo camino. El navegador lee el HTML, descubre que necesita estilos, imágenes y scripts, y los pide por la misma conexión.
 
-<Nota>
-Muchos sitios grandes ya usan HTTP/3, que viaja sobre un protocolo llamado QUIC (sobre UDP) en lugar de TCP, y combina el saludo de la conexión con el de TLS para ganar tiempo. Las piezas del camino son las mismas: DNS, routing, cifrado, servidor, aplicación y datos.
+<Nota titulo="Un detalle para más adelante">
+No hace falta que retengas esto ahora. Muchos sitios grandes ya usan HTTP/3, que viaja sobre un protocolo llamado QUIC (sobre UDP) en lugar de TCP, y combina el saludo de la conexión con el de TLS para ganar tiempo. Las piezas del camino son las mismas: DNS, routing, cifrado, servidor, aplicación y datos.
 </Nota>
 
 Los códigos de estado HTTP son de lo primero que mira un sysadmin cuando una página falla:

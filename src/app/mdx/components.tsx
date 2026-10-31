@@ -172,6 +172,32 @@ export function Advertencia({ titulo, children }: { titulo?: string; children: R
   )
 }
 
+/** La misma idea con palabras simples y un ejemplo cotidiano, junto a un concepto que suele costar. */
+export function EnSimple({ titulo, children }: { titulo?: string; children: ReactNode }) {
+  return (
+    <Callout
+      tone="accent"
+      title={
+        <span className="flex items-center gap-1.5">
+          <Icon name="lightbulb" className="h-4 w-4 text-accent" />
+          {titulo ?? 'Dicho más simple'}
+        </span>
+      }
+    >
+      {children}
+    </Callout>
+  )
+}
+
+/** Repaso breve, al comienzo de una lección, de lo que se va a usar de lecciones anteriores. */
+export function AntesDeEmpezar({ titulo, children }: { titulo?: string; children: ReactNode }) {
+  return (
+    <Callout tone="neutral" title={titulo ?? 'Antes de empezar: lo que ya sabes'}>
+      {children}
+    </Callout>
+  )
+}
+
 export function Importante({ titulo, children }: { titulo?: string; children: ReactNode }) {
   return (
     <Callout tone="bad" title={titulo ?? 'Importante'}>
@@ -453,6 +479,8 @@ export const mdxComponents = {
   Consejo,
   Advertencia,
   Importante,
+  EnSimple,
+  AntesDeEmpezar,
   ErroresComunes,
   ErrorComun,
   Resumen,

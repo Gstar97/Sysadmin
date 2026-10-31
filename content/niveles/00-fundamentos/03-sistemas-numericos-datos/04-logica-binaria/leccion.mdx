@@ -14,7 +14,20 @@ import ejBits from './ej-bits.yaml'
 
 Con cuatro operaciones muy simples sobre bits se resuelven tareas que un sysadmin hace todo el tiempo: saber si dos equipos están en la misma red, calcular los permisos con los que se crea un archivo o entender cómo un arreglo RAID reconstruye un disco que falló. Esta lección es el puente entre el binario y el cálculo de subredes del nivel de redes.
 
+<AntesDeEmpezar>
+- Un byte son 8 bits, con pesos 128, 64, 32, 16, 8, 4, 2 y 1.
+- Una dirección IPv4 son 4 bytes (octetos), cada uno de 0 a 255: 192.168.10.77.
+- Sabes pasar un octeto de decimal a binario y al revés (si todavía te cuesta, repasa con el conversor de la lección de binario antes de seguir).
+</AntesDeEmpezar>
+
 ## Las cuatro operaciones
+
+Estas operaciones ya las usas todos los días sin ponerles nombre:
+
+- Para subir a un avión necesitas el pasaje **y** el documento: si falta cualquiera de los dos, no subes.
+- En un negocio puedes pagar en efectivo **o** con tarjeta: con cualquiera de los dos alcanza.
+- La luz de una escalera con un interruptor arriba y otro abajo: si cambias **uno solo** de los dos, la luz cambia; si cambias los dos, vuelve a como estaba.
+- "Lo contrario": si la puerta está abierta, la cierras; si está cerrada, la abres.
 
 Una **<Termino id="operacion-logica">operación lógica</Termino>** toma bits y devuelve un bit según una regla fija:
 
@@ -22,6 +35,10 @@ Una **<Termino id="operacion-logica">operación lógica</Termino>** toma bits y 
 - **OR** (O): el resultado es 1 si al menos uno de los dos es 1.
 - **XOR** (O exclusivo): el resultado es 1 si los bits son distintos.
 - **NOT** (NO): invierte el bit; trabaja sobre uno solo.
+
+<EnSimple>
+AND es el pasaje y el documento: los dos tienen que estar. OR es efectivo o tarjeta: con uno alcanza. XOR es la luz de la escalera: da 1 cuando los interruptores están distintos. NOT es dar vuelta: el 1 pasa a 0 y el 0 a 1. En los bits, "estar" es 1 y "no estar" es 0.
+</EnSimple>
 
 <Diagrama svg={tablas} alt="Tablas de verdad de AND, OR, XOR y NOT: para cada combinación de bits A y B, el resultado R" pie="Las tablas de verdad: todas las combinaciones posibles y su resultado." />
 
@@ -42,7 +59,7 @@ Prueba las cuatro operaciones tocando los bits de A y B. Fíjate en lo que tiene
 
 ## Para qué sirve cada una
 
-Esas tres propiedades son justamente las que se aprovechan en la práctica:
+Esas tres propiedades son justamente las que se aprovechan en la práctica. No hace falta que retengas todos estos usos ahora: cada uno lo vas a ver con calma en su nivel. Aquí es solo para que sepas que existen y de dónde salen.
 
 - **AND para quedarse con una parte**: se arma un número (llamado máscara) con unos en las posiciones que interesan y ceros en el resto. El AND copia esas posiciones y borra las demás. Es lo que hace la máscara de red.
 - **OR para encender bits**: sirve para sumar opciones sin tocar las que ya estaban. En los permisos de Linux, leer (4) OR escribir (2) da 6, lectura y escritura.
@@ -50,6 +67,8 @@ Esas tres propiedades son justamente las que se aprovechan en la práctica:
 - **XOR para comparar y recuperar**: XOR de dos valores marca dónde difieren. Y tiene una propiedad muy útil: si P = A XOR B, entonces A = P XOR B. Los arreglos **RAID 5** guardan P (la paridad) en otro disco; si el disco de A se rompe, lo reconstruyen calculando P XOR B.
 
 ## La máscara de red
+
+Piensa en una dirección postal: "Av. Libertad 1450". Una parte dice la calle y otra el número de la casa. Todos los vecinos de esa calle comparten la primera parte y cada casa tiene su número.
 
 Una dirección IPv4 tiene dos partes: la de **red** (compartida por todos los equipos de esa red) y la de **equipo**. La **<Termino id="mascara-red">máscara de red</Termino>** indica dónde termina una y empieza la otra: tiene unos en los bits de la red y ceros en los del equipo.
 
@@ -60,6 +79,10 @@ IP        192.168.10.77    11000000.10101000.00001010.01001101
 máscara   255.255.255.192  11111111.11111111.11111111.11000000
 AND       192.168.10.64    11000000.10101000.00001010.01000000
 ```
+
+<EnSimple titulo="Dicho más simple: la máscara como plantilla">
+Imagina una hoja de cartón con agujeros recortados. Si la apoyas sobre un texto, solo ves lo que queda debajo de los agujeros y el resto queda tapado. La máscara de red es esa plantilla: los unos son los agujeros. Al hacer IP AND máscara, ves solo la parte de la red y la parte del equipo queda en ceros.
+</EnSimple>
 
 La máscara 255.255.255.192 tiene 26 unos seguidos, por eso también se escribe `/26`. Los últimos 6 bits son del equipo.
 
@@ -76,6 +99,10 @@ Prueba el modo **IP y máscara** con distintas direcciones y prefijos:
 ## La umask
 
 Cuando un programa crea un archivo en Linux, pide los permisos 666 (lectura y escritura para todos) y el sistema le quita los que indique la **<Termino id="umask">umask</Termino>**. La cuenta es un AND con la umask invertida: **permisos = 666 AND NOT umask**.
+
+<EnSimple titulo="Dicho más simple: la umask">
+El archivo nuevo empieza con todos los permisos posibles para un archivo (666). La umask es una lista de "esto no" que el sistema tacha antes de entregarlo. Con umask 022 se tacha la escritura para el grupo y para el resto: queda 644. No es una resta común, sino tachar casilleros, aunque con estos valores el resultado coincide.
+</EnSimple>
 
 Con la umask habitual de root, 022, los archivos nuevos quedan en 644 (`rw-r--r--`). Para los usuarios comunes de Rocky y Ubuntu la umask es 002, y sus archivos quedan en 664.
 

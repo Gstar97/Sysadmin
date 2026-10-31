@@ -15,11 +15,25 @@ import ejOom from './ej-oom.yaml'
 
 En el módulo anterior viste que cuando la RAM se llena el servidor se pone lento y, en el peor caso, un proceso desaparece. En esta lección vas a ver el mecanismo que hay detrás, la memoria virtual, y a leer los registros que deja el sistema cuando la memoria se agota, que es lo que vas a hacer en un incidente real.
 
+<AntesDeEmpezar>
+- La **RAM** es rápida pero limitada, y se vacía al apagar. El **disco** es enorme pero miles de veces más lento.
+- Un **proceso** es un programa en ejecución, y el **kernel** es la parte del sistema operativo que reparte la CPU y la memoria entre todos.
+- Cuando la RAM se llena, el servidor se pone lento (lo viste en la lección de procesos con `free -h` y `top`).
+</AntesDeEmpezar>
+
 ## Cada proceso tiene su propio mapa de memoria
+
+Empecemos con una situación conocida. En una oficina hay un solo depósito de cajas, y cada empleado lleva su propia lista: "mi caja 1, mi caja 2, mi caja 3". Ningún empleado sabe en qué estante está de verdad cada una de sus cajas; cuando necesita "su caja 2", se la pide al encargado del depósito, que tiene anotado dónde está realmente. Así, dos empleados pueden tener cada uno una "caja 1" sin que se mezclen, y nadie puede tocar las cajas de otro porque ni siquiera sabe dónde están.
+
+Así funciona la memoria de una computadora: el depósito es la RAM, los empleados son los procesos y el encargado es el kernel junto con el procesador.
 
 Ningún proceso ve la memoria física directamente. Cada uno recibe un espacio de direcciones propio, la **<Termino id="memoria-virtual">memoria virtual</Termino>**, como si tuviera toda la memoria para él solo. El kernel y el procesador (con un componente llamado MMU) traducen cada dirección virtual a la posición real en la RAM.
 
 La memoria se maneja en bloques de tamaño fijo llamados **<Termino id="pagina">páginas</Termino>**, normalmente de 4 KiB. El kernel lleva una tabla por proceso que dice dónde está cada página: en un marco de la RAM, en el disco o en ningún lado todavía.
+
+<EnSimple>
+Cada programa cree que tiene toda la memoria para él solo y la numera a su manera. El sistema operativo lleva la cuenta de dónde está realmente cada pedazo. Esos pedazos, todos del mismo tamaño, se llaman **páginas**. Donde el ejemplo del depósito deja de servir: el encargado no busca a mano, la traducción la hace el procesador millones de veces por segundo, sin que el programa se entere.
+</EnSimple>
 
 <Diagrama svg={paginas} alt="Dos procesos con sus páginas virtuales apuntando a marcos de la RAM física; una biblioteca compartida aparece una sola vez en la RAM, una página está en el swap y otra todavía no existe" pie="Las páginas de cada proceso pueden estar en cualquier lugar de la RAM, en el swap o todavía sin crear." />
 
@@ -31,6 +45,10 @@ Este esquema resuelve varios problemas a la vez:
 - **Swap**: las páginas que se usan poco se pueden mover al disco para hacer lugar.
 
 ## Fallos de página y swap
+
+Piensa en tu escritorio y en el archivo del sótano. En el escritorio (la RAM) tienes a mano los papeles que estás usando. Cuando se llena, los papeles que hace días que no tocas los bajas al archivo del sótano (el disco) para hacer lugar. Si un día necesitas uno de esos, bajas a buscarlo: funciona, pero tardas. Y si tienes que bajar a cada rato, no trabajas más: te pasas el día subiendo y bajando la escalera.
+
+Ese archivo del sótano es el **swap**, y "bajar a buscar un papel" es lo que el sistema llama un fallo de página.
 
 Cuando un proceso usa una página que no está en la RAM, el procesador avisa al kernel con un **fallo de página** (*page fault*). No es un error: es parte del funcionamiento normal.
 
@@ -44,6 +62,10 @@ Tener swap no es malo: le permite al sistema sacar de la RAM páginas que nadie 
 </Nota>
 
 ## La caché de disco
+
+<EnSimple titulo="Dicho más simple: la caché">
+Si leíste un documento hace un rato, dejas una fotocopia sobre el escritorio por si lo vuelves a necesitar. Si mañana te hace falta lugar, la tiras sin pensarlo: no perdiste nada, porque el original sigue en el archivo. La caché de disco son esas fotocopias. Por eso la RAM puede parecer "llena" y en realidad tener muchísimo lugar disponible.
+</EnSimple>
 
 Como viste en el módulo anterior, la RAM que los programas no usan se aprovecha como **<Termino id="cache-disco">caché de disco</Termino>** (en Linux, *page cache*): copias de archivos leídos hace poco. Es memoria "ocupada" que se libera en el acto cuando un programa la necesita. Por eso las herramientas distinguen:
 
@@ -66,6 +88,10 @@ Este simulador tiene 12 marcos de RAM y 4 espacios de swap. Prueba esta secuenci
 <SimuladorMemoria />
 
 ## El OOM killer
+
+<EnSimple titulo="Dicho más simple: el OOM killer">
+El escritorio está lleno, el archivo del sótano también, y alguien pide lugar para un papel más. Ya no hay de dónde sacar espacio, así que el sistema hace salir de la oficina al que más lugar ocupa, aunque no haya sido el que pidió el papel. Es una medida de emergencia: evita que se trabe todo, pero el que sale suele ser justamente el servicio más importante.
+</EnSimple>
 
 Cuando la RAM y el swap se agotan y un proceso pide más memoria, el kernel no tiene de dónde sacarla. En Linux, en ese momento actúa el **<Termino id="oom-killer">OOM killer</Termino>** (*Out Of Memory*): elige un proceso y lo termina con SIGKILL para recuperar su memoria.
 
@@ -97,7 +123,7 @@ Ubuntu, además, incluye **systemd-oomd**, que actúa antes que el kernel: si de
     Más swap solo cambia "el proceso desaparece" por "el servidor se arrastra durante horas". Si la memoria no alcanza para el trabajo normal, hay que reducir el consumo (limitar o mover procesos) o agregar RAM. El swap es un colchón para picos, no un reemplazo de la RAM.
   </ErrorComun>
   <ErrorComun titulo="Un proceso muestra 8 GB en VSZ y el servidor tiene 4 GB">
-    VSZ es la memoria virtual que el proceso reservó, no la que ocupa. La que cuenta es RSS (columna RES en `top`). Muchos programas, como Java o las bases de datos, reservan grandes espacios que nunca llegan a usar completos.
+    Es como reservar una mesa para diez personas en un restaurante y que lleguen tres: la reserva (VSZ) es grande, pero las sillas ocupadas (RSS) son pocas. VSZ es la memoria virtual que el proceso reservó, no la que ocupa. La que cuenta es RSS (columna RES en `top`). Muchos programas, como Java o las bases de datos, reservan grandes espacios que nunca llegan a usar completos.
   </ErrorComun>
 </ErroresComunes>
 

@@ -14,7 +14,13 @@ import byte from './byte.svg?raw'
 
 El binario aparece en el trabajo de un sysadmin mucho más de lo que parece: en las direcciones IP y sus máscaras, en los permisos de Linux, en los tamaños de disco y en las reglas de firewall. En el nivel de redes vas a calcular subredes, y ese cálculo es binario puro. Esta lección te da la base para hacerlo de cabeza, sin calculadora.
 
+<AntesDeEmpezar titulo="Antes de empezar: algo que ya sabes hacer">
+Cuando lees el número 405, sin pensarlo sabes que son 4 centenas, 0 decenas y 5 unidades. Toda esta lección se apoya en esa misma idea, solo que con otros valores por posición. No hace falta saber matemática más allá de sumar y restar.
+</AntesDeEmpezar>
+
 ## Por qué las computadoras usan binario
+
+Piensa en un interruptor de luz: solo tiene dos posiciones, encendido o apagado. No hay "medio encendido". Con una fila de interruptores puedes armar combinaciones distintas: con dos interruptores hay cuatro (apagado-apagado, apagado-encendido, encendido-apagado, encendido-encendido). Una computadora es, en el fondo, una cantidad enorme de interruptores diminutos.
 
 Todo circuito digital distingue solo dos estados: hay tensión o no hay, una celda de memoria flash está cargada o no, una zona del disco está magnetizada en un sentido o en el otro. Por eso la información se guarda con solo dos dígitos, 0 y 1.
 
@@ -26,6 +32,10 @@ Todo circuito digital distingue solo dos estados: hay tensión o no hay, una cel
 En decimal, cada posición vale diez veces más que la de su derecha: el número 405 es 4 × 100 + 0 × 10 + 5 × 1. El **<Termino id="binario">sistema binario</Termino>** funciona igual, pero cada posición vale **el doble** que la de su derecha: 1, 2, 4, 8, 16, 32, 64, 128...
 
 <Diagrama svg={byte} alt="Un byte con los pesos 128, 64, 32, 16, 8, 4, 2 y 1 sobre cada bit; el valor 11000000 equivale a 192. Debajo, la IP 192.168.1.10 con cada octeto convertido a binario" pie="Cada bit en 1 suma su peso. Una IPv4 son cuatro bytes." />
+
+<EnSimple titulo="Dicho más simple: monedas de 1, 2, 4, 8...">
+Imagina que tienes una sola moneda de cada uno de estos valores: 1, 2, 4, 8, 16, 32, 64 y 128. Con esas ocho monedas puedes pagar cualquier monto entre 0 y 255, usando cada moneda o no usándola. Un número binario es simplemente la lista de qué monedas usaste: 1 si la usaste, 0 si no. Por ejemplo, para pagar 11 usas la de 8, la de 2 y la de 1: eso es `1011`.
+</EnSimple>
 
 Para leer un número binario, se suman los pesos de las posiciones que tienen un 1. Por ejemplo, `1011`:
 
@@ -53,7 +63,7 @@ bit:      1   0   1   0   1   0   0   0
 
 ## De decimal a binario
 
-El método más rápido para números de hasta 255 es **restar pesos de mayor a menor**:
+El método más rápido para números de hasta 255 es **restar pesos de mayor a menor**. Es lo mismo que pagar con las monedas del ejemplo: empiezas por la más grande que no se pase del monto, y sigues con las más chicas hasta completar.
 
 1. Escribe los pesos: 128, 64, 32, 16, 8, 4, 2, 1.
 2. Para cada peso, de izquierda a derecha: si cabe en lo que queda, pon un 1 y réstalo; si no cabe, pon un 0.
@@ -108,7 +118,7 @@ En las máscaras de red (las vas a estudiar a fondo en el nivel de redes) aparec
 | 11111110 | 254 |
 | 11111111 | 255 |
 
-Un truco para reconstruirlos: cada uno es el anterior más el peso del bit que se agrega (128, +64 = 192, +32 = 224, +16 = 240...).
+Un truco para reconstruirlos: cada uno es el anterior más el peso del bit que se agrega (128, +64 = 192, +32 = 224, +16 = 240...). Con las monedas: vas agregando la siguiente moneda más chica a las que ya tenías.
 
 <Consejo>
 Para verificar tus cuentas en una terminal Linux: `echo $((2#11001000))` convierte de binario a decimal (responde 200), y `python3 -c "print(bin(200))"` hace lo contrario (responde `0b11001000`). Pero el objetivo es hacerlo de cabeza: en un examen de certificación o en medio de un incidente no siempre hay calculadora.

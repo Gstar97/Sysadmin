@@ -15,11 +15,25 @@ import ejHex from './ej-hex.yaml'
 
 El binario es perfecto para las computadoras, pero incómodo para las personas: una dirección IPv6 en binario tiene 128 dígitos. Por eso, cuando hay que mostrar bytes, se usan dos sistemas más compactos que se convierten a binario sin hacer cuentas: el **hexadecimal** y el **octal**. Los vas a ver en direcciones de red, códigos de error, sumas de verificación y permisos de archivos.
 
+<AntesDeEmpezar>
+- En binario, cada posición vale el doble que la anterior: 1, 2, 4, 8, 16...
+- Con **4 bits** se pueden formar 16 combinaciones, del 0 (`0000`) al 15 (`1111`).
+- Un **byte** son 8 bits, o sea, dos grupos de 4.
+</AntesDeEmpezar>
+
 ## Hexadecimal: 4 bits por dígito
+
+Cuando alguien te dicta un número de teléfono, no dice "mil ciento cuarenta y cinco millones..."; lo parte en bloques cortos, porque así se lee y se recuerda mucho mejor. El hexadecimal hace lo mismo con los bits: los agrupa de a cuatro y a cada grupo le pone un solo símbolo.
+
+Como con 4 bits hay 16 combinaciones y nuestros dígitos son solo diez (del 0 al 9), para las seis que faltan se usan letras: A, B, C, D, E y F.
 
 El **<Termino id="hexadecimal">hexadecimal</Termino>** (base 16) usa dieciséis dígitos: del 0 al 9 y después las letras A (10), B (11), C (12), D (13), E (14) y F (15). Su gran ventaja es que **cada dígito equivale exactamente a 4 bits**, así que un byte siempre se escribe con dos dígitos hexadecimales.
 
 <Diagrama svg={hex} alt="Tabla de los 16 dígitos hexadecimales con su valor en binario de 4 bits y en decimal; ejemplo de 1100 0000 igual a C0 igual a 192; y una dirección MAC dividida en la parte del fabricante y la parte de la placa" pie="Un dígito hexadecimal = 4 bits. Un byte = 2 dígitos hexadecimales." />
+
+<EnSimple>
+Un dígito hexadecimal es un "atajo" para escribir 4 bits de una vez. `F` es lo mismo que `1111`, `A` es `1010` y `0` es `0000`. Si sabes de memoria esos 16 atajos (o tienes la tabla a mano), pasar de binario a hexadecimal es solo reemplazar cada bloque de 4 por su atajo.
+</EnSimple>
 
 Para que no se confunda con un número decimal, el hexadecimal se marca de distintas formas según el contexto: `0xC0` (en programación y en muchas herramientas), `C0h` (en documentación de hardware), `#C0C0C0` (en colores web) o directamente separado por `:` (en direcciones MAC e IPv6).
 
@@ -47,6 +61,8 @@ Para que no se confunda con un número decimal, el hexadecimal se marca de disti
 
 El **<Termino id="octal">octal</Termino>** (base 8) usa los dígitos del 0 al 7, y cada uno equivale a **3 bits**. Hoy casi solo aparece en un lugar, pero un lugar muy importante para un sysadmin: **los permisos de Linux**.
 
+Imagina una planilla con tres casilleros por persona: "puede leer", "puede modificar", "puede ejecutar". Cada casillero está tildado o no, y eso es exactamente un bit. Hay tres personas en la planilla: el dueño del archivo, su grupo y todos los demás.
+
 Los permisos de un archivo son tres grupos de tres bits: lectura (r), escritura (w) y ejecución (x), para el dueño, el grupo y el resto. Cada grupo de 3 bits es un dígito octal:
 
 | Permisos | Binario | Octal |
@@ -57,7 +73,12 @@ Los permisos de un archivo son tres grupos de tres bits: lectura (r), escritura 
 | `rw-` | 110 | 6 |
 | `rwx` | 111 | 7 |
 
-Así, `chmod 750 script.sh` deja los permisos en `rwxr-x---`: el dueño puede todo (7), el grupo lee y ejecuta (5) y el resto, nada (0). La forma rápida de calcularlos: r vale 4, w vale 2 y x vale 1, y se suman los que corresponden a cada grupo. Los permisos tienen un módulo completo en el nivel de Linux; por ahora alcanza con entender que son octal.
+Así, `chmod 750 script.sh` deja los permisos en `rwxr-x---`: el dueño puede todo (7), el grupo lee y ejecuta (5) y el resto, nada (0). La forma rápida de calcularlos: r vale 4, w vale 2 y x vale 1, y se suman los que corresponden a cada grupo.
+
+<EnSimple titulo="Dicho más simple: los permisos como puntos">
+Cada tilde de la planilla da puntos: leer da 4, modificar da 2 y ejecutar da 1. Sumas los puntos de cada persona y escribes los tres resultados seguidos. El dueño con todo tildado tiene 4 + 2 + 1 = 7; el grupo que solo lee y ejecuta tiene 4 + 1 = 5; el resto, sin ninguna tilde, tiene 0. Resultado: `750`.
+</EnSimple>
+ Los permisos tienen un módulo completo en el nivel de Linux; por ahora alcanza con entender que son octal.
 
 <Pregunta id="p08" />
 

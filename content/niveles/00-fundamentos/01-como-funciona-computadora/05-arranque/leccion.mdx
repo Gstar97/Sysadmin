@@ -17,7 +17,15 @@ import noArranca from './no-arranca.yaml'
 
 "No arranca" puede significar cosas muy distintas: que no enciende ni una luz, que la pantalla queda negra, que aparece un mensaje de error del firmware o que el sistema operativo empieza a cargar y se detiene. Cada caso tiene causas y soluciones distintas. Si conoces las etapas del arranque, el último mensaje en pantalla te dice dónde buscar.
 
+<AntesDeEmpezar>
+- La **placa madre** tiene un chip con un programa propio, que funciona aunque el disco esté vacío.
+- La **RAM** se vacía al apagar: cada vez que el equipo arranca, hay que volver a cargar todo desde el disco.
+- Un disco se puede dividir en partes llamadas **particiones** (lo viste en la lección de almacenamiento).
+</AntesDeEmpezar>
+
 ## Del botón al sistema operativo
+
+El arranque funciona como una carrera de postas: cada corredor hace su tramo y le pasa el testigo al siguiente. Si la carrera se detiene, mirando quién tenía el testigo sabes en qué tramo fue el problema. En una computadora, cada etapa prepara lo necesario y le entrega el control a la siguiente.
 
 <Diagrama svg={etapas} alt="Las seis etapas del arranque: encendido, POST, búsqueda del dispositivo de arranque, cargador, kernel y servicios, con el síntoma típico de una falla en cada una" pie="Las tres primeras etapas son del firmware; las tres últimas, del sistema operativo." />
 
@@ -31,6 +39,10 @@ import noArranca from './no-arranca.yaml'
 <Ordenar ejercicio={ordenar} />
 
 ## BIOS y UEFI
+
+<EnSimple>
+Imagina a dos personas a las que les pides que busquen las instrucciones para encender una máquina dentro de una carpeta. La primera (BIOS) solo sabe leer la primera hoja: si las instrucciones no están ahí, no sabe seguir. La segunda (UEFI) sabe leer el índice, buscar el archivo correcto por su nombre y abrirlo. Por eso UEFI es más flexible y puede tener varios sistemas a mano.
+</EnSimple>
 
 Hay dos tipos de firmware:
 
@@ -50,6 +62,8 @@ Con UEFI, el disco tiene una **<Termino id="particion-efi">partición EFI</Termi
 \EFI\BOOT\BOOTX64.EFI                cargador de respaldo
 ```
 
+Piensa en la partición EFI como la recepción de un edificio: cada sistema operativo deja ahí su "tarjeta" con las instrucciones para despertarlo, y el firmware sabe que tiene que ir a buscar a la recepción.
+
 El firmware guarda en su propia memoria una lista de **entradas de arranque** ("Rocky Linux: disco 1, archivo `\EFI\rocky\shimx64.efi`") y el orden en que las prueba. Si esa lista se pierde (por ejemplo, al reiniciar la configuración del firmware o al cambiar el disco de equipo), el firmware busca el cargador de respaldo `\EFI\BOOT\BOOTX64.EFI`, y si tampoco existe, muestra que no hay dispositivo de arranque.
 
 ### Cómo saber con qué firmware arrancó un equipo
@@ -65,7 +79,7 @@ El firmware guarda en su propia memoria una lista de **entradas de arranque** ("
 
 ## MBR y GPT
 
-Un disco necesita una **tabla de particiones** que diga dónde empieza y termina cada partición. Hay dos formatos:
+Un disco necesita una **tabla de particiones** que diga dónde empieza y termina cada partición. Es como el índice de un libro: dice en qué página empieza cada capítulo. Hay dos formatos:
 
 | | MBR | <Termino id="gpt">GPT</Termino> |
 | --- | --- | --- |
@@ -74,6 +88,10 @@ Un disco necesita una **tabla de particiones** que diga dónde empieza y termina
 | Copia de seguridad de la tabla | No: si se daña el primer sector, se pierde | Sí, al final del disco, con verificación de errores |
 | Arranque | BIOS heredado | UEFI (y BIOS con una pequeña partición especial) |
 
+<EnSimple titulo="Dicho más simple: MBR y GPT">
+MBR es un índice muy corto escrito en la primera hoja del libro: solo tiene lugar para 4 capítulos, y si esa hoja se rompe, se pierde el índice. GPT es un índice largo, con lugar para muchos capítulos, y con una copia guardada al final del libro por si la primera se daña.
+</EnSimple>
+
 La regla práctica: **UEFI va con GPT, BIOS heredado va con MBR**. Windows exige exactamente esa combinación: si el instalador arrancó en modo UEFI y el disco es MBR, se niega a instalar. Linux es más flexible (puede arrancar con BIOS desde un disco GPT si tiene una partición de 1 MB de tipo *BIOS boot*), pero en servidores nuevos se usa siempre UEFI con GPT.
 
 <Pregunta id="p06" />
@@ -81,6 +99,10 @@ La regla práctica: **UEFI va con GPT, BIOS heredado va con MBR**. Windows exige
 ## Secure Boot
 
 **<Termino id="secure-boot">Secure Boot</Termino>** es una función de UEFI que solo deja arrancar cargadores **firmados** con claves que el firmware tiene registradas. Así evita que un programa malicioso se instale antes que el sistema operativo, donde ningún antivirus lo puede ver.
+
+<EnSimple titulo="Dicho más simple: Secure Boot">
+Es como la entrada a un edificio con guardia: solo pasa quien tiene una credencial firmada por alguien en quien el guardia confía. El guardia confía en Microsoft. Las distribuciones Linux entran con **shim**, un "acompañante" que tiene credencial de Microsoft y que, una vez adentro, responde por el resto de los programas de la distribución.
+</EnSimple>
 
 Los equipos traen de fábrica las claves de Microsoft. Windows arranca porque su cargador está firmado por Microsoft. Las distribuciones Linux usan un truco: un cargador pequeño llamado **shim**, firmado por Microsoft, que a su vez verifica GRUB y el kernel con las claves de la distribución. Por eso Rocky, AlmaLinux y Ubuntu arrancan con Secure Boot activo sin hacer nada.
 
