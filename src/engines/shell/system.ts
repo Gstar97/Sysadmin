@@ -558,6 +558,13 @@ export class System {
         '# /etc/fstab\nUUID=6f1c2b8e-1a7d-4c1e-9d5a-2b6f0c3e8a11 /     xfs  defaults 0 0\nUUID=3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22 /boot xfs  defaults 0 0\n' +
         (this.firmware === 'uefi' ? 'UUID=1A2B-3C4D /boot/efi vfat umask=0077,shortname=winnt 0 2\n' : ''),
       '/etc/shells': '/bin/sh\n/bin/bash\n/usr/bin/sh\n/usr/bin/bash\n',
+      // Documentación que instalan los paquetes en /usr/share/doc (lección "Obtener ayuda").
+      '/usr/share/doc/sudo/README.md':
+        'Sudo is a program designed to allow a sysadmin to give limited root privileges\nto users and log root activity. The basic philosophy is to give as few\nprivileges as possible but still allow people to get their work done.\n\nSee the sudoers(5) manual for the policy file format and visudo(8) to edit it.\n',
+      [this.distro === 'ubuntu' ? '/usr/share/doc/bash/README' : '/usr/share/doc/bash/FAQ']:
+        'This is the Bash FAQ: frequently asked questions about the GNU Bourne-Again Shell.\nFor the complete reference, see bash(1) and the Bash Reference Manual.\n',
+      '/usr/share/doc/coreutils/README':
+        'These are the GNU core utilities: ls, cp, mv, rm, cat, head, tail, sort, wc and\nmany more. Each program documents its options with --help and in its manual page.\n',
       '/etc/login.defs': 'PASS_MAX_DAYS\t99999\nPASS_MIN_DAYS\t0\nPASS_WARN_AGE\t7\nUID_MIN\t\t1000\nGID_MIN\t\t1000\nUMASK\t\t022\n',
       '/etc/ssh/sshd_config':
         '# Configuración del servidor SSH\n#Port 22\nPermitRootLogin prohibit-password\nPubkeyAuthentication yes\nPasswordAuthentication yes\nKbdInteractiveAuthentication no\nUsePAM yes\nX11Forwarding no\nSubsystem sftp /usr/libexec/openssh/sftp-server\n',

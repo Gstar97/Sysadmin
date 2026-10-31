@@ -16,7 +16,7 @@ register('ls', {
   summary: 'List information about the FILEs (the current directory by default).\n  -a, --all  -A  -l  -h  -d  -R  -r  -t  -S  -i  -1  -F',
   run(ctx) {
     const a = parseArgs(ctx.args, {
-      flags: { all: ['a', 'all'], almost: ['A', 'almost-all'], long: ['l'], human: ['h', 'human-readable'], dir: ['d', 'directory'], recursive: ['R', 'recursive'], reverse: ['r', 'reverse'], time: ['t'], size: ['S'], inode: ['i', 'inode'], one: ['1'], classify: ['F', 'classify'], color: ['color'] },
+      flags: { all: ['a', 'all'], almost: ['A', 'almost-all'], long: ['l'], human: ['h', 'human-readable'], dir: ['d', 'directory'], recursive: ['R', 'recursive'], reverse: ['r', 'reverse'], time: ['t'], size: ['S'], inode: ['i', 'inode'], one: ['1'], classify: ['F', 'classify'], color: ['color'], columns: ['C'] },
     })
     if (a.unknown) {
       ctx.err(`ls: invalid option -- '${a.unknown.replace(/^-+/, '')}'\nTry 'ls --help' for more information.\n`)
@@ -276,6 +276,17 @@ register('rm', {
       }
       try {
         const node = ctx.sys.vfs.stat(abs, ctx.sh.cred, false)
+        if (a.flags.has('interactive') && !a.flags.has('force')) {
+          const kind = node.type === 'dir' ? 'directory' : node.type === 'symlink' ? 'symbolic link' : node.data.length === 0 ? 'regular empty file' : 'regular file'
+          ctx.err(`rm: remove ${kind} '${f}'? `)
+          let answer = ctx.stdin.readLine()
+          if (answer === null) {
+            // La terminal simulada no puede quedarse esperando: responde por el estudiante.
+            answer = 'y'
+            ctx.err('y\n[simulador] En un servidor real, rm -i espera tu respuesta: y para borrar, n (o Enter) para conservar.\n')
+          } else ctx.err('\n')
+          if (!/^y(es)?$/i.test(answer.trim())) continue
+        }
         if (node.type === 'dir') {
           if (a.flags.has('recursive')) ctx.sys.vfs.removeTree(abs, ctx.sh.cred)
           else if (a.flags.has('dir')) ctx.sys.vfs.rmdir(abs, ctx.sh.cred)

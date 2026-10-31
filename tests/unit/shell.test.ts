@@ -145,3 +145,40 @@ describe('detalles que usa el Nivel 0', () => {
     expect((await run('curl -v http://tienda.example.com')).err).not.toContain('TLSv1.3')
   })
 })
+
+describe('lo que usa el Nivel 1 (primeros pasos)', () => {
+  it('expansión de llaves', async () => {
+    const { run } = await session()
+    await run('mkdir -p p/{src,docs}/v{1..3}')
+    expect((await run('ls p/docs')).out).toBe('v1  v2  v3\n')
+    expect((await run('echo f{01..03}.log {c..a} x{1..7..3}')).out).toBe('f01.log f02.log f03.log c b a x1 x4 x7\n')
+    expect((await run("echo '{a,b}' {solo}")).out).toBe('{a,b} {solo}\n')
+  })
+
+  it('historial con !! y !$, y alias de la distribución', async () => {
+    const { run } = await session({ usuarios: [{ nombre: 'estudiante', sudo: true }] })
+    await run('ls /etc/hosts')
+    const r = await run('echo !$')
+    expect(r.out).toBe('echo /etc/hosts\n/etc/hosts\n')
+    expect((await run('!!')).out).toBe('echo /etc/hosts\n/etc/hosts\n')
+    expect((await run('!noexiste')).err).toContain('event not found')
+    expect((await run("echo 'sin !! expansión'")).out).toBe('sin !! expansión\n')
+    expect((await run('type ll')).out).toContain('aliased to `ls -l --color=auto')
+    await run("alias hola='echo hola mundo'")
+    expect((await run('hola')).out).toBe('hola mundo\n')
+    await run('unalias hola')
+    expect((await run('hola')).err).toContain('command not found')
+    const ub = await session({ distro: 'ubuntu' })
+    expect((await ub.run('alias ll')).out).toBe("alias ll='ls -alF'\n")
+  })
+
+  it('ayuda: secciones del manual, whatis, whereis y nl', async () => {
+    const { run } = await session()
+    expect((await run('whatis passwd')).out).toMatch(/passwd \(1\)[\s\S]*passwd \(5\)/)
+    expect((await run('man 5 passwd')).out).toContain('seven colon-separated fields')
+    expect((await run('man 5 ls')).err).toContain('No entry for ls in section 5')
+    expect((await run('whereis ls')).out).toBe('ls: /usr/bin/ls /usr/share/man/man1/ls.1.gz\n')
+    expect((await run('printf "a\\n\\nb\\n" | nl')).out).toBe('     1\ta\n       \n     2\tb\n')
+    expect((await run('ls -lhd /etc')).out).toMatch(/ 4\.0K /)
+  })
+})

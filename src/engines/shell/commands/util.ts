@@ -23,7 +23,8 @@ export function humanSize(bytes: number): string {
     v /= 1024
     i++
   }
-  return (v < 10 ? Math.ceil(v * 10) / 10 : Math.ceil(v)).toString() + units[i]
+  // Como GNU: una cifra decimal por debajo de 10 (4.0K, 1.5G) y redondeo hacia arriba.
+  return (v < 10 ? (Math.ceil(v * 10) / 10).toFixed(1) : String(Math.ceil(v))) + units[i]
 }
 
 export function sizeOf(node: Inode): number {

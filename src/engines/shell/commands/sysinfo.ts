@@ -800,6 +800,74 @@ register('which', {
   },
 })
 
+register('whereis', {
+  usage: 'whereis [options] [-BMS directory... -f] name...',
+  run(ctx) {
+    for (const c of ctx.args.filter((x) => !x.startsWith('-'))) {
+      const def = COMMANDS.get(c)
+      const available = def && ctx.sys.isCommandAvailable(c, (x) => commandPackage(ctx.sys.distro, x))
+      if (!available) {
+        ctx.out(`${c}:\n`)
+        continue
+      }
+      const man = MAN_DESC[c] ? ` /usr/share/man/man${MAN_SECTION[c] ?? 1}/${c}.${MAN_SECTION[c] ?? 1}.gz` : ''
+      ctx.out(`${c}: ${def.path ?? '/usr/bin'}/${c}${man}\n`)
+    }
+    return 0
+  },
+})
+
+register('nl', {
+  usage: 'nl [OPTION]... [FILE]...',
+  summary: '  -b a  number all lines',
+  run(ctx) {
+    let all = false
+    const files: string[] = []
+    for (let i = 0; i < ctx.args.length; i++) {
+      const a = ctx.args[i]
+      if (a === '-ba' || (a === '-b' && ctx.args[i + 1] === 'a')) {
+        all = true
+        if (a === '-b') i++
+      } else files.push(a)
+    }
+    let text: string
+    try {
+      text = files.length ? files.map((f) => ctx.sys.vfs.readFile(ctx.sh.resolve(f), ctx.sh.cred)).join('') : ctx.stdin.readAll()
+    } catch (e) {
+      ctx.err(`nl: ${files[0]}: ${(e as Error).message}\n`)
+      return 1
+    }
+    let n = 0
+    const lines = text.replace(/\n$/, '').split('\n')
+    for (const l of lines) {
+      if (!all && l === '') ctx.out('       \n')
+      else ctx.out(`${String(++n).padStart(6)}\t${l}\n`)
+    }
+    return 0
+  },
+})
+
+/** Comandos de administración: sección 8 del manual. El resto va en la 1. */
+const MAN_SECTION: Record<string, number> = Object.fromEntries(
+  ['useradd', 'usermod', 'userdel', 'groupadd', 'groupdel', 'fdisk', 'visudo', 'shutdown', 'reboot', 'poweroff', 'halt', 'dmidecode', 'lspci', 'efibootmgr', 'ip', 'ss', 'ifconfig', 'adduser', 'ufw', 'dnf', 'yum', 'apt', 'apt-get', 'rpm'].map((c) => [c, 8]),
+)
+
+/** Formatos de archivo (sección 5). */
+const MAN_FILES: Record<string, { desc: string; body: string; see: string }> = {
+  passwd: {
+    desc: 'password file',
+    body: 'The /etc/passwd file is a text file that describes user login accounts for the system.\nEach line describes one user and contains seven colon-separated fields:\n\n  login name : optional encrypted password : numerical user ID :\n  numerical group ID : user name or comment field : user home directory :\n  optional user command interpreter\n\nIf the password field is a lower-case "x", then the encrypted password is\nactually stored in the shadow(5) file instead.',
+    see: 'login(1), passwd(1), su(1), group(5), shadow(5)',
+  },
+  shadow: { desc: 'shadowed password file', body: 'shadow is a file which contains the password information for the system\'s\naccounts and optional aging information. This file must not be readable by\nregular users if password security is to be maintained.', see: 'chage(1), passwd(1), passwd(5)' },
+  group: { desc: 'user group file', body: 'The /etc/group file is a text file that defines the groups on the system.\nThere is one entry per line, with the following format:\n\n  group_name:password:GID:user_list', see: 'gpasswd(1), groupadd(8), passwd(5)' },
+  fstab: { desc: 'static information about the filesystems', body: 'The file fstab contains descriptive information about the filesystems the\nsystem can mount. Each filesystem is described on a separate line; fields\nare separated by tabs or spaces: device, mount point, type, options,\ndump and fsck order.', see: 'mount(8), swapon(8)' },
+  hosts: { desc: 'static table lookup for hostnames', body: 'This manual page describes the format of the /etc/hosts file. For each\nhost a single line should be present with the following information:\n\n  IP_address canonical_hostname [aliases...]', see: 'hostname(1), resolv.conf(5)' },
+  sudoers: { desc: 'default sudo security policy plugin', body: 'The sudoers policy plugin determines a user\'s sudo privileges. The\nsudoers file should always be edited with the visudo command.', see: 'sudo(8), visudo(8)' },
+  'sshd_config': { desc: 'OpenSSH daemon configuration file', body: 'sshd(8) reads configuration data from /etc/ssh/sshd_config. The file\ncontains keyword-argument pairs, one per line. Lines starting with # and\nempty lines are interpreted as comments.', see: 'sshd(8)' },
+  'crontab': { desc: 'tables for driving cron', body: 'A crontab file contains instructions to the cron daemon of the general form:\n"run this command at this time on this date".\n\n  minute  hour  day-of-month  month  day-of-week  command', see: 'cron(8), crontab(1)' },
+}
+
 const MAN_DESC: Record<string, string> = {
   ls: 'list directory contents',
   cd: 'change the shell working directory',
@@ -879,37 +947,65 @@ const MAN_DESC: Record<string, string> = {
   setfacl: 'set file access control lists',
 }
 
-register(['man', 'apropos'], {
-  usage: 'man [-k KEYWORD] PAGE',
+/** Todas las páginas conocidas: [nombre, sección, descripción]. */
+function manIndex(): [string, number, string][] {
+  return [
+    ...Object.entries(MAN_DESC).map(([k, v]) => [k, MAN_SECTION[k] ?? 1, v] as [string, number, string]),
+    ...Object.entries(MAN_FILES).map(([k, v]) => [k, 5, v.desc] as [string, number, string]),
+  ]
+}
+
+register(['man', 'apropos', 'whatis'], {
+  usage: 'man [SECTION] PAGE | man -k KEYWORD | man -f PAGE',
   run(ctx) {
+    if (ctx.name === 'whatis' || ctx.args[0] === '-f') {
+      const page = ctx.name === 'whatis' ? ctx.args[0] : ctx.args[1]
+      const hits = manIndex().filter(([k]) => k === page)
+      if (!hits.length) {
+        ctx.out(`${page}: nothing appropriate.\n`)
+        return 16
+      }
+      for (const [k, sec, v] of hits.sort((a, b) => a[1] - b[1])) ctx.out(`${`${k} (${sec})`.padEnd(22)} - ${v}\n`)
+      return 0
+    }
     if (ctx.name === 'apropos' || ctx.args[0] === '-k') {
       const kw = (ctx.name === 'apropos' ? ctx.args[0] : ctx.args[1])?.toLowerCase()
       if (!kw) {
         ctx.err('apropos what?\n')
         return 1
       }
-      const hits = Object.entries(MAN_DESC).filter(([k, v]) => k.includes(kw) || v.toLowerCase().includes(kw))
+      const hits = manIndex().filter(([k, , v]) => k.includes(kw) || v.toLowerCase().includes(kw))
       if (!hits.length) {
         ctx.out(`${kw}: nothing appropriate.\n`)
         return 16
       }
-      for (const [k, v] of hits.sort()) ctx.out(`${k.padEnd(16)} (1)  - ${v}\n`)
+      for (const [k, sec, v] of hits.sort((a, b) => a[0].localeCompare(b[0]) || a[1] - b[1])) ctx.out(`${`${k} (${sec})`.padEnd(22)} - ${v}\n`)
       return 0
     }
+    const section = ctx.args.find((a) => /^\d$/.test(a))
     const page = ctx.args.find((a) => !/^\d$/.test(a))
     if (!page) {
       ctx.err('What manual page do you want?\nFor example, try \'man man\'.\n')
       return 1
     }
+    const file = MAN_FILES[page]
+    if (file && (section === '5' || (!section && !COMMANDS.has(page)))) {
+      const title = `${page.toUpperCase()}(5)`
+      ctx.out(`${title.padEnd(30)}File Formats Manual${title.padStart(30)}\n\nNAME\n       ${page} - ${file.desc}\n\nDESCRIPTION\n${file.body.split('\n').map((l) => '       ' + l).join('\n')}\n\nSEE ALSO\n       ${file.see}\n\n`)
+      if (ctx.isTTY) ctx.err('[simulador] Esta es una versión abreviada; en un servidor real man muestra el manual completo (se sale con q).\n')
+      return 0
+    }
     const def = COMMANDS.get(page)
     const builtin = page in BUILTINS
-    if (!def && !builtin) {
-      ctx.err(`No manual entry for ${page}\n`)
+    const sec = MAN_SECTION[page] ?? 1
+    if ((!def && !builtin) || (section && Number(section) !== sec && !(builtin && section === '1'))) {
+      ctx.err(section ? `No entry for ${page} in section ${section} of the manual\n` : `No manual entry for ${page}\n`)
       return 16
     }
-    const title = `${page.toUpperCase()}(1)`
+    const title = `${page.toUpperCase()}(${sec})`
+    const kind = sec === 8 ? 'System Management Commands' : 'User Commands'
     ctx.out(
-      `${title.padEnd(30)}User Commands${title.padStart(30)}\n\nNAME\n       ${page} - ${MAN_DESC[page] ?? (builtin ? 'bash built-in command' : 'command')}\n\nSYNOPSIS\n       ${def?.usage ?? `${page} [arguments]`}\n\nDESCRIPTION\n${(def?.summary ?? '       See the online documentation for details.').split('\n').map((l) => '       ' + l.trim()).join('\n')}\n\n`,
+      `${title.padEnd(30)}${kind}${title.padStart(30)}\n\nNAME\n       ${page} - ${MAN_DESC[page] ?? (builtin ? 'bash built-in command' : 'command')}\n\nSYNOPSIS\n       ${def?.usage ?? `${page} [arguments]`}\n\nDESCRIPTION\n${(def?.summary ?? '       See the online documentation for details.').split('\n').map((l) => '       ' + l.trim()).join('\n')}\n\n`,
     )
     if (ctx.isTTY) ctx.err('[simulador] Esta es una versión abreviada; en un servidor real man muestra el manual completo (se sale con q).\n')
     return 0

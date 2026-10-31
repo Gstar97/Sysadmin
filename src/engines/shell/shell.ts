@@ -85,6 +85,70 @@ export interface EditorRequest {
 
 const GLOB_CHARS = /[*?[]/
 
+/**
+ * Expansión de llaves de bash: a{b,c}d → abd acd; {1..5}, {a..e}, {01..10}, {1..10..2}.
+ * Se aplica solo al texto sin comillas y antes que cualquier otra expansión.
+ */
+export function braceExpand(word: Word): Word[] {
+  for (let i = 0; i < word.parts.length; i++) {
+    const part = word.parts[i]
+    if (part.t !== 'lit' || part.q) continue
+    const v = part.v
+    for (let start = v.indexOf('{'); start !== -1; start = v.indexOf('{', start + 1)) {
+      let depth = 0
+      let end = -1
+      const commas: number[] = []
+      for (let j = start; j < v.length; j++) {
+        if (v[j] === '{') depth++
+        else if (v[j] === '}') {
+          depth--
+          if (depth === 0) {
+            end = j
+            break
+          }
+        } else if (v[j] === ',' && depth === 1) commas.push(j)
+      }
+      if (end === -1) break
+      const inner = v.slice(start + 1, end)
+      let alts: string[] | null = null
+      if (commas.length) {
+        alts = []
+        let from = start + 1
+        for (const c of [...commas, end]) {
+          alts.push(v.slice(from, c))
+          from = c + 1
+        }
+      } else {
+        const r = /^(-?\d+|[A-Za-z])\.\.(-?\d+|[A-Za-z])(?:\.\.(-?\d+))?$/.exec(inner)
+        if (r) alts = braceRange(r[1], r[2], r[3])
+      }
+      if (!alts) continue
+      const prefix = v.slice(0, start)
+      const suffix = v.slice(end + 1)
+      return alts.flatMap((alt) =>
+        braceExpand({ parts: [...word.parts.slice(0, i), { t: 'lit', v: prefix + alt + suffix, q: false }, ...word.parts.slice(i + 1)] }),
+      )
+    }
+  }
+  return [word]
+}
+
+function braceRange(a: string, b: string, stepText?: string): string[] | null {
+  const step = Math.abs(Number(stepText ?? 1)) || 1
+  const numeric = /^-?\d+$/.test(a) && /^-?\d+$/.test(b)
+  if (!numeric && (/\d/.test(a) || /\d/.test(b))) return null
+  const from = numeric ? Number(a) : a.charCodeAt(0)
+  const to = numeric ? Number(b) : b.charCodeAt(0)
+  const width = numeric && (/^-?0\d/.test(a) || /^-?0\d/.test(b)) ? Math.max(a.replace('-', '').length, b.replace('-', '').length) : 0
+  const out: string[] = []
+  const dir = from <= to ? 1 : -1
+  for (let n = from; dir > 0 ? n <= to : n >= to; n += dir * step) {
+    out.push(numeric ? (n < 0 ? '-' : '') + String(Math.abs(n)).padStart(width, '0') : String.fromCharCode(n))
+    if (out.length > 10000) break
+  }
+  return out
+}
+
 function globToRegex(segment: string): RegExp {
   let re = '^'
   for (let i = 0; i < segment.length; i++) {
@@ -122,6 +186,8 @@ export class Shell {
   scriptName = '-bash'
   functions = new Map<string, Node>()
   history: string[] = []
+  /** Alias del shell interactivo (los que define ~/.bashrc en cada distribución, más los del estudiante). */
+  aliases = new Map<string, string>()
   lastExit = 0
   options = { errexit: false, nounset: false, pipefail: false }
   umask = 0o022
@@ -139,6 +205,17 @@ export class Shell {
     this.cwdStack = [cwd ? normalizePath(cwd) : home]
     this.umask = user === 'root' ? 0o022 : 0o002
     this.resetEnv()
+    this.defaultAliases()
+  }
+
+  /** Los alias que traen los archivos de inicio de cada distribución. */
+  private defaultAliases() {
+    this.aliases.clear()
+    const defs: Record<string, string> =
+      this.sys.distro === 'ubuntu'
+        ? { ls: 'ls --color=auto', grep: 'grep --color=auto', ll: 'ls -alF', la: 'ls -A', l: 'ls -CF' }
+        : { ls: 'ls --color=auto', grep: 'grep --color=auto', ll: 'ls -l --color=auto', 'l.': 'ls -d .* --color=auto' }
+    for (const [k, v] of Object.entries(defs)) this.aliases.set(k, v)
   }
 
   get user(): string {
@@ -240,6 +317,17 @@ export class Shell {
       if (last && last.stream === stream) last.text += text
       else chunks.push({ text, stream })
     }
+    const hist = this.expandHistory(source)
+    if ('error' in hist) {
+      push('err')(hist.error + '\n')
+      this.lastExit = 1
+      this.lastOutput = hist.error
+      return { chunks }
+    }
+    if (hist.changed) {
+      source = hist.text
+      push('out')(source.replace(/\n$/, '') + '\n')
+    }
     let node: Node
     try {
       node = parse(source)
@@ -269,6 +357,51 @@ export class Shell {
     }
     this.lastOutput = chunks.map((c) => c.text).join('')
     return { chunks }
+  }
+
+  /**
+   * Expansión del historial de bash interactivo: !!, !$, !n, !-n y !texto.
+   * Como en bash, no se aplica dentro de comillas simples ni a un ! seguido de espacio, = o (.
+   */
+  private expandHistory(src: string): { text: string; changed: boolean } | { error: string } {
+    if (!src.includes('!')) return { text: src, changed: false }
+    let out = ''
+    let changed = false
+    let inSingle = false
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i]
+      if (c === "'" ) inSingle = !inSingle
+      if (c === '\\' && !inSingle) {
+        out += c + (src[i + 1] ?? '')
+        i++
+        continue
+      }
+      if (c !== '!' || inSingle) {
+        out += c
+        continue
+      }
+      const rest = src.slice(i + 1)
+      const m = /^(!|\$|-?\d+|[A-Za-z_./][\w./-]*)/.exec(rest)
+      if (!m) {
+        out += c
+        continue
+      }
+      const tok = m[1]
+      let entry: string | undefined
+      if (tok === '!' || tok === '$') entry = this.history[this.history.length - 1]
+      else if (/^-\d+$/.test(tok)) entry = this.history[this.history.length + Number(tok)]
+      else if (/^\d+$/.test(tok)) entry = this.history[Number(tok) - 1]
+      else entry = [...this.history].reverse().find((h) => h.startsWith(tok))
+      if (entry === undefined) return { error: `bash: !${tok}: event not found` }
+      if (tok === '$') {
+        const words = entry.trim().split(/\s+/)
+        entry = words[words.length - 1]
+      }
+      out += entry
+      changed = true
+      i += tok.length
+    }
+    return { text: out, changed }
   }
 
   // ---------------------------------------------------------------------------
@@ -316,7 +449,7 @@ export class Shell {
         })
       case 'for':
         return this.withRedirs(node.redirs, io, async (rio) => {
-          const items = node.items ? (await Promise.all(node.items.map((w) => this.expandWord(w)))).flat() : [...this.positional]
+          const items = node.items ? (await Promise.all(node.items.flatMap((w) => braceExpand(w)).map((w) => this.expandWord(w)))).flat() : [...this.positional]
           let code = 0
           for (const item of items) {
             this.setVar(node.name, item)
@@ -516,12 +649,32 @@ export class Shell {
     return { io: { stdin, out, err, isTTY }, flush }
   }
 
+  /** Reemplaza la primera palabra por su alias (solo en el shell interactivo y si no va entre comillas). */
+  private async applyAlias(first: Word | undefined, argv: string[]): Promise<string[]> {
+    if (!first || this.scriptName !== '-bash' || argv.length === 0) return argv
+    if (first.parts.length !== 1 || first.parts[0].t !== 'lit' || first.parts[0].q) return argv
+    const value = this.aliases.get(argv[0])
+    if (value === undefined) return argv
+    let node: Node
+    try {
+      node = parse(value)
+    } catch {
+      return argv
+    }
+    if (node.kind !== 'simple' || node.words.length === 0) return argv
+    const expanded: string[] = []
+    for (const w of node.words.flatMap((x) => braceExpand(x))) expanded.push(...(await this.expandWord(w)))
+    return [...expanded, ...argv.slice(1)]
+  }
+
   private async execSimple(node: Extract<Node, { kind: 'simple' }>, io: IO): Promise<number> {
     const isTest = node.words[0]?.parts.length === 1 && node.words[0].parts[0].t === 'lit' && node.words[0].parts[0].v === '[['
     let argv: string[]
     try {
       argv = []
-      for (const w of node.words) argv.push(...(await this.expandWord(w, isTest ? { split: false, glob: false } : {})))
+      const words = isTest ? node.words : node.words.flatMap((w) => braceExpand(w))
+      for (const w of words) argv.push(...(await this.expandWord(w, isTest ? { split: false, glob: false } : {})))
+      argv = await this.applyAlias(node.words[0], argv)
     } catch (e) {
       if (e instanceof ExpansionError) {
         io.err(e.message + '\n')
@@ -1402,7 +1555,8 @@ export const BUILTINS: Record<string, Builtin> = {
   type: (sh, args, io) => {
     let code = 0
     for (const a of args) {
-      if (BUILTINS[a]) io.out(`${a} is a shell builtin\n`)
+      if (sh.aliases.has(a)) io.out(`${a} is aliased to \`${sh.aliases.get(a)}'\n`)
+      else if (BUILTINS[a]) io.out(`${a} is a shell builtin\n`)
       else if (sh.functions.has(a)) io.out(`${a} is a function\n`)
       else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c))) {
         io.out(`${a} is ${COMMANDS.get(a)!.path ?? '/usr/bin'}/${a}\n`)
@@ -1440,7 +1594,52 @@ export const BUILTINS: Record<string, Builtin> = {
     sh.umask = parseInt(args[0], 8)
     return 0
   },
-  alias: () => 0,
+  alias: (sh, args, io) => {
+    const show = (k: string) => io.out(`alias ${k}='${sh.aliases.get(k)}'\n`)
+    if (!args.length || args[0] === '-p') {
+      ;[...sh.aliases.keys()].sort().forEach(show)
+      return 0
+    }
+    let code = 0
+    for (const a of args) {
+      const eq = a.indexOf('=')
+      if (eq > 0) sh.aliases.set(a.slice(0, eq), a.slice(eq + 1))
+      else if (sh.aliases.has(a)) show(a)
+      else {
+        io.err(`bash: alias: ${a}: not found\n`)
+        code = 1
+      }
+    }
+    return code
+  },
+  unalias: (sh, args, io) => {
+    if (args[0] === '-a') {
+      sh.aliases.clear()
+      return 0
+    }
+    let code = 0
+    for (const a of args) {
+      if (!sh.aliases.delete(a)) {
+        io.err(`bash: unalias: ${a}: not found\n`)
+        code = 1
+      }
+    }
+    return code
+  },
+  command: (sh, args, io) => {
+    if (args[0] === '-v' || args[0] === '-V') {
+      let code = 0
+      for (const a of args.slice(1)) {
+        if (sh.aliases.has(a)) io.out(args[0] === '-v' ? `alias ${a}='${sh.aliases.get(a)}'\n` : `${a} is aliased to \`${sh.aliases.get(a)}'\n`)
+        else if (BUILTINS[a]) io.out(args[0] === '-v' ? `${a}\n` : `${a} is a shell builtin\n`)
+        else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c))) io.out(`${COMMANDS.get(a)!.path ?? '/usr/bin'}/${a}\n`)
+        else code = 1
+      }
+      return code
+    }
+    // command nombre args: ejecuta sin buscar alias ni funciones.
+    return args.length ? sh.invoke(args, io) : 0
+  },
   clear: (sh) => {
     sh.pendingClear = true
     return 0
