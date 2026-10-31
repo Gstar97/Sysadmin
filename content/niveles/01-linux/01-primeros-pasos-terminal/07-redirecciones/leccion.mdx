@@ -1,0 +1,133 @@
+---
+id: n1-m1-l7
+titulo: Redirecciones, tuberías y filtros
+minutos: 180
+objetivos:
+  - Entender stdin, stdout y stderr y redirigirlos (>, >>, 2>, &>, <).
+  - Encadenar comandos con | y tee.
+  - Filtrar y resumir texto con grep, sort, uniq, wc, cut y tr.
+glosario: [flujo-estandar, redireccion, tuberia]
+verificado: 2026-10
+---
+
+import flujos from './flujos.svg?raw'
+import operadores from './operadores.yaml'
+import ejFiltros from './ej-filtros.yaml'
+
+Esta es la lección que convierte la terminal en una herramienta poderosa. Cada comando de Linux hace una sola cosa, pero se pueden **encadenar**: uno filtra, otro ordena, otro cuenta. Con tres o cuatro comandos unidos respondes preguntas como "¿qué IP hizo más intentos fallidos de inicio de sesión hoy?" sobre un archivo de un millón de líneas, en segundos. Lo vas a usar todos los días, y es la base de los scripts del final de este nivel.
+
+<AntesDeEmpezar>
+- Sabes ver archivos con `cat`, `head` y `tail`, y buscar texto con `grep palabra archivo`.
+- Los logs son archivos de texto con una línea por evento.
+- Un comando tiene la forma `comando opciones argumentos`.
+</AntesDeEmpezar>
+
+## Los tres canales de un comando
+
+Imagina una oficina con una bandeja de entrada y dos de salida: una para los trabajos terminados y otra para los reclamos. Todo comando tiene esas tres "bandejas", llamadas **<Termino id="flujo-estandar">flujos estándar</Termino>**:
+
+- **stdin** (entrada estándar, número 0): de donde lee. Por defecto, el teclado.
+- **stdout** (salida estándar, número 1): donde escribe los resultados. Por defecto, la pantalla.
+- **stderr** (salida de errores, número 2): donde escribe los errores y avisos. Por defecto, también la pantalla.
+
+Como stdout y stderr salen los dos en la pantalla, parecen lo mismo. Pero son canales separados, y eso permite tratarlos distinto: guardar los resultados en un archivo y seguir viendo los errores, o al revés.
+
+<Diagrama svg={flujos} alt="Arriba, un comando con su entrada stdin desde el teclado o un archivo, su salida stdout hacia la pantalla o un archivo, y su salida de errores stderr hacia la pantalla o un archivo. Abajo, la tubería cat access.log, cut, sort y uniq -c, donde la salida de cada comando entra al siguiente." pie="Arriba, los tres canales; abajo, cómo una tubería conecta la salida de un comando con la entrada del siguiente." />
+
+## Redirecciones: mandar la salida a otro lugar
+
+Una **<Termino id="redireccion">redirección</Termino>** cambia a dónde va (o de dónde viene) uno de esos canales.
+
+| Operador | Qué hace | Ejemplo |
+| --- | --- | --- |
+| `>` | Manda stdout a un archivo; **lo reemplaza** si existe | `ls /etc > lista.txt` |
+| `>>` | Manda stdout al final del archivo, sin borrar lo que tenía | `echo "nota" >> registro.txt` |
+| `2>` | Manda stderr a un archivo | `find / -name x 2> errores.txt` |
+| `&>` | Manda stdout y stderr juntos al mismo archivo | `./backup.sh &> backup.log` |
+| `2>&1` | Manda stderr a donde va stdout | `comando > todo.log 2>&1` |
+| `<` | Toma stdin de un archivo | `sort < nombres.txt` |
+
+Un lugar especial es **`/dev/null`**: un archivo que descarta todo lo que recibe. `2>/dev/null` es la forma de decir "no me muestres los errores", como hiciste con `find` en la lección anterior.
+
+<Advertencia titulo="> borra el archivo antes de escribir">
+`>` vacía el archivo de destino **antes** de ejecutar el comando, aunque el comando falle o no muestre nada. Un `>` donde iba `>>` borra un log entero. Y `sort archivo > archivo` deja el archivo vacío: el shell lo vacía antes de que `sort` llegue a leerlo. Para guardar en el mismo archivo, usa uno intermedio.
+</Advertencia>
+
+<Emparejar ejercicio={operadores} />
+
+## Tuberías: un comando detrás de otro
+
+La **<Termino id="tuberia">tubería</Termino>** (*pipe*), el símbolo `|`, conecta la salida de un comando con la entrada del siguiente. Así se arman cadenas donde cada comando hace una parte del trabajo:
+
+```bash
+cut -d' ' -f1 access.log | sort | uniq -c | sort -rn | head -5
+```
+
+Se lee de izquierda a derecha: toma la primera columna de cada línea (la IP), ordénalas, cuenta las repetidas, ordena por cantidad de mayor a menor y muestra las cinco primeras. Resultado: las cinco IP que más pedidos hicieron.
+
+<EnSimple>
+Es una línea de producción: el primer puesto separa las piezas, el segundo las ordena, el tercero las cuenta y el último arma el informe. Cada puesto hace una sola cosa simple y le pasa el resultado al siguiente por una cinta. Para entender una tubería larga, se arma de a un comando: ejecutas el primero, miras la salida, agregas `| el siguiente`, y así.
+</EnSimple>
+
+**`tee`** es una T en la cañería: copia lo que recibe a un archivo **y** lo deja seguir por la tubería. Sirve para guardar un resultado intermedio y seguir trabajando: `grep ERROR app.log | tee errores.txt | wc -l`.
+
+<Nota>
+Los errores (stderr) no pasan por la tubería: siguen saliendo en la pantalla. Si quieres filtrarlos también, primero júntalos con stdout: `comando 2>&1 | grep algo`.
+</Nota>
+
+## Los filtros que más se usan
+
+Un **filtro** es un comando que recibe texto, lo transforma y lo devuelve. Con estos siete se resuelve la gran mayoría de los análisis de logs:
+
+| Comando | Qué hace | Ejemplo |
+| --- | --- | --- |
+| `grep texto` | Deja solo las líneas que contienen el texto | `grep "Failed password"` |
+| `grep -v texto` | Deja las líneas que **no** lo contienen | `grep -v "^#"` (quita comentarios) |
+| `grep -i`, `-c`, `-n` | Ignora mayúsculas; cuenta; numera las líneas | `grep -ic error app.log` |
+| `sort` | Ordena las líneas (`-n` por número, `-r` al revés, `-u` sin repetidos) | `sort -rn` |
+| `uniq -c` | Junta líneas iguales **seguidas** y cuenta cuántas eran | `sort \| uniq -c` |
+| `wc -l` | Cuenta líneas (`-w` palabras, `-c` bytes) | `grep 404 access.log \| wc -l` |
+| `cut -d SEP -f N` | Se queda con la columna N, separadas por SEP | `cut -d: -f1 /etc/passwd` |
+| `tr a b` | Reemplaza caracteres (`-d` los borra) | `tr 'a-z' 'A-Z'`, `tr -d '\r'` |
+| `head` / `tail` | Las primeras o las últimas N líneas | `head -5` |
+
+<EnSimple titulo="Dicho más simple: sort y uniq">
+`uniq -c` es como contar votos en una mesa: solo puede sumar las boletas iguales que están juntas. Por eso primero se ordenan todas con `sort`, para que las iguales queden una al lado de la otra, y recién después se cuentan.
+</EnSimple>
+
+<Pregunta id="p06" />
+
+## Practicar con un log real
+
+<Terminal ejercicio={ejFiltros} />
+
+<Consejo>
+Dos combinaciones que vas a usar toda la carrera. En Rocky, los intentos fallidos de SSH por IP: `sudo grep "Failed password" /var/log/secure | grep -o "from [0-9.]*" | sort | uniq -c | sort -rn` (en Ubuntu, el archivo es `/var/log/auth.log`). Y un archivo de configuración sin comentarios ni líneas vacías: `grep -v -e '^#' -e '^$' /etc/ssh/sshd_config`.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Se borró el contenido de un archivo">
+    Usaste `>` donde querías `>>`, o redirigiste un archivo sobre sí mismo (`sort a.txt > a.txt`). `>` vacía el destino antes de ejecutar. Para agregar, `>>`; para transformar un archivo, guarda en uno nuevo y después reemplaza con `mv`.
+  </ErrorComun>
+  <ErrorComun titulo="Los errores siguen apareciendo en pantalla aunque redirigí la salida">
+    `>` solo redirige stdout. Los errores van por stderr: usa `2>` para separarlos o `&>` para guardar todo junto.
+  </ErrorComun>
+  <ErrorComun titulo="uniq -c no cuenta bien">
+    `uniq` solo junta líneas iguales consecutivas. Si no ordenaste antes, la misma IP aparece varias veces con conteos parciales. Siempre `sort | uniq -c`.
+  </ErrorComun>
+  <ErrorComun titulo='"Permission denied" al redirigir con sudo'>
+    En `sudo echo "texto" > /etc/archivo`, el `>` lo procesa tu shell, que no tiene permisos; sudo solo afecta a `echo`. Usa `echo "texto" | sudo tee /etc/archivo` (o `sudo tee -a` para agregar).
+  </ErrorComun>
+  <ErrorComun titulo="cut devuelve columnas vacías">
+    `cut -d' '` cuenta cada espacio como separador, así que dos espacios seguidos generan una columna vacía. Para salidas alineadas con varios espacios, primero `tr -s ' '` (que junta los espacios repetidos) o usa `awk '{print $2}'`, que verás en el módulo de scripting.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Todo comando tiene stdin (0), stdout (1) y stderr (2). Por defecto: teclado, pantalla y pantalla.
+- `>` reemplaza, `>>` agrega, `2>` redirige errores, `&>` todo junto, `<` toma la entrada de un archivo. `/dev/null` descarta.
+- `|` conecta la salida de un comando con la entrada del siguiente; `tee` además guarda una copia.
+- Filtros: `grep` (y `-v`, `-i`, `-c`), `sort` (`-n`, `-r`), `uniq -c`, `wc -l`, `cut -d -f`, `tr`, `head`, `tail`.
+- La receta para contar cualquier cosa: `... | sort | uniq -c | sort -rn | head`.
+- Con sudo, para escribir en un archivo protegido: `| sudo tee archivo`.
+</Resumen>

@@ -429,6 +429,11 @@ function headTail(ctx: CommandContext, tail: boolean) {
   if (typeof inputs === 'number') return inputs
   inputs.forEach((inp, i) => {
     if (inputs.length > 1) ctx.out(`${i ? '\n' : ''}==> ${inp.name} <==\n`)
+    if (a.values.has('bytes')) {
+      const c = Number(a.values.get('bytes')!.replace(/^\+/, ''))
+      ctx.out(tail ? inp.data.slice(Math.max(0, inp.data.length - c)) : inp.data.slice(0, c))
+      return
+    }
     const ls = lines(inp.data)
     const fromStart = tail && (a.values.get('lines') ?? '').startsWith('+')
     const sel = tail ? (fromStart ? ls.slice(n - 1) : ls.slice(Math.max(0, ls.length - n))) : ls.slice(0, n)
@@ -446,7 +451,7 @@ register('tail', { usage: 'tail [OPTION]... [FILE]...', summary: '  -n, --lines=
 register(['less', 'more'], {
   usage: 'less [FILE]',
   run(ctx) {
-    const inputs = readInputs(ctx, ctx.args.filter((a) => !a.startsWith('-')))
+    const inputs = readInputs(ctx, ctx.args.filter((a) => !a.startsWith('-') && !a.startsWith('+')))
     if (typeof inputs === 'number') return inputs
     for (const i of inputs) ctx.out(i.data)
     if (ctx.isTTY) ctx.err('[simulador] less muestra el archivo completo. En un servidor real se avanza con espacio, se busca con / y se sale con q.\n')
@@ -516,7 +521,9 @@ register('stat', {
               .replace(/%s/g, String(sizeOf(node)))
               .replace(/%n/g, f)
               .replace(/%i/g, String(node.ino))
-              .replace(/%h/g, String(node.nlink)) + '\n',
+              .replace(/%h/g, String(node.nlink))
+              .replace(/%F/g, node.type === 'dir' ? 'directory' : node.type === 'symlink' ? 'symbolic link' : sizeOf(node) ? 'regular file' : 'regular empty file')
+              .replace(/%y/g, new Date(node.mtime).toISOString().replace('T', ' ').replace('Z', '000000 +0000')) + '\n',
           )
           continue
         }
@@ -547,6 +554,7 @@ register('find', {
     let mindepth = 0
     let negateNext = false
     let execCmd: string[] | null = null
+    let execBatch = false
     const add = (t: Test) => {
       const neg = negateNext
       negateNext = false
@@ -638,6 +646,18 @@ register('find', {
           i++
           break
         }
+        case '-newer': {
+          let ref = 0
+          try {
+            ref = ctx.sys.vfs.stat(ctx.sh.resolve(val), ctx.sh.cred).mtime
+          } catch {
+            ctx.err(`find: '${val}': No such file or directory\n`)
+            return 1
+          }
+          add((_a, node) => node.mtime > ref)
+          i++
+          break
+        }
         case '-empty':
           add((_a, n) => (n.type === 'dir' ? n.entries!.size === 0 : n.data.length === 0))
           break
@@ -656,6 +676,7 @@ register('find', {
           const end2 = ctx.args.indexOf('+', i)
           const stop = end >= 0 ? end : end2
           execCmd = ctx.args.slice(i, stop < 0 ? undefined : stop)
+          execBatch = end < 0 && end2 >= 0
           i = stop < 0 ? ctx.args.length : stop + 1
           break
         }
@@ -678,13 +699,13 @@ register('find', {
           (abs, node, depth) => {
             if (depth > maxdepth) return false
             if (depth >= mindepth && tests.every((t) => t(abs, node, depth))) {
-              const shown = p === '.' ? (abs === start ? '.' : '.' + abs.slice(start === '/' ? 0 : start.length)) : p.replace(/\/$/, '') + abs.slice(start.length)
+              const shown = p === '.' ? (abs === start ? '.' : '.' + abs.slice(start === '/' ? 0 : start.length)) : start === '/' ? abs : p.replace(/\/$/, '') + abs.slice(start.length)
               found.push(shown || '/')
             }
             return depth < maxdepth
           },
           (abs) => {
-            const shown = p === '.' ? '.' + abs.slice(start.length) : p.replace(/\/$/, '') + abs.slice(start.length)
+            const shown = p === '.' ? '.' + abs.slice(start.length) : start === '/' ? abs : p.replace(/\/$/, '') + abs.slice(start.length)
             ctx.err(`find: '${shown}': Permission denied\n`)
             code = 1
           },
@@ -696,7 +717,11 @@ register('find', {
         } else throw e
       }
     }
-    if (execCmd) {
+    if (execCmd && execBatch) {
+      const idx = execCmd.indexOf('{}')
+      const argv = idx >= 0 ? [...execCmd.slice(0, idx), ...found, ...execCmd.slice(idx + 1)] : [...execCmd, ...found]
+      if (found.length) await ctx.sh.invoke(argv, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY })
+    } else if (execCmd) {
       for (const f of found) {
         const argv = execCmd.map((x) => (x === '{}' ? f : x))
         await ctx.sh.invoke(argv, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY })

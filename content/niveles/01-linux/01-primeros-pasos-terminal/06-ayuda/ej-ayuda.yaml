@@ -1,0 +1,56 @@
+tipo: terminal
+shell: bash
+titulo: Encontrar la respuesta en el propio sistema
+descripcion: >-
+  Sin internet y sin buscador: usa solo la ayuda que trae el servidor para responder cada
+  pregunta.
+estado_inicial:
+  distro: rocky
+  hostname: rocky01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+pasos:
+  - consigna: Busca qué comandos tienen que ver con contraseñas (password) usando `man -k`.
+    verificar:
+      - { comando_usado: '(man\s+-k|apropos)\s+passw' }
+      - { salida_contiene: chage }
+    pistas:
+      - "`man -k password` o `apropos password`"
+    solucion: [man -k password]
+    explicacion: >-
+      El número entre paréntesis es la sección. `passwd` aparece dos veces: en la 1 (el comando
+      para cambiar la contraseña) y en la 5 (el formato del archivo /etc/passwd).
+  - consigna: Muestra en una línea las páginas que existen para `passwd`, con `whatis passwd`.
+    verificar:
+      - { comando_usado: '(whatis|man\s+-f)\s+passwd' }
+      - { salida_contiene: password file }
+    pistas:
+      - "`whatis passwd` (equivale a `man -f passwd`)"
+    solucion: [whatis passwd]
+    explicacion: "`whatis` es la forma rápida de ver qué es algo sin abrir el manual completo."
+  - consigna: Abre la página del archivo /etc/passwd, que está en la sección 5.
+    verificar:
+      - { comando_usado: 'man\s+5\s+passwd' }
+      - { salida_contiene: seven colon-separated fields }
+    pistas:
+      - "El número de sección va antes del nombre: `man 5 passwd`"
+    solucion: [man 5 passwd]
+    explicacion: >-
+      Dice que cada línea tiene siete campos separados por dos puntos. Sin el 5, `man passwd`
+      abre la página del comando, que no habla del archivo.
+  - consigna: Mira la ayuda rápida del comando `useradd` con `--help`.
+    verificar:
+      - { comando_usado: 'useradd\s+(--help|-h)' }
+    pistas:
+      - "`useradd --help`"
+    solucion: [useradd --help]
+    explicacion: "`--help` es más corto que el manual: sirve para recordar el nombre de una opción que ya conocías."
+  - consigna: Mira qué documentación instaló el paquete de sudo en `/usr/share/doc/sudo`.
+    verificar:
+      - { comando_usado: 'ls\s+.*/usr/share/doc/sudo' }
+      - { salida_contiene: README }
+    pistas:
+      - "`ls /usr/share/doc/sudo`"
+    solucion: [ls /usr/share/doc/sudo]
+    explicacion: Muchos paquetes dejan ahí archivos de ejemplo, notas de la versión y documentación que no entra en el manual. Puedes leerlos con `less`.

@@ -1,0 +1,86 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "¿Qué diferencia hay entre `echo hola > a.txt` y `echo hola >> a.txt`?"
+  opciones:
+    - { texto: "> reemplaza el contenido de a.txt; >> lo agrega al final", correcta: true, explicacion: "Con > se pierde lo que había; con >> se conserva." }
+    - { texto: "Ninguna", explicacion: "La diferencia es enorme si a.txt tenía contenido." }
+    - { texto: ">> guarda los errores", explicacion: "Los errores se redirigen con 2>." }
+    - { texto: "> agrega y >> reemplaza", explicacion: "Es al revés." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "¿Qué hace `ls /etc | wc -l`?"
+  opciones:
+    - { texto: "Cuenta cuántos elementos hay en /etc", correcta: true, explicacion: "La lista de ls entra a wc -l, que cuenta las líneas." }
+    - { texto: "Guarda la lista de /etc en un archivo llamado wc", explicacion: "Eso haría ls /etc > wc." }
+    - { texto: "Muestra /etc y después cuenta las líneas de la pantalla", explicacion: "La salida de ls no aparece: va directamente a wc." }
+    - { texto: "Da error porque wc necesita un archivo", explicacion: "Si no le das un archivo, wc lee de su entrada estándar." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: "Ejecutas `find / -name app.conf > resultado.txt` y la pantalla se llena de \"Permission denied\". ¿Por qué?"
+  opciones:
+    - { texto: "Esos mensajes salen por stderr, y > solo redirige stdout", correcta: true, explicacion: "Para ocultarlos: 2>/dev/null; para guardarlos: 2> errores.txt." }
+    - { texto: "Porque resultado.txt no existe", explicacion: "> lo crea si no existe." }
+    - { texto: "Porque find no permite redirecciones", explicacion: "Las redirecciones las maneja el shell, sirven con cualquier comando." }
+    - { texto: "Porque falta sudo en el >", explicacion: "El problema es el canal, no los permisos del archivo." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que busca "error" en app.log ignorando mayúsculas y minúsculas.
+  aceptadas: [grep -i error app.log, grep -i "error" app.log, grep -i 'error' app.log]
+  explicacion: "-i hace que grep encuentre error, Error y ERROR."
+- id: p05
+  tipo: ordenar_pasos
+  enunciado: Ordena los comandos de la tubería que muestra las 3 IP con más pedidos en access.log.
+  pasos:
+    - "cut -d' ' -f1 access.log"
+    - sort
+    - uniq -c
+    - sort -rn
+    - head -3
+  explicacion: Primero se extrae la IP, después se ordena para que uniq pueda contar, se ordena por cantidad y se toman las tres primeras.
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "¿Por qué `uniq -c` casi siempre va después de `sort`?"
+  opciones:
+    - { texto: "Porque uniq solo junta líneas iguales que están seguidas", correcta: true, explicacion: "sort deja las iguales una al lado de la otra." }
+    - { texto: "Porque uniq no funciona sin una tubería", explicacion: "También funciona con un archivo, pero igual necesita las líneas ordenadas." }
+    - { texto: "Porque sort cuenta y uniq ordena", explicacion: "Es al revés." }
+    - { texto: "Por costumbre, no hace falta", explicacion: "Sin ordenar, los conteos salen partidos." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: ¿Qué muestra esta salida?
+  salida: |
+    $ cut -d: -f7 /etc/passwd | sort | uniq -c
+          3 /bin/bash
+         21 /sbin/nologin
+  opciones:
+    - { texto: "Que 3 usuarios tienen bash como shell y 21 no pueden iniciar sesión", correcta: true, explicacion: "El campo 7 de /etc/passwd es el shell; nologin es el de las cuentas de servicio." }
+    - { texto: "Que hay 3 archivos bash en el sistema", explicacion: "Se cuentan líneas de /etc/passwd, no archivos." }
+    - { texto: "Que hay 24 usuarios conectados", explicacion: "passwd lista cuentas, no sesiones." }
+    - { texto: "Un error de cut", explicacion: "Es la salida normal de uniq -c." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: "¿Por qué falla `sudo echo \"nameserver 1.1.1.1\" > /etc/resolv.conf` con \"Permission denied\"?"
+  opciones:
+    - { texto: "Porque la redirección la hace tu shell sin privilegios; sudo solo se aplica a echo", correcta: true, explicacion: "La solución es echo \"...\" | sudo tee /etc/resolv.conf." }
+    - { texto: "Porque echo no se puede usar con sudo", explicacion: "Se puede; el problema es el >." }
+    - { texto: "Porque el archivo no existe", explicacion: "El error es de permisos." }
+    - { texto: "Porque falta -a", explicacion: "Eso es una opción de tee, no de la redirección." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Quieres ver cuántos errores hay en el log y, a la vez, guardar esas líneas en errores.txt. ¿Qué usas?
+  opciones:
+    - { texto: "grep ERROR app.log | tee errores.txt | wc -l", correcta: true, explicacion: "tee guarda una copia y deja seguir el texto hacia wc." }
+    - { texto: "grep ERROR app.log > errores.txt | wc -l", explicacion: "Con > toda la salida va al archivo y a wc no le llega nada: muestra 0." }
+    - { texto: "grep ERROR app.log >> wc -l", explicacion: "Crearía un archivo llamado wc." }
+    - { texto: "wc -l errores.txt | grep ERROR", explicacion: "Está al revés y errores.txt todavía no existe." }
+- id: p10
+  tipo: respuesta_multiple
+  enunciado: "¿Cuáles de estos comandos guardan la salida y los errores en el mismo archivo?"
+  opciones:
+    - { texto: "comando &> todo.log", correcta: true, explicacion: "&> redirige los dos canales." }
+    - { texto: "comando > todo.log 2>&1", correcta: true, explicacion: "Primero stdout al archivo, después stderr a donde va stdout." }
+    - { texto: "comando > todo.log", explicacion: "Solo guarda stdout." }
+    - { texto: "comando 2> todo.log", explicacion: "Solo guarda stderr." }

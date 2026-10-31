@@ -1,0 +1,81 @@
+tipo: terminal
+shell: bash
+titulo: Qué dice el log del servidor web
+descripcion: >-
+  El equipo de seguridad sospecha que alguien está buscando archivos sensibles en el sitio web.
+  Usa el log de accesos para averiguar quién, cuántas veces y qué buscaba, y guarda las
+  pruebas en archivos.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  archivos:
+    /home/ana/access.log: "192.168.1.20 - - [30/Oct/2026:10:00:01 +0000] \"GET / HTTP/1.1\" 200 615\n192.168.1.31 - - [30/Oct/2026:10:00:05 +0000] \"GET /login HTTP/1.1\" 200 1200\n10.0.0.7 - - [30/Oct/2026:10:01:11 +0000] \"GET /admin HTTP/1.1\" 404 153\n192.168.1.20 - - [30/Oct/2026:10:02:40 +0000] \"POST /login HTTP/1.1\" 302 0\n10.0.0.7 - - [30/Oct/2026:10:02:41 +0000] \"GET /wp-login.php HTTP/1.1\" 404 153\n192.168.1.45 - - [30/Oct/2026:10:03:02 +0000] \"GET /productos HTTP/1.1\" 200 3400\n10.0.0.7 - - [30/Oct/2026:10:03:12 +0000] \"GET /.env HTTP/1.1\" 404 153\n192.168.1.20 - - [30/Oct/2026:10:04:30 +0000] \"GET /productos HTTP/1.1\" 200 3400\n10.0.0.7 - - [30/Oct/2026:10:04:31 +0000] \"GET /backup.zip HTTP/1.1\" 404 153\n192.168.1.31 - - [30/Oct/2026:10:05:00 +0000] \"GET /logout HTTP/1.1\" 200 90\n"
+pasos:
+  - consigna: Cuenta cuántas líneas (pedidos) tiene `access.log` con `wc -l`.
+    verificar:
+      - { comando_usado: 'wc\s+-l' }
+      - { salida_contiene: "10" }
+    pistas:
+      - "`wc -l access.log`"
+    solucion: [wc -l access.log]
+    explicacion: Cada línea es un pedido al servidor web. En un servidor real, este número puede ser de millones por día.
+  - consigna: Muestra solo los pedidos que terminaron en error 404 (no encontrado) con `grep`.
+    verificar:
+      - { comando_usado: 'grep\s+.*404' }
+      - { salida_contiene: wp-login.php }
+    pistas:
+      - "`grep \" 404 \" access.log` (con espacios alrededor para no coincidir con otros números)"
+    solucion: ['grep " 404 " access.log']
+    explicacion: Todos los 404 vienen de la misma IP y piden cosas que no existen en el sitio. Es un patrón típico de alguien escaneando en busca de archivos olvidados.
+  - consigna: Cuenta cuántos pedidos hizo cada IP, de la que más a la que menos, con una tubería de cuatro comandos.
+    verificar:
+      - { comando_usado: 'cut\s+.*-f\s*1.*\|\s*sort.*\|\s*uniq\s+-c.*\|\s*sort\s+-\w*n|awk.*\$1.*\|\s*sort.*\|\s*uniq\s+-c.*\|\s*sort\s+-\w*n' }
+      - { salida_regex: '^\s*4 10\.0\.0\.7' }
+    pistas:
+      - "La IP es el primer campo separado por espacios: `cut -d' ' -f1 access.log`"
+      - "Después: ordenar, contar repetidos y ordenar los números de mayor a menor"
+      - "`cut -d' ' -f1 access.log | sort | uniq -c | sort -rn`"
+    solucion: ["cut -d' ' -f1 access.log | sort | uniq -c | sort -rn"]
+    explicacion: >-
+      `uniq -c` solo junta líneas iguales que están seguidas, por eso antes hay que ordenar con
+      `sort`. El último `sort -rn` ordena por número (`-n`) y de mayor a menor (`-r`). Esta
+      combinación sirve para contar cualquier cosa en un log.
+  - consigna: Guarda todas las líneas de la IP 10.0.0.7 en un archivo llamado `evidencia.txt`.
+    verificar:
+      - { archivo: /home/ana/evidencia.txt, contenido_incluye: backup.zip }
+    pistas:
+      - "`>` manda la salida a un archivo en lugar de la pantalla"
+      - "`grep 10.0.0.7 access.log > evidencia.txt`"
+    solucion: [grep 10.0.0.7 access.log > evidencia.txt]
+    explicacion: Si el archivo existía, `>` lo reemplazó. Para agregar al final sin borrar lo anterior se usa `>>`.
+  - consigna: Agrega al final de `evidencia.txt` una línea con tu nota, usando `echo` y `>>`.
+    verificar:
+      - { archivo: /home/ana/evidencia.txt, contenido_incluye: backup.zip }
+      - { comando_usado: 'echo\s+.*>>\s*evidencia\.txt' }
+    pistas:
+      - "`echo \"Revisado por ana el 30/10\" >> evidencia.txt`"
+    solucion: ['echo "Revisado por ana el 30/10" >> evidencia.txt']
+    explicacion: Con `>>` el contenido anterior se conserva. Si te equivocabas y usabas `>`, perdías las líneas del log.
+  - consigna: >-
+      Lista `access.log` y un archivo que no existe, `viejo.log`, mandando la salida normal a
+      `salida.txt` y los errores a `errores.txt`.
+    verificar:
+      - { archivo: /home/ana/salida.txt, contenido_incluye: access.log }
+      - { archivo: /home/ana/errores.txt, contenido_incluye: No such file }
+    pistas:
+      - "La salida normal se redirige con `>` y los errores con `2>`"
+      - "`ls access.log viejo.log > salida.txt 2> errores.txt`"
+    solucion: [ls access.log viejo.log > salida.txt 2> errores.txt]
+    explicacion: Cada canal fue a su archivo. Separar los errores es clave en los scripts y en las tareas programadas, que no tienen pantalla.
+  - consigna: Muestra cuántos pedidos con 404 hubo y, al mismo tiempo, guárdalos en `404.txt`, usando `tee`.
+    verificar:
+      - { archivo: /home/ana/404.txt, contenido_incluye: .env }
+      - { comando_usado: 'tee\s+404\.txt' }
+    pistas:
+      - "`tee` copia lo que recibe a un archivo y también lo deja pasar a la tubería"
+      - "`grep \" 404 \" access.log | tee 404.txt | wc -l`"
+    solucion: ['grep " 404 " access.log | tee 404.txt | wc -l']
+    explicacion: "`tee` es como una T en una cañería: una parte va al archivo y otra sigue hacia el próximo comando."

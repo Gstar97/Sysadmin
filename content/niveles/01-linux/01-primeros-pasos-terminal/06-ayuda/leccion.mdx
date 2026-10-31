@@ -1,0 +1,96 @@
+---
+id: n1-m1-l6
+titulo: Obtener ayuda
+minutos: 60
+objetivos:
+  - Usar man (secciones y búsqueda), --help y la documentación de /usr/share/doc.
+  - Encontrar el comando adecuado con man -k (apropos).
+  - Leer la sinopsis de un comando y entender su notación.
+glosario: [pagina-manual]
+verificado: 2026-10
+---
+
+import man from './man.svg?raw'
+import manDatos from './man.yaml'
+import ejAyuda from './ej-ayuda.yaml'
+
+En la lección 0.4.4 viste que la documentación oficial es la primera fuente antes de buscar en internet. Ahora que ya usas la terminal todos los días, vas a sacarle todo el jugo a la ayuda que trae el propio servidor. Tiene una ventaja que ninguna página web tiene: corresponde exactamente a la versión instalada.
+
+<AntesDeEmpezar>
+- `man comando` abre el manual; se recorre con las flechas, se busca con `/palabra` y se sale con `q`.
+- `man -k palabra` (o `apropos palabra`) busca comandos por tema.
+- Casi todos los comandos aceptan `--help`.
+</AntesDeEmpezar>
+
+## Las secciones del manual
+
+El manual está dividido en **secciones**, como los capítulos de un libro. Las tres que vas a usar todo el tiempo:
+
+| Sección | Contiene | Ejemplos |
+| --- | --- | --- |
+| 1 | Comandos para cualquier usuario | `ls(1)`, `cp(1)`, `passwd(1)` |
+| 5 | Formatos de archivos de configuración | `passwd(5)`, `fstab(5)`, `sshd_config(5)` |
+| 8 | Comandos de administración | `useradd(8)`, `fdisk(8)`, `visudo(8)` |
+
+Cuando un nombre existe en varias secciones, `man` abre la de número más bajo. Por eso `man passwd` muestra el comando para cambiar contraseñas, y para leer cómo es el archivo `/etc/passwd` hay que pedir la sección: `man 5 passwd`. En la documentación, la sección aparece entre paréntesis: "ver `crontab(5)`" significa `man 5 crontab`.
+
+<EnSimple>
+Es como una enciclopedia con varios tomos: la palabra "banco" aparece en el tomo de muebles y en el de economía, con significados distintos. Si no dices qué tomo quieres, te dan el primero. `whatis passwd` te muestra en qué tomos aparece la palabra antes de abrir uno.
+</EnSimple>
+
+## Leer una página de manual
+
+Todas las páginas tienen la misma estructura. Toca cada parte:
+
+<DiagramaInteractivo datos={manDatos} svg={man} alt="La página de manual de cp con su encabezado CP(1), las secciones NAME, SYNOPSIS con las dos formas de usar cp, DESCRIPTION, las opciones -a, -i y -r con su explicación, y SEE ALSO con mv, rm y ln." />
+
+La parte que más confunde al principio es la **sinopsis**, porque usa una notación propia:
+
+| En la sinopsis | Significa |
+| --- | --- |
+| `[OPTION]` | Opcional: puedes ponerlo o no |
+| `...` | Se puede repetir |
+| `SOURCE`, `FILE` (mayúsculas o subrayado) | Se reemplaza por un valor tuyo |
+| `a\|b` | Una cosa o la otra |
+| Texto común, como `cp` o `-T` | Se escribe tal cual |
+
+Así, `cp [OPTION]... SOURCE... DIRECTORY` se lee: "cp, después cero o más opciones, uno o más orígenes y al final una carpeta".
+
+<Pregunta id="p04" />
+
+## Cuál usar en cada caso
+
+- **`--help`**: para recordar el nombre de una opción que ya usaste. Es corto y aparece en la terminal directamente.
+- **`man`**: para entender un comando o un archivo de configuración a fondo, con todas sus opciones.
+- **`man -k palabra`**: cuando no sabes qué comando necesitas. Prueba palabras en inglés (*disk*, *user*, *network*, *time*).
+- **`whatis nombre`**: para saber en una línea qué es algo y en qué secciones está.
+- **`/usr/share/doc/paquete/`**: notas de la versión, ejemplos de configuración y documentación extra que dejan muchos paquetes.
+- **`info comando`**: algunos programas de GNU tienen además un manual más largo en este formato. Es menos común; si existe, `man` lo menciona al final.
+
+<Consejo>
+Si el manual no está, puede que falten paquetes: en las instalaciones mínimas de Rocky conviene instalar `man-db` (el programa `man`) y `man-pages` (las páginas de archivos y del sistema), y Ubuntu Server en su versión minimizada quita los manuales hasta que ejecutas `unminimize`. Para comandos internos del shell, como `cd` o `history`, usa `help cd`.
+</Consejo>
+
+## Practicar
+
+<Terminal ejercicio={ejAyuda} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"No manual entry for ..."'>
+    Puede que el nombre esté mal escrito, que sea un comando interno del shell (usa `help nombre`), que el manual esté en otra sección (prueba `man -k nombre`) o que el paquete de manuales no esté instalado.
+  </ErrorComun>
+  <ErrorComun titulo="Leer la página del comando cuando necesitabas la del archivo">
+    `man passwd` explica el comando, no el archivo `/etc/passwd`; `man crontab` explica el comando, no el formato de las líneas. Para el archivo, sección 5: `man 5 passwd`, `man 5 crontab`.
+  </ErrorComun>
+  <ErrorComun titulo="man -k no encuentra nada">
+    Busca en las descripciones de una línea, que están en inglés. Prueba con otras palabras (*copy* en lugar de *duplicate*) o con una parte de la palabra. En un sistema recién instalado, el índice se construye con `sudo mandb`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Secciones: 1 comandos de usuario, 5 formatos de archivos, 8 comandos de administración. `man 5 passwd` elige la sección.
+- `whatis nombre` muestra en qué secciones existe algo; `man -k palabra` busca comandos por tema.
+- Sinopsis: `[ ]` opcional, `...` repetible, mayúsculas se reemplazan por valores tuyos.
+- `--help` para recordar opciones, `man` para entender a fondo, `/usr/share/doc` para ejemplos y notas.
+- Dentro de man: `/texto` busca, `n` repite, `q` sale.
+</Resumen>

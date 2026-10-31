@@ -1,0 +1,83 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Tienes que revisar un log de 200 000 líneas buscando la palabra "timeout". ¿Qué herramienta usas?
+  opciones:
+    - { texto: "less, y dentro escribes /timeout", correcta: true, explicacion: "less muestra de a una pantalla y busca; con n saltas a la siguiente coincidencia." }
+    - { texto: "cat", explicacion: "Volcaría las 200 000 líneas en la pantalla." }
+    - { texto: "head", explicacion: "Solo muestra el principio." }
+    - { texto: "touch", explicacion: "touch crea archivos o cambia su fecha." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un usuario va a probar de nuevo una operación que falla y quieres ver en el momento qué registra el servicio. ¿Qué usas?
+  opciones:
+    - { texto: "tail -f con el log del servicio", correcta: true, explicacion: "Muestra las líneas nuevas a medida que se escriben." }
+    - { texto: "head con el log del servicio", explicacion: "Muestra el principio, donde está lo más viejo." }
+    - { texto: "cat cada pocos segundos", explicacion: "Funcionaría muy mal: tail -f lo hace solo." }
+    - { texto: "find con el log", explicacion: "find busca archivos, no muestra su contenido." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra las últimas 20 líneas de /var/log/secure (con sudo, porque es solo de root).
+  aceptadas: [sudo tail -n 20 /var/log/secure, sudo tail -20 /var/log/secure, sudo tail -n20 /var/log/secure]
+  explicacion: "tail -n 20 muestra las últimas 20 líneas; el log de seguridad de Rocky solo lo puede leer root."
+- id: p04
+  tipo: interpretar_salida
+  enunciado: Encuentras este archivo en /tmp. ¿Qué es?
+  salida: |
+    $ file /tmp/actualizar.jpg
+    /tmp/actualizar.jpg: Bourne-Again shell script, ASCII text executable
+  opciones:
+    - { texto: "Un script de bash disfrazado de imagen: conviene leerlo con cat antes de hacer nada", correcta: true, explicacion: "file mira el contenido, no la extensión. Un script con nombre de imagen en /tmp es sospechoso." }
+    - { texto: "Una imagen JPEG", explicacion: "La extensión no define el tipo: file dice que es un script." }
+    - { texto: "Un programa compilado", explicacion: "Diría ELF." }
+    - { texto: "Un archivo vacío", explicacion: "Diría empty." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: "¿Por qué `find . -name *.conf` puede fallar y `find . -name '*.conf'` no?"
+  opciones:
+    - { texto: "Sin comillas, el shell expande *.conf antes de que find lo vea", correcta: true, explicacion: "Si hay archivos .conf en la carpeta actual, find recibe sus nombres en lugar del patrón." }
+    - { texto: "Porque find no acepta comodines", explicacion: "Los acepta, siempre que le lleguen sin expandir." }
+    - { texto: "Por una diferencia entre Rocky y Ubuntu", explicacion: "Pasa igual en las dos." }
+    - { texto: "Porque las comillas buscan también en subcarpetas", explicacion: "find busca en subcarpetas en los dos casos." }
+- id: p06
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: El disco de /var se llenó. ¿Qué comando te ayuda a encontrar rápido los archivos grandes?
+  opciones:
+    - { texto: "sudo find /var -type f -size +500M", correcta: true, explicacion: "Lista los archivos de más de 500 MiB dentro de /var." }
+    - { texto: "find /var -name '*'", explicacion: "Lista todo, sin filtrar por tamaño." }
+    - { texto: "tail -f /var", explicacion: "tail trabaja con archivos, no con carpetas." }
+    - { texto: "file /var", explicacion: "Solo diría que es un directorio." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: "¿Qué hace `find /etc -name '*.conf' -mtime -1`?"
+  opciones:
+    - { texto: "Lista los .conf de /etc modificados en el último día", correcta: true, explicacion: "Las dos condiciones se tienen que cumplir a la vez." }
+    - { texto: "Lista los .conf de /etc de más de un día", explicacion: "Eso sería -mtime +1." }
+    - { texto: "Borra los .conf modificados hoy", explicacion: "Sin -delete ni -exec, find solo muestra." }
+    - { texto: "Lista todos los .conf y además todo lo modificado ayer", explicacion: "Las condiciones se combinan con Y, no con O." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Estás dentro de less leyendo un log. ¿Cómo sales?
+  opciones:
+    - { texto: "Con q", correcta: true, explicacion: "q (de quit) sale de less y de man." }
+    - { texto: "Con Ctrl+C", explicacion: "En less, Ctrl+C no sale: se usa q." }
+    - { texto: "Escribiendo exit", explicacion: "exit es un comando del shell, no de less." }
+    - { texto: "Cerrando la terminal", explicacion: "No hace falta: alcanza con q." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: "¿Qué muestra `which python3`?"
+  opciones:
+    - { texto: "La ruta del programa que se ejecuta al escribir python3, por ejemplo /usr/bin/python3", correcta: true, explicacion: "Es la primera coincidencia en las carpetas del PATH." }
+    - { texto: "La versión de python3", explicacion: "Eso sería python3 --version." }
+    - { texto: "Todos los archivos de Python del sistema", explicacion: "Para eso se usaría find." }
+    - { texto: "Si python3 está corriendo", explicacion: "Eso se ve con ps." }
+- id: p10
+  tipo: respuesta_multiple
+  enunciado: ¿Qué condiciones de find sirven para encontrar los archivos que dejó un usuario que se fue de la empresa, modificados en el último mes?
+  opciones:
+    - { texto: "-user nombre", correcta: true, explicacion: "Filtra por dueño." }
+    - { texto: "-mtime -30", correcta: true, explicacion: "Modificados en los últimos 30 días." }
+    - { texto: "-type f", correcta: true, explicacion: "Deja solo archivos, sin las carpetas." }
+    - { texto: "-size +30", explicacion: "Filtra por tamaño, no por fecha." }

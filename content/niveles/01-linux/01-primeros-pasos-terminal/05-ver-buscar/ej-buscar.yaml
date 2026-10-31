@@ -1,0 +1,88 @@
+tipo: terminal
+shell: bash
+titulo: El archivo de configuración perdido
+descripcion: >-
+  Te piden revisar la aplicación de facturación, pero nadie recuerda dónde se instaló ni dónde
+  guarda su configuración. Encuéntrala, mira qué hay en sus logs y averigua qué archivos de la
+  carpeta compartida son de Carlos.
+estado_inicial:
+  distro: rocky
+  hostname: srv-fact01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: carlos }
+  archivos:
+    /opt/facturacion/etc/facturacion.ini: "[db]\nhost=10.0.0.5\nport=5432\nusuario=facturas\n\n[app]\nmoneda=USD\nlog=/var/log/facturacion/app.log\n"
+    /opt/facturacion/bin/facturar: { contenido: "#!/bin/bash\n# Genera las facturas del día\n/opt/facturacion/bin/motor --config /opt/facturacion/etc/facturacion.ini\n", modo: "0755" }
+    /var/log/facturacion/app.log: "2026-10-30 09:00:00 INFO factura 1000 generada para cliente 200\n2026-10-30 09:01:07 INFO factura 1001 generada para cliente 201\n2026-10-30 09:02:14 INFO factura 1002 generada para cliente 202\n2026-10-30 09:03:21 INFO factura 1003 generada para cliente 203\n2026-10-30 09:04:28 INFO factura 1004 generada para cliente 204\n2026-10-30 09:05:35 INFO factura 1005 generada para cliente 205\n2026-10-30 09:06:42 INFO factura 1006 generada para cliente 206\n2026-10-30 09:07:49 INFO factura 1007 generada para cliente 207\n2026-10-30 09:08:56 INFO factura 1008 generada para cliente 208\n2026-10-30 09:09:03 INFO factura 1009 generada para cliente 209\n2026-10-30 09:10:10 INFO factura 1010 generada para cliente 210\n2026-10-30 09:11:17 INFO factura 1011 generada para cliente 211\n2026-10-30 09:12:24 INFO factura 1012 generada para cliente 212\n2026-10-30 09:13:31 INFO factura 1013 generada para cliente 213\n2026-10-30 09:14:38 INFO factura 1014 generada para cliente 214\n2026-10-30 09:15:45 INFO factura 1015 generada para cliente 215\n2026-10-30 09:16:52 INFO factura 1016 generada para cliente 216\n2026-10-30 09:17:59 INFO factura 1017 generada para cliente 200\n2026-10-30 09:18:06 INFO factura 1018 generada para cliente 201\n2026-10-30 09:19:13 INFO factura 1019 generada para cliente 202\n2026-10-30 09:20:20 INFO factura 1020 generada para cliente 203\n2026-10-30 09:21:27 INFO factura 1021 generada para cliente 204\n2026-10-30 09:22:34 INFO factura 1022 generada para cliente 205\n2026-10-30 09:23:41 INFO factura 1023 generada para cliente 206\n2026-10-30 09:24:48 INFO factura 1024 generada para cliente 207\n2026-10-30 09:25:55 INFO factura 1025 generada para cliente 208\n2026-10-30 09:26:02 INFO factura 1026 generada para cliente 209\n2026-10-30 09:27:09 INFO factura 1027 generada para cliente 210\n2026-10-30 09:28:16 INFO factura 1028 generada para cliente 211\n2026-10-30 09:29:23 INFO factura 1029 generada para cliente 212\n2026-10-30 09:30:30 INFO factura 1030 generada para cliente 213\n2026-10-30 09:31:37 INFO factura 1031 generada para cliente 214\n2026-10-30 09:32:44 INFO factura 1032 generada para cliente 215\n2026-10-30 09:33:51 INFO factura 1033 generada para cliente 216\n2026-10-30 09:34:58 INFO factura 1034 generada para cliente 200\n2026-10-30 09:35:05 INFO factura 1035 generada para cliente 201\n2026-10-30 09:36:12 INFO factura 1036 generada para cliente 202\n2026-10-30 09:37:19 INFO factura 1037 generada para cliente 203\n2026-10-30 09:38:26 INFO factura 1038 generada para cliente 204\n2026-10-30 09:39:33 INFO factura 1039 generada para cliente 205\n"
+    /var/log/facturacion/app.log.1: "2026-10-29 23:59:59 INFO cierre del día\n"
+    /var/log/facturacion/error.log: "2026-10-30 08:58:02 ERROR no se pudo conectar a 10.0.0.5:5432\n2026-10-30 09:12:44 WARN reintento 1 de 3\n2026-10-30 09:12:49 WARN reintento 2 de 3\n2026-10-30 09:12:54 ERROR la base de datos no responde\n2026-10-30 09:13:00 INFO conexión restablecida\n"
+    /srv/compartido/ventas-octubre.xlsx: { contenido: "PK", dueno: carlos, grupo: carlos }
+    /srv/compartido/clientes.csv: { contenido: "id,nombre\n", dueno: carlos, grupo: carlos }
+    /srv/compartido/presupuesto.xlsx: { contenido: "PK", dueno: ana, grupo: ana }
+pasos:
+  - consigna: >-
+      Busca en todo el sistema un archivo llamado `facturacion.ini`. Para no llenar la pantalla
+      de avisos de permisos, agrega `2>/dev/null` al final.
+    verificar:
+      - { comando_usado: 'find\s+/\s+.*-i?name\s+.*facturacion\.ini' }
+      - { salida_contiene: /opt/facturacion/etc/facturacion.ini }
+    pistas:
+      - "find DÓNDE -name NOMBRE: `find / -name facturacion.ini 2>/dev/null`"
+    solucion: ['find / -name facturacion.ini 2>/dev/null']
+    explicacion: >-
+      Buscar desde `/` recorre todo el sistema: es lento en un servidor grande, pero sirve cuando
+      no tienes idea de dónde está algo. `2>/dev/null` descarta los mensajes de "Permission
+      denied" de las carpetas que tu usuario no puede leer.
+  - consigna: Mira el contenido del archivo que encontraste.
+    verificar:
+      - { comando_usado: '(cat|less|more|head)\s+.*/opt/facturacion/etc/facturacion\.ini' }
+    pistas:
+      - "Es un archivo corto: `cat /opt/facturacion/etc/facturacion.ini`"
+    solucion: [cat /opt/facturacion/etc/facturacion.ini]
+    explicacion: >-
+      Ya sabes a qué base de datos se conecta (10.0.0.5, puerto 5432) y dónde escribe su log.
+      Leer la configuración suele responder la mitad de las preguntas sobre una aplicación.
+  - consigna: Averigua qué tipo de archivo es `/opt/facturacion/bin/facturar` con `file`.
+    verificar:
+      - { comando_usado: 'file\s+/opt/facturacion/bin/facturar' }
+      - { salida_contiene: shell script }
+    pistas:
+      - "`file /opt/facturacion/bin/facturar`"
+    solucion: [file /opt/facturacion/bin/facturar]
+    explicacion: Es un script de bash, así que se puede leer con `cat` para ver qué hace. Si fuera un programa compilado, `file` diría ELF.
+  - consigna: Muestra las últimas 3 líneas del log de errores, `/var/log/facturacion/error.log`.
+    verificar:
+      - { comando_usado: 'tail\s+(-n\s*3|-3)\s+/var/log/facturacion/error\.log' }
+      - { salida_contiene: conexión restablecida }
+    pistas:
+      - "`tail -n 3 archivo`"
+    solucion: [tail -n 3 /var/log/facturacion/error.log]
+    explicacion: Lo más reciente de un log está al final. La base de datos dejó de responder a las 09:12 y volvió a las 09:13.
+  - consigna: Busca en `/var/log/facturacion` los archivos de más de 1 KiB.
+    verificar:
+      - { comando_usado: 'find\s+/var/log/facturacion/?\s+.*-size\s+\+1k' }
+      - { salida_contiene: app.log }
+    pistas:
+      - "`-size +1k` significa más de 1 KiB; `-type f` deja afuera la carpeta"
+      - "`find /var/log/facturacion -type f -size +1k`"
+    solucion: [find /var/log/facturacion -type f -size +1k]
+    explicacion: Con `+` es "más de", con `-` es "menos de". Con `M` y `G` buscas los archivos grandes cuando un disco se llena.
+  - consigna: Averigua qué archivos de `/srv/compartido` pertenecen al usuario carlos.
+    verificar:
+      - { comando_usado: 'find\s+/srv/compartido/?\s+.*-user\s+carlos' }
+      - { salida_contiene: ventas-octubre.xlsx }
+    pistas:
+      - "`find /srv/compartido -user carlos`"
+    solucion: [find /srv/compartido -user carlos]
+    explicacion: Muy útil cuando alguien deja la empresa y hay que decidir qué hacer con sus archivos.
+  - consigna: Sigue en vivo el log de la aplicación con `tail -f`, como harías mientras alguien prueba el sistema.
+    verificar:
+      - { comando_usado: 'tail\s+-[fF]\s+/var/log/facturacion/app\.log' }
+    pistas:
+      - "`tail -f /var/log/facturacion/app.log` (en un servidor real se corta con Ctrl+C)"
+    solucion: [tail -f /var/log/facturacion/app.log]
+    explicacion: >-
+      `tail -f` muestra las últimas líneas y se queda esperando las nuevas. Es lo que se hace
+      cuando alguien dice "pruebo ahora": miras el log en una ventana mientras pasa.

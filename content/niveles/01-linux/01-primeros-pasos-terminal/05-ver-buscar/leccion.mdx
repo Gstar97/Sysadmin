@@ -1,0 +1,126 @@
+---
+id: n1-m1-l5
+titulo: Ver y buscar
+minutos: 120
+objetivos:
+  - Ver contenido con cat, less, head y tail, incluido tail -f para seguir logs en vivo.
+  - Buscar archivos con find por nombre, tipo, tamaño, fecha y dueño.
+  - Identificar archivos y comandos con file, stat, which y type.
+glosario: [log]
+verificado: 2026-10
+---
+
+import findSvg from './find.svg?raw'
+import teclasLess from './teclas-less.yaml'
+import ejBuscar from './ej-buscar.yaml'
+
+Gran parte del trabajo de un sysadmin es leer: configuraciones para entender cómo funciona algo, y **<Termino id="log">logs</Termino>** para entender qué pasó. Y antes de leer, hay que encontrar el archivo. En esta lección vas a aprender a mirar archivos de cualquier tamaño sin perderte, y a encontrar lo que buscas aunque no sepas dónde está.
+
+<AntesDeEmpezar>
+- Te mueves con `cd` y listas con `ls -l`.
+- Los comodines (`*`, `?`) seleccionan varios nombres a la vez.
+- La configuración está en `/etc`, los logs en `/var/log` y los programas en `/usr/bin`.
+</AntesDeEmpezar>
+
+## Ver archivos: elegir la herramienta según el tamaño
+
+| Comando | Para qué | Ejemplo |
+| --- | --- | --- |
+| `cat` | Mostrar un archivo corto entero | `cat /etc/hostname` |
+| `less` | Leer un archivo largo, de a una pantalla | `less /var/log/messages` |
+| `head` | Ver el principio (10 líneas por defecto) | `head -n 20 archivo` |
+| `tail` | Ver el final (10 líneas por defecto) | `tail -n 50 /var/log/secure` |
+| `tail -f` | Seguir un archivo en vivo, a medida que crece | `tail -f /var/log/nginx/access.log` |
+
+Con un archivo de diez líneas, `cat` es perfecto. Con un log de cien mil líneas, `cat` llena la pantalla durante varios segundos y te deja viendo solo el final. Para eso está `less`.
+
+### less: leer sin apuro
+
+`less` muestra el archivo de a una pantalla y te deja moverte, buscar y salir cuando quieras, sin cargar el archivo completo en memoria. Las mismas teclas sirven en `man`, que usa `less` para mostrar los manuales.
+
+<Emparejar ejercicio={teclasLess} />
+
+<EnSimple>
+`cat` es tirar todo el libro sobre la mesa de una vez. `less` es leerlo página por página, con un índice para saltar a la palabra que buscas. `head` es mirar la primera página y `tail`, la última. Y `tail -f` es como una cámara en vivo apuntando a la última página: cada línea nueva que se escribe, aparece en tu pantalla.
+</EnSimple>
+
+### tail -f: mirar lo que pasa ahora
+
+Es una de las herramientas más usadas en un incidente: abres el log del servicio con `tail -f`, le pides a alguien que pruebe de nuevo, y ves en vivo lo que el servicio registra. Se sale con **Ctrl+C**. Si el log se "rota" (se renombra y se empieza uno nuevo, algo que verás en el módulo de logs), `tail -F` con mayúscula sigue al archivo nuevo.
+
+<Consejo>
+`tail -n +5 archivo` muestra desde la línea 5 hasta el final; `head -c 100` muestra solo los primeros 100 bytes. Y `less +F archivo` funciona como `tail -f`, pero con Ctrl+C vuelves a poder navegar y buscar sin salir.
+</Consejo>
+
+## Identificar: qué es esto y dónde está
+
+- `file archivo` dice **qué tipo de contenido** tiene, mirando sus primeros bytes, sin importar la extensión: texto, script, programa compilado, imagen, archivo comprimido. Antes de abrir algo desconocido con `cat`, conviene preguntarle a `file` (un binario en pantalla se ve como basura y puede desordenar la terminal).
+- `stat archivo` muestra **todos los metadatos**: tamaño, inodo, enlaces, permisos, dueño y fechas.
+- `which comando` dice **qué programa se ejecuta** cuando escribes ese comando (la primera coincidencia en el PATH).
+- `type comando` dice además si es un alias o un comando interno del shell.
+
+## Buscar archivos con find
+
+`find` recorre carpetas y muestra los archivos que cumplen las condiciones que le pidas. Su forma siempre es la misma: **dónde buscar, qué condiciones y qué hacer con lo que encuentra**.
+
+<Diagrama svg={findSvg} alt="El comando find /var/log -name '*.log' -size +10M -mtime -7 -ls con sus partes: el comando find, la carpeta donde buscar, tres condiciones (nombre, tamaño y antigüedad) y la acción -ls." pie="Las partes de un find. Todas las condiciones se tienen que cumplir a la vez." />
+
+<EnSimple titulo="Dicho más simple: find">
+Es como pedirle algo a un bibliotecario: "en la sección de historia (dónde), libros de este autor, de más de 300 páginas, que llegaron este mes (condiciones), y traémelos a la mesa (acción)". Cuantas más condiciones des, menos resultados vas a tener que revisar.
+</EnSimple>
+
+Las condiciones más usadas:
+
+| Condición | Busca | Ejemplo |
+| --- | --- | --- |
+| `-name 'patrón'` | Por nombre (con comodines, entre comillas) | `-name '*.conf'` |
+| `-iname 'patrón'` | Igual, sin distinguir mayúsculas | `-iname 'leeme*'` |
+| `-type f` / `-type d` | Solo archivos / solo carpetas | `-type f` |
+| `-size +100M` | Más de 100 MiB (`-` es "menos de") | `-size +1G` |
+| `-mtime -7` | Modificados en los últimos 7 días | `-mtime +30` (hace más de 30) |
+| `-mmin -60` | Modificados en los últimos 60 minutos | `-mmin -10` |
+| `-user ana` | Que pertenecen a ana | `-user ana` |
+| `-newer archivo` | Más nuevos que ese archivo | `-newer /etc/hosts` |
+| `-maxdepth 1` | Sin bajar a subcarpetas | `-maxdepth 2` |
+
+Y las acciones: sin nada, `find` muestra las rutas; `-ls` muestra los detalles de cada una; `-exec comando {} \;` ejecuta un comando por cada archivo (`{}` se reemplaza por la ruta); y `-delete` borra lo que encuentra, con el mismo cuidado que `rm`.
+
+```bash
+find /etc -name '*.conf' -mtime -1           # configuraciones cambiadas desde ayer
+find /var/log -type f -size +100M            # logs enormes
+find /home -user carlos -ls                  # todo lo de carlos, con detalles
+find /tmp -type f -mtime +30 -exec ls -l {} \;   # temporales viejos (mirar antes de borrar)
+```
+
+<Nota>
+Cuando buscas en carpetas que tu usuario no puede leer, `find` muestra un "Permission denied" por cada una. Agregar `2>/dev/null` al final los descarta: lo vas a entender a fondo en la lección de redirecciones. Si necesitas buscar también ahí, usa `sudo find`.
+</Nota>
+
+<Pregunta id="p06" />
+
+## Practicar
+
+<Terminal ejercicio={ejBuscar} />
+
+<ErroresComunes>
+  <ErrorComun titulo="find no encuentra archivos que sí existen (o da &quot;paths must precede expression&quot;)">
+    Casi siempre falta poner el patrón entre comillas. `find . -name *.conf` hace que el shell expanda `*.conf` con los archivos de la carpeta actual antes de que find lo vea. Escribe siempre `-name '*.conf'`.
+  </ErrorComun>
+  <ErrorComun titulo="La terminal muestra símbolos raros después de un cat">
+    Abriste un archivo binario (un programa, una imagen, algo comprimido). Usa `reset` para recuperar la terminal, y en adelante pregunta antes con `file`.
+  </ErrorComun>
+  <ErrorComun titulo="No sé cómo salir de less o de man">
+    Con la tecla `q`. Si escribiste algo en la búsqueda, primero Esc o Enter.
+  </ErrorComun>
+  <ErrorComun titulo="tail -f no muestra nada nuevo">
+    Puede que el servicio no esté escribiendo en ese archivo (revisa en su configuración dónde escribe) o que el log se haya rotado y sigas mirando el archivo viejo: usa `tail -F`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `cat` para archivos cortos, `less` para largos (Espacio avanza, `/` busca, `q` sale), `head` y `tail` para el principio y el final.
+- `tail -f` sigue un log en vivo; se corta con Ctrl+C. `tail -F` sigue también después de una rotación.
+- `file` dice qué contiene un archivo, `stat` muestra sus metadatos, `which` y `type` dicen qué se ejecuta con un comando.
+- `find DÓNDE CONDICIONES ACCIÓN`: `-name '*.log'`, `-type f`, `-size +100M`, `-mtime -7`, `-user ana`, y acciones como `-ls` y `-exec`.
+- Los patrones de `find` siempre van entre comillas; `2>/dev/null` oculta los avisos de permisos.
+</Resumen>
