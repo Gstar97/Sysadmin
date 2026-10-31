@@ -21,7 +21,8 @@ function installBinaries(sys: System) {
     if (sys.vfs.exists(path)) return
     sys.vfs.writeFile(path, '\x7fELF\x02\x01\x01', ROOT_CRED)
     const node = sys.vfs.stat(path, ROOT_CRED)
-    node.mode = name === 'sudo' ? 0o4111 : 0o755
+    // Programas con SUID root, como en una instalación real.
+    node.mode = name === 'sudo' ? (sys.distro === 'rocky' ? 0o4111 : 0o4755) : ['passwd', 'su', 'gpasswd', 'newgrp', 'mount', 'umount', 'chsh', 'chfn'].includes(name) ? 0o4755 : 0o755
     node.size = BINARY_SIZES[name] ?? 24_000 + ([...name].reduce((h, c) => h * 31 + c.charCodeAt(0), 7) % 160_000)
   }
   // Herramientas que solo existen en una de las dos familias de distribuciones.

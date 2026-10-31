@@ -95,6 +95,8 @@ export const bashStateSchema = z.strictObject({
       registros_dns: {},
       sitios_web: {},
     }),
+  /** Intentos fallidos de inicio de sesión registrados por pam_faillock, por usuario. */
+  faillock: z.record(z.string(), z.number().int().min(0)).default({}),
   journal: z
     .array(
       z.strictObject({

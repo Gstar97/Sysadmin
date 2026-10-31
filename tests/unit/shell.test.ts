@@ -182,3 +182,58 @@ describe('lo que usa el Nivel 1 (primeros pasos)', () => {
     expect((await run('ls -lhd /etc')).out).toMatch(/ 4\.0K /)
   })
 })
+
+describe('lo que usa el Nivel 1 (usuarios y permisos)', () => {
+  const state = {
+    usuarios: [{ nombre: 'ana', sudo: true }, { nombre: 'laura' }, { nombre: 'pedro' }],
+    usuario: 'ana',
+    grupos: [
+      { nombre: 'ventas', miembros: ['laura'] },
+      { nombre: 'auditoria', miembros: ['pedro'] },
+    ],
+  }
+
+  it('ACL: acceso extra, máscara y herencia por defecto', async () => {
+    const { run } = await session(state)
+    await run('sudo mkdir /srv/ventas; sudo chgrp ventas /srv/ventas; sudo chmod 2770 /srv/ventas')
+    await run('sudo setfacl -m g:auditoria:rx /srv/ventas')
+    await run('sudo setfacl -d -m g:ventas:rwx,g:auditoria:rx /srv/ventas')
+    expect((await run('ls -ld /srv/ventas')).out).toMatch(/^drwxrws---\+ /)
+    await run('sudo -u laura touch /srv/ventas/informe.txt')
+    const acl = (await run('sudo getfacl /srv/ventas/informe.txt')).out
+    expect(acl).toContain('group:auditoria:r-x')
+    expect(acl).toMatch(/group:ventas:rwx\t+#effective:rw-/)
+    expect((await run('sudo -u pedro cat /srv/ventas/informe.txt')).code).toBe(0)
+    expect((await run('sudo -u pedro touch /srv/ventas/otro')).err).toContain('Permission denied')
+    expect((await run('cat /srv/ventas/informe.txt')).err).toContain('Permission denied')
+    await run('sudo setfacl -b /srv/ventas')
+    expect((await run('ls -ld /srv/ventas')).out).toMatch(/^drwxrws---\. /)
+  })
+
+  it('sudo con reglas acotadas, sudo su - y sudo -l -U', async () => {
+    const { run } = await session(state)
+    await run('echo "laura ALL=(root) /usr/bin/journalctl" | sudo tee /etc/sudoers.d/laura > /dev/null')
+    expect((await run('sudo -l -U laura')).out).toContain('(root) /usr/bin/journalctl')
+    await run('sudo su - laura')
+    expect((await run('whoami')).out).toBe('laura\n')
+    expect((await run('sudo cat /etc/shadow')).err).toContain('is not allowed to execute')
+    await run('exit')
+    expect((await run('whoami')).out).toBe('ana\n')
+  })
+
+  it('cuentas de sistema, SUID, getent shadow, chage y faillock', async () => {
+    const { run } = await session({ ...state, faillock: { laura: 3 } })
+    await run('sudo useradd -r -s /sbin/nologin svc_app')
+    expect((await run('id -u svc_app')).out).toBe('999\n')
+    expect((await run('ls -l /usr/bin/passwd')).out).toMatch(/^-rwsr-xr-x/)
+    expect((await run('getent shadow ana')).out).toBe('')
+    expect((await run('sudo getent shadow ana')).out).toMatch(/^ana:/)
+    await run('sudo chage -d 0 laura')
+    expect((await run('sudo chage -l laura')).out).toMatch(/Password expires\s+: password must be changed/)
+    expect((await run('sudo faillock --user laura')).out.split('\n').filter((l) => l.includes('RHOST')).length).toBe(3)
+    await run('sudo faillock --user laura --reset')
+    expect((await run('sudo faillock --user laura')).out).not.toContain('RHOST')
+    await run('sudo authselect enable-feature with-faillock')
+    expect((await run('sudo grep -c pam_faillock /etc/pam.d/system-auth')).out).toBe('3\n')
+  })
+})

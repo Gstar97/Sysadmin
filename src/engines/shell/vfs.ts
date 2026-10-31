@@ -19,6 +19,35 @@ export interface Inode {
   size?: number
   entries?: Map<string, number>
   nlink: number
+  /** Lista de control de acceso (setfacl). Con ACL, los bits de grupo de mode son la máscara. */
+  acl?: Acl
+  /** ACL por defecto de un directorio: la heredan los archivos que se crean adentro. */
+  defaultAcl?: DefaultAcl
+}
+
+export interface Acl {
+  users: Map<number, number>
+  groups: Map<number, number>
+  /** Permisos de la entrada group:: (el grupo dueño). */
+  groupObj: number
+  mask: number
+}
+
+export interface DefaultAcl {
+  user: number
+  group: number
+  other: number
+  users: Map<number, number>
+  groups: Map<number, number>
+  mask?: number
+}
+
+/** Máscara calculada como la unión de los permisos de grupo y de las entradas con nombre. */
+export function aclUnion(groupObj: number, users: Map<number, number>, groups: Map<number, number>): number {
+  let m = groupObj
+  for (const v of users.values()) m |= v
+  for (const v of groups.values()) m |= v
+  return m
 }
 
 export interface Cred {
@@ -103,8 +132,28 @@ export class VFS {
       return (node.mode & 0o111) !== 0
     }
     let bits: number
+    const inGroup = (gid: number) => cred.gid === gid || cred.groups.includes(gid)
     if (cred.uid === node.uid) bits = (node.mode >> 6) & 7
-    else if (cred.gid === node.gid || cred.groups.includes(node.gid)) bits = (node.mode >> 3) & 7
+    else if (node.acl) {
+      // Algoritmo de las ACL POSIX: usuario con nombre, después los grupos, después "otros".
+      const acl = node.acl
+      const named = acl.users.get(cred.uid)
+      if (named !== undefined) return (named & acl.mask & want) !== 0
+      let matched = false
+      let union = 0
+      if (inGroup(node.gid)) {
+        matched = true
+        union |= acl.groupObj
+      }
+      for (const [gid, perms] of acl.groups) {
+        if (inGroup(gid)) {
+          matched = true
+          union |= perms
+        }
+      }
+      if (matched) return (union & acl.mask & want) !== 0
+      bits = node.mode & 7
+    } else if (inGroup(node.gid)) bits = (node.mode >> 3) & 7
     else bits = node.mode & 7
     return (bits & want) !== 0
   }
@@ -162,11 +211,26 @@ export class VFS {
     return { parent, name: basename(abs) }
   }
 
-  private newInode(type: FileType, mode: number, cred: Cred, parent?: Inode): Inode {
+  /**
+   * Crea un inodo. mode son los permisos pedidos por el programa; umask se aplica salvo que el
+   * directorio padre tenga una ACL por defecto, que en ese caso manda (como en Linux).
+   */
+  private newInode(type: FileType, mode: number, cred: Cred, parent?: Inode, umask = 0): Inode {
     // SGID en el directorio padre: el archivo hereda el grupo (y los subdirectorios, el bit).
     const inheritGroup = parent && (parent.mode & 0o2000) !== 0
     const gid = inheritGroup ? parent!.gid : cred.gid
-    let finalMode = mode
+    let finalMode = mode & ~umask
+    let acl: Acl | undefined
+    const d = parent?.defaultAcl
+    if (d) {
+      const owner = d.user & ((mode >> 6) & 7)
+      const other = d.other & (mode & 7)
+      if (d.users.size || d.groups.size || d.mask !== undefined) {
+        const mask = (d.mask ?? aclUnion(d.group, d.users, d.groups)) & ((mode >> 3) & 7)
+        acl = { users: new Map(d.users), groups: new Map(d.groups), groupObj: d.group, mask }
+        finalMode = (mode & 0o7000) | (owner << 6) | (mask << 3) | other
+      } else finalMode = (mode & 0o7000) | (owner << 6) | ((d.group & ((mode >> 3) & 7)) << 3) | other
+    }
     if (type === 'dir' && inheritGroup) finalMode |= 0o2000
     const node: Inode = {
       ino: this.nextIno++,
@@ -179,6 +243,8 @@ export class VFS {
       nlink: type === 'dir' ? 2 : 1,
       entries: type === 'dir' ? new Map() : undefined,
     }
+    if (acl) node.acl = acl
+    if (d && type === 'dir') node.defaultAcl = { ...d, users: new Map(d.users), groups: new Map(d.groups) }
     this.inodes.set(node.ino, node)
     return node
   }
@@ -201,7 +267,7 @@ export class VFS {
     return node.data
   }
 
-  writeFile(path: string, data: string, cred: Cred, opts: { append?: boolean; mode?: number } = {}): void {
+  writeFile(path: string, data: string, cred: Cred, opts: { append?: boolean; mode?: number; umask?: number } = {}): void {
     const abs = normalizePath(path)
     let ino: number | undefined
     try {
@@ -219,38 +285,38 @@ export class VFS {
       return
     }
     const { parent, name } = this.parentFor(abs, cred)
-    const node = this.newInode('file', opts.mode ?? 0o644, cred, parent)
+    const node = this.newInode('file', opts.mode ?? 0o644, cred, parent, opts.umask)
     node.data = data
     parent.entries!.set(name, node.ino)
     parent.mtime = this.now()
   }
 
-  touch(path: string, cred: Cred): void {
+  touch(path: string, cred: Cred, umask?: number): void {
     if (this.exists(path, cred)) {
       const node = this.stat(path, cred)
       if (cred.uid !== 0 && cred.uid !== node.uid && !this.can(node, cred, 2)) throw new FsError('EACCES', path)
       node.mtime = this.now()
     } else {
-      this.writeFile(path, '', cred)
+      this.writeFile(path, '', cred, umask === undefined ? {} : { mode: 0o666, umask })
     }
   }
 
-  mkdir(path: string, cred: Cred, mode = 0o755): void {
+  mkdir(path: string, cred: Cred, mode = 0o755, umask = 0): void {
     const abs = normalizePath(path)
     if (this.exists(abs, cred, false)) throw new FsError('EEXIST', path)
     const { parent, name } = this.parentFor(abs, cred)
-    const node = this.newInode('dir', mode, cred, parent)
+    const node = this.newInode('dir', mode, cred, parent, umask)
     parent.entries!.set(name, node.ino)
     parent.nlink++
     parent.mtime = this.now()
   }
 
-  mkdirp(path: string, cred: Cred, mode = 0o755): void {
+  mkdirp(path: string, cred: Cred, mode = 0o755, umask = 0): void {
     const abs = normalizePath(path)
     let acc = ''
     for (const part of abs.split('/').filter(Boolean)) {
       acc += '/' + part
-      if (!this.exists(acc, cred)) this.mkdir(acc, cred, mode)
+      if (!this.exists(acc, cred)) this.mkdir(acc, cred, mode, umask)
       else if (this.stat(acc, cred).type !== 'dir') throw new FsError('ENOTDIR', acc)
     }
   }
@@ -349,6 +415,8 @@ export class VFS {
     const node = this.stat(path, cred)
     if (cred.uid !== 0 && cred.uid !== node.uid) throw new FsError('EPERM', path)
     node.mode = mode & 0o7777
+    // Con ACL, chmod sobre el grupo cambia la máscara.
+    if (node.acl) node.acl.mask = (mode >> 3) & 7
   }
 
   chown(path: string, uid: number | undefined, gid: number | undefined, cred: Cred, follow = true): void {
@@ -392,6 +460,8 @@ export class VFS {
     const node = this.stat(dest, cred)
     node.mode = src.mode
     node.mtime = src.mtime
+    if (src.acl) node.acl = { ...src.acl, users: new Map(src.acl.users), groups: new Map(src.acl.groups) }
+    if (src.defaultAcl) node.defaultAcl = { ...src.defaultAcl, users: new Map(src.defaultAcl.users), groups: new Map(src.defaultAcl.groups) }
     if (cred.uid === 0) {
       node.uid = src.uid
       node.gid = src.gid

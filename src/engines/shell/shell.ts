@@ -586,7 +586,7 @@ export class Shell {
     const fileSink = (path: string, append: boolean) => {
       if (path === '/dev/null') return () => undefined
       // Igual que bash: el archivo se crea (o se vacía con >) antes de ejecutar el comando.
-      if (!append || !this.sys.vfs.exists(path, this.cred)) this.sys.vfs.writeFile(path, '', this.cred, { mode: 0o666 & ~this.umask })
+      if (!append || !this.sys.vfs.exists(path, this.cred)) this.sys.vfs.writeFile(path, '', this.cred, { mode: 0o666, umask: this.umask })
       else this.sys.vfs.writeFile(path, '', this.cred, { append: true })
       let buf = ''
       writes.push({ path, data: () => buf })

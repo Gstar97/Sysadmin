@@ -1,6 +1,6 @@
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
-import { basename, FsError, modeString, normalizePath, octal, type Inode } from '../vfs'
+import { aclUnion, basename, FsError, modeString, normalizePath, octal, type DefaultAcl, type Inode } from '../vfs'
 import { applyChmod, COLOR, fsErr, humanSize, lines, lsDate, readInputs, sizeOf } from './util'
 
 function colorName(name: string, node: Inode, tty: boolean): string {
@@ -60,7 +60,7 @@ register('ls', {
           const target = e.node.type === 'symlink' ? ` -> ${e.node.data}` : ''
           return {
             ino: String(e.node.ino),
-            perm: modeString(e.node) + (ctx.sys.distro === 'rocky' ? '.' : ''),
+            perm: modeString(e.node) + (e.node.acl || e.node.defaultAcl ? '+' : ctx.sys.distro === 'rocky' ? '.' : ''),
             links: String(e.node.nlink),
             user: ctx.sys.userName(e.node.uid),
             group: ctx.sys.groupName(e.node.gid),
@@ -144,8 +144,9 @@ register('mkdir', {
     for (const d of a.rest) {
       const abs = ctx.sh.resolve(d)
       try {
-        if (a.flags.has('parents')) ctx.sys.vfs.mkdirp(abs, ctx.sh.cred, 0o777 & ~ctx.sh.umask)
-        else ctx.sys.vfs.mkdir(abs, ctx.sh.cred, mode)
+        if (a.flags.has('parents')) ctx.sys.vfs.mkdirp(abs, ctx.sh.cred, 0o777, ctx.sh.umask)
+        else if (a.values.has('mode')) ctx.sys.vfs.mkdir(abs, ctx.sh.cred, mode)
+        else ctx.sys.vfs.mkdir(abs, ctx.sh.cred, 0o777, ctx.sh.umask)
         if (a.values.has('mode')) ctx.sys.vfs.stat(abs, ctx.sh.cred).mode = mode | (ctx.sys.vfs.stat(abs, ctx.sh.cred).mode & 0o2000)
         if (a.flags.has('verbose')) ctx.out(`mkdir: created directory '${d}'\n`)
       } catch (e) {
@@ -224,9 +225,7 @@ register('touch', {
     for (const f of files) {
       const abs = ctx.sh.resolve(f)
       try {
-        const existed = ctx.sys.vfs.exists(abs, ctx.sh.cred)
-        ctx.sys.vfs.touch(abs, ctx.sh.cred)
-        if (!existed) ctx.sys.vfs.stat(abs, ctx.sh.cred).mode = 0o666 & ~ctx.sh.umask
+        ctx.sys.vfs.touch(abs, ctx.sh.cred, ctx.sh.umask)
         if (when !== undefined) ctx.sys.vfs.stat(abs, ctx.sh.cred).mtime = when
       } catch (e) {
         code = fsErr(ctx, e, 'cannot touch', f)
@@ -1136,12 +1135,232 @@ register('tee', {
     let code = 0
     for (const f of ctx.args.filter((x) => !x.startsWith('-'))) {
       try {
-        ctx.sys.vfs.writeFile(ctx.sh.resolve(f), data, ctx.sh.cred, { append, mode: 0o666 & ~ctx.sh.umask })
+        ctx.sys.vfs.writeFile(ctx.sh.resolve(f), data, ctx.sh.cred, { append, mode: 0o666, umask: ctx.sh.umask })
       } catch (e) {
         code = fsErr(ctx, e, '', f)
       }
     }
     ctx.out(data)
+    return code
+  },
+})
+
+// ---------------------------------------------------------------------------------------
+// Listas de control de acceso (ACL)
+// ---------------------------------------------------------------------------------------
+
+const permText = (p: number) => (p & 4 ? 'r' : '-') + (p & 2 ? 'w' : '-') + (p & 1 ? 'x' : '-')
+
+function parsePerm(text: string): number | null {
+  if (/^[0-7]$/.test(text)) return Number(text)
+  if (!/^[rwxX-]{1,3}$/.test(text)) return null
+  return (text.includes('r') ? 4 : 0) | (text.includes('w') ? 2 : 0) | (/[xX]/.test(text) ? 1 : 0)
+}
+
+register('getfacl', {
+  usage: 'getfacl [-dR] FILE...',
+  run(ctx) {
+    const files = ctx.args.filter((a) => !a.startsWith('-'))
+    let code = 0
+    let warned = false
+    for (const f of files) {
+      try {
+        const node = ctx.sys.vfs.stat(ctx.sh.resolve(f), ctx.sh.cred)
+        const name = ctx.sh.resolve(f) === f ? f.replace(/^\/+/, '') : f
+        if (f.startsWith('/') && !warned) {
+          ctx.err("getfacl: Removing leading '/' from absolute path names\n")
+          warned = true
+        }
+        const lines = [`# file: ${name}`, `# owner: ${ctx.sys.userName(node.uid)}`, `# group: ${ctx.sys.groupName(node.gid)}`]
+        if (node.mode & 0o7000) lines.push(`# flags: ${node.mode & 0o4000 ? 's' : '-'}${node.mode & 0o2000 ? 's' : '-'}${node.mode & 0o1000 ? 't' : '-'}`)
+        const entry = (text: string, perms: number, mask?: number) => {
+          if (mask === undefined || (perms & mask) === perms) return text
+          const pad = '\t'.repeat(Math.max(1, Math.ceil((40 - text.length) / 8)))
+          return `${text}${pad}#effective:${permText(perms & mask)}`
+        }
+        const acl = node.acl
+        lines.push(`user::${permText((node.mode >> 6) & 7)}`)
+        if (acl) {
+          for (const [uid, p] of acl.users) lines.push(entry(`user:${ctx.sys.userName(uid)}:${permText(p)}`, p, acl.mask))
+          lines.push(entry(`group::${permText(acl.groupObj)}`, acl.groupObj, acl.mask))
+          for (const [gid, p] of acl.groups) lines.push(entry(`group:${ctx.sys.groupName(gid)}:${permText(p)}`, p, acl.mask))
+          lines.push(`mask::${permText(acl.mask)}`)
+        } else lines.push(`group::${permText((node.mode >> 3) & 7)}`)
+        lines.push(`other::${permText(node.mode & 7)}`)
+        const d = node.defaultAcl
+        if (d) {
+          lines.push(`default:user::${permText(d.user)}`)
+          for (const [uid, p] of d.users) lines.push(`default:user:${ctx.sys.userName(uid)}:${permText(p)}`)
+          lines.push(`default:group::${permText(d.group)}`)
+          for (const [gid, p] of d.groups) lines.push(`default:group:${ctx.sys.groupName(gid)}:${permText(p)}`)
+          if (d.users.size || d.groups.size || d.mask !== undefined) lines.push(`default:mask::${permText(d.mask ?? aclUnion(d.group, d.users, d.groups))}`)
+          lines.push(`default:other::${permText(d.other)}`)
+        }
+        ctx.out(lines.join('\n') + '\n\n')
+      } catch (e) {
+        if (e instanceof FsError) {
+          ctx.err(`getfacl: ${f}: ${e.message}\n`)
+          code = 1
+        } else throw e
+      }
+    }
+    return code
+  },
+})
+
+register('setfacl', {
+  usage: 'setfacl [-bkndRLP] { -m|-M|-x|-X ... } file ...',
+  summary: '  -m, --modify=acl  -x, --remove=acl  -b, --remove-all  -k, --remove-default  -d, --default  -R, --recursive',
+  run(ctx) {
+    let modify: string | undefined
+    let remove: string | undefined
+    let removeAll = false
+    let removeDefault = false
+    let defaults = false
+    let recursive = false
+    const files: string[] = []
+    for (let i = 0; i < ctx.args.length; i++) {
+      const a = ctx.args[i]
+      if (a === '-m' || a === '--modify') modify = ctx.args[++i]
+      else if (a.startsWith('--modify=')) modify = a.slice(9)
+      else if (a === '-x' || a === '--remove') remove = ctx.args[++i]
+      else if (a.startsWith('--remove=')) remove = a.slice(9)
+      else if (/^-[bkdRn]+$/.test(a)) {
+        if (a.includes('b')) removeAll = true
+        if (a.includes('k')) removeDefault = true
+        if (a.includes('d')) defaults = true
+        if (a.includes('R')) recursive = true
+        if (a.endsWith('m')) modify = ctx.args[++i]
+      } else if (/^-[bkdR]*m$/.test(a)) {
+        if (a.includes('R')) recursive = true
+        if (a.includes('d')) defaults = true
+        modify = ctx.args[++i]
+      } else if (/^-[bkdR]*x$/.test(a)) {
+        if (a.includes('R')) recursive = true
+        if (a.includes('d')) defaults = true
+        remove = ctx.args[++i]
+      } else files.push(a)
+    }
+    if (!files.length || (modify === undefined && remove === undefined && !removeAll && !removeDefault)) {
+      ctx.err('Usage: setfacl [-bkndRLP] { -m|-M|-x|-X ... } file ...\nTry `setfacl --help\' for more information.\n')
+      return 2
+    }
+    interface Spec {
+      def: boolean
+      kind: 'u' | 'g' | 'm' | 'o'
+      id?: number
+      perms: number
+    }
+    const parse = (list: string, needPerms: boolean): Spec[] | string => {
+      const out: Spec[] = []
+      for (const raw of list.split(',')) {
+        let parts = raw.split(':')
+        let def = defaults
+        if (parts[0] === 'd' || parts[0] === 'default') {
+          def = true
+          parts = parts.slice(1)
+        }
+        const k = parts[0]
+        const kind = (k === 'user' ? 'u' : k === 'group' ? 'g' : k === 'mask' ? 'm' : k === 'other' ? 'o' : k) as Spec['kind']
+        if (!['u', 'g', 'm', 'o'].includes(kind)) return raw
+        let qualifier = parts[1] ?? ''
+        let permStr = parts[2]
+        if ((kind === 'm' || kind === 'o') && parts.length === 2) {
+          permStr = parts[1]
+          qualifier = ''
+        }
+        let id: number | undefined
+        if (qualifier) {
+          id = kind === 'u' ? (ctx.sys.users.get(qualifier)?.uid ?? (/^\d+$/.test(qualifier) ? Number(qualifier) : undefined)) : kind === 'g' ? (ctx.sys.groups.get(qualifier)?.gid ?? (/^\d+$/.test(qualifier) ? Number(qualifier) : undefined)) : undefined
+          if (id === undefined) return raw
+        }
+        let perms = 0
+        if (needPerms) {
+          const p = parsePerm(permStr ?? '')
+          if (p === null) return raw
+          perms = p
+        }
+        out.push({ def, kind, id, perms })
+      }
+      return out
+    }
+    const mods = modify !== undefined ? parse(modify, true) : []
+    const rems = remove !== undefined ? parse(remove, false) : []
+    for (const r of [mods, rems]) {
+      if (typeof r === 'string') {
+        ctx.err(`setfacl: Option -${r === mods ? 'm' : 'x'}: Invalid argument near character 1\n`)
+        return 2
+      }
+    }
+    const apply = (abs: string, shown: string): number => {
+      const node = ctx.sys.vfs.stat(abs, ctx.sh.cred)
+      if (ctx.sh.cred.uid !== 0 && ctx.sh.cred.uid !== node.uid) {
+        ctx.err(`setfacl: ${shown}: Operation not permitted\n`)
+        return 1
+      }
+      if (removeAll) {
+        if (node.acl) node.mode = (node.mode & ~0o070) | (node.acl.groupObj << 3)
+        node.acl = undefined
+        node.defaultAcl = undefined
+      }
+      if (removeDefault) node.defaultAcl = undefined
+      let explicitMask: number | undefined
+      for (const sp of [...(mods as Spec[]), ...(rems as Spec[]).map((r) => ({ ...r, remove: true }))] as (Spec & { remove?: boolean })[]) {
+        if (sp.def) {
+          if (node.type !== 'dir') continue
+          const d: DefaultAcl = (node.defaultAcl ??= { user: (node.mode >> 6) & 7, group: node.acl ? node.acl.groupObj : (node.mode >> 3) & 7, other: node.mode & 7, users: new Map<number, number>(), groups: new Map<number, number>() })
+          if (sp.kind === 'u' && sp.id !== undefined) {
+            if (sp.remove) d.users.delete(sp.id)
+            else d.users.set(sp.id, sp.perms)
+          } else if (sp.kind === 'g' && sp.id !== undefined) {
+            if (sp.remove) d.groups.delete(sp.id)
+            else d.groups.set(sp.id, sp.perms)
+          }
+          else if (sp.kind === 'u' && !sp.remove) d.user = sp.perms
+          else if (sp.kind === 'g' && !sp.remove) d.group = sp.perms
+          else if (sp.kind === 'o' && !sp.remove) d.other = sp.perms
+          else if (sp.kind === 'm') d.mask = sp.remove ? undefined : sp.perms
+          continue
+        }
+        const acl = (node.acl ??= { users: new Map(), groups: new Map(), groupObj: (node.mode >> 3) & 7, mask: (node.mode >> 3) & 7 })
+        if (sp.kind === 'u' && sp.id !== undefined) {
+          if (sp.remove) acl.users.delete(sp.id)
+          else acl.users.set(sp.id, sp.perms)
+        } else if (sp.kind === 'g' && sp.id !== undefined) {
+          if (sp.remove) acl.groups.delete(sp.id)
+          else acl.groups.set(sp.id, sp.perms)
+        }
+        else if (sp.kind === 'u' && !sp.remove) node.mode = (node.mode & ~0o700) | (sp.perms << 6)
+        else if (sp.kind === 'g' && !sp.remove) acl.groupObj = sp.perms
+        else if (sp.kind === 'o' && !sp.remove) node.mode = (node.mode & ~0o007) | sp.perms
+        else if (sp.kind === 'm' && !sp.remove) explicitMask = sp.perms
+      }
+      const acl = node.acl
+      if (acl) {
+        acl.mask = explicitMask ?? aclUnion(acl.groupObj, acl.users, acl.groups)
+        if (!acl.users.size && !acl.groups.size && explicitMask === undefined) {
+          node.mode = (node.mode & ~0o070) | (acl.groupObj << 3)
+          node.acl = undefined
+        } else node.mode = (node.mode & ~0o070) | (acl.mask << 3)
+      }
+      return 0
+    }
+    let code = 0
+    for (const f of files) {
+      const abs = ctx.sh.resolve(f)
+      try {
+        if (recursive) {
+          ctx.sys.vfs.walk(abs, ctx.sh.cred, (p) => {
+            code |= apply(p, p)
+          })
+        } else code |= apply(abs, f)
+      } catch (e) {
+        if (e instanceof FsError) {
+          ctx.err(`setfacl: ${f}: ${e.message}\n`)
+          code = 1
+        } else throw e
+      }
+    }
     return code
   },
 })

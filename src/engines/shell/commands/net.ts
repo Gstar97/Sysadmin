@@ -411,7 +411,7 @@ register(['curl', 'wget'], {
     const headers = `HTTP/1.1 ${res.status} ${statusText}\nServer: ${res.server}\nDate: ${new Date().toUTCString()}\nContent-Type: text/html\nContent-Length: ${res.body.length}\nConnection: keep-alive\n\n`
     if (ctx.name === 'wget') {
       const file = a.values.get('o') ?? (m[4] && m[4] !== '/' ? m[4].split('/').pop()! : 'index.html')
-      ctx.sys.vfs.writeFile(ctx.sh.resolve(file), res.body, ctx.sh.cred, { mode: 0o666 & ~ctx.sh.umask })
+      ctx.sys.vfs.writeFile(ctx.sh.resolve(file), res.body, ctx.sh.cred, { mode: 0o666, umask: ctx.sh.umask })
       ctx.err(`--${new Date().toISOString().slice(0, 19).replace('T', ' ')}--  ${url}\nResolving ${host}... ${ip}\nConnecting to ${host}|${ip}|:${port}... connected.\nHTTP request sent, awaiting response... ${res.status} ${statusText}\nLength: ${res.body.length} [text/html]\nSaving to: '${file}'\n\n'${file}' saved [${res.body.length}/${res.body.length}]\n\n`)
       return res.status >= 400 ? 8 : 0
     }
@@ -434,7 +434,7 @@ register(['curl', 'wget'], {
       return 22
     }
     if (a.values.has('o')) {
-      ctx.sys.vfs.writeFile(ctx.sh.resolve(a.values.get('o')!), res.body, ctx.sh.cred, { mode: 0o666 & ~ctx.sh.umask })
+      ctx.sys.vfs.writeFile(ctx.sh.resolve(a.values.get('o')!), res.body, ctx.sh.cred, { mode: 0o666, umask: ctx.sh.umask })
       if (!a.flags.has('s')) ctx.err(`  % Total    % Received % Xferd  Average Speed   Time\n100  ${res.body.length}  100  ${res.body.length}    0     0   ${res.body.length * 10}      0 --:--:--\n`)
       return 0
     }

@@ -1,6 +1,7 @@
 import { parseArgs } from '../args'
 import { BUILTINS, register, type CommandContext } from '../shell'
 import { ROOT_CRED } from '../vfs'
+import { systemAuth } from '../system'
 
 function needRoot(ctx: CommandContext, message: string): boolean {
   if (ctx.sh.user === 'root') return false
@@ -101,8 +102,20 @@ register('useradd', {
         return 6
       }
     }
-    const uid = a.values.has('u') ? Number(a.values.get('u')) : undefined
-    if (uid !== undefined && ctx.sys.userByUid(uid)) {
+    let uid = a.values.has('u') ? Number(a.values.get('u')) : undefined
+    if (uid === undefined && a.flags.has('r')) {
+      // Las cuentas de sistema toman UID por debajo de 1000, de 999 hacia abajo.
+      for (let candidate = 999; candidate > 100; candidate--) {
+        if (!ctx.sys.userByUid(candidate) && ![...ctx.sys.groups.values()].some((g) => g.gid === candidate)) {
+          uid = candidate
+          break
+        }
+      }
+    } else if (a.values.has('u') && ctx.sys.userByUid(uid!)) {
+      ctx.err(`useradd: UID ${uid} is not unique\n`)
+      return 4
+    }
+    if (uid !== undefined && !a.flags.has('r') && ctx.sys.userByUid(uid)) {
       ctx.err(`useradd: UID ${uid} is not unique\n`)
       return 4
     }
@@ -417,8 +430,8 @@ register('chage', {
       ctx.out(
         [
           `Last password change\t\t\t\t\t: ${user.lastChange === 0 ? 'password must be changed' : fmt(user.lastChange)}`,
-          `Password expires\t\t\t\t\t: ${user.maxDays >= 99999 ? 'never' : fmt(user.lastChange + user.maxDays)}`,
-          `Password inactive\t\t\t\t\t: never`,
+          `Password expires\t\t\t\t\t: ${user.lastChange === 0 ? 'password must be changed' : user.maxDays >= 99999 ? 'never' : fmt(user.lastChange + user.maxDays)}`,
+          `Password inactive\t\t\t\t\t: ${user.lastChange === 0 ? 'password must be changed' : 'never'}`,
           `Account expires\t\t\t\t\t\t: ${user.expire ? new Date(user.expire).toLocaleDateString('en', { month: 'short', day: '2-digit', year: 'numeric' }) : 'never'}`,
           `Minimum number of days between password change\t\t: ${user.minDays}`,
           `Maximum number of days between password change\t\t: ${user.maxDays}`,
@@ -432,7 +445,10 @@ register('chage', {
     if (a.values.has('m')) user.minDays = Number(a.values.get('m'))
     if (a.values.has('W')) user.warnDays = Number(a.values.get('W'))
     if (a.values.has('E')) user.expire = a.values.get('E') === '-1' ? '' : a.values.get('E')!
-    if (a.values.has('d')) user.lastChange = Number(a.values.get('d'))
+    if (a.values.has('d')) {
+      const v = a.values.get('d')!
+      user.lastChange = /^\d{4}-\d{2}-\d{2}$/.test(v) ? Math.floor(Date.parse(v) / 86_400_000) : Number(v)
+    }
     ctx.sys.syncAccountFiles()
     return 0
   },
@@ -506,20 +522,33 @@ register('sudo', {
   async run(ctx) {
     const args = [...ctx.args]
     let target = 'root'
+    let listUser: string | undefined
     let mode: 'cmd' | 'login' | 'shell' | 'list' = 'cmd'
     while (args.length && args[0].startsWith('-')) {
       const o = args.shift()!
       if (o === '-u') target = args.shift() ?? 'root'
+      else if (o === '-U') listUser = args.shift()
       else if (o === '-i') mode = 'login'
       else if (o === '-s') mode = 'shell'
       else if (o === '-l') mode = 'list'
       else if (o === '--') break
     }
-    const user = ctx.sh.user
+    let user = ctx.sh.user
     if (mode === 'list') {
+      if (listUser) {
+        if (user !== 'root' && sudoAllowed(ctx, user, ['ALL']) !== 'ok') {
+          ctx.err(`Sorry, user ${user} is not allowed to list the privileges of ${listUser}.\n`)
+          return 1
+        }
+        if (!ctx.sys.users.has(listUser)) {
+          ctx.err(`sudo: unknown user ${listUser}\n`)
+          return 1
+        }
+        user = listUser
+      }
       if (sudoAllowed(ctx, user, ['true']) === 'noentry' && user !== 'root') {
-        ctx.err(`Sorry, user ${user} may not run sudo on ${ctx.sys.hostname}.\n`)
-        return 1
+        ctx.err(listUser ? `User ${user} is not allowed to run sudo on ${ctx.sys.hostname}.\n` : `Sorry, user ${user} may not run sudo on ${ctx.sys.hostname}.\n`)
+        return listUser ? 0 : 1
       }
       const groups = ctx.sys.groupsOf(user)
       ctx.out(`User ${user} may run the following commands on ${ctx.sys.hostname}:\n`)
@@ -535,7 +564,7 @@ register('sudo', {
       ctx.err(`sudo: unknown user ${target}\nsudo: error initializing audit plugin sudoers_audit\n`)
       return 1
     }
-    const shellLike = mode !== 'cmd' || (args[0] === 'su' && (args.length === 1 || args[1] === '-')) || args[0] === 'bash' || args[0] === '-i'
+    const shellLike = mode !== 'cmd' || args[0] === 'bash'
     const command = shellLike ? ['/bin/bash'] : args
     if (!command.length) {
       ctx.err('usage: sudo -h | -K | -k | -V\nusage: sudo [-u user] [-i | -s] [command [arg ...]]\n')
@@ -548,13 +577,28 @@ register('sudo', {
         logAuth(ctx, `${user} : user NOT in sudoers ; TTY=pts/0 ; PWD=${ctx.sh.cwd} ; USER=${target} ; COMMAND=${command.join(' ')}`)
       } else {
         ctx.err(`Sorry, user ${user} is not allowed to execute '${command[0].startsWith('/') ? '' : defPath(command[0]) + '/'}${command.join(' ')}' as ${target} on ${ctx.sys.hostname}.\n`)
-        logAuth(ctx, `${user} : command not allowed ; TTY=pts/0 ; PWD=${ctx.sh.cwd} ; USER=${target} ; COMMAND=${command.join(' ')}`)
+        logAuth(ctx, `${user} : command not allowed ; TTY=pts/0 ; PWD=${ctx.sh.cwd} ; USER=${target} ; COMMAND=${command[0].startsWith('/') ? '' : defPath(command[0]) + '/'}${command.join(' ')}`)
       }
       return 1
     }
     logAuth(ctx, `${user} : TTY=pts/0 ; PWD=${ctx.sh.cwd} ; USER=${target} ; COMMAND=${command[0].startsWith('/') ? '' : defPath(command[0]) + '/'}${command.join(' ')}`)
+    if (args[0] === 'su' && mode === 'cmd') {
+      // sudo su [-] [usuario]: abre una sesión como ese usuario (por defecto root).
+      const suArgs = args.slice(1)
+      const suTarget = suArgs.find((a) => !a.startsWith('-')) ?? 'root'
+      if (!ctx.sys.users.has(suTarget)) {
+        ctx.err(`su: user ${suTarget} does not exist or the user entry does not contain all the required fields\n`)
+        return 1
+      }
+      if (/nologin$/.test(ctx.sys.users.get(suTarget)!.shell)) {
+        ctx.out('This account is currently not available.\n')
+        return 1
+      }
+      ctx.sh.pushUser(suTarget, suArgs.some((a) => a === '-' || a === '-l' || a === '--login'))
+      return 0
+    }
     if (shellLike) {
-      ctx.sh.pushUser(target, mode === 'login' || (args[0] === 'su' && args[1] === '-'))
+      ctx.sh.pushUser(target, mode === 'login')
       return 0
     }
     return ctx.sh.asUser(target, () => ctx.sh.invoke(command, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY }))
@@ -636,11 +680,13 @@ register('getent', {
   usage: 'getent database [key ...]',
   run(ctx) {
     const [db, key] = ctx.args
-    const file = db === 'passwd' ? '/etc/passwd' : db === 'group' ? '/etc/group' : db === 'hosts' ? '/etc/hosts' : null
+    const file = db === 'passwd' ? '/etc/passwd' : db === 'group' ? '/etc/group' : db === 'hosts' ? '/etc/hosts' : db === 'shadow' ? '/etc/shadow' : null
     if (!file) {
       ctx.err(`Unknown database: ${db}\n`)
       return 1
     }
+    // Sin permiso para leer /etc/shadow, getent no muestra nada (como en Linux).
+    if (db === 'shadow' && ctx.sh.cred.uid !== 0) return 2
     const ls = ctx.sys.vfs.readFile(file, ROOT_CRED).split('\n').filter(Boolean)
     const sel = key ? ls.filter((l) => (db === 'hosts' ? l.split(/\s+/).includes(key) : l.split(':')[0] === key)) : ls
     if (!sel.length) return 2
@@ -663,3 +709,72 @@ register(['who', 'w'], {
 
 // "test" también existe como comando externo en /usr/bin.
 register('test', { usage: 'test EXPRESSION', run: (ctx) => BUILTINS.test(ctx.sh, ctx.args, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY }) })
+
+register('faillock', {
+  usage: 'faillock [--user username] [--reset]',
+  path: '/usr/sbin',
+  run(ctx) {
+    const a = parseArgs(ctx.args, { flags: { reset: ['reset'] }, values: { user: ['user'], dir: ['dir'] } })
+    const target = a.values.get('user')
+    if (a.flags.has('reset')) {
+      if (ctx.sh.cred.uid !== 0) {
+        ctx.err(`faillock: Error resetting the tally for ${target ?? ctx.sh.user}: Permission denied\n`)
+        return 3
+      }
+      if (target) ctx.sys.faillock.delete(target)
+      else ctx.sys.faillock.clear()
+      return 0
+    }
+    const users = target ? [target] : ctx.sh.cred.uid === 0 ? [...ctx.sys.users.keys()] : [ctx.sh.user]
+    for (const u of users) {
+      if (!ctx.sys.users.has(u)) continue
+      const records = ctx.sys.faillock.get(u) ?? []
+      if (!target && !records.length && ctx.sh.cred.uid === 0) continue
+      ctx.out(`${u}:\nWhen                Type  Source                                           Valid\n`)
+      for (const r of records) {
+        const d = new Date(r.when)
+        const when = `${d.toISOString().slice(0, 10)} ${d.toTimeString().slice(0, 8)}`
+        ctx.out(`${when} RHOST ${r.source.padEnd(48)} V\n`)
+      }
+    }
+    return 0
+  },
+})
+
+register('authselect', {
+  usage: 'authselect COMMAND [ARGS]',
+  path: '/usr/bin',
+  run(ctx) {
+    if (ctx.sys.distro !== 'rocky') {
+      ctx.err('bash: authselect: command not found\n')
+      return 127
+    }
+    const [cmd, feature] = ctx.args
+    const features = ctx.sys.authselectFeatures
+    if (cmd === 'current') {
+      ctx.out(`Profile ID: local\nEnabled features:${features.size ? '\n' + [...features].map((f) => `- ${f}`).join('\n') : ' None'}\n`)
+      return 0
+    }
+    if (cmd === 'enable-feature' || cmd === 'disable-feature') {
+      if (ctx.sh.cred.uid !== 0) {
+        ctx.err('[error] Unable to write configuration [13]: Permission denied\n')
+        return 1
+      }
+      if (feature !== 'with-faillock' && feature !== 'with-mkhomedir' && feature !== 'with-pamaccess') {
+        ctx.err(`[error] Unknown profile feature [${feature}]\n`)
+        return 1
+      }
+      if (cmd === 'enable-feature') features.add(feature)
+      else features.delete(feature)
+      const content = systemAuth(features.has('with-faillock'))
+      for (const f of ['system-auth', 'password-auth']) ctx.sys.vfs.writeFile(`/etc/authselect/${f}`, content, ROOT_CRED)
+      return 0
+    }
+    if (cmd === 'list-features') {
+      ctx.out('with-faillock\nwith-mkhomedir\nwith-pamaccess\nwith-silent-lastlog\nwith-sudo\n')
+      return 0
+    }
+    ctx.err(`Usage: authselect [COMMAND] [OPTIONS]\nCommands: current, enable-feature, disable-feature, list-features\n`)
+    return 1
+  },
+})

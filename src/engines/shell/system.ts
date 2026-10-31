@@ -151,6 +151,10 @@ export class System {
   /** Hay salida a internet: cualquier IP pública responde si la puerta de enlace funciona. */
   internet = true
   sites: Record<string, string> = {}
+  /** Fallos de inicio de sesión de cada usuario (pam_faillock): fecha y origen. */
+  faillock = new Map<string, { when: number; source: string }[]>()
+  /** Funciones de authselect activadas (familia Red Hat). */
+  authselectFeatures = new Set<string>()
   firewall: FirewallState = {
     running: true,
     services: new Set(['ssh', 'dhcpv6-client', 'cockpit']),
@@ -274,6 +278,9 @@ export class System {
     this.internet = state.red.internet
     this.dnsRecords = { ...(state.red.internet ? { 'example.com': '93.184.215.14', 'google.com': '142.250.78.14', 'rockylinux.org': '104.21.27.229', 'ubuntu.com': '185.125.190.20' } : {}), ...state.red.registros_dns }
     this.sites = state.red.sitios_web
+    for (const [user, n] of Object.entries(state.faillock)) {
+      this.faillock.set(user, Array.from({ length: n }, (_, i) => ({ when: Date.now() - (n - i) * 47_000, source: `192.168.56.${23 + i}` })))
+    }
     this.vfs.writeFile('/etc/resolv.conf', this.dns.map((d) => `nameserver ${d}`).join('\n') + '\n', ROOT_CRED)
 
     // Procesos y journal
@@ -558,6 +565,22 @@ export class System {
         '# /etc/fstab\nUUID=6f1c2b8e-1a7d-4c1e-9d5a-2b6f0c3e8a11 /     xfs  defaults 0 0\nUUID=3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22 /boot xfs  defaults 0 0\n' +
         (this.firmware === 'uefi' ? 'UUID=1A2B-3C4D /boot/efi vfat umask=0077,shortname=winnt 0 2\n' : ''),
       '/etc/shells': '/bin/sh\n/bin/bash\n/usr/bin/sh\n/usr/bin/bash\n',
+      '/etc/security/faillock.conf': FAILLOCK_CONF,
+      ...(this.distro === 'rocky'
+        ? { '/etc/security/pwquality.conf': PWQUALITY_CONF, '/etc/authselect/system-auth': systemAuth(false), '/etc/authselect/password-auth': systemAuth(false) }
+        : { '/etc/pam.d/common-auth': UBUNTU_COMMON_AUTH, '/etc/pam.d/common-password': UBUNTU_COMMON_PASSWORD }),
+      ...(this.distro === 'rocky'
+        ? {
+            '/etc/pam.d/sshd': '#%PAM-1.0\nauth       substack     password-auth\nauth       include      postlogin\naccount    required     pam_sepermit.so\naccount    required     pam_nologin.so\naccount    include      password-auth\npassword   include      password-auth\nsession    required     pam_selinux.so close\nsession    required     pam_loginuid.so\nsession    required     pam_selinux.so open env_params\nsession    required     pam_namespace.so\nsession    optional     pam_keyinit.so force revoke\nsession    optional     pam_motd.so\nsession    include      password-auth\nsession    include      postlogin\n',
+            '/etc/pam.d/sudo': '#%PAM-1.0\nauth       include      system-auth\naccount    include      system-auth\npassword   include      system-auth\nsession    include      system-auth\n',
+            '/etc/pam.d/su': '#%PAM-1.0\nauth            required        pam_env.so\nauth            sufficient      pam_rootok.so\n#auth           required        pam_wheel.so use_uid\nauth            substack        system-auth\nauth            include         postlogin\naccount         sufficient      pam_succeed_if.so uid = 0 use_uid quiet\naccount         include         system-auth\npassword        include         system-auth\nsession         include         system-auth\nsession         include         postlogin\n',
+            '/etc/pam.d/passwd': '#%PAM-1.0\nauth       include      system-auth\naccount    include      system-auth\npassword   substack     system-auth\n-password  optional     pam_gnome_keyring.so use_authtok\npassword   substack     postlogin\n',
+          }
+        : {
+            '/etc/pam.d/sshd': '# PAM configuration for the Secure Shell service\n\n# Standard Un*x authentication.\n@include common-auth\n\n# Disallow non-root logins when /etc/nologin exists.\naccount    required     pam_nologin.so\n\n# Standard Un*x authorization.\n@include common-account\n\n# Standard Un*x session setup and teardown.\n@include common-session\n\n# Print the message of the day upon successful login.\nsession    optional     pam_motd.so  motd=/run/motd.dynamic\nsession    optional     pam_motd.so noupdate\n\n# Standard Un*x password updating.\n@include common-password\n',
+            '/etc/pam.d/sudo': '#%PAM-1.0\n\n# Set up user limits from /etc/security/limits.conf.\nsession    required   pam_limits.so\n\n@include common-auth\n@include common-account\n@include common-session-noninteractive\n',
+            '/etc/pam.d/su': '#\n# The PAM configuration file for the Shadow `su\' service\n#\n\n# This allows root to su without passwords (normal operation)\nauth       sufficient pam_rootok.so\n\n# Uncomment this to force users to be a member of group wheel\n# before they can use `su\'.\n# auth       required   pam_wheel.so\n\n@include common-auth\n@include common-account\n@include common-session\n',
+          }),
       // Documentación que instalan los paquetes en /usr/share/doc (lección "Obtener ayuda").
       '/usr/share/doc/sudo/README.md':
         'Sudo is a program designed to allow a sysadmin to give limited root privileges\nto users and log root activity. The basic philosophy is to give as few\nprivileges as possible but still allow people to get their work done.\n\nSee the sudoers(5) manual for the policy file format and visudo(8) to edit it.\n',
@@ -610,6 +633,9 @@ export class System {
     if (this.distro === 'rocky') {
       v.stat('/var/log/secure', ROOT_CRED).mode = 0o600
       v.stat('/var/log/messages', ROOT_CRED).mode = 0o600
+      // authselect mantiene system-auth y password-auth y los enlaza desde /etc/pam.d.
+      v.mkdirp('/etc/pam.d', ROOT_CRED)
+      for (const f of ['system-auth', 'password-auth']) v.symlink(`/etc/authselect/${f}`, `/etc/pam.d/${f}`, ROOT_CRED)
     }
   }
 
@@ -694,3 +720,157 @@ export class System {
   }
 
 }
+
+// ---------------------------------------------------------------------------------------
+// Archivos de autenticación (PAM)
+// ---------------------------------------------------------------------------------------
+
+const FAILLOCK_CONF = `# Configuration for locking the user after multiple failed
+# authentication attempts.
+#
+# The directory where the user files with the failure records are kept.
+# The default is /var/run/faillock.
+# dir = /var/run/faillock
+#
+# Will log the user name into the system log if the user is not found.
+# Enabled if option is present.
+# audit
+#
+# Don't print informative messages.
+# Enabled if option is present.
+# silent
+#
+# Deny access if the number of consecutive authentication failures
+# for this user during the recent interval exceeds n tries.
+# The default is 3.
+# deny = 3
+#
+# The length of the interval during which the consecutive
+# authentication failures must happen for the user account
+# lock out is <replaceable>n</replaceable> seconds.
+# The default is 900 (15 minutes).
+# fail_interval = 900
+#
+# The access will be re-enabled after n seconds after the lock out.
+# The value 0 has the same meaning as value \`never\` - the access
+# will not be re-enabled without resetting the faillock
+# entries by the \`faillock\` command.
+# The default is 600 (10 minutes).
+# unlock_time = 600
+#
+# Root account can become locked as well as regular accounts.
+# Enabled if option is present.
+# even_deny_root
+`
+
+const PWQUALITY_CONF = `# Configuration for systemwide password quality limits
+# Defaults:
+#
+# Number of characters in the new password that must not be present in the
+# old password.
+# difok = 1
+#
+# Minimum acceptable size for the new password (plus one if
+# credits are not disabled which is the default). (See pam_cracklib manual.)
+# Cannot be set to lower value than 6.
+# minlen = 8
+#
+# The maximum credit for having digits in the new password. If less than 0
+# it is the minimum number of digits in the new password.
+# dcredit = 0
+#
+# The maximum credit for having uppercase characters in the new password.
+# If less than 0 it is the minimum number of uppercase characters in the new
+# password.
+# ucredit = 0
+#
+# The maximum credit for having lowercase characters in the new password.
+# If less than 0 it is the minimum number of lowercase characters in the new
+# password.
+# lcredit = 0
+#
+# The maximum credit for having other characters in the new password.
+# If less than 0 it is the minimum number of other characters in the new
+# password.
+# ocredit = 0
+#
+# The minimum number of required classes of characters for the new
+# password (digits, uppercase, lowercase, others).
+# minclass = 0
+#
+# The maximum number of allowed consecutive same characters in the new password.
+# The check is disabled if the value is 0.
+# maxrepeat = 0
+#
+# Whether to check for the words from the passwd entry GECOS string of the user.
+# The check is enabled if the value is not 0.
+# gecoscheck = 0
+#
+# Whether to check for the words from the cracklib dictionary.
+# The check is enabled if the value is not 0.
+# dictcheck = 1
+#
+# Prompt user at most N times before returning with error. The default is 1.
+# retry = 3
+#
+# Enforces pwquality checks on the root user password.
+# Enabled if the option is present.
+# enforce_for_root
+`
+
+/** /etc/pam.d/system-auth generado por authselect (perfil local), con o sin faillock. */
+export function systemAuth(faillock: boolean): string {
+  const fl = (line: string) => (faillock ? line + '\n' : '')
+  return `# Generated by authselect
+# Do not modify this file manually, use authselect instead. Any user changes will be overwritten.
+# You can stop authselect from managing your configuration by calling 'authselect opt-out'.
+# See authselect(8) for more details.
+
+auth        required                                     pam_env.so
+auth        required                                     pam_faildelay.so delay=2000000
+${fl('auth        required                                     pam_faillock.so preauth silent')}auth        sufficient                                   pam_unix.so nullok
+${fl('auth        required                                     pam_faillock.so authfail')}auth        required                                     pam_deny.so
+
+${fl('account     required                                     pam_faillock.so')}account     required                                     pam_unix.so
+
+password    requisite                                    pam_pwquality.so local_users_only
+password    sufficient                                   pam_unix.so sha512 shadow nullok use_authtok
+password    required                                     pam_deny.so
+
+session     optional                                     pam_keyinit.so revoke
+session     required                                     pam_limits.so
+-session    optional                                     pam_systemd.so
+session     [success=1 default=ignore]                   pam_succeed_if.so service in crond quiet use_uid
+session     required                                     pam_unix.so
+`
+}
+
+const UBUNTU_COMMON_AUTH = `#
+# /etc/pam.d/common-auth - authentication settings common to all services
+#
+# This file is included from other service-specific PAM config files,
+# and should contain a list of the authentication modules that define
+# the central authentication scheme for use on the system.
+#
+# here are the per-package modules (the "Primary" block)
+auth	[success=1 default=ignore]	pam_unix.so nullok
+# here's the fallback if no module succeeds
+auth	requisite			pam_deny.so
+# prime the stack with a positive return value if there isn't one already;
+auth	required			pam_permit.so
+# and here are more per-package modules (the "Additional" block)
+auth	optional			pam_cap.so
+# end of pam-auth-update config
+`
+
+const UBUNTU_COMMON_PASSWORD = `#
+# /etc/pam.d/common-password - password-related modules common to all services
+#
+# here are the per-package modules (the "Primary" block)
+password	[success=1 default=ignore]	pam_unix.so obscure yescrypt
+# here's the fallback if no module succeeds
+password	requisite			pam_deny.so
+# prime the stack with a positive return value if there isn't one already;
+password	required			pam_permit.so
+# end of pam-auth-update config
+`
