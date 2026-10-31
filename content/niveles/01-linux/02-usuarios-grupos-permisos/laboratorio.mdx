@@ -1,0 +1,37 @@
+---
+titulo: La estructura de una oficina
+horas: 3
+verificacion:
+  - Creé los grupos de cada área y las cuentas, con contraseña inicial que hay que cambiar al entrar.
+  - Armé carpetas compartidas con SGID (2770) y comprobé que los miembros del área trabajan juntos y los demás no entran.
+  - Di acceso de lectura a auditoría con ACL, incluida la ACL por defecto, y lo verifiqué con un archivo nuevo.
+  - Delegué a soporte solo dos comandos con una regla en /etc/sudoers.d validada por visudo.
+  - Apliqué una política de contraseñas con pwquality y el bloqueo por intentos con faillock, y lo probé.
+  - Repetí un área en ubuntu01 teniendo en cuenta las diferencias.
+  - Documenté grupos, carpetas, permisos, reglas de sudo y política de contraseñas.
+---
+
+import pasos from './lab-oficina.yaml'
+
+## Objetivo
+
+Armar en un servidor real todo lo del módulo, como lo harías al preparar el servidor de archivos de una oficina: cuentas por área, carpetas compartidas que funcionen sin pedirte ayuda cada vez, un acceso puntual para una auditoría, tareas delegadas a soporte y las políticas de seguridad que pide cualquier auditoría.
+
+## Qué necesitas
+
+- rocky01 y ubuntu01, accesibles por SSH.
+- Unas tres horas. Los pasos quedan guardados.
+
+<Advertencia>
+En este laboratorio vas a tocar sudo y PAM. Toma la instantánea del primer paso y, antes de los pasos 6 y 7, abre una segunda sesión con `sudo -i` y no la cierres hasta comprobar que todo funciona.
+</Advertencia>
+
+## Pasos
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Si mañana Carlos pasa de ventas a contabilidad, ¿qué comandos ejecutas? ¿Qué pasa con los archivos que dejó en /srv/ventas?
+2. Terminó la auditoría. Escribe los comandos para quitar todo el acceso del grupo auditoria, incluida la ACL por defecto.
+3. ¿Por qué la regla de soporte no permite `systemctl` sin argumentos? ¿Qué podría hacer alguien con `sudo systemctl` a secas?

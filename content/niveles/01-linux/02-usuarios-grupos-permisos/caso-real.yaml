@@ -1,0 +1,92 @@
+tipo: troubleshooting
+titulo: Nadie de ventas puede guardar en la carpeta compartida
+descripcion: >-
+  Incidente simulado en un servidor Rocky Linux. Cada decisión suma minutos: el área de ventas
+  tiene que cargar los pedidos del día antes de las 11.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 9:05. Laura, de ventas, llama: desde esta mañana nadie del área puede guardar
+      archivos en /srv/ventas. Ayer funcionaba. Abrir los archivos sí pueden.
+    opciones:
+      - { texto: "Mirar los permisos de la carpeta con ls -ld", ir_a: n_ls, minutos: 2 }
+      - texto: Aplicar chmod -R 777 /srv/ventas para que trabajen ya
+        ir_a: n1
+        minutos: 3
+        consecuencia: >-
+          Funciona, pero ahora cualquier usuario y cualquier servicio del servidor puede leer,
+          modificar y borrar los pedidos y las listas de precios de ventas. Seguridad lo detecta
+          en la revisión de la tarde y lo revierte: el problema original sigue ahí.
+      - texto: Reiniciar el servidor
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          Quince minutos sin servicio para todas las áreas, y al volver todo está igual: los
+          permisos de un archivo no cambian con un reinicio.
+  n_ls:
+    situacion: La carpeta cambió de dueño y de permisos.
+    evidencia:
+      - titulo: ls -ld /srv/ventas
+        contenido: |
+          drwxr-xr-x. 6 root root 4096 Oct 29 18:40 /srv/ventas
+    opciones:
+      - { texto: "Buscar en el registro de sudo quién cambió /srv ayer", ir_a: n_log, minutos: 3 }
+      - { texto: "Corregir enseguida el grupo y los permisos de la carpeta", ir_a: n_fix_sin_causa, minutos: 3 }
+  n_fix_sin_causa:
+    situacion: >-
+      Con chgrp ventas y chmod 2770 en la carpeta, ventas vuelve a guardar. Pero a la hora llama
+      contabilidad con el mismo problema, y después recursos humanos.
+    opciones:
+      - texto: Buscar en el registro quién cambió /srv
+        ir_a: n_log
+        minutos: 3
+        consecuencia: El mismo cambio afectó a todas las carpetas de /srv. Por no buscar la causa, cada área tuvo que llamar.
+  n_log:
+    situacion: El registro de sudo muestra el cambio.
+    evidencia:
+      - titulo: sudo grep "/srv" /var/log/secure
+        contenido: |
+          Oct 29 18:40:12 rocky01 sudo[8812]: pablo : TTY=pts/3 ; PWD=/srv ; USER=root ; COMMAND=/usr/bin/chown -R root:root /srv
+    opciones:
+      - { texto: "Restaurar grupo y permisos de cada carpeta de área (chgrp -R y chmod 2770) y avisar a Pablo", ir_a: n_fix, minutos: 6 }
+  n_fix:
+    situacion: >-
+      Pablo, de infraestructura, confirma que quiso arreglar el dueño de una carpeta y escribió /srv
+      en lugar de /srv/backups. Restauraste los grupos y el 2770 de todas las carpetas. Ventas
+      guarda de nuevo, pero a las 10:20 Laura vuelve a llamar: no puede modificar el archivo de
+      pedidos que creó Carlos esta mañana.
+    evidencia:
+      - titulo: ls -l /srv/ventas
+        contenido: |
+          -rw-rw-r--. 1 laura  ventas 1840 Oct 29 17:10 clientes.csv
+          -rw-r--r--. 1 carlos ventas 2213 Oct 30 10:05 pedidos-30-10.csv
+          -rw-r--r--. 1 carlos ventas  902 Oct 30 10:12 precios-nuevos.csv
+      - titulo: sudo grep umask /home/carlos/.bashrc
+        contenido: |
+          umask 022   # agregado por el instalador de la app de facturación
+    opciones:
+      - { texto: "Dar escritura al grupo en esos archivos y corregir la umask de Carlos (o poner una ACL por defecto en la carpeta)", ir_a: n_ok, minutos: 5 }
+      - texto: Pedirle a Carlos que le pase los archivos por correo a Laura
+        ir_a: n_fix
+        minutos: 2
+        consecuencia: >-
+          Funciona hoy, pero cada archivo nuevo de Carlos va a tener el mismo problema, y los datos
+          de clientes viajan por correo sin necesidad.
+  n_ok:
+    situacion: >-
+      Con chmod g+w en los archivos de Carlos, quitando la línea de umask de su .bashrc (con
+      la umask 002 por defecto vuelve a funcionar) y una ACL por defecto `g:ventas:rwx` en la carpeta
+      como red de seguridad, todo el equipo vuelve a trabajar a las 10:35.
+    opciones:
+      - { texto: "Registrar en el ticket las dos causas y proponer revisar los cambios con sudo en /srv", ir_a: fin_ok, minutos: 2 }
+  fin_ok:
+    final: exito
+    resumen: >-
+      Hubo dos causas encadenadas. Primero, un `chown -R root:root /srv` equivocado le quitó el
+      grupo a todas las carpetas compartidas: el registro de sudo mostró quién y cuándo, y eso
+      evitó que cada área tuviera que llamar por separado. Después, una umask 022 en la cuenta de
+      Carlos hacía que sus archivos nacieran sin escritura para el grupo. chmod 777 o reiniciar
+      habrían escondido el problema o creado uno peor. Revisar permisos con ls, buscar el cambio
+      en el registro y entender cómo nacen los archivos (umask, SGID, ACL por defecto) es la forma
+      de resolverlo de verdad.
