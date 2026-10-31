@@ -1,0 +1,88 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Estás en vim, escribiste cambios que no querías y quieres salir sin guardarlos. ¿Qué haces?
+  opciones:
+    - { texto: "Esc, después :q! y Enter", correcta: true, explicacion: "El ! fuerza la salida descartando los cambios." }
+    - { texto: "Esc, después :wq y Enter", explicacion: "Eso guarda los cambios que no querías." }
+    - { texto: "Ctrl+X", explicacion: "Ese es el atajo de nano." }
+    - { texto: "Escribir exit", explicacion: "exit es del shell; en vim se escribiría en el archivo." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En nano, ¿cómo se guarda el archivo?
+  opciones:
+    - { texto: "Ctrl+O y Enter", correcta: true, explicacion: "Write Out: guarda y confirma el nombre del archivo." }
+    - { texto: ":w", explicacion: "Así se guarda en vim." }
+    - { texto: "Ctrl+S siempre", explicacion: "Las versiones nuevas de nano lo aceptan, pero el atajo que muestra la barra es Ctrl+O." }
+    - { texto: "Ctrl+X", explicacion: "Ctrl+X sale (y pregunta si guardar)." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: Abriste un archivo con vim, apretaste varias letras y el texto empezó a borrarse. ¿Qué pasó?
+  opciones:
+    - { texto: "Estabas en modo normal, donde las letras son órdenes", correcta: true, explicacion: "Esc, u para deshacer, e i antes de escribir." }
+    - { texto: "El archivo está dañado", explicacion: "Es el comportamiento normal del modo normal." }
+    - { texto: "Faltó sudo", explicacion: "Sin sudo no podrías guardar, pero sí escribir." }
+    - { texto: "Estabas en modo inserción", explicacion: "En modo inserción las letras se escriben, no borran." }
+- id: p04
+  tipo: completar_comando
+  enunciado: "En vim, escribe el comando que reemplaza todas las apariciones de 8080 por 9090 en el archivo (incluidos los dos puntos iniciales)."
+  aceptadas: [":%s/8080/9090/g"]
+  explicacion: "% todas las líneas, s sustituir, g todas las apariciones de cada línea."
+- id: p05
+  tipo: opcion_multiple
+  enunciado: "¿Qué hace `dd` seguido de `p` en el modo normal de vim?"
+  opciones:
+    - { texto: "Corta la línea actual y la pega debajo de la siguiente: la mueve una línea hacia abajo", correcta: true, explicacion: "dd borra y guarda la línea; p la pega debajo del cursor." }
+    - { texto: "Borra dos líneas", explicacion: "Eso sería 2dd." }
+    - { texto: "Duplica la línea", explicacion: "Para duplicar se usa yy y p." }
+    - { texto: "Escribe dd p en el archivo", explicacion: "En modo normal las letras son órdenes." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: Abres un archivo y vim muestra esto. ¿Qué conviene hacer primero?
+  salida: |
+    E325: ATTENTION
+    Found a swap file by the name ".sshd_config.swp"
+              owned by: carlos   dated: Thu Oct 29 16:40:12 2026
+             file name: /etc/ssh/sshd_config
+              modified: YES
+             user name: carlos   host name: rocky01
+            process ID: 24811 (STILL RUNNING)
+  opciones:
+    - { texto: "Salir con (Q)uit y hablar con carlos: lo está editando ahora mismo", correcta: true, explicacion: "El proceso sigue corriendo: si editas a la vez, uno va a pisar los cambios del otro." }
+    - { texto: "Elegir (D)elete para borrar el .swp", explicacion: "Perderías los cambios que carlos todavía no guardó." }
+    - { texto: "Elegir (E)dit anyway y editar igual", explicacion: "Terminarían pisándose los cambios." }
+    - { texto: "Reiniciar el servidor", explicacion: "Cortaría la sesión de carlos sin resolver nada." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: En vim, ¿cuál es la forma más rápida de borrar 5 líneas desde la actual?
+  opciones:
+    - { texto: "5dd", correcta: true, explicacion: "El número delante repite el comando." }
+    - { texto: "dd5", explicacion: "El número va antes del comando." }
+    - { texto: "xxxxx", explicacion: "x borra caracteres, no líneas." }
+    - { texto: ":5d", explicacion: "Borra solo la línea 5, no cinco líneas." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Abriste /etc/hosts con vim sin sudo, hiciste cambios y al guardar dice "Permission denied". ¿Qué puedes hacer sin perder los cambios?
+  opciones:
+    - { texto: "Escribir :w !sudo tee % y después :q!", correcta: true, explicacion: "Manda el contenido a sudo tee, que lo escribe como root en el mismo archivo." }
+    - { texto: "Escribir :q! y empezar de nuevo", explicacion: "Funciona, pero pierdes los cambios." }
+    - { texto: "Escribir :wq!", explicacion: "El ! no da permisos de root." }
+    - { texto: "Cerrar la terminal", explicacion: "Perderías los cambios." }
+- id: p09
+  tipo: respuesta_multiple
+  enunciado: ¿Qué teclas pasan de modo normal a modo inserción en vim?
+  opciones:
+    - { texto: "i", correcta: true, explicacion: "Inserta antes del cursor." }
+    - { texto: "a", correcta: true, explicacion: "Inserta después del cursor." }
+    - { texto: "o", correcta: true, explicacion: "Abre una línea nueva debajo." }
+    - { texto: "Esc", explicacion: "Esc vuelve al modo normal." }
+    - { texto: "dd", explicacion: "Borra la línea; no cambia de modo." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: ¿Por qué conviene aprender vim aunque nano sea más fácil?
+  opciones:
+    - { texto: "Porque vi o vim está en casi todos los servidores, incluso donde nano no existe, y es más rápido cuando lo dominas", correcta: true, explicacion: "En instalaciones mínimas, contenedores y consolas de emergencia, muchas veces solo está vi." }
+    - { texto: "Porque nano no puede editar archivos de /etc", explicacion: "Puede, con sudo." }
+    - { texto: "Porque nano no guarda los cambios", explicacion: "Los guarda con Ctrl+O." }
+    - { texto: "Porque vim tiene interfaz gráfica", explicacion: "vim funciona en la terminal." }

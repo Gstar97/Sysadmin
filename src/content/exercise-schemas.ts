@@ -222,6 +222,39 @@ export const guidedStepsSchema = z.strictObject({
     .min(2),
 })
 
+const vimCheckSchema = z.union([
+  z.strictObject({ contenido_incluye: z.string() }),
+  z.strictObject({ contenido_no_incluye: z.string() }),
+  z.strictObject({ contenido_igual: z.string() }),
+  z.strictObject({ linea: z.number().int().min(1), texto: z.string() }),
+  z.strictObject({ linea_cursor: z.number().int().min(1) }),
+  z.strictObject({ modo: z.enum(['normal', 'insert']) }),
+  z.strictObject({ guardado: z.boolean() }),
+  z.strictObject({ cerrado: z.boolean() }),
+  z.strictObject({ numeros: z.boolean() }),
+  z.strictObject({ comando_usado: z.string() }),
+])
+
+/** Ejercicio de vim: un archivo y pasos que se verifican sobre el mismo buffer, uno detrás de otro. */
+export const vimExerciseSchema = z.strictObject({
+  tipo: z.literal('vim'),
+  titulo: z.string().optional(),
+  descripcion: z.string().optional(),
+  archivo: z.strictObject({ nombre: z.string().min(1), contenido: z.string() }),
+  pasos: z
+    .array(
+      z.strictObject({
+        consigna: z.string().min(1),
+        verificar: z.array(vimCheckSchema).min(1),
+        pistas: z.array(z.string()).default([]),
+        /** Teclas de la solución, con la notación de vim: <Esc>, <CR>, <BS>, <C-r>. */
+        solucion: z.string().optional(),
+        explicacion: z.string().optional(),
+      }),
+    )
+    .min(1),
+})
+
 /** Esquema de cada tipo de archivo de ejercicio, según su campo "tipo". */
 export const exerciseSchemas = {
   terminal: terminalExerciseSchema,
@@ -233,10 +266,12 @@ export const exerciseSchemas = {
   troubleshooting: troubleshootingSchema,
   configuracion: configExerciseSchema,
   pasos: guidedStepsSchema,
+  vim: vimExerciseSchema,
 } as const
 
 export type ExerciseKind = keyof typeof exerciseSchemas
 export type BashExercise = z.infer<typeof bashExerciseSchema>
+export type VimExercise = z.infer<typeof vimExerciseSchema>
 export type PsExercise = z.infer<typeof psExerciseSchema>
 export type IosExercise = z.infer<typeof iosExerciseSchema>
 export type TerminalExercise = z.infer<typeof terminalExerciseSchema>

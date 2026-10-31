@@ -41,6 +41,7 @@ const BitBoard = lazy(() => import('@/interactive/fundamentos/BitBoard').then((m
 const BaseConverter = lazy(() => import('@/interactive/fundamentos/BaseConverter').then((m) => ({ default: m.BaseConverter })))
 const UnitsCalculator = lazy(() => import('@/interactive/fundamentos/UnitsCalculator').then((m) => ({ default: m.UnitsCalculator })))
 const BitOps = lazy(() => import('@/interactive/fundamentos/BitOps').then((m) => ({ default: m.BitOps })))
+const VimSimulatorView = lazy(() => import('@/interactive/vim/VimSimulator').then((m) => ({ default: m.VimSimulator })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
 function Loading() {
@@ -313,6 +314,16 @@ export function Terminal({ ejercicio, shell = 'bash', estado, titulo }: { ejerci
   )
 }
 
+export function SimuladorVim({ ejercicio }: { ejercicio: unknown }) {
+  const { value, error } = useExercise('vim', ejercicio)
+  if (error) return <ExerciseError error={error} />
+  return (
+    <Island>
+      <VimSimulatorView exercise={value!} />
+    </Island>
+  )
+}
+
 export function Subnetting(props: ComponentProps<typeof SubnettingTool>) {
   return (
     <Island>
@@ -481,6 +492,7 @@ export const mdxComponents = {
   Importante,
   EnSimple,
   AntesDeEmpezar,
+  SimuladorVim,
   ErroresComunes,
   ErrorComun,
   Resumen,

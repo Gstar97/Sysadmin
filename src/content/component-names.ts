@@ -25,6 +25,7 @@ export const INTERACTIVE_COMPONENTS = [
   'CalculadoraUnidades',
   'OperacionesBits',
   'PasosGuiados',
+  'SimuladorVim',
 ] as const
 
 export const REQUIRED_BLOCKS = [

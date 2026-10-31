@@ -1,0 +1,145 @@
+---
+id: n1-m1-l8
+titulo: 'Editores de texto: nano y vim'
+minutos: 150
+objetivos:
+  - Editar archivos de configuración con nano.
+  - Usar vim (modos, desplazamiento, edición, búsqueda, reemplazo, guardar y salir).
+  - Recuperarse de un archivo .swp o de un cierre sin guardar.
+glosario: [editor-texto, vim]
+verificado: 2026-10
+---
+
+import modos from './modos.svg?raw'
+import ordenarNano from './ordenar-nano.yaml'
+import ejVim from './ej-vim.yaml'
+
+En Linux, casi toda la configuración vive en archivos de texto: el servidor web, SSH, los usuarios, las tareas programadas. Administrar un servidor es, en buena parte, editar esos archivos. En un servidor no hay Bloc de notas ni Word: se usa un **<Termino id="editor-texto">editor de texto</Termino>** dentro de la terminal. Vas a aprender dos: **nano**, que se usa sin aprender nada, y **vim**, que está en todos los servidores y es mucho más rápido cuando lo dominas.
+
+<AntesDeEmpezar>
+- Los archivos de configuración están en `/etc` y casi siempre necesitan `sudo` para modificarlos.
+- Antes de editar una configuración, se hace una copia: `sudo cp -a archivo archivo.bak`.
+- `cat` y `less` muestran archivos, pero no los modifican.
+</AntesDeEmpezar>
+
+## nano: el editor sin sorpresas
+
+nano funciona como cualquier editor que ya conoces: abres el archivo, escribes donde está el cursor y te mueves con las flechas. Abajo muestra siempre los atajos disponibles, donde `^` significa la tecla **Ctrl**.
+
+```bash
+sudo nano /etc/hostname
+```
+
+| Atajo | Qué hace |
+| --- | --- |
+| Ctrl+O, luego Enter | Guardar (*write Out*) |
+| Ctrl+X | Salir (si hay cambios, pregunta si guardar: Y o N) |
+| Ctrl+W | Buscar texto (*Where is*) |
+| Ctrl+K y Ctrl+U | Cortar la línea y pegarla |
+| Alt+U | Deshacer |
+| Ctrl+_ (o Ctrl+/) | Ir a un número de línea |
+
+nano viene instalado en Ubuntu y es su editor por defecto. En Rocky, si falta: `sudo dnf install nano`.
+
+<Ordenar ejercicio={ordenarNano} />
+
+## vim: por qué vale la pena
+
+**<Termino id="vim">vim</Termino>** (o su versión mínima, `vi`) está en prácticamente todos los servidores Linux del mundo, incluso en los más recortados, en los contenedores y en las consolas de emergencia donde nano no existe. Además, cuando lo manejas, editas mucho más rápido: borrar una línea son dos teclas, cambiar una palabra en todo el archivo es un comando.
+
+Su particularidad es que tiene **modos**. Las mismas teclas hacen cosas distintas según el modo en que estés, y eso es lo que confunde a todo el mundo la primera vez (de ahí el famoso chiste de "no sé cómo salir de vim").
+
+<Diagrama svg={modos} alt="Los tres modos de vim. Del modo normal se pasa al modo inserción con i, a, o o A, y se vuelve con Esc. Del modo normal se pasa a la línea de comandos con : o /, y se vuelve con Enter o Esc." pie="vim arranca en modo normal. Esc siempre te devuelve ahí." />
+
+<EnSimple>
+Piensa en un control remoto con un botón que cambia entre "televisor" y "grabador": los mismos botones hacen otra cosa según qué esté seleccionado. En vim, en el **modo normal** las letras son órdenes (`x` borra, `dd` borra la línea); en el **modo inserción** las letras se escriben en el archivo. Esc es el botón que te devuelve siempre al modo normal.
+</EnSimple>
+
+### Lo mínimo para sobrevivir
+
+Con esto ya puedes editar cualquier archivo:
+
+1. `vim archivo` (o `sudo vim archivo`, o `vi` si no está vim).
+2. Te mueves con las flechas hasta donde quieres cambiar.
+3. `i` para empezar a escribir. Escribes.
+4. **Esc** para dejar de escribir.
+5. `:wq` y Enter para guardar y salir, o `:q!` y Enter para salir **sin** guardar.
+
+### Los comandos que más vas a usar
+
+Todos se escriben en el modo normal:
+
+| Moverse | | Editar | |
+| --- | --- | --- | --- |
+| `h` `j` `k` `l` | izquierda, abajo, arriba, derecha | `x` | borrar el carácter |
+| `w` / `b` | palabra siguiente / anterior | `dd` | borrar (cortar) la línea |
+| `0` / `$` | principio / final de la línea | `yy` | copiar la línea |
+| `gg` / `G` | principio / final del archivo | `p` | pegar debajo |
+| `15G` | ir a la línea 15 | `cw` | cambiar la palabra |
+| `/texto` | buscar (`n` la siguiente) | `u` / Ctrl+R | deshacer / rehacer |
+
+Y en la línea de comandos (después de `:`):
+
+| Comando | Qué hace |
+| --- | --- |
+| `:w` | Guardar |
+| `:q` | Salir (solo si no hay cambios sin guardar) |
+| `:wq` o `:x` | Guardar y salir |
+| `:q!` | Salir descartando los cambios |
+| `:set nu` | Mostrar números de línea |
+| `:%s/viejo/nuevo/g` | Reemplazar en todo el archivo |
+
+Casi todos los comandos aceptan un número delante: `3dd` borra tres líneas, `5j` baja cinco.
+
+## Practicar vim
+
+<SimuladorVim ejercicio={ejVim} />
+
+<Consejo>
+En tu VM, el comando `vimtutor` abre un tutorial de unos 30 minutos dentro del propio vim. En Rocky está en el paquete `vim-enhanced` (`sudo dnf install vim-enhanced`), que además agrega el comando `vim`; la instalación mínima solo trae `vi`.
+</Consejo>
+
+## Cuando algo sale mal
+
+### "E37: No write since last change"
+
+Escribiste `:q` y hay cambios sin guardar. vim se niega a salir para que no los pierdas. Decide: `:wq` para guardar y salir, o `:q!` para descartarlos.
+
+### "E325: ATTENTION ... Found a swap file"
+
+Mientras editas, vim guarda tus cambios en un archivo oculto `.nombre.swp` en la misma carpeta. Si la sesión se cortó (se cayó el SSH, se apagó la VM), ese archivo queda ahí, y la próxima vez que abras el original vim te avisa y ofrece opciones:
+
+- **(R)ecover**: recupera lo que estabas escribiendo antes del corte. Revisa el contenido, guarda con `:w` y después borra el `.swp`.
+- **(E)dit anyway**: abre el archivo ignorando el `.swp`.
+- **(Q)uit** o **(A)bort**: no abre nada.
+- **(D)elete it**: borra el `.swp` (aparece cuando el proceso que lo creó ya no existe).
+
+Antes de elegir, piensa si **otra persona** puede estar editando el mismo archivo ahora mismo: el aviso dice qué usuario y qué proceso lo crearon. Si es así, sal y coordina; dos personas editando el mismo archivo a la vez terminan pisándose los cambios.
+
+<Nota>
+Comandos como `visudo`, `crontab -e` y `systemctl edit` abren el editor definido en la variable `EDITOR` (en Rocky suele ser vi; en Ubuntu, nano). Para usar nano en una sola ocasión: `EDITOR=nano sudo -E visudo`; para cambiarlo de forma permanente en Ubuntu: `sudo update-alternatives --config editor`.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Escribo en vim y aparecen cosas raras o se borra texto">
+    Estás en modo normal y cada letra es una orden. Aprieta Esc, deshaz con `u` las veces que haga falta y entra al modo inserción con `i` antes de escribir.
+  </ErrorComun>
+  <ErrorComun titulo='"Can&apos;t open file for writing" o "[ Error writing ... Permission denied ]"'>
+    Abriste un archivo de `/etc` sin `sudo`. En nano, sal sin guardar y vuelve a abrir con `sudo nano`. En vim, puedes guardar igual con `:w !sudo tee %` (escribe el contenido con permisos de root) y después `:q!`.
+  </ErrorComun>
+  <ErrorComun titulo="Guardé un archivo de configuración y el servicio dejó de arrancar">
+    Un error de escritura en la configuración. Compara con la copia que hiciste antes (`diff archivo.bak archivo` muestra las diferencias) y muchos servicios tienen un comando para validar su configuración antes de reiniciar, como `sshd -t` o `nginx -t`.
+  </ErrorComun>
+  <ErrorComun titulo="Copié texto con el mouse a vim y quedó todo escalonado">
+    vim indentó automáticamente cada línea pegada. Antes de pegar, `:set paste`; después, `:set nopaste`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- En Linux la configuración es texto: se edita con nano o vim, casi siempre con `sudo` y después de hacer una copia.
+- nano: Ctrl+O guarda, Ctrl+X sale, Ctrl+W busca. Los atajos se ven abajo (^ es Ctrl).
+- vim tiene modos: normal (órdenes), inserción (escribir) y línea de comandos (`:`). Esc vuelve al modo normal.
+- vim: `i` para escribir, `dd` borra la línea, `yy` y `p` copian y pegan, `u` deshace, `/texto` busca, `:%s/a/b/g` reemplaza.
+- Salir: `:wq` guarda y sale, `:q!` sale sin guardar. E37 avisa que hay cambios sin guardar.
+- Un aviso de archivo `.swp` significa que una sesión anterior se cortó o que otra persona está editando el archivo.
+</Resumen>

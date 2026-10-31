@@ -7,8 +7,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse } from 'yaml'
 import { scanContent } from '../build/content-scan'
-import { configExerciseSchema, terminalExerciseSchema } from '../src/content/exercise-schemas'
-import { checkConfigExercise, checkTerminalExercise, checkTopologyExercise, type ExerciseProblem } from '../src/engines/exercise-check'
+import { configExerciseSchema, terminalExerciseSchema, vimExerciseSchema } from '../src/content/exercise-schemas'
+import { checkConfigExercise, checkTerminalExercise, checkTopologyExercise, checkVimExercise, type ExerciseProblem } from '../src/engines/exercise-check'
 import { topologyExerciseSchema } from '../src/engines/network/schema'
 
 const contentDir = path.resolve(process.env.CONTENT_DIR ?? 'content')
@@ -43,6 +43,9 @@ async function main() {
     } else if (data?.tipo === 'configuracion') {
       const ex = configExerciseSchema.safeParse(data)
       if (ex.success) problems = checkConfigExercise(ex.data)
+    } else if (data?.tipo === 'vim') {
+      const ex = vimExerciseSchema.safeParse(data)
+      if (ex.success) problems = checkVimExercise(ex.data)
     } else if (data?.tipo === 'topologia') {
       const ex = topologyExerciseSchema.safeParse(data)
       if (ex.success) problems = checkTopologyExercise(ex.data)

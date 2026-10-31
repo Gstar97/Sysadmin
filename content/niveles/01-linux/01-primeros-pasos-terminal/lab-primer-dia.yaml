@@ -1,0 +1,80 @@
+tipo: pasos
+titulo: Primer día en el servidor
+descripcion: >-
+  Todo se hace en tus máquinas virtuales, conectado por SSH desde tu PC. Los comandos son para
+  rocky01; cuando algo cambia en ubuntu01, el paso lo indica.
+pasos:
+  - titulo: Conéctate y reconoce el servidor
+    detalle: 'Desde la terminal de tu PC, entra por SSH con la IP de solo anfitrión de tu inventario y averigua qué sistema es:'
+    comandos:
+      - ssh tu_usuario@192.168.56.102
+      - cat /etc/os-release
+      - hostnamectl
+      - whoami; pwd
+    comprobar: Sabes qué distribución, versión y kernel tiene rocky01, y en qué carpeta empezaste.
+  - titulo: Arma el árbol del proyecto
+    detalle: 'Crea en tu carpeta personal una estructura para un proyecto web y revisa que quedó bien:'
+    comandos:
+      - mkdir -p ~/proyecto-web/{config,logs,scripts,docs}
+      - touch ~/proyecto-web/docs/LEEME.txt
+      - ls -R ~/proyecto-web
+    comprobar: "`ls -R` muestra las cuatro subcarpetas y el archivo LEEME.txt dentro de docs."
+  - titulo: Genera actividad en el log de seguridad
+    detalle: >-
+      Desde tu PC (no desde la VM), intenta entrar tres veces con un usuario que no existe y
+      escribe cualquier contraseña. Cada intento queda registrado en el servidor.
+    comandos:
+      - ssh pirata@192.168.56.102
+    comprobar: Cada intento termina en "Permission denied".
+  - titulo: Extrae los intentos fallidos del log
+    detalle: >-
+      En rocky01, los intentos de inicio de sesión se registran en `/var/log/secure` (en
+      ubuntu01, en `/var/log/auth.log`). Filtra los fallidos, cuenta cuántos hubo por IP y guarda
+      el resultado en el proyecto.
+    comandos:
+      - sudo grep "Invalid user" /var/log/secure
+      - sudo grep "Invalid user" /var/log/secure | wc -l
+      - sudo grep "Invalid user" /var/log/secure | grep -o "from [0-9.]*" | sort | uniq -c | sort -rn
+      - sudo grep "Invalid user" /var/log/secure > ~/proyecto-web/logs/intentos.txt
+    comprobar: Aparecen tus tres intentos con la IP de tu PC, y `intentos.txt` los contiene.
+    si_falla: >-
+      Si no aparece nada, revisa el nombre del archivo según la distribución. En algunos
+      sistemas recientes los mensajes de SSH solo están en el journal: prueba
+      `sudo journalctl -u sshd | grep "Invalid user"` (en Ubuntu, `-u ssh`).
+  - titulo: Busca archivos con find
+    detalle: 'Responde estas preguntas con find y anota las respuestas en docs/LEEME.txt:'
+    comandos:
+      - sudo find /etc -name '*.conf' | wc -l
+      - sudo find /etc -type f -mmin -60
+      - sudo find /var -type f -size +10M 2>/dev/null
+      - find ~ -type d
+    comprobar: Tienes en LEEME.txt cuántos .conf hay en /etc, qué cambió en la última hora y cuáles son los archivos grandes de /var.
+  - titulo: Copia una configuración y edítala con vim
+    detalle: >-
+      Trabaja sobre una copia para no tocar el servicio real. Copia la configuración de SSH al
+      proyecto, ábrela con vim (o vi), cambia el valor de `#MaxAuthTries 6` por
+      `MaxAuthTries 3` (sin el numeral), guarda y compara con el original.
+    comandos:
+      - sudo cp /etc/ssh/sshd_config ~/proyecto-web/config/
+      - sudo chown $USER ~/proyecto-web/config/sshd_config
+      - vi ~/proyecto-web/config/sshd_config
+      - diff /etc/ssh/sshd_config ~/proyecto-web/config/sshd_config
+    comprobar: "`diff` muestra exactamente la línea que cambiaste: la vieja con `<` y la nueva con `>`."
+  - titulo: Edita un archivo real con nano
+    detalle: >-
+      El archivo `/etc/motd` (*message of the day*) se muestra al iniciar sesión. Haz una copia,
+      edítalo con nano, agrega una línea que diga que es un servidor de laboratorio y quién lo
+      administra, y vuelve a entrar por SSH para verlo.
+    comandos:
+      - sudo cp -a /etc/motd /etc/motd.bak
+      - sudo nano /etc/motd
+      - exit
+      - ssh tu_usuario@192.168.56.102
+    comprobar: Al entrar de nuevo aparece tu mensaje.
+    si_falla: Si `/etc/motd` no existía, `cp` da error pero puedes crearlo igual con nano. Para volver atrás, `sudo cp -a /etc/motd.bak /etc/motd`.
+  - titulo: Repite en ubuntu01 y documenta
+    detalle: >-
+      Repite los pasos 4 a 7 en ubuntu01, con `/var/log/auth.log` en lugar de
+      `/var/log/secure`. En tu cuaderno técnico, crea `procedimientos/primer-dia.md` con los
+      comandos que usaste y las diferencias que encontraste entre las dos distribuciones.
+    comprobar: Tu cuaderno tiene el procedimiento con al menos dos diferencias entre Rocky y Ubuntu.

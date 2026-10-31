@@ -4,7 +4,7 @@
  * corregido pase sus reglas y que una topología no tenga referencias rotas.
  * Lo usan el validador de contenido (npm run validar) y las pruebas automáticas.
  */
-import type { ConfigExercise, TerminalExercise } from '@/content/exercise-schemas'
+import type { ConfigExercise, TerminalExercise, VimExercise } from '@/content/exercise-schemas'
 import { evaluateRules, validateConfig } from './config'
 import { createIosSession, verifyIos } from './network'
 import { parseIpv4 } from './network/ip'
@@ -15,6 +15,7 @@ import type { PsCheck } from './powershell/schema'
 import { createBashSession, verifyBash } from './shell'
 import type { BashCheck } from './shell/schema'
 import type { IosCheck } from './network/schema'
+import { createVim, verifyVim, vimKeys, type VimCheck } from './vim'
 
 export interface ExerciseProblem {
   level: 'error' | 'warning'
@@ -52,6 +53,24 @@ export async function checkTerminalExercise(ex: TerminalExercise): Promise<Exerc
     for (const cmd of paso.solucion) await run(cmd)
     for (const c of paso.verificar) {
       const r = verify(c)
+      if (!r.ok) problems.push({ level: 'error', message: `el paso ${i + 1} no se cumple con su solución de referencia: falla "${r.label}"` })
+    }
+  }
+  return problems
+}
+
+/** Reproduce las teclas de la solución de cada paso de un ejercicio de vim y verifica el resultado. */
+export function checkVimExercise(ex: VimExercise): ExerciseProblem[] {
+  const problems: ExerciseProblem[] = []
+  let s = createVim(ex.archivo.contenido, ex.archivo.nombre)
+  for (const [i, paso] of ex.pasos.entries()) {
+    if (!paso.solucion) {
+      problems.push({ level: 'warning', message: `el paso ${i + 1} no tiene solución de referencia` })
+      continue
+    }
+    s = vimKeys(s, paso.solucion)
+    for (const c of paso.verificar) {
+      const r = verifyVim(s, c as VimCheck)
       if (!r.ok) problems.push({ level: 'error', message: `el paso ${i + 1} no se cumple con su solución de referencia: falla "${r.label}"` })
     }
   }

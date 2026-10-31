@@ -1,0 +1,116 @@
+tipo: troubleshooting
+titulo: La aplicación no arranca después de un cambio en su configuración
+descripcion: >-
+  Incidente simulado en un servidor Rocky Linux. Cada decisión suma minutos: el área de
+  depósito no puede despachar pedidos mientras la aplicación de inventario esté caída.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 9:40. Martín, del equipo de desarrollo, cambió esta mañana la configuración de la
+      aplicación de inventario para conectarla al servidor de base de datos nuevo, y desde que la
+      reinició no arranca. Te pasa el log.
+    evidencia:
+      - titulo: tail -n 3 /var/log/inventario/app.log
+        contenido: |
+          2026-10-30 09:31:02 INFO  iniciando inventario 3.4.1
+          2026-10-30 09:31:02 INFO  leyendo /opt/inventario/config.ini
+          2026-10-30 09:31:02 FATAL config.ini línea 14: se esperaba 'clave = valor'
+    opciones:
+      - { texto: "Mirar la línea 14 del archivo con cat -n", ir_a: n_ver, minutos: 2 }
+      - texto: Restaurar la copia de ayer (config.ini.bak) para que arranque ya
+        ir_a: n_restaurar
+        minutos: 4
+      - texto: Reinstalar la aplicación
+        ir_a: n1
+        minutos: 30
+        consecuencia: >-
+          Media hora después, la aplicación reinstalada lee el mismo config.ini y falla igual. El
+          log decía exactamente qué línea estaba mal: el problema nunca fue el programa.
+  n_restaurar:
+    situacion: >-
+      Con la copia de ayer, la aplicación arranca. Pero a los cinco minutos llama Martín: la base
+      de datos vieja se apaga hoy al mediodía, y su cambio era justamente para usar la nueva.
+    opciones:
+      - texto: Volver a poner el archivo de Martín y buscar el error de verdad
+        ir_a: n_ver
+        minutos: 2
+        consecuencia: >-
+          Restaurar fue una salida rápida, pero deshizo un cambio necesario sin saber qué tenía
+          mal. Antes de restaurar una copia, conviene ver qué cambió.
+  n_ver:
+    situacion: Muestras las líneas cercanas a la 14 con números.
+    evidencia:
+      - titulo: cat -n /opt/inventario/config.ini | sed -n '10,16p'
+        contenido: |
+              10	[base_de_datos]
+              11	motor = postgresql
+              12	host = 10.0.0.8
+              13	nombre = inventario
+              14	puerto 5433
+              15	usuario = inventario_app
+              16
+    opciones:
+      - { texto: "Comparar todo el archivo con la copia de ayer usando diff", ir_a: n_diff, minutos: 3 }
+      - texto: Corregir la línea 14 (agregar el =) y reiniciar
+        ir_a: n_parcial
+        minutos: 4
+  n_parcial:
+    situacion: >-
+      La aplicación arranca y el depósito vuelve a trabajar. Pero a las 11:15 llega una alerta:
+      el disco de /var está al 95% y crece rápido. El log de la aplicación pesa 4 GB.
+    evidencia:
+      - titulo: tail -n 2 /var/log/inventario/app.log
+        contenido: |
+          2026-10-30 11:14:59 DEBUG consulta SELECT * FROM stock WHERE sku='A-1044' (0.8 ms)
+          2026-10-30 11:14:59 DEBUG consulta SELECT * FROM stock WHERE sku='A-1045' (0.7 ms)
+    opciones:
+      - texto: Comparar el archivo con la copia de ayer para ver qué más cambió
+        ir_a: n_diff
+        minutos: 3
+        consecuencia: Arreglaste el error que impedía arrancar, pero no revisaste el resto del cambio.
+  n_diff:
+    situacion: diff muestra todas las diferencias entre la copia de ayer y el archivo actual.
+    evidencia:
+      - titulo: diff /opt/inventario/config.ini.bak /opt/inventario/config.ini
+        contenido: |
+          12c12
+          < host = 10.0.0.5
+          ---
+          > host = 10.0.0.8
+          14c14
+          < puerto = 5432
+          ---
+          > puerto 5433
+          20c20
+          < nivel_log = info
+          ---
+          > nivel_log = debug
+    opciones:
+      - { texto: "Corregir la línea 14, consultar a Martín por el nivel de log, volver a info y reiniciar", ir_a: n_ok, minutos: 5 }
+      - texto: Restaurar la copia de ayer completa
+        ir_a: n_diff
+        minutos: 3
+        consecuencia: >-
+          El cambio del host (línea 12) era necesario: la base vieja se apaga hoy. Restaurar todo
+          deshace también lo que estaba bien.
+  n_ok:
+    situacion: >-
+      Martín confirma que dejó debug por error mientras probaba. Corriges las dos líneas con vim,
+      guardas y reinicias la aplicación.
+    evidencia:
+      - titulo: tail -n 3 /var/log/inventario/app.log
+        contenido: |
+          2026-10-30 09:52:10 INFO  leyendo /opt/inventario/config.ini
+          2026-10-30 09:52:10 INFO  conectado a postgresql://10.0.0.8:5433/inventario
+          2026-10-30 09:52:11 INFO  escuchando en el puerto 8080
+    opciones:
+      - { texto: "Registrar en el ticket la causa, el cambio y cómo se verificó, y acordar con desarrollo hacer una copia antes de editar", ir_a: fin_ok, minutos: 2 }
+  fin_ok:
+    final: exito
+    resumen: >-
+      El log decía qué línea fallaba y diff mostró en segundos todo lo que había cambiado: el
+      host nuevo (correcto), el puerto sin el signo igual (el error que impedía arrancar) y el
+      nivel de log en debug (que iba a llenar el disco). Restaurar la copia a ciegas o arreglar
+      solo la primera línea habría dejado problemas. La regla: antes de editar, copia; ante una
+      falla después de un cambio, compara con la copia.
