@@ -1,0 +1,60 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué hace rsync -av fotos web01:/srv/ (sin barra final en fotos)?
+  opciones:
+    - { texto: "Copia la carpeta entera: queda /srv/fotos en web01", correcta: true, explicacion: "Sin barra, se copia la carpeta; con barra (fotos/), su contenido." }
+    - { texto: "Copia el contenido de fotos directo en /srv", explicacion: "Eso sería fotos/." }
+    - { texto: "No copia nada: falta -r", explicacion: "-a ya incluye recursivo." }
+    - { texto: "Borra /srv", explicacion: "Solo --delete borra, y solo lo que sobra." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: db01 está en una red interna a la que solo llega el bastión. ¿Cómo entras desde tu equipo?
+  opciones:
+    - { texto: "ssh -J bastion db01", correcta: true, explicacion: "La conexión pasa por el bastión y llega cifrada a db01." }
+    - { texto: "Copiar tu clave privada al bastión y desde ahí hacer ssh db01", explicacion: "Funciona, pero deja tu privada en otro equipo: un riesgo innecesario." }
+    - { texto: "ssh db01 --via bastion", explicacion: "Esa opción no existe." }
+    - { texto: "No se puede", explicacion: "Para eso existe el bastión." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando que baja /var/log/nginx/error.log de web01 a la carpeta actual.
+  aceptadas: [scp web01:/var/log/nginx/error.log ., scp web01:/var/log/nginx/error.log ./, rsync -av web01:/var/log/nginx/error.log ., rsync web01:/var/log/nginx/error.log .]
+  explicacion: El punto es la carpeta actual.
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra lo que haría rsync al sincronizar sitio/ con web01:/var/www/sitio/ borrando lo que sobra, sin hacer nada.
+  aceptadas: [rsync -avn --delete sitio/ web01:/var/www/sitio/, rsync -av --delete -n sitio/ web01:/var/www/sitio/, rsync -av --dry-run --delete sitio/ web01:/var/www/sitio/, rsync -anv --delete sitio/ web01:/var/www/sitio/, rsync -avn --delete sitio/ web01:/var/www/sitio]
+  explicacion: -n (o --dry-run) muestra la lista, incluidos los "deleting".
+- id: p05
+  tipo: opcion_multiple
+  enunciado: En ~/.ssh/config tienes primero "Host *" con User root, y después "Host web01" con User ana. ¿Con qué usuario entra ssh web01?
+  opciones:
+    - { texto: "root: gana el primer valor que coincide, y Host * coincide con todo", correcta: true, explicacion: "Los bloques generales van al final." }
+    - { texto: "ana: el bloque más específico siempre gana", explicacion: "En ssh gana el primero, no el más específico." }
+    - { texto: "Da error por bloques repetidos", explicacion: "Es válido." }
+    - { texto: "El usuario local", explicacion: "Hay un User que coincide." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Una base de datos en db01 escucha solo en 127.0.0.1:5432. ¿Cómo la usas desde tu equipo sin exponerla a la red?
+  opciones:
+    - { texto: "Con un túnel: ssh -L 5432:localhost:5432 db01, y conectar a localhost:5432", correcta: true, explicacion: "El tráfico va por dentro de SSH." }
+    - { texto: "Cambiarla para que escuche en 0.0.0.0", explicacion: "Funciona, pero la expone a toda la red." }
+    - { texto: "Abrir el puerto 5432 en el firewall", explicacion: "Si escucha en 127.0.0.1, abrir el firewall no alcanza (y la expondría)." }
+    - { texto: "No se puede", explicacion: "Para eso están los túneles." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: "scp -p 2222 archivo web01: no se conecta al puerto 2222. ¿Por qué?"
+  opciones:
+    - { texto: "En scp el puerto es -P mayúscula; -p conserva fechas y permisos", correcta: true, explicacion: "Una diferencia con ssh que confunde a todos." }
+    - { texto: "scp no permite otros puertos", explicacion: "Sí, con -P." }
+    - { texto: "Falta la ruta de destino", explicacion: "web01: es el home remoto." }
+    - { texto: "Hay que usar rsync", explicacion: "scp también puede." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: ¿Qué ventaja tiene rsync sobre scp para publicar una carpeta grande que cambia un poco cada día?
+  opciones:
+    - { texto: "Solo transfiere lo que cambió y puede retomar si se corta", correcta: true, explicacion: "scp copia todo cada vez." }
+    - { texto: "Es más seguro: cifra mejor", explicacion: "Los dos van por SSH." }
+    - { texto: "No necesita SSH", explicacion: "Para equipos remotos, normalmente usa SSH." }
+    - { texto: "Ninguna", explicacion: "La diferencia es enorme en carpetas grandes." }

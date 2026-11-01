@@ -375,6 +375,13 @@ register('ssh', {
     o.alias = d.host
     o.user = d.user ?? o.user
     o.port = d.port ?? o.port
+    if (ctx.args.includes('-G')) {
+      // ssh -G: la configuración que usaría, sin conectarse.
+      const c = clientConfig(ctx.sys, ctx.sh.cred, ctx.sh.home, d.host)
+      const ids = [...o.identities, ...c.identityFiles]
+      ctx.out(`host ${d.host}\nuser ${o.user ?? c.user ?? ctx.sh.user}\nhostname ${c.hostname ?? d.host}\nport ${o.port ?? c.port ?? 22}\n${(o.jump ?? c.proxyJump) ? `proxyjump ${o.jump ?? c.proxyJump}\n` : ''}stricthostkeychecking ${o.strict ?? c.strictHostKeyChecking ?? 'ask'}\n${(ids.length ? ids : ['~/.ssh/id_rsa', '~/.ssh/id_ecdsa', '~/.ssh/id_ed25519']).map((f) => `identityfile ${f.replace(ctx.sh.home, '~')}\n`).join('')}`)
+      return 0
+    }
     const s = await connect(ctx, o)
     if (!s) return 255
     const sh = ctx.sh

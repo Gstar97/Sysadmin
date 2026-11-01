@@ -306,7 +306,7 @@ export class System {
     // Usuarios y grupos del ejercicio. El usuario de la sesión se crea primero para que
     // reciba el UID/GID 1000, como pasa en una instalación recién hecha.
     const currentDefined = state.usuarios.some((u) => u.nombre === state.usuario)
-    const usuarios = currentDefined || state.usuario === 'root' ? [...state.usuarios] : [{ nombre: state.usuario, grupos: [], sudo: true, bloqueado: false }, ...state.usuarios]
+    const usuarios = currentDefined || state.usuario === 'root' ? [...state.usuarios] : [{ nombre: state.usuario, grupos: [] as string[], sudo: true, bloqueado: false, clave_ssh: false } as (typeof state.usuarios)[number], ...state.usuarios]
     usuarios.sort((a, b) => Number(b.nombre === state.usuario) - Number(a.nombre === state.usuario))
     const first = usuarios[0]?.nombre === state.usuario ? usuarios.shift() : undefined
     if (first) this.addUser(first.nombre, { uid: first.uid, shell: first.shell, home: first.home, gecos: first.comentario, createHome: true })

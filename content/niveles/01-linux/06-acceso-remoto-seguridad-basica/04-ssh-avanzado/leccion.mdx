@@ -1,0 +1,130 @@
+---
+id: n1-m6-l4
+titulo: SSH avanzado y transferencia de archivos
+minutos: 120
+objetivos:
+  - Guardar tus conexiones en ~/.ssh/config y entrar a redes internas a través de un bastión.
+  - Copiar archivos con scp y sincronizar carpetas con rsync sin sorpresas.
+  - Entender para qué sirve un túnel SSH (-L).
+glosario: [bastion, rsync]
+verificado: 2026-11
+---
+
+import bastion from './bastion.svg?raw'
+import herramientas from './herramientas.yaml'
+import ejAvanzado from './ej-avanzado.yaml'
+
+Con lo de las lecciones anteriores ya entras a cualquier servidor. Esta lección es sobre el día a día: no escribir diez veces la misma conexión, llegar a servidores que no están en tu red y mover archivos de un lado a otro sin romper nada.
+
+<AntesDeEmpezar>
+- Claves SSH y known_hosts (lecciones 1.6.2 y 1.6.3).
+- La diferencia entre "llegar" y "no llegar" a una red (lección 1.6.1).
+</AntesDeEmpezar>
+
+## ~/.ssh/config: tus conexiones con nombre
+
+Si siempre escribes `ssh -p 2222 -i ~/.ssh/clave_trabajo ana@192.168.10.20`, guárdalo con un nombre:
+
+```text
+# ~/.ssh/config
+Host web01
+    HostName 192.168.10.20
+    User ana
+    Port 2222
+    IdentityFile ~/.ssh/clave_trabajo
+
+Host *.empresa.local
+    User ana
+```
+
+Con eso alcanza con `ssh web01`, y lo mismo vale para scp, rsync y cualquier programa que use ssh. Como en sshd, para cada opción gana el **primer** valor que coincide: pon los bloques específicos arriba y los generales (como `Host *`) al final. El archivo tiene que ser tuyo y no escribible por otros (`chmod 600 ~/.ssh/config`).
+
+## El bastión
+
+En muchas empresas, los servidores importantes (bases de datos, por ejemplo) están en una red interna a la que no se llega desde la oficina ni desde internet. Para entrar, se pasa por un único servidor de entrada, el **bastión** (también *jump host*), que está en las dos redes y que se cuida de forma especial: pocos usuarios, solo claves, todo registrado.
+
+Piensa en un edificio con un único acceso con guardia: para llegar a cualquier oficina, primero pasas por la recepción. La diferencia es que con SSH no te bajas en la recepción: tu conexión pasa a través del bastión y llega cifrada hasta el servidor de destino.
+
+<Diagrama svg={bastion} alt="admin01, en la red de oficina 192.168.10.0/24, no llega directo a db01, que está en la red interna 10.0.5.0/24. El bastión tiene una dirección en cada red (192.168.10.30 y 10.0.5.1). Con ssh -J bastion db01, la conexión pasa por el bastión y va cifrada de punta a punta hasta db01." pie="El bastión pasa los datos, pero no puede leerlos: la sesión con db01 va cifrada de punta a punta." />
+
+```bash
+ssh -J bastion db01               # una vez
+```
+
+```text
+# o, para siempre, en ~/.ssh/config:
+Host db01
+    HostName 10.0.5.20
+    ProxyJump bastion
+```
+
+Tu clave privada se queda en tu equipo: no hace falta (ni conviene) copiarla al bastión, y tampoco usar `ssh -A`. Cada servidor tiene que tener tu clave pública en su authorized_keys.
+
+## Copiar: scp y rsync
+
+<Emparejar ejercicio={herramientas} />
+
+**scp** copia como `cp`, pero entre equipos. Lo remoto se escribe `servidor:ruta` (una ruta sin `/` adelante es desde el home remoto):
+
+```bash
+scp informe.pdf web01:/tmp/              # subir
+scp web01:/var/log/nginx/error.log .     # bajar
+scp -r fotos/ web01:respaldos/           # una carpeta, con -r
+scp -P 2222 archivo web01:               # el puerto va con -P mayúscula
+```
+
+**rsync** es para carpetas: compara y copia solo lo que cambió, conserva permisos y fechas, y si se corta, se retoma.
+
+```bash
+rsync -av sitio/ web01:/var/www/sitio/          # -a archivo (recursivo + permisos), -v detalle
+rsync -avn --delete sitio/ web01:/var/www/sitio/   # -n: muestra lo que haría, sin hacerlo
+```
+
+Dos detalles que causan la mayoría de los accidentes con rsync:
+
+- **La barra final del origen.** `sitio/` copia el contenido de la carpeta; `sitio` copia la carpeta entera (en el destino queda `/var/www/sitio/sitio`).
+- **--delete** borra en el destino lo que no está en el origen. Con el origen o el destino equivocados, puede borrar mucho. Prueba siempre primero con `-n`.
+
+<EnSimple>
+scp para un archivo, rsync para una carpeta. Y con rsync, mira dos veces la barra final y prueba con -n antes de usar --delete.
+</EnSimple>
+
+## Túneles: llegar a un servicio que no se ve
+
+A veces un servicio escucha solo en `127.0.0.1` del servidor (una base de datos, un panel de administración): está bien que no se vea desde la red. Si necesitas usarlo desde tu equipo, SSH puede hacer de túnel:
+
+```bash
+ssh -L 5432:localhost:5432 db01
+```
+
+Mientras esa sesión esté abierta, lo que conectes a `localhost:5432` en tu equipo llega, por dentro de SSH, al puerto 5432 de db01. El servicio sigue sin estar expuesto a la red. Para más adelante: `-R` hace lo contrario (abre un puerto en el servidor que llega a tu equipo), y tiene usos más delicados.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejAvanzado} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Quedó la carpeta dentro de la carpeta (sitio/sitio)">
+    Faltó la barra final en el origen de rsync. `rsync -av sitio/ destino/` copia el contenido.
+  </ErrorComun>
+  <ErrorComun titulo="rsync --delete borró lo que no debía">
+    Origen y destino al revés, o destino equivocado. Siempre primero con `-n`, y mira la lista de "deleting".
+  </ErrorComun>
+  <ErrorComun titulo="scp -p 2222 no usa el puerto">
+    En scp, `-p` (minúscula) conserva fechas y permisos; el puerto es `-P` (mayúscula). Mejor: ponlo en ~/.ssh/config.
+  </ErrorComun>
+  <ErrorComun titulo="Copiar la clave privada al bastión para seguir saltando">
+    No hace falta: con `-J` o `ProxyJump` la clave se queda en tu equipo. Una privada en el bastión es un riesgo para todos los servidores.
+  </ErrorComun>
+  <ErrorComun titulo="~/.ssh/config no se aplica">
+    Un bloque más general arriba ganó primero, el nombre no coincide con el Host, o el archivo tiene permisos abiertos ("Bad owner or permissions"). `ssh -G servidor` muestra la configuración que va a usar.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `~/.ssh/config`: bloques Host con HostName, User, Port, IdentityFile y ProxyJump; gana el primer valor; permisos 600.
+- Bastión: único punto de entrada a una red interna. `ssh -J bastion servidor` o `ProxyJump`; la clave privada no sale de tu equipo.
+- scp: `scp archivo servidor:ruta`, `scp servidor:ruta .`, `-r` carpetas, `-P` puerto.
+- rsync: `rsync -av origen/ servidor:destino/`; barra final = contenido; `-n` para probar; `--delete` con cuidado.
+- Túnel: `ssh -L puerto_local:localhost:puerto_remoto servidor` para usar un servicio que solo escucha en 127.0.0.1.
+</Resumen>

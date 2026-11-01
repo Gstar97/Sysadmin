@@ -41,6 +41,11 @@ const stateShape = {
         sudo: z.boolean().default(false),
         comentario: z.string().optional(),
         bloqueado: z.boolean().default(false),
+        /**
+         * En el servidor del ejercicio: el usuario ya tiene su clave SSH (~/.ssh/id_ed25519).
+         * En los demás servidores: esa clave ya está en su authorized_keys.
+         */
+        clave_ssh: z.boolean().default(false),
       }),
     )
     .default([]),

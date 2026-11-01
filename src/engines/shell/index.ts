@@ -15,7 +15,7 @@ import './commands/ssh'
 import './commands/security'
 import { commandPackage, OTHER_FAMILY } from './packages'
 import { bashStateSchema, type BashCheck, type BashState, type BashStateInput } from './schema'
-import { hostKey, knownLine } from './hosts'
+import { hostKey, knownLine, makeKey } from './hosts'
 import { COMMANDS, Shell } from './shell'
 import { System } from './system'
 import { modeString, ROOT_CRED, type Inode } from './vfs'
@@ -78,6 +78,23 @@ function linkHosts(base: System, state: BashState) {
   // known_hosts del usuario del ejercicio.
   const user = base.users.get(state.usuario)
   if (!user) return
+  // Clave SSH ya creada e instalada donde el ejercicio lo indica.
+  if (state.usuarios.some((u) => u.nombre === user.name && u.clave_ssh)) {
+    const key = makeKey('ed25519', `estado:${base.hostname}:${user.name}`, `${user.name}@${base.hostname}`)
+    const cred = base.credFor(user.name)
+    if (!base.vfs.exists(`${user.home}/.ssh`)) base.vfs.mkdir(`${user.home}/.ssh`, cred, 0o700)
+    base.vfs.writeFile(`${user.home}/.ssh/id_ed25519`, key.priv, cred, { mode: 0o600 })
+    base.vfs.writeFile(`${user.home}/.ssh/id_ed25519.pub`, key.pub + '\n', cred, { mode: 0o644 })
+    for (const r of remotes) {
+      for (const ru of r.spec.usuarios.filter((x) => x.clave_ssh)) {
+        const u = r.sys.users.get(ru.nombre)
+        if (!u) continue
+        const rc = r.sys.credFor(u.name)
+        if (!r.sys.vfs.exists(`${u.home}/.ssh`)) r.sys.vfs.mkdir(`${u.home}/.ssh`, rc, 0o700)
+        r.sys.vfs.writeFile(`${u.home}/.ssh/authorized_keys`, key.pub + '\n', rc, { append: true, mode: 0o600 })
+      }
+    }
+  }
   const lines: string[] = []
   for (const r of remotes) {
     if (r.spec.clave_conocida === 'no') continue

@@ -1,0 +1,104 @@
+tipo: terminal
+shell: bash
+titulo: Bastión, config y copias
+descripcion: >-
+  db01 está en la red interna y solo se llega a través de bastion. Tu clave ya está instalada en
+  todos los servidores. Vas a dejar ~/.ssh/config listo, traer un informe de db01 y publicar un
+  sitio en web01 con rsync.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true, clave_ssh: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.5/24 }
+  archivos:
+    /home/ana/sitio/index.html: "<h1>Catálogo</h1>\n"
+    /home/ana/sitio/css/estilo.css: "body { font-family: sans-serif; }\n"
+  servidores:
+    - { ip: 192.168.10.20, hostname: web01, distro: ubuntu, usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }], clave_conocida: si }
+    - ip: 192.168.10.30
+      hostname: bastion
+      usuarios: [{ nombre: ana, clave_ssh: true }]
+      clave_conocida: si
+      red:
+        interfaces:
+          - { nombre: enp0s3, ip: 192.168.10.30/24 }
+          - { nombre: enp0s8, ip: 10.0.5.1/24 }
+    - ip: 10.0.5.20
+      hostname: db01
+      usuarios: [{ nombre: ana, clave_ssh: true }]
+      clave_conocida: si
+      archivos:
+        /home/ana/informe-db.txt: "Tamaño de la base de pedidos: 12 GB\nÚltimo respaldo: anoche, 02:10\n"
+pasos:
+  - consigna: Intenta entrar a db01 directamente, para ver qué pasa.
+    verificar:
+      - { comando_usado: 'ssh\s+(ana@)?db01' }
+      - { salida_contiene: timed out }
+    pistas:
+      - "`ssh db01`"
+    solucion: [ssh db01]
+    explicacion: Desde la red de oficina no hay camino a 10.0.5.0/24. Solo el bastión está en las dos redes.
+  - consigna: Entra a db01 pasando por bastion, con una sola orden, y vuelve.
+    verificar:
+      - { comando_usado: 'ssh\s+.*-J\s+(ana@)?bastion\s+(ana@)?db01' }
+    pistas:
+      - "`ssh -J bastion db01` y después `exit`"
+    solucion: [ssh -J bastion db01, exit]
+    explicacion: Una sola sesión, cifrada hasta db01. Tu clave privada no se copió al bastión.
+  - consigna: >-
+      Crea ~/.ssh/config para no tener que escribir -J cada vez: un bloque Host bastion (HostName
+      192.168.10.30, User ana) y un bloque Host db01 (HostName 10.0.5.20, ProxyJump bastion).
+    verificar:
+      - { archivo: /home/ana/.ssh/config, contenido_incluye: ProxyJump bastion }
+      - { archivo: /home/ana/.ssh/config, contenido_incluye: 10.0.5.20 }
+    pistas:
+      - Con nano ~/.ssh/config, o con cat y un here-document (cat > archivo <<'FIN' ... FIN).
+      - "Cada opción en su línea: Host bastion / HostName 192.168.10.30 / User ana, una línea vacía, y Host db01 / HostName 10.0.5.20 / ProxyJump bastion."
+    solucion: ["cat > ~/.ssh/config <<'FIN'\nHost bastion\n    HostName 192.168.10.30\n    User ana\n\nHost db01\n    HostName 10.0.5.20\n    ProxyJump bastion\nFIN"]
+    explicacion: Cada bloque Host se aplica cuando escribes ese nombre. La sangría es solo para leerlo mejor.
+  - consigna: Comprueba que ahora alcanza con el nombre, ejecutando hostname en db01.
+    verificar:
+      - { comando_usado: 'ssh\s+db01\s+hostname' }
+      - { salida_contiene: db01 }
+    pistas:
+      - "`ssh db01 hostname`"
+    solucion: [ssh db01 hostname]
+    explicacion: ssh leyó ~/.ssh/config y pasó por el bastión solo.
+  - consigna: Trae a tu carpeta personal el archivo informe-db.txt que está en el home de ana en db01.
+    verificar:
+      - { archivo: /home/ana/informe-db.txt, contenido_incluye: "12 GB" }
+    pistas:
+      - "En scp, lo remoto se escribe servidor:ruta. Una ruta relativa es desde el home remoto."
+      - "`scp db01:informe-db.txt ~/`"
+    solucion: ["scp db01:informe-db.txt ~/"]
+    explicacion: scp también usa ~/.ssh/config, así que pasó por el bastión sin que lo pidieras.
+  - consigna: Publica la carpeta sitio en web01, en /home/ana/sitio, con rsync.
+    verificar:
+      - { en: web01, verificar: { archivo: /home/ana/sitio/css/estilo.css, existe: true } }
+      - { comando_usado: 'rsync\s+-\w*a' }
+    pistas:
+      - "Con la barra final en el origen (sitio/) se copia el contenido de la carpeta."
+      - "`rsync -av sitio/ web01:/home/ana/sitio/`"
+    solucion: [rsync -av sitio/ web01:/home/ana/sitio/]
+    explicacion: -a copia recursivamente y conserva permisos y fechas; -v muestra qué copió.
+  - consigna: >-
+      Cambia index.html (agrégale una línea) y, antes de volver a sincronizar, pide a rsync que te
+      muestre qué haría sin copiar nada.
+    verificar:
+      - { comando_usado: 'rsync\s+-\w*n|rsync\s+.*--dry-run' }
+      - { salida_contiene: DRY RUN }
+    pistas:
+      - "`echo '<p>Nuevos precios</p>' >> sitio/index.html` y después `rsync -avn sitio/ web01:/home/ana/sitio/`"
+    solucion: ["echo '<p>Nuevos precios</p>' >> sitio/index.html", rsync -avn sitio/ web01:/home/ana/sitio/]
+    explicacion: Solo aparece index.html, porque es lo único que cambió. Con --delete, -n es todavía más importante (muestra lo que borraría).
+  - consigna: Ahora sí, sincroniza y comprueba en web01 que llegó el cambio.
+    verificar:
+      - { en: web01, verificar: { archivo: /home/ana/sitio/index.html, contenido_incluye: Nuevos precios } }
+    pistas:
+      - "`rsync -av sitio/ web01:/home/ana/sitio/` y `ssh web01 cat sitio/index.html`"
+    solucion: [rsync -av sitio/ web01:/home/ana/sitio/, ssh web01 cat sitio/index.html]
+    explicacion: rsync solo mandó lo que cambió. En un sitio con miles de archivos, esa es la diferencia entre segundos y horas.
