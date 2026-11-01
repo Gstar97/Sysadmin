@@ -33,3 +33,16 @@ export const REQUIRED_BLOCKS = [
   { componente: 'ErroresComunes', descripcion: 'la sección de errores comunes' },
   { componente: 'Resumen', descripcion: 'el resumen de puntos clave' },
 ] as const
+
+/** Propiedad que recibe los datos de cada componente con ejercicio (el validador revisa que se use esa). */
+export const DATA_PROPS: Record<string, string> = {
+  DiagramaInteractivo: 'datos',
+  SimuladorVim: 'ejercicio',
+  Topologia: 'ejercicio',
+  SimuladorPaquetes: 'escenario',
+  Ordenar: 'ejercicio',
+  Emparejar: 'ejercicio',
+  Troubleshooting: 'escenario',
+  EditorConfig: 'ejercicio',
+  PasosGuiados: 'ejercicio',
+}

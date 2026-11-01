@@ -367,13 +367,26 @@ reordenar carpetas no rompe el progreso guardado de nadie.
     <Ordenar ejercicio={ej} />  <Emparejar ejercicio={ej} />
     <Troubleshooting escenario={ej} />
     <EditorConfig ejercicio={ej} />  lenguaje (nginx, compose, ansible, yaml, sshd,
-                                     fstab, texto), archivo inicial, solución y reglas:
-                                     sin_errores, contiene, no_contiene, directiva
-                                     (nginx por contexto, sshd por nombre) y yaml_ruta
-                                     (por ejemplo services.web.ports contiene "8080:80")
+                                     fstab, sudoers, systemd, texto), archivo inicial,
+                                     solución y reglas: sin_errores, contiene,
+                                     no_contiene, directiva (nginx por contexto, sshd por
+                                     nombre, systemd por sección: contexto "Service" y
+                                     nombre "Restart"; vale la última aparición) y
+                                     yaml_ruta (por ejemplo services.web.ports contiene
+                                     "8080:80")
     <Pregunta id="p03" />            una pregunta del banco de la lección, en el medio
                                      de la explicación
     <PasosGuiados ejercicio={ej} />  pasos para hacer en máquinas reales (ver 5.4 bis)
+    <SimuladorVim ejercicio={ej} />  editor vim simulado con pasos: archivo inicial,
+                                     consigna, verificaciones (contenido, línea, cursor,
+                                     modo, guardado, cerrado, comando usado) y la
+                                     solución como teclas ("Go# texto<Esc>:wq<CR>")
+    <CalculadoraPermisos />          rwx, octal y simbólico, bits especiales y umask,
+                                     con modo de práctica
+
+  La propiedad que recibe los datos es fija para cada componente: ejercicio, salvo
+  escenario (Troubleshooting y SimuladorPaquetes) y datos (DiagramaInteractivo). El
+  validador falla si se usa otra o si la variable no está importada.
 
   Interactivos del Nivel 0 (sin archivo de datos, salvo SimuladorCpu)
     <SimuladorCpu programa={ej} />   ciclo de instrucción paso a paso con registros
@@ -407,8 +420,12 @@ reordenar carpetas no rompe el progreso guardado de nadie.
   - Aparece texto de relleno ("lorem ipsum", "contenido pendiente", TODO).
   - Un ejercicio de terminal no se puede resolver: el validador ejecuta la solución de
     referencia en el simulador y comprueba que cumple las verificaciones.
-  - La solución de un ejercicio de configuración no pasa sus propias reglas, o una
-    topología menciona equipos o interfaces que no existen.
+  - La solución de un ejercicio de configuración no pasa sus propias reglas, la de un
+    ejercicio de vim no deja el archivo como piden sus verificaciones, o una topología
+    menciona equipos o interfaces que no existen.
+  - Un componente recibe sus datos en una propiedad equivocada (por ejemplo,
+    <Troubleshooting ejercicio={...}> en lugar de escenario) o con una variable que no
+    está importada.
   Además avisa (sin fallar) si la fecha de verificación de una lección tiene más de un
   año.
 
@@ -482,6 +499,34 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
   - Red del lado del cliente: ip, ping, traceroute, dig, nslookup, host, curl y wget
     contra registros DNS y sitios definidos en el ejercicio; curl -v muestra la
     resolución, la conexión, el saludo TLS y el certificado en las URL https.
+  - Nivel 1, parte 1 (módulos 1.1 a 1.3):
+    · Shell: expansión de llaves ({a,b}, {1..5}), historial (!!, !$, !n, !texto), alias
+      reales de cada distribución (ll), alias/unalias, command -v, type.
+    · Archivos: cp, mv y rm con -i, touch -d, find -newer y -exec ... +, head/tail -c,
+      stat con formato, man por secciones (1, 5 y 8), whatis, whereis y nl.
+    · Usuarios y permisos: ACL POSIX completas (setfacl/getfacl, máscara, ACL por
+      defecto), UID de sistema desde 999 hacia abajo, programas con SUID, sudo -l -U,
+      sudo su, PAM (archivos reales de cada familia), faillock y authselect. sudo usa la
+      umask del usuario unida a 022, como el real; su - usa la de la cuenta.
+    · Paquetes: actualizaciones pendientes (dnf check-update, apt list --upgradable),
+      dnf history info/undo, /var/log/apt/history.log, rpm -qi, rpm -qf y dpkg -S
+      (también para los comandos base), apt-cache policy, EPEL y archivos de
+      repositorios (.repo y deb822).
+    · systemd: unidades propias en /etc/systemd/system (se cargan a demanda, como en
+      systemd), drop-ins con systemctl edit, aviso de daemon-reload, servicios oneshot
+      que ejecutan de verdad su script con el usuario de la unidad y dejan la salida en
+      el journal, errores 203/EXEC, 217/USER y 200/CHDIR, timers con OnCalendar
+      (list-timers, Persistent), --failed, show -p, list-dependencies, mask (enlace a
+      /dev/null), get-default/set-default y systemd-analyze (calendar, verify, blame).
+    · Logs: journalctl con -u (varias veces), -p, --since/--until, -b, -g, -k, -x, -o
+      (cat, short-iso, json, verbose), --disk-usage, --vacuum-*; logger; logrotate con
+      rotación real (numérica o con fecha), compresión, create, su, scripts y los
+      errores típicos (permisos del archivo, carpeta insegura).
+    · Arranque: /proc/cmdline, /etc/default/grub, grubby, grub2-mkconfig, update-grub,
+      dracut, lsinitrd y update-initramfs. Los cambios quedan en /boot y se aplican "en
+      el próximo arranque": el simulador no reinicia.
+    · Los comandos de una sola familia (apt, dnf, grubby, update-grub...) no existen en
+      la otra: dan "command not found", como en un servidor real.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el celular aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -531,10 +576,14 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     mensajes como los de "nginx -t" pero explicados), docker compose (Compose
     Specification: opciones, puertos, restart, depends_on, volúmenes y redes declarados),
     playbooks de Ansible (estructura, módulos más usados y sus argumentos, handlers),
-    sshd_config (opciones y valores, como "sshd -t"), fstab y YAML en general. En la
-    terminal, visudo y crontab -e validan antes de guardar.
+    sshd_config (opciones y valores, como "sshd -t"), fstab y YAML en general.
+    Nivel 1: sudoers (como visudo, con advertencias de seguridad: NOPASSWD con ALL,
+    editores y shells, comodines) y unidades de systemd .service y .timer (secciones y
+    opciones mal escritas con sugerencia, opciones en la sección equivocada, varios
+    ExecStart, rutas sin /, tiempos y fechas de OnCalendar, WantedBy sin .target). En
+    la terminal, visudo, crontab -e y systemctl edit validan o procesan antes de guardar.
   - Se suman con el nivel que los usa: manifiestos de Kubernetes, inventarios de Ansible,
-    smb.conf, zonas DNS, unidades de systemd, nftables, WireGuard, cloud-init y HCL.
+    smb.conf, zonas DNS, nftables, WireGuard, cloud-init y HCL.
   - Cada ejercicio agrega sus propias reglas (por ejemplo, "debe escuchar en 443 con
     TLS").
 
@@ -547,11 +596,12 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     discos, planificador de procesos, simulador de memoria virtual, tablero de bits,
     conversor de bases, calculadora de unidades y transferencias, operaciones de bits
     (con red y broadcast) y pasos guiados (ver 5.5).
+  - Hechos en la Etapa 4a (Nivel 1): simulador de vim (modos, movimientos, edición,
+    deshacer, búsqueda, reemplazo y comandos de :) y calculadora de permisos.
   - Pendientes, con el nivel que los usa: simuladores de RAID, STP, quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; visor de capturas de
-    tráfico; constructor de rack y calculadoras (UPS, disponibilidad, permisos, cron,
-    transferencia, costos).
+    tráfico; constructor de rack y calculadoras (UPS, disponibilidad, cron, costos).
   - Los componentes pesados se cargan solo cuando una lección los usa.
 
 
@@ -759,9 +809,19 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       de hardware, BIOS y UEFI, sumas de verificación y la red del lado del cliente.
     - Pausa para revisión antes de empezar el Nivel 1.
 
-  Etapa 4 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
-  Los niveles más largos (Linux y Redes) se pueden entregar en dos partes dentro de la
-  misma etapa para poder revisarlos a mitad de camino.
+  Etapa 4 - Nivel 1, Linux (en dos partes)
+    - 4a (HECHA, en revisión): módulos 1.1 Primeros pasos en la terminal, 1.2 Usuarios,
+      grupos y permisos y 1.3 Software, servicios y logs. 20 lecciones, cada módulo con
+      laboratorio guiado, examen y caso real; 199 preguntas, 151 tarjetas, 51 términos
+      de glosario nuevos, 19 ejercicios de terminal, 1 de vim y 2 de editor de
+      configuración que el validador resuelve. Todo el contenido nuevo sigue el estilo
+      de 5.7 (EnSimple y AntesDeEmpezar en cada lección).
+    - 4b (siguiente, después de la revisión): módulos 1.4 a 1.7 (discos, procesos y
+      tareas programadas, acceso remoto y seguridad básica, scripting en bash) y el
+      proyecto integrador del nivel.
+
+  Etapa 5 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
+  El nivel de Redes también se puede entregar en dos partes.
 
 
 ============================================================================================

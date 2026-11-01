@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
-import { DIAGRAM_COMPONENTS, INTERACTIVE_COMPONENTS, REQUIRED_BLOCKS } from '../src/content/component-names.ts'
+import { DATA_PROPS, DIAGRAM_COMPONENTS, INTERACTIVE_COMPONENTS, REQUIRED_BLOCKS } from '../src/content/component-names.ts'
 import { exerciseSchemas, troubleshootingSchema } from '../src/content/exercise-schemas.ts'
 import {
   careerSchema,
@@ -325,6 +325,7 @@ export function scanContent(contentDir: string): ScanResult {
         if (!INTERACTIVE_COMPONENTS.some(usa)) {
           err(lessonFile, 'necesita al menos un elemento interactivo')
         }
+        checkDataProps(lessonFile, fm.body, err)
 
         let preguntas = 0
         let diagnosticas = 0
@@ -479,5 +480,22 @@ export function scanContent(contentDir: string): ScanResult {
     errors,
     warnings,
     lessonsBodies,
+  }
+}
+
+/** Cada componente con ejercicio recibe sus datos en una propiedad concreta, con una variable importada. */
+export function checkDataProps(file: string, body: string, err: (file: string, msg: string) => void) {
+  const imported = new Set([...body.matchAll(/^import\s+(\w+)\s+from\s/gm)].map((m) => m[1]))
+  for (const [comp, prop] of Object.entries(DATA_PROPS)) {
+    for (const m of body.matchAll(new RegExp(`<${comp}\\b([^>]*)>`, 'g'))) {
+      const attrs = m[1]
+      const value = new RegExp(`\\b${prop}=\\{(\\w+)\\}`).exec(attrs)
+      if (!value) {
+        const used = /\b(ejercicio|escenario|datos)=\{/.exec(attrs)?.[1]
+        err(file, `<${comp}> recibe sus datos en ${prop}={...}${used ? `, no en ${used}={...}` : ''}`)
+      } else if (!imported.has(value[1])) {
+        err(file, `<${comp}> usa ${value[1]}, que no está importado`)
+      }
+    }
   }
 }
