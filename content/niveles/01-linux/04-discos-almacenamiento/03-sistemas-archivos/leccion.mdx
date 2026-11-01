@@ -1,0 +1,124 @@
+---
+id: n1-m4-l3
+titulo: Sistemas de archivos
+minutos: 120
+objetivos:
+  - Explicar qué guarda un sistema de archivos y por qué hace falta crearlo.
+  - Elegir entre XFS y ext4 según lo que se necesite.
+  - Crear sistemas de archivos con mkfs, con etiqueta, y revisarlos con blkid.
+  - Saber cuándo y cómo se revisa un sistema de archivos dañado.
+glosario: [xfs, ext4, journaling]
+verificado: 2026-11
+---
+
+import indice from './indice.svg?raw'
+import xfsExt4 from './xfs-ext4.yaml'
+import ejMkfs from './ej-mkfs.yaml'
+
+Una partición recién creada es un rango de bloques vacío: no tiene carpetas, ni nombres, ni forma de saber qué bloque pertenece a qué archivo. Para poder guardar archivos hace falta un **sistema de archivos**. En esta lección vas a ver qué es por dentro, cuáles se usan en servidores y cómo se crean.
+
+<AntesDeEmpezar>
+- Un sistema de archivos organiza los datos en carpetas y archivos; cada archivo tiene un **inodo** con sus datos (lección 0.2.4).
+- Las particiones se crean con parted o fdisk (lección 1.4.2).
+- `lsblk -f` y `blkid` muestran el tipo y el UUID de cada parte (lección 1.4.1).
+</AntesDeEmpezar>
+
+## Qué es un sistema de archivos
+
+Piensa en una biblioteca. Los libros están en estantes numerados, pero sin un fichero nadie podría encontrar nada. El fichero dice: "El libro de redes está en el estante 14, posición 3". Si un libro se mueve, se actualiza la ficha.
+
+Un **sistema de archivos** es el fichero del disco. Guarda:
+
+<Diagrama svg={indice} alt="Un sistema de archivos guarda carpetas con nombres y su número de inodo; cada inodo guarda el dueño, el grupo, los permisos, el tamaño, las fechas y dónde están sus bloques; y los bloques guardan el contenido. Además lleva la cuenta de los bloques libres y un journal de los cambios a medio hacer." pie="Carpetas, inodos y bloques: las tres piezas que crea mkfs." />
+
+Crear un sistema de archivos (lo que en Windows se llama "formatear") es escribir esas estructuras vacías en la partición. Por eso **borra el acceso a todo lo que hubiera antes**.
+
+<EnSimple>
+Sin sistema de archivos, una partición es un estante sin fichero. mkfs crea el fichero vacío; desde ese momento ya se pueden guardar archivos (después de montarlo, en la próxima lección).
+</EnSimple>
+
+### El journal
+
+Si se corta la luz mientras se guarda un archivo, el fichero puede quedar a medio actualizar: la ficha dice una cosa y el estante otra. Para evitarlo, los sistemas de archivos modernos tienen un **journal**: antes de cambiar algo, anotan lo que van a hacer. Si el corte llega a la mitad, al arrancar repasan el journal y terminan o deshacen lo pendiente, en segundos. Por eso hoy un corte de luz casi nunca deja un sistema de archivos dañado.
+
+## XFS y ext4
+
+En servidores Linux vas a ver sobre todo dos:
+
+| | XFS | ext4 |
+| --- | --- | --- |
+| Predeterminado en | Rocky, AlmaLinux, RHEL | Ubuntu, Debian |
+| Agrandar | Sí, montado (xfs_growfs) | Sí, montado (resize2fs) |
+| **Achicar** | **No se puede** | Sí, pero desmontado |
+| Inodos | Se crean a medida que hacen falta | Cantidad fija, se decide al crearlo |
+| Reparar | `xfs_repair` | `e2fsck` (o `fsck.ext4`) |
+
+Los dos son estables y rinden bien. La regla práctica: usa el de tu distribución. La diferencia que más importa en el día a día es que **XFS no se puede achicar**: si creas un volumen demasiado grande, la única salida es copiar los datos a otro lado y rehacerlo.
+
+También vas a encontrar **vfat** (FAT32) en la partición EFI y en memorias USB, porque lo entiende casi cualquier sistema. Para más adelante: **Btrfs** (con instantáneas incorporadas, el predeterminado de Fedora y openSUSE) y los sistemas de archivos de red como NFS.
+
+<Emparejar ejercicio={xfsExt4} />
+
+## Crear un sistema de archivos
+
+```bash
+sudo mkfs.xfs /dev/sdb1              # XFS
+sudo mkfs.ext4 /dev/sdb2             # ext4
+sudo mkfs.ext4 -L logs /dev/sdb2     # con una etiqueta
+sudo mkfs.xfs -L datos /dev/sdb1     # XFS también acepta -L
+```
+
+- `mkfs -t xfs /dev/sdb1` es lo mismo que `mkfs.xfs /dev/sdb1`.
+- La **etiqueta** (label) es un nombre que tú eliges, útil para reconocer el disco en `lsblk -f`. Debe ser única en el servidor.
+- Al crearlo, cada sistema de archivos recibe un **UUID** nuevo. `sudo blkid` lo muestra.
+
+Las herramientas protegen lo que ya existe:
+
+```text
+$ sudo mkfs.xfs /dev/sdb1
+mkfs.xfs: /dev/sdb1 appears to contain an existing filesystem (xfs).
+mkfs.xfs: Use the -f option to force overwrite.
+```
+
+mkfs.ext4 pregunta *"Proceed anyway? (y,N)"*. Y si está montado, ninguno de los dos lo toca. Para borrar las firmas de un dispositivo que quieres reutilizar, `sudo wipefs -a /dev/sdb1` (sin `-a`, solo las muestra).
+
+## Cuando un sistema de archivos se daña
+
+Es raro con el journal, pero pasa: un disco que empieza a fallar, una máquina virtual que se cortó en mal momento. Los síntomas son errores de entrada y salida en `dmesg` o en el journal, o que el sistema de archivos se vuelva solo de lectura para protegerse.
+
+La regla de oro: **nunca se repara un sistema de archivos montado**. Se desmonta (o, si es la raíz, se arranca en modo de rescate, lección 1.3.6) y recién ahí:
+
+```bash
+sudo umount /srv/datos
+sudo xfs_repair /dev/sdb1        # XFS
+sudo e2fsck -f /dev/sdb2         # ext4
+```
+
+Si el disco está fallando, primero copia los datos que puedas: reparar sobre un disco que se está rompiendo puede empeorar las cosas.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejMkfs} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"appears to contain an existing filesystem"'>
+    mkfs.xfs encontró un sistema de archivos. Confirma con `lsblk -f` que es el dispositivo correcto y que no tiene nada que necesites. Recién ahí, `-f`.
+  </ErrorComun>
+  <ErrorComun titulo='"contains a mounted filesystem"'>
+    Está montado: ni mkfs ni las herramientas de reparación lo van a tocar. Revisa si de verdad es el dispositivo que querías.
+  </ErrorComun>
+  <ErrorComun titulo="Crear el sistema de archivos sobre el disco entero en lugar de la partición">
+    `mkfs.xfs /dev/sdb` en lugar de `/dev/sdb1` borra la tabla de particiones. Fíjate siempre en el número al final.
+  </ErrorComun>
+  <ErrorComun titulo="Un XFS demasiado grande que hay que achicar">
+    XFS no se achica. Antes de crear un volumen enorme, piensa si no conviene empezar más chico y agrandarlo cuando haga falta (con LVM es muy fácil, lección 1.4.5).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un **sistema de archivos** organiza la partición en carpetas, inodos y bloques. mkfs lo crea vacío y borra el acceso a lo anterior.
+- El **journal** permite recuperarse rápido de un corte de luz.
+- **XFS** (Rocky): se agranda montado, no se achica. **ext4** (Ubuntu): se agranda montado, se achica desmontado.
+- `mkfs.xfs`, `mkfs.ext4`, `-L` para la etiqueta, `-f` para pisar; `blkid` para ver UUID y tipo; `wipefs -a` para limpiar firmas.
+- Se repara siempre desmontado: `xfs_repair` o `e2fsck -f`.
+</Resumen>

@@ -504,6 +504,7 @@ register('parted', {
     while (i < words.length) {
       const cmd = words[i++]
       if (cmd === 'print' || cmd === 'p') {
+        if (!d.label) ctx.err(`Error: ${devArg}: unrecognised disk label\n`)
         ctx.out(partedPrint(s, d))
       } else if (cmd === 'mklabel') {
         const lbl = words[i++]

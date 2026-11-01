@@ -1,0 +1,78 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Vas a preparar un disco nuevo de 4 TiB para datos. ¿Qué tabla de particiones usas?
+  opciones:
+    - { texto: "GPT: no tiene el límite de 2 TiB de MBR y guarda una copia de la tabla", correcta: true, explicacion: "Es la opción por defecto para cualquier disco nuevo." }
+    - { texto: "MBR, porque es la más compatible", explicacion: "MBR no puede usar más de 2 TiB." }
+    - { texto: "Ninguna: los discos grandes no se particionan", explicacion: "Se pueden particionar igual; la tabla adecuada es GPT." }
+    - { texto: "Da igual", explicacion: "Con 4 TiB, MBR desperdiciaría la mitad." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "¿Qué hace `sudo parted -s /dev/sdb mkpart datos 1MiB 6GiB`?"
+  opciones:
+    - { texto: "Crea una partición llamada datos que empieza en 1 MiB y termina en 6 GiB", correcta: true, explicacion: "Los números son posiciones de inicio y fin." }
+    - { texto: "Crea una partición de 1 MiB y otra de 6 GiB", explicacion: "Es una sola partición, de un punto a otro." }
+    - { texto: "Formatea la partición datos con 6 GiB", explicacion: "parted crea particiones; el formato es otro paso." }
+    - { texto: "Agranda la partición datos a 6 GiB", explicacion: "Para agrandar se usa resizepart." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: Estás en fdisk, creaste dos particiones y te das cuenta de que elegiste mal el disco. ¿Qué haces?
+  opciones:
+    - { texto: "Salir con q: fdisk no escribió nada todavía", correcta: true, explicacion: "Los cambios se guardan recién con w." }
+    - { texto: "Escribir con w y después borrar las particiones", explicacion: "Al escribir ya pisaste la tabla original." }
+    - { texto: "Reiniciar el servidor", explicacion: "No hace falta, y es peligroso si otros trabajan." }
+    - { texto: "Ya no tiene arreglo", explicacion: "Mientras no elijas w, el disco no cambió." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Por qué las particiones suelen empezar en 1 MiB (sector 2048)?
+  opciones:
+    - { texto: "Para quedar alineadas con los bloques físicos del disco, que es mejor para el rendimiento", correcta: true, explicacion: "Además deja lugar para la tabla y el cargador." }
+    - { texto: "Porque el primer MiB está roto en todos los discos", explicacion: "No está roto; es una convención." }
+    - { texto: "Para que el disco parezca más chico", explicacion: "No es el objetivo." }
+    - { texto: "Porque GPT no permite empezar antes", explicacion: "Se puede, pero no conviene." }
+- id: p05
+  tipo: interpretar_salida
+  enunciado: Ejecutas fdisk sobre el disco del sistema y al guardar aparece esto. ¿Qué significa?
+  salida: |
+    The partition table has been altered.
+    Calling ioctl() to re-read partition table.
+    Re-reading the partition table failed.: Device or resource busy
+    The kernel still uses the old table. The new table will be used at the next reboot or after you run partprobe(8) or partx(8).
+  opciones:
+    - { texto: "La tabla se guardó, pero el kernel sigue usando la vieja porque el disco está en uso; partprobe o un reinicio la aplican", correcta: true, explicacion: "Pasa con discos que tienen particiones montadas." }
+    - { texto: "No se guardó nada", explicacion: "Dice que la tabla fue modificada." }
+    - { texto: "El disco está roto", explicacion: "Es un aviso normal para discos en uso." }
+    - { texto: "Hay que formatear todo el disco", explicacion: "No hace falta." }
+- id: p06
+  tipo: completar_comando
+  enunciado: Escribe el comando que crea una tabla GPT nueva en /dev/sdc con parted, sin preguntas.
+  aceptadas: [sudo parted -s /dev/sdc mklabel gpt, sudo parted /dev/sdc -s mklabel gpt, sudo parted --script /dev/sdc mklabel gpt]
+  explicacion: Sobre un disco usado, esto borra la tabla anterior y con ella el acceso a todas sus particiones.
+- id: p07
+  tipo: opcion_multiple
+  enunciado: "¿Qué cambia `parted -s /dev/sdb set 2 lvm on`?"
+  opciones:
+    - { texto: "El tipo de la partición 2, para indicar que se va a usar con LVM", correcta: true, explicacion: "No formatea ni crea nada adentro." }
+    - { texto: "Crea un volumen de LVM en la partición 2", explicacion: "Eso se hace con pvcreate (lección 1.4.5)." }
+    - { texto: "Activa LVM en todo el disco", explicacion: "Afecta solo el tipo de la partición 2." }
+    - { texto: "Borra la partición 2", explicacion: "Para borrar se usa rm." }
+- id: p08
+  tipo: ordenar_pasos
+  enunciado: Ordena los comandos para dejar /dev/sdc con una sola partición para LVM que ocupe todo el disco.
+  pasos:
+    - lsblk
+    - sudo parted -s /dev/sdc mklabel gpt
+    - sudo parted -s /dev/sdc mkpart lvm 1MiB 100%
+    - sudo parted -s /dev/sdc set 1 lvm on
+    - sudo parted /dev/sdc print
+  explicacion: Siempre se empieza confirmando el disco y se termina revisando el resultado.
+- id: p09
+  tipo: opcion_multiple
+  enunciado: ¿Cuál es una limitación de MBR?
+  opciones:
+    - { texto: "Solo admite 4 particiones primarias y discos de hasta 2 TiB", correcta: true, explicacion: "Por eso para discos nuevos se usa GPT." }
+    - { texto: "No funciona en Linux", explicacion: "Funciona; rocky01 la usa en el disco del sistema." }
+    - { texto: "No permite particiones de más de 1 GiB", explicacion: "No hay ese límite." }
+    - { texto: "Necesita UEFI", explicacion: "Es al revés: UEFI usa GPT." }

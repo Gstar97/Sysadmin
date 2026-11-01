@@ -1,0 +1,129 @@
+---
+id: n1-m4-l1
+titulo: Dispositivos de bloque
+minutos: 90
+objetivos:
+  - Reconocer los nombres de los discos en Linux (sda, vda, nvme0n1) y de sus particiones.
+  - Entender las capas del almacenamiento, del disco a la carpeta.
+  - Hacer el inventario de discos de un servidor con lsblk, blkid, fdisk y df.
+glosario: [dispositivo-bloque, uuid]
+verificado: 2026-11
+---
+
+import capas from './capas.svg?raw'
+import comandos from './comandos.yaml'
+import ejDispositivos from './ej-dispositivos.yaml'
+
+Un servidor guarda todo en discos: el sistema, los datos de los usuarios, las bases de datos, los logs. En este módulo vas a aprender a agregar discos, prepararlos y hacerlos crecer sin apagar nada. Primero, lo básico: cómo ve Linux los discos y cómo saber qué tiene un servidor.
+
+<AntesDeEmpezar>
+- Hay discos HDD, SSD y NVMe; cambian la velocidad, no la forma de usarlos (lección 0.1.4).
+- Un disco se divide en **particiones**, y la tabla que las describe puede ser MBR o GPT (lección 0.1.5).
+- Un **sistema de archivos** organiza los datos, y se **monta** en una carpeta del árbol (lección 0.2.4).
+</AntesDeEmpezar>
+
+## Qué es un dispositivo de bloque
+
+Imagina un mueble enorme de casilleros numerados, todos del mismo tamaño. Para guardar algo, pides "el casillero 4.512"; para buscarlo, lo mismo. No importa qué hay adentro: el mueble solo sabe de casilleros.
+
+Un disco funciona así para Linux: es una fila de **bloques** numerados que se leen y se escriben de a uno o de a varios. Por eso a los discos, las particiones y los volúmenes se los llama **dispositivos de bloque**. Cada uno aparece como un archivo especial dentro de `/dev`:
+
+```text
+$ ls -l /dev/sda /dev/sda1
+brw-rw----. 1 root disk 8, 0 Nov  2 09:12 /dev/sda
+brw-rw----. 1 root disk 8, 1 Nov  2 09:12 /dev/sda1
+```
+
+La **b** del principio significa *block device*. Los dos números (8, 0) identifican el dispositivo para el kernel.
+
+<EnSimple>
+Un dispositivo de bloque es cualquier cosa que se puede usar como disco: un disco entero, un pedazo de un disco (una partición) o un volumen de LVM. Linux los muestra como archivos dentro de /dev.
+</EnSimple>
+
+## Cómo se llaman los discos
+
+| Nombre | Qué es | Sus particiones |
+| --- | --- | --- |
+| `/dev/sda`, `/dev/sdb`... | Discos SATA, SAS, USB y la mayoría de los discos virtuales | `/dev/sda1`, `/dev/sda2`... |
+| `/dev/vda`, `/dev/vdb`... | Discos virtuales *virtio* (KVM, muchas nubes) | `/dev/vda1`... |
+| `/dev/nvme0n1`, `/dev/nvme1n1`... | Discos NVMe | `/dev/nvme0n1p1` (con una **p**) |
+| `/dev/sr0` | Lectora de CD/DVD (o la ISO conectada a la VM) | — |
+| `/dev/mapper/rl-root` | Volumen de LVM (lección 1.4.5) | — |
+
+La letra (a, b, c) va en el orden en que el sistema detecta los discos, y **ese orden puede cambiar** entre un arranque y otro, por ejemplo si se agrega un disco o se cambia una controladora. Por eso, para referirse a un sistema de archivos de forma segura se usa su **UUID**: un identificador único que se le asigna al crearlo y que no cambia aunque el disco cambie de nombre.
+
+## Las capas, del disco a la carpeta
+
+Entre un disco y una carpeta donde guardas archivos hay varias capas. No siempre están todas, pero el orden es siempre este:
+
+<Diagrama svg={capas} alt="Capas del almacenamiento de rocky01: el disco /dev/sda de 20 GiB se divide en dos particiones, sda1 de 1 GiB y sda2 de 19 GiB para LVM; sobre sda2, LVM arma los volúmenes rl-root de 17 GiB y rl-swap de 2 GiB; sda1 y rl-root tienen sistemas de archivos xfs, montados en /boot y en /; rl-swap es swap, memoria extra que no se monta." pie="Disco → particiones → (LVM) → sistema de archivos → carpeta." />
+
+1. **Disco**: el dispositivo físico o virtual.
+2. **Particiones**: divisiones del disco (lección 1.4.2).
+3. **LVM**, opcional: junta espacio de una o varias particiones y lo reparte en volúmenes que se pueden agrandar (lección 1.4.5).
+4. **Sistema de archivos**: la organización que permite guardar archivos y carpetas (lección 1.4.3).
+5. **Montaje**: conectar ese sistema de archivos a una carpeta (lección 1.4.4).
+
+Cuando agregas un disco nuevo a un servidor, vas a recorrer esas capas de arriba hacia abajo.
+
+## El inventario: qué tiene este servidor
+
+El comando más útil es **lsblk**, que muestra el árbol completo y no necesita sudo:
+
+```text
+$ lsblk
+NAME        MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda           8:0    0   20G  0 disk
+├─sda1        8:1    0    1G  0 part /boot
+└─sda2        8:2    0   19G  0 part
+  ├─rl-root 253:0    0   17G  0 lvm  /
+  └─rl-swap 253:1    0    2G  0 lvm  [SWAP]
+sdb           8:16   0   20G  0 disk
+sr0          11:0    1 1024M  0 rom
+```
+
+Se lee de izquierda a derecha: nombre, tamaño, tipo (disk, part, lvm, rom) y dónde está montado. Aquí se ve enseguida que sdb no tiene nada: ni particiones ni montaje.
+
+Para más detalle:
+
+<Emparejar ejercicio={comandos} />
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    El instalador arma por defecto: una partición `/boot` (xfs), y el resto en LVM con dos volúmenes, `rl-root` (xfs, montado en `/`) y `rl-swap`. Con UEFI, además, una partición `/boot/efi`.
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    El instalador arma por defecto: una partición `/boot` (ext4) y el resto en LVM con el volumen `ubuntu-lv` (ext4, montado en `/`), dentro del grupo `ubuntu-vg`. La swap es un **archivo**, `/swap.img`, en lugar de un volumen. En `lsblk` el nombre aparece como `ubuntu--vg-ubuntu--lv`: los guiones del nombre se duplican.
+  </Distro>
+</Distros>
+
+<Nota titulo="Discos nuevos sin reiniciar">
+En una máquina virtual, si agregas un disco con la máquina encendida, normalmente aparece en `lsblk` al instante. Si no aparece, en algunos hipervisores hace falta pedirle a Linux que vuelva a revisar las controladoras; si tienes dudas, un reinicio planificado lo resuelve.
+</Nota>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejDispositivos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Trabajar sobre el disco equivocado">
+    Antes de particionar o formatear, confirma con `lsblk` cuál es el disco nuevo: el que tiene el tamaño esperado y ningún montaje. Formatear el disco equivocado borra datos en segundos, y los nombres pueden haber cambiado desde la última vez que miraste.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir el disco con la partición">
+    `/dev/sdb` es el disco entero; `/dev/sdb1` es su primera partición. Un sistema de archivos va en una partición (o en un volumen de LVM), casi nunca en el disco entero.
+  </ErrorComun>
+  <ErrorComun titulo="fdisk -l o blkid no muestran nada">
+    Necesitan sudo para leer los discos. `lsblk` sí funciona sin sudo.
+  </ErrorComun>
+  <ErrorComun titulo="Usar /dev/sdb1 en lugar del UUID para algo permanente">
+    Los nombres pueden cambiar entre arranques. Para lo que queda configurado (como /etc/fstab), usa el UUID.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un **dispositivo de bloque** es un disco, una partición o un volumen; Linux los muestra en `/dev`.
+- Nombres: `sda`, `vda`, `nvme0n1` (particiones `sda1`, `nvme0n1p1`); el orden puede cambiar entre arranques.
+- El **UUID** identifica un sistema de archivos sin depender del nombre del disco.
+- Capas: disco → particiones → (LVM) → sistema de archivos → carpeta.
+- `lsblk` (y `lsblk -f`) para el panorama; `sudo blkid` y `sudo fdisk -l` para el detalle; `df -h` para el espacio libre.
+</Resumen>

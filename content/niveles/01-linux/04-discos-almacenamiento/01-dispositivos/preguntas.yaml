@@ -1,0 +1,78 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué es /dev/sdb2?
+  opciones:
+    - { texto: "La segunda partición del segundo disco", correcta: true, explicacion: "La letra es el disco y el número, la partición." }
+    - { texto: "El segundo disco", explicacion: "Ese sería /dev/sdb." }
+    - { texto: "Una carpeta donde se montan los discos", explicacion: "Es un archivo especial que representa la partición." }
+    - { texto: "La segunda copia de seguridad del disco b", explicacion: "No tiene relación con copias." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Por qué se recomienda usar el UUID en lugar de /dev/sdb1 para configuraciones permanentes?
+  opciones:
+    - { texto: "Porque el nombre sdb puede cambiar entre arranques, y el UUID no", correcta: true, explicacion: "El orden de detección de los discos no está garantizado." }
+    - { texto: "Porque el UUID es más corto", explicacion: "Es bastante más largo." }
+    - { texto: "Porque /dev/sdb1 no funciona en Rocky", explicacion: "Funciona, pero puede apuntar a otro disco después de un cambio." }
+    - { texto: "Porque el UUID hace que el disco sea más rápido", explicacion: "No cambia la velocidad." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: Según esta salida de lsblk, ¿cuál es el disco que todavía no se usa?
+  salida: |
+    NAME        MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+    sda           8:0    0   40G  0 disk
+    ├─sda1        8:1    0    1G  0 part /boot
+    └─sda2        8:2    0   39G  0 part
+      ├─rl-root 253:0    0   37G  0 lvm  /
+      └─rl-swap 253:1    0    2G  0 lvm  [SWAP]
+    sdb           8:16   0  100G  0 disk
+    └─sdb1        8:17   0  100G  0 part /srv
+    sdc           8:32   0   50G  0 disk
+  opciones:
+    - { texto: "sdc: no tiene particiones ni montaje", correcta: true, explicacion: "sda tiene el sistema y sdb1 está montada en /srv." }
+    - { texto: "sdb", explicacion: "Su partición sdb1 está montada en /srv." }
+    - { texto: "sda2", explicacion: "Tiene los volúmenes del sistema." }
+    - { texto: "rl-swap", explicacion: "Es la swap del sistema, en uso." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Cómo se llama la primera partición del disco NVMe /dev/nvme0n1?
+  opciones:
+    - { texto: "/dev/nvme0n1p1", correcta: true, explicacion: "En NVMe se agrega una p antes del número de partición." }
+    - { texto: "/dev/nvme0n11", explicacion: "Sería ambiguo; por eso existe la p." }
+    - { texto: "/dev/sda1", explicacion: "sda es otro tipo de disco." }
+    - { texto: "/dev/nvme1", explicacion: "nvme1 sería otra controladora." }
+- id: p05
+  tipo: ordenar_pasos
+  enunciado: Ordena las capas del almacenamiento, del disco a la carpeta.
+  pasos: [Disco, Partición, Volumen de LVM, Sistema de archivos, Carpeta donde se monta]
+  explicacion: LVM es opcional; cuando está, va entre la partición y el sistema de archivos.
+- id: p06
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra el árbol de discos con el tipo de sistema de archivos y el UUID de cada parte.
+  aceptadas: [lsblk -f, lsblk --fs, lsblk -fp]
+  explicacion: Sin -f, lsblk muestra tamaños y montajes.
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Agregaste un disco a la VM y no aparece en df -h. ¿Qué pasa?
+  opciones:
+    - { texto: "df solo muestra sistemas de archivos montados; el disco nuevo todavía no tiene ninguno", correcta: true, explicacion: "lsblk sí lo muestra, porque mira los dispositivos." }
+    - { texto: "El disco está roto", explicacion: "Es lo normal para un disco vacío." }
+    - { texto: "Hace falta reiniciar para que df lo vea", explicacion: "Reiniciar no le da un sistema de archivos." }
+    - { texto: "df solo muestra discos de más de 100 GB", explicacion: "No hay ese límite." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: "¿Qué significa la b al principio de `brw-rw----. 1 root disk 8, 16 /dev/sdb`?"
+  opciones:
+    - { texto: "Que es un dispositivo de bloque", correcta: true, explicacion: "Como d es directorio y l enlace simbólico." }
+    - { texto: "Que es un archivo binario", explicacion: "Los binarios comunes empiezan con -." }
+    - { texto: "Que está bloqueado", explicacion: "No indica ningún bloqueo." }
+    - { texto: "Que es una copia de seguridad (backup)", explicacion: "No tiene relación." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: En Ubuntu Server, ¿dónde está la swap que crea el instalador?
+  opciones:
+    - { texto: "En el archivo /swap.img", correcta: true, explicacion: "En Rocky, en cambio, es un volumen de LVM (rl-swap)." }
+    - { texto: "En la partición /dev/sda1", explicacion: "En Ubuntu con BIOS, sda1 es una partición mínima para el arranque." }
+    - { texto: "No tiene swap", explicacion: "Tiene, como archivo." }
+    - { texto: "En /boot", explicacion: "/boot guarda el kernel y el cargador." }

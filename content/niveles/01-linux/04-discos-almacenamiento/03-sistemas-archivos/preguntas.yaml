@@ -1,0 +1,72 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Creaste una partición nueva. ¿Por qué todavía no puedes guardar archivos en ella?
+  opciones:
+    - { texto: "Porque no tiene sistema de archivos: falta crearlo con mkfs (y montarlo)", correcta: true, explicacion: "Una partición sola es un rango de bloques sin organización." }
+    - { texto: "Porque hay que reiniciar", explicacion: "Reiniciar no le da un sistema de archivos." }
+    - { texto: "Porque las particiones nuevas son de solo lectura", explicacion: "No es una cuestión de permisos." }
+    - { texto: "Porque falta instalar un driver", explicacion: "El driver del disco ya está funcionando." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué diferencia importante hay entre XFS y ext4?
+  opciones:
+    - { texto: "XFS no se puede achicar; ext4 sí, desmontado", correcta: true, explicacion: "Los dos se pueden agrandar montados." }
+    - { texto: "ext4 no se puede agrandar", explicacion: "Se agranda con resize2fs, incluso montado." }
+    - { texto: "XFS no tiene journal", explicacion: "Los dos tienen journal." }
+    - { texto: "XFS solo funciona en Ubuntu", explicacion: "Es el predeterminado de Rocky." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Para qué sirve el journal de un sistema de archivos?
+  opciones:
+    - { texto: "Para anotar los cambios antes de hacerlos y recuperarse rápido si se corta la luz", correcta: true, explicacion: "Al arrancar, repasa lo pendiente en segundos." }
+    - { texto: "Para guardar los logs del sistema", explicacion: "Eso es el journal de systemd, otra cosa." }
+    - { texto: "Para hacer copias de seguridad automáticas", explicacion: "No guarda versiones viejas de los archivos." }
+    - { texto: "Para comprimir los archivos", explicacion: "No comprime." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que crea un sistema de archivos ext4 con la etiqueta backups en /dev/sdc1.
+  aceptadas: [sudo mkfs.ext4 -L backups /dev/sdc1, sudo mkfs -t ext4 -L backups /dev/sdc1, sudo mke2fs -t ext4 -L backups /dev/sdc1]
+  explicacion: La etiqueta se ve en lsblk -f y blkid, y se puede usar en fstab con LABEL=backups.
+- id: p05
+  tipo: interpretar_salida
+  enunciado: ¿Qué significa este mensaje?
+  salida: |
+    $ sudo mkfs.xfs /dev/sdb1
+    mkfs.xfs: /dev/sdb1 appears to contain an existing filesystem (ext4).
+    mkfs.xfs: Use the -f option to force overwrite.
+  opciones:
+    - { texto: "Ya hay un ext4 en sdb1; mkfs.xfs no lo pisa sin -f", correcta: true, explicacion: "Antes de usar -f, confirma que es el dispositivo correcto." }
+    - { texto: "El disco está lleno", explicacion: "No tiene relación con el espacio." }
+    - { texto: "XFS no se puede usar en sdb1", explicacion: "Se puede, pero hay que confirmar que se pisa lo anterior." }
+    - { texto: "Hay que convertir el ext4 a XFS", explicacion: "No existe esa conversión; se crea uno nuevo." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Un sistema de archivos de datos tiene errores. ¿Qué es lo primero antes de repararlo?
+  opciones:
+    - { texto: "Desmontarlo: nunca se repara montado", correcta: true, explicacion: "Si es la raíz, se arranca en modo de rescate." }
+    - { texto: "Formatearlo", explicacion: "Perderías los datos." }
+    - { texto: "Ejecutar xfs_repair con el sistema funcionando", explicacion: "Reparar montado puede empeorar el daño." }
+    - { texto: "Agrandarlo", explicacion: "No resuelve los errores." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Qué sistema de archivos tiene la partición EFI?
+  opciones:
+    - { texto: "vfat (FAT32)", correcta: true, explicacion: "El firmware UEFI necesita un formato simple que entienda." }
+    - { texto: "XFS", explicacion: "El firmware no lee XFS." }
+    - { texto: "ext4", explicacion: "El firmware no lee ext4." }
+    - { texto: "swap", explicacion: "La swap no guarda archivos." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe el comando que borra todas las firmas de sistemas de archivos de /dev/sdd1.
+  aceptadas: [sudo wipefs -a /dev/sdd1, sudo wipefs --all /dev/sdd1]
+  explicacion: Sin -a, wipefs solo muestra qué firmas encuentra.
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Vas a crear un volumen de 2 TB para una aplicación que quizás después necesite menos espacio. ¿Qué tienes en cuenta?
+  opciones:
+    - { texto: "Si es XFS, no se va a poder achicar: conviene empezar más chico y agrandar cuando haga falta", correcta: true, explicacion: "Con LVM, agrandar lleva un minuto." }
+    - { texto: "Que XFS se achica solo cuando hay espacio libre", explicacion: "XFS no se achica nunca." }
+    - { texto: "Que hay que usar FAT32 para poder achicar", explicacion: "FAT32 no es para servidores." }
+    - { texto: "Nada: cualquier sistema de archivos se achica montado", explicacion: "Ninguno de los comunes se achica montado." }

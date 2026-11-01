@@ -1,0 +1,56 @@
+tipo: terminal
+shell: bash
+titulo: Particionar el disco de datos
+descripcion: >-
+  El servidor de archivos tiene un disco nuevo de 10 GiB. El plan es usar 6 GiB para una
+  partición de datos y el resto para LVM, que se va a usar más adelante.
+estado_inicial:
+  distro: rocky
+  hostname: files01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  discos:
+    - { nombre: sdb, tamano: 10G }
+pasos:
+  - consigna: Confirma cuál es el disco nuevo y mira qué dice parted sobre él.
+    verificar:
+      - { comando_usado: 'parted\s+(/dev/sdb\s+print|/dev/sdb\s+p\b|-l)' }
+    pistas:
+      - "Primero `lsblk`; después parted necesita sudo, el disco y la acción."
+      - "`sudo parted /dev/sdb print`"
+    solucion: [lsblk, sudo parted /dev/sdb print]
+    explicacion: '"unrecognised disk label": el disco no tiene tabla de particiones. Es lo esperable en un disco nuevo.'
+  - consigna: Crea una tabla de particiones GPT en /dev/sdb, sin que parted haga preguntas.
+    verificar:
+      - { comando_usado: 'parted\s+(-s\s+)?/dev/sdb\s+(-s\s+)?mklabel\s+gpt|parted\s+-s\s+/dev/sdb.*mklabel\s+gpt' }
+    pistas:
+      - "La opción -s (script) evita las preguntas; la acción es mklabel."
+      - "`sudo parted -s /dev/sdb mklabel gpt`"
+    solucion: [sudo parted -s /dev/sdb mklabel gpt]
+    explicacion: mklabel crea una tabla vacía. Sobre un disco usado, borraría todas sus particiones.
+  - consigna: Crea la primera partición, llamada datos, desde 1MiB hasta 6GiB.
+    verificar:
+      - { particion: /dev/sdb1, tamano_min: 5.9G }
+    pistas:
+      - "mkpart NOMBRE INICIO FIN; el inicio en 1MiB deja el espacio alineado."
+      - "`sudo parted -s /dev/sdb mkpart datos 1MiB 6GiB`"
+    solucion: [sudo parted -s /dev/sdb mkpart datos 1MiB 6GiB]
+    explicacion: Empezar en 1MiB alinea la partición con los bloques físicos del disco, y es lo que hacen todas las herramientas modernas.
+  - consigna: Crea la segunda partición, llamada lvm, con todo el espacio que queda, y márcala con el indicador lvm.
+    verificar:
+      - { particion: /dev/sdb2, tamano_min: 3.9G }
+      - { comando_usado: 'parted\s+.*set\s+2\s+lvm\s+on' }
+    pistas:
+      - "Para que llegue hasta el final, el fin es 100%. El indicador se pone con set N lvm on."
+      - "`sudo parted -s /dev/sdb mkpart lvm 6GiB 100%` y `sudo parted -s /dev/sdb set 2 lvm on`"
+    solucion: [sudo parted -s /dev/sdb mkpart lvm 6GiB 100%, sudo parted -s /dev/sdb set 2 lvm on]
+    explicacion: El indicador no cambia nada adentro de la partición; le avisa a las personas (y a algunas herramientas) para qué se va a usar.
+  - consigna: Comprueba el resultado con fdisk.
+    verificar:
+      - { comando_usado: 'fdisk\s+-l\s+/dev/sdb' }
+      - { salida_contiene: Linux LVM }
+    pistas:
+      - "`sudo fdisk -l /dev/sdb`"
+    solucion: [sudo fdisk -l /dev/sdb]
+    explicacion: Disklabel type gpt, y dos particiones con sus tipos. lsblk también las muestra, debajo de sdb.

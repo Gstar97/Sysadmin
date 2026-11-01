@@ -1,0 +1,58 @@
+tipo: terminal
+shell: bash
+titulo: Reconocer los discos de un servidor
+descripcion: >-
+  Te sumas al equipo y te dan acceso a un servidor que no conoces. Anoche alguien le agregó un
+  disco nuevo a la máquina virtual. Antes de tocar nada, haz el inventario.
+estado_inicial:
+  distro: rocky
+  hostname: files01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  discos:
+    - { nombre: sdb, tamano: 20G }
+pasos:
+  - consigna: Mira el árbol de discos y particiones.
+    verificar:
+      - { comando_usado: '^lsblk\s*$' }
+    pistas:
+      - "`lsblk`"
+    solucion: [lsblk]
+    explicacion: >-
+      sda tiene dos particiones y, adentro de la segunda, los volúmenes rl-root y rl-swap. sdb
+      (20G) no tiene nada: es el disco nuevo. sr0 es la lectora de CD virtual.
+  - consigna: Ahora mira el mismo árbol con el tipo de sistema de archivos y el UUID de cada parte.
+    verificar:
+      - { comando_usado: 'lsblk\s+(-f|--fs)' }
+    pistas:
+      - "lsblk tiene una opción para los sistemas de archivos."
+      - "`lsblk -f`"
+    solucion: [lsblk -f]
+    explicacion: >-
+      sdb no tiene FSTYPE ni UUID: está vacío. sda2 dice LVM2_member, es decir, es parte de LVM.
+  - consigna: Mira la tabla de particiones del disco del sistema con fdisk.
+    verificar:
+      - { comando_usado: 'fdisk\s+-l\s+/dev/sda' }
+      - { salida_contiene: "Disklabel type: dos" }
+    pistas:
+      - "fdisk -l necesita sudo."
+      - "`sudo fdisk -l /dev/sda`"
+    solucion: [sudo fdisk -l /dev/sda]
+    explicacion: Disklabel type dos significa una tabla MBR. El asterisco en Boot marca la partición de arranque.
+  - consigna: Averigua solo el UUID de la partición /boot (/dev/sda1).
+    verificar:
+      - { comando_usado: 'blkid\s+.*/dev/sda1|lsblk\s+.*-f.*sda1|lsblk\s+.*sda1.*-f' }
+      - { salida_contiene: 3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22 }
+    pistas:
+      - "blkid necesita sudo y acepta el dispositivo como argumento."
+      - "`sudo blkid /dev/sda1`"
+    solucion: [sudo blkid /dev/sda1]
+    explicacion: El UUID no cambia aunque el disco cambie de nombre (por ejemplo, si mañana es sdb). Por eso se usa en /etc/fstab.
+  - consigna: Mira cuánto espacio libre queda en cada sistema de archivos, en unidades fáciles de leer y con su tipo.
+    verificar:
+      - { comando_usado: 'df\s+-(hT|Th|h\s+-T|T\s+-h)' }
+    pistas:
+      - "`df -hT`"
+    solucion: [df -hT]
+    explicacion: El disco nuevo no aparece en df porque todavía no tiene sistema de archivos ni está montado. Eso lo vas a hacer en las próximas lecciones.

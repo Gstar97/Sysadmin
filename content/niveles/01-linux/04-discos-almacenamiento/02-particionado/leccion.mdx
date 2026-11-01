@@ -1,0 +1,123 @@
+---
+id: n1-m4-l2
+titulo: Particionado
+minutos: 120
+objetivos:
+  - Elegir entre una tabla de particiones MBR y GPT.
+  - Crear, ver y borrar particiones con parted, y reconocer cómo se hace con fdisk.
+  - Marcar el tipo de cada partición y evitar los errores que borran datos.
+glosario: [particion, mbr, gpt]
+verificado: 2026-11
+---
+
+import tablas from './tablas.svg?raw'
+import pasos from './pasos.yaml'
+import ejParticiones from './ej-particiones.yaml'
+
+Un disco nuevo es un espacio en blanco. Antes de guardar algo, casi siempre se divide en **particiones**: pedazos independientes, cada uno con un uso. En esta lección vas a aprender a crear esas divisiones con cuidado, porque es una de las pocas tareas donde un error borra datos en un segundo.
+
+<AntesDeEmpezar>
+- `lsblk` muestra los discos y sus particiones; `/dev/sdb` es el disco y `/dev/sdb1` su primera partición (lección 1.4.1).
+- Las tablas de particiones MBR y GPT, y la partición EFI para arrancar con UEFI (lección 0.1.5).
+</AntesDeEmpezar>
+
+## Qué es una partición
+
+Piensa en un terreno grande. Antes de construir, se marca en el plano qué parte va a ser la casa, cuál el jardín y cuál el garaje. El terreno es el mismo, pero cada parte tiene su límite y su uso. Una **partición** es eso para un disco: un rango de bloques reservado para algo. La **tabla de particiones** es el plano, y se guarda al principio del disco.
+
+Para qué sirve dividir un disco:
+
+- Separar el sistema de los datos, para que si los datos llenan su espacio el sistema siga funcionando.
+- Tener partes con usos distintos: la de arranque, la de LVM, la de swap.
+- En discos de datos con LVM, poner una sola partición que ocupe todo el disco, con el tipo "Linux LVM", deja claro para qué se usa ese disco.
+
+<EnSimple>
+Particionar es dibujar el plano del disco: dónde empieza y dónde termina cada parte. Todavía no se guarda nada; eso viene después, al crear el sistema de archivos.
+</EnSimple>
+
+## MBR o GPT
+
+Hay dos formatos de tabla:
+
+<Diagrama svg={tablas} alt="Comparación: MBR tiene una sola tabla de un sector, hasta 4 particiones primarias y discos de hasta 2 TiB, y si la tabla se daña se pierde. GPT tiene una tabla principal al principio y una copia al final, hasta 128 particiones y discos de cualquier tamaño actual; es la que usan los equipos con UEFI." pie="Para un disco nuevo, GPT es la opción por defecto." />
+
+MBR (que las herramientas llaman `msdos` o `dos`) sigue apareciendo en servidores viejos y en máquinas virtuales que arrancan con BIOS; por ejemplo, el disco del sistema de rocky01 lo usa. Para todo disco nuevo, usa **GPT**.
+
+## Las herramientas
+
+| Herramienta | Cómo se usa | Cuándo conviene |
+| --- | --- | --- |
+| `parted` | Con órdenes en la misma línea, o interactiva | Scripts y tareas repetibles; está en Rocky y en Ubuntu |
+| `fdisk` | Interactiva, con un menú de letras | Lo más común para trabajar a mano; maneja MBR y GPT |
+| `gdisk` | Interactiva, solo GPT | Para quien viene de fdisk y trabaja solo con GPT |
+
+Las tres escriben lo mismo en el disco: elige una y úsala bien. En esta lección practicas con parted, porque se puede escribir todo en una línea:
+
+```bash
+sudo parted -s /dev/sdb mklabel gpt                 # tabla nueva (borra la anterior)
+sudo parted -s /dev/sdb mkpart datos 1MiB 6GiB      # partición 1: de 1 MiB a 6 GiB
+sudo parted -s /dev/sdb mkpart lvm 6GiB 100%        # partición 2: hasta el final
+sudo parted -s /dev/sdb set 2 lvm on                # marcarla para LVM
+sudo parted /dev/sdb print                          # ver el resultado
+```
+
+- `-s` (script): no hace preguntas. Úsalo solo cuando estés seguro del disco.
+- Las posiciones son **inicio y fin**, no tamaños: `6GiB 100%` significa "desde los 6 GiB hasta el final".
+- Empezar en `1MiB` deja el espacio **alineado** con los bloques físicos del disco, que es lo que conviene para el rendimiento. Todas las herramientas modernas lo hacen por defecto.
+- Ojo con las unidades: en parted, `GB` son mil millones de bytes y `GiB` son 1024³ (lección 0.3.3). Usa siempre `MiB` y `GiB`.
+
+### Lo mismo con fdisk
+
+fdisk funciona con un menú: cada letra es una acción, y **nada se escribe en el disco hasta que eliges `w`**. Si algo sale mal, `q` sale sin guardar.
+
+```text
+$ sudo fdisk /dev/sdb
+Command (m for help): g                         ← tabla GPT nueva
+Created a new GPT disklabel (GUID: 7A1E...).
+Command (m for help): n                         ← partición nueva
+Partition number (1-128, default 1):            ← Enter
+First sector (2048-20971486, default 2048):     ← Enter
+Last sector, +/-sectors or +/-size{K,M,G,T,P} (2048-20971486, default 20969471): +6G
+Created a new partition 1 of type 'Linux filesystem' and of size 6 GiB.
+Command (m for help): t                         ← cambiar el tipo
+Partition type or alias (type L to list all): lvm
+Command (m for help): p                         ← ver cómo queda
+Command (m for help): w                         ← escribir y salir
+```
+
+<Ordenar ejercicio={pasos} />
+
+<Advertencia titulo="El disco equivocado no avisa">
+Ni parted ni fdisk preguntan "¿estás seguro de que este es el disco nuevo?". Antes de escribir una tabla, mira `lsblk` y confirma: el tamaño es el esperado, no tiene particiones y no está montado. En un servidor con varios discos iguales, compara también el número de serie con `lsblk -o NAME,SIZE,SERIAL` si tu hipervisor lo muestra.
+</Advertencia>
+
+## Cuando el kernel no ve el cambio
+
+Al escribir la tabla, la herramienta le avisa al kernel para que vea las particiones nuevas. Si el disco está en uso (por ejemplo, el disco del sistema), el kernel no puede releer la tabla y fdisk lo dice: *"Re-reading the partition table failed.: Device or resource busy"*. En ese caso, `sudo partprobe /dev/sda` pide que la relea, y si sigue sin verla, se aplica en el próximo reinicio. En un disco nuevo y vacío esto no pasa.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejParticiones} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"Error: /dev/sdb: unrecognised disk label"'>
+    El disco no tiene tabla de particiones. No es un error: es un disco nuevo. Créala con `mklabel gpt`.
+  </ErrorComun>
+  <ErrorComun titulo='"Error: Partition(s) on /dev/sdb are being used."'>
+    Alguna partición del disco está montada, es swap o es parte de LVM. Nunca cambies la tabla de un disco en uso: desmonta o libera primero, o revisa si de verdad es el disco que querías.
+  </ErrorComun>
+  <ErrorComun titulo="La partición quedó mucho más chica (o más grande) de lo pensado">
+    En parted, los números son posiciones de inicio y fin, no tamaños; y GB no es lo mismo que GiB. Para borrarla y empezar de nuevo: `sudo parted /dev/sdb rm 1`.
+  </ErrorComun>
+  <ErrorComun titulo="Salir de fdisk sin w">
+    fdisk no escribe nada hasta que eliges w. Si saliste con q o con Ctrl+C, el disco quedó como estaba.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una **partición** es un rango del disco reservado para un uso; la **tabla de particiones** las describe.
+- **GPT** para todo disco nuevo (128 particiones, copia de seguridad, UEFI); **MBR** en sistemas viejos o con BIOS (4 primarias, 2 TiB).
+- `parted -s DISCO mklabel gpt`, `mkpart NOMBRE INICIO FIN`, `set N lvm on`, `print`, `rm N`. Inicio en `1MiB`, unidades en MiB y GiB.
+- fdisk es interactivo: g, n, t, p y **w** para escribir (q sale sin guardar).
+- Antes de escribir una tabla, confirma el disco con `lsblk`. Si el kernel no ve el cambio, `partprobe`.
+</Resumen>
