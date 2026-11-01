@@ -39,6 +39,10 @@ La diferencia de fondo es enorme. Con `su`, todos los administradores comparten 
 `su` es prestarle a alguien la llave maestra del edificio: puede abrir todo y nadie sabe qué puerta abrió. `sudo` es la recepción con un registro: cada persona pide la llave de una oficina concreta, firma, y solo le dan las que tiene autorizadas.
 </EnSimple>
 
+<Nota titulo="Un detalle de sudo -u y los permisos">
+Lo que se crea con sudo usa una umask de al menos 022, aunque la del usuario sea 002: un archivo creado con `sudo -u laura touch informe.txt` nace con 644, sin escritura para el grupo. Si necesitas crear algo exactamente como lo haría esa persona al iniciar sesión, usa `sudo su - laura -c 'comando'`.
+</Nota>
+
 ## Cómo se escribe una regla
 
 La configuración de sudo está en `/etc/sudoers` y en los archivos de la carpeta `/etc/sudoers.d/`. Cada regla responde cuatro preguntas: quién, en qué equipos, como quién y qué comandos.

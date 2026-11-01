@@ -37,12 +37,16 @@ pasos:
       Como laura, crea un archivo en /srv/ventas; como carlos, agrégale una línea; y como marta
       (de otra área), intenta verlo.
     comandos:
-      - "sudo -u laura sh -c 'echo \"precio: 100\" > /srv/ventas/lista.txt'"
+      - "sudo su - laura -c 'echo \"precio: 100\" > /srv/ventas/lista.txt'"
       - "echo \"precio: 120\" | sudo -u carlos tee -a /srv/ventas/lista.txt"
       - sudo -u marta ls /srv/ventas
       - ls -l /srv/ventas
     comprobar: Carlos pudo escribir, marta recibió "Permission denied" y el archivo es del grupo ventas.
-    si_falla: Si carlos no puede escribir, revisa que el archivo tenga `rw-` para el grupo y que la umask de las cuentas sea 002 (`sudo -u laura sh -c umask`).
+    si_falla: >-
+      Si carlos no puede escribir, revisa que el archivo tenga `rw-` para el grupo. Un detalle que
+      confunde: si lo creas con `sudo -u laura`, nace con 644, porque sudo suma la umask 022 a la
+      del usuario. `su - laura` abre una sesión igual a la de ella, con su umask 002 (compruébalo
+      con `sudo su - laura -c umask`).
   - titulo: Da acceso de lectura a la auditoría con ACL
     comandos:
       - sudo setfacl -R -m g:auditoria:rX /srv/contabilidad
