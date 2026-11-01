@@ -177,7 +177,10 @@ export function matchPattern(text: string, pattern: string): boolean {
 }
 
 export class Shell {
-  sys: System
+  /** Servidor de cada nivel de la pila (cambia con ssh; con su y sudo se repite el mismo). */
+  private sysStack: System[]
+  /** Para los niveles abiertos con ssh: el nombre con el que se conectó (para "Connection to X closed."). */
+  private remoteStack: (string | undefined)[]
   private userStack: string[]
   private cwdStack: string[]
   vars = new Map<string, string>()
@@ -201,7 +204,8 @@ export class Shell {
   private conditionDepth = 0
 
   constructor(sys: System, user: string, cwd?: string) {
-    this.sys = sys
+    this.sysStack = [sys]
+    this.remoteStack = [undefined]
     this.userStack = [user]
     const home = sys.users.get(user)?.home ?? '/root'
     this.cwdStack = [cwd ? normalizePath(cwd) : home]
@@ -220,6 +224,14 @@ export class Shell {
     for (const [k, v] of Object.entries(defs)) this.aliases.set(k, v)
   }
 
+  /** El servidor donde se ejecutan los comandos ahora (el remoto, si hay una sesión ssh abierta). */
+  get sys(): System {
+    return this.sysStack[this.sysStack.length - 1]
+  }
+  /** El servidor donde empezó la sesión (el del ejercicio). */
+  get baseSys(): System {
+    return this.sysStack[0]
+  }
   get user(): string {
     return this.userStack[this.userStack.length - 1]
   }
@@ -262,28 +274,65 @@ export class Shell {
   /** Cambia de usuario (sudo -i, su -). */
   pushUser(user: string, login = true) {
     const home = this.sys.users.get(user)?.home ?? '/'
+    this.sysStack.push(this.sys)
+    this.remoteStack.push(undefined)
     this.userStack.push(user)
     this.cwdStack.push(login ? home : this.cwd)
     this.umask = user === 'root' ? 0o022 : 0o002
     this.resetEnv()
   }
 
-  popUser(): boolean {
+  /** Abre una sesión en otro servidor (ssh). */
+  pushHost(sys: System, user: string, label: string) {
+    this.sysStack.push(sys)
+    this.remoteStack.push(label)
+    this.userStack.push(user)
+    this.cwdStack.push(sys.users.get(user)?.home ?? '/')
+    this.umask = user === 'root' ? 0o022 : 0o002
+    this.resetEnv()
+    this.defaultAliases()
+  }
+
+  /** Cierra el nivel actual. Devuelve false si era el último, y el nombre del servidor si era una sesión ssh. */
+  popUser(): false | { remote?: string } {
     if (this.userStack.length <= 1) return false
+    const remote = this.remoteStack.pop()
+    this.sysStack.pop()
     this.userStack.pop()
     this.cwdStack.pop()
     this.umask = this.user === 'root' ? 0o022 : 0o002
     this.resetEnv()
-    return true
+    if (remote) this.defaultAliases()
+    return { remote }
+  }
+
+  /** Ejecuta una acción en otro servidor, como un usuario (ssh servidor comando, scp). */
+  async onHost<T>(sys: System, user: string, fn: () => Promise<T>): Promise<T> {
+    this.sysStack.push(sys)
+    this.remoteStack.push(undefined)
+    this.userStack.push(user)
+    this.cwdStack.push(sys.users.get(user)?.home ?? '/')
+    try {
+      return await fn()
+    } finally {
+      this.sysStack.pop()
+      this.remoteStack.pop()
+      this.userStack.pop()
+      this.cwdStack.pop()
+    }
   }
 
   /** Ejecuta una acción como otro usuario (sudo comando). */
   async asUser<T>(user: string, fn: () => Promise<T>): Promise<T> {
+    this.sysStack.push(this.sys)
+    this.remoteStack.push(undefined)
     this.userStack.push(user)
     this.cwdStack.push(this.cwd)
     try {
       return await fn()
     } finally {
+      this.sysStack.pop()
+      this.remoteStack.pop()
       this.userStack.pop()
       this.cwdStack.pop()
     }
@@ -351,7 +400,9 @@ export class Shell {
     } catch (e) {
       if (e instanceof ExitSignal) {
         this.lastExit = e.code
-        if (!this.popUser()) push('out')('logout\n')
+        const popped = this.popUser()
+        if (!popped) push('out')('logout\n')
+        else if (popped.remote) push('out')(`logout\nConnection to ${popped.remote} closed.\n`)
       } else if (e instanceof ReturnSignal || e instanceof LoopSignal) {
         // return/break fuera de contexto: se ignora como en bash interactivo
       } else {

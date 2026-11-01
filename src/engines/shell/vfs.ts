@@ -25,6 +25,8 @@ export interface Inode {
   defaultAcl?: DefaultAcl
   /** Dispositivo de bloques (/dev/sda): números mayor y menor. */
   blockDev?: [number, number]
+  /** Contexto de SELinux puesto a mano o heredado (si no, el que dice la política para su ruta). */
+  selabel?: string
 }
 
 export interface Acl {
@@ -114,6 +116,8 @@ export class VFS {
   now: () => number = () => Date.now()
   /** Se llama cuando un archivo pierde su último nombre (para los archivos abiertos por procesos). */
   onRelease?: (ino: number, node: Inode, path: string) => void
+  /** Antes de mover un archivo: SELinux le fija la etiqueta que tenía (mv la conserva). */
+  onRename?: (node: Inode, from: string, to: string) => void
 
   constructor() {
     this.inodes.set(1, { ino: 1, type: 'dir', mode: 0o755, uid: 0, gid: 0, mtime: Date.now(), data: '', entries: new Map(), nlink: 2 })
@@ -248,6 +252,8 @@ export class VFS {
       entries: type === 'dir' ? new Map() : undefined,
     }
     if (acl) node.acl = acl
+    // SELinux: lo nuevo hereda la etiqueta del directorio si se la pusieron a mano.
+    if (parent?.selabel) node.selabel = parent.selabel
     if (d && type === 'dir') node.defaultAcl = { ...d, users: new Map(d.users), groups: new Map(d.groups) }
     this.inodes.set(node.ino, node)
     return node
@@ -397,6 +403,7 @@ export class VFS {
     this.checkSticky(src.parent, child, cred, from)
     let dest = normalizePath(to)
     if (this.exists(dest, cred) && this.stat(dest, cred).type === 'dir') dest = `${dest}/${src.name}`
+    this.onRename?.(child, normalizePath(from), dest)
     if (child.type === 'dir' && (dest + '/').startsWith(normalizePath(from) + '/')) throw new FsError('EINVAL', to)
     const dst = this.parentFor(dest, cred)
     const existing = dst.parent.entries!.get(dst.name)

@@ -2,6 +2,7 @@
  * Unidades de systemd del servidor simulado: lectura de archivos .service y .timer
  * (con sus drop-ins), carga y recarga (daemon-reload) y cálculo de fechas de OnCalendar.
  */
+import { readSshdConfig } from './hosts'
 import type { Service, System } from './system'
 import { ROOT_CRED } from './vfs'
 
@@ -384,6 +385,11 @@ export function needsReload(sys: System, unit: string): boolean {
 
 /** systemctl daemon-reload: vuelve a leer todas las unidades. */
 export function daemonReload(sys: System) {
+  // En Ubuntu, el generador de ssh.socket vuelve a leer Port y ListenAddress de sshd_config.
+  if (sys.distro === 'ubuntu') {
+    const r = readSshdConfig(sys)
+    if (!r.errors.length) sys.sshSocketPorts = r.conf.ports
+  }
   // systemd también vuelve a leer /etc/fstab (las unidades .mount).
   sys.storage.fstabSeen = sys.storage.fstabText()
   for (const svc of [...sys.services.values()]) {

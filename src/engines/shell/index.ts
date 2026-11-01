@@ -11,8 +11,11 @@ import './commands/storage'
 import './commands/bashcmd'
 import './commands/pkg'
 import './commands/net'
+import './commands/ssh'
+import './commands/security'
 import { commandPackage, OTHER_FAMILY } from './packages'
-import { bashStateSchema, type BashCheck, type BashStateInput } from './schema'
+import { bashStateSchema, type BashCheck, type BashState, type BashStateInput } from './schema'
+import { hostKey, knownLine } from './hosts'
 import { COMMANDS, Shell } from './shell'
 import { System } from './system'
 import { modeString, ROOT_CRED, type Inode } from './vfs'
@@ -50,7 +53,43 @@ export function createBashSession(input: BashStateInput = {}): Shell {
   const state = bashStateSchema.parse(input)
   const sys = new System(state)
   installBinaries(sys)
+  linkHosts(sys, state)
   return new Shell(sys, state.usuario, state.directorio)
+}
+
+/** Crea los otros servidores de la red del ejercicio y los conecta entre sí. */
+function linkHosts(base: System, state: BashState) {
+  if (!state.servidores.length) return
+  const remotes = state.servidores.map((h) => {
+    const { ip, clave_conocida: _k, en_dns: _d, ...rest } = h
+    const red = h.red.interfaces.length === 1 && h.red.interfaces[0].ip === '192.168.1.10/24' ? { ...h.red, interfaces: [{ nombre: 'enp0s3', ip: ip.includes('/') ? ip : `${ip}/24`, estado: 'UP' as const }] } : h.red
+    const sys = new System({ ...rest, red, servidores: [] })
+    installBinaries(sys)
+    return { spec: h, sys, ip: ip.split('/')[0] }
+  })
+  const all = [base, ...remotes.map((r) => r.sys)]
+  for (const s of all) s.lab = all.filter((x) => x !== s)
+  // El DNS interno resuelve los nombres de los servidores (salvo los que el ejercicio excluye).
+  const names: Record<string, string> = {}
+  for (const r of remotes) if (r.spec.en_dns) names[r.sys.hostname] = r.ip
+  const baseIp = base.ownIps()[1]
+  if (baseIp) names[base.hostname] = baseIp
+  for (const s of all) for (const [n, ip] of Object.entries(names)) s.dnsRecords[n] ??= ip
+  // known_hosts del usuario del ejercicio.
+  const user = base.users.get(state.usuario)
+  if (!user) return
+  const lines: string[] = []
+  for (const r of remotes) {
+    if (r.spec.clave_conocida === 'no') continue
+    if (r.spec.clave_conocida === 'cambiada') r.sys.hostKeyVariant = ':reinstalado'
+    const key = hostKey(r.sys, 'ed25519')
+    lines.push(knownLine(base, r.sys.hostname, key), knownLine(base, r.ip, key))
+  }
+  if (lines.length) {
+    const cred = base.credFor(user.name)
+    if (!base.vfs.exists(`${user.home}/.ssh`)) base.vfs.mkdir(`${user.home}/.ssh`, cred, 0o700)
+    base.vfs.writeFile(`${user.home}/.ssh/known_hosts`, lines.join('\n') + '\n', cred, { mode: 0o644, umask: 0o022 })
+  }
 }
 
 export function stripAnsi(s: string): string {
@@ -88,7 +127,16 @@ function aclEntries(sys: System, node: Inode): string[] {
 
 /** Comprueba una verificación de ejercicio contra el estado actual del sistema simulado. */
 export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
-  const sys = sh.sys
+  if ('en' in check) {
+    const host = [sh.baseSys, ...sh.baseSys.lab].find((h) => h.hostname === check.en)
+    if (!host) return { ok: false, label: `en ${check.en} (ese servidor no existe en el ejercicio)` }
+    const r = verifyOn(host, sh, check.verificar)
+    return { ok: r.ok, label: `en ${check.en}: ${r.label}` }
+  }
+  return verifyOn(sh.baseSys, sh, check)
+}
+
+function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string }>): CheckResult {
   if ('archivo' in check) {
     const exists = sys.vfs.exists(check.archivo, ROOT_CRED, false)
     const parts: string[] = []

@@ -4,6 +4,8 @@ import { applyStateStorage, installLayout, parseSize, Storage, GiB, MiB } from '
 import type { PerfState } from './perf'
 import { initKernel, chronyStart, bootModules, staticKernelFs, refreshKernelFs } from './kernel'
 import { metrics, MEM_TOTAL_KB } from './perf'
+import { installSshFiles, readSshdConfig, type SshdConf } from './hosts'
+import { installSelinuxHooks, newSelinux, portAllowed, type AvcRecord, type SelinuxState } from './selinux'
 import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
 import { normalizePath, ROOT_CRED, VFS, type Cred } from './vfs'
@@ -240,6 +242,16 @@ export class System {
   gateway?: string
   dns: string[] = []
   reachable = new Set<string>()
+  /** Los otros servidores de la red del ejercicio (para ssh y scp). */
+  lab: System[] = []
+  /** Configuración de sshd con la que arrancó el servicio (cambia al reiniciarlo o recargarlo). */
+  sshd?: SshdConf
+  /** Puertos de ssh.socket en Ubuntu (se regeneran con systemctl daemon-reload). */
+  sshSocketPorts: number[] = [22]
+  /** Si el servidor se reinstaló: su clave de servidor cambia (known_hosts de los clientes queda viejo). */
+  hostKeyVariant = ''
+  /** Último inicio de sesión por SSH de cada usuario (para "Last login"). */
+  lastLogins = new Map<string, { time: number; from: string }>()
   dnsRecords: Record<string, string> = {}
   /** Hay salida a internet: cualquier IP pública responde si la puerta de enlace funciona. */
   internet = true
@@ -315,6 +327,16 @@ export class System {
 
     // Kernel (sysctl y módulos) y hora.
     initKernel(this)
+    this.selinux.mode = this.distro === 'rocky' ? state.selinux : 'disabled'
+    if (this.distro === 'rocky') {
+      installSelinuxHooks(this)
+      this.vfs.mkdirp('/etc/selinux/targeted', ROOT_CRED)
+      this.vfs.writeFile('/etc/selinux/config', `# This file controls the state of SELinux on the system.\n# SELINUX= can take one of these three values:\n#     enforcing - SELinux security policy is enforced.\n#     permissive - SELinux prints warnings instead of enforcing.\n#     disabled - No SELinux policy is loaded.\n# See also:\n# https://docs.fedoraproject.org/en-US/quick-docs/getting-started-with-selinux/#getting-started-with-selinux-selinux-states-and-modes\n#\n# NOTE: In earlier Fedora kernel builds, SELINUX=disabled would also\n# fully disable SELinux during boot. If you need a system with SELinux\n# fully disabled instead of SELinux running with no policy loaded, you\n# need to pass selinux=0 to the kernel command line. You can use grubby\n# to persistently set the bootloader to boot with selinux=0:\n#\n#    grubby --update-kernel ALL --args selinux=0\n#\n# To revert back to SELinux enabled:\n#\n#    grubby --update-kernel ALL --remove-args selinux\n#\nSELINUX=${state.selinux}\n# SELINUXTYPE= can take one of these three values:\n#     targeted - Targeted processes are protected,\n#     minimum - Modification of targeted policy. Only selected processes are protected.\n#     mls - Multi Level Security protection.\nSELINUXTYPE=targeted\n`, ROOT_CRED)
+      for (const b of state.booleanos_selinux) {
+        const cur = this.selinux.booleans.get(b)
+        if (cur) cur.cur = true
+      }
+    }
     this.clock.timezone = state.hora.zona
     this.clock.offset = state.hora.desfase_segundos
     if (state.hora.servidor_ntp) {
@@ -350,6 +372,7 @@ export class System {
       if (s.modo) node.mode = parseInt(s.modo, 8)
       else if (s.tipo === 'directorio') node.mode = 0o755
       if (s.tamano) node.size = parseSize(s.tamano, 1)
+      if (s.etiqueta) node.selabel = `unconfined_u:object_r:${s.etiqueta}:s0`
       // Sin dueño indicado, lo que está dentro del home de un usuario es de ese usuario
       // (incluidas las carpetas intermedias que se crearon para el archivo).
       const homeUser = [...this.users.values()].find((u) => u.uid >= 1000 && (abs === u.home || abs.startsWith(`${u.home}/`)))
@@ -472,6 +495,10 @@ export class System {
     if (this.services.get(this.distro === 'rocky' ? 'chronyd' : 'chrony')?.active) chronyStart(this)
     bootModules(this)
     staticKernelFs(this)
+    // sshd arrancó con la configuración que dejó el ejercicio.
+    const sshdConf = readSshdConfig(this).conf
+    this.sshd = sshdConf
+    this.sshSocketPorts = sshdConf.ports
     this.syncAccountFiles()
     this.refreshVirtual()
   }
@@ -613,6 +640,10 @@ export class System {
       this.vfs.mkdirp(path.slice(0, path.lastIndexOf('/')) || '/', ROOT_CRED)
       if (!this.vfs.exists(path)) this.vfs.writeFile(path, content, ROOT_CRED)
     }
+    for (const [link, target] of Object.entries(info.links ?? {})) {
+      this.vfs.mkdirp(link.slice(0, link.lastIndexOf('/')) || '/', ROOT_CRED)
+      if (!this.vfs.exists(link, ROOT_CRED, false)) this.vfs.symlink(target, link, ROOT_CRED)
+    }
     for (const s of info.services ?? []) {
       if (this.services.has(s.name)) continue
       const active = !!s.activeAfterInstall
@@ -667,6 +698,17 @@ export class System {
   // ---------------------------------------------------------------------------
   // Red
   // ---------------------------------------------------------------------------
+
+  /** SELinux (solo Rocky; en Ubuntu queda deshabilitado) y sus denegaciones. */
+  selinux: SelinuxState = newSelinux()
+  avcLog: AvcRecord[] = []
+  /** Perfiles de AppArmor (Ubuntu) y su modo. */
+  apparmor = new Map<string, 'enforce' | 'complain'>()
+
+  /** Si SELinux deja usar ese puerto con ese tipo (ssh_port_t, http_port_t...). */
+  selinuxPortAllowed(type: string, port: number): boolean {
+    return portAllowed(this, type, port)
+  }
 
   ownIps(): string[] {
     return ['127.0.0.1', ...this.interfaces.filter((i) => i.up && i.ip).map((i) => i.ip!.split('/')[0])]
@@ -780,8 +822,6 @@ export class System {
       '/usr/share/doc/coreutils/README':
         'These are the GNU core utilities: ls, cp, mv, rm, cat, head, tail, sort, wc and\nmany more. Each program documents its options with --help and in its manual page.\n',
       '/etc/login.defs': 'PASS_MAX_DAYS\t99999\nPASS_MIN_DAYS\t0\nPASS_WARN_AGE\t7\nUID_MIN\t\t1000\nGID_MIN\t\t1000\nUMASK\t\t022\n',
-      '/etc/ssh/sshd_config':
-        '# Configuración del servidor SSH\n#Port 22\nPermitRootLogin prohibit-password\nPubkeyAuthentication yes\nPasswordAuthentication yes\nKbdInteractiveAuthentication no\nUsePAM yes\nX11Forwarding no\nSubsystem sftp /usr/libexec/openssh/sftp-server\n',
       '/etc/sudoers':
         this.distro === 'rocky'
           ? 'Defaults   !visiblepw\nDefaults    secure_path = /sbin:/bin:/usr/sbin:/usr/bin\nroot    ALL=(ALL)       ALL\n%wheel  ALL=(ALL)       ALL\n#includedir /etc/sudoers.d\n'
@@ -839,7 +879,7 @@ export class System {
     if (this.firmware === 'uefi') v.stat('/boot/efi', ROOT_CRED).mode = 0o700
     v.stat('/etc/sudoers', ROOT_CRED).mode = 0o440
     v.stat('/dev/null', ROOT_CRED).mode = 0o666
-    v.stat('/etc/ssh/sshd_config', ROOT_CRED).mode = 0o600
+    installSshFiles(this)
     if (this.distro === 'rocky') {
       v.stat('/var/log/secure', ROOT_CRED).mode = 0o600
       v.stat('/var/log/messages', ROOT_CRED).mode = 0o600

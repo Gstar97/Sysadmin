@@ -3,8 +3,17 @@ import type { Diagnostic } from './types'
 
 type Kind = 'yesno' | 'number' | 'text' | 'list' | { values: string[] }
 
-const KEYWORDS: Record<string, Kind> = {
+export const SSHD_KEYWORDS: Record<string, Kind> = {
   port: 'number',
+  gssapicleanupcredentials: 'yesno',
+  x11displayoffset: 'number',
+  x11uselocalhost: 'yesno',
+  permittty: 'yesno',
+  rekeylimit: 'text',
+  versionaddendum: 'text',
+  authorizedprincipalsfile: 'text',
+  hostkeyalgorithms: 'text',
+  pubkeyacceptedalgorithms: 'text',
   listenaddress: 'text',
   addressfamily: { values: ['any', 'inet', 'inet6'] },
   hostkey: 'text',
@@ -87,7 +96,7 @@ export function validateSshd(text: string): { entries: { key: string; value: str
       diagnostics.push({ line, severity: 'warning', message: `${REMOVED[lower]} (sshd: Deprecated option ${key})` })
       return
     }
-    const kind = KEYWORDS[lower]
+    const kind = SSHD_KEYWORDS[lower]
     if (!kind) {
       diagnostics.push({ line, severity: 'error', message: `Opción desconocida "${key}" (sshd: Bad configuration option: ${key}). Revisa cómo está escrita.` })
       return

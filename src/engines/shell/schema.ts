@@ -11,17 +11,23 @@ const fileSpecSchema = z.union([
     destino: z.string().optional(),
     /** Tamaño aparente del archivo (por ejemplo 2G): para simular archivos grandes. */
     tamano: z.string().optional(),
+    /** Tipo de SELinux puesto a mano (por ejemplo user_home_t, como queda al moverlo desde un home). */
+    etiqueta: z.string().optional(),
   }),
 ])
 
 const fsKind = z.enum(['xfs', 'ext4', 'vfat', 'swap'])
 
-export const bashStateSchema = z.strictObject({
+const stateShape = {
   distro: z.enum(['rocky', 'ubuntu']).default('rocky'),
   hostname: z.string().default('servidor'),
   /** Cómo arranca la máquina: BIOS heredado (tabla MBR en Rocky) o UEFI (con partición EFI). */
   firmware: z.enum(['bios', 'uefi']).default('bios'),
   secure_boot: z.boolean().default(true),
+  /** Modo de SELinux en Rocky. */
+  selinux: z.enum(['enforcing', 'permissive', 'disabled']).default('enforcing'),
+  /** Booleanos de SELinux que el ejercicio deja activados. */
+  booleanos_selinux: z.array(z.string()).default([]),
   usuario: z.string().default('estudiante'),
   directorio: z.string().optional(),
   usuarios: z
@@ -200,9 +206,26 @@ export const bashStateSchema = z.strictObject({
       }),
     )
     .default([]),
+}
+
+/** Otro servidor de la red del ejercicio (para ssh, scp y el bastión). */
+export const remoteHostSchema = z.strictObject({
+  ...stateShape,
+  /** Dirección en la red; si no se definen interfaces, se crea enp0s3 con esta IP y máscara /24. */
+  ip: z.string(),
+  /** Si el known_hosts del usuario del ejercicio ya tiene la clave de este servidor (o una vieja). */
+  clave_conocida: z.enum(['no', 'si', 'cambiada']).default('no'),
+  /** Si el DNS de la red resuelve su nombre (si no, hay que usar la IP o /etc/hosts). */
+  en_dns: z.boolean().default(true),
 })
 
-export const bashCheckSchema = z.union([
+export const bashStateSchema = z.strictObject({
+  ...stateShape,
+  /** Los demás servidores de la red. */
+  servidores: z.array(remoteHostSchema).default([]),
+})
+
+const singleCheckSchema = z.union([
   z.strictObject({
     archivo: z.string(),
     existe: z.boolean().default(true),
@@ -259,6 +282,9 @@ export const bashCheckSchema = z.union([
   z.strictObject({ particion: z.string(), existe: z.boolean().default(true), tamano_min: z.string().optional(), fs: z.string().optional() }),
   z.strictObject({ swap: z.string(), activa: z.boolean().default(true) }),
 ])
+
+/** Una verificación, o la misma en otro servidor de la red: { en: web01, verificar: {...} }. */
+export const bashCheckSchema = z.union([singleCheckSchema, z.strictObject({ en: z.string(), verificar: singleCheckSchema })])
 
 export type BashState = z.infer<typeof bashStateSchema>
 export type BashStateInput = z.input<typeof bashStateSchema>

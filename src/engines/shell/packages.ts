@@ -14,6 +14,8 @@ export interface PackageInfo {
   user?: { name: string; uid: number; home: string; gecos: string }
   services?: PackageService[]
   files?: Record<string, string>
+  /** Enlaces simbólicos que deja el paquete (enlace → destino). */
+  links?: Record<string, string>
   commands?: string[]
   version: string
 }
@@ -122,6 +124,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
     services: [{ name: 'postgresql', description: 'PostgreSQL database server', ports: [5432] }],
     commands: ['postgresql-setup', 'psql'],
   },
+  'policycoreutils-python-utils': { summary: 'SELinux policy core python utilities', version: '3.8', commands: ['semanage', 'audit2allow', 'audit2why', 'sepolicy'] },
   'bind-utils': { summary: 'Utilities for querying DNS name servers', version: '9.18.33', commands: ['dig', 'nslookup', 'host'] },
   bind: {
     summary: 'The Berkeley Internet Name Domain (BIND) DNS server',
@@ -178,17 +181,24 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
 
 export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   ...common,
+  apparmor: { summary: 'user-space parser utility for AppArmor', version: '4.0.1', commands: ['aa-status', 'apparmor_parser', 'aa-enabled'] },
+  'apparmor-utils': { summary: 'utilities for controlling AppArmor', version: '4.0.1', commands: ['aa-complain', 'aa-enforce', 'aa-disable', 'aa-logprof', 'aa-genprof'] },
   nginx: {
     summary: 'small, powerful, scalable web/proxy server',
     version: '1.26.3',
     services: [{ name: 'nginx', description: 'A high performance web server and a reverse proxy server', ports: [80], enabledByDefault: true, activeAfterInstall: true }],
     files: {
-      '/etc/nginx/nginx.conf': nginxConf.replace('user nginx;', 'user www-data;').replace('include /etc/nginx/conf.d/*.conf;', 'include /etc/nginx/conf.d/*.conf;\n    include /etc/nginx/sites-enabled/*;'),
+      '/etc/nginx/nginx.conf': nginxConf
+        .replace('user nginx;', 'user www-data;')
+        .replace('include /etc/nginx/conf.d/*.conf;', 'include /etc/nginx/conf.d/*.conf;\n    include /etc/nginx/sites-enabled/*;')
+        .replace(/\n {4}server \{[\s\S]*?\n {4}\}\n/, '\n'),
       '/etc/nginx/sites-available/default': 'server {\n\tlisten 80 default_server;\n\troot /var/www/html;\n\tindex index.html index.nginx-debian.html;\n\tserver_name _;\n}\n',
       '/var/www/html/index.nginx-debian.html': nginxIndex,
+      '/usr/share/nginx/html/index.html': nginxIndex,
       '/var/log/nginx/access.log': '',
       '/var/log/nginx/error.log': '',
     },
+    links: { '/etc/nginx/sites-enabled/default': '/etc/nginx/sites-available/default' },
     commands: ['nginx'],
   },
   apache2: {
@@ -268,7 +278,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
 
 export const BASE_INSTALLED = {
   rocky: ['bash', 'coreutils', 'sudo', 'curl', 'nano', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'firewalld', 'cronie', 'lsof'],
-  ubuntu: ['bash', 'coreutils', 'sudo', 'curl', 'wget', 'nano', 'vim', 'xxd', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'ufw', 'cron', 'rsyslog', 'lsof'],
+  ubuntu: ['bash', 'coreutils', 'sudo', 'curl', 'wget', 'nano', 'vim', 'xxd', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'ufw', 'cron', 'rsyslog', 'lsof', 'apparmor'],
 }
 
 /** Comandos que solo existen si su paquete está instalado. */

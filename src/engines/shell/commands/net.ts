@@ -1,3 +1,5 @@
+import { FW_SERVICES, hostByIp, inbound, routeTo, sourceIp } from '../hosts'
+import { nginxServe } from '../web'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
 import { ROOT_CRED } from '../vfs'
@@ -354,20 +356,15 @@ register('host', {
   },
 })
 
-function localWebContent(ctx: CommandContext, port: number): { status: number; body: string; server: string } | undefined {
-  const svc = [...ctx.sys.services.values()].find((s) => s.active && s.ports.includes(port))
+function localWebContent(ctx: CommandContext, port: number, path = '/', sys = ctx.sys): { status: number; body: string; server: string } | undefined {
+  const svc = [...sys.services.values()].find((s) => s.active && s.ports.includes(port))
   if (!svc) return undefined
-  const isNginx = svc.name === 'nginx'
-  const candidates =
-    ctx.sys.distro === 'rocky'
-      ? isNginx
-        ? ['/usr/share/nginx/html/index.html']
-        : ['/var/www/html/index.html']
-      : ['/var/www/html/index.html', '/var/www/html/index.nginx-debian.html']
+  if (svc.name === 'nginx') return nginxServe(sys, port, path)
+  const candidates = ['/var/www/html/index.html']
   for (const c of candidates) {
-    if (ctx.sys.vfs.exists(c)) return { status: 200, body: ctx.sys.vfs.readFile(c, ROOT_CRED), server: isNginx ? 'nginx/1.26.3' : 'Apache/2.4.63' }
+    if (sys.vfs.exists(c)) return { status: 200, body: sys.vfs.readFile(c, ROOT_CRED), server: 'Apache/2.4.63' }
   }
-  return { status: 403, body: '<html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1></body></html>\n', server: isNginx ? 'nginx/1.26.3' : 'Apache/2.4.63' }
+  return { status: 403, body: '<html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1></body></html>\n', server: 'Apache/2.4.63' }
 }
 
 register(['curl', 'wget'], {
@@ -394,8 +391,20 @@ register(['curl', 'wget'], {
       return ctx.name === 'wget' ? 4 : 6
     }
     let res: { status: number; body: string; server: string } | undefined
-    if (ip.startsWith('127.') || ctx.sys.ownIps().includes(ip)) {
-      res = localWebContent(ctx, port)
+    const remote = hostByIp(ctx.sys, ip)
+    if (remote && remote !== ctx.sys) {
+      const failed = (why: string, code: number) => {
+        ctx.err(ctx.name === 'wget' ? `Connecting to ${host} (${host})|${ip}|:${port}... failed: ${why}.\n` : code === 28 ? `curl: (28) Failed to connect to ${host} port ${port} after 3002 ms: Timeout was reached\n` : `curl: (7) Failed to connect to ${host} port ${port} after 1 ms: ${why === 'Connection refused' ? "Couldn't connect to server" : why}\n`)
+        return ctx.name === 'wget' ? 4 : code
+      }
+      if (!routeTo(ctx.sys, ip)) return failed('Connection timed out', 28)
+      const fw = inbound(remote, port, 'tcp', sourceIp(ctx.sys, ip))
+      if (fw === 'reject') return failed('No route to host', 7)
+      if (fw === 'drop') return failed('Connection timed out', 28)
+      res = localWebContent(ctx, port, m[4] ?? '/', remote)
+      if (!res) return failed('Connection refused', 7)
+    } else if (ip.startsWith('127.') || ctx.sys.ownIps().includes(ip)) {
+      res = localWebContent(ctx, port, m[4] ?? '/')
       if (!res) {
         ctx.err(ctx.name === 'wget' ? `Connecting to ${host} (${host})|${ip}|:${port}... failed: Connection refused.\n` : `curl: (7) Failed to connect to ${host} port ${port} after 0 ms: Couldn't connect to server\n`)
         return ctx.name === 'wget' ? 4 : 7
@@ -443,7 +452,6 @@ register(['curl', 'wget'], {
   },
 })
 
-const FW_SERVICES: Record<string, string> = { ssh: '22/tcp', http: '80/tcp', https: '443/tcp', 'dhcpv6-client': '546/udp', cockpit: '9090/tcp', dns: '53/udp', mysql: '3306/tcp', postgresql: '5432/tcp', samba: '445/tcp', nfs: '2049/tcp', ntp: '123/udp', smtp: '25/tcp', ftp: '21/tcp' }
 
 register('firewall-cmd', {
   usage: 'firewall-cmd [OPTIONS...]',
