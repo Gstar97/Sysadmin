@@ -1,0 +1,134 @@
+---
+id: n1-m5-l1
+titulo: Procesos y señales
+minutos: 150
+objetivos:
+  - Encontrar procesos con ps, pgrep, pstree y top, y leer su estado.
+  - Terminar procesos con la señal adecuada, en el orden correcto.
+  - Cambiar la prioridad de un proceso con nice y renice.
+  - Usar trabajos en segundo plano y saber cuándo conviene otra cosa.
+glosario: [proceso, senal, zombi, nice]
+verificado: 2026-11
+---
+
+import estados from './estados.svg?raw'
+import senales from './senales.yaml'
+import ejProcesos from './ej-procesos.yaml'
+
+Todo lo que funciona en un servidor es un proceso: el servidor web, tu sesión SSH, el comando que acabas de escribir. Cuando algo anda mal (un programa que se come la CPU, uno que no responde, uno que no se deja cerrar), vas a tener que encontrarlo y decidir qué hacer con él. Esta lección te da las herramientas y el criterio.
+
+<AntesDeEmpezar>
+- Un **proceso** es un programa en ejecución, con su número (PID), su dueño y un proceso padre (lección 0.2.2).
+- systemd es el PID 1: el antepasado de todos los demás (lección 1.3.3).
+- Los servicios se manejan con `systemctl`, no matando sus procesos a mano (lección 1.3.3).
+</AntesDeEmpezar>
+
+## Encontrar procesos
+
+```bash
+ps aux                                  # todos, con dueño, %CPU, %MEM y comando
+ps aux --sort=-%cpu | head -5           # los que más CPU usan
+ps -eo pid,ppid,user,stat,%cpu,cmd      # elegir las columnas
+pgrep -a nginx                          # PID y comando de los que se llaman nginx
+pgrep -f informe.py                     # buscar en la línea de comandos completa
+pstree -p                               # el árbol de padres e hijos
+top                                     # en vivo (q para salir)
+```
+
+En `top`, algunas teclas útiles: **P** ordena por CPU, **M** por memoria, **k** pide un PID para mandarle una señal, **r** le cambia la prioridad y **1** muestra cada CPU por separado.
+
+Cada proceso también tiene una carpeta en `/proc/PID` con todo lo que el kernel sabe de él: la línea de comandos (`cmdline`), el estado (`status`), los archivos abiertos (`fd/`). Las herramientas de esta lección leen de ahí.
+
+## Estados
+
+La columna **STAT** de `ps` (o **S** en `top`) dice qué está haciendo cada proceso:
+
+<Diagrama svg={estados} alt="Estados de un proceso: R corriendo, S durmiendo mientras espera algo, D esperando el disco sin atender señales, T detenido por Ctrl+Z o SIGSTOP, y Z zombi, que ya terminó pero su padre no lo recogió. Un proceso pasa de R a S cuando espera y vuelve cuando llega lo que esperaba, de R a D cuando lee o escribe, de R a T con STOP y vuelve con CONT, y a Z cuando termina." pie="Los estados que vas a ver en ps y top." />
+
+- Casi todo está en **S**: los servidores pasan la mayor parte del tiempo esperando pedidos.
+- Muchos procesos en **D** al mismo tiempo indican problemas de disco (lección 1.5.2).
+- Un **zombi** (Z, `<defunct>`) ya terminó: no usa CPU ni memoria, solo ocupa una línea de la tabla. No se puede matar porque ya está muerto; desaparece cuando su padre lo "recoge" o cuando el padre termina.
+
+Después de la letra pueden venir otras: `s` (inicia una sesión), `l` (tiene varios hilos), `+` (está en primer plano en una terminal), `<` y `N` (prioridad alta o baja).
+
+## Señales: cómo pedirle algo a un proceso
+
+Para terminar a alguien que no se quiere ir de una reunión hay varias formas: pedirle por favor que se despida y se vaya (le das tiempo para juntar sus cosas), o sacarlo del brazo (se va ya, y lo que dejó a medias queda a medias). Con los procesos es igual: se les mandan **señales**.
+
+<Emparejar ejercicio={senales} />
+
+```bash
+kill 1234            # SIGTERM: termina prolijamente (cierra archivos, guarda lo pendiente)
+kill -9 1234         # SIGKILL: termina ya, sin limpiar nada
+kill -HUP 1234       # SIGHUP: muchos servicios releen su configuración
+pkill -f informe.py  # por nombre (o por línea de comandos con -f)
+killall nginx        # todos los que se llaman así
+kill -l              # la lista de señales
+```
+
+<EnSimple>
+`kill` no significa "matar": significa "mandar una señal". La que manda por defecto (TERM) le pide al programa que termine bien. La 9 (KILL) lo termina sin preguntar. Primero TERM, esperar unos segundos, y KILL solo si no respondió.
+</EnSimple>
+
+Tres reglas prácticas:
+
+- **Los servicios se manejan con systemctl.** Si matas el proceso de nginx a mano, systemd puede volver a arrancarlo (si tiene `Restart=`) o marcarlo como fallido. `systemctl restart` o `stop` hacen lo correcto.
+- **Un proceso en D no responde ni a KILL** hasta que vuelve la operación de disco. Si se queda así, el problema es el disco o el almacenamiento de red, no el proceso.
+- Un usuario común solo puede mandar señales a sus propios procesos; para los de otros hace falta `sudo`.
+
+## Prioridades: nice y renice
+
+Cuando varios procesos quieren CPU, el kernel reparte según la **prioridad**. El valor **nice** va de **-20** (más prioridad) a **19** (menos prioridad); lo normal es 0. "Nice" significa amable: un proceso con nice alto es amable con los demás y les cede el turno.
+
+```bash
+nice -n 10 tar czf /backup/todo.tgz /srv      # arrancar algo con baja prioridad
+renice 10 -p 1234                             # cambiar la de un proceso que ya corre
+```
+
+Cualquiera puede bajar la prioridad de sus procesos; para subirla (nice negativo) o tocar procesos de otros, hace falta root. Es la herramienta ideal para un proceso que molesta pero que no quieres cortar.
+
+## Trabajos en segundo plano
+
+Desde la terminal puedes mandar un comando a segundo plano y seguir trabajando:
+
+| Acción | Cómo |
+| --- | --- |
+| Arrancar en segundo plano | `comando &` |
+| Ver los trabajos de esta terminal | `jobs` |
+| Traer uno al frente | `fg %1` |
+| Pausar el que está al frente | Ctrl+Z |
+| Seguir en segundo plano uno pausado | `bg %1` |
+| Terminarlo | `kill %1` |
+
+Los trabajos son de la terminal: si cierras la sesión, reciben SIGHUP y terminan. `nohup comando &` los protege de eso (la salida va a `nohup.out`). Pero para tareas que tienen que seguir funcionando de verdad, lo correcto es un **servicio** o un **timer** de systemd (lecciones 1.3.3 y 1.3.4). Para más adelante: `tmux` y `screen` mantienen sesiones de terminal vivas aunque se corte la conexión.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejProcesos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar kill -9 de entrada">
+    El programa no puede cerrar archivos ni terminar escrituras: puedes dejar datos a medias o archivos de bloqueo que impiden volver a arrancarlo. Primero `kill` (TERM) y unos segundos de espera.
+  </ErrorComun>
+  <ErrorComun titulo='"Operation not permitted"'>
+    El proceso es de otro usuario. Con `sudo` puedes mandarle la señal, pero pregúntate primero si corresponde.
+  </ErrorComun>
+  <ErrorComun titulo="Matar el proceso de un servicio y que vuelva a aparecer">
+    systemd lo reinicia porque tiene `Restart=`. Usa `systemctl stop servicio`.
+  </ErrorComun>
+  <ErrorComun titulo="Intentar matar un zombi">
+    Ya está muerto: kill no le hace nada. Busca el padre con `ps -o ppid= -p PID` y ocúpate de él.
+  </ErrorComun>
+  <ErrorComun titulo="Un comando largo se cortó al cerrar la sesión SSH">
+    Era un trabajo de la terminal y recibió SIGHUP. Para la próxima: `nohup ... &`, tmux, o mejor un servicio o timer de systemd.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Ver procesos: `ps aux --sort=-%cpu`, `ps -eo ...`, `pgrep -a`/`-f`, `pstree -p`, `top` (P, M, k, r, 1).
+- Estados: R (corriendo), S (esperando), D (esperando el disco), T (detenido), Z (zombi: ya terminó, se va cuando el padre lo recoge).
+- Señales: TERM (15, la normal), KILL (9, último recurso), HUP (1, releer configuración), INT (Ctrl+C), STOP/CONT. Primero TERM.
+- Los servicios se manejan con systemctl, no con kill.
+- nice va de -20 a 19 (más alto = menos prioridad): `nice -n 10 comando`, `renice 10 -p PID`.
+- Trabajos: `&`, `jobs`, `fg`, `bg`, Ctrl+Z, `kill %N`; mueren al cerrar la sesión salvo con nohup.
+</Resumen>

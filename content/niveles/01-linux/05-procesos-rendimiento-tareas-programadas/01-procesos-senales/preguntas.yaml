@@ -1,0 +1,76 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "¿Qué hace `kill 1234` sin opciones?"
+  opciones:
+    - { texto: "Le manda SIGTERM: le pide al proceso que termine de forma ordenada", correcta: true, explicacion: "El programa puede cerrar archivos y guardar lo pendiente." }
+    - { texto: "Lo termina de inmediato sin que pueda hacer nada", explicacion: "Eso es kill -9 (SIGKILL)." }
+    - { texto: "Lo pausa", explicacion: "Para pausar es SIGSTOP." }
+    - { texto: "Borra el programa del disco", explicacion: "kill no toca archivos." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuál es el orden correcto para terminar un proceso que molesta?
+  opciones:
+    - { texto: "kill (TERM), esperar unos segundos, y kill -9 solo si no respondió", correcta: true, explicacion: "Así le das la oportunidad de terminar bien." }
+    - { texto: "kill -9 directamente, es más rápido", explicacion: "Puede dejar datos a medias." }
+    - { texto: "Reiniciar el servidor", explicacion: "Es desproporcionado." }
+    - { texto: "kill -HUP varias veces", explicacion: "HUP no es para terminar procesos." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta línea de ps?
+  salida: |
+    USER   PID  PPID STAT COMMAND
+    root  4521  2210 Z    [tarea] <defunct>
+  opciones:
+    - { texto: "Es un zombi: ya terminó y su padre (PID 2210) no lo recogió", correcta: true, explicacion: "Desaparece cuando el padre lo recoge o termina." }
+    - { texto: "Es un proceso que usa mucha CPU", explicacion: "Los zombis no usan CPU." }
+    - { texto: "Hay que matarlo con kill -9", explicacion: "Ya está muerto; kill no le hace nada." }
+    - { texto: "Es un virus", explicacion: "Es un estado normal, aunque indica un programa padre mal escrito." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: Mataste el proceso de nginx con kill y a los pocos segundos vuelve a aparecer. ¿Por qué?
+  opciones:
+    - { texto: "Es un servicio con Restart= y systemd lo vuelve a arrancar; hay que usar systemctl stop", correcta: true, explicacion: "Los servicios se manejan con systemctl." }
+    - { texto: "kill no funciona con nginx", explicacion: "Funciona, pero systemd lo reinicia." }
+    - { texto: "Faltó sudo", explicacion: "Si faltara, daría Operation not permitted." }
+    - { texto: "Es un zombi", explicacion: "Un zombi no vuelve a aparecer." }
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando que le baja la prioridad al proceso 2345, poniéndole nice 15.
+  aceptadas: [renice 15 -p 2345, sudo renice 15 -p 2345, renice -n 15 -p 2345, sudo renice -n 15 -p 2345, renice +15 -p 2345, renice 15 2345]
+  explicacion: Para subir la prioridad (nice negativo) hace falta root.
+- id: p06
+  tipo: opcion_multiple
+  enunciado: "Un proceso está en estado D y no responde ni a kill -9. ¿Qué indica?"
+  opciones:
+    - { texto: "Está esperando una operación de disco (o de almacenamiento de red) que no vuelve: el problema está ahí", correcta: true, explicacion: "No atiende señales hasta que la operación termina." }
+    - { texto: "Que kill -9 está roto", explicacion: "Funciona; el proceso no puede atender señales en ese estado." }
+    - { texto: "Que es un zombi", explicacion: "Los zombis tienen estado Z." }
+    - { texto: "Que hay que bajarle la prioridad", explicacion: "No cambia nada." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Qué valor de nice tiene la prioridad más baja (el proceso más "amable")?
+  opciones:
+    - { texto: "19", correcta: true, explicacion: "Va de -20 (más prioridad) a 19 (menos)." }
+    - { texto: "-20", explicacion: "Esa es la prioridad más alta." }
+    - { texto: "0", explicacion: "Es el valor normal." }
+    - { texto: "100", explicacion: "Está fuera del rango." }
+- id: p08
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para pasar a segundo plano un comando largo que ya arrancaste en primer plano.
+  pasos: [Presionar Ctrl+Z para pausarlo, Ejecutar jobs para ver su número, "Ejecutar bg %1 para que siga en segundo plano"]
+  explicacion: Ctrl+Z lo detiene (estado T) y bg lo hace seguir sin ocupar la terminal.
+- id: p09
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra los 5 procesos que más CPU usan (con el encabezado).
+  aceptadas: ["ps aux --sort=-%cpu | head -6", "ps aux --sort=-%cpu | head -5", "ps -eo pid,user,%cpu,cmd --sort=-%cpu | head -6", "ps aux --sort -%cpu | head -6"]
+  explicacion: También sirve top, que ordena por CPU por defecto.
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Lanzaste un respaldo con `./respaldo.sh &` y cerraste la sesión SSH. Al volver, no terminó. ¿Qué pasó?
+  opciones:
+    - { texto: "Al cerrar la sesión, los trabajos de la terminal reciben SIGHUP y terminan", correcta: true, explicacion: "nohup, tmux o un servicio/timer de systemd lo evitan." }
+    - { texto: "El & no funciona por SSH", explicacion: "Funciona mientras la sesión está abierta." }
+    - { texto: "El script tenía un error", explicacion: "Puede ser, pero la causa más probable es el cierre de la sesión." }
+    - { texto: "Se pausó y sigue esperando", explicacion: "Recibió SIGHUP y terminó." }

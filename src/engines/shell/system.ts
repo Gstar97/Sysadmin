@@ -381,6 +381,7 @@ export class System {
       if (p.io_lectura || p.io_escritura) proc.io = { r: (p.io_lectura ?? 0) * 1024, w: (p.io_escritura ?? 0) * 1024 }
       if (p.ignora_term) proc.ignoresTerm = true
       if (p.hace_minutos !== undefined) proc.start = now - p.hace_minutos * 60_000
+      if (p.estado === 'Z') proc.cmd = `[${proc.cmd.split(/\s+/)[0].split('/').pop()}] <defunct>`
       for (const f of p.abiertos) {
         try {
           this.storage.openFiles.push({ pid: proc.pid, path: normalizePath(f), ino: this.vfs.resolve(f, ROOT_CRED) })
@@ -392,6 +393,13 @@ export class System {
     for (const j of state.journal) {
       this.journal.push({ time: now - j.hace_minutos * 60_000, unit: j.unidad, priority: priorityNumber(j.prioridad), message: j.mensaje, ident: j.unidad.replace(/\.service$/, '') })
     }
+    // Padres de los procesos del ejercicio.
+    state.procesos.forEach((p, i) => {
+      if (!p.padre) return
+      const child = this.procs.filter((x) => x.fromState)[i]
+      const parent = this.procs.find((x) => x !== child && x.cmd.includes(p.padre!))
+      if (child && parent) child.ppid = parent.pid
+    })
     this.journal.sort((a, b) => a.time - b.time)
     const r = state.rendimiento
     this.perf = {

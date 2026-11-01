@@ -89,6 +89,8 @@ export const bashStateSchema = z.strictObject({
         /** No termina con SIGTERM: hace falta SIGKILL. */
         ignora_term: z.boolean().optional(),
         hace_minutos: z.number().optional(),
+        /** Texto del comando del proceso padre (si es otro proceso del ejercicio). */
+        padre: z.string().optional(),
       }),
     )
     .default([]),

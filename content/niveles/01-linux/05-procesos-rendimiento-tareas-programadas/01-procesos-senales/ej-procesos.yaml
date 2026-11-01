@@ -1,0 +1,86 @@
+tipo: terminal
+shell: bash
+titulo: El servidor está lento esta mañana
+descripcion: >-
+  Los usuarios dicen que app01 responde lento. Encuentra el proceso que se está comiendo la CPU,
+  bájale la prioridad mientras hablas con su dueño, y ocúpate de otros dos procesos que no se
+  comportan bien.
+estado_inicial:
+  distro: rocky
+  hostname: app01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: pablo }
+  procesos:
+    - { usuario: pablo, comando: python3 /home/pablo/informe.py, cpu: 99.6, mem: 2.1, estado: R, hace_minutos: 95 }
+    - { usuario: root, comando: /opt/agente-viejo/agente --daemon, cpu: 0.3, mem: 0.4, ignora_term: true, hace_minutos: 4000 }
+    - { usuario: root, comando: /usr/local/bin/lanzador, cpu: 0.1, mem: 0.2, hace_minutos: 600 }
+    - { usuario: root, comando: tarea, estado: Z, padre: /usr/local/bin/lanzador, hace_minutos: 590 }
+pasos:
+  - consigna: Lista los procesos ordenados por uso de CPU, de mayor a menor, y quédate con los primeros.
+    verificar:
+      - { comando_usado: 'ps\s+.*--sort=-%cpu|top\s+-b' }
+      - { salida_contiene: informe.py }
+    pistas:
+      - "ps aux tiene la opción --sort; head muestra las primeras líneas."
+      - "`ps aux --sort=-%cpu | head -5`"
+    solucion: [ps aux --sort=-%cpu | head -5]
+    explicacion: El script de Pablo usa el 99,6 % de una CPU desde hace hora y media. No es de root ni de un servicio.
+  - consigna: Mientras hablas con Pablo, bájale la prioridad a su proceso a 10 (sin matarlo).
+    verificar:
+      - { comando_usado: 'renice\s+(-n\s+)?\+?10\s+(-p\s+)?' }
+      - { salida_contiene: new priority 10 }
+    pistas:
+      - "renice PRIORIDAD -p PID; para un proceso de otro usuario hace falta sudo. pgrep -f busca en la línea completa."
+      - "`sudo renice 10 -p $(pgrep -f informe.py)`"
+    solucion: ['sudo renice 10 -p $(pgrep -f informe.py)']
+    explicacion: >-
+      Con nice 10, el kernel le da la CPU a los demás primero. El script sigue trabajando, pero ya
+      no frena al resto. En top, su CPU pasa a la columna ni.
+  - consigna: El agente viejo ya no se usa. Pídele que termine con kill (sin opciones) y comprueba si sigue vivo.
+    verificar:
+      - { comando_usado: 'kill\s+(-15\s+|-TERM\s+|-s\s+TERM\s+)?\$\(pgrep|kill\s+(-15\s+|-TERM\s+)?\d+' }
+      - { comando_usado: 'pgrep\s+.*agente|ps\s+' }
+    pistas:
+      - "`sudo kill $(pgrep agente)` y después `pgrep -a agente`"
+    solucion: ['sudo kill $(pgrep agente)', pgrep -a agente]
+    explicacion: Sigue ahí. Algunos programas ignoran SIGTERM (o están trabados y no pueden atenderla).
+  - consigna: Termínalo a la fuerza.
+    verificar:
+      - { proceso: agente-viejo, existe: false }
+    pistas:
+      - "La señal que no se puede ignorar es la 9 (KILL)."
+      - "`sudo kill -9 $(pgrep agente)`"
+    solucion: ['sudo kill -9 $(pgrep agente)']
+    explicacion: Con KILL el proceso no tiene oportunidad de cerrar nada. Por eso se usa después de TERM, no antes.
+  - consigna: Busca procesos zombi mostrando el PID, el PID del padre, el estado y el nombre de cada proceso.
+    verificar:
+      - { comando_usado: 'ps\s+.*-\w*o\s+\S*ppid' }
+      - { salida_contiene: defunct }
+    pistas:
+      - "ps -eo con las columnas pid,ppid,stat,comm; grep para quedarte con la Z."
+      - "`ps -eo pid,ppid,stat,cmd | grep Z`"
+    solucion: ['ps -eo pid,ppid,stat,cmd | grep -w Z']
+    explicacion: >-
+      El zombi ya terminó: no usa CPU ni memoria, solo una línea en la tabla de procesos. No se
+      puede matar (ya está muerto). Desaparece cuando su padre lo recoge, o cuando el padre
+      termina. El PPID dice quién es el padre: lanzador.
+  - consigna: Reinicia (termina) el proceso padre del zombi y comprueba que el zombi desapareció.
+    verificar:
+      - { proceso: lanzador, existe: false }
+      - { proceso: defunct, existe: false }
+    pistas:
+      - "`sudo kill $(pgrep lanzador)` y `ps -eo pid,ppid,stat,cmd | grep -w Z`"
+    solucion: ['sudo kill $(pgrep lanzador)', 'ps -eo pid,ppid,stat,cmd | grep -w Z']
+    explicacion: Unos pocos zombis no molestan; miles sí (la tabla de procesos tiene un límite). La solución de fondo es arreglar el programa padre.
+  - consigna: Practica los trabajos en segundo plano. Lanza sleep 600 en segundo plano, mira la lista de trabajos y termínalo por su número de trabajo.
+    verificar:
+      - { comando_usado: 'sleep\s+\d+\s*&' }
+      - { comando_usado: '^jobs' }
+      - { comando_usado: 'kill\s+%1' }
+    pistas:
+      - "& al final lo manda a segundo plano; jobs los lista; kill %1 se refiere al trabajo 1."
+      - "`sleep 600 &`, `jobs` y `kill %1`"
+    solucion: [sleep 600 &, jobs, kill %1]
+    explicacion: Los trabajos son de esta terminal. Si cierras la sesión, terminan (salvo que uses nohup o, mejor, un servicio o un timer de systemd).
