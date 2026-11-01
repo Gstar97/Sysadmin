@@ -1,0 +1,91 @@
+tipo: terminal
+shell: bash
+titulo: Primeras conexiones por SSH
+descripcion: >-
+  Estás en admin01 (Rocky). Vas a entrar por primera vez a web01 (Ubuntu), revisar su servicio
+  SSH y después resolver un aviso en web02, que se reinstaló ayer.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.5/24 }
+    puerta_enlace: 192.168.10.1
+  servidores:
+    - { ip: 192.168.10.20, hostname: web01, distro: ubuntu, usuarios: [{ nombre: ana, sudo: true }] }
+    - { ip: 192.168.10.21, hostname: web02, distro: ubuntu, usuarios: [{ nombre: ana, sudo: true }], clave_conocida: cambiada }
+pasos:
+  - consigna: Conéctate a web01 con tu usuario. Es la primera vez, así que vas a tener que aceptar su huella.
+    verificar:
+      - { comando_usado: 'ssh\s+(ana@)?web01\s*$' }
+      - { archivo: /home/ana/.ssh/known_hosts, contenido_incluye: web01 }
+    pistas:
+      - "`ssh web01` (si tu usuario se llama igual en los dos lados, no hace falta ana@)"
+    solucion: [ssh web01]
+    explicacion: >-
+      La huella quedó guardada en ~/.ssh/known_hosts. La próxima vez, ssh la compara en silencio
+      y solo avisa si cambia.
+  - consigna: Confirma dónde estás y con qué usuario.
+    verificar:
+      - { comando_usado: 'hostname' }
+      - { salida_contiene: web01 }
+    pistas:
+      - "`hostname; whoami`"
+    solucion: ["hostname; whoami"]
+    explicacion: El prompt también lo dice. Mirarlo antes de un comando delicado te evita hacerlo en el servidor equivocado.
+  - consigna: Mira el estado del servicio SSH de web01 (en Ubuntu se llama ssh).
+    verificar:
+      - { comando_usado: 'systemctl\s+status\s+ssh' }
+      - { salida_contiene: active (running) }
+    pistas:
+      - "`systemctl status ssh` (en Rocky sería sshd)"
+    solucion: [systemctl status ssh]
+    explicacion: El servicio que te atiende. Si lo detienes, las sesiones abiertas siguen, pero nadie más puede entrar.
+  - consigna: Busca en el registro de web01 tu inicio de sesión.
+    verificar:
+      - { comando_usado: 'journalctl\s+.*-u\s+ssh' }
+      - { salida_contiene: Accepted password for ana }
+    pistas:
+      - "`sudo journalctl -u ssh -n 10`"
+    solucion: [sudo journalctl -u ssh -n 10]
+    explicacion: Cada entrada (y cada intento fallido) queda registrada con usuario, IP de origen y método.
+  - consigna: Cierra la sesión para volver a admin01.
+    verificar:
+      - { comando_usado: '^(exit|logout)$' }
+      - { salida_contiene: Connection to web01 closed }
+    pistas:
+      - "`exit` (o Ctrl+D)"
+    solucion: [exit]
+    explicacion: Volviste a admin01. Comprueba siempre en el prompt dónde estás.
+  - consigna: Sin abrir una sesión, mira cuánto espacio libre tiene la raíz de web01.
+    verificar:
+      - { comando_usado: 'ssh\s+(ana@)?web01\s+.*df' }
+      - { salida_contiene: Filesystem }
+    pistas:
+      - "Después del servidor puedes poner un comando: se ejecuta allá y te devuelve la salida."
+      - "`ssh web01 df -h /`"
+    solucion: [ssh web01 df -h /]
+    explicacion: Muy útil para revisar varios servidores rápido, o dentro de un script.
+  - consigna: Ahora conéctate a web02.
+    verificar:
+      - { comando_usado: 'ssh\s+(ana@)?web02' }
+      - { salida_contiene: REMOTE HOST IDENTIFICATION HAS CHANGED }
+    pistas:
+      - "`ssh web02`"
+    solucion: [ssh web02]
+    explicacion: >-
+      ssh se niega a conectar: la clave de web02 no es la que tenías guardada. Puede ser un ataque
+      o un servidor reinstalado. En este caso sabes que se reinstaló ayer (y en la vida real lo confirmas
+      con quien lo hizo, comparando la huella nueva).
+  - consigna: Borra la clave vieja de web02 de tu known_hosts y vuelve a conectarte.
+    verificar:
+      - { comando_usado: 'ssh-keygen\s+.*-R\s+web02' }
+      - { comando_usado: 'ssh\s+(ana@)?web02' }
+      - { salida_contiene: "Permanently added 'web02'" }
+    pistas:
+      - "`ssh-keygen -R web02` y después `ssh web02`"
+    solucion: [ssh-keygen -R web02, ssh web02]
+    explicacion: Nunca borres known_hosts entero ni desactives la verificación para "sacarte el aviso de encima". Se borra solo la línea de ese servidor, después de confirmar el motivo.

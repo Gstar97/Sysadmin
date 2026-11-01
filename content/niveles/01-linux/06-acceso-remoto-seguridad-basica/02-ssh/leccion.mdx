@@ -1,0 +1,110 @@
+---
+id: n1-m6-l2
+titulo: SSH, conexión segura
+minutos: 120
+objetivos:
+  - Conectarte a un servidor por SSH, ejecutar comandos remotos y cerrar la sesión.
+  - Entender la huella del servidor, known_hosts y qué hacer cuando la clave cambia.
+  - Ubicar el servicio sshd, su configuración y su registro en Rocky y en Ubuntu.
+glosario: [ssh, huella-servidor, known-hosts]
+verificado: 2026-11
+---
+
+import conexion from './conexion.svg?raw'
+import orden from './orden.yaml'
+import ejSsh from './ej-ssh.yaml'
+
+Casi nunca vas a estar sentado frente a un servidor: están en un centro de datos, en la nube o en otra oficina. La herramienta para trabajar en ellos es **SSH** (Secure Shell): te da una terminal en el otro equipo, como si estuvieras ahí, y todo lo que viaja va cifrado.
+
+<AntesDeEmpezar>
+- IP, puertos y cómo diagnosticar una conexión (lección 1.6.1).
+- Servicios con systemctl y registros con journalctl (lecciones 1.3.3 y 1.3.5).
+</AntesDeEmpezar>
+
+## Qué pasa al conectarte
+
+Piensa en una llamada al banco. Antes de darle tus datos a quien te atiende, quieres estar seguro de que llamaste al banco y no a un impostor; después, el banco necesita estar seguro de que eres tú. SSH hace las dos cosas, en ese orden: primero el servidor demuestra quién es, y recién después tú. La diferencia con el teléfono es que todo va cifrado: aunque alguien escuche la línea, no entiende nada.
+
+<Diagrama svg={conexion} alt="Los cinco pasos de una conexión SSH entre el cliente y el servidor web01: el cliente se conecta al puerto 22; el servidor presenta su clave de servidor y el cliente compara la huella con known_hosts; los dos acuerdan una clave para cifrar todo lo que sigue; el usuario se identifica con contraseña o clave SSH según lo que permita sshd_config; y se abre la sesión." pie="El servidor se identifica antes que tú: así no le das tu contraseña a un impostor." />
+
+<Ordenar ejercicio={orden} />
+
+```bash
+ssh ana@web01              # usuario@servidor
+ssh web01                  # si tu usuario se llama igual en los dos lados
+ssh -p 2222 ana@web01      # si sshd escucha en otro puerto
+ssh web01 df -h /          # ejecutar un solo comando y volver
+exit                       # (o Ctrl+D) cerrar la sesión
+```
+
+Después de conectarte, el prompt cambia: `ana@web01:~$`. Acostúmbrate a mirarlo antes de cada comando importante. "Reinicié el servidor equivocado" es un clásico que se evita leyendo el prompt.
+
+## La huella del servidor y known_hosts
+
+La primera vez que te conectas a un servidor, ssh no lo conoce y te pregunta:
+
+```text
+The authenticity of host 'web01 (192.168.10.20)' can't be established.
+ED25519 key fingerprint is SHA256:UBAFTwUN4SzrA2aL394IQoCiKtXGrpzQHnrKnMoi9ZH.
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
+```
+
+La **huella** (fingerprint) es un resumen corto de la clave del servidor. Lo correcto es compararla con la que te pasó quien instaló el servidor (en el servidor se ve con `ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub`). Si respondes `yes`, ssh la guarda en `~/.ssh/known_hosts` y, de ahí en adelante, la compara sola en cada conexión.
+
+Si un día la clave no coincide, ssh se niega a conectar con un aviso enorme (`REMOTE HOST IDENTIFICATION HAS CHANGED`). Hay dos explicaciones: alguien se está haciendo pasar por el servidor, o el servidor se reinstaló (o le cambiaron la IP a otro equipo). Antes de seguir, averigua cuál. Si es una reinstalación confirmada, borra solo la línea vieja:
+
+```bash
+ssh-keygen -R web01        # borra web01 de known_hosts (deja una copia en known_hosts.old)
+```
+
+<EnSimple>
+known_hosts es tu lista de "servidores que ya conozco y su cara". Si un servidor aparece con otra cara, ssh no te deja pasar hasta que confirmes qué pasó.
+</EnSimple>
+
+## Del lado del servidor: sshd
+
+El que atiende las conexiones es el servicio **sshd**, que viene instalado en casi cualquier servidor Linux.
+
+| | Rocky | Ubuntu |
+| --- | --- | --- |
+| Servicio | `sshd` | `ssh` |
+| Configuración | `/etc/ssh/sshd_config` y `/etc/ssh/sshd_config.d/*.conf` | igual |
+| Registro | `journalctl -u sshd`, `/var/log/secure` | `journalctl -u ssh`, `/var/log/auth.log` |
+
+En el registro aparecen todas las entradas y los intentos fallidos:
+
+```text
+Accepted password for ana from 192.168.10.5 port 51432 ssh2
+Failed password for invalid user admin from 203.0.113.50 port 40112 ssh2
+```
+
+Si tu servidor tiene el puerto 22 abierto a internet, vas a ver cientos de intentos de cuentas como `admin`, `root` o `test` todos los días: son robots que prueban contraseñas. Es una de las razones para usar claves en lugar de contraseñas (próxima lección).
+
+La configuración de sshd tiene opciones como `PermitRootLogin` (si root puede entrar directo) o `PasswordAuthentication` (si se aceptan contraseñas). Las vas a cambiar en la lección siguiente, con un cuidado especial: si te equivocas, puedes dejar a todos sin acceso.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejSsh} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Responder yes a la huella sin mirarla">
+    En la red de tu casa no pasa nada, pero en una red ajena es justo el momento en que un impostor te engañaría. Compara la huella al menos con los primeros caracteres.
+  </ErrorComun>
+  <ErrorComun titulo="Borrar known_hosts entero o usar StrictHostKeyChecking=no">
+    Te sacas el aviso de encima, pero también la protección para todos los servidores. Borra solo la línea del servidor con `ssh-keygen -R`.
+  </ErrorComun>
+  <ErrorComun titulo="Ejecutar un comando en el servidor equivocado">
+    Mira el prompt, o `hostname`, antes de cualquier cosa delicada. Con varias terminales abiertas, es muy fácil confundirse.
+  </ErrorComun>
+  <ErrorComun titulo='"Permission denied, please try again"'>
+    Contraseña equivocada, usuario que no existe en ese servidor, o configuración de sshd que no permite ese usuario o ese método. El registro de sshd del servidor dice cuál.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `ssh usuario@servidor` abre una terminal remota cifrada; `ssh servidor comando` ejecuta un solo comando; `exit` vuelve.
+- Primero se identifica el servidor (huella guardada en `~/.ssh/known_hosts`), después tú.
+- Clave cambiada: averigua por qué; si es una reinstalación confirmada, `ssh-keygen -R servidor`.
+- El servicio es `sshd` en Rocky y `ssh` en Ubuntu; la configuración, `/etc/ssh/sshd_config` (y `sshd_config.d/`).
+- El registro (`journalctl -u sshd` o `-u ssh`) muestra cada entrada y cada intento fallido.
+</Resumen>
