@@ -1,0 +1,76 @@
+tipo: terminal
+shell: bash
+titulo: La página de la empresa no carga
+descripcion: >-
+  Después de la ventana de mantenimiento de anoche, la página web de la empresa no responde. El
+  servidor web oficial es nginx. Encuentra qué pasa, arréglalo y deja el servidor listo para el
+  próximo reinicio.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes:
+    instalados: [nginx, httpd]
+  servicios:
+    httpd: { activo: true, habilitado: true, puertos: [80], paquete: httpd, hace_minutos: 50 }
+    nginx: { activo: false, habilitado: true, fallido: true, puertos: [80], paquete: nginx, hace_minutos: 40 }
+  journal:
+    - { unidad: nginx.service, prioridad: err, mensaje: "nginx: [emerg] bind() to 0.0.0.0:80 failed (98: Address already in use)", hace_minutos: 40 }
+    - { unidad: nginx.service, prioridad: err, mensaje: "Failed to start nginx.service - The nginx HTTP and reverse proxy server.", hace_minutos: 40 }
+pasos:
+  - consigna: Empieza por lo general. Lista los servicios que fallaron.
+    verificar:
+      - { comando_usado: 'systemctl\s+(--failed|list-units\s+.*--state=failed)' }
+      - { salida_contiene: nginx.service }
+    pistas:
+      - "systemctl tiene una opción para mostrar solo lo que falló."
+      - "`systemctl --failed`"
+    solucion: [systemctl --failed]
+    explicacion: Es lo primero que conviene mirar en un servidor con problemas.
+  - consigna: Mira el estado de nginx.
+    verificar:
+      - { comando_usado: 'systemctl\s+status\s+nginx' }
+    pistas:
+      - "`systemctl status nginx`"
+    solucion: [systemctl status nginx]
+    explicacion: >-
+      La línea Loaded dice enabled (iba a arrancar solo) y Active dice failed. Las últimas líneas
+      del journal ya muestran la causa: el puerto 80 está ocupado.
+  - consigna: Averigua qué programa está usando el puerto 80.
+    verificar:
+      - { comando_usado: 'ss\s+-\w*[tl]\w*' }
+      - { salida_contiene: httpd }
+    pistas:
+      - "ss muestra los puertos en escucha. Con sudo, también qué proceso los usa."
+      - "`sudo ss -tlnp`"
+    solucion: [sudo ss -tlnp]
+    explicacion: Alguien instaló y dejó habilitado httpd (Apache), otro servidor web. Solo un programa puede escuchar en un mismo puerto.
+  - consigna: Detén httpd y haz que no vuelva a arrancar al encender el servidor, con un solo comando.
+    verificar:
+      - { servicio: httpd, activo: false, habilitado: false }
+    pistas:
+      - "disable tiene la opción --now, igual que enable."
+      - "`sudo systemctl disable --now httpd`"
+    solucion: [sudo systemctl disable --now httpd]
+    explicacion: Si solo lo detuvieras, en el próximo reinicio httpd volvería a ganar el puerto y el problema reaparecería.
+  - consigna: Arranca nginx.
+    verificar:
+      - { servicio: nginx, activo: true }
+    pistas:
+      - "`sudo systemctl start nginx`"
+    solucion: [sudo systemctl start nginx]
+    explicacion: Ahora el puerto está libre y nginx arranca sin problemas.
+  - consigna: Comprueba, como lo haría un script, que nginx está activo y habilitado.
+    verificar:
+      - { comando_usado: 'systemctl\s+is-active\s+nginx' }
+      - { comando_usado: 'systemctl\s+is-enabled\s+nginx' }
+      - { servicio: nginx, activo: true, habilitado: true }
+    pistas:
+      - "is-active e is-enabled responden con una sola palabra."
+      - "`systemctl is-active nginx` y `systemctl is-enabled nginx`"
+    solucion: [systemctl is-active nginx, systemctl is-enabled nginx]
+    explicacion: >-
+      Responden active y enabled. Además devuelven un código de salida (0 si está bien), así que
+      sirven para scripts y monitoreo: systemctl is-active --quiet nginx || echo "nginx caído".

@@ -1,0 +1,91 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué es systemd?
+  opciones:
+    - { texto: "El primer proceso del sistema (PID 1): arranca, vigila y detiene los servicios", correcta: true, explicacion: "Se maneja con systemctl." }
+    - { texto: "Un servidor web", explicacion: "nginx o Apache son servidores web; systemd los arranca." }
+    - { texto: "El gestor de paquetes de Rocky", explicacion: "Ese es dnf." }
+    - { texto: "Un editor de configuración", explicacion: "systemd usa archivos de configuración, pero no es un editor." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Ejecutas `sudo systemctl start nginx` y funciona. Después reinician el servidor y nginx no está funcionando. ¿Por qué?
+  opciones:
+    - { texto: "Faltó habilitarlo: start lo arranca ahora, enable hace que arranque al encender", correcta: true, explicacion: "sudo systemctl enable nginx (o enable --now desde el principio)." }
+    - { texto: "El reinicio borró nginx", explicacion: "Reiniciar no desinstala nada." }
+    - { texto: "nginx solo funciona hasta medianoche", explicacion: "No existe esa limitación." }
+    - { texto: "Hacía falta restart en lugar de start", explicacion: "restart tampoco lo habilita para el arranque." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta parte de systemctl status?
+  salida: |
+    × postgresql.service - PostgreSQL database server
+         Loaded: loaded (/usr/lib/systemd/system/postgresql.service; enabled; preset: disabled)
+         Active: failed (Result: exit-code) since Mon 2026-11-02 08:01:12 UTC; 3min ago
+  opciones:
+    - { texto: "Está habilitado para arrancar al encender, pero falló hace 3 minutos", correcta: true, explicacion: "enabled en Loaded, failed en Active. El próximo paso es leer el journal." }
+    - { texto: "Está deshabilitado y por eso no arranca", explicacion: "Dice enabled; preset es solo la recomendación de la distribución." }
+    - { texto: "Está funcionando sin problemas", explicacion: "failed y la × roja indican que falló." }
+    - { texto: "No está instalado", explicacion: "Si no estuviera instalado, systemctl diría que la unidad no existe." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que arranca chronyd ahora y además lo habilita para cada encendido, en un solo paso.
+  aceptadas: [sudo systemctl enable --now chronyd, sudo systemctl enable chronyd --now, sudo systemctl enable --now chronyd.service]
+  explicacion: --now hace que enable también ejecute start.
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Cambiaste la configuración de nginx y quieres aplicarla sin cortar las conexiones de los usuarios. ¿Qué haces?
+  opciones:
+    - { texto: "Probar la configuración con nginx -t y después systemctl reload nginx", correcta: true, explicacion: "reload relee la configuración sin detener el servicio." }
+    - { texto: "systemctl restart nginx directamente", explicacion: "Funciona, pero corta las conexiones en curso." }
+    - { texto: "systemctl enable nginx", explicacion: "enable no aplica la configuración: solo cambia el arranque automático." }
+    - { texto: "Reiniciar el servidor", explicacion: "Corta todo, y es innecesario." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Cuál es la diferencia entre disable y mask?
+  opciones:
+    - { texto: "disable lo saca del arranque automático; mask además impide que se arranque de cualquier forma", correcta: true, explicacion: "mask es para lo que no debe funcionar nunca en ese servidor." }
+    - { texto: "Son lo mismo", explicacion: "Con disable todavía se puede arrancar a mano." }
+    - { texto: "mask lo desinstala", explicacion: "No quita ningún paquete; se revierte con unmask." }
+    - { texto: "disable detiene el servicio ahora", explicacion: "disable solo cambia el arranque; para detenerlo también hace falta stop o --now." }
+- id: p07
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para diagnosticar un servicio que no arranca.
+  pasos:
+    - systemctl status servicio
+    - journalctl -xeu servicio
+    - Probar la configuración (por ejemplo, nginx -t)
+    - Corregir la causa
+    - systemctl start servicio y comprobar que responde
+  explicacion: Primero se averigua qué falló y por qué; recién después se cambia algo.
+- id: p08
+  tipo: opcion_multiple
+  enunciado: "nginx no arranca y el journal dice \"bind() to 0.0.0.0:80 failed (98: Address already in use)\". ¿Qué revisas?"
+  opciones:
+    - { texto: "Qué programa ya usa el puerto 80, con sudo ss -tlnp", correcta: true, explicacion: "Solo un programa puede escuchar en un puerto." }
+    - { texto: "Los permisos de /etc/nginx", explicacion: "El mensaje habla de un puerto ocupado." }
+    - { texto: "Si nginx está instalado", explicacion: "Si intentó abrir el puerto, está instalado." }
+    - { texto: "Que el disco tenga espacio", explicacion: "No tiene relación con el mensaje." }
+- id: p09
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estos comandos se pueden ejecutar sin sudo? (Marca todos los que correspondan.)
+  opciones:
+    - { texto: "systemctl status nginx", correcta: true, explicacion: "Mirar no necesita privilegios." }
+    - { texto: "systemctl is-active nginx", correcta: true, explicacion: "También es solo una consulta." }
+    - { texto: "systemctl restart nginx", explicacion: "Cambiar el estado de un servicio necesita sudo." }
+    - { texto: "systemctl --failed", correcta: true, explicacion: "Es una consulta." }
+    - { texto: "systemctl enable nginx", explicacion: "Cambia la configuración del arranque: necesita sudo." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: ¿Qué es multi-user.target?
+  opciones:
+    - { texto: "El modo normal de un servidor: red y servicios, sin escritorio gráfico", correcta: true, explicacion: "Los servicios habilitados se enganchan a este target." }
+    - { texto: "Un servicio que permite varios usuarios por SSH", explicacion: "Es un target, no un servicio." }
+    - { texto: "El modo de rescate", explicacion: "Ese es rescue.target." }
+    - { texto: "Un grupo de usuarios", explicacion: "No tiene relación con los grupos de usuarios." }
+- id: p11
+  tipo: completar_comando
+  enunciado: Escribe el comando que lista solo los servicios que fallaron.
+  aceptadas: [systemctl --failed, systemctl list-units --failed, systemctl list-units --state=failed, systemctl --failed --type=service]
+  explicacion: Es el primer comando a ejecutar en un servidor con problemas.

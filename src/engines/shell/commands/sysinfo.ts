@@ -40,7 +40,7 @@ function parseSince(v: string): number | undefined {
 }
 
 /** PID estable para las entradas del journal que no lo guardaron. */
-function entryPid(e: JournalEntry): number {
+export function entryPid(e: JournalEntry): number {
   if (e.pid !== undefined) return e.pid
   if (e.ident === 'systemd') return 1
   let h = 0

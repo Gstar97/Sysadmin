@@ -1,0 +1,46 @@
+tipo: diagrama
+titulo: Cómo se lee systemctl status
+puntos:
+  - id: head
+    titulo: "El punto, el nombre y la descripción"
+    area: { x: 1.5, y: 5.76, ancho: 97, alto: 6.36 }
+    texto: >-
+      El punto de color resume el estado: verde (●) funcionando, blanco (○) detenido, rojo (×)
+      falló. Después viene el nombre de la unidad y la descripción que trae su archivo.
+  - id: loaded
+    titulo: "Loaded: el archivo y si arranca solo"
+    area: { x: 1.5, y: 12.12, ancho: 97, alto: 6.36 }
+    texto: >-
+      Dónde está el archivo de la unidad, y si está enabled (arranca al encender el servidor) o
+      disabled (no). preset es lo que la distribución recomienda por defecto; lo que vale es lo
+      que dice antes.
+  - id: active
+    titulo: "Active: qué está pasando ahora"
+    area: { x: 1.5, y: 18.48, ancho: 97, alto: 6.36 }
+    texto: >-
+      active (running) significa funcionando, inactive (dead) detenido y failed que se cayó o no
+      pudo arrancar. Siempre dice desde cuándo: si un servicio se reinició hace 2 minutos y nadie
+      lo tocó, ahí hay una pista.
+  - id: pid
+    titulo: "Main PID: el proceso principal"
+    area: { x: 1.5, y: 24.85, ancho: 97, alto: 6.36 }
+    texto: >-
+      El número del proceso que systemd vigila. Es el mismo que ves en ps o top.
+  - id: rec
+    titulo: "Tasks y Memory: lo que consume"
+    area: { x: 1.5, y: 31.21, ancho: 97, alto: 12.73 }
+    texto: >-
+      Cuántos procesos e hilos tiene el servicio y cuánta memoria usa en total. Útil para ver de
+      un vistazo si algo se está comiendo la RAM.
+  - id: cg
+    titulo: "CGroup: todos sus procesos"
+    area: { x: 1.5, y: 43.94, ancho: 97, alto: 19.09 }
+    texto: >-
+      systemd agrupa todos los procesos de un servicio, incluidos los que crea después (aquí, el
+      proceso principal de nginx y su worker). Así, al detenerlo, no queda ninguno suelto.
+  - id: logs
+    titulo: "Las últimas líneas del journal"
+    area: { x: 1.5, y: 69.39, ancho: 97, alto: 19.09 }
+    texto: >-
+      Los últimos mensajes del servicio. Si falló, casi siempre la causa está aquí. Para ver más,
+      journalctl -u nginx (lección 1.3.5).

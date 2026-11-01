@@ -22,7 +22,7 @@ import {
   type Timer,
 } from '../units'
 import { ROOT_CRED } from '../vfs'
-import { SERVICE_CHECKS } from './sysinfo'
+import { entryPid, SERVICE_CHECKS } from './sysinfo'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -207,7 +207,14 @@ async function startService(ctx: CommandContext, svc: Service, verb = 'start'): 
   if (!def?.custom) {
     const extra = SERVICE_CHECKS[svc.name]?.(ctx)
     const conflict = [...sys.services.values()].find((o) => o !== svc && o.active && o.ports.some((p) => svc.ports.includes(p)))
-    const failure = svc.failMessage ?? extra ?? (conflict ? `bind() to 0.0.0.0:${svc.ports.find((p) => conflict.ports.includes(p))} failed (98: Address already in use)` : undefined)
+    const port = conflict ? svc.ports.find((p) => conflict.ports.includes(p)) : undefined
+    const bindError =
+      svc.name === 'nginx'
+        ? `nginx: [emerg] bind() to 0.0.0.0:${port} failed (98: Address already in use)`
+        : svc.name === 'httpd' || svc.name === 'apache2'
+          ? `(98)Address already in use: AH00072: make_sock: could not bind to address 0.0.0.0:${port}`
+          : `bind() to 0.0.0.0:${port} failed (98: Address already in use)`
+    const failure = svc.failMessage ?? extra ?? (conflict ? bindError : undefined)
     if (failure) {
       const pid = sys.allocPid()
       journal(sys, unit, `Starting ${unit} - ${svc.description}...`)
@@ -374,7 +381,7 @@ function serviceStatus(ctx: CommandContext, svc: Service): string {
     out += `   Main PID: ${svc.pid} (${proc?.comm ?? cmd.split(/\s+/)[0].split('/').pop()})\n      Tasks: ${svc.ports.length ? 3 : 1} (limit: 22950)\n     Memory: 4.2M\n        CPU: 61ms\n     CGroup: /system.slice/${unit}\n             └─${svc.pid} ${cmd}\n`
   }
   const logs = ctx.sys.journal.filter((j) => j.unit === unit).slice(-8)
-  if (logs.length) out += '\n' + logs.map((j) => `${journalTime(j.time)} ${ctx.sys.hostname} ${j.ident}[${j.pid ?? 1}]: ${j.message}`).join('\n') + '\n'
+  if (logs.length) out += '\n' + logs.map((j) => `${journalTime(j.time)} ${ctx.sys.hostname} ${j.ident}[${entryPid(j)}]: ${j.message}`).join('\n') + '\n'
   return out
 }
 
@@ -391,7 +398,7 @@ function timerStatus(ctx: CommandContext, t: Timer): string {
   const target = ctx.sys.services.get(t.unit)
   out += `   Triggers: ${target?.active ? GREEN('●', tty) : target?.failed ? RED('×', tty) : '●'} ${t.unit}.service\n`
   const logs = ctx.sys.journal.filter((j) => j.unit === unit).slice(-5)
-  if (logs.length) out += '\n' + logs.map((j) => `${journalTime(j.time)} ${ctx.sys.hostname} ${j.ident}[${j.pid ?? 1}]: ${j.message}`).join('\n') + '\n'
+  if (logs.length) out += '\n' + logs.map((j) => `${journalTime(j.time)} ${ctx.sys.hostname} ${j.ident}[${entryPid(j)}]: ${j.message}`).join('\n') + '\n'
   return out
 }
 
