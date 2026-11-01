@@ -1,0 +1,99 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué relación hay entre el journal y /var/log/messages en Rocky?
+  opciones:
+    - { texto: "journald recibe los mensajes y rsyslog escribe una copia en archivos de texto como /var/log/messages", correcta: true, explicacion: "Por eso muestran casi lo mismo, en dos formatos." }
+    - { texto: "Son registros independientes que no tienen nada en común", explicacion: "La mayoría de los mensajes llegan a los dos." }
+    - { texto: "/var/log/messages es el nombre del journal en el disco", explicacion: "El journal se guarda en /var/log/journal, en formato propio." }
+    - { texto: "El journal solo guarda los mensajes del kernel", explicacion: "Guarda los de todo el sistema." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "¿Qué muestra `journalctl -p warning`?"
+  opciones:
+    - { texto: "Las advertencias y todo lo más grave (err, crit, alert, emerg)", correcta: true, explicacion: "La prioridad indicada y las de número menor." }
+    - { texto: "Solo las advertencias", explicacion: "También incluye las más graves." }
+    - { texto: "Todo menos las advertencias", explicacion: "Es al revés: filtra para quedarse con ellas y lo peor." }
+    - { texto: "Los mensajes de los últimos días", explicacion: "-p filtra por prioridad, no por fecha." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra los mensajes del servicio sshd desde hoy a la medianoche.
+  aceptadas: [journalctl -u sshd --since today, journalctl --since today -u sshd, journalctl -u sshd.service --since today, journalctl -u sshd -S today]
+  explicacion: --since acepta today, yesterday, fechas como "2026-11-01 08:00" o expresiones como "2 hours ago".
+- id: p04
+  tipo: opcion_multiple
+  enunciado: En un servidor Ubuntu, ¿dónde buscas quién usó sudo o intentó entrar por SSH?
+  opciones:
+    - { texto: "/var/log/auth.log (o journalctl)", correcta: true, explicacion: "En Rocky, el equivalente es /var/log/secure." }
+    - { texto: "/var/log/syslog", explicacion: "Ahí van los mensajes generales; la autenticación va aparte." }
+    - { texto: "/var/log/secure", explicacion: "Ese es el nombre en Rocky." }
+    - { texto: "/etc/sudoers", explicacion: "Es la configuración de sudo, no un registro." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Después de reiniciar, `journalctl -b -1` dice que no hay datos del arranque anterior. ¿Por qué?
+  opciones:
+    - { texto: "El journal se guarda en memoria porque no existe /var/log/journal, y se perdió al reiniciar", correcta: true, explicacion: "Se hace persistente creando la carpeta y reiniciando systemd-journald." }
+    - { texto: "Falta sudo", explicacion: "Sin permisos, journalctl lo avisa de otra forma." }
+    - { texto: "-b -1 no existe", explicacion: "Es la forma de pedir el encendido anterior." }
+    - { texto: "logrotate borró el journal", explicacion: "logrotate rota archivos de texto; el journal tiene su propio límite." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: Ves estas líneas en /var/log/secure. ¿Qué está pasando?
+  salida: |
+    Nov 02 03:14:01 web01 sshd[8811]: Failed password for root from 198.51.100.7 port 41022 ssh2
+    Nov 02 03:14:03 web01 sshd[8813]: Failed password for invalid user admin from 198.51.100.7 port 41030 ssh2
+    Nov 02 03:14:05 web01 sshd[8815]: Failed password for invalid user oracle from 198.51.100.7 port 41038 ssh2
+  opciones:
+    - { texto: "Un programa automático prueba usuarios y contraseñas comunes desde la misma IP", correcta: true, explicacion: "Es muy común en servidores expuestos a internet. Se protege con claves SSH y bloqueos (módulo 1.6)." }
+    - { texto: "Un empleado olvidó su contraseña", explicacion: "Prueba usuarios como root, admin y oracle cada dos segundos." }
+    - { texto: "El servidor SSH está caído", explicacion: "Si respondió Failed password, está funcionando." }
+    - { texto: "Alguien entró al servidor", explicacion: "Todos los intentos fallaron. Un acceso exitoso diría Accepted." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Qué hace `delaycompress` en logrotate?
+  opciones:
+    - { texto: "Deja sin comprimir la copia más reciente (.1) y comprime las demás", correcta: true, explicacion: "Por si el programa todavía estaba escribiendo en ella." }
+    - { texto: "Espera una hora antes de rotar", explicacion: "No cambia el momento de la rotación." }
+    - { texto: "Comprime más lento para no cargar la CPU", explicacion: "No tiene relación con la velocidad." }
+    - { texto: "Desactiva la compresión", explicacion: "Para eso existe nocompress." }
+- id: p08
+  tipo: encontrar_error
+  enunciado: logrotate rechaza esta configuración. Marca la línea con el problema.
+  archivo: |
+    /var/log/app/*.log {
+        weekly
+        rotate 4
+        compress
+        missingok
+        create 0640 app app   # el log nuevo, de la aplicación
+    }
+  lineas_con_error: [6]
+  explicacion: >-
+    logrotate no acepta comentarios al final de una línea. El comentario va en una línea aparte que empiece con #.
+- id: p09
+  tipo: opcion_multiple
+  enunciado: "logrotate dice: \"skipping /var/log/app/app.log because parent directory has insecure permissions\". ¿Qué haces?"
+  opciones:
+    - { texto: "Agregar su app app dentro del bloque de configuración", correcta: true, explicacion: "Le dice a logrotate con qué cuenta trabajar en esa carpeta." }
+    - { texto: "chmod 777 /var/log/app", explicacion: "Empeora el problema: ahora cualquiera puede escribir." }
+    - { texto: "Borrar el log a mano todos los días", explicacion: "Es justamente lo que logrotate evita." }
+    - { texto: "Ejecutar logrotate sin sudo", explicacion: "No podría escribir en /var/log." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Después de configurar logrotate, el app.log nuevo queda vacío y el app.log.1 sigue creciendo. ¿Qué pasa?
+  opciones:
+    - { texto: "La aplicación sigue escribiendo en el archivo que tenía abierto; falta un postrotate que la avise o usar copytruncate", correcta: true, explicacion: "Renombrar un archivo no cambia el archivo que un programa ya tiene abierto." }
+    - { texto: "logrotate rotó dos veces", explicacion: "No explica que .1 siga creciendo." }
+    - { texto: "El disco está lleno", explicacion: "Si estuviera lleno, nada crecería." }
+    - { texto: "Faltó compress", explicacion: "La compresión no cambia dónde escribe la aplicación." }
+- id: p11
+  tipo: completar_comando
+  enunciado: Escribe el comando que prueba la configuración /etc/logrotate.d/app sin cambiar nada.
+  aceptadas: [sudo logrotate -d /etc/logrotate.d/app, logrotate -d /etc/logrotate.d/app, sudo logrotate --debug /etc/logrotate.d/app]
+  explicacion: -d explica paso a paso qué haría. Para forzar una rotación real, -f.
+- id: p12
+  tipo: ordenar_pasos
+  enunciado: Ordena de lo más grave a lo menos grave.
+  pasos: [emerg, crit, err, warning, info, debug]
+  explicacion: Los números van de 0 (emerg) a 7 (debug). Faltan alert (1) y notice (5).

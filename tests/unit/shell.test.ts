@@ -237,3 +237,18 @@ describe('lo que usa el Nivel 1 (usuarios y permisos)', () => {
     expect((await run('sudo grep -c pam_faillock /etc/pam.d/system-auth')).out).toBe('3\n')
   })
 })
+
+describe('umask con sudo y su', () => {
+  it('sudo suma 022 a la umask; su - usa la de la cuenta', async () => {
+    const { run } = await session({ usuarios: [{ nombre: 'ana', sudo: true }, { nombre: 'marta' }], usuario: 'ana' })
+    await run('sudo mkdir -m 1777 /srv/c')
+    await run('sudo -u marta touch /srv/c/a.txt')
+    await run("sudo su - marta -c 'touch /srv/c/b.txt'")
+    await run('echo hola | sudo tee /srv/c/c.txt')
+    const ls = (await run('ls -l /srv/c')).out
+    expect(ls).toMatch(/-rw-r--r--\. 1 marta .* a\.txt/)
+    expect(ls).toMatch(/-rw-rw-r--\. 1 marta .* b\.txt/)
+    expect(ls).toMatch(/-rw-r--r--\. 1 root .* c\.txt/)
+    expect((await run('whoami')).out).toBe('ana\n')
+  })
+})

@@ -582,7 +582,7 @@ register('sudo', {
       return 1
     }
     logAuth(ctx, `${user} : TTY=pts/0 ; PWD=${ctx.sh.cwd} ; USER=${target} ; COMMAND=${command[0].startsWith('/') ? '' : defPath(command[0]) + '/'}${command.join(' ')}`)
-    if (args[0] === 'su' && mode === 'cmd') {
+    if (args[0] === 'su' && mode === 'cmd' && !args.includes('-c') && !args.includes('--command')) {
       // sudo su [-] [usuario]: abre una sesión como ese usuario (por defecto root).
       const suArgs = args.slice(1)
       const suTarget = suArgs.find((a) => !a.startsWith('-')) ?? 'root'
@@ -601,7 +601,14 @@ register('sudo', {
       ctx.sh.pushUser(target, mode === 'login')
       return 0
     }
-    return ctx.sh.asUser(target, () => ctx.sh.invoke(command, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY }))
+    // sudo usa la unión de la umask del usuario y 0022: lo que se crea con sudo no queda escribible por el grupo.
+    const savedUmask = ctx.sh.umask
+    ctx.sh.umask = savedUmask | 0o022
+    try {
+      return await ctx.sh.asUser(target, () => ctx.sh.invoke(command, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY }))
+    } finally {
+      ctx.sh.umask = savedUmask
+    }
   },
 })
 
@@ -612,13 +619,16 @@ register('su', {
     let login = false
     let cmd: string | undefined
     let shell: string | undefined
-    while (args.length && args[0].startsWith('-')) {
+    // Las opciones pueden ir antes o después del usuario: su - marta -c 'comando'.
+    const positional: string[] = []
+    while (args.length) {
       const o = args.shift()!
       if (o === '-' || o === '-l' || o === '--login') login = true
-      else if (o === '-c') cmd = args.shift()
+      else if (o === '-c' || o === '--command') cmd = args.shift()
       else if (o === '-s' || o === '--shell') shell = args.shift()
+      else positional.push(o)
     }
-    const target = args[0] ?? 'root'
+    const target = positional[0] ?? 'root'
     if (!ctx.sys.users.has(target)) {
       ctx.err(`su: user ${target} does not exist or the user entry does not contain all the required fields\n`)
       return 1
@@ -634,11 +644,18 @@ register('su', {
       return 1
     }
     if (cmd) {
-      return ctx.sh.asUser(target, async () => {
-        const res = await ctx.sh.captureCommand(cmd!)
-        ctx.out(res)
-        return ctx.sh.lastExit
-      })
+      // su - abre una sesión de inicio: la umask es la de esa cuenta (002 para usuarios, 022 para root).
+      const savedUmask = ctx.sh.umask
+      if (login) ctx.sh.umask = target === 'root' ? 0o022 : 0o002
+      try {
+        return await ctx.sh.asUser(target, async () => {
+          const res = await ctx.sh.captureCommand(cmd!)
+          ctx.out(res)
+          return ctx.sh.lastExit
+        })
+      } finally {
+        ctx.sh.umask = savedUmask
+      }
     }
     ctx.sh.pushUser(target, login)
     return 0

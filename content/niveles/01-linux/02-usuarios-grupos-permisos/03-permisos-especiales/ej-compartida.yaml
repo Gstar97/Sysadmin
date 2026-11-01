@@ -42,12 +42,15 @@ pasos:
     verificar:
       - { archivo: /srv/contabilidad/balance.txt, dueno: marta, grupo: contabilidad }
     pistas:
-      - "`sudo -u marta touch /srv/contabilidad/balance.txt` y `sudo ls -l /srv/contabilidad`"
-    solucion: [sudo -u marta touch /srv/contabilidad/balance.txt, sudo ls -l /srv/contabilidad]
+      - "Para trabajar como marta, abre su sesión con su -: así el archivo nace como si ella lo hubiera creado desde su cuenta."
+      - "`sudo su - marta -c 'touch /srv/contabilidad/balance.txt'` y `sudo ls -l /srv/contabilidad`"
+    solucion: ["sudo su - marta -c 'touch /srv/contabilidad/balance.txt'", sudo ls -l /srv/contabilidad]
     explicacion: >-
       Sin el SGID, el archivo habría quedado con el grupo marta (su grupo principal) y diego no
       podría modificarlo. Con el SGID, hereda el grupo contabilidad, y como la umask de los usuarios
-      es 002, nace con escritura para el grupo.
+      es 002, nace con escritura para el grupo. Un detalle: con sudo -u marta el archivo nacería
+      con 644, porque sudo suma la umask 022 a la del usuario; su - abre una sesión igual a la de
+      marta, con su umask.
   - consigna: Comprueba que diego puede agregar una línea al archivo de marta.
     verificar:
       - { archivo: /srv/contabilidad/balance.txt, contenido_incluye: revisado }

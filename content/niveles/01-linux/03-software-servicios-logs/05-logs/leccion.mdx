@@ -1,0 +1,201 @@
+---
+id: n1-m3-l5
+titulo: Logs del sistema
+minutos: 150
+objetivos:
+  - Explicar cómo se registran los mensajes en Linux (journal y archivos de /var/log).
+  - Encontrar rápido lo importante con journalctl, filtrando por servicio, prioridad, fecha y texto.
+  - Saber qué archivo de /var/log mirar en Rocky y en Ubuntu.
+  - Configurar y probar la rotación de logs con logrotate.
+glosario: [journal, prioridad-log, rsyslog, logrotate]
+verificado: 2026-11
+---
+
+import flujo from './flujo.svg?raw'
+import opciones from './opciones.yaml'
+import ejLogs from './ej-logs.yaml'
+
+Cuando algo falla en un servidor, casi nunca lo ves pasar. Lo que tienes es lo que quedó escrito: los **logs**. Saber encontrar en minutos la línea que importa, entre miles, es una de las habilidades que más diferencia a un buen administrador. En esta lección vas a aprender dónde están, cómo leerlos con filtros y cómo evitar que llenen el disco.
+
+<AntesDeEmpezar>
+- Un **log** es un registro de lo que pasó, con fecha y hora (lección 1.1.5).
+- `systemctl status` muestra las últimas líneas del log de un servicio, y `journalctl -u` el registro completo (lección 1.3.3).
+- `less`, `tail -f` y `grep` para leer y buscar en archivos de texto (lección 1.1.5).
+</AntesDeEmpezar>
+
+## Para qué sirven los logs
+
+Piensa en el libro de novedades de la portería de un edificio: "08:15, llegó el técnico del ascensor. 10:40, se cortó la luz en el piso 3. 10:52, volvió". Nadie lo lee todos los días, pero cuando algo sale mal es lo primero que se consulta, porque dice qué pasó, cuándo y quién estuvo.
+
+En un servidor pasa lo mismo, con una diferencia: se escriben cientos o miles de líneas por hora. El trabajo no es leerlo todo, sino **filtrar** hasta quedarte con lo que importa.
+
+## Cómo se registra todo
+
+En Rocky y en Ubuntu Server hay dos sistemas trabajando juntos:
+
+<Diagrama svg={flujo} alt="El kernel, los servicios, sudo y los scripts envían sus mensajes a systemd-journald, que los guarda en el journal (en /var/log/journal, se lee con journalctl) y los pasa a rsyslog, que los escribe en archivos de texto: /var/log/messages, secure y cron en Rocky; /var/log/syslog y auth.log en Ubuntu. Algunas aplicaciones, como nginx, además escriben sus propios archivos en /var/log." pie="Un mismo mensaje termina en el journal y, casi siempre, también en un archivo de texto." />
+
+- **systemd-journald** recibe los mensajes de todo el sistema y los guarda en el **journal**, con datos extra: qué servicio lo escribió, con qué PID, con qué prioridad. Se lee con `journalctl`.
+- **rsyslog** recibe una copia y la escribe en los archivos de texto clásicos de `/var/log`, que se leen con `less`, `tail` o `grep`.
+- Algunas aplicaciones, como nginx o las bases de datos, además escriben sus propios archivos (por ejemplo `/var/log/nginx/error.log`).
+
+<EnSimple>
+Hay un registro central (el journal) que se consulta con `journalctl`, y copias en archivos de texto dentro de `/var/log`. Muestran casi lo mismo; el journal es más cómodo para filtrar, y los archivos de texto sirven con cualquier herramienta.
+</EnSimple>
+
+## La gravedad de cada mensaje
+
+Cada mensaje tiene una **prioridad**, de 0 (lo más grave) a 7 (lo menos importante):
+
+| Número | Nombre | Ejemplo |
+| --- | --- | --- |
+| 0 | emerg | El sistema no se puede usar |
+| 1 | alert | Hay que actuar ya |
+| 2 | crit | Falla crítica de hardware |
+| 3 | **err** | Un servicio no pudo arrancar |
+| 4 | **warning** | Algo raro que todavía no es un error |
+| 5 | notice | Normal, pero digno de mención |
+| 6 | info | Información de rutina |
+| 7 | debug | Detalle para programadores |
+
+Cuando filtras por una prioridad, ves esa y todas las más graves: `journalctl -p err` muestra err, crit, alert y emerg. En la terminal, los errores aparecen en rojo y las advertencias en amarillo.
+
+## journalctl paso a paso
+
+Sin opciones, `journalctl` muestra **todo** desde el principio, dentro de `less` (q para salir, / para buscar). Casi nunca es lo que quieres. Empieza por un filtro y agrega otros de a uno:
+
+```bash
+journalctl -u nginx                  # un servicio
+journalctl -u nginx -n 50            # sus últimas 50 líneas
+journalctl -u nginx -p warning       # sus advertencias y errores
+journalctl -u nginx --since today    # lo de hoy
+journalctl -u nginx --since "2026-11-01 02:00" --until "2026-11-01 04:00"
+```
+
+<Emparejar ejercicio={opciones} />
+
+Otras que vas a usar seguido:
+
+- **`-f`**: sigue mostrando las líneas nuevas mientras llegan, como `tail -f`. Ideal para mirar qué pasa mientras pruebas algo. Se corta con Ctrl+C.
+- **`-e`**: abre directamente en el final. **`-x`** agrega explicaciones a algunos mensajes. Por eso `journalctl -xeu nginx` es la receta que sugiere systemd cuando un servicio falla.
+- **`-b`**: solo desde el último encendido. `-b -1` es el encendido anterior (si el journal se guarda en disco).
+- **`-k`**: solo los mensajes del kernel (lo mismo que muestra `dmesg`).
+- **`-g texto`**: solo las líneas que contienen ese texto.
+- **`_COMM=sudo`**: los mensajes de un programa que no es un servicio, como sudo.
+- **`-o cat`**: solo el mensaje, sin fecha ni servidor. Útil para copiar.
+
+<Nota titulo="¿Quién puede leer el journal?">
+root, y los miembros de los grupos `wheel` (Rocky), `adm` (Ubuntu) o `systemd-journal`. Un usuario común solo ve sus propios mensajes; si te pasa, `journalctl` te lo avisa con un *Hint* al principio.
+</Nota>
+
+### ¿Se guarda después de reiniciar?
+
+Depende de si existe la carpeta `/var/log/journal`. Si existe, el journal se guarda en el disco y sobrevive a los reinicios; si no, se guarda en memoria y se pierde al apagar. Para comprobarlo, `journalctl --list-boots` muestra cuántos encendidos tiene guardados. Si hay uno solo y lo necesitas, se hace persistente así:
+
+```bash
+sudo mkdir -p /var/log/journal
+sudo systemctl restart systemd-journald
+```
+
+El journal se limita solo para no llenar el disco (por defecto, hasta un 10 % del sistema de archivos, con un máximo de 4 GB). `journalctl --disk-usage` dice cuánto ocupa, y `sudo journalctl --vacuum-size=500M` borra lo más viejo hasta quedar en ese tamaño.
+
+## Los archivos de /var/log
+
+Muchos manuales y compañeros te van a decir "mira el syslog" o "fíjate en secure". Los nombres cambian entre familias:
+
+| Qué contiene | Rocky | Ubuntu |
+| --- | --- | --- |
+| Mensajes generales del sistema | `/var/log/messages` | `/var/log/syslog` |
+| Inicios de sesión, sudo, SSH | `/var/log/secure` | `/var/log/auth.log` |
+| Tareas programadas | `/var/log/cron` | dentro de `syslog` |
+| Instalaciones de paquetes | `/var/log/dnf.log` | `/var/log/apt/history.log` |
+| Mensajes del kernel | journal (`journalctl -k`) | `/var/log/kern.log` |
+| Aplicaciones | `/var/log/nginx/`, `/var/log/httpd/`... | `/var/log/nginx/`, `/var/log/apache2/`... |
+
+Casi todos necesitan `sudo` para leerse. Las herramientas son las de siempre:
+
+```bash
+sudo tail -f /var/log/secure                    # mirar en vivo
+sudo grep "Failed password" /var/log/secure     # buscar
+sudo less /var/log/messages                     # recorrer (G va al final)
+```
+
+Para probar que el registro funciona, o para que tus scripts dejen constancia de lo que hicieron, existe **logger**: `logger -t respaldo "Respaldo terminado"` escribe esa línea en el journal y en los archivos, como cualquier otro programa.
+
+## logrotate: que los logs no llenen el disco
+
+Los archivos de texto crecen sin parar. Un servidor web con mucho tráfico puede escribir gigas por día, y un disco lleno detiene casi todo (los servicios no pueden escribir, las bases de datos se frenan). **logrotate** resuelve esto: cada cierto tiempo renombra el log actual, empieza uno nuevo vacío, comprime los viejos y borra los que ya no hacen falta.
+
+<EnSimple>
+logrotate es como el archivo de una oficina: cada semana, las carpetas de la semana pasada se guardan en una caja con fecha, se empieza una carpeta nueva, y las cajas de hace más de un mes se tiran.
+</EnSimple>
+
+Se ejecuta solo, una vez por día, con `logrotate.timer`. Lee `/etc/logrotate.conf` (las opciones generales) y un archivo por aplicación en `/etc/logrotate.d/`. Un ejemplo típico:
+
+```text
+/var/log/inventario/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 inventario inventario
+}
+```
+
+Línea por línea:
+
+- `daily`: rotar todos los días (también existen `weekly` y `monthly`, o `size 100M` para rotar por tamaño).
+- `rotate 7`: guardar 7 copias viejas; la octava se borra.
+- `compress` y `delaycompress`: comprimir las copias con gzip, menos la más reciente (por si el programa todavía estaba escribiendo en ella).
+- `missingok`: si el log no existe, no es un error.
+- `notifempty`: si está vacío, no rotarlo.
+- `create 0640 inventario inventario`: crear el log nuevo con esos permisos, dueño y grupo.
+
+Ojo: logrotate no acepta comentarios al final de una línea. Si quieres comentar, usa una línea aparte que empiece con `#`.
+
+Con eso, la carpeta queda así después de unos días: `app.log` (el actual), `app.log.1` (el de ayer, sin comprimir), `app.log.2.gz`, `app.log.3.gz`... hasta el 7.
+
+Dos situaciones que vas a encontrar:
+
+- **El programa sigue escribiendo en el archivo viejo.** Muchos programas tienen el archivo abierto y no se enteran de que fue renombrado. Hay dos soluciones: avisarle al programa con un bloque `postrotate` (`systemctl reload nginx` entre `postrotate` y `endscript`), o usar `copytruncate`, que copia el contenido y vacía el original sin renombrarlo.
+- **La carpeta del log es de otro usuario.** Si la carpeta es escribible por un usuario que no es root, logrotate se niega a trabajar ahí por seguridad. Se resuelve con `su usuario grupo` dentro del bloque.
+
+Antes de confiar en una configuración, pruébala:
+
+```bash
+sudo logrotate -d /etc/logrotate.d/inventario    # modo de prueba: explica qué haría, sin cambiar nada
+sudo logrotate -f /etc/logrotate.d/inventario    # forzar una rotación ahora
+```
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejLogs} />
+
+<ErroresComunes>
+  <ErrorComun titulo="journalctl muestra miles de líneas y no encuentro nada">
+    Siempre empieza con un filtro: `-u servicio`, `-p err`, `--since`, `-b`. Y combínalos. Si buscas un texto, `-g "texto"`.
+  </ErrorComun>
+  <ErrorComun titulo='"No journal files were found" o falta lo de ayer'>
+    El journal no se guarda en el disco (no existe `/var/log/journal`) y el servidor se reinició. Crea la carpeta y reinicia `systemd-journald` para que, de ahora en adelante, se conserve.
+  </ErrorComun>
+  <ErrorComun titulo='"error: Ignoring app because of bad file mode - must be 0644 or 0444."'>
+    El archivo de `/etc/logrotate.d/` tiene permisos de escritura para el grupo o para otros. logrotate lo ignora por seguridad: `sudo chmod 644 /etc/logrotate.d/app`.
+  </ErrorComun>
+  <ErrorComun titulo='"skipping ... because parent directory has insecure permissions"'>
+    La carpeta del log es escribible por un usuario o grupo que no es root. Agrega `su usuario grupo` al bloque de logrotate (no cambies los permisos de la carpeta: la aplicación los necesita).
+  </ErrorComun>
+  <ErrorComun titulo="Después de rotar, el log nuevo queda vacío y el viejo sigue creciendo">
+    El programa sigue escribiendo en el archivo que tenía abierto. Agrega un `postrotate` que le avise (reload) o usa `copytruncate`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- systemd-journald recibe todos los mensajes y los guarda en el **journal**; rsyslog escribe copias en los archivos de texto de `/var/log`.
+- Prioridades de 0 (emerg) a 7 (debug); `-p err` muestra los errores y lo más grave.
+- journalctl se usa con filtros: `-u` servicio, `-p` prioridad, `--since`/`--until`, `-b` arranque, `-g` texto, `-f` en vivo, `-n` últimas líneas. `-xeu servicio` para un servicio que falla.
+- El journal sobrevive a los reinicios si existe `/var/log/journal`. `--disk-usage` y `--vacuum-size` controlan su tamaño.
+- Rocky: `messages`, `secure`, `cron`. Ubuntu: `syslog`, `auth.log`. Las aplicaciones, en su carpeta de `/var/log`.
+- logrotate rota los archivos de texto según `/etc/logrotate.d/`: daily, rotate N, compress, delaycompress, missingok, notifempty, create. Se prueba con `-d` y se fuerza con `-f`.
+</Resumen>
