@@ -1,0 +1,139 @@
+---
+id: n1-m4-l4
+titulo: Montajes y /etc/fstab
+minutos: 120
+objetivos:
+  - Montar y desmontar sistemas de archivos, y entender qué pasa con la carpeta.
+  - Escribir líneas de /etc/fstab con UUID y las opciones correctas.
+  - Probar fstab antes de reiniciar para no dejar el servidor sin arrancar.
+glosario: [fstab, punto-montaje]
+verificado: 2026-11
+---
+
+import linea from './linea.svg?raw'
+import lineaPuntos from './linea.yaml'
+import editorFstab from './editor-fstab.yaml'
+import ejMontar from './ej-montar.yaml'
+
+Ya tienes una partición con su sistema de archivos. Falta lo último: conectarla al árbol de carpetas para poder usarla, y que esa conexión sobreviva a los reinicios. Es la lección más corta en comandos, pero tiene una trampa importante: un error en `/etc/fstab` puede dejar el servidor sin arrancar.
+
+<AntesDeEmpezar>
+- En Linux hay un solo árbol de carpetas que empieza en `/`; los discos se **montan** en carpetas de ese árbol (lección 0.2.4).
+- Cada sistema de archivos tiene un **UUID** que no cambia (lección 1.4.1).
+- Un error en fstab hace que el servidor arranque en modo de emergencia (lección 1.3.6).
+</AntesDeEmpezar>
+
+## Qué es montar
+
+Imagina un mueble con huecos para cajones. Cada cajón se puede sacar y poner en otro hueco; lo que tiene adentro viaja con él. Montar un sistema de archivos es **encajar un cajón (el disco) en un hueco del mueble (una carpeta)**. Desde ese momento, todo lo que guardes en esa carpeta va a ese disco.
+
+```bash
+sudo mkdir -p /srv/datos               # el hueco: una carpeta vacía
+sudo mount /dev/sdb1 /srv/datos        # encajar el cajón
+df -h /srv/datos                       # ¿qué disco hay detrás de esta carpeta?
+sudo umount /srv/datos                 # sacarlo (umount, sin la n)
+```
+
+Al desmontar, la carpeta vuelve a mostrar lo que tenía antes, que normalmente es nada. Los archivos no se borraron: siguen en el disco, que ya no está encajado.
+
+<EnSimple>
+Montar es conectar un disco a una carpeta. Lo que guardas en la carpeta va al disco; si lo desmontas, la carpeta queda vacía otra vez, pero los archivos siguen en el disco.
+</EnSimple>
+
+<Advertencia titulo="Los archivos escondidos debajo de un montaje">
+Si guardas algo en `/srv/datos` cuando el disco **no** está montado, queda en el disco del sistema. Cuando después montas el disco encima, esos archivos quedan tapados: no se ven, pero ocupan lugar. Es una de las causas de "df dice que el disco está lleno, pero du no encuentra nada" (el caso real del módulo).
+</Advertencia>
+
+Para ver qué está montado y dónde: `findmnt` (en forma de árbol), `mount` sin argumentos o `df -h`.
+
+### "target is busy"
+
+No se puede desmontar algo que se está usando: un programa con un archivo abierto ahí, o una terminal (incluida la tuya) parada adentro de esa carpeta.
+
+```text
+$ sudo umount /srv/datos
+umount: /srv/datos: target is busy.
+```
+
+Sal de la carpeta (`cd`) y, si sigue ocupado, `sudo lsof /srv/datos` muestra qué procesos lo usan.
+
+## /etc/fstab: los montajes permanentes
+
+Lo que montas con `mount` dura hasta el próximo reinicio. Para que se monte solo al arrancar, se escribe en `/etc/fstab`, una línea por sistema de archivos:
+
+<DiagramaInteractivo svg={linea} datos={lineaPuntos} alt="Una línea de fstab dividida en sus seis columnas: UUID=0e69434a-6154-4c3c-a364-9935dcae73e5 (qué montar), /srv/datos (dónde), xfs (tipo), defaults,nofail (opciones), 0 (dump) y 2 (orden de fsck)." />
+
+Opciones que vas a usar seguido:
+
+| Opción | Qué hace |
+| --- | --- |
+| `defaults` | El conjunto normal: lectura y escritura, se monta al arrancar |
+| `nofail` | Si el disco no está, el arranque sigue en lugar de caer en modo de emergencia |
+| `noatime` | No anota la fecha de último acceso de cada lectura (un poco menos de escritura) |
+| `ro` | Solo lectura |
+| `noexec` | No deja ejecutar programas desde ahí (útil para carpetas de intercambio) |
+
+Para obtener el UUID: `lsblk -f` o `sudo blkid /dev/sdb1`. Para agregar la línea sin abrir un editor:
+
+```bash
+echo "UUID=$(sudo blkid -s UUID -o value /dev/sdb1) /srv/datos xfs defaults 0 0" | sudo tee -a /etc/fstab
+```
+
+Ojo con el `-a` de `tee`: sin él, el archivo se reemplaza entero y el servidor pierde la raíz y `/boot`.
+
+Practica corrigiendo un fstab real:
+
+<EditorConfig ejercicio={editorFstab} />
+
+## Probar antes de reiniciar
+
+Un fstab con errores se descubre al reiniciar, que es el peor momento: el servidor cae en modo de emergencia, sin SSH. Por eso, después de cada cambio:
+
+```bash
+sudo findmnt --verify            # revisa fstab sin montar nada
+sudo systemctl daemon-reload     # systemd vuelve a leer fstab
+sudo mount -a                    # monta lo que falta, como en el arranque
+```
+
+- `findmnt --verify` avisa de carpetas que no existen, UUID que no aparecen, tipos que no coinciden. Si todo está bien, dice *"Success, no errors or warnings detected"*.
+- `mount -a` intenta montar todo lo de fstab que no esté montado. Si da un error, el arranque también lo va a dar.
+- systemd arma las unidades de montaje a partir de fstab. Si te olvidas de `daemon-reload`, mount te lo recuerda con un *hint*.
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    El fstab del instalador usa `/dev/mapper/rl-root` para la raíz (las rutas de LVM son estables) y `UUID=` para `/boot`. Los XFS llevan `0 0` al final.
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    El instalador usa rutas `/dev/disk/by-uuid/...`, que es otra forma de escribir el UUID, y deja comentarios con el dispositivo original. Los ext4 llevan `0 1` para la raíz y `0 2` para el resto. La swap aparece como `/swap.img none swap sw 0 0`.
+  </Distro>
+</Distros>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejMontar} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"mount point does not exist"'>
+    La carpeta no existe. Créala con `sudo mkdir -p /ruta`.
+  </ErrorComun>
+  <ErrorComun titulo='"wrong fs type, bad option, bad superblock..."'>
+    El dispositivo no tiene un sistema de archivos que mount entienda (¿falta el mkfs?), el tipo indicado no coincide, o hay una opción mal escrita. `lsblk -f` muestra qué tiene.
+  </ErrorComun>
+  <ErrorComun titulo='"can&#39;t find UUID=..."'>
+    El UUID de fstab no existe: está mal copiado, o se volvió a crear el sistema de archivos (mkfs genera un UUID nuevo). Compáralo con `sudo blkid`.
+  </ErrorComun>
+  <ErrorComun titulo="El servidor no arranca después de editar fstab">
+    Es el caso de la lección 1.3.6: modo de emergencia, `journalctl -xb`, corregir o comentar la línea, `systemctl daemon-reload` y `mount -a`. Para discos que pueden faltar, `nofail`.
+  </ErrorComun>
+  <ErrorComun titulo="Usar > en lugar de >> (o tee sin -a)">
+    Se borra todo fstab. Si no reiniciaste, recréalo con la información de `findmnt` y `blkid`, o recupéralo de una copia. Por eso conviene `sudo cp /etc/fstab /etc/fstab.bak` antes de tocarlo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- **Montar** conecta un sistema de archivos a una carpeta: `mount DISPOSITIVO CARPETA`; `umount CARPETA` lo desconecta (los archivos siguen en el disco).
+- "target is busy": algo lo está usando; `cd` afuera y `lsof CARPETA`.
+- `/etc/fstab`: qué (UUID=), dónde, tipo, opciones, dump (0) y orden de fsck (0, 1 o 2).
+- `nofail` para discos que pueden faltar; `defaults` para lo normal.
+- Antes de reiniciar: `findmnt --verify`, `systemctl daemon-reload` y `mount -a`. Y una copia de fstab antes de tocarlo.
+</Resumen>

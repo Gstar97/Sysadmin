@@ -1,0 +1,12 @@
+tipo: emparejar
+consigna: Une cada comando con lo que hace.
+pares:
+  - { a: "pvcreate /dev/sdb", b: "Prepara un disco o partición para que LVM lo pueda usar" }
+  - { a: "vgcreate datos /dev/sdb", b: "Crea un grupo de volúmenes con ese disco" }
+  - { a: "vgextend datos /dev/sdc", b: "Suma otro disco al grupo, para tener más espacio" }
+  - { a: "lvcreate -n srv -L 4G datos", b: "Crea un volumen lógico de 4 GiB dentro del grupo" }
+  - { a: "lvextend -r -L +2G datos/srv", b: "Agranda el volumen y su sistema de archivos en un solo paso" }
+  - { a: "vgs", b: "Muestra cuánto espacio libre queda en cada grupo" }
+explicacion: >-
+  Los comandos siguen un patrón: pv para los discos, vg para los grupos y lv para los volúmenes;
+  y para cada uno, create, s (resumen) y display (detalle).

@@ -1,0 +1,90 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Montaste /dev/sdb1 en /srv/datos y guardaste archivos. Después ejecutas umount /srv/datos. ¿Qué pasa con los archivos?
+  opciones:
+    - { texto: "Siguen en el disco sdb1; la carpeta queda vacía hasta que lo vuelvas a montar", correcta: true, explicacion: "Desmontar desconecta el disco, no borra nada." }
+    - { texto: "Se borran", explicacion: "umount no borra archivos." }
+    - { texto: "Se copian al disco del sistema", explicacion: "No se copian a ningún lado." }
+    - { texto: "Quedan en /srv/datos, pero de solo lectura", explicacion: "La carpeta muestra lo que había antes de montar." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Para qué sirve /etc/fstab?
+  opciones:
+    - { texto: "Para que los sistemas de archivos se monten solos en cada arranque", correcta: true, explicacion: "Lo que montas con mount dura solo hasta reiniciar." }
+    - { texto: "Para crear sistemas de archivos", explicacion: "Eso es mkfs." }
+    - { texto: "Para particionar discos", explicacion: "Eso es parted o fdisk." }
+    - { texto: "Para guardar los permisos de cada carpeta", explicacion: "Los permisos están en los inodos." }
+- id: p03
+  tipo: encontrar_error
+  enunciado: Este fstab va a dar problemas al arrancar. Marca las líneas con errores.
+  lenguaje: fstab
+  archivo: |
+    /dev/mapper/rl-root  /          xfs   defaults   0 0
+    UUID=3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22  /boot  xfs  defaults  0 0
+    UUID=0e69434a-6154-4c3c-a364-9935dcae73e5  datos  xfs  defaults  0 0
+    LABEL=logs  /var/log/app  ext4  defaults, noatime  0 2
+  lineas_con_error: [3, 4]
+  explicacion: El punto de montaje tiene que ser una ruta absoluta (/datos), y las opciones van sin espacios (defaults,noatime); si no, la línea queda con siete campos.
+- id: p04
+  tipo: opcion_multiple
+  enunciado: Un disco USB de respaldo no siempre está conectado. ¿Qué opción de fstab evita que el servidor caiga en modo de emergencia si falta?
+  opciones:
+    - { texto: "nofail", correcta: true, explicacion: "Si el dispositivo no aparece, el arranque sigue." }
+    - { texto: "noatime", explicacion: "Evita anotar la fecha de acceso; no tiene relación." }
+    - { texto: "ro", explicacion: "Lo monta en solo lectura, pero igual lo exige." }
+    - { texto: "defaults", explicacion: "Con defaults, si falta, el arranque se detiene." }
+- id: p05
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para agregar un montaje permanente sin arriesgar el arranque.
+  pasos:
+    - sudo cp /etc/fstab /etc/fstab.bak
+    - Agregar la línea con el UUID (sudo blkid)
+    - sudo findmnt --verify
+    - sudo systemctl daemon-reload
+    - sudo mount -a
+  explicacion: Copia de seguridad, cambio, revisión, que systemd lo lea y la prueba real de montaje.
+- id: p06
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    $ sudo findmnt --verify
+    /srv/datos
+       [E] unreachable source: UUID=0e69434a-6154-4c3c-a364-9935dcae73e5
+
+    0 parse errors, 1 error, 0 warnings
+  opciones:
+    - { texto: "No existe ningún sistema de archivos con ese UUID: está mal copiado o el disco no está", correcta: true, explicacion: "Compáralo con sudo blkid antes de reiniciar." }
+    - { texto: "La carpeta /srv/datos no existe", explicacion: "Ese caso dice target does not exist." }
+    - { texto: "Todo está bien", explicacion: "Hay un error." }
+    - { texto: "Falta el tipo de sistema de archivos", explicacion: "El problema es la fuente (source)." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: "umount responde \"target is busy\". ¿Qué revisas primero?"
+  opciones:
+    - { texto: "Que tu terminal no esté dentro de esa carpeta, y con lsof qué procesos la usan", correcta: true, explicacion: "Algo tiene archivos abiertos ahí." }
+    - { texto: "Que el disco no esté lleno", explicacion: "No tiene relación." }
+    - { texto: "Que fstab esté bien escrito", explicacion: "umount no lee fstab para esto." }
+    - { texto: "Reiniciar el servidor", explicacion: "Es la última opción, no la primera." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe el comando que monta todo lo que está en /etc/fstab y todavía no está montado.
+  aceptadas: [sudo mount -a, mount -a]
+  explicacion: Es la prueba de que el próximo arranque va a montar todo sin errores.
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Guardaste archivos en /srv/datos sin darte cuenta de que el disco no estaba montado. Después lo montaste. ¿Dónde están esos archivos?
+  opciones:
+    - { texto: "En el disco del sistema, escondidos debajo del montaje: no se ven pero ocupan lugar", correcta: true, explicacion: "Desmontando se vuelven a ver." }
+    - { texto: "Se movieron solos al disco nuevo", explicacion: "El montaje no mueve archivos." }
+    - { texto: "Se borraron al montar", explicacion: "No se borran." }
+    - { texto: "En /tmp", explicacion: "No se mueven a ningún lado." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: ¿Por qué en un XFS el último campo de fstab suele ser 0?
+  opciones:
+    - { texto: "Porque XFS se revisa solo con su journal y no usa fsck al arrancar", correcta: true, explicacion: "En ext4 se usa 1 para la raíz y 2 para el resto." }
+    - { texto: "Porque XFS no se puede revisar nunca", explicacion: "Se revisa con xfs_repair, a mano y desmontado." }
+    - { texto: "Porque 0 es más rápido", explicacion: "No es una cuestión de velocidad." }
+    - { texto: "Porque es el primero que se monta", explicacion: "El campo no indica orden de montaje." }

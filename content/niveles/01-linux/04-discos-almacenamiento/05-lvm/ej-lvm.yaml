@@ -1,0 +1,70 @@
+tipo: terminal
+shell: bash
+titulo: Un volumen que crece con la oficina
+descripcion: >-
+  El servidor de archivos tiene dos discos nuevos de 10 GiB. Vas a armar LVM con el primero,
+  crear un volumen para los datos, y después hacerlo crecer dos veces sin desmontarlo: primero
+  con el espacio que sobra y después sumando el segundo disco.
+estado_inicial:
+  distro: rocky
+  hostname: files01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  discos:
+    - { nombre: sdb, tamano: 10G }
+    - { nombre: sdc, tamano: 10G }
+pasos:
+  - consigna: Prepara /dev/sdb como volumen físico (PV) y mira el resultado.
+    verificar:
+      - { comando_usado: 'pvcreate\s+/dev/sdb' }
+      - { comando_usado: 'pvs' }
+    pistas:
+      - "`sudo pvcreate /dev/sdb` y `sudo pvs`"
+    solucion: [sudo pvcreate /dev/sdb, sudo pvs]
+    explicacion: El PV todavía no pertenece a ningún grupo (la columna VG está vacía).
+  - consigna: Crea el grupo de volúmenes datos con /dev/sdb.
+    verificar:
+      - { grupo_volumenes: datos, discos: [sdb] }
+    pistas:
+      - "`sudo vgcreate datos /dev/sdb`"
+    solucion: [sudo vgcreate datos /dev/sdb]
+    explicacion: "`sudo vgs` muestra el grupo con su tamaño total (VSize) y lo libre (VFree)."
+  - consigna: Crea un volumen lógico llamado srv de 4 GiB en el grupo datos.
+    verificar:
+      - { volumen: datos/srv, tamano_min: 4G }
+    pistas:
+      - "-n para el nombre y -L para el tamaño."
+      - "`sudo lvcreate -n srv -L 4G datos`"
+    solucion: [sudo lvcreate -n srv -L 4G datos]
+    explicacion: El volumen aparece como /dev/datos/srv (y /dev/mapper/datos-srv). Se usa igual que una partición.
+  - consigna: Crea un XFS en el volumen y móntalo en /srv/datos.
+    verificar:
+      - { montaje: /srv/datos, dispositivo: /dev/datos/srv, tipo: xfs }
+    pistas:
+      - "`sudo mkfs.xfs /dev/datos/srv`, `sudo mkdir -p /srv/datos` y `sudo mount /dev/datos/srv /srv/datos`"
+    solucion: [sudo mkfs.xfs /dev/datos/srv, sudo mkdir -p /srv/datos, sudo mount /dev/datos/srv /srv/datos]
+    explicacion: En un servidor real, también lo agregarías a fstab como en la lección anterior.
+  - consigna: El volumen se queda chico. Agrándalo 3 GiB, junto con su sistema de archivos, sin desmontarlo.
+    verificar:
+      - { montaje: /srv/datos, tamano_min: 6.9G }
+    pistas:
+      - "lvextend con -r agranda también el sistema de archivos. +3G suma al tamaño actual."
+      - "`sudo lvextend -r -L +3G datos/srv`"
+    solucion: [sudo lvextend -r -L +3G datos/srv]
+    explicacion: "`df -h /srv/datos` ya muestra 7 GiB. Sin -r, el volumen crecería pero el sistema de archivos no, y habría que ejecutar xfs_growfs a mano."
+  - consigna: Suma el segundo disco (/dev/sdc) al grupo datos.
+    verificar:
+      - { grupo_volumenes: datos, discos: [sdb, sdc] }
+    pistas:
+      - "`sudo vgextend datos /dev/sdc`"
+    solucion: [sudo vgextend datos /dev/sdc]
+    explicacion: vgextend crea el PV solo si hace falta. Ahora el grupo tiene unos 13 GiB libres.
+  - consigna: Agranda srv con todo el espacio libre del grupo, también con su sistema de archivos.
+    verificar:
+      - { montaje: /srv/datos, tamano_min: 19G }
+    pistas:
+      - "Con -l se indican extents o porcentajes: +100%FREE es todo lo libre."
+      - "`sudo lvextend -r -l +100%FREE datos/srv`"
+    solucion: [sudo lvextend -r -l +100%FREE datos/srv]
+    explicacion: El volumen ahora ocupa los dos discos, y quien guarda archivos en /srv/datos no notó nada. `lsblk` muestra datos-srv debajo de sdb y de sdc.

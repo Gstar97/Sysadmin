@@ -1,0 +1,26 @@
+tipo: configuracion
+titulo: Arreglar el fstab antes de reiniciar
+consigna: >-
+  Un compañero agregó dos líneas al final de fstab y todavía no reinició. Corrígelas para que el
+  servidor arranque bien: /srv/datos es el XFS con UUID 0e69434a-6154-4c3c-a364-9935dcae73e5, y
+  /backup es un disco USB que no siempre está conectado (ext4, etiqueta backup), así que el
+  arranque no tiene que esperarlo.
+lenguaje: fstab
+nombre_archivo: /etc/fstab
+archivo_inicial: |
+  /dev/mapper/rl-root     /          xfs     defaults        0 0
+  UUID=3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22 /boot  xfs  defaults  0 0
+  /dev/mapper/rl-swap     none       swap    defaults        0 0
+  /dev/sdb1  srv/datos  xfs  defaults 0 1
+  LABEL=backup /backup ext4 defaults, nofail 0 2
+reglas:
+  - { tipo: sin_errores, mensaje: "El archivo no tiene errores" }
+  - { tipo: contiene, regex: "^UUID=0e69434a-6154-4c3c-a364-9935dcae73e5\\s+/srv/datos\\s+xfs\\s+defaults\\s+0\\s+0\\s*$", mensaje: "/srv/datos se monta por UUID, con xfs y 0 0" }
+  - { tipo: contiene, regex: "^LABEL=backup\\s+/backup\\s+ext4\\s+\\S*nofail\\S*\\s+0\\s+[02]\\s*$", mensaje: "/backup tiene nofail, sin espacios entre las opciones" }
+  - { tipo: no_contiene, regex: "^/dev/sdb1", mensaje: "No queda /dev/sdb1 (puede cambiar de nombre)" }
+solucion: |
+  /dev/mapper/rl-root     /          xfs     defaults        0 0
+  UUID=3b2e9f40-7c55-4e0b-b1aa-0d4c8b6f1e22 /boot  xfs  defaults  0 0
+  /dev/mapper/rl-swap     none       swap    defaults        0 0
+  UUID=0e69434a-6154-4c3c-a364-9935dcae73e5 /srv/datos xfs defaults 0 0
+  LABEL=backup /backup ext4 defaults,nofail 0 2

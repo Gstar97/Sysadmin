@@ -1,0 +1,42 @@
+tipo: diagrama
+titulo: Las seis columnas de fstab
+puntos:
+  - id: spec
+    titulo: "1. Qué montar"
+    area: { x: 1.86, y: 24.21, ancho: 40.47, alto: 44.21 }
+    texto: >-
+      El sistema de archivos. Lo más seguro es el UUID (UUID=...), porque no cambia si el disco
+      cambia de nombre. También se usa LABEL=etiqueta, o rutas como /dev/mapper/rl-root, que
+      son estables para los volúmenes de LVM. /dev/sdb1 funciona, pero puede apuntar a otro
+      disco después de un cambio de hardware.
+  - id: target
+    titulo: "2. Dónde"
+    area: { x: 42.56, y: 24.21, ancho: 13.72, alto: 44.21 }
+    texto: >-
+      La carpeta (punto de montaje). Tiene que existir: créala antes con mkdir. Para swap se
+      escribe none.
+  - id: type
+    titulo: "3. Tipo"
+    area: { x: 56.51, y: 24.21, ancho: 7.91, alto: 44.21 }
+    texto: >-
+      El tipo de sistema de archivos: xfs, ext4, vfat, swap, nfs... Tiene que coincidir con lo
+      que muestra lsblk -f.
+  - id: opts
+    titulo: "4. Opciones"
+    area: { x: 64.65, y: 24.21, ancho: 18.37, alto: 44.21 }
+    texto: >-
+      Separadas por comas, sin espacios. defaults es el conjunto normal (lectura y escritura,
+      montaje automático). nofail hace que, si el disco no está, el arranque siga igual en lugar
+      de caer en modo de emergencia. Otras comunes: noatime, ro, noexec.
+  - id: dump
+    titulo: "5. dump"
+    area: { x: 83.26, y: 24.21, ancho: 7.91, alto: 44.21 }
+    texto: >-
+      Una herramienta de respaldo muy vieja usaba esta columna. Hoy va siempre en 0.
+  - id: pass
+    titulo: "6. Orden de revisión (fsck)"
+    area: { x: 91.4, y: 24.21, ancho: 6.74, alto: 44.21 }
+    texto: >-
+      Si se revisa al arrancar y en qué orden: 1 para la raíz, 2 para el resto y 0 para no
+      revisarlo. XFS se revisa solo, así que en Rocky va 0; en ext4 conviene 2 (y 1 para la
+      raíz).

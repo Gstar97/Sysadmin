@@ -1,0 +1,139 @@
+---
+id: n1-m4-l5
+titulo: LVM
+minutos: 180
+objetivos:
+  - Explicar qué resuelve LVM y sus tres piezas (PV, VG y LV).
+  - Crear un grupo de volúmenes y volúmenes lógicos, y usarlos como particiones.
+  - Agrandar un volumen y su sistema de archivos sin desmontarlo, y sumar discos a un grupo.
+  - Saber qué no se puede hacer (achicar XFS) y qué hacer antes de achicar.
+glosario: [lvm]
+verificado: 2026-11
+---
+
+import capas from './capas.svg?raw'
+import comandos from './comandos.yaml'
+import ejLvm from './ej-lvm.yaml'
+
+Con particiones comunes hay un problema que tarde o temprano aparece: una partición se llena y la de al lado está casi vacía, pero no se pueden mover los límites sin apagar, copiar datos y rezar. **LVM** (Logical Volume Manager) resuelve eso. Por eso Rocky y Ubuntu lo usan por defecto para el disco del sistema, y por eso vas a encontrarlo en casi todos los servidores.
+
+<AntesDeEmpezar>
+- Disco, partición, sistema de archivos y montaje (lecciones 1.4.1 a 1.4.4).
+- En `lsblk` ya viste `rl-root` y `ubuntu--vg-ubuntu--lv`: son volúmenes de LVM.
+- XFS se agranda montado y no se achica; ext4 se achica, pero desmontado (lección 1.4.3).
+</AntesDeEmpezar>
+
+## La idea
+
+Imagina que tienes varios bidones de agua de distintos tamaños. En lugar de usarlos por separado, los vuelcas todos en un **tanque** grande. Del tanque llenas **botellas** del tamaño que necesites, y si una botella se queda corta, le agregas más agua del tanque. Si el tanque se vacía, le sumas otro bidón.
+
+LVM hace eso con el espacio en disco:
+
+<Diagrama svg={capas} alt="Dos discos, sdb y sdc de 10 GiB, son volúmenes físicos (PV). Juntos forman el grupo de volúmenes datos, de unos 20 GiB, dividido en pedacitos de 4 MiB. Del grupo salen dos volúmenes lógicos (LV): srv de 12 GiB con xfs en /srv/datos y logs de 4 GiB con ext4 en /var/log/app, y quedan 4 GiB libres." pie="PV (los bidones), VG (el tanque) y LV (las botellas)." />
+
+- **PV** (volumen físico): un disco o una partición preparada para LVM. Es un bidón.
+- **VG** (grupo de volúmenes): la suma de uno o varios PV. Es el tanque: un solo depósito de espacio.
+- **LV** (volumen lógico): un pedazo del grupo que se usa como si fuera una partición: lleva un sistema de archivos y se monta. Es una botella.
+
+La comparación deja de servir en un punto: en LVM no se trasvasa nada al agrandar. Agrandar un LV es asignarle más pedacitos del grupo (los **extents**, de 4 MiB), estén en el disco que estén.
+
+<EnSimple>
+LVM junta el espacio de varios discos y te deja repartirlo en volúmenes que puedes agrandar cuando quieras, sin apagar el servidor y sin mover datos.
+</EnSimple>
+
+## Armarlo desde cero
+
+```bash
+sudo pvcreate /dev/sdb                    # 1. preparar el disco (PV)
+sudo vgcreate datos /dev/sdb              # 2. crear el grupo (VG)
+sudo lvcreate -n srv -L 4G datos          # 3. crear un volumen de 4 GiB (LV)
+sudo mkfs.xfs /dev/datos/srv              # 4. sistema de archivos
+sudo mkdir -p /srv/datos
+sudo mount /dev/datos/srv /srv/datos      # 5. montarlo
+```
+
+El volumen tiene dos nombres equivalentes: `/dev/datos/srv` y `/dev/mapper/datos-srv`. Los dos son estables, así que se pueden usar en fstab (o el UUID, como siempre).
+
+Sobre el paso 1: puedes usar el disco entero (`/dev/sdb`) o una partición del tipo LVM (`/dev/sdb1`, lección 1.4.2). Las dos formas son comunes; la partición deja más claro, para quien mire el disco con otra herramienta, que está en uso.
+
+Para ver cómo está todo, hay un comando de resumen y uno de detalle para cada pieza:
+
+| Pieza | Resumen | Detalle |
+| --- | --- | --- |
+| PV | `pvs` | `pvdisplay` |
+| VG | `vgs` (mira **VFree**: el espacio libre) | `vgdisplay` |
+| LV | `lvs` | `lvdisplay` |
+
+<Emparejar ejercicio={comandos} />
+
+## Agrandar sin apagar
+
+Es la tarea de LVM más común en el trabajo real: llega una alerta de "/srv/datos al 90 %", y lo resuelves en un minuto, con todo funcionando.
+
+**Si el grupo tiene espacio libre** (`vgs` muestra VFree):
+
+```bash
+sudo lvextend -r -L +5G datos/srv          # sumar 5 GiB
+sudo lvextend -r -l +100%FREE datos/srv    # o usar todo lo libre
+```
+
+La opción **`-r`** agranda también el sistema de archivos. Sin ella, el volumen crece pero el sistema de archivos sigue igual, y `df` no cambia; en ese caso se completa a mano con `sudo xfs_growfs /srv/datos` (XFS) o `sudo resize2fs /dev/datos/srv` (ext4).
+
+**Si el grupo no tiene espacio**, primero se le suma un disco:
+
+```bash
+sudo vgextend datos /dev/sdc               # el disco nuevo pasa a ser parte del grupo
+sudo lvextend -r -l +100%FREE datos/srv
+```
+
+En una máquina virtual o en la nube, otra opción es agrandar el disco virtual que ya existe; eso agrega un paso más (agrandar la partición y el PV con `pvresize`), que vas a practicar en el laboratorio.
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    El grupo del sistema se llama `rl`, con los volúmenes `root` y `swap`. Normalmente no tiene espacio libre: para agrandar la raíz hay que sumar un disco al grupo (`vgextend rl /dev/sdb`) o agrandar el disco virtual.
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    El grupo se llama `ubuntu-vg` y el volumen de la raíz `ubuntu-lv`. Según el tamaño del disco, el instalador puede dejar parte del grupo sin usar. Mira `sudo vgs`: si **VFree** tiene espacio, la raíz se agranda con `sudo lvextend -r -l +100%FREE ubuntu-vg/ubuntu-lv`, sin tocar nada más.
+  </Distro>
+</Distros>
+
+## Achicar: con mucho cuidado
+
+Achicar es lo contrario y es riesgoso, porque si el volumen queda más chico que los datos, se pierden.
+
+- **XFS no se puede achicar.** `lvreduce` lo rechaza. La única forma es copiar los datos a otro lado, borrar el volumen, crearlo más chico y volver a copiar.
+- **ext4 sí**, pero desmontado: `sudo umount /var/log/app` y `sudo lvreduce -r -L 3G datos/logs` (el `-r` achica primero el sistema de archivos y después el volumen, en el orden correcto).
+
+Antes de achicar algo con datos importantes, haz una copia de seguridad. Siempre.
+
+<Nota titulo="Para más adelante: instantáneas">
+LVM puede sacar **instantáneas** (snapshots) de un volumen: una foto del momento, útil para hacer una copia de seguridad consistente o para probar una actualización y volver atrás. Las vas a ver en el nivel de respaldos.
+</Nota>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejLvm} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Agrandé el volumen y df sigue mostrando lo mismo">
+    Faltó agrandar el sistema de archivos: usaste lvextend sin `-r`. Complétalo con `sudo xfs_growfs /punto/de/montaje` o `sudo resize2fs /dev/vg/lv`.
+  </ErrorComun>
+  <ErrorComun titulo='"Insufficient free space" o "insufficient free space (N extents)"'>
+    El grupo no tiene ese espacio libre. Mira `sudo vgs` (VFree) y suma un disco con `vgextend` o pide menos.
+  </ErrorComun>
+  <ErrorComun titulo='"Cannot use /dev/sdb: device is partitioned"'>
+    El disco tiene una tabla de particiones. Usa la partición (`/dev/sdb1`) o, si el disco es nuevo y está vacío, borra la tabla con `wipefs -a /dev/sdb` (confirmando antes con lsblk).
+  </ErrorComun>
+  <ErrorComun titulo="Intentar achicar un XFS">
+    No se puede. lvreduce lo avisa: *"File system reduce is required and not supported (xfs)"*. Planifica los tamaños empezando chico, porque agrandar es fácil.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- **PV** (disco o partición preparada) → **VG** (la suma, un depósito de espacio) → **LV** (un volumen que se usa como partición).
+- Crear: `pvcreate`, `vgcreate NOMBRE PV`, `lvcreate -n NOMBRE -L TAMAÑO VG`; después mkfs y mount con `/dev/VG/LV`.
+- Ver: `pvs`, `vgs` (VFree), `lvs`; con `display` para el detalle.
+- Agrandar sin apagar: `lvextend -r -L +5G VG/LV` o `-l +100%FREE`; sin espacio, primero `vgextend VG /dev/nuevo`.
+- `-r` agranda también el sistema de archivos; si te lo olvidas, `xfs_growfs` o `resize2fs`.
+- XFS no se achica; ext4 sí, desmontado y con una copia de seguridad antes.
+</Resumen>

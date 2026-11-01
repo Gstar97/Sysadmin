@@ -1,0 +1,78 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué problema resuelve LVM?
+  opciones:
+    - { texto: "Permite repartir el espacio de uno o varios discos en volúmenes que se agrandan sin apagar el servidor", correcta: true, explicacion: "Con particiones comunes, mover límites es difícil y riesgoso." }
+    - { texto: "Hace que los discos sean más rápidos", explicacion: "No cambia la velocidad." }
+    - { texto: "Reemplaza a las copias de seguridad", explicacion: "No protege contra borrados ni fallas de disco." }
+    - { texto: "Permite usar discos sin sistema de archivos", explicacion: "Los volúmenes igual necesitan un sistema de archivos." }
+- id: p02
+  tipo: ordenar_pasos
+  diagnostico: true
+  enunciado: Ordena los pasos para tener un volumen de LVM montado a partir de un disco nuevo.
+  pasos: [pvcreate /dev/sdb, vgcreate datos /dev/sdb, lvcreate -n srv -L 4G datos, mkfs.xfs /dev/datos/srv, mount /dev/datos/srv /srv/datos]
+  explicacion: PV, VG, LV, sistema de archivos y montaje.
+- id: p03
+  tipo: interpretar_salida
+  enunciado: Necesitas 5 GiB más en un volumen del grupo app. ¿Qué te dice esta salida?
+  salida: |
+    $ sudo vgs
+      VG  #PV #LV #SN Attr   VSize   VFree
+      app   1   2   0 wz--n- <20.00g  8.00g
+      rl    1   2   0 wz--n- <19.00g      0
+  opciones:
+    - { texto: "El grupo app tiene 8 GiB libres: se puede agrandar sin agregar discos", correcta: true, explicacion: "lvextend -r -L +5G app/VOLUMEN." }
+    - { texto: "Hay que agregar un disco al grupo app", explicacion: "Tiene 8 GiB libres, alcanza." }
+    - { texto: "El grupo rl tiene espacio libre", explicacion: "rl tiene 0 libre." }
+    - { texto: "No se puede saber", explicacion: "La columna VFree lo dice." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que agranda el volumen datos/srv en 10 GiB, junto con su sistema de archivos.
+  aceptadas: [sudo lvextend -r -L +10G datos/srv, sudo lvextend -L +10G -r datos/srv, sudo lvextend -r -L +10G /dev/datos/srv, sudo lvextend --resizefs -L +10G datos/srv]
+  explicacion: Sin el +, -L 10G significaría "que quede en 10 GiB", no "sumar 10 GiB".
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Ejecutaste lvextend -L +5G datos/srv y df sigue mostrando el tamaño viejo. ¿Qué pasó?
+  opciones:
+    - { texto: "Se agrandó el volumen pero no el sistema de archivos: faltó -r, o xfs_growfs/resize2fs", correcta: true, explicacion: "Son dos capas distintas." }
+    - { texto: "Hay que reiniciar para que df lo vea", explicacion: "Se puede completar sin reiniciar." }
+    - { texto: "lvextend falló", explicacion: "El volumen creció; lo que no creció es el sistema de archivos." }
+    - { texto: "df está roto", explicacion: "df muestra el tamaño del sistema de archivos, que sigue igual." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: El grupo datos no tiene espacio libre y el volumen srv está lleno. Agregaste el disco /dev/sdd a la VM. ¿Qué haces?
+  opciones:
+    - { texto: "vgextend datos /dev/sdd y después lvextend -r -l +100%FREE datos/srv", correcta: true, explicacion: "El disco nuevo suma espacio al grupo, y el volumen lo toma." }
+    - { texto: "lvextend -r -L +10G /dev/sdd", explicacion: "lvextend recibe el volumen, no el disco." }
+    - { texto: "Crear un VG nuevo con sdd y mover los datos", explicacion: "Funciona, pero es mucho más trabajo." }
+    - { texto: "mkfs.xfs /dev/sdd y montarlo en /srv/datos", explicacion: "Taparía los datos que ya están ahí." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Se puede achicar un volumen con XFS?
+  opciones:
+    - { texto: "No: XFS no se achica; hay que copiar los datos, recrear el volumen más chico y volver a copiar", correcta: true, explicacion: "Por eso conviene empezar con tamaños chicos." }
+    - { texto: "Sí, con lvreduce -r montado", explicacion: "lvreduce lo rechaza para XFS." }
+    - { texto: "Sí, pero solo desmontado", explicacion: "Eso vale para ext4, no para XFS." }
+    - { texto: "Sí, con xfs_growfs y un número negativo", explicacion: "xfs_growfs solo agranda." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: En lsblk ves ubuntu--vg-ubuntu--lv. ¿Qué es?
+  opciones:
+    - { texto: "El volumen ubuntu-lv del grupo ubuntu-vg; los guiones se duplican en el nombre", correcta: true, explicacion: "Es la raíz del sistema en Ubuntu." }
+    - { texto: "Un disco nuevo", explicacion: "Es un volumen lógico." }
+    - { texto: "Un error en el nombre", explicacion: "Es la forma normal en que device-mapper escribe los guiones." }
+    - { texto: "La partición de arranque", explicacion: "La de arranque es /boot, en otra partición." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: "En Ubuntu, `sudo vgs` muestra VFree 9.50g en ubuntu-vg. ¿Qué significa?"
+  opciones:
+    - { texto: "Que el instalador dejó espacio del grupo sin usar y se puede sumar a la raíz con lvextend -r", correcta: true, explicacion: "sudo lvextend -r -l +100%FREE ubuntu-vg/ubuntu-lv." }
+    - { texto: "Que el disco está fallando", explicacion: "Es espacio sin asignar, no un error." }
+    - { texto: "Que hay 9,5 GiB de swap", explicacion: "VFree es espacio del grupo sin asignar a volúmenes." }
+    - { texto: "Que hay que reinstalar", explicacion: "No hace falta." }
+- id: p10
+  tipo: completar_comando
+  enunciado: Escribe el comando que suma el disco /dev/sdc al grupo de volúmenes datos.
+  aceptadas: [sudo vgextend datos /dev/sdc]
+  explicacion: Si /dev/sdc todavía no es un PV, vgextend lo prepara solo.
