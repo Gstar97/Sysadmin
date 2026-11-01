@@ -4,7 +4,7 @@ import { applyStateStorage, installLayout, parseSize, Storage, GiB, MiB } from '
 import type { PerfState } from './perf'
 import { initKernel, chronyStart, bootModules, staticKernelFs, refreshKernelFs } from './kernel'
 import { metrics, MEM_TOTAL_KB } from './perf'
-import { installSshFiles, readSshdConfig, type SshdConf } from './hosts'
+import { inSubnet as sameNet, installSshFiles, readSshdConfig, type SshdConf } from './hosts'
 import { installSelinuxHooks, newSelinux, portAllowed, type AvcRecord, type SelinuxState } from './selinux'
 import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
@@ -732,6 +732,9 @@ export class System {
 
   isReachable(ip: string): boolean {
     if (this.ownIps().includes(ip) || this.reachable.has(ip) || [...this.reachable].some((h) => this.dnsRecords[h] === ip)) return true
+    // Los otros servidores del ejercicio y el DNS de la red local responden si están en la misma red.
+    if (this.lab.some((h) => h.ownIps().includes(ip))) return this.interfaces.some((i) => i.up && i.ip && sameNet(ip, i.ip))
+    if (this.lab.length && this.dns.includes(ip) && this.interfaces.some((i) => i.up && i.ip && sameNet(ip, i.ip))) return true
     const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|169\.254\.)/.test(ip)
     return this.internet && !isPrivate && !!this.gateway && this.reachable.has(this.gateway)
   }

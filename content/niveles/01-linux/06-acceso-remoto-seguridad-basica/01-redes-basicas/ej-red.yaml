@@ -1,0 +1,85 @@
+tipo: terminal
+shell: bash
+titulo: ¿Hasta dónde llego?
+descripcion: >-
+  Estás en app01. Te piden revisar por qué "la web de web01 no anda", y de paso confirmar que
+  podrás administrar web01 por SSH. Ve escalón por escalón.
+estado_inicial:
+  distro: rocky
+  hostname: app01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes:
+    instalados: [bind-utils]
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.15/24 }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.2]
+  servidores:
+    - { ip: 192.168.10.20, hostname: web01, distro: ubuntu }
+    - { ip: 10.0.5.20, hostname: db01 }
+pasos:
+  - consigna: Mira qué dirección IP tiene app01.
+    verificar:
+      - { comando_usado: 'ip\s+(-br\s+)?(a|addr|address)' }
+      - { salida_contiene: 192.168.10.15/24 }
+    pistas:
+      - "`ip -br a` (la versión corta) o `ip a`"
+    solucion: [ip -br a]
+    explicacion: >-
+      192.168.10.15 con /24: está en la red 192.168.10.0, donde todas las direcciones empiezan con 192.168.10.
+  - consigna: Mira por dónde sale hacia otras redes (la puerta de enlace).
+    verificar:
+      - { comando_usado: 'ip\s+r(oute)?' }
+      - { salida_contiene: default via 192.168.10.1 }
+    pistas:
+      - "`ip route`"
+    solucion: [ip route]
+    explicacion: '"default via 192.168.10.1": todo lo que no es de la red local se manda a esa dirección.'
+  - consigna: Averigua qué IP tiene web01.
+    verificar:
+      - { comando_usado: '(getent\s+hosts|dig|host|nslookup)\s+.*web01' }
+      - { salida_contiene: 192.168.10.20 }
+    pistas:
+      - "`getent hosts web01` (busca en /etc/hosts y en el DNS, como los programas) o `dig +short web01`"
+    solucion: [getent hosts web01]
+    explicacion: El nombre resuelve. Si no lo hiciera, ssh y curl darían "Could not resolve hostname".
+  - consigna: Comprueba que web01 responde.
+    verificar:
+      - { comando_usado: 'ping\s+.*web01' }
+      - { salida_contiene: 0% packet loss }
+    pistas:
+      - "`ping -c 3 web01` (-c para que pare solo)"
+    solucion: [ping -c 3 web01]
+    explicacion: >-
+      El equipo está prendido y hay camino. Ojo: algunos firewalls bloquean ping, así que un ping que falla no siempre quiere decir que el servidor esté caído.
+  - consigna: Prueba si responde algo en el puerto 80 (la web) de web01.
+    verificar:
+      - { comando_usado: '(nc\s+-\w*z\w*\s+.*web01\s+80|curl\s+.*web01)' }
+    pistas:
+      - "`nc -zv web01 80` prueba solo si el puerto acepta conexiones."
+    solucion: [nc -zv web01 80]
+    explicacion: >-
+      "Connection refused": llegas al servidor, pero nada escucha en el 80. El problema no es la
+      red: el servidor web está apagado o no está instalado. Eso se revisa entrando a web01.
+  - consigna: Y en el puerto 22 (SSH)?
+    verificar:
+      - { comando_usado: 'nc\s+-\w*z\w*\s+.*web01\s+22' }
+      - { salida_contiene: succeeded }
+    pistas:
+      - "`nc -zv web01 22`"
+    solucion: [nc -zv web01 22]
+    explicacion: SSH responde, así que vas a poder entrar a administrarlo (próxima lección).
+  - consigna: Por último, prueba el puerto 22 de db01, que está en otra red.
+    verificar:
+      - { comando_usado: 'nc\s+-\w*z\w*\s+.*db01\s+22' }
+      - { salida_contiene: timed out }
+    pistas:
+      - "`nc -zv db01 22`"
+    solucion: [nc -zv db01 22]
+    explicacion: >-
+      "Timed out": no hubo respuesta. db01 está en 10.0.5.0/24, otra red, y desde app01 no hay
+      camino hasta ahí. En la lección 1.6.4 vas a ver cómo se llega a una red así: a través de
+      un bastión.

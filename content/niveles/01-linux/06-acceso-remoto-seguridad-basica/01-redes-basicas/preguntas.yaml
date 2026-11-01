@@ -1,0 +1,65 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un servidor tiene la IP 192.168.10.15/24. ¿Cuál de estas direcciones está en su misma red?
+  opciones:
+    - { texto: "192.168.10.200", correcta: true, explicacion: "Con /24, la red son los tres primeros números: 192.168.10." }
+    - { texto: "192.168.11.15", explicacion: "El tercer número es distinto: otra red." }
+    - { texto: "10.0.10.15", explicacion: "Otra red." }
+    - { texto: "Ninguna: cada IP es su propia red", explicacion: "Una red agrupa muchas direcciones." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ssh web01 responde "Connection refused". ¿Qué quiere decir?
+  opciones:
+    - { texto: "Llegaste a web01, pero nada escucha en el puerto 22", correcta: true, explicacion: "El equipo contestó: el servicio está apagado o en otro puerto." }
+    - { texto: "El nombre web01 no existe", explicacion: "Eso sería Could not resolve hostname." }
+    - { texto: "La contraseña es incorrecta", explicacion: "Ni siquiera llegó a pedirla." }
+    - { texto: "No hay camino hasta web01", explicacion: "Eso suele dar timed out." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: Una aplicación funciona en el servidor, pero nadie puede usarla desde otro equipo. ¿Por qué?
+  salida: |
+    $ sudo ss -tlnp | grep 8080
+    LISTEN 0  511  127.0.0.1:8080  0.0.0.0:*  users:(("java",pid=1210,fd=12))
+  opciones:
+    - { texto: "Escucha solo en 127.0.0.1: acepta conexiones del mismo servidor, no de afuera", correcta: true, explicacion: "Habría que configurarla para escuchar en 0.0.0.0 o en la IP del servidor." }
+    - { texto: "El puerto 8080 está prohibido", explicacion: "No hay nada especial en ese puerto." }
+    - { texto: "java no está funcionando", explicacion: "Está escuchando, así que funciona." }
+    - { texto: "Falta el DNS", explicacion: "No tiene relación." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra la puerta de enlace del servidor.
+  aceptadas: [ip route, ip r, ip route show, ip r s]
+  explicacion: La línea "default via ..." es la puerta de enlace.
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando que prueba si el puerto 443 de web01 acepta conexiones (sin usar curl).
+  aceptadas: [nc -zv web01 443, nc -vz web01 443, nc -z web01 443, ncat -zv web01 443]
+  explicacion: Si responde "succeeded", hay algo escuchando y el firewall lo deja pasar.
+- id: p06
+  tipo: opcion_multiple
+  enunciado: dig +short web01 devuelve 192.168.10.20, pero ssh web01 se conecta a 192.168.10.99. ¿Qué pasa?
+  opciones:
+    - { texto: "Hay una entrada para web01 en /etc/hosts, que se consulta antes que el DNS", correcta: true, explicacion: "getent hosts web01 te muestra lo que usan los programas." }
+    - { texto: "El DNS está roto", explicacion: "dig responde bien." }
+    - { texto: "ssh usa otro protocolo de nombres", explicacion: "Usa el mismo orden que el resto: /etc/hosts y después DNS." }
+    - { texto: "Es un error de la red", explicacion: "Es una configuración del propio servidor." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ping a un servidor no responde, pero curl a su página web funciona. ¿Cómo puede ser?
+  opciones:
+    - { texto: "Un firewall bloquea ping (ICMP) pero deja pasar el tráfico web", correcta: true, explicacion: "Por eso un ping que falla no prueba que el equipo esté caído." }
+    - { texto: "curl miente", explicacion: "Si recibiste la página, llegaste." }
+    - { texto: "El servidor está caído", explicacion: "Respondió la página." }
+    - { texto: "ping solo funciona en la misma red", explicacion: "ping funciona a cualquier red a la que haya camino." }
+- id: p08
+  tipo: ordenar_pasos
+  enunciado: Ordena los escalones para diagnosticar "no puedo entrar a la web de web01".
+  pasos:
+    - "Revisar mi IP y mi ruta (ip -br a, ip route)"
+    - "Ver si el nombre resuelve (getent hosts web01)"
+    - "Ver si llego al equipo (ping -c 3 web01)"
+    - "Ver si el puerto responde (nc -zv web01 80)"
+    - "Pedir la página (curl -I http://web01)"
+  explicacion: Se para en el primer escalón que falla, porque los de arriba dependen de él.

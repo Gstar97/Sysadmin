@@ -1,0 +1,112 @@
+---
+id: n1-m6-l1
+titulo: Lo justo de redes para empezar
+minutos: 120
+objetivos:
+  - Leer la IP, la máscara, la puerta de enlace y el DNS de un servidor.
+  - Saber qué servicios escuchan en qué puertos con ss.
+  - Diagnosticar una conexión escalón por escalón e interpretar cada mensaje de error.
+glosario: [direccion-ip, mascara-red, puerta-enlace, dns, puerto]
+verificado: 2026-11
+---
+
+import red from './red.svg?raw'
+import errores from './errores-conexion.yaml'
+import ejRed from './ej-red.yaml'
+
+Para administrar un servidor a distancia tienes que llegar hasta él. Este módulo trata de eso: entrar por SSH, protegerlo y que solo entre quien debe. Antes, lo mínimo de redes para entender qué pasa cuando una conexión no anda. Las redes tienen un nivel entero más adelante (nivel 2); en esta lección, solo lo que vas a usar todos los días.
+
+<AntesDeEmpezar>
+- Qué son una dirección IP, un puerto y el DNS (lección 0.4.5).
+- Los servicios y cómo ver si están funcionando (lección 1.3.3).
+</AntesDeEmpezar>
+
+## Direcciones, redes y puerta de enlace
+
+Piensa en el correo de una ciudad. Cada edificio tiene su dirección (la **IP**), los edificios de un mismo barrio comparten el principio de la dirección (la **red**), y para mandar algo a otro barrio lo dejas en la oficina de correo del tuyo (la **puerta de enlace**), que sabe cómo seguir. Dentro de cada edificio hay ventanillas numeradas (los **puertos**), una para cada servicio. Y para saber la dirección de alguien a partir de su nombre, consultas una guía (el **DNS**). Donde la comparación no llega: en una red no hay carteros, los paquetes viajan en milésimas de segundo y muchas veces se pierden y se vuelven a mandar.
+
+<Diagrama svg={red} alt="La red de la oficina 192.168.10.0/24 con tu PC (192.168.10.50), app01 (192.168.10.15), web01 (192.168.10.20), el servidor DNS (192.168.10.2) y la puerta de enlace (192.168.10.1), que conecta con otras redes como internet. Para llegar a web01 primero se traduce el nombre con el DNS, después se ve que está en la misma red y se va directo al puerto que corresponde." pie="En la misma red se llega directo; a otra red se llega a través de la puerta de enlace." />
+
+```bash
+ip -br a        # las interfaces y sus IP, en una línea cada una
+ip a            # lo mismo, con todo el detalle (MAC, estado)
+ip route        # las rutas: la línea "default via" es la puerta de enlace
+```
+
+El número después de la barra (`/24`) es la **máscara**: dice cuántos bits del principio identifican a la red. Con `/24`, los tres primeros números son la red (192.168.10) y el último es el equipo. Dos equipos en la misma red se hablan directo; para cualquier otro destino, el servidor manda los paquetes a la puerta de enlace.
+
+<EnSimple>
+La IP es la dirección del servidor. Si otro equipo comparte el principio de la dirección (según la máscara), están en el mismo barrio y se hablan directo. Si no, todo pasa por la puerta de enlace.
+</EnSimple>
+
+## Nombres: DNS y /etc/hosts
+
+```bash
+cat /etc/resolv.conf     # qué servidor DNS usa
+getent hosts web01       # cómo resuelve un nombre (como lo hacen los programas)
+dig +short web01         # le pregunta solo al DNS
+cat /etc/hosts           # nombres fijos de este servidor, que se miran antes que el DNS
+```
+
+`getent hosts` es la prueba más honesta: sigue el mismo orden que usan ssh, curl y todos los programas (primero `/etc/hosts`, después el DNS). `dig` solo consulta al DNS: si `dig` responde y `getent` da otra cosa, hay una línea en `/etc/hosts` que manda.
+
+## Puertos: quién escucha
+
+Cada servicio espera conexiones en un puerto. Los que más vas a ver: **22** (SSH), **80** y **443** (web), **53** (DNS), **123** (hora, en UDP), **3306** (MariaDB/MySQL) y **5432** (PostgreSQL).
+
+```bash
+sudo ss -tlnp
+```
+
+```text
+State  Recv-Q Send-Q Local Address:Port  Peer Address:Port Process
+LISTEN 0      128          0.0.0.0:22         0.0.0.0:*     users:(("sshd",pid=803,fd=3))
+LISTEN 0      511        127.0.0.1:8080       0.0.0.0:*     users:(("java",pid=1210,fd=12))
+```
+
+`-t` TCP, `-l` solo los que escuchan, `-n` números en vez de nombres, `-p` qué proceso (necesita `sudo`). Fíjate en la dirección: **0.0.0.0** escucha en todas las interfaces (se puede llegar desde afuera), **127.0.0.1** solo desde el mismo servidor. Una aplicación que "no se ve desde afuera" muchas veces está escuchando en 127.0.0.1.
+
+## Diagnosticar escalón por escalón
+
+Cuando algo "no conecta", no pruebes cosas al azar: sube los escalones en orden y para en el primero que falla.
+
+| Escalón | Pregunta | Cómo |
+| --- | --- | --- |
+| 1 | ¿Tengo IP y ruta? | `ip -br a`, `ip route` |
+| 2 | ¿Resuelve el nombre? | `getent hosts servidor` |
+| 3 | ¿Llego al equipo? | `ping -c 3 servidor` (si el firewall no lo bloquea) |
+| 4 | ¿Responde el puerto? | `nc -zv servidor puerto` |
+| 5 | ¿Responde el servicio? | `curl -I http://servidor`, `ssh servidor` |
+
+Y aprende a leer lo que te dicen los errores:
+
+<Emparejar ejercicio={errores} />
+
+La diferencia entre **refused** y **timed out** es la más útil: refused quiere decir que llegaste y el servidor te contestó "aquí no hay nadie" (el servicio está apagado o escucha en otro puerto); timed out quiere decir que nadie contestó (no hay camino, o un firewall descarta en silencio).
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejRed} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Concluir que el servidor está caído porque no responde al ping">
+    Muchos firewalls bloquean ping. Prueba el puerto del servicio con `nc -zv` antes de dar por caído un equipo.
+  </ErrorComun>
+  <ErrorComun titulo="El servicio funciona en el servidor pero no desde afuera">
+    Mira `ss -tlnp`: si escucha en 127.0.0.1, solo acepta conexiones locales. Si escucha en 0.0.0.0, revisa el firewall (lección 1.6.5).
+  </ErrorComun>
+  <ErrorComun titulo="dig resuelve bien, pero ssh va a otra IP">
+    Hay una línea vieja en `/etc/hosts`, que se consulta antes que el DNS. `getent hosts` te muestra lo que realmente usan los programas.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir refused con timed out">
+    Refused: llegaste y no hay servicio. Timed out: no llegaste (camino o firewall). Se arreglan en lugares distintos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- IP y máscara (`/24`): la parte de la red y la del equipo. En la misma red se habla directo; para las demás, la puerta de enlace (`ip route`, línea default).
+- Nombres: `getent hosts` (como los programas: /etc/hosts y después DNS), `dig +short` (solo DNS), `/etc/resolv.conf`.
+- Puertos: 22 SSH, 80/443 web, 53 DNS, 123 hora. `sudo ss -tlnp` dice quién escucha y dónde (0.0.0.0 todos, 127.0.0.1 solo local).
+- Diagnóstico por escalones: IP y ruta → nombre → equipo → puerto (`nc -zv`) → servicio.
+- Errores: could not resolve (nombre), refused (no hay servicio), timed out (sin camino o firewall que descarta), no route to host (rechazo en el camino).
+</Resumen>

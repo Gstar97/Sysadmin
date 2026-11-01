@@ -707,6 +707,14 @@ register('getent', {
     if (db === 'shadow' && ctx.sh.cred.uid !== 0) return 2
     const ls = ctx.sys.vfs.readFile(file, ROOT_CRED).split('\n').filter(Boolean)
     const sel = key ? ls.filter((l) => (db === 'hosts' ? l.split(/\s+/).includes(key) : l.split(':')[0] === key)) : ls
+    // hosts: primero /etc/hosts y después el DNS (lo que dice /etc/nsswitch.conf).
+    if (db === 'hosts' && key && !sel.length) {
+      const ip = ctx.sys.dns.length ? ctx.sys.dnsRecords[key] : undefined
+      if (ip && ctx.sys.isReachable(ctx.sys.dns[0])) {
+        ctx.out(`${ip.padEnd(15)} ${key}\n`)
+        return 0
+      }
+    }
     if (!sel.length) return 2
     ctx.out(sel.join('\n') + '\n')
     return 0

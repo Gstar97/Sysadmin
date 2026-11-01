@@ -750,9 +750,18 @@ register(['nc', 'ncat'], {
       return 1
     }
     const local = ip.startsWith('127.') || ctx.sys.ownIps().includes(ip)
-    const open = local ? [...ctx.sys.services.values()].some((s) => s.active && s.ports.includes(port)) : canReach(ctx, ip)
+    const remote = local ? undefined : hostByIp(ctx.sys, ip)
+    let why = 'Connection refused'
+    let open: boolean
+    if (local) open = [...ctx.sys.services.values()].some((s) => s.active && s.ports.includes(port))
+    else if (remote) {
+      const fw = routeTo(ctx.sys, ip) ? inbound(remote, port, 'tcp', sourceIp(ctx.sys, ip)) : 'drop'
+      open = fw === 'ok' && [...remote.services.values()].some((s) => s.active && s.ports.includes(port))
+      if (fw === 'reject') why = 'No route to host'
+      if (fw === 'drop') why = 'Connection timed out'
+    } else open = canReach(ctx, ip)
     if (open) ctx.err(`Connection to ${host} (${ip}) ${port} port [tcp/*] succeeded!\n`)
-    else ctx.err(`nc: connect to ${host} (${ip}) port ${port} (tcp) failed: Connection refused\n`)
+    else ctx.err(`nc: connect to ${host} (${ip}) port ${port} (tcp) failed: ${why}\n`)
     return open ? 0 : 1
   },
 })
