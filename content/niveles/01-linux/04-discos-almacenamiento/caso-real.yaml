@@ -1,0 +1,108 @@
+tipo: troubleshooting
+titulo: El disco está al 100 %, pero du no encuentra nada
+descripcion: >-
+  Incidente simulado en un servidor Rocky. Cada decisión suma minutos: la aplicación de pedidos
+  dejó de guardar datos y el área comercial no puede trabajar.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 10:05. La aplicación de pedidos devuelve errores al guardar. El monitoreo muestra
+      /var/log/pedidos al 100 %. Ayer a la tarde alguien del turno anterior "limpió los logs".
+    evidencia:
+      - titulo: df -h /var/log/pedidos
+        contenido: |
+          Filesystem                Size  Used Avail Use% Mounted on
+          /dev/mapper/datos-logs    8.0G  8.0G   20K 100% /var/log/pedidos
+    opciones:
+      - { texto: "Ver qué ocupa el espacio con du", ir_a: n_du, minutos: 2 }
+      - texto: Agrandar el volumen ya, con lvextend -r
+        ir_a: n_agrandar
+        minutos: 3
+      - texto: Reiniciar el servidor
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Diez minutos sin ningún servicio. Al volver, el disco está al 2 %... y la aplicación
+          funciona. Parece arreglado, pero no sabes por qué pasó, y en unos días va a volver a
+          pasar. Además, reiniciaste sin avisar a las otras áreas.
+  n_agrandar:
+    situacion: >-
+      El grupo tiene 4 GiB libres. Con lvextend -r el volumen pasa a 12 GiB y la aplicación
+      vuelve a guardar. Pero el espacio "ocupado" sigue siendo un misterio y va a seguir
+      creciendo.
+    opciones:
+      - { texto: "Ahora, con tiempo, investigar con du qué ocupa los 8 GiB", ir_a: n_du, minutos: 2 }
+  n_du:
+    situacion: du no encuentra casi nada.
+    evidencia:
+      - titulo: sudo du -sh /var/log/pedidos
+        contenido: |
+          212M	/var/log/pedidos
+      - titulo: ls -lh /var/log/pedidos
+        contenido: |
+          total 212M
+          -rw-r-----. 1 pedidos pedidos 212M Nov  2 10:04 app.log.1
+    opciones:
+      - { texto: "Buscar archivos borrados que algún proceso todavía tiene abiertos", ir_a: n_lsof, minutos: 2 }
+      - texto: Pensar que df está equivocado y ejecutar fsck
+        ir_a: n_du
+        minutos: 6
+        consecuencia: >-
+          Para revisar el sistema de archivos hay que desmontarlo, y "target is busy": la
+          aplicación lo está usando. Además, df no está equivocado: está contando algo que du
+          no ve.
+      - texto: Buscar archivos tapados por un montaje
+        ir_a: n_tapados
+        minutos: 4
+  n_tapados:
+    situacion: >-
+      Para ver debajo del montaje habría que desmontar el volumen, y la aplicación lo está usando.
+      Además, el volumen se montó hace meses y la diferencia apareció ayer: no parece la causa.
+    opciones:
+      - { texto: "Buscar archivos borrados que siguen abiertos", ir_a: n_lsof, minutos: 2 }
+  n_lsof:
+    situacion: Aparece el responsable.
+    evidencia:
+      - titulo: sudo lsof +L1
+        contenido: |
+          COMMAND   PID    USER   FD   TYPE DEVICE   SIZE/OFF NLINK  NODE NAME
+          java     1873 pedidos   4w   REG  253,2 8355840000     0 33554 /var/log/pedidos/app.log (deleted)
+      - titulo: Historial de sudo de ayer
+        contenido: |
+          pablo : TTY=pts/1 ; PWD=/var/log/pedidos ; USER=root ; COMMAND=/usr/bin/rm app.log
+    opciones:
+      - { texto: "Avisar al área, reiniciar solo el servicio de pedidos y comprobar el espacio", ir_a: n_restart, minutos: 4 }
+      - texto: Borrar el archivo otra vez
+        ir_a: n_lsof
+        minutos: 1
+        consecuencia: Ya no tiene nombre, así que no hay nada que borrar. El espacio lo tiene el proceso java.
+      - texto: Matar el proceso java con kill -9
+        ir_a: n_kill
+        minutos: 2
+  n_kill:
+    situacion: >-
+      El espacio se libera, pero kill -9 no le dio tiempo a la aplicación a cerrar bien: dos
+      pedidos que se estaban guardando quedaron a medias y hay que revisarlos a mano.
+    opciones:
+      - { texto: "Arrancar el servicio y pasar a la prevención", ir_a: n_prevencion, minutos: 5 }
+  n_restart:
+    situacion: >-
+      Con systemctl restart pedidos, la aplicación cierra el archivo borrado y abre uno nuevo. El
+      disco baja al 3 % y los pedidos vuelven a guardarse. Falta que no vuelva a pasar.
+    evidencia:
+      - titulo: df -h /var/log/pedidos
+        contenido: |
+          Filesystem                Size  Used Avail Use% Mounted on
+          /dev/mapper/datos-logs    8.0G  220M  7.8G   3% /var/log/pedidos
+    opciones:
+      - { texto: "Configurar logrotate para app.log y explicarle al equipo cómo vaciar un log en uso", ir_a: n_prevencion, minutos: 6 }
+  n_prevencion:
+    final: exito
+    resumen: >-
+      La causa: el log de la aplicación crecía sin rotación, y ayer alguien lo borró con rm para
+      "liberar espacio". Como java lo tenía abierto, el espacio nunca se liberó y siguió creciendo
+      hasta llenar el disco. du no lo veía porque el archivo ya no tenía nombre; lsof +L1 sí. La
+      solución inmediata fue reiniciar solo ese servicio (no el servidor ni con kill -9). La
+      prevención: logrotate con un postrotate que le avise a la aplicación (lección 1.3.5), y una
+      nota en el cuaderno técnico: "un log en uso se vacía con : > archivo, nunca se borra".

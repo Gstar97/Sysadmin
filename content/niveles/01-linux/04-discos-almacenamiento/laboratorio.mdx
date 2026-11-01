@@ -1,0 +1,38 @@
+---
+titulo: Almacenamiento con LVM en rocky01
+horas: 3
+verificacion:
+  - Agregué dos discos, los particioné para LVM y armé el grupo datos.
+  - Creé los volúmenes srv y logs con sus sistemas de archivos.
+  - Monté /srv/datos y /var/log por UUID en fstab, y lo probé con findmnt --verify y mount -a.
+  - Moví /var/log al volumen nuevo y el servidor arrancó bien después.
+  - Agrandé /srv/datos con el servidor funcionando.
+  - Agrandé un disco virtual y sumé el espacio al grupo con pvresize.
+  - Agregué swap en un archivo de forma permanente.
+  - Repetí lo básico en ubuntu01 y documenté todo.
+---
+
+import pasos from './lab-discos.yaml'
+
+## Objetivo
+
+Hacer con discos de verdad todo lo del módulo, tal como se hace en un servidor real: agregar discos, armar LVM, separar los datos y los logs del sistema, y agrandar sin cortar el servicio.
+
+## Qué necesitas
+
+- rocky01 y ubuntu01, con acceso por SSH y a la configuración del hipervisor.
+- Unas tres horas.
+
+<Advertencia>
+En este laboratorio vas a cambiar /etc/fstab y a mover /var/log. Toma la instantánea del primer paso, guarda la copia de fstab que indica el paso 5 y, si algo falla al arrancar, usa lo que aprendiste en la lección 1.3.6 (modo de emergencia) antes de volver a la instantánea.
+</Advertencia>
+
+## Pasos
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. ¿Por qué conviene que /var/log esté en su propio volumen? ¿Qué pasaría en tu servidor si un programa llenara los logs?
+2. Si tuvieras que achicar el volumen logs, ¿podrías? ¿Qué harías distinto la próxima vez?
+3. Agregaste el disco sdc al grupo datos. Si mañana ese disco se rompe, ¿qué volúmenes se ven afectados? (Pista: mira `sudo lvs -o +devices`.)
