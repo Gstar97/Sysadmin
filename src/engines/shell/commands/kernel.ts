@@ -7,7 +7,7 @@ import { chronyService, chronyStart, LOADED_BY_DEFAULT, modprobeConf, MODS, norm
 import { register, type CommandContext } from '../shell'
 import type { System } from '../system'
 import { ROOT_CRED } from '../vfs'
-import { strftime } from './sysinfo'
+import { strftime, tzInfo } from './sysinfo'
 
 // ---------------------------------------------------------------------------------------
 // sysctl
@@ -295,9 +295,11 @@ register('timedatectl', {
     const d = new Date(Date.now() + sys.clock.offset * 1000)
     const svc = chronyService(sys)
     const ntp = !!svc?.active
-    const tz = sys.clock.timezone
+    const tzName = sys.clock.timezone
+    const tz = tzInfo(tzName, ZONE_OFFSET)
+    const utc = tzInfo('UTC', ZONE_OFFSET)
     ctx.out(
-      `               Local time: ${strftime('%a %F %T', d)} ${tz === 'UTC' ? 'UTC' : ZONE_OFFSET[tz] === '+0000' ? 'GMT' : ZONE_OFFSET[tz].slice(0, 3)}\n           Universal time: ${strftime('%a %F %T', d)} UTC\n                 RTC time: ${strftime('%a %F %T', d)}\n                Time zone: ${tz} (${tz === 'UTC' ? 'UTC' : ZONE_OFFSET[tz].slice(0, 3)}, ${ZONE_OFFSET[tz]})\nSystem clock synchronized: ${ntp && sys.clock.synced ? 'yes' : 'no'}\n              NTP service: ${ntp ? 'active' : 'inactive'}\n          RTC in local TZ: no\n`,
+      `               Local time: ${strftime('%a %F %T %Z', d, tz)}\n           Universal time: ${strftime('%a %F %T', d, utc)} UTC\n                 RTC time: ${strftime('%a %F %T', d, utc)}\n                Time zone: ${tzName} (${tz.abbr}, ${strftime('%z', d, tz)})\nSystem clock synchronized: ${ntp && sys.clock.synced ? 'yes' : 'no'}\n              NTP service: ${ntp ? 'active' : 'inactive'}\n          RTC in local TZ: no\n`,
     )
     return 0
   },
@@ -317,7 +319,7 @@ register('chronyc', {
     if (verb === 'sources') {
       ctx.out(`MS Name/IP address         Stratum Poll Reach LastRx Last sample               \n===============================================================================\n`)
       sources.forEach((s, i) => {
-        const names = s.pool ? [`${s.name.replace(/^\d\.|^\w+\./, '')}`.replace(/^/, '')] : [s.name]
+        const names = [s.name]
         for (const [j, n] of names.entries()) {
           if (s.reachable) {
             const mark = i === 0 && j === 0 && sys.clock.synced ? '^*' : '^+'
@@ -334,7 +336,7 @@ register('chronyc', {
         ctx.out(`Reference ID    : 00000000 ()\nStratum         : 0\nRef time (UTC)  : Thu Jan 01 00:00:00 1970\nSystem time     : ${Math.abs(sys.clock.offset).toFixed(9)} seconds ${sys.clock.offset >= 0 ? 'fast' : 'slow'} of NTP time\nLast offset     : +0.000000000 seconds\nRMS offset      : 0.000000000 seconds\nFrequency       : 0.000 ppm slow\nResidual freq   : +0.000 ppm\nSkew            : 0.000 ppm\nRoot delay      : 1.000000000 seconds\nRoot dispersion : 1.000000000 seconds\nUpdate interval : 0.0 seconds\nLeap status     : Not synchronised\n`)
         return 0
       }
-      ctx.out(`Reference ID    : C0A80101 (${best.name})\nStratum         : 3\nRef time (UTC)  : ${strftime('%a %b %d %T %Y', new Date())}\nSystem time     : ${Math.abs(sys.clock.offset).toFixed(9)} seconds ${sys.clock.offset >= 0 ? 'fast' : 'slow'} of NTP time\nLast offset     : +0.000089113 seconds\nRMS offset      : 0.000120531 seconds\nFrequency       : 12.345 ppm slow\nResidual freq   : +0.001 ppm\nSkew            : 0.035 ppm\nRoot delay      : 0.028441371 seconds\nRoot dispersion : 0.001204887 seconds\nUpdate interval : 64.2 seconds\nLeap status     : Normal\n`)
+      ctx.out(`Reference ID    : C0A80101 (${best.name})\nStratum         : 3\nRef time (UTC)  : ${strftime('%a %b %d %T %Y', new Date(), tzInfo('UTC', ZONE_OFFSET))}\nSystem time     : ${Math.abs(sys.clock.offset).toFixed(9)} seconds ${sys.clock.offset >= 0 ? 'fast' : 'slow'} of NTP time\nLast offset     : +0.000089113 seconds\nRMS offset      : 0.000120531 seconds\nFrequency       : 12.345 ppm slow\nResidual freq   : +0.001 ppm\nSkew            : 0.035 ppm\nRoot delay      : 0.028441371 seconds\nRoot dispersion : 0.001204887 seconds\nUpdate interval : 64.2 seconds\nLeap status     : Normal\n`)
       return 0
     }
     if (verb === 'makestep') {

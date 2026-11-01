@@ -1,0 +1,65 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Desde esta mañana, varios usuarios no pueden iniciar sesión en el dominio desde un servidor. Las contraseñas son correctas. ¿Qué revisas primero?
+  opciones:
+    - { texto: "La hora del servidor: Kerberos rechaza diferencias de más de 5 minutos", correcta: true, explicacion: "Es una causa clásica y se revisa en un minuto con timedatectl." }
+    - { texto: "Reiniciar las contraseñas de todos", explicacion: "Las contraseñas están bien." }
+    - { texto: "Reinstalar el servidor", explicacion: "Antes hay causas mucho más simples." }
+    - { texto: "El espacio en disco", explicacion: "No suele dar este síntoma." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Cambias la zona horaria de un servidor de UTC a America/Lima. ¿Qué pasa con el reloj interno?
+  opciones:
+    - { texto: "Nada: sigue en UTC, solo cambia cómo se muestra la hora", correcta: true, explicacion: "La zona es una forma de mostrar." }
+    - { texto: "Se atrasa 5 horas", explicacion: "El reloj no se mueve." }
+    - { texto: "Se desincroniza de NTP", explicacion: "NTP trabaja en UTC; no le afecta." }
+    - { texto: "Hay que reiniciar para que tome efecto", explicacion: "Es inmediato." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: ¿Qué dice esta salida?
+  salida: |
+    MS Name/IP address         Stratum Poll Reach LastRx Last sample
+    ===============================================================================
+    ^* ntp1.empresa.local            2   6   377    21   +101us[ +130us] +/-   10ms
+    ^? ntp2.empresa.local            0   6     0     -     +0ns[   +0ns] +/-    0ns
+  opciones:
+    - { texto: "Sincroniza con ntp1; ntp2 no responde y conviene revisarlo", correcta: true, explicacion: "^* es la fuente en uso, ^? la que no responde." }
+    - { texto: "No está sincronizado", explicacion: "^* indica que sí, con ntp1." }
+    - { texto: "Usa los dos servidores por igual", explicacion: "ntp2 no responde (Reach 0)." }
+    - { texto: "ntp1 tiene un error", explicacion: "377 en Reach indica que respondió las últimas 8 consultas." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra cuánto se desvió el reloj según chrony.
+  aceptadas: [chronyc tracking]
+  explicacion: La línea System time dice cuántos segundos está adelantado (fast) o atrasado (slow).
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando para poner la zona horaria America/Mexico_City.
+  aceptadas: [sudo timedatectl set-timezone America/Mexico_City, timedatectl set-timezone America/Mexico_City]
+  explicacion: Los nombres válidos salen de timedatectl list-timezones.
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Un servidor está en una red sin salida a internet. ¿Cómo lo mantienes en hora?
+  opciones:
+    - { texto: "Apuntando chrony al servidor de hora interno de la empresa con una línea server", correcta: true, explicacion: "Por ejemplo: server ntp.empresa.local iburst." }
+    - { texto: "Corrigiéndolo con date -s una vez por semana", explicacion: "Se vuelve a correr y los registros quedan con saltos." }
+    - { texto: "Cambiando la zona horaria", explicacion: "La zona no corrige el reloj." }
+    - { texto: "No hace falta: el reloj de hardware es exacto", explicacion: "Se corre segundos por día." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Para qué sirve la opción iburst en una línea server de chrony.conf?
+  opciones:
+    - { texto: "Para mandar varias consultas seguidas al arrancar y sincronizar en segundos", correcta: true, explicacion: "Sin iburst, la primera sincronización tarda más." }
+    - { texto: "Para corregir de un salto en lugar de a poco", explicacion: "Eso lo hace makestep." }
+    - { texto: "Para que el servidor dé la hora a otros", explicacion: "Eso es allow." }
+    - { texto: "Para cifrar la comunicación", explicacion: "Eso es NTS." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: El reloj está 3 minutos adelantado y chrony ya pasó sus primeras actualizaciones. ¿Qué hace por su cuenta?
+  opciones:
+    - { texto: "Lo corrige de a poco, frenando un poco el reloj, para que la hora nunca vaya hacia atrás", correcta: true, explicacion: "Si lo necesitas ya, chronyc makestep lo corrige de un salto." }
+    - { texto: "Lo atrasa 3 minutos de golpe", explicacion: "Eso solo en las primeras actualizaciones (makestep) o con chronyc makestep." }
+    - { texto: "Nada", explicacion: "Lo corrige, pero gradualmente." }
+    - { texto: "Reinicia el servidor", explicacion: "Nunca." }

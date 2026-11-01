@@ -1,0 +1,75 @@
+tipo: terminal
+shell: bash
+titulo: Poner en hora un servidor sin internet
+descripcion: >-
+  app01 está en una red interna sin salida a internet y su reloj está atrasado. La empresa tiene
+  su propio servidor de hora, ntp.empresa.local, y la oficina está en Bogotá.
+estado_inicial:
+  distro: rocky
+  hostname: app01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  hora:
+    desfase_segundos: -437
+  red:
+    internet: false
+    alcanzables: [ntp.empresa.local]
+pasos:
+  - consigna: Mira el estado de la hora del servidor.
+    verificar:
+      - { comando_usado: 'timedatectl(\s+status)?\s*$' }
+      - { salida_contiene: "synchronized: no" }
+    pistas:
+      - "`timedatectl`"
+    solucion: [timedatectl]
+    explicacion: El servicio NTP está activo, pero el reloj no está sincronizado. Algo impide llegar a las fuentes.
+  - consigna: Pregúntale a chrony con qué fuentes está intentando sincronizar.
+    verificar:
+      - { comando_usado: 'chronyc\s+sources' }
+    pistas:
+      - "`chronyc sources`"
+    solucion: [chronyc sources]
+    explicacion: '"^?" quiere decir que no responde: sin internet, el pool público no se alcanza.'
+  - consigna: Mira cuánto se desvió el reloj.
+    verificar:
+      - { comando_usado: 'chronyc\s+tracking' }
+      - { salida_contiene: "slow of NTP time" }
+    pistas:
+      - "`chronyc tracking`, en la línea System time"
+    solucion: [chronyc tracking]
+    explicacion: 437 segundos atrasado, más de 7 minutos. Suficiente para que Kerberos rechace los inicios de sesión.
+  - consigna: >-
+      En /etc/chrony.conf, reemplaza la línea que empieza con pool por
+      `server ntp.empresa.local iburst`.
+    verificar:
+      - { archivo: /etc/chrony.conf, contenido_incluye: "server ntp.empresa.local iburst" }
+      - { archivo: /etc/chrony.conf, contenido_no_incluye: "pool 2.rocky.pool.ntp.org" }
+    pistas:
+      - Con nano o vim (sudo), o con sed.
+      - "`sudo sed -i 's/^pool .*/server ntp.empresa.local iburst/' /etc/chrony.conf`"
+    solucion: ["sudo sed -i 's/^pool .*/server ntp.empresa.local iburst/' /etc/chrony.conf"]
+    explicacion: iburst manda varias consultas seguidas al arrancar, así sincroniza en segundos y no en minutos.
+  - consigna: Reinicia chronyd y comprueba que ahora sincroniza con el servidor de la empresa.
+    verificar:
+      - { servicio: chronyd, activo: true }
+      - { comando_usado: 'chronyc\s+sources' }
+      - { salida_contiene: "^* ntp.empresa.local" }
+    pistas:
+      - "`sudo systemctl restart chronyd` y después `chronyc sources`"
+    solucion: [sudo systemctl restart chronyd, chronyc sources]
+    explicacion: >-
+      "^*" marca la fuente que está usando. Como chrony.conf tiene makestep 1.0 3, en las primeras
+      actualizaciones corrige de un salto los 7 minutos en lugar de ir de a poco.
+  - consigna: Pon la zona horaria de Bogotá y verifica que la hora local y la sincronización quedaron bien.
+    verificar:
+      - { comando_usado: 'timedatectl\s+set-timezone\s+America/Bogota' }
+      - { comando_usado: 'timedatectl(\s+status)?\s*$' }
+      - { salida_contiene: "synchronized: yes" }
+    pistas:
+      - "El nombre de la zona sale de `timedatectl list-timezones`."
+      - "`sudo timedatectl set-timezone America/Bogota` y después `timedatectl`"
+    solucion: [sudo timedatectl set-timezone America/Bogota, timedatectl]
+    explicacion: >-
+      La zona solo cambia cómo se muestra la hora: el reloj interno sigue en UTC. Muchos equipos
+      dejan los servidores en UTC para que los registros de distintos países coincidan.

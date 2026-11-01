@@ -118,6 +118,10 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
         ok &&= node.data.includes(check.contenido_incluye)
         parts.push(`contiene "${check.contenido_incluye}"`)
       }
+      if (check.contenido_no_incluye !== undefined) {
+        ok &&= !node.data.includes(check.contenido_no_incluye)
+        parts.push(`no contiene "${check.contenido_no_incluye}"`)
+      }
       if (check.contenido_igual !== undefined) {
         ok &&= node.data.replace(/\n+$/, '') === check.contenido_igual.replace(/\n+$/, '')
         parts.push('contenido exacto')

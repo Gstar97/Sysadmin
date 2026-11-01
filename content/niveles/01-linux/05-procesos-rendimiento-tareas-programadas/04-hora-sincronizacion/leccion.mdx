@@ -1,0 +1,117 @@
+---
+id: n1-m5-l4
+titulo: Hora y sincronización
+minutos: 60
+objetivos:
+  - Explicar por qué un reloj corrido rompe la autenticación, los certificados y los registros.
+  - Ver y cambiar la zona horaria con timedatectl.
+  - Revisar y configurar la sincronización con chrony (fuentes, desfase y estado).
+glosario: [ntp, chrony, zona-horaria]
+verificado: 2026-11
+---
+
+import estratos from './estratos.svg?raw'
+import porQue from './por-que.yaml'
+import ejHora from './ej-hora.yaml'
+
+Que un servidor tenga la hora mal parece un detalle, hasta que un lunes nadie puede iniciar sesión y la causa es un reloj atrasado seis minutos. En esta lección vas a ver por qué la hora importa tanto, cómo se mantiene en hora un servidor y cómo revisarlo en un minuto.
+
+<AntesDeEmpezar>
+- Los servicios se manejan con `systemctl` (lección 1.3.3).
+- Los registros llevan la fecha y la hora de cada evento (lección 1.3.5).
+- Para más adelante, en el módulo de redes: NTP viaja por la red en UDP, puerto 123.
+</AntesDeEmpezar>
+
+## Por qué importa
+
+Imagina una reunión donde cada participante tiene el reloj a una hora distinta: uno llega tarde, otro se va antes, y después nadie se pone de acuerdo sobre a qué hora se dijo qué. Entre servidores pasa lo mismo, con consecuencias concretas:
+
+<Emparejar ejercicio={porQue} />
+
+Por eso, cuando algo de autenticación o de certificados falla "sin motivo", una de las primeras preguntas es: ¿qué hora tiene el servidor?
+
+## Reloj, zona horaria y lo que ves
+
+El servidor lleva la hora internamente en **UTC** (la hora universal, sin zonas ni horario de verano). La **zona horaria** solo cambia cómo se muestra. Por eso cambiar la zona nunca adelanta ni atrasa el reloj de verdad.
+
+```bash
+timedatectl                                   # resumen: hora local, UTC, zona y sincronización
+timedatectl list-timezones | grep America     # los nombres de zona
+sudo timedatectl set-timezone America/Bogota  # cambiar la zona
+date                                          # la hora en la zona del servidor
+date -u                                       # la hora en UTC
+```
+
+Muchos equipos dejan todos los servidores en UTC: si tienes servidores en varios países, los registros se comparan sin hacer cuentas. Otros prefieren la hora local para que coincida con lo que reporta la gente. Las dos opciones son válidas; lo importante es que el equipo lo decida y sea igual en todos.
+
+Además está el **reloj de hardware** (RTC), el que sigue andando con el equipo apagado. Linux lo guarda en UTC (`RTC in local TZ: no`) y lo corrige solo mientras está sincronizado.
+
+## NTP: copiar la hora de alguien que la sabe
+
+El reloj de cualquier computadora se adelanta o se atrasa unos segundos por día. Para corregirlo se usa **NTP** (Network Time Protocol): el servidor le pregunta la hora a otros que la saben mejor, calcula cuánto tardó la respuesta en llegar y se ajusta.
+
+<Diagrama svg={estratos} alt="La jerarquía de NTP en estratos: en el estrato 0, relojes atómicos y satélites GPS; en el estrato 1, servidores conectados directamente a ellos; en el estrato 2, servidores públicos como pool.ntp.org o el de la empresa; y en el estrato 3, los servidores de la empresa, como web01, db01, app01 y backup01, que copian la hora del estrato 2." pie="Cada nivel copia la hora del de arriba. El número de estrato dice qué tan lejos está de la referencia." />
+
+<EnSimple>
+Tu servidor le pregunta la hora a otro que la sabe mejor, varias veces y a varios a la vez, y se corrige de a poco. En una empresa lo habitual es tener uno o dos servidores de hora internos, y que todos los demás les pregunten a ellos.
+</EnSimple>
+
+## chrony
+
+En Rocky Linux y en Ubuntu desde la 25.10 (incluida la 26.04 LTS), el servicio que hace esto es **chrony**. Ubuntu 24.04 trae por defecto otro más simple, `systemd-timesyncd`, pero chrony se instala con `apt install chrony` y la forma de trabajar es la misma que vas a ver en esta lección.
+
+| | Rocky | Ubuntu |
+| --- | --- | --- |
+| Servicio | `chronyd` | `chrony` |
+| Configuración | `/etc/chrony.conf` | `/etc/chrony/chrony.conf` (y `/etc/chrony/sources.d/`) |
+
+```bash
+chronyc sources      # con quién sincroniza y cómo responde cada fuente
+chronyc tracking     # cuánto se desvió el reloj y el estado general
+sudo chronyc makestep  # corregir de un salto, ya
+```
+
+En `chronyc sources`, el símbolo de la izquierda dice todo: **^\*** es la fuente que está usando, **^+** son otras buenas que combina, y **^?** son las que no responden. En `chronyc tracking`, mira **System time** (cuántos segundos está adelantado o atrasado) y **Leap status** (`Normal` es que está sincronizado).
+
+La configuración es corta. Las líneas que importan:
+
+```text
+pool 2.rocky.pool.ntp.org iburst     # un grupo de servidores públicos
+server ntp.empresa.local iburst      # un servidor concreto (el de la empresa)
+makestep 1.0 3                       # si el desfase supera 1 s, corregir de un salto
+                                     # (solo en las 3 primeras actualizaciones)
+```
+
+Después de un cambio: `sudo systemctl restart chronyd` (o `chrony` en Ubuntu) y `chronyc sources` para confirmar. Fuera de esas primeras actualizaciones, chrony corrige **de a poco** (acelera o frena el reloj un poquito) en lugar de saltar, para que los programas no vean la hora ir hacia atrás. Si el desfase es grande y necesitas corregirlo ya, `chronyc makestep`.
+
+Para más adelante: un servidor puede **dar** la hora a la red con `allow 192.168.10.0/24` en chrony.conf (y el puerto UDP 123 abierto en el firewall), y NTS agrega cifrado y autenticación a NTP.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejHora} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"System clock synchronized: no" en un servidor sin internet'>
+    El pool público no se alcanza. Usa el servidor de hora de la empresa (`server ... iburst`) o pide que se habilite UDP 123 hacia afuera.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar la zona horaria para corregir una hora mal">
+    La zona solo cambia cómo se muestra. Si la hora está mal en UTC, el problema es la sincronización.
+  </ErrorComun>
+  <ErrorComun titulo="Poner la hora a mano con date -s">
+    chrony la vuelve a corregir, y mientras tanto los registros quedan con saltos. Arregla la fuente de hora y usa `chronyc makestep`.
+  </ErrorComun>
+  <ErrorComun titulo="Inicios de sesión de dominio que fallan sin explicación">
+    Revisa la hora antes que nada: Kerberos no acepta más de 5 minutos de diferencia.
+  </ErrorComun>
+  <ErrorComun titulo="Cada servidor con su propia zona horaria">
+    Los registros no se pueden comparar. Elige UTC o la hora local para todos y anótalo en la documentación.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un reloj corrido rompe la autenticación (Kerberos: 5 minutos), los certificados, los códigos de un solo uso, cron y la comparación de registros.
+- El reloj interno va en UTC; la zona solo cambia lo que se muestra: `timedatectl set-timezone ZONA`, `date`, `date -u`.
+- NTP: copiar la hora de servidores que la saben mejor, en estratos. En una empresa, todos le preguntan a uno o dos servidores internos.
+- chrony: `chronyc sources` (^\* en uso, ^? sin respuesta), `chronyc tracking` (System time y Leap status), `chronyc makestep`.
+- Configuración: `server` o `pool` con `iburst`, y `makestep`; después reiniciar chronyd (Rocky) o chrony (Ubuntu).
+</Resumen>

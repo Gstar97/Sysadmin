@@ -71,3 +71,20 @@ describe('procesos y rendimiento', () => {
     expect((await run('lsmod')).out).toMatch(/bridge\s+\d+\s+1 br_netfilter/)
   })
 })
+
+describe('hora y chrony', () => {
+  it('la zona cambia la hora local pero no la UTC, y chrony sincroniza con el servidor interno', async () => {
+    const { run } = await session({ distro: 'rocky', hora: { desfase_segundos: -437 }, red: { internet: false, alcanzables: ['ntp.empresa.local'] } })
+    expect((await run('timedatectl')).out).toContain('synchronized: no')
+    expect((await run('chronyc sources')).out).toMatch(/\^\? 2\.rocky\.pool\.ntp\.org/)
+    await run('timedatectl set-timezone America/Bogota')
+    const h = (await run('date +%H')).out.trim()
+    const hu = (await run('date -u +%H')).out.trim()
+    expect((Number(hu) - Number(h) + 24) % 24).toBe(5)
+    expect((await run('date')).out).toContain(' -05 ')
+    await run("sed -i 's/^pool .*/server ntp.empresa.local iburst/' /etc/chrony.conf")
+    await run('systemctl restart chronyd')
+    expect((await run('chronyc sources')).out).toContain('^* ntp.empresa.local')
+    expect((await run('timedatectl')).out).toContain('synchronized: yes')
+  })
+})

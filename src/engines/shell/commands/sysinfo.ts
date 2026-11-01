@@ -5,6 +5,7 @@ import { commOf, priorityName, priorityNumber, type JournalEntry } from '../syst
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
 import { CPU_FLAGS, dmiBiosText, efibootmgrText } from '../hardware'
+import { ZONE_OFFSET } from '../kernel'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -464,33 +465,61 @@ register('hostnamectl', {
   },
 })
 
-export function strftime(fmt: string, d: Date): string {
+/** Zona horaria para strftime: desplazamiento en minutos y abreviatura (como "UTC" o "-05"). */
+export interface TzInfo {
+  offsetMin: number
+  abbr: string
+}
+
+/** La zona del servidor a partir de su nombre (UTC, America/Bogota...). */
+export function tzInfo(zone: string, offsets: Record<string, string>): TzInfo {
+  const z = offsets[zone] ?? '+0000'
+  const offsetMin = (z.startsWith('-') ? -1 : 1) * (Number(z.slice(1, 3)) * 60 + Number(z.slice(3, 5)))
+  const abbr = zone === 'UTC' ? 'UTC' : zone === 'Europe/London' ? 'GMT' : z.slice(3, 5) === '00' ? z.slice(0, 3) : z
+  return { offsetMin, abbr }
+}
+
+/**
+ * Formatea una fecha como date +FORMATO. Sin zona usa la hora local del navegador (rotulada
+ * UTC); con zona calcula la hora de esa zona, que es lo que hacen date y timedatectl.
+ */
+export function strftime(fmt: string, d: Date, tz?: TzInfo): string {
+  const u = tz ? new Date(d.getTime() + tz.offsetMin * 60_000) : d
+  const Y = tz ? u.getUTCFullYear() : u.getFullYear()
+  const mo = tz ? u.getUTCMonth() : u.getMonth()
+  const da = tz ? u.getUTCDate() : u.getDate()
+  const h = tz ? u.getUTCHours() : u.getHours()
+  const mi = tz ? u.getUTCMinutes() : u.getMinutes()
+  const se = tz ? u.getUTCSeconds() : u.getSeconds()
+  const wd = tz ? u.getUTCDay() : u.getDay()
+  const civil = new Date(Y, mo, da)
+  const off = tz?.offsetMin ?? 0
   const map: Record<string, string> = {
-    Y: String(d.getFullYear()),
-    m: pad(d.getMonth() + 1),
-    d: pad(d.getDate()),
-    H: pad(d.getHours()),
-    M: pad(d.getMinutes()),
-    S: pad(d.getSeconds()),
-    F: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    T: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
-    A: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()],
-    a: DAYS[d.getDay()],
-    B: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][d.getMonth()],
-    b: MONTHS[d.getMonth()],
+    Y: String(Y),
+    m: pad(mo + 1),
+    d: pad(da),
+    H: pad(h),
+    M: pad(mi),
+    S: pad(se),
+    F: `${Y}-${pad(mo + 1)}-${pad(da)}`,
+    T: `${pad(h)}:${pad(mi)}:${pad(se)}`,
+    A: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wd],
+    a: DAYS[wd],
+    B: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mo],
+    b: MONTHS[mo],
     s: String(Math.floor(d.getTime() / 1000)),
-    Z: 'UTC',
-    z: '+0000',
-    j: pad(Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000), 3),
-    u: String(d.getDay() || 7),
-    w: String(d.getDay()),
-    e: String(d.getDate()).padStart(2),
-    y: pad(d.getFullYear() % 100),
-    I: pad(((d.getHours() + 11) % 12) + 1),
-    p: d.getHours() < 12 ? 'AM' : 'PM',
-    R: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-    D: `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${pad(d.getFullYear() % 100)}`,
-    V: pad(isoWeek(d)),
+    Z: tz?.abbr ?? 'UTC',
+    z: `${off < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(off) / 60))}${pad(Math.abs(off) % 60)}`,
+    j: pad(Math.floor((civil.getTime() - new Date(Y, 0, 0).getTime()) / 86_400_000), 3),
+    u: String(wd || 7),
+    w: String(wd),
+    e: String(da).padStart(2),
+    y: pad(Y % 100),
+    I: pad(((h + 11) % 12) + 1),
+    p: h < 12 ? 'AM' : 'PM',
+    R: `${pad(h)}:${pad(mi)}`,
+    D: `${pad(mo + 1)}/${pad(da)}/${pad(Y % 100)}`,
+    V: pad(isoWeek(civil)),
     n: '\n',
     t: '\t',
     '%': '%',
@@ -510,9 +539,11 @@ register('date', {
   usage: 'date [+FORMAT]',
   run(ctx) {
     const d = new Date(Date.now() + ctx.sys.clock.offset * 1000)
+    const utc = ctx.args.includes('-u') || ctx.args.includes('--utc')
+    const tz = tzInfo(utc ? 'UTC' : ctx.sys.clock.timezone, ZONE_OFFSET)
     const fmt = ctx.args.find((a) => a.startsWith('+'))
-    if (fmt) ctx.out(strftime(fmt.slice(1), d) + '\n')
-    else ctx.out(strftime('%a %b %d %T %Z %Y', d).replace(/ 0(\d) /, '  $1 ') + '\n')
+    if (fmt) ctx.out(strftime(fmt.slice(1), d, tz) + '\n')
+    else ctx.out(strftime('%a %b %e %T %Z %Y', d, tz) + '\n')
     return 0
   },
 })
