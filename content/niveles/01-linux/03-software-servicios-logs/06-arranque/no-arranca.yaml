@@ -1,0 +1,82 @@
+tipo: troubleshooting
+titulo: El servidor no termina de arrancar
+descripcion: >-
+  Incidente simulado en una máquina virtual Rocky. Cada decisión suma minutos: el servidor de
+  archivos tiene que estar disponible antes de las 9:00.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 8:20. Anoche se hizo mantenimiento en el servidor de archivos y hoy no responde por
+      SSH. Abres la consola de la máquina virtual y ves esto.
+    evidencia:
+      - titulo: Consola
+        contenido: |
+          [ TIME ] Timed out waiting for device /dev/disk/by-uuid/5d1e7c2a-...
+          [DEPEND] Dependency failed for /datos.
+          [DEPEND] Dependency failed for Local File Systems.
+          You are in emergency mode. After logging in, type "journalctl -xb" to view
+          system logs, "systemctl reboot" to reboot, "systemctl default" or "exit"
+          to boot into default mode.
+          Give root password for maintenance
+          (or press Control-D to continue):
+    opciones:
+      - { texto: "Escribir la contraseña de root y leer journalctl -xb", ir_a: n_journal, minutos: 3 }
+      - texto: Reiniciar para ver si se arregla solo
+        ir_a: n1
+        minutos: 6
+        consecuencia: Seis minutos después, la misma pantalla. El problema está en la configuración, no es algo pasajero.
+      - texto: Reinstalar el sistema operativo
+        ir_a: n1
+        minutos: 5
+        consecuencia: >-
+          Antes de empezar, tu jefa te frena: reinstalar llevaría horas, y todavía no sabes qué
+          pasa. El mensaje en pantalla ya da una pista concreta: un disco que no aparece.
+  n_journal:
+    situacion: El journal confirma que no encuentra un disco que el sistema espera montar en /datos.
+    evidencia:
+      - titulo: journalctl -xb -p err
+        contenido: |
+          systemd[1]: dev-disk-by\x2duuid-5d1e7c2a....device: Job dev-disk-by\x2duuid-5d1e7c2a....device/start timed out.
+          systemd[1]: Timed out waiting for device /dev/disk/by-uuid/5d1e7c2a-...
+          systemd[1]: Dependency failed for datos.mount - /datos.
+    opciones:
+      - { texto: "Revisar qué discos ve el sistema (lsblk) y la línea de /datos en /etc/fstab", ir_a: n_fstab, minutos: 3 }
+      - texto: Pasar al modo normal con Control-D
+        ir_a: n_journal
+        minutos: 4
+        consecuencia: >-
+          Con Control-D intenta seguir, pero Local File Systems depende de /datos, así que vuelve
+          a caer en el modo de emergencia.
+  n_fstab:
+    situacion: >-
+      lsblk muestra un solo disco. En /etc/fstab, el archivo que dice qué discos se montan al
+      arrancar, hay una línea para un segundo disco que ya no existe. Pablo, del turno noche, te
+      confirma por mensaje que anoche quitó un disco viejo de la máquina virtual y se olvidó de
+      actualizar fstab.
+    evidencia:
+      - titulo: /etc/fstab (última línea)
+        contenido: |
+          UUID=5d1e7c2a-...  /datos  xfs  defaults  0 0
+    opciones:
+      - { texto: "Comentar esa línea (poner # adelante), y probar con mount -a y systemctl daemon-reload", ir_a: n_fix, minutos: 4 }
+      - texto: Borrar el archivo /etc/fstab completo
+        ir_a: n_fstab
+        minutos: 5
+        consecuencia: >-
+          fstab también dice dónde montar la raíz y /boot. Sin él, el próximo arranque sería
+          bastante peor. Por suerte, hiciste una copia antes y la restauras.
+  n_fix:
+    situacion: >-
+      Comentaste la línea. mount -a no da errores y systemctl daemon-reload vuelve a leer fstab.
+      Ahora tienes que salir del modo de emergencia.
+    opciones:
+      - { texto: "Ejecutar systemctl default (o reboot) y comprobar que el servidor llega al login", ir_a: n_fin, minutos: 4 }
+  n_fin:
+    final: exito
+    resumen: >-
+      El servidor arrancó a las 8:37. La causa: una línea en /etc/fstab de un disco que se quitó.
+      Para que un disco que puede faltar no frene el arranque se usa la opción nofail (lo vas a
+      ver en el módulo 1.4). Lo importante del método: leer el mensaje de la consola, que ya decía
+      qué disco faltaba, confirmar en el journal y cambiar una sola cosa. Y anotar en el cuaderno
+      técnico qué pasó, para que el próximo cambio de discos incluya revisar fstab.

@@ -154,11 +154,12 @@ register('grubby', {
         const key = r.split('=')[0]
         parts = parts.filter((p) => (r.includes('=') ? p !== r : p.split('=')[0] !== key))
       }
-      for (const add of (a.values.get('args') ?? '').split(/\s+/).filter(Boolean)) {
-        const key = add.split('=')[0]
-        parts = parts.filter((p) => p.split('=')[0] !== key)
-        parts.push(add)
-      }
+      // Un parámetro nuevo reemplaza al que ya tenía la misma clave; los nuevos de una misma
+      // orden se agregan todos (console=tty0 console=ttyS0 quedan los dos).
+      const adds = (a.values.get('args') ?? '').split(/\s+/).filter(Boolean)
+      const keys = new Set(adds.map((x) => x.split('=')[0]))
+      parts = parts.filter((p) => !keys.has(p.split('=')[0]))
+      parts.push(...adds)
       sys.kernelArgs = parts.join(' ')
       sys.vfs.writeFile(entryPath(), rockyBootEntry(sys.kernelArgs), ROOT_CRED)
       ctx.err(NOTE_REBOOT)

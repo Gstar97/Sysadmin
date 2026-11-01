@@ -1,0 +1,13 @@
+tipo: ordenar
+consigna: Ordena las etapas del arranque de un servidor Linux.
+pasos:
+  - El firmware (UEFI o BIOS) revisa el hardware y busca el cargador
+  - GRUB muestra su menú y carga el kernel y el initramfs
+  - El kernel detecta el hardware y arranca el initramfs
+  - El initramfs encuentra el disco raíz y lo monta
+  - systemd (PID 1) arranca los servicios hasta llegar al target
+  - Aparece el login en la consola y se puede entrar por SSH
+explicacion: >-
+  Cada etapa le pasa el control a la siguiente. Si el arranque se detiene, lo primero es
+  reconocer en cuál: un error del firmware, un menú de GRUB que no aparece, un "Kernel panic",
+  una consola del initramfs (dracut) o el modo de emergencia de systemd son problemas distintos.

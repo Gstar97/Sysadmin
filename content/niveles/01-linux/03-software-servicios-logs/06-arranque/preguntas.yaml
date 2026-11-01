@@ -1,0 +1,90 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Para qué sirve el initramfs?
+  opciones:
+    - { texto: "Es un sistema mínimo en memoria que encuentra y monta el disco raíz para que pueda seguir el arranque", correcta: true, explicacion: "Trae los programas necesarios para leer el disco, como los de LVM." }
+    - { texto: "Es una copia de seguridad del kernel", explicacion: "No es una copia: es un paso del arranque." }
+    - { texto: "Guarda la configuración de GRUB", explicacion: "Eso está en grub.cfg y /etc/default/grub." }
+    - { texto: "Es la memoria de intercambio (swap)", explicacion: "No tiene relación con swap." }
+- id: p02
+  tipo: ordenar_pasos
+  diagnostico: true
+  enunciado: Ordena las etapas del arranque.
+  pasos: [Firmware (UEFI o BIOS), GRUB, Kernel, initramfs, systemd, Login]
+  explicacion: Cada etapa carga y le pasa el control a la siguiente.
+- id: p03
+  tipo: interpretar_salida
+  enunciado: Un servidor muestra esto en la consola al arrancar. ¿En qué etapa está el problema?
+  salida: |
+    [ TIME ] Timed out waiting for device /dev/disk/by-uuid/9a1c...
+    [DEPEND] Dependency failed for /backup.
+    You are in emergency mode. After logging in, type "journalctl -xb" to view
+    system logs, "systemctl reboot" to reboot, "systemctl default" or "exit"
+    to boot into default mode.
+  opciones:
+    - { texto: "En systemd: no pudo montar un sistema de archivos de /etc/fstab", correcta: true, explicacion: "El kernel y el initramfs ya hicieron su trabajo; falla un montaje." }
+    - { texto: "En el firmware: el disco está roto", explicacion: "El firmware ya terminó hace rato; systemd está funcionando." }
+    - { texto: "En GRUB: no encuentra el kernel", explicacion: "Si GRUB fallara, verías grub> o grub rescue>." }
+    - { texto: "En la red: no hay DHCP", explicacion: "El mensaje habla de un dispositivo de disco." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra los parámetros con los que arrancó el kernel actual.
+  aceptadas: [cat /proc/cmdline]
+  explicacion: Para ver los que se usarán en el próximo arranque, en Rocky está grubby --info=DEFAULT.
+- id: p05
+  tipo: opcion_multiple
+  enunciado: En Ubuntu agregaste "quiet" a GRUB_CMDLINE_LINUX_DEFAULT en /etc/default/grub, reiniciaste, y no cambió nada. ¿Qué faltó?
+  opciones:
+    - { texto: "Ejecutar sudo update-grub antes de reiniciar", correcta: true, explicacion: "update-grub genera /boot/grub/grub.cfg con los valores nuevos." }
+    - { texto: "Ejecutar sudo systemctl daemon-reload", explicacion: "Eso es para unidades de systemd, no para GRUB." }
+    - { texto: "Regenerar el initramfs", explicacion: "Los parámetros del kernel están en la configuración de GRUB." }
+    - { texto: "Reiniciar dos veces", explicacion: "Sin update-grub, la configuración de GRUB sigue igual." }
+- id: p06
+  tipo: completar_comando
+  enunciado: En Rocky, escribe el comando que agrega el parámetro console=ttyS0,115200 a todos los kernels.
+  aceptadas: ['sudo grubby --update-kernel=ALL --args="console=ttyS0,115200"', "sudo grubby --update-kernel=ALL --args=console=ttyS0,115200", "sudo grubby --update-kernel ALL --args console=ttyS0,115200", "sudo grubby --update-kernel=ALL --args='console=ttyS0,115200'"]
+  explicacion: Con --remove-args se quitan parámetros, y --info=DEFAULT muestra cómo quedó.
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Cuál es la diferencia principal entre rescue.target y emergency.target?
+  opciones:
+    - { texto: "rescue monta todos los sistemas de archivos y arranca servicios básicos; emergency solo monta la raíz, en solo lectura", correcta: true, explicacion: "emergency es para cuando ni siquiera se pueden montar los discos." }
+    - { texto: "rescue tiene red y emergency no", explicacion: "Ninguno de los dos levanta la red." }
+    - { texto: "emergency no pide contraseña", explicacion: "Los dos piden la contraseña de root." }
+    - { texto: "Son nombres distintos para lo mismo", explicacion: "Arrancan cosas diferentes." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: En un Ubuntu, el modo de emergencia responde "Cannot open access to console, the root account is locked". ¿Por qué?
+  opciones:
+    - { texto: "En Ubuntu root no tiene contraseña, y el modo de emergencia la pide", correcta: true, explicacion: "Hay que usar init=/bin/bash desde GRUB." }
+    - { texto: "Alguien bloqueó root por error", explicacion: "Es la configuración por defecto de Ubuntu." }
+    - { texto: "El disco está dañado", explicacion: "El mensaje es sobre la cuenta, no sobre el disco." }
+    - { texto: "Falta conectar el teclado", explicacion: "No tiene relación." }
+- id: p09
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para recuperar la contraseña de root en Rocky con rd.break.
+  pasos:
+    - En GRUB, presionar e y agregar rd.break a la línea linux
+    - mount -o remount,rw /sysroot
+    - chroot /sysroot
+    - passwd
+    - touch /.autorelabel
+    - exit dos veces para seguir el arranque
+  explicacion: Sin /.autorelabel, SELinux impide usar el archivo de contraseñas modificado.
+- id: p10
+  tipo: opcion_multiple
+  enunciado: ¿Qué enseña el procedimiento de recuperación de root sobre la seguridad?
+  opciones:
+    - { texto: "Que quien tiene acceso a la consola puede tomar el control del servidor, así que la consola se protege como una contraseña", correcta: true, explicacion: "También existen contraseña de GRUB y cifrado de disco." }
+    - { texto: "Que Linux no es seguro", explicacion: "Cualquier sistema operativo se puede controlar con acceso físico si no hay más protecciones." }
+    - { texto: "Que hay que desactivar GRUB", explicacion: "Sin cargador, el sistema no arranca." }
+    - { texto: "Que nunca hay que poner contraseña a root", explicacion: "No es la conclusión." }
+- id: p11
+  tipo: opcion_multiple
+  enunciado: Después de actualizar, el kernel nuevo no arranca. ¿Qué es lo más rápido para volver a tener el servidor funcionando?
+  opciones:
+    - { texto: "Elegir el kernel anterior en el menú de GRUB", correcta: true, explicacion: "Por eso se guardan varios kernels. Después se investiga con journalctl -b -1." }
+    - { texto: "Reinstalar el sistema", explicacion: "Lleva horas y no hace falta." }
+    - { texto: "Regenerar el initramfs desde otra computadora", explicacion: "Primero conviene volver a arrancar con el kernel que funcionaba." }
+    - { texto: "Esperar a que se arregle solo", explicacion: "No se va a arreglar solo." }
