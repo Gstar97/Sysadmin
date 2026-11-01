@@ -7,6 +7,59 @@ import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
 import { normalizePath, ROOT_CRED, VFS, type Cred } from './vfs'
 
+const CRON_EXAMPLE = `# Example of job definition:
+# .---------------- minute (0 - 59)
+# |  .------------- hour (0 - 23)
+# |  |  .---------- day of month (1 - 31)
+# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
+# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
+# |  |  |  |  |
+`
+const CRONTAB_ROCKY = `SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=root
+
+# For details see man 4 crontabs
+
+${CRON_EXAMPLE}# *  *  *  *  * user-name  command to be executed
+
+`
+const CRONTAB_UBUNTU = `# /etc/crontab: system-wide crontab
+# Unlike any other crontab you don't have to run the \`crontab'
+# command to install the new version when you edit this file
+# and files in /etc/cron.d. These files also have username fields,
+# that none of the other crontabs do.
+
+SHELL=/bin/sh
+# You can also override PATH, but by default, newer versions inherit it from the environment
+#PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+${CRON_EXAMPLE}# *  *  *  *  * user-name command to be executed
+17 *\t* * *\troot\tcd / && run-parts --report /etc/cron.hourly
+25 6\t* * *\troot\ttest -x /usr/sbin/anacron || { cd / && run-parts --report /etc/cron.daily; }
+47 6\t* * 7\troot\ttest -x /usr/sbin/anacron || { cd / && run-parts --report /etc/cron.weekly; }
+52 6\t1 * *\troot\ttest -x /usr/sbin/anacron || { cd / && run-parts --report /etc/cron.monthly; }
+#
+`
+const ANACRONTAB = `# /etc/anacrontab: configuration file for anacron
+
+# See anacron(8) and anacrontab(5) for details.
+
+SHELL=/bin/sh
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=root
+# the maximal random delay added to the base delay of the jobs
+RANDOM_DELAY=45
+# the jobs will be started during the following hours only
+START_HOURS_RANGE=3-22
+
+#period in days   delay in minutes   job-identifier   command
+1\t5\tcron.daily\t\tnice run-parts /etc/cron.daily
+7\t25\tcron.weekly\t\tnice run-parts /etc/cron.weekly
+@monthly 45\tcron.monthly\t\tnice run-parts /etc/cron.monthly
+`
+
+
 export interface User {
   name: string
   uid: number
@@ -745,9 +798,13 @@ export class System {
       files['/var/log/messages'] = ''
       files['/var/log/secure'] = ''
       files['/var/log/cron'] = ''
+      files['/etc/crontab'] = CRONTAB_ROCKY
+      files['/etc/cron.d/0hourly'] = '# Run the hourly jobs\nSHELL=/bin/bash\nPATH=/sbin:/bin:/usr/sbin:/usr/bin\nMAILTO=root\n01 * * * * root run-parts /etc/cron.hourly\n'
+      files['/etc/anacrontab'] = ANACRONTAB
     } else {
       files['/var/log/syslog'] = ''
       files['/var/log/auth.log'] = ''
+      files['/etc/crontab'] = CRONTAB_UBUNTU
       files['/etc/netplan/50-cloud-init.yaml'] = 'network:\n  version: 2\n  ethernets:\n    enp0s3:\n      dhcp4: true\n'
     }
     if (this.firmware === 'uefi') {

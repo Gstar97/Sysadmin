@@ -1,0 +1,140 @@
+---
+id: n1-m5-l3
+titulo: Tareas programadas
+minutos: 120
+objetivos:
+  - Escribir y leer líneas de crontab, incluidas las abreviaturas como @daily.
+  - Programar tareas de usuario con crontab y tareas del sistema en /etc/cron.d.
+  - Evitar los errores típicos de cron (la PATH corta, el % y la salida que se pierde).
+  - Programar algo una sola vez con at, y elegir entre cron y un timer de systemd.
+glosario: [cron, crontab, timer]
+verificado: 2026-11
+---
+
+import campos from './campos.svg?raw'
+import expresiones from './expresiones.yaml'
+import noCorre from './no-corre.yaml'
+import ejCron from './ej-cron.yaml'
+
+Respaldos de madrugada, reportes a primera hora, limpieza de archivos viejos una vez por semana: una parte grande del trabajo de un servidor ocurre sin que nadie esté mirando. En esta lección vas a aprender a programar esas tareas con **cron** (lo clásico, que vas a encontrar en todos lados) y con **at** (para una sola vez), y a decidir cuándo conviene un timer de systemd.
+
+<AntesDeEmpezar>
+- Los timers de systemd (lección 1.3.4): otra forma de programar tareas.
+- Redirecciones: `>>` agrega al final de un archivo y `2>&1` junta los errores con la salida (lección 1.1.7).
+- Un script es un archivo de texto con comandos que, con permiso de ejecución, se lanza como un programa (lección 1.2.2). En el módulo 1.7 vas a escribir los tuyos.
+</AntesDeEmpezar>
+
+## La línea de crontab
+
+Piensa en una agenda con recordatorios: "todos los lunes a las 9, reunión". cron es eso para el servidor: un servicio que cada minuto revisa la lista y ejecuta lo que corresponde. La diferencia con una agenda es que no hay nadie para leer el recordatorio: el comando se ejecuta solo y, si falla, nadie se entera a menos que lo prepares.
+
+Cada línea tiene cinco campos de tiempo y después el comando:
+
+<Diagrama svg={campos} alt="Una línea de crontab: 30 2 * * 1-5 seguido del comando. Los campos son minuto (0-59), hora (0-23), día del mes (1-31), mes (1-12) y día de la semana (0-7, donde 0 y 7 son domingo). El asterisco significa cualquiera, la coma separa una lista, el guion un rango y la barra indica cada tanto. También existen @reboot, @hourly, @daily, @weekly y @monthly." pie="Se lee de izquierda a derecha: minuto, hora, día del mes, mes, día de la semana." />
+
+<Emparejar ejercicio={expresiones} />
+
+<EnSimple>
+Cinco casilleros: minuto, hora, día, mes y día de la semana. Un asterisco es "me da igual". Si quieres que algo pase una vez por día, el minuto y la hora tienen que ser números.
+</EnSimple>
+
+Un detalle que sorprende: si pones algo en el día del mes **y** en el día de la semana (`0 8 1 * 1`), cron lo ejecuta cuando se cumple **cualquiera** de los dos (el día 1 y también todos los lunes), no cuando se cumplen ambos.
+
+## Las tareas de cada usuario: crontab
+
+Cada usuario tiene su propia lista. Se maneja siempre con el comando `crontab`, nunca editando el archivo directamente:
+
+```bash
+crontab -l              # ver mi lista
+crontab -e              # editarla (abre un editor y la valida al guardar)
+crontab -r              # borrarla entera, sin preguntar: cuidado
+sudo crontab -u ana -l  # la lista de otro usuario
+```
+
+Las tareas corren con los permisos de ese usuario. El archivo queda en `/var/spool/cron/USUARIO` (Rocky) o en `/var/spool/cron/crontabs/USUARIO` (Ubuntu). La `-r` está al lado de la `-e` en el teclado, y no pide confirmación: antes de tocar un crontab importante, guarda una copia con `crontab -l > crontab.bak`.
+
+## Las tareas del sistema: /etc/cron.d y compañía
+
+Para tareas del servidor (no de una persona), lo prolijo es un archivo propio en **/etc/cron.d/**. Tiene una columna más: el usuario con el que se ejecuta.
+
+```bash
+# /etc/cron.d/limpieza-tmp
+# Borra lo que tenga más de 7 días en /srv/tmp, todos los domingos a las 3:15.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 3 * * 0  root  find /srv/tmp -type f -mtime +7 -delete >> /var/log/limpieza-tmp.log 2>&1
+```
+
+Un archivo por tarea, con un comentario arriba, hace que cualquiera entienda qué corre y por qué. También existen las carpetas **/etc/cron.hourly**, **cron.daily**, **cron.weekly** y **cron.monthly**: un script con permiso de ejecución que dejes ahí corre con esa frecuencia, sin escribir ninguna línea (así funcionan logrotate y otros paquetes). En Rocky los de daily, weekly y monthly los lanza **anacron**, que los ejecuta aunque el servidor haya estado apagado a la hora prevista (con un retraso al azar, entre las 3 y las 22); en un Ubuntu Server corren a las 6:25 desde `/etc/crontab`.
+
+## Los tres errores de siempre
+
+"A mano funciona y desde cron no" es casi un clásico. Casi siempre es una de estas tres cosas:
+
+1. **La PATH es mínima.** cron ejecuta con muy pocas variables; la PATH de las tareas de usuario es solo `/usr/bin:/bin`. Lo que está en `/usr/local/bin` o `/usr/sbin` no se encuentra. Usa rutas completas o define `PATH=` arriba del crontab o dentro del script. Tampoco carga tu `.bashrc`, y el directorio de trabajo es tu home.
+2. **El % tiene un significado especial.** En una línea de crontab, `%` es un salto de línea. `date +%F` corta el comando a la mitad; hay que escribirlo `date +\%F` (o, mejor, llevar el comando a un script).
+3. **La salida se pierde.** Si no la rediriges, cron intenta mandarla por correo al usuario, y en casi todos los servidores ese correo no llega a nadie. Termina siempre las líneas con `>> /ruta/al.log 2>&1`.
+
+Para saber si cron lanzó la tarea: en Rocky, `/var/log/cron` (o `journalctl -u crond`); en Ubuntu, `journalctl -u cron`. Y para probar una línea nueva, prográmala para dentro de dos o tres minutos, mira el log, y recién después ponle el horario de verdad.
+
+<Troubleshooting escenario={noCorre} />
+
+## Una sola vez: at
+
+Para algo que tiene que pasar una vez ("reinicia el servicio esta noche a las 23:30"), cron no es lo adecuado: tendrías que acordarte de borrar la línea. Para eso está **at**:
+
+```bash
+echo "systemctl restart nginx" | sudo at 23:30     # hoy a las 23:30
+echo "/usr/local/bin/reporte.sh" | at now + 2 hours
+at -l   # o atq: la cola de tareas pendientes
+atrm 3  # cancelar la tarea 3
+```
+
+Necesita el paquete `at` y su servicio `atd` funcionando. Cada usuario ve y cancela solo sus tareas; root ve todas.
+
+## ¿cron o un timer de systemd?
+
+| | cron | timer de systemd |
+| --- | --- | --- |
+| Escribirlo | Una línea | Dos archivos (.timer y .service) |
+| Dónde queda lo que imprime | Donde lo redirijas (si no, se pierde) | En el journal, solo |
+| Ver cuándo corrió y cuándo corre de nuevo | Mirando logs | `systemctl list-timers` |
+| Si el servidor estaba apagado | Se lo pierde (salvo anacron) | `Persistent=true` lo ejecuta al arrancar |
+| Evitar dos ejecuciones a la vez | Hay que resolverlo aparte | No arranca el servicio si ya está corriendo |
+| Dónde lo vas a encontrar | En todos lados, desde hace décadas | En todas las distribuciones actuales |
+
+Una regla práctica: para algo nuevo e importante en el servidor (un respaldo, por ejemplo), un timer te da más control y más rastro. Pero vas a leer y mantener crontabs toda tu carrera, así que tienes que manejar los dos. Para más adelante: `flock` evita que una tarea de cron arranque si la anterior todavía no terminó.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejCron} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"* 2 * * *" para "una vez a las 2"'>
+    Eso es cada minuto entre las 2:00 y las 2:59. Para una vez: `0 2 * * *`.
+  </ErrorComun>
+  <ErrorComun titulo="command not found solo desde cron">
+    La PATH de cron es corta. Rutas completas en la línea y en el script, o `PATH=...` al principio.
+  </ErrorComun>
+  <ErrorComun titulo="El nombre del archivo queda cortado en date +%F">
+    El % es especial en crontab. Escríbelo `\%` o mueve el comando a un script.
+  </ErrorComun>
+  <ErrorComun titulo="Borrar todo con crontab -r">
+    Quisiste escribir -e. No hay papelera: guarda copias con `crontab -l > archivo` antes de cambios grandes.
+  </ErrorComun>
+  <ErrorComun titulo="echo 'línea' | crontab - borró las otras tareas">
+    Reemplaza la lista entera. Para agregar: `(crontab -l; echo 'línea nueva') | crontab -`, o usa `crontab -e`.
+  </ErrorComun>
+  <ErrorComun titulo="Editar /var/spool/cron a mano">
+    cron puede no enterarse y no se valida nada. Usa siempre `crontab -e`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Línea de crontab: minuto, hora, día del mes, mes, día de la semana y comando; `*`, `,`, `-` y `/`; atajos `@reboot`, `@daily`, etc.
+- Tareas de usuario: `crontab -e` y `crontab -l` (cuidado con `-r`). Tareas del sistema: un archivo en `/etc/cron.d` con columna de usuario, o un script en `/etc/cron.daily` y compañía.
+- Desde cron: PATH mínima, `%` escapado como `\%`, y siempre `>> log 2>&1`. Probar con un horario cercano.
+- Registro de cron: `/var/log/cron` o `journalctl -u crond` (Rocky), `journalctl -u cron` (Ubuntu).
+- Una sola vez: `echo comando | at HORA`, `atq`, `atrm` (paquete at, servicio atd).
+- Timer de systemd: más rastro y control; cron: más simple y está en todos lados.
+</Resumen>

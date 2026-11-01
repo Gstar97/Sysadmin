@@ -1,0 +1,77 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuándo se ejecuta "*/10 * * * *"?
+  opciones:
+    - { texto: "Cada 10 minutos", correcta: true, explicacion: "La barra indica cada cuánto dentro del rango; * es todo el rango." }
+    - { texto: "A los 10 minutos de cada hora", explicacion: "Eso sería 10 * * * *." }
+    - { texto: "El día 10 de cada mes", explicacion: "El primer campo es el minuto." }
+    - { texto: "10 veces por día", explicacion: "Son 6 por hora, 144 por día." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Quieres un respaldo todos los días a las 2 de la mañana. ¿Qué línea es correcta?
+  opciones:
+    - { texto: "0 2 * * * /usr/local/bin/respaldo.sh >> /var/log/respaldo.log 2>&1", correcta: true, explicacion: "Minuto 0, hora 2, cualquier día, con la salida a un log." }
+    - { texto: "* 2 * * * /usr/local/bin/respaldo.sh", explicacion: "Se ejecutaría 60 veces, una por minuto entre las 2:00 y las 2:59." }
+    - { texto: "2 0 * * * /usr/local/bin/respaldo.sh", explicacion: "Eso es a las 0:02: el primer campo es el minuto." }
+    - { texto: "0 2 * * 2 /usr/local/bin/respaldo.sh", explicacion: "Solo los martes." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: >-
+    Un script funciona a mano, pero desde cron el log dice "pg_dump: command not found". ¿Qué pasa?
+  opciones:
+    - { texto: "cron usa una PATH mínima y no encuentra el programa: hay que usar la ruta completa o definir PATH", correcta: true, explicacion: "Es el problema más común con cron." }
+    - { texto: "cron no tiene permisos para ejecutar scripts", explicacion: "El script sí corrió: el error viene de adentro." }
+    - { texto: "Hay que reiniciar crond", explicacion: "crond lanzó la tarea sin problemas." }
+    - { texto: "pg_dump no está instalado", explicacion: "A mano funciona, así que está instalado." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: "La línea 0 1 * * * tar czf /backup/web-$(date +%F).tgz /srv/web no genera ningún archivo. ¿Por qué?"
+  opciones:
+    - { texto: "En crontab, % es un salto de línea: el comando queda cortado; hay que escribir \\%", correcta: true, explicacion: "O mejor, mover el comando a un script." }
+    - { texto: "cron no permite $( )", explicacion: "Sí lo permite; el problema es el %." }
+    - { texto: "tar no funciona desde cron", explicacion: "Funciona; el comando llega cortado." }
+    - { texto: "Falta el usuario en la línea", explicacion: "En un crontab de usuario no va la columna de usuario." }
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra las tareas de cron del usuario actual.
+  aceptadas: [crontab -l]
+  explicacion: Con -e se editan y con -r se borran todas.
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué diferencia tiene una línea en /etc/cron.d/ respecto de una de crontab -e?
+  opciones:
+    - { texto: "Tiene una columna extra, después de los campos de tiempo, con el usuario que la ejecuta", correcta: true, explicacion: "Por ejemplo: 15 3 * * 0 root comando." }
+    - { texto: "No acepta asteriscos", explicacion: "El formato de tiempo es el mismo." }
+    - { texto: "Solo puede ejecutar scripts de /etc/cron.daily", explicacion: "Puede ejecutar cualquier comando." }
+    - { texto: "Ninguna", explicacion: "La columna de usuario es la diferencia." }
+- id: p07
+  tipo: completar_comando
+  enunciado: "Programa con at que se ejecute /usr/local/bin/limpiar.sh hoy a las 22:00 (escribe la línea completa con echo y una tubería)."
+  aceptadas: ["echo /usr/local/bin/limpiar.sh | at 22:00", "echo '/usr/local/bin/limpiar.sh' | at 22:00", "echo \"/usr/local/bin/limpiar.sh\" | at 22:00", "echo /usr/local/bin/limpiar.sh | at 22:00 today", "echo '/usr/local/bin/limpiar.sh' | at 22:00 today"]
+  explicacion: at lee los comandos de la entrada estándar. atq muestra la cola.
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Una tarea de cron no dejó rastro de haber corrido. ¿Dónde confirmas si crond la lanzó, en Rocky?
+  opciones:
+    - { texto: "En /var/log/cron (o journalctl -u crond)", correcta: true, explicacion: "En Ubuntu, journalctl -u cron." }
+    - { texto: "En crontab -l", explicacion: "Muestra la lista, no las ejecuciones." }
+    - { texto: "En /etc/crontab", explicacion: "Es configuración, no un registro." }
+    - { texto: "En systemctl list-timers", explicacion: "Muestra timers de systemd, no tareas de cron." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: El servidor estuvo apagado entre las 0 y las 6 por mantenimiento. ¿Qué pasa con una tarea programada a las 3?
+  opciones:
+    - { texto: "En cron se pierde; un timer con Persistent=true la ejecuta al arrancar", correcta: true, explicacion: "anacron cubre esto para cron.daily y compañía." }
+    - { texto: "cron la ejecuta al arrancar siempre", explicacion: "cron solo mira la hora actual." }
+    - { texto: "Se ejecuta a las 3 del día siguiente dos veces", explicacion: "Nadie acumula ejecuciones." }
+    - { texto: "El servidor no arranca hasta ejecutarla", explicacion: "No tiene relación con el arranque." }
+- id: p10
+  tipo: opcion_multiple
+  enunciado: Quieres agregar una línea al crontab sin borrar las que ya hay, desde un comando. ¿Cuál usas?
+  opciones:
+    - { texto: "(crontab -l; echo 'línea nueva') | crontab -", correcta: true, explicacion: "Junta la lista actual con la nueva y la instala completa." }
+    - { texto: "echo 'línea nueva' | crontab -", explicacion: "Reemplaza la lista entera por esa sola línea." }
+    - { texto: "echo 'línea nueva' >> /etc/crontab", explicacion: "Ese archivo es del sistema y necesita la columna de usuario." }
+    - { texto: "crontab -a 'línea nueva'", explicacion: "crontab no tiene esa opción." }

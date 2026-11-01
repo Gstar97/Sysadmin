@@ -1,0 +1,56 @@
+tipo: troubleshooting
+titulo: El respaldo anda a mano, pero no desde cron
+descripcion: >-
+  Servidor Rocky Linux. Ayer programaste un respaldo nocturno con cron y hoy no hay ningún archivo
+  nuevo en /backup. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 8:30. En /backup está el respaldo que hiciste ayer a mano, pero no el de esta
+      madrugada. Ejecutado a mano, el script funciona perfecto.
+    evidencia:
+      - titulo: crontab -l
+        contenido: |
+          0 2 * * * /home/ana/respaldo.sh
+    opciones:
+      - { texto: "Mirar el registro de cron para ver si la tarea se lanzó", ir_a: n_log, minutos: 2 }
+      - texto: Ejecutar el script a mano otra vez para tener el respaldo de hoy
+        ir_a: n1
+        minutos: 10
+        consecuencia: Tienes el respaldo de hoy, pero mañana va a pasar lo mismo. No sabes por qué falló.
+  n_log:
+    situacion: cron sí lanzó la tarea a las 2:00. Algo falló adentro, pero la línea no guarda la salida en ningún lado.
+    evidencia:
+      - titulo: sudo grep respaldo /var/log/cron
+        contenido: |
+          Nov  1 02:00:01 app01 CROND[41210]: (ana) CMD (/home/ana/respaldo.sh)
+          Nov  1 02:00:01 app01 CROND[41209]: (ana) CMDEND (/home/ana/respaldo.sh)
+    opciones:
+      - { texto: "Agregar >> /home/ana/respaldo.log 2>&1 a la línea y programarla para dentro de 2 minutos, como prueba", ir_a: n_prueba, minutos: 4 }
+      - texto: Reinstalar cronie
+        ir_a: n_log
+        minutos: 8
+        consecuencia: cron funcionaba bien; el registro lo muestra. El problema está en lo que ejecuta.
+  n_prueba:
+    situacion: Esta vez la salida quedó registrada.
+    evidencia:
+      - titulo: cat /home/ana/respaldo.log
+        contenido: |
+          /home/ana/respaldo.sh: line 6: restic: command not found
+      - titulo: which restic (en tu sesión)
+        contenido: |
+          /usr/local/bin/restic
+    opciones:
+      - { texto: "En el script, poner la ruta completa /usr/local/bin/restic (o definir PATH al principio)", ir_a: n_ok, minutos: 3 }
+      - texto: Copiar restic a /home/ana
+        ir_a: n_prueba
+        minutos: 4
+        consecuencia: Funcionaría, pero te queda una copia suelta que nadie va a actualizar. Lo prolijo es que el script no dependa de la PATH.
+  n_ok:
+    final: exito
+    resumen: >-
+      La prueba de las 8:52 deja un respaldo nuevo en /backup y el log no muestra errores; la
+      línea vuelve a 0 2 * * *, con la salida al log. La causa: cron ejecuta con muy pocas variables: la PATH es solo /usr/bin:/bin, así que no encuentra lo
+      que está en /usr/local/bin ni en /usr/sbin. Usa rutas completas o define PATH en el script,
+      redirige la salida a un log, y prueba la línea programándola para dentro de unos minutos.
