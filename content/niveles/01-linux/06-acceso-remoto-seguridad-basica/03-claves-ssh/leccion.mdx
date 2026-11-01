@@ -1,0 +1,125 @@
+---
+id: n1-m6-l3
+titulo: Claves SSH
+minutos: 120
+objetivos:
+  - Crear un par de claves, instalarlas en un servidor y entender qué hace cada una.
+  - Resolver los problemas de permisos que hacen que sshd ignore una clave.
+  - Usar ssh-agent para escribir la frase de paso una vez por sesión.
+  - Cerrar el acceso con contraseña y el de root sin quedarte afuera.
+glosario: [clave-ssh, authorized-keys, frase-paso]
+verificado: 2026-11
+---
+
+import claves from './claves.svg?raw'
+import tipos from './tipos.yaml'
+import ejClaves from './ej-claves.yaml'
+
+Las contraseñas tienen dos problemas en un servidor: se pueden adivinar (los robots de la lección anterior prueban miles por día) y hay que escribirlas cada vez. Las **claves SSH** resuelven los dos: son imposibles de adivinar y, bien configuradas, te dejan entrar sin escribir nada. En las empresas, los servidores se administran con claves y las contraseñas por SSH se desactivan.
+
+<AntesDeEmpezar>
+- Conectarte por SSH, known_hosts y el registro de sshd (lección 1.6.2).
+- Permisos de archivos y carpetas (lección 1.2.2).
+</AntesDeEmpezar>
+
+## Un par de claves
+
+Una clave SSH son dos archivos que van juntos. Piensa en un candado y su llave: puedes fabricar muchos candados iguales y dejarlos en todas las puertas que quieras (la **clave pública**), pero la única llave que los abre la guardas tú (la **clave privada**). Donde la comparación no llega: el servidor no te pide la llave; te manda un desafío distinto cada vez y tu equipo lo responde usando la privada. La privada nunca viaja por la red.
+
+<Diagrama svg={claves} alt="En tu equipo, la clave privada id_ed25519, que no sale nunca de ahí y tiene permisos 600, y la pública id_ed25519.pub, que se copia con ssh-copy-id al archivo authorized_keys del usuario en el servidor. El servidor exige que el home y la carpeta .ssh no los pueda modificar nadie más y que authorized_keys tenga permisos 600; si no, ignora la clave." pie="La pública se reparte; la privada no se mueve de tu equipo." />
+
+<Emparejar ejercicio={tipos} />
+
+```bash
+ssh-keygen -t ed25519 -C "ana@admin01"   # crea ~/.ssh/id_ed25519 y id_ed25519.pub
+ssh-copy-id web01                        # instala la pública en web01 (pide la contraseña una vez)
+ssh web01                                # ya entras con la clave
+```
+
+**ed25519** es el tipo recomendado hoy: claves cortas, rápidas y seguras. Vas a ver también **RSA** (`-t rsa -b 4096`) en sistemas viejos que no soportan ed25519. El comentario (`-C`) es solo una etiqueta, pero ayuda mucho cuando un authorized_keys tiene diez claves y hay que saber cuál borrar.
+
+ssh-keygen te pide una **frase de paso**: protege la clave privada si alguien la copia. Para tus claves personales, ponle una. Para una clave que usa un proceso automático (un respaldo nocturno, por ejemplo), se deja vacía, y se compensa limitando lo que esa clave puede hacer (nivel 3).
+
+## Sin ssh-copy-id: a mano
+
+Si no tienes ssh-copy-id, o la contraseña ya está desactivada y alguien con acceso te ayuda, la clave se agrega a mano en el servidor:
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo 'ssh-ed25519 AAAAC3Nz... ana@admin01' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+sshd es estricto con los permisos (la opción `StrictModes`): si el home, `~/.ssh` o `authorized_keys` los puede modificar alguien más, **ignora la clave** sin avisarte, y ssh te pide la contraseña como si nada. La pista está en el registro del servidor: `Authentication refused: bad ownership or modes for directory /home/ana/.ssh`. En tu equipo pasa algo parecido: si la clave privada se puede leer por otros, ssh se niega a usarla (`UNPROTECTED PRIVATE KEY FILE!`).
+
+En Rocky hay un detalle más: si creaste `.ssh` o `authorized_keys` con `mv` desde otro lugar, pueden tener una etiqueta de SELinux equivocada y sshd no los puede leer. `restorecon -Rv ~/.ssh` lo arregla (lo vas a entender en la lección 1.6.6). ssh-copy-id ya lo hace solo.
+
+## ssh-agent: la frase de paso una vez
+
+Con frase de paso, ssh la pide en cada conexión. El **agente** la guarda en memoria mientras dura tu sesión:
+
+```bash
+eval "$(ssh-agent -s)"     # arranca el agente (muchos escritorios ya lo tienen andando)
+ssh-add                    # le das la frase una vez
+ssh-add -l                 # las claves que tiene cargadas
+```
+
+Para más adelante: con `ssh -A` el agente viaja con tu conexión a otro servidor. Úsalo solo en servidores de confianza: root en ese servidor podría usar tu agente mientras estás conectado. Para pasar por un servidor intermedio hay una forma mejor (`-J`, en la próxima lección).
+
+## Cerrar las contraseñas (sin dejarte afuera)
+
+Una vez que entras con clave, el paso siguiente es que nadie pueda entrar con contraseña. Esto se hace en el servidor, con un archivo propio en `sshd_config.d`:
+
+```text
+# /etc/ssh/sshd_config.d/01-endurecido.conf
+PasswordAuthentication no
+PermitRootLogin no
+```
+
+`PermitRootLogin no` obliga a entrar con tu usuario y usar sudo: así queda registrado quién hizo cada cosa. El nombre empieza con `01-` porque sshd se queda con el **primer** valor que lee de cada opción, y los archivos de `sshd_config.d` se leen en orden alfabético antes que el resto de `sshd_config`. Algunas imágenes de nube traen `50-cloud-init.conf` con `PasswordAuthentication yes`: tu `01-` se lee antes y gana.
+
+El orden seguro para tocar sshd, siempre:
+
+1. Comprobar que **ya entras con clave**.
+2. Dejar **una sesión abierta** (es tu red de seguridad).
+3. Editar y revisar con `sudo sshd -t`.
+4. Aplicar con `sudo systemctl reload sshd` (o `ssh` en Ubuntu).
+5. Probar desde **otra terminal** que entras, y que con contraseña no (`ssh -o PubkeyAuthentication=no servidor`).
+6. Recién entonces, cerrar la sesión de seguridad.
+
+Para comprobar qué valor quedó en realidad: `sudo sshd -T | grep -E 'passwordauth|permitroot'`.
+
+<EnSimple>
+Antes de cerrar una puerta, comprueba que tu llave funciona y deja otra puerta abierta mientras pruebas. Con sshd, la puerta abierta es la sesión que ya tienes.
+</EnSimple>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejClaves} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Sigue pidiendo contraseña aunque copiaste la clave">
+    Permisos: home o `~/.ssh` escribibles por el grupo, `authorized_keys` que no es 600 o no es del usuario. Mira el registro del servidor ("bad ownership or modes"). En Rocky, también puede ser la etiqueta de SELinux: `restorecon -Rv ~/.ssh`.
+  </ErrorComun>
+  <ErrorComun titulo='"UNPROTECTED PRIVATE KEY FILE!"'>
+    La clave privada se puede leer por otros. `chmod 600 ~/.ssh/id_ed25519`.
+  </ErrorComun>
+  <ErrorComun titulo="Copiar la clave privada al servidor">
+    Al servidor solo va la .pub. Si una privada terminó en otro lado, considérala comprometida: genera otra y borra la vieja de todos los authorized_keys.
+  </ErrorComun>
+  <ErrorComun titulo="Puse PasswordAuthentication no y se sigue aceptando contraseña">
+    Otro archivo lo define antes (sshd usa el primer valor) o no recargaste el servicio. `sudo sshd -T | grep passwordauth` muestra el valor efectivo.
+  </ErrorComun>
+  <ErrorComun titulo="Me quedé afuera después de tocar sshd_config">
+    Necesitas la consola del hipervisor o del proveedor de nube. Para la próxima: sesión abierta, `sshd -t`, reload y prueba desde otra terminal (el caso real del módulo trata de esto).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `ssh-keygen -t ed25519 -C "usuario@equipo"` crea la privada (`id_ed25519`, 600, con frase de paso) y la pública (`.pub`).
+- `ssh-copy-id servidor` agrega la pública a `~/.ssh/authorized_keys` del servidor (a mano: `~/.ssh` 700, `authorized_keys` 600).
+- Si los permisos no son estrictos, sshd ignora la clave; el registro del servidor dice por qué.
+- `eval "$(ssh-agent -s)"` y `ssh-add`: la frase de paso una vez por sesión.
+- Endurecer: `PasswordAuthentication no` y `PermitRootLogin no` en `/etc/ssh/sshd_config.d/01-...conf`; sshd usa el primer valor.
+- Orden seguro: clave probada → sesión abierta → `sshd -t` → reload → probar desde otra terminal.
+</Resumen>

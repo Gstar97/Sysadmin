@@ -1,0 +1,77 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué archivo copias a los servidores donde quieres entrar con clave?
+  opciones:
+    - { texto: "La clave pública (id_ed25519.pub)", correcta: true, explicacion: "Se agrega a authorized_keys del servidor." }
+    - { texto: "La clave privada (id_ed25519)", explicacion: "La privada no sale nunca de tu equipo." }
+    - { texto: "Los dos", explicacion: "Solo la pública." }
+    - { texto: "known_hosts", explicacion: "Ese archivo guarda las claves de los servidores." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: >-
+    Copiaste tu clave a un servidor y sigue pidiendo contraseña. El registro dice "Authentication refused: bad ownership or modes for directory /home/ana/.ssh". ¿Qué haces?
+  opciones:
+    - { texto: "chmod 700 ~/.ssh y chmod 600 ~/.ssh/authorized_keys en el servidor", correcta: true, explicacion: "sshd ignora la clave si otros pueden modificar esos archivos." }
+    - { texto: "Generar otra clave", explicacion: "La clave está bien; el problema son los permisos." }
+    - { texto: "chmod 777 ~/.ssh para que sshd pueda leerla", explicacion: "Es justo lo que sshd rechaza." }
+    - { texto: "Reiniciar sshd", explicacion: "Sin cambiar los permisos, sigue igual." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando para crear una clave ed25519 con el comentario ana@portatil.
+  aceptadas: ['ssh-keygen -t ed25519 -C "ana@portatil"', "ssh-keygen -t ed25519 -C 'ana@portatil'", ssh-keygen -t ed25519 -C ana@portatil, 'ssh-keygen -C "ana@portatil" -t ed25519']
+  explicacion: Por defecto la guarda en ~/.ssh/id_ed25519.
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que instala tu clave pública en el servidor db01 para el usuario ana.
+  aceptadas: [ssh-copy-id ana@db01, ssh-copy-id -i ~/.ssh/id_ed25519.pub ana@db01, ssh-copy-id db01]
+  explicacion: Pide la contraseña una última vez.
+- id: p05
+  tipo: opcion_multiple
+  enunciado: ¿Por qué el archivo de ajustes se llama 01-endurecido.conf y no zz-endurecido.conf?
+  opciones:
+    - { texto: "sshd usa el primer valor que lee de cada opción, y los archivos se leen en orden alfabético", correcta: true, explicacion: "Con 01- se lee antes que, por ejemplo, 50-cloud-init.conf." }
+    - { texto: "sshd solo lee archivos que empiezan con números", explicacion: "Lee los que terminan en .conf." }
+    - { texto: "Es solo una costumbre", explicacion: "Aquí el orden cambia el resultado." }
+    - { texto: "Para que se lea después que los demás y gane", explicacion: "En sshd gana el primero, no el último." }
+- id: p06
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para desactivar el acceso con contraseña sin riesgo de quedarte afuera.
+  pasos:
+    - Comprobar que entras con tu clave
+    - Dejar una sesión SSH abierta
+    - Crear el archivo con PasswordAuthentication no
+    - Revisar con sudo sshd -t
+    - Recargar el servicio
+    - Probar desde otra terminal que sigues entrando
+  explicacion: La sesión abierta es tu red de seguridad si algo sale mal.
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Para qué sirve ssh-agent?
+  opciones:
+    - { texto: "Para escribir la frase de paso de tu clave una sola vez por sesión", correcta: true, explicacion: "La guarda en memoria y ssh se la pide a él." }
+    - { texto: "Para guardar contraseñas de los servidores", explicacion: "Guarda claves, no contraseñas." }
+    - { texto: "Para que el servidor acepte claves", explicacion: "Eso es del lado del servidor (sshd)." }
+    - { texto: "Para generar claves", explicacion: "Eso es ssh-keygen." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: ¿Por qué conviene PermitRootLogin no?
+  opciones:
+    - { texto: "Para que cada uno entre con su usuario y use sudo: queda registrado quién hizo qué", correcta: true, explicacion: "Además, root es el primer usuario que prueban los robots." }
+    - { texto: "Porque root no puede usar SSH", explicacion: "Puede, si se permite." }
+    - { texto: "Para que sshd consuma menos", explicacion: "No tiene que ver con el rendimiento." }
+    - { texto: "Porque root no tiene contraseña", explicacion: "No es el motivo." }
+- id: p09
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice este mensaje al conectarte?
+  salida: |
+    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    @         WARNING: UNPROTECTED PRIVATE KEY FILE!          @
+    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    Permissions 0644 for '/home/ana/.ssh/id_ed25519' are too open.
+  opciones:
+    - { texto: "Que tu clave privada la pueden leer otros usuarios de tu equipo y ssh no la va a usar", correcta: true, explicacion: "chmod 600 ~/.ssh/id_ed25519." }
+    - { texto: "Que el servidor rechazó tu clave", explicacion: "El problema está en tu equipo, antes de llegar." }
+    - { texto: "Que la clave expiró", explicacion: "Las claves SSH no expiran solas." }
+    - { texto: "Que hay que regenerar la clave", explicacion: "Con corregir los permisos alcanza." }

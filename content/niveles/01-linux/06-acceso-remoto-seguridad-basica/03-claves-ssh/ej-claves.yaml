@@ -1,0 +1,83 @@
+tipo: terminal
+shell: bash
+titulo: Entrar con clave y cerrar las contraseñas
+descripcion: >-
+  Vas a dejar web01 (Ubuntu) como se usa en una empresa: se entra solo con clave SSH, nunca con
+  contraseña, y root no puede entrar directo. Sin dejarte afuera en el camino.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.5/24 }
+  servidores:
+    - { ip: 192.168.10.20, hostname: web01, distro: ubuntu, usuarios: [{ nombre: ana, sudo: true }], clave_conocida: si }
+pasos:
+  - consigna: Crea tu par de claves ed25519 con un comentario que diga de quién y de dónde es.
+    verificar:
+      - { archivo: /home/ana/.ssh/id_ed25519, modo: "0600" }
+      - { archivo: /home/ana/.ssh/id_ed25519.pub, contenido_incluye: ssh-ed25519 }
+    pistas:
+      - "`ssh-keygen -t ed25519 -C \"ana@admin01\"` y Enter para la ubicación por defecto."
+    solucion: ['ssh-keygen -t ed25519 -C "ana@admin01"']
+    explicacion: >-
+      La privada quedó con permisos 600. En tu equipo de trabajo, ponle una frase de paso: si
+      alguien copia el archivo, sin la frase no le sirve.
+  - consigna: Instala tu clave pública en web01.
+    verificar:
+      - { comando_usado: 'ssh-copy-id\s+.*web01' }
+      - { en: web01, verificar: { archivo: /home/ana/.ssh/authorized_keys, contenido_incluye: ana@admin01, modo: "0600" } }
+    pistas:
+      - "`ssh-copy-id web01` (te pide la contraseña por última vez)"
+    solucion: [ssh-copy-id web01]
+    explicacion: ssh-copy-id agrega la clave al final de authorized_keys y deja los permisos como los exige sshd.
+  - consigna: Entra a web01 y confirma en su registro que entraste con la clave.
+    verificar:
+      - { comando_usado: 'ssh\s+(ana@)?web01\s*$' }
+      - { salida_contiene: Accepted publickey for ana }
+    pistas:
+      - "`ssh web01` y, ya adentro, `sudo journalctl -u ssh -n 5`"
+    solucion: [ssh web01, sudo journalctl -u ssh -n 5]
+    explicacion: '"Accepted publickey": no hizo falta contraseña. Ahora sí se pueden cerrar las contraseñas.'
+  - consigna: >-
+      Sin cerrar esta sesión, crea /etc/ssh/sshd_config.d/01-endurecido.conf con dos líneas:
+      `PasswordAuthentication no` y `PermitRootLogin no`.
+    verificar:
+      - { en: web01, verificar: { archivo: /etc/ssh/sshd_config.d/01-endurecido.conf, contenido_incluye: PasswordAuthentication no } }
+      - { en: web01, verificar: { archivo: /etc/ssh/sshd_config.d/01-endurecido.conf, contenido_incluye: PermitRootLogin no } }
+    pistas:
+      - "Con sudo nano, o con printf y sudo tee."
+      - "`printf 'PasswordAuthentication no\\nPermitRootLogin no\\n' | sudo tee /etc/ssh/sshd_config.d/01-endurecido.conf`"
+    solucion: ["printf 'PasswordAuthentication no\\nPermitRootLogin no\\n' | sudo tee /etc/ssh/sshd_config.d/01-endurecido.conf"]
+    explicacion: >-
+      Un archivo propio en sshd_config.d no se pisa con las actualizaciones. El "01-" no es un
+      capricho: sshd usa el PRIMER valor que encuentra, así que tu archivo tiene que leerse antes
+      que otros (por ejemplo, el 50-cloud-init.conf de algunas imágenes de nube).
+  - consigna: Revisa que la configuración no tenga errores antes de aplicarla.
+    verificar:
+      - { comando_usado: 'sudo\s+sshd\s+-t' }
+    pistas:
+      - "`sudo sshd -t` (si no muestra nada, está bien)"
+    solucion: [sudo sshd -t]
+    explicacion: Si sshd -t encuentra un error y reinicias igual, el servicio no arranca. Con la sesión abierta no te quedas afuera, pero nadie más puede entrar.
+  - consigna: Aplica el cambio.
+    verificar:
+      - { comando_usado: 'systemctl\s+(reload|restart)\s+ssh' }
+      - { en: web01, verificar: { servicio: ssh, activo: true } }
+    pistas:
+      - "`sudo systemctl reload ssh` (reload no corta las sesiones abiertas)"
+    solucion: [sudo systemctl reload ssh]
+    explicacion: Todavía no cierres esta sesión. Primero prueba desde otra terminal que todo funciona.
+  - consigna: >-
+      Vuelve a admin01 (como si fuera otra terminal) y prueba que con contraseña ya no se puede
+      entrar, forzando a ssh a no usar la clave.
+    verificar:
+      - { comando_usado: 'ssh\s+.*PubkeyAuthentication=no.*web01' }
+      - { salida_contiene: Permission denied (publickey) }
+    pistas:
+      - "`exit` y después `ssh -o PubkeyAuthentication=no web01`"
+    solucion: [exit, ssh -o PubkeyAuthentication=no web01]
+    explicacion: '"Permission denied (publickey)": el servidor solo ofrece clave. Y con tu clave sigues entrando normalmente (pruébalo con ssh web01).'
