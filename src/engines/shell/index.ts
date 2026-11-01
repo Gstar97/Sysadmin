@@ -26,7 +26,7 @@ function installBinaries(sys: System) {
     node.size = BINARY_SIZES[name] ?? 24_000 + ([...name].reduce((h, c) => h * 31 + c.charCodeAt(0), 7) % 160_000)
   }
   // Herramientas que solo existen en una de las dos familias de distribuciones.
-  const otherFamily = sys.distro === 'rocky' ? ['apt', 'apt-get', 'dpkg', 'adduser', 'ufw'] : ['dnf', 'yum', 'rpm', 'firewall-cmd', 'nmcli']
+  const otherFamily = sys.distro === 'rocky' ? ['apt', 'apt-get', 'apt-cache', 'dpkg', 'adduser', 'ufw'] : ['dnf', 'yum', 'rpm', 'firewall-cmd', 'nmcli', 'authselect']
   for (const [name, def] of COMMANDS) {
     if (otherFamily.includes(name)) continue
     const pkg = commandPackage(sys.distro, name)

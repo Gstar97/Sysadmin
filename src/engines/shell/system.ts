@@ -163,7 +163,11 @@ export class System {
     permPorts: new Set(),
   }
   ufw: UfwState = { active: false, rules: [] }
-  pkgHistory: { id: number; cmdline: string; date: number; altered: number }[] = []
+  pkgHistory: { id: number; cmdline: string; date: number; altered: number; action?: 'Install' | 'Removed' | 'Upgrade'; names?: string[] }[] = []
+  /** Versión instalada cuando difiere de la del catálogo (después de actualizar). */
+  versions = new Map<string, string>()
+  /** Paquetes instalados con una actualización pendiente. */
+  upgradable = new Set<string>()
   /** Cambios de red pendientes de nmcli (se aplican con "nmcli connection up"). */
   nmPending = new Map<string, { address?: string; gateway?: string; dns?: string[] }>()
   bootTime: number
@@ -189,6 +193,7 @@ export class System {
     // Paquetes base y adicionales
     for (const p of BASE_INSTALLED[this.distro]) this.installPackage(p, true)
     for (const p of state.paquetes.instalados) this.installPackage(p, true)
+    for (const p of state.paquetes.actualizables) if (this.installed.has(p)) this.upgradable.add(p)
     for (const p of state.paquetes.disponibles) {
       if (!this.catalog[p]) this.catalog[p] = { summary: `${p} package`, version: '1.0' }
     }
@@ -567,6 +572,9 @@ export class System {
       '/etc/shells': '/bin/sh\n/bin/bash\n/usr/bin/sh\n/usr/bin/bash\n',
       '/etc/security/faillock.conf': FAILLOCK_CONF,
       ...(this.distro === 'rocky'
+        ? { '/etc/yum.repos.d/rocky.repo': ROCKY_REPO, '/etc/yum.repos.d/rocky-extras.repo': ROCKY_EXTRAS_REPO }
+        : { '/etc/apt/sources.list.d/ubuntu.sources': UBUNTU_SOURCES, '/etc/apt/sources.list': '# Ubuntu sources have moved to /etc/apt/sources.list.d/ubuntu.sources\n', '/var/log/apt/history.log': '' }),
+      ...(this.distro === 'rocky'
         ? { '/etc/security/pwquality.conf': PWQUALITY_CONF, '/etc/authselect/system-auth': systemAuth(false), '/etc/authselect/password-auth': systemAuth(false) }
         : { '/etc/pam.d/common-auth': UBUNTU_COMMON_AUTH, '/etc/pam.d/common-password': UBUNTU_COMMON_PASSWORD }),
       ...(this.distro === 'rocky'
@@ -874,4 +882,77 @@ password	requisite			pam_deny.so
 # prime the stack with a positive return value if there isn't one already;
 password	required			pam_permit.so
 # end of pam-auth-update config
+`
+
+// ---------------------------------------------------------------------------------------
+// Repositorios
+// ---------------------------------------------------------------------------------------
+
+const ROCKY_REPO = `# rocky.repo
+#
+# The mirrorlist system uses the connecting IP address of the client and the
+# update status of each mirror to pick current mirrors that are geographically
+# close to the client.
+
+[baseos]
+name=Rocky Linux $releasever - BaseOS
+mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=$basearch&repo=BaseOS-$releasever$rltype
+#baseurl=http://dl.rockylinux.org/$contentdir/$releasever/BaseOS/$basearch/os/
+gpgcheck=1
+enabled=1
+countme=1
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-10
+
+[appstream]
+name=Rocky Linux $releasever - AppStream
+mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=$basearch&repo=AppStream-$releasever$rltype
+#baseurl=http://dl.rockylinux.org/$contentdir/$releasever/AppStream/$basearch/os/
+gpgcheck=1
+enabled=1
+countme=1
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-10
+
+[crb]
+name=Rocky Linux $releasever - CRB
+mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=$basearch&repo=CRB-$releasever$rltype
+#baseurl=http://dl.rockylinux.org/$contentdir/$releasever/CRB/$basearch/os/
+gpgcheck=1
+enabled=0
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-10
+`
+
+const ROCKY_EXTRAS_REPO = `[extras]
+name=Rocky Linux $releasever - Extras
+mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=$basearch&repo=extras-$releasever$rltype
+#baseurl=http://dl.rockylinux.org/$contentdir/$releasever/extras/$basearch/os/
+gpgcheck=1
+enabled=1
+countme=1
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-10
+`
+
+export const EPEL_REPO = `[epel]
+name=Extra Packages for Enterprise Linux $releasever - $basearch
+metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-$releasever&arch=$basearch
+enabled=1
+gpgcheck=1
+countme=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-10
+`
+
+const UBUNTU_SOURCES = `Types: deb
+URIs: http://archive.ubuntu.com/ubuntu/
+Suites: noble noble-updates noble-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+Types: deb
+URIs: http://security.ubuntu.com/ubuntu/
+Suites: noble-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 `

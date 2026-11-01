@@ -55,8 +55,10 @@ export const bashStateSchema = z.strictObject({
     .strictObject({
       instalados: z.array(z.string()).default([]),
       disponibles: z.array(z.string()).default([]),
+      /** Paquetes instalados que tienen una versión nueva disponible. */
+      actualizables: z.array(z.string()).default([]),
     })
-    .default({ instalados: [], disponibles: [] }),
+    .default({ instalados: [], disponibles: [], actualizables: [] }),
   procesos: z
     .array(
       z.strictObject({
