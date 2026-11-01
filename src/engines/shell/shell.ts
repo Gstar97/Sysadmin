@@ -504,6 +504,8 @@ export class Shell {
           }
           return 0
         })
+      case 'bg':
+        return this.startJob(node.body, node.text, io)
       case 'group':
         return this.withRedirs(node.redirs, io, async (rio) => {
           if (!node.subshell) return this.exec(node.body, rio)
@@ -780,6 +782,55 @@ export class Shell {
       }
       throw e
     }
+  }
+
+  /** Trabajos en segundo plano de esta sesión (comando &). */
+  jobs: { id: number; pid: number; text: string; state: 'Running' | 'Stopped' }[] = []
+
+  /**
+   * comando &: los programas que en la realidad siguen corriendo (sleep, yes, tail -f, bucles
+   * infinitos) quedan como un proceso en segundo plano; el resto se ejecuta enseguida.
+   */
+  async startJob(body: Node, text: string, io: IO): Promise<number> {
+    const id = (this.jobs.at(-1)?.id ?? 0) + 1
+    const long = longRunning(body)
+    const shellPid = this.sys.procs.find((p) => p.cmd === '-bash' && p.user === this.user)?.pid ?? 1
+    let nohup = false
+    let inner = body
+    if (inner.kind === 'simple' && inner.words[0]?.parts.length === 1 && inner.words[0].parts[0].t === 'lit' && inner.words[0].parts[0].v === 'nohup') {
+      nohup = true
+      inner = { ...inner, words: inner.words.slice(1) }
+    }
+    if (long) {
+      const cmd = text.replace(/^nohup\s+/, '')
+      const proc = this.sys.spawn(this.user, cmd, long.cpu, 0.1, shellPid, Date.now())
+      proc.stat = long.cpu > 50 ? 'R' : 'S'
+      proc.tty = 'pts/0'
+      this.jobs.push({ id, pid: proc.pid, text, state: 'Running' })
+      io.err(`[${id}] ${proc.pid}\n`)
+      if (nohup) io.err("nohup: ignoring input and appending output to 'nohup.out'\n")
+      return 0
+    }
+    const pid = this.sys.allocPid()
+    io.err(`[${id}] ${pid}\n`)
+    const code = await this.exec(inner, nohup ? { ...io, out: (t) => this.appendNohup(t) } : io)
+    io.err(`[${id}]+  ${code === 0 ? 'Done' : `Exit ${code}`}${' '.repeat(20)}${text}\n`)
+    return 0
+  }
+
+  private appendNohup(text: string) {
+    try {
+      this.sys.vfs.writeFile(this.resolve('nohup.out'), text, this.cred, { append: true, mode: 0o600, umask: this.umask })
+    } catch {
+      // sin permiso en la carpeta actual
+    }
+  }
+
+  /** Trabajos cuyo proceso sigue vivo. */
+  liveJobs() {
+    this.jobs = this.jobs.filter((j) => this.sys.procs.some((p) => p.pid === j.pid))
+    for (const j of this.jobs) j.state = this.sys.procs.find((p) => p.pid === j.pid)!.stat.startsWith('T') ? 'Stopped' : 'Running'
+    return this.jobs
   }
 
   /** bash script.sh: no hace falta el permiso de ejecución. */
@@ -1369,7 +1420,96 @@ export function evalTest(sh: Shell, args: string[], extended: boolean): boolean 
   return orExpr()
 }
 
+/** Programas que no terminan solos (o tardan): quedan como trabajo en segundo plano. */
+function longRunning(node: Node): { cpu: number } | undefined {
+  if (node.kind === 'while' || node.kind === 'for') return { cpu: 99.7 }
+  if (node.kind === 'pipeline') return longRunning(node.cmds[0])
+  if (node.kind !== 'simple') return undefined
+  const words = node.words.map((w) => w.parts.map((p) => (p.t === 'lit' ? p.v : '')).join(''))
+  if (words[0] === 'nohup') words.shift()
+  const [cmd, ...rest] = words
+  const base = (cmd ?? '').split('/').pop()
+  if (base === 'sleep') return Number(rest[0]?.replace(/[smhd]$/, '') ?? 0) > 1 || /[mhd]$/.test(rest[0] ?? '') || rest[0] === 'infinity' ? { cpu: 0 } : undefined
+  if (base === 'yes' || ((base === 'md5sum' || base === 'sha256sum' || base === 'gzip') && rest.includes('/dev/urandom'))) return { cpu: 99.7 }
+  if (base === 'dd' && rest.some((r) => /^if=\/dev\/(zero|urandom)/.test(r)) && rest.some((r) => r === 'of=/dev/null')) return { cpu: 99.7 }
+  if (base === 'tail' && rest.some((r) => r === '-f' || r === '-F')) return { cpu: 0 }
+  if (base === 'ping' && !rest.includes('-c')) return { cpu: 0 }
+  if (base === 'top' || base === 'watch' || base === 'vmstat' || base === 'iostat') return { cpu: 0.3 }
+  if (/\.sh$/.test(base ?? '') && rest.length === 0 && /(^|\/)(largo|infinito|loop|bucle)/.test(cmd ?? '')) return { cpu: 50 }
+  return undefined
+}
+
+export function jobFor(sh: Shell, spec: string | undefined) {
+  const jobs = sh.liveJobs()
+  if (!spec || spec === '%%' || spec === '%+' || spec === '%') return jobs.at(-1)
+  if (spec === '%-') return jobs.at(-2)
+  const n = /^%?(\d+)$/.exec(spec)
+  if (n) return jobs.find((j) => j.id === Number(n[1]))
+  const name = spec.replace(/^%\??/, '')
+  return jobs.find((j) => j.text.includes(name))
+}
+
 export const BUILTINS: Record<string, Builtin> = {
+  jobs: (sh, args, io) => {
+    const jobs = sh.liveJobs()
+    const l = args.includes('-l')
+    const p = args.includes('-p')
+    jobs.forEach((j, i) => {
+      const mark = i === jobs.length - 1 ? '+' : i === jobs.length - 2 ? '-' : ' '
+      if (p) io.out(`${j.pid}\n`)
+      else io.out(`[${j.id}]${mark}  ${l ? `${j.pid} ` : ''}${j.state.padEnd(24)}${j.text}${j.state === 'Running' ? ' &' : ''}\n`)
+    })
+    return 0
+  },
+  fg: (sh, args, io) => {
+    const j = jobFor(sh, args[0])
+    if (!j) {
+      io.err(`bash: fg: ${args[0] ?? 'current'}: no such job\n`)
+      return 1
+    }
+    io.out(j.text + '\n')
+    const proc = sh.sys.procs.find((p) => p.pid === j.pid)
+    if (proc && /^sleep\b/.test(j.text)) {
+      // sleep en primer plano: termina cuando se cumple el tiempo.
+      sh.sys.procs = sh.sys.procs.filter((p) => p.pid !== j.pid)
+      return 0
+    }
+    io.err('[simulador] El trabajo pasó al primer plano. En un servidor real, la terminal queda ocupada hasta que termine; se corta con Ctrl+C o se manda de nuevo atrás con Ctrl+Z y bg.\n')
+    sh.sys.procs = sh.sys.procs.filter((p) => p.pid !== j.pid)
+    io.out('^C\n')
+    return 130
+  },
+  bg: (sh, args, io) => {
+    const j = jobFor(sh, args[0])
+    if (!j) {
+      io.err(`bash: bg: ${args[0] ?? 'current'}: no such job\n`)
+      return 1
+    }
+    if (j.state === 'Running') {
+      io.err(`bash: bg: job ${j.id} already in background\n`)
+      return 0
+    }
+    j.state = 'Running'
+    const proc = sh.sys.procs.find((p) => p.pid === j.pid)
+    if (proc) proc.stat = proc.cpu > 50 ? 'R' : 'S'
+    io.out(`[${j.id}]+ ${j.text} &\n`)
+    return 0
+  },
+  disown: (sh, args, io) => {
+    const j = jobFor(sh, args[0])
+    if (!j) {
+      io.err(`bash: disown: ${args[0] ?? 'current'}: no such job\n`)
+      return 1
+    }
+    sh.jobs = sh.jobs.filter((x) => x !== j)
+    return 0
+  },
+  wait: (sh) => {
+    // Los trabajos que terminan solos (sleep) terminan; los infinitos quedarían esperando para siempre.
+    const sleepers = sh.liveJobs().filter((j) => /^sleep\b/.test(j.text))
+    sh.sys.procs = sh.sys.procs.filter((p) => !sleepers.some((j) => j.pid === p.pid))
+    return 0
+  },
   ':': () => 0,
   true: () => 0,
   false: () => 1,

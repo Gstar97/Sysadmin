@@ -147,6 +147,12 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
     services: [{ name: 'firewalld', description: 'firewalld - dynamic firewall daemon', ports: [], enabledByDefault: true, activeAfterInstall: true }],
     commands: ['firewall-cmd'],
   },
+  at: {
+    summary: 'Job spooling tools',
+    version: '3.2.5',
+    services: [{ name: 'atd', description: 'Deferred execution scheduler', ports: [], enabledByDefault: false, activeAfterInstall: false }],
+    commands: ['at', 'atq', 'atrm'],
+  },
   cronie: {
     summary: 'Cron daemon for executing programs at set times',
     version: '1.7.0',
@@ -226,6 +232,12 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     services: [{ name: 'ssh', description: 'OpenBSD Secure Shell server', ports: [22], enabledByDefault: true, activeAfterInstall: true }],
   },
   ufw: { summary: 'program for managing a Netfilter firewall', version: '0.36.2', commands: ['ufw'] },
+  at: {
+    summary: 'Delayed job execution and batch processing',
+    version: '3.2.5',
+    services: [{ name: 'atd', description: 'Deferred execution scheduler', ports: [], enabledByDefault: true, activeAfterInstall: true }],
+    commands: ['at', 'atq', 'atrm'],
+  },
   cron: {
     summary: 'process scheduling daemon',
     version: '3.0pl1',

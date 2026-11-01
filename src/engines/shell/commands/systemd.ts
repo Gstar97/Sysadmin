@@ -23,6 +23,7 @@ import {
 } from '../units'
 import { ROOT_CRED } from '../vfs'
 import { entryPid, SERVICE_CHECKS } from './sysinfo'
+import { chronyStart, ntpSources } from '../kernel'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -237,6 +238,11 @@ async function startService(ctx: CommandContext, svc: Service, verb = 'start'): 
     svc.pid = sys.spawnService(svc.name).pid
     journal(sys, unit, `Starting ${unit} - ${svc.description}...`)
     journal(sys, unit, `Started ${unit} - ${svc.description}.`)
+    if (svc.name === 'chronyd' || svc.name === 'chrony') {
+      chronyStart(sys)
+      for (const s of ntpSources(sys)) if (!s.reachable) journal(sys, unit, `Could not resolve address of ${s.name}`, 4, svc.name, svc.pid)
+      journal(sys, unit, sys.clock.synced ? `Selected source ${ntpSources(sys).find((s) => s.reachable)?.name ?? ''}` : 'No suitable source for synchronisation', sys.clock.synced ? 6 : 4, svc.name, svc.pid)
+    }
     return true
   }
   // Unidades propias.

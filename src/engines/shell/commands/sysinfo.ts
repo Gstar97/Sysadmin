@@ -1,5 +1,6 @@
 import { parseArgs } from '../args'
-import { BUILTINS, COMMANDS, formatPrintf, register, type CommandContext } from '../shell'
+import { checkCrontab } from '../editor'
+import { BUILTINS, COMMANDS, formatPrintf, jobFor, register, type CommandContext } from '../shell'
 import { commOf, priorityName, priorityNumber, type JournalEntry } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
@@ -193,6 +194,14 @@ register('logger', {
   },
 })
 
+function etime(start: number): string {
+  const s = Math.max(1, Math.floor((Date.now() - start) / 1000))
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  return `${d ? `${d}-` : ''}${d || h ? `${pad(h)}:` : ''}${pad(m)}:${pad(s % 60)}`
+}
+
 register('ps', {
   usage: 'ps [options]',
   summary: '  ps aux | ps -ef | ps -u USER | ps -p PID | ps -eo pid,user,%cpu,%mem,cmd --sort=-%cpu',
@@ -220,13 +229,13 @@ register('ps', {
     const custom = /-o\s+(\S+)/.exec(args)?.[1] ?? /-eo\s+(\S+)/.exec(args)?.[1]
     if (custom) {
       const cols = custom.split(',')
-      const head: Record<string, string> = { pid: 'PID', ppid: 'PPID', user: 'USER', '%cpu': '%CPU', '%mem': '%MEM', cmd: 'CMD', comm: 'COMMAND', stat: 'STAT', args: 'COMMAND' }
+      const head: Record<string, string> = { pid: 'PID', ppid: 'PPID', user: 'USER', '%cpu': '%CPU', '%mem': '%MEM', cmd: 'CMD', comm: 'COMMAND', stat: 'STAT', args: 'COMMAND', ni: ' NI', pri: 'PRI', tty: 'TT', etime: '    ELAPSED' }
       ctx.out(cols.map((c) => head[c] ?? c.toUpperCase()).join(' ') + '\n')
       for (const p of procs) {
         ctx.out(
           cols
             .map((c) =>
-              c === 'pid' ? String(p.pid).padStart(5) : c === 'ppid' ? String(p.ppid).padStart(5) : c === 'user' ? p.user.padEnd(8) : c === '%cpu' ? p.cpu.toFixed(1).padStart(4) : c === '%mem' ? p.mem.toFixed(1).padStart(4) : c === 'stat' ? p.stat : c === 'comm' ? commOf(p) : p.cmd,
+              c === 'pid' ? String(p.pid).padStart(5) : c === 'ppid' ? String(p.ppid).padStart(5) : c === 'user' ? p.user.padEnd(8) : c === '%cpu' ? p.cpu.toFixed(1).padStart(4) : c === '%mem' ? p.mem.toFixed(1).padStart(4) : c === 'stat' ? p.stat.padEnd(4) : c === 'comm' ? commOf(p) : c === 'ni' ? String(p.nice ?? 0).padStart(3) : c === 'pri' ? String(19 - (p.nice ?? 0)).padStart(3) : c === 'tty' ? (p.tty ?? '?').padEnd(6) : c === 'etime' ? etime(p.start).padStart(11) : p.cmd,
             )
             .join(' ') + '\n',
         )
@@ -236,18 +245,18 @@ register('ps', {
     if (/\b(a?ux|aux)\b/.test(args) || args.includes('-aux')) {
       ctx.out('USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n')
       for (const p of procs) {
-        ctx.out(`${p.user.padEnd(10).slice(0, 10)} ${String(p.pid).padStart(5)} ${p.cpu.toFixed(1).padStart(4)} ${p.mem.toFixed(1).padStart(4)} ${String(Math.round(20000 + p.mem * 40000)).padStart(6)} ${String(Math.round(4000 + p.mem * 38000)).padStart(5)} ${p.cmd.startsWith('-bash') ? 'pts/0   ' : '?       '} ${p.stat.padEnd(4)} ${time(p).padEnd(5)}   0:${pad(Math.round(p.cpu / 10))} ${p.cmd}\n`)
+        ctx.out(`${p.user.padEnd(10).slice(0, 10)} ${String(p.pid).padStart(5)} ${p.cpu.toFixed(1).padStart(4)} ${p.mem.toFixed(1).padStart(4)} ${String(Math.round(20000 + p.mem * 40000)).padStart(6)} ${String(Math.round(4000 + p.mem * 38000)).padStart(5)} ${(p.tty ?? (p.cmd.startsWith('-bash') ? 'pts/0' : '?')).padEnd(8)} ${p.stat.padEnd(4)} ${time(p).padEnd(5)}   0:${pad(Math.round(p.cpu / 10))} ${p.cmd}\n`)
       }
       return 0
     }
     if (args.includes('-e') || args.includes('-A') || args.includes('-f')) {
       ctx.out('UID          PID    PPID  C STIME TTY          TIME CMD\n')
-      for (const p of procs) ctx.out(`${p.user.padEnd(8)} ${String(p.pid).padStart(7)} ${String(p.ppid).padStart(7)}  ${Math.round(p.cpu)} ${time(p).padEnd(5)} ${p.cmd.startsWith('-bash') ? 'pts/0   ' : '?       '}     00:00:0${Math.min(9, Math.round(p.cpu / 10))} ${p.cmd}\n`)
+      for (const p of procs) ctx.out(`${p.user.padEnd(8)} ${String(p.pid).padStart(7)} ${String(p.ppid).padStart(7)}  ${Math.round(p.cpu)} ${time(p).padEnd(5)} ${(p.tty ?? (p.cmd.startsWith('-bash') ? 'pts/0' : '?')).padEnd(8)}     00:00:0${Math.min(9, Math.round(p.cpu / 10))} ${p.cmd}\n`)
       return 0
     }
     if (userFilter || pidFilter || cmdFilter) {
       ctx.out('    PID TTY          TIME CMD\n')
-      for (const p of procs) ctx.out(`${String(p.pid).padStart(7)} ${p.cmd === '-bash' ? 'pts/0   ' : '?       '} 00:00:${pad(Math.min(59, Math.round(p.cpu / 10)))} ${commOf(p)}\n`)
+      for (const p of procs) ctx.out(`${String(p.pid).padStart(7)} ${(p.tty ?? (p.cmd === '-bash' ? 'pts/0' : '?')).padEnd(8)} 00:00:${pad(Math.min(59, Math.round(p.cpu / 10)))} ${commOf(p)}\n`)
       return procs.length ? 0 : 1
     }
     const shellProc = ctx.sys.procs.find((p) => p.cmd === '-bash' && p.user === ctx.sh.user) ?? ctx.sys.procs.find((p) => p.cmd === '-bash')
@@ -273,6 +282,11 @@ function killProcs(ctx: CommandContext, targets: number[], signal: number): numb
       continue
     }
     if (pid === 1) continue
+    // Un zombi ya terminó: no se puede matar. Desaparece cuando su padre lo recoge (o muere).
+    if (p.stat.startsWith('Z')) continue
+    // En espera del disco (D): no atiende señales hasta que vuelve la operación.
+    if (p.stat.startsWith('D') && signal !== 18 && signal !== 19) continue
+    if (signal === 15 && p.ignoresTerm) continue
     if (signal === 18) {
       if (p.stat.startsWith('T')) p.stat = p.cpu > 50 ? 'R' : 'S'
       continue
@@ -282,7 +296,7 @@ function killProcs(ctx: CommandContext, targets: number[], signal: number): numb
       p.stat = 'T'
       continue
     }
-    ctx.sys.procs = ctx.sys.procs.filter((x) => x.pid !== pid)
+    ctx.sys.procs = ctx.sys.procs.filter((x) => x.pid !== pid && !(x.ppid === pid && x.stat.startsWith('Z')))
     for (const svc of ctx.sys.services.values()) {
       if (svc.pid === pid) {
         svc.active = false
@@ -319,7 +333,27 @@ register('kill', {
       ctx.err('kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]\n')
       return 2
     }
-    return killProcs(ctx, args.map(Number), signal)
+    // %1, %2...: trabajos de esta terminal.
+    const pids: number[] = []
+    for (const a of args) {
+      if (a.startsWith('%')) {
+        const j = jobFor(ctx.sh, a)
+        if (!j) {
+          ctx.err(`bash: kill: ${a}: no such job\n`)
+          return 1
+        }
+        pids.push(j.pid)
+      } else pids.push(Number(a))
+    }
+    const jobsBefore = ctx.sh.liveJobs().filter((j) => pids.includes(j.pid)).map((j) => ({ ...j }))
+    const code = killProcs(ctx, pids, signal)
+    for (const j of jobsBefore) {
+      const alive = ctx.sys.procs.find((p) => p.pid === j.pid)
+      if (!alive) ctx.err(`[${j.id}]+  ${signal === 9 ? 'Killed' : 'Terminated'}${' '.repeat(signal === 9 ? 19 : 15)}${j.text}\n`)
+      else if (signal === 19) ctx.err(`\n[${j.id}]+  Stopped                 ${j.text}\n`)
+    }
+    ctx.sh.liveJobs()
+    return code
   },
 })
 
@@ -355,82 +389,12 @@ register(['pkill', 'killall'], {
 register('pgrep', {
   usage: 'pgrep [-l] [-u USER] PATTERN',
   run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { l: ['l', 'list-name'], a: ['a', 'list-full'] }, values: { u: ['u'] } })
+    const a = parseArgs(ctx.args, { flags: { l: ['l', 'list-name'], a: ['a', 'list-full'], f: ['f', 'full'] }, values: { u: ['u'] } })
     const pattern = a.rest[0] ?? ''
     const re = new RegExp(pattern)
-    const found = [...ctx.sys.procs].sort((x, y) => x.pid - y.pid).filter((p) => re.test(commOf(p)) && (!a.values.has('u') || p.user === a.values.get('u')))
+    const found = [...ctx.sys.procs].sort((x, y) => x.pid - y.pid).filter((p) => re.test(a.flags.has('f') ? p.cmd : commOf(p)) && (!a.values.has('u') || p.user === a.values.get('u')))
     for (const p of found) ctx.out(`${p.pid}${a.flags.has('l') ? ' ' + commOf(p) : a.flags.has('a') ? ' ' + p.cmd : ''}\n`)
     return found.length ? 0 : 1
-  },
-})
-
-function loadAvg(ctx: CommandContext) {
-  const busy = ctx.sys.procs.reduce((s, p) => s + p.cpu, 0) / 100
-  return [0.08 + busy, 0.12 + busy * 0.8, 0.09 + busy * 0.5].map((x) => x.toFixed(2))
-}
-
-function uptimeText(ctx: CommandContext) {
-  const mins = Math.floor((Date.now() - ctx.sys.bootTime) / 60_000)
-  const days = Math.floor(mins / 1440)
-  const hh = Math.floor((mins % 1440) / 60)
-  const mm = mins % 60
-  return ` ${new Date().toTimeString().slice(0, 8)} up ${days} days, ${String(hh).padStart(2)}:${pad(mm)},  1 user,  load average: ${loadAvg(ctx).join(', ')}`
-}
-
-register('uptime', {
-  usage: 'uptime [-p]',
-  run(ctx) {
-    if (ctx.args.includes('-p')) {
-      const mins = Math.floor((Date.now() - ctx.sys.bootTime) / 60_000)
-      ctx.out(`up ${Math.floor(mins / 1440)} days, ${Math.floor((mins % 1440) / 60)} hours, ${mins % 60} minutes\n`)
-    } else ctx.out(uptimeText(ctx) + '\n')
-    return 0
-  },
-})
-
-register(['top', 'htop'], {
-  usage: 'top [-b] [-n ITERATIONS]',
-  run(ctx) {
-    const procs = [...ctx.sys.procs].sort((a, b) => b.cpu - a.cpu || a.pid - b.pid)
-    const cpuUsed = Math.min(100, procs.reduce((s, p) => s + p.cpu, 0) / 2)
-    ctx.out(
-      `top - ${uptimeText(ctx).trim().replace(/^\S+ /, '')}\nTasks: ${procs.length} total,   ${procs.filter((p) => p.stat.startsWith('R')).length} running, ${procs.filter((p) => !p.stat.startsWith('R')).length} sleeping,   0 stopped,   0 zombie\n%Cpu(s): ${cpuUsed.toFixed(1)} us,  0.5 sy,  0.0 ni, ${(99.5 - cpuUsed).toFixed(1)} id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st\nMiB Mem :   3753.5 total,   1484.7 free,    985.2 used,   1349.1 buff/cache\nMiB Swap:   2048.0 total,   2048.0 free,      0.0 used.   2723.1 avail Mem\n\n    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\n`,
-    )
-    for (const p of procs.slice(0, 15)) {
-      ctx.out(`${String(p.pid).padStart(7)} ${p.user.padEnd(9).slice(0, 9)} 20   0 ${String(Math.round(20000 + p.mem * 40000)).padStart(7)} ${String(Math.round(4000 + p.mem * 38000)).padStart(6)}   2816 ${p.stat[0]} ${p.cpu.toFixed(1).padStart(5)} ${p.mem.toFixed(1).padStart(5)}   0:0${Math.min(9, Math.round(p.cpu / 10))}.12 ${commOf(p)}\n`)
-    }
-    if (ctx.isTTY && !ctx.args.includes('-b')) ctx.err(`[simulador] ${ctx.name} se actualiza en vivo y se sale con q; aquí se muestra una sola captura.\n`)
-    return 0
-  },
-})
-
-register('free', {
-  usage: 'free [-h|-m|-g]',
-  run(ctx) {
-    const h = ctx.args.includes('-h')
-    const m = ctx.args.includes('-m')
-    const g = ctx.args.includes('-g')
-    // Valores en KiB, como los informa el kernel en /proc/meminfo.
-    const human = (kb: number) => {
-      if (kb === 0) return '0B'
-      const units = ['Ki', 'Mi', 'Gi', 'Ti']
-      let v = kb
-      let u = 0
-      while (v >= 1024 && u < units.length - 1) {
-        v /= 1024
-        u++
-      }
-      return `${v < 10 ? v.toFixed(1) : Math.round(v)}${units[u]}`
-    }
-    const row = (kb: number) => (h ? human(kb) : m ? String(Math.round(kb / 1024)) : g ? String(Math.round(kb / 1048576)) : String(kb))
-    const mem = [3843580, 1008840, 1520332, 9620, 1314408, 2788416]
-    const cols = ['total', 'used', 'free', 'shared', 'buff/cache', 'available']
-    ctx.out(`${''.padEnd(8)}${cols.map((c) => c.padStart(12)).join('')}\n`)
-    ctx.out(`${'Mem:'.padEnd(8)}${mem.map((v) => row(v).padStart(12)).join('')}\n`)
-    const swapKb = ctx.sys.storage.swaps.reduce((a, w) => a + w.size / 1024 - 4, 0)
-    const swapUsed = ctx.sys.storage.swaps.reduce((a, w) => a + w.used / 1024, 0)
-    ctx.out(`${'Swap:'.padEnd(8)}${[swapKb, swapUsed, swapKb - swapUsed].map((v) => row(v).padStart(12)).join('')}\n`)
-    return 0
   },
 })
 
@@ -500,7 +464,7 @@ register('hostnamectl', {
   },
 })
 
-function strftime(fmt: string, d: Date): string {
+export function strftime(fmt: string, d: Date): string {
   const map: Record<string, string> = {
     Y: String(d.getFullYear()),
     m: pad(d.getMonth() + 1),
@@ -519,16 +483,33 @@ function strftime(fmt: string, d: Date): string {
     z: '+0000',
     j: pad(Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000), 3),
     u: String(d.getDay() || 7),
+    w: String(d.getDay()),
+    e: String(d.getDate()).padStart(2),
+    y: pad(d.getFullYear() % 100),
+    I: pad(((d.getHours() + 11) % 12) + 1),
+    p: d.getHours() < 12 ? 'AM' : 'PM',
+    R: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    D: `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${pad(d.getFullYear() % 100)}`,
+    V: pad(isoWeek(d)),
     n: '\n',
+    t: '\t',
     '%': '%',
   }
-  return fmt.replace(/%([YmdHMSFTAaBbsZzjun%])/g, (_, k: string) => map[k])
+  return fmt.replace(/%([YmdHMSFTAaBbsZzjuwneyIpRDVt%])/g, (_, k: string) => map[k])
+}
+
+function isoWeek(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const day = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7)
 }
 
 register('date', {
   usage: 'date [+FORMAT]',
   run(ctx) {
-    const d = new Date()
+    const d = new Date(Date.now() + ctx.sys.clock.offset * 1000)
     const fmt = ctx.args.find((a) => a.startsWith('+'))
     if (fmt) ctx.out(strftime(fmt.slice(1), d) + '\n')
     else ctx.out(strftime('%a %b %d %T %Z %Y', d).replace(/ 0(\d) /, '  $1 ') + '\n')
@@ -536,37 +517,6 @@ register('date', {
   },
 })
 
-register('timedatectl', {
-  usage: 'timedatectl [status | set-timezone ZONE | list-timezones | set-ntp BOOL]',
-  run(ctx) {
-    const tzFile = '/etc/timezone-simulado'
-    const tz = ctx.sys.vfs.exists(tzFile) ? ctx.sys.vfs.readFile(tzFile, ROOT_CRED).trim() : 'UTC'
-    const [verb, arg] = ctx.args
-    if (verb === 'set-timezone') {
-      if (ctx.sh.user !== 'root') {
-        ctx.err('Failed to set time zone: Access denied\n')
-        return 1
-      }
-      if (!arg || !/^[A-Z][A-Za-z_]+(\/[A-Za-z_]+)*$|^UTC$/.test(arg)) {
-        ctx.err(`Failed to set time zone: Invalid or not installed time zone '${arg ?? ''}'\n`)
-        return 1
-      }
-      ctx.sys.vfs.writeFile(tzFile, arg + '\n', ROOT_CRED)
-      return 0
-    }
-    if (verb === 'list-timezones') {
-      ctx.out(['America/Argentina/Buenos_Aires', 'America/Bogota', 'America/Lima', 'America/Mexico_City', 'America/Montevideo', 'America/Santiago', 'Europe/Madrid', 'UTC'].join('\n') + '\n')
-      return 0
-    }
-    if (verb === 'set-ntp') return ctx.sh.user === 'root' ? 0 : 1
-    const d = new Date()
-    const ntp = ctx.sys.services.get(ctx.sys.distro === 'rocky' ? 'chronyd' : 'chrony')?.active
-    ctx.out(
-      `               Local time: ${strftime('%a %F %T', d)} ${tz === 'UTC' ? 'UTC' : tz.split('/').pop()}\n           Universal time: ${strftime('%a %F %T', d)} UTC\n                 RTC time: ${strftime('%a %F %T', d)}\n                Time zone: ${tz} (${tz === 'UTC' ? 'UTC, +0000' : 'local'})\nSystem clock synchronized: ${ntp ? 'yes' : 'no'}\n              NTP service: ${ntp ? 'active' : 'inactive'}\n          RTC in local TZ: no\n`,
-    )
-    return 0
-  },
-})
 
 register(['env', 'printenv'], {
   usage: 'printenv [VARIABLE]',
@@ -1022,6 +972,11 @@ register('crontab', {
     // crontab ARCHIVO o desde la entrada estándar
     const src = a.rest[0]
     const data = src && src !== '-' ? ctx.sys.vfs.readFile(ctx.sh.resolve(src), ctx.sh.cred) : ctx.stdin.readAll()
+    const bad = checkCrontab(data)
+    if (bad) {
+      ctx.err(`"${src && src !== '-' ? src : '-'}":${bad.line}: ${bad.message}\nerrors in crontab file, can't install.\n`)
+      return 1
+    }
     ctx.sys.vfs.writeFile(file, data, ROOT_CRED)
     return 0
   },

@@ -80,9 +80,31 @@ export const bashStateSchema = z.strictObject({
         mem: z.number().default(0.1),
         /** Archivos que el proceso tiene abiertos (si se borran, siguen ocupando espacio). */
         abiertos: z.array(z.string()).default([]),
+        /** Estado: R (corriendo), S (esperando), D (esperando el disco), T (detenido), Z (zombi). */
+        estado: z.enum(['R', 'S', 'D', 'T', 'Z']).optional(),
+        nice: z.number().int().min(-20).max(19).optional(),
+        /** Lectura y escritura en disco, en MB/s. */
+        io_lectura: z.number().optional(),
+        io_escritura: z.number().optional(),
+        /** No termina con SIGTERM: hace falta SIGKILL. */
+        ignora_term: z.boolean().optional(),
+        hace_minutos: z.number().optional(),
       }),
     )
     .default([]),
+  /** Datos de rendimiento que no salen de los procesos. */
+  rendimiento: z
+    .strictObject({
+      memoria_usada: z.string().optional(),
+      cache: z.string().optional(),
+      swap_usada: z.string().optional(),
+      /** Porcentaje de CPU que el hipervisor le quita a la VM (st). */
+      cpu_robada: z.number().optional(),
+      carga: z.array(z.number()).length(3).optional(),
+      /** Hace cuántos minutos empezó el problema: sar muestra valores normales antes. */
+      incidente_desde_minutos: z.number().optional(),
+    })
+    .default({}),
   /** Discos extra (sdb, sdc...), vacíos o con particiones. */
   discos: z
     .array(
@@ -126,6 +148,14 @@ export const bashStateSchema = z.strictObject({
       }),
     )
     .default([]),
+  /** Hora del servidor: zona, desfase del reloj y servidor NTP configurado en chrony. */
+  hora: z
+    .strictObject({
+      zona: z.string().default('UTC'),
+      desfase_segundos: z.number().default(0),
+      servidor_ntp: z.string().optional(),
+    })
+    .default({ zona: 'UTC', desfase_segundos: 0 }),
   /** Espacio ocupado en la raíz (por defecto, unos 4,3 GiB del sistema instalado). */
   uso_raiz: z.string().optional(),
   red: z

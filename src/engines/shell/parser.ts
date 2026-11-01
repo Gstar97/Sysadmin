@@ -30,6 +30,7 @@ export type Node =
   | { kind: 'case'; word: Word; items: { patterns: Word[]; body: Node }[]; redirs: Redir[] }
   | { kind: 'group'; body: Node; subshell: boolean; redirs: Redir[] }
   | { kind: 'func'; name: string; body: Node }
+  | { kind: 'bg'; body: Node; text: string }
 
 export class IncompleteInput extends Error {
   constructor() {
@@ -353,8 +354,17 @@ export function parse(src: string): Node {
       if (t.type === 'eof') break
       if (t.type === 'word' && t.plain && terminators.includes(t.raw)) break
       if (t.type === 'op' && (t.op === ')' || t.op === ';;') && terminators.includes(t.op)) break
+      const startTok = pos
       items.push(parseAndOr())
       const sep = peek()
+      if (sep.type === 'op' && sep.op === '&') {
+        // comando & : se ejecuta en segundo plano. Se guarda el texto para jobs.
+        const text = tokens
+          .slice(startTok, pos)
+          .map((t) => (t.type === 'word' ? t.raw : t.type === 'op' ? t.op : ''))
+          .join(' ')
+        items[items.length - 1] = { kind: 'bg', body: items[items.length - 1], text }
+      }
       if (sep.type === 'nl' || (sep.type === 'op' && (sep.op === ';' || sep.op === '&'))) {
         next()
         skipNl()

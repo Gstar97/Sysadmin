@@ -1,4 +1,5 @@
 import { parseArgs } from '../args'
+import { metrics } from '../perf'
 import { BUILTINS, register, type CommandContext } from '../shell'
 import { ROOT_CRED } from '../vfs'
 import { systemAuth } from '../system'
@@ -718,7 +719,7 @@ register(['who', 'w'], {
     const login = new Date(Date.now() - 25 * 60_000)
     const t = `${login.toISOString().slice(0, 10)} ${login.toTimeString().slice(0, 5)}`
     if (ctx.name === 'w') {
-      ctx.out(` ${new Date().toTimeString().slice(0, 8)} up 3 days,  4:02,  1 user,  load average: 0.08, 0.12, 0.09\nUSER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT\n${ctx.sh.user.padEnd(8)} pts/0    192.168.1.50     ${login.toTimeString().slice(0, 5)}    0.00s  0.04s  0.00s w\n`)
+      ctx.out(` ${new Date().toTimeString().slice(0, 8)} up 3 days,  4:02,  1 user,  load average: ${metrics(ctx.sys).load.map((x) => x.toFixed(2)).join(', ')}\nUSER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT\n${ctx.sh.user.padEnd(8)} pts/0    192.168.1.50     ${login.toTimeString().slice(0, 5)}    0.00s  0.04s  0.00s w\n`)
     } else ctx.out(`${ctx.sh.user.padEnd(8)} pts/0        ${t} (192.168.1.50)\n`)
     return 0
   },

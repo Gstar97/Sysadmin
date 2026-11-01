@@ -1,6 +1,8 @@
 import type { BashState } from './schema'
 import { builtinTimers, daemonReload, type Timer, type UnitDef } from './units'
-import { applyStateStorage, installLayout, parseSize, Storage, GiB } from './storage'
+import { applyStateStorage, installLayout, parseSize, Storage, GiB, MiB } from './storage'
+import type { PerfState } from './perf'
+import { initKernel, chronyStart, bootModules } from './kernel'
 import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
 import { normalizePath, ROOT_CRED, VFS, type Cred } from './vfs'
@@ -60,6 +62,15 @@ export interface Proc {
   mem: number
   stat: string
   start: number
+  /** Prioridad (nice), de -20 a 19. */
+  nice?: number
+  /** Lectura y escritura en disco, en KB/s. */
+  io?: { r: number; w: number }
+  tty?: string
+  /** Lo creó el ejercicio (no es parte del sistema base). */
+  fromState?: boolean
+  /** No responde a SIGTERM (hace falta SIGKILL). */
+  ignoresTerm?: boolean
 }
 
 export function commOf(p: Proc): string {
@@ -151,6 +162,12 @@ export class System {
   groups = new Map<string, Group>()
   services = new Map<string, Service>()
   storage: Storage
+  perf: PerfState = {}
+  /** Reloj: desfase respecto de la hora real (segundos) y servidor NTP configurado. */
+  clock = { offset: 0, synced: true, timezone: 'UTC' }
+  sysctl = new Map<string, string>()
+  modules = new Set<string>()
+  atJobs: { id: number; when: number; user: string; commands: string; queue: string }[] = []
   timers = new Map<string, Timer>()
   /** Target con el que arranca el sistema (systemctl get-default). */
   defaultTarget = 'multi-user.target'
@@ -238,6 +255,21 @@ export class System {
       if (u.sudo) this.addMember(this.adminGroup, u.nombre)
     }
     for (const g of state.grupos) for (const m of g.miembros) if (this.users.has(m)) this.addMember(g.nombre, m)
+
+    // Kernel (sysctl y módulos) y hora.
+    initKernel(this)
+    this.clock.timezone = state.hora.zona
+    this.clock.offset = state.hora.desfase_segundos
+    if (state.hora.servidor_ntp) {
+      const conf = this.distro === 'rocky' ? '/etc/chrony.conf' : '/etc/chrony/chrony.conf'
+      let first = true
+      const text = this.vfs.readFile(conf, ROOT_CRED).replace(/^(pool|server) .*\n/gm, () => {
+        const line = first ? `server ${state.hora.servidor_ntp} iburst\n` : ''
+        first = false
+        return line
+      })
+      this.vfs.writeFile(conf, text, ROOT_CRED)
+    }
 
     // Discos: el del sistema (como lo deja el instalador) y los extra del ejercicio.
     this.storage = new Storage(this)
@@ -343,6 +375,12 @@ export class System {
     }
     for (const p of state.procesos) {
       const proc = this.spawn(p.usuario, p.comando, p.cpu, p.mem)
+      proc.fromState = true
+      if (p.estado) proc.stat = p.estado
+      if (p.nice) proc.nice = p.nice
+      if (p.io_lectura || p.io_escritura) proc.io = { r: (p.io_lectura ?? 0) * 1024, w: (p.io_escritura ?? 0) * 1024 }
+      if (p.ignora_term) proc.ignoresTerm = true
+      if (p.hace_minutos !== undefined) proc.start = now - p.hace_minutos * 60_000
       for (const f of p.abiertos) {
         try {
           this.storage.openFiles.push({ pid: proc.pid, path: normalizePath(f), ino: this.vfs.resolve(f, ROOT_CRED) })
@@ -355,6 +393,19 @@ export class System {
       this.journal.push({ time: now - j.hace_minutos * 60_000, unit: j.unidad, priority: priorityNumber(j.prioridad), message: j.mensaje, ident: j.unidad.replace(/\.service$/, '') })
     }
     this.journal.sort((a, b) => a.time - b.time)
+    const r = state.rendimiento
+    this.perf = {
+      memUsedKb: r.memoria_usada ? (parseSize(r.memoria_usada, MiB) ?? 0) / 1024 : undefined,
+      cacheKb: r.cache ? (parseSize(r.cache, MiB) ?? 0) / 1024 : undefined,
+      swapUsedKb: r.swap_usada ? (parseSize(r.swap_usada, MiB) ?? 0) / 1024 : undefined,
+      steal: r.cpu_robada,
+      load: r.carga as [number, number, number] | undefined,
+      incidentMinutes: r.incidente_desde_minutos,
+    }
+    if (this.perf.swapUsedKb && this.storage.swaps[0]) this.storage.swaps[0].used = this.perf.swapUsedKb * 1024
+    // chronyd decide si está sincronizado según sus fuentes.
+    if (this.services.get(this.distro === 'rocky' ? 'chronyd' : 'chrony')?.active) chronyStart(this)
+    bootModules(this)
     this.syncAccountFiles()
   }
 
@@ -673,6 +724,7 @@ export class System {
           : 'Linux version 6.8.0-58-generic (buildd@lcy02-amd64-074) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0) #60-Ubuntu SMP PREEMPT_DYNAMIC\n',
       ...bootFiles(this.distro, this.firmware),
       ...logrotateFiles(this.distro),
+      ...kernelFiles(this.distro),
       '/etc/systemd/journald.conf':
         '#  This file is part of systemd.\n#\n# Entries in this file show the compile time defaults. Local configuration\n# should be created by either modifying this file, or by creating "drop-ins" in\n# the journald.conf.d/ subdirectory.\n\n[Journal]\n#Storage=auto\n#Compress=yes\n#SystemMaxUse=\n#SystemKeepFree=\n#MaxRetentionSec=0\n#ForwardToSyslog=no\n',
       '/dev/null': '',
@@ -703,6 +755,8 @@ export class System {
     this.kernelArgs = KERNEL_ARGS[this.distro]
     for (const d of ['/usr/lib/systemd/system', '/etc/systemd/system/multi-user.target.wants', '/etc/systemd/system/timers.target.wants', '/var/log/journal', '/etc/logrotate.d', '/run/systemd/system']) v.mkdirp(d, ROOT_CRED)
     v.symlink('/usr/lib/systemd/system/multi-user.target', '/etc/systemd/system/default.target', ROOT_CRED)
+    v.symlink('../usr/share/zoneinfo/UTC', '/etc/localtime', ROOT_CRED)
+    for (const d of ['/etc/sysctl.d', '/etc/cron.daily', '/etc/cron.hourly', '/etc/cron.weekly', '/etc/cron.monthly']) v.mkdirp(d, ROOT_CRED)
     if (this.distro === 'ubuntu') v.stat('/usr/lib/rsyslog/rsyslog-rotate', ROOT_CRED).mode = 0o755
     v.stat('/boot/grub2/grubenv'.replace('grub2', this.distro === 'rocky' ? 'grub2' : 'grub'), ROOT_CRED).mode = 0o600
     // La partición EFI se monta con umask=0077: solo root puede ver su contenido.
@@ -798,7 +852,7 @@ export class System {
     // La sesión del usuario empieza después de los servicios del arranque.
     this.nextPid = Math.max(this.nextPid, 1150)
     const sshd = this.spawn('root', `sshd: ${user} [priv]`, 0, 0.1, this.procs.find((p) => p.comm === 'sshd')?.pid ?? 1, Date.now(), 'sshd')
-    this.spawn(user, '-bash', 0, 0.1, sshd.pid, Date.now(), 'bash')
+    this.spawn(user, '-bash', 0, 0.1, sshd.pid, Date.now(), 'bash').tty = 'pts/0'
   }
 
 }
@@ -860,6 +914,29 @@ function bootFiles(distro: 'rocky' | 'ubuntu', firmware: 'bios' | 'uefi'): Recor
     '/proc/cmdline': `BOOT_IMAGE=/vmlinuz-${k} ${KERNEL_ARGS.ubuntu}\n`,
     '/etc/initramfs-tools/initramfs.conf': '#\n# initramfs.conf\n# Configuration file for mkinitramfs(8). See initramfs.conf(5).\n#\n\nMODULES=most\nBUSYBOX=auto\nCOMPRESS=zstd\n',
   }
+}
+
+function kernelFiles(distro: 'rocky' | 'ubuntu'): Record<string, string> {
+  const zones = ['UTC', 'America/Argentina/Buenos_Aires', 'America/Bogota', 'America/Caracas', 'America/Guatemala', 'America/La_Paz', 'America/Lima', 'America/Mexico_City', 'America/Montevideo', 'America/New_York', 'America/Santiago', 'America/Sao_Paulo', 'Europe/Madrid', 'Europe/London']
+  const files: Record<string, string> = {
+    '/etc/sysctl.conf':
+      distro === 'rocky'
+        ? '# sysctl settings are defined through files in\n# /usr/lib/sysctl.d/, /run/sysctl.d/, and /etc/sysctl.d/.\n#\n# Vendors settings live in /usr/lib/sysctl.d/.\n# To override a whole file, create a new file with the same in\n# /etc/sysctl.d/ and put new settings there. To override\n# only specific settings, add a file with a lexically later\n# name in /etc/sysctl.d/ and put new settings there.\n#\n# For more information, see sysctl.conf(5) and sysctl.d(5).\n'
+        : '#\n# /etc/sysctl.conf - Configuration file for setting system variables\n# See /etc/sysctl.d/ for additional system variables.\n# See sysctl.conf (5) for information.\n#\n\n# Uncomment the next line to enable packet forwarding for IPv4\n#net.ipv4.ip_forward=1\n',
+    '/usr/lib/sysctl.d/50-default.conf': '# Default settings from systemd\nkernel.sysrq = 16\nkernel.core_uses_pid = 1\nnet.ipv4.conf.all.rp_filter = 1\nfs.protected_hardlinks = 1\nfs.protected_symlinks = 1\n',
+    '/etc/modprobe.d/README': 'Archivos .conf de este directorio: opciones, alias y listas negras de módulos (ver modprobe.d(5)).\n',
+    '/etc/modules-load.d/README': 'Archivos .conf con un nombre de módulo por línea: se cargan al arrancar (ver modules-load.d(5)).\n',
+  }
+  for (const z of zones) files[`/usr/share/zoneinfo/${z}`] = 'TZif2'
+  if (distro === 'rocky') {
+    files['/etc/chrony.conf'] =
+      '# Use public servers from the pool.ntp.org project.\n# Please consider joining the pool (https://www.pool.ntp.org/join.html).\npool 2.rocky.pool.ntp.org iburst\n\n# Use NTP servers from DHCP.\nsourcedir /run/chrony-dhcp\n\n# Record the rate at which the system clock gains/losses time.\ndriftfile /var/lib/chrony/drift\n\n# Allow the system clock to be stepped in the first three updates\n# if its offset is larger than 1 second.\nmakestep 1.0 3\n\n# Enable kernel synchronization of the real-time clock (RTC).\nrtcsync\n\n# Allow NTP client access from local network.\n#allow 192.168.0.0/16\n\n# Serve time even if not synchronized to a time source.\n#local stratum 10\n\n# Get TAI-UTC offset and leap seconds from the system tz database.\nleapsectz right/UTC\n\n# Specify directory for log files.\nlogdir /var/log/chrony\n'
+  } else {
+    files['/etc/chrony/chrony.conf'] =
+      '# Welcome to the chrony configuration file. See chrony.conf(5) for more\n# information about usable directives.\n\n# Include configuration files found in /etc/chrony/conf.d.\nconfdir /etc/chrony/conf.d\n\n# Use the Ubuntu NTP servers (and some from the pool).\npool ntp.ubuntu.com        iburst maxsources 4\npool 0.ubuntu.pool.ntp.org iburst maxsources 1\npool 1.ubuntu.pool.ntp.org iburst maxsources 1\npool 2.ubuntu.pool.ntp.org iburst maxsources 2\n\n# This directive specify the location of the file containing ID/key pairs for\n# NTP authentication.\nkeyfile /etc/chrony/chrony.keys\n\n# This directive specify the file into which chronyd will store the rate\n# information.\ndriftfile /var/lib/chrony/chrony.drift\n\n# Step the system clock instead of slewing it if the adjustment is larger than\n# one second, but only in the first three clock updates.\nmakestep 1 3\n\n# Get TAI-UTC offset and leap seconds from the system tz database.\nleapsectz right/UTC\n'
+    files['/etc/timezone'] = 'Etc/UTC\n'
+  }
+  return files
 }
 
 function logrotateFiles(distro: 'rocky' | 'ubuntu'): Record<string, string> {
