@@ -71,6 +71,9 @@ export interface Proc {
   fromState?: boolean
   /** No responde a SIGTERM (hace falta SIGKILL). */
   ignoresTerm?: boolean
+  /** Prioridad de disco (ionice): 1 tiempo real, 2 normal, 3 idle. */
+  ioClass?: number
+  ioLevel?: number
 }
 
 export function commOf(p: Proc): string {

@@ -1,0 +1,57 @@
+tipo: diagrama
+titulo: Las cinco líneas de arriba de top
+puntos:
+  - id: load
+    titulo: "Load average"
+    area: { x: 47.46, y: 14.71, ancho: 29.29, alto: 11.76 }
+    texto: >-
+      Cuántos procesos quisieron usar la CPU (o esperaron el disco) en promedio, en el último
+      minuto, 5 minutos y 15 minutos. Se compara con la cantidad de CPU: con 2 CPU, una carga
+      de 2 es "todo ocupado"; de 4, hay el doble de trabajo que de capacidad. Si el primer
+      número es mayor que el último, la carga viene subiendo.
+  - id: tasks
+    titulo: "Tasks"
+    area: { x: 5.66, y: 30.0, ancho: 65.39, alto: 11.76 }
+    texto: >-
+      Cuántos procesos hay y en qué estado. Lo importante: running (cuántos usan CPU ahora) y
+      zombie (si hay muchos, un programa no recoge a sus hijos).
+  - id: us
+    titulo: "us y sy: la CPU trabajando"
+    area: { x: 14.21, y: 45.29, ancho: 20.74, alto: 11.76 }
+    texto: >-
+      us es el tiempo usado por los programas; sy, por el kernel; ni, por programas con nice
+      alto. Un us alto con un proceso arriba de todo en la lista: ese proceso es el que la
+      usa.
+  - id: id
+    titulo: "id y wa: la CPU sin trabajo"
+    area: { x: 39.86, y: 45.29, ancho: 16.94, alto: 11.76 }
+    texto: >-
+      id es tiempo libre. wa (iowait) también es tiempo libre, pero esperando al disco: un wa
+      alto significa que el cuello de botella no es la CPU sino el almacenamiento. Aquí, 40 %
+      de wa: hay que mirar el disco con iostat.
+  - id: st
+    titulo: "st: la CPU que no te dan"
+    area: { x: 57.91, y: 45.29, ancho: 23.59, alto: 11.76 }
+    texto: >-
+      steal: en una máquina virtual, el tiempo que el hipervisor le dio a otra VM aunque esta
+      la necesitaba. Un st alto y constante es un problema del anfitrión, no de tu servidor.
+  - id: mem
+    titulo: "Memoria"
+    area: { x: 5.66, y: 60.59, ancho: 72.04, alto: 11.76 }
+    texto: >-
+      used es lo que usan los programas; buff/cache es memoria que Linux usa para acelerar el
+      disco y que devuelve apenas un programa la necesita. Por eso un "free" bajo no es, por sí
+      solo, un problema.
+  - id: swap
+    titulo: "Swap usada"
+    area: { x: 5.66, y: 75.88, ancho: 53.04, alto: 11.76 }
+    texto: >-
+      Algo de swap usada puede ser de un pico antiguo. Lo que importa es si se está usando
+      ahora: en vmstat, las columnas si y so distintas de 0 de forma constante significan que
+      falta RAM.
+  - id: avail
+    titulo: "avail Mem: la que importa"
+    area: { x: 58.86, y: 75.88, ancho: 17.89, alto: 11.76 }
+    texto: >-
+      La memoria disponible de verdad para programas nuevos (libre más lo que se puede sacar
+      del caché). Aquí quedan 380 MiB de casi 4 GiB: este servidor está corto de memoria.

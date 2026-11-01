@@ -354,6 +354,54 @@ register('renice', {
   },
 })
 
+register('ionice', {
+  usage: 'ionice [-c CLASE] [-n NIVEL] -p PID | ionice -c CLASE COMANDO',
+  summary: '  Clases: 1 tiempo real · 2 normal (best-effort, niveles 0 a 7) · 3 idle (solo cuando nadie más usa el disco)',
+  async run(ctx) {
+    const a = parseArgs(ctx.args, { values: { c: ['c', 'class'], n: ['n', 'classdata'], p: ['p', 'pid'] } })
+    const names = ['none', 'realtime', 'best-effort', 'idle']
+    if (!a.values.has('c') && a.values.has('p')) {
+      const p = ctx.sys.procs.find((x) => x.pid === Number(a.values.get('p')))
+      if (!p) {
+        ctx.err(`ionice: ioprio_get failed: No such process\n`)
+        return 1
+      }
+      const cls = p.ioClass ?? 2
+      ctx.out(cls === 3 ? 'idle\n' : `${names[cls]}: prio ${p.ioLevel ?? 4}\n`)
+      return 0
+    }
+    const cls = Number(a.values.get('c') ?? 2)
+    const level = Number(a.values.get('n') ?? 4)
+    if (![1, 2, 3].includes(cls)) {
+      ctx.err('ionice: unknown scheduling class\n')
+      return 1
+    }
+    if (a.values.has('p')) {
+      const p = ctx.sys.procs.find((x) => x.pid === Number(a.values.get('p')))
+      if (!p) {
+        ctx.err(`ionice: ioprio_set failed: No such process\n`)
+        return 1
+      }
+      if (ctx.sh.user !== 'root' && (p.user !== ctx.sh.user || cls === 1)) {
+        ctx.err('ionice: ioprio_set failed: Operation not permitted\n')
+        return 1
+      }
+      p.ioClass = cls
+      p.ioLevel = level
+      // En clase idle, el disco atiende primero a los demás: deja de frenar al resto.
+      if (cls === 3) {
+        if (p.io) p.io = { r: p.io.r * 0.4, w: p.io.w * 0.4 }
+        if (p.stat.startsWith('D')) p.stat = 'S'
+      }
+      return 0
+    }
+    const before = new Set(ctx.sys.procs.map((p) => p.pid))
+    const code = await ctx.sh.invoke(a.rest, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY })
+    for (const p of ctx.sys.procs) if (!before.has(p.pid)) p.ioClass = cls
+    return code
+  },
+})
+
 register('nohup', {
   usage: 'nohup COMANDO [ARGUMENTOS]',
   async run(ctx) {

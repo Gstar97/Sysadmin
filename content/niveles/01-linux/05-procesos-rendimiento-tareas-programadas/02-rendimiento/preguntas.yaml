@@ -1,0 +1,74 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Un servidor con 4 CPU tiene load average de 1.2, 1.1, 1.0. ¿Cómo está?
+  opciones:
+    - { texto: "Tranquilo: usa poco más de una de sus cuatro CPU", correcta: true, explicacion: "La carga se compara con la cantidad de CPU." }
+    - { texto: "Sobrecargado", explicacion: "Con 4 CPU, sobrecargado sería más de 4 de forma sostenida." }
+    - { texto: "Sin carga", explicacion: "Algo trabaja, pero hay mucha capacidad libre." }
+    - { texto: "No se puede saber sin reiniciar", explicacion: "Se puede saber con estos números." }
+- id: p02
+  tipo: interpretar_salida
+  diagnostico: true
+  enunciado: ¿Dónde está el cuello de botella?
+  salida: |
+    %Cpu(s):  6.1 us,  3.0 sy,  0.0 ni, 12.4 id, 78.5 wa,  0.0 hi,  0.0 si,  0.0 st
+  opciones:
+    - { texto: "En el disco: la CPU pasa la mayor parte del tiempo esperando lecturas y escrituras", correcta: true, explicacion: "wa (iowait) es tiempo libre esperando al disco." }
+    - { texto: "En la CPU", explicacion: "us es apenas 6 %." }
+    - { texto: "En la memoria", explicacion: "Esta línea no habla de memoria." }
+    - { texto: "En el hipervisor", explicacion: "st es 0." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: ¿Le falta memoria a este servidor?
+  salida: |2
+                   total        used        free      shared  buff/cache   available
+    Mem:           7.7Gi       2.1Gi       310Mi        40Mi       5.3Gi       5.2Gi
+    Swap:          2.0Gi          0B       2.0Gi
+  opciones:
+    - { texto: "No: available es 5,2 GiB; la caché usa lo que sobra y lo devuelve cuando hace falta", correcta: true, explicacion: "Un free bajo no es un problema por sí solo." }
+    - { texto: "Sí: solo quedan 310 MiB libres", explicacion: "Mira available, no free." }
+    - { texto: "Sí: la caché está ocupando todo", explicacion: "La caché se libera sola." }
+    - { texto: "No se puede saber", explicacion: "available lo dice." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: En vmstat 1 5, las columnas si y so muestran valores de cientos en todas las líneas. ¿Qué significa?
+  opciones:
+    - { texto: "El sistema está moviendo memoria a la swap y de vuelta todo el tiempo: falta RAM", correcta: true, explicacion: "Es la señal más clara de falta de memoria." }
+    - { texto: "El disco está fallando", explicacion: "Es tráfico de swap, no errores." }
+    - { texto: "Todo normal", explicacion: "Lo normal es 0 o casi 0." }
+    - { texto: "La red está saturada", explicacion: "si y so son de swap." }
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra el uso extendido de cada disco (incluido %util).
+  aceptadas: [iostat -x, iostat -xz, iostat -x 1, iostat -x 2 3, iostat -xz 1, iostat -dx]
+  explicacion: Viene en el paquete sysstat.
+- id: p06
+  tipo: opcion_multiple
+  enunciado: El promedio de CPU es 50 % en un servidor de 2 CPU, pero un informe que corre en un solo hilo no termina más rápido. ¿Por qué?
+  opciones:
+    - { texto: "Ese proceso ocupa una CPU entera al 100 %; mpstat -P ALL lo muestra", correcta: true, explicacion: "Un programa de un solo hilo no puede usar más de una CPU." }
+    - { texto: "Hay que agregar más CPU", explicacion: "Con un solo hilo no usaría las nuevas." }
+    - { texto: "Es un problema de memoria", explicacion: "Nada indica eso." }
+    - { texto: "top está mal", explicacion: "top muestra el promedio de todas las CPU." }
+- id: p07
+  tipo: completar_comando
+  enunciado: Escribe el comando que pone en la clase de disco idle al proceso 3456.
+  aceptadas: [ionice -c 3 -p 3456, sudo ionice -c 3 -p 3456, ionice -c3 -p 3456, sudo ionice -c3 -p 3456, sudo ionice -c 3 -p3456]
+  explicacion: Así solo usa el disco cuando nadie más lo necesita.
+- id: p08
+  tipo: opcion_multiple
+  enunciado: "Mañana te van a preguntar \"¿qué pasó anoche a las 3 con el servidor?\". ¿Qué tiene que estar funcionando desde antes?"
+  opciones:
+    - { texto: "sysstat (sar), que guarda una foto del rendimiento cada 10 minutos", correcta: true, explicacion: "El historial empieza el día que lo activas." }
+    - { texto: "top", explicacion: "top muestra solo el momento actual." }
+    - { texto: "iotop", explicacion: "También muestra solo el momento actual." }
+    - { texto: "Nada, el kernel lo guarda solo", explicacion: "El kernel no guarda historial de rendimiento." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: En una máquina virtual, top muestra st (steal) en 35 % de forma constante. ¿Qué haces?
+  opciones:
+    - { texto: "Avisar al equipo de virtualización: el anfitrión está sobrecargado y le quita CPU a tu VM", correcta: true, explicacion: "El problema no está dentro de tu servidor." }
+    - { texto: "Matar procesos para liberar CPU", explicacion: "No va a cambiar el steal." }
+    - { texto: "Agregar swap", explicacion: "No tiene relación." }
+    - { texto: "Bajar la prioridad de todo con renice", explicacion: "El tiempo lo pierde la VM entera." }

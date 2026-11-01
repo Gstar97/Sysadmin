@@ -1,0 +1,156 @@
+---
+id: n1-m5-l2
+titulo: Rendimiento del sistema
+minutos: 180
+objetivos:
+  - Separar un problema de rendimiento en CPU, memoria o disco con números, antes de cambiar nada.
+  - Leer el load average, la línea de CPU de top, la memoria disponible y el uso del disco.
+  - Usar vmstat, iostat, iotop y mpstat para confirmar, y sar para ver el historial.
+  - Mitigar sin cortar el servicio con nice, renice e ionice.
+glosario: [load-average, iowait, oom-killer]
+verificado: 2026-11
+---
+
+import top from './top.svg?raw'
+import topPuntos from './top.yaml'
+import sintomas from './sintomas.yaml'
+import ejRendimiento from './ej-rendimiento.yaml'
+
+"El servidor está lento" es de los reclamos más comunes y de los más vagos. Lento puede ser la CPU, la memoria, el disco o la red, y cada uno se arregla distinto. En esta lección vas a aprender a preguntar con números hasta encontrar cuál es, y a aliviarlo sin cortar el servicio.
+
+<AntesDeEmpezar>
+- La CPU tiene núcleos, la RAM es rápida pero limitada, y el disco es miles de veces más lento que la RAM (lecciones 0.1.2 a 0.1.4).
+- Cuando falta RAM, el sistema usa la swap, y si no alcanza, el **OOM killer** mata procesos (lección 0.2.3).
+- `top`, `ps` y los estados de los procesos, incluido D (lección 1.5.1).
+</AntesDeEmpezar>
+
+## El método: un recurso por vez
+
+Piensa en un supermercado donde la fila no avanza. Puede ser que falten cajeros (CPU), que no haya lugar para dejar los carritos (memoria) o que el depósito tarde en traer la mercadería (disco). Mirar la fila no te dice cuál; tienes que mirar cada cosa.
+
+El orden que vamos a seguir:
+
+1. **¿Cuánta carga hay?** `uptime`.
+2. **¿Qué dice la CPU?** `top`: cuánto trabaja, cuánto espera al disco.
+3. **¿Alcanza la memoria?** `free -h` y `vmstat`.
+4. **¿Da abasto el disco?** `iostat -x` e `iotop`.
+5. **¿Desde cuándo?** `sar` (el historial).
+
+<Emparejar ejercicio={sintomas} />
+
+## Load average
+
+```text
+$ uptime
+ 10:15:02 up 3 days,  4:02,  2 users,  load average: 2.10, 1.85, 1.20
+```
+
+Los tres números son la cantidad promedio de procesos que querían CPU (o estaban esperando el disco) en el último minuto, en los últimos 5 y en los últimos 15. Se lee **comparado con la cantidad de CPU** (`nproc`):
+
+- Con 2 CPU, una carga de 1 es "la mitad ocupada"; de 2, "todo ocupado"; de 4, "el doble de trabajo que de capacidad".
+- Si el primer número es mayor que el último, la carga viene subiendo; si es menor, bajando.
+
+Un detalle de Linux: los procesos en estado **D** (esperando el disco) también suman. Por eso puede haber carga alta con la CPU casi libre: es el disco.
+
+<EnSimple>
+El load average es el largo de la fila. Para saber si es mucho, compáralo con la cantidad de cajas abiertas (las CPU).
+</EnSimple>
+
+## La parte de arriba de top
+
+Toca cada parte para ver qué significa:
+
+<DiagramaInteractivo svg={top} datos={topPuntos} alt="Las cinco líneas de arriba de top: la hora, el tiempo encendido y el load average; la cantidad de procesos por estado; el reparto de la CPU en us, sy, ni, id, wa, hi, si y st; la memoria total, libre, usada y en caché; y la swap con la memoria disponible." />
+
+Dos lecturas clave:
+
+- **wa alto** (iowait): la CPU está libre esperando al disco. El cuello de botella es el almacenamiento.
+- **avail Mem**: la memoria que de verdad queda para programas. `buff/cache` no es memoria perdida: Linux usa lo que sobra para acelerar el disco y lo devuelve cuando un programa lo pide.
+
+Para ver cada CPU por separado: `mpstat -P ALL` (o la tecla **1** en top). Un programa de un solo hilo al 100 % ocupa una CPU entera y deja las otras libres: el promedio puede verse tranquilo mientras ese programa no puede ir más rápido.
+
+## Memoria: ¿falta de verdad?
+
+```text
+$ free -h
+               total        used        free      shared  buff/cache   available
+Mem:           3.7Gi       3.0Gi       210Mi        12Mi       442Mi       380Mi
+Swap:          2.0Gi       737Mi       1.3Gi
+```
+
+Mira **available**, no free. Y para saber si la swap se está usando **ahora** (no hace horas), `vmstat`:
+
+```text
+$ vmstat 1 5
+procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu
+ 1  0 755302 215340   4268 447000  210  340   890  1200  610 1100 20  5 45 30  0  0
+```
+
+- **si/so** (swap in/out) distintos de 0 de forma constante: falta RAM y el sistema mueve memoria al disco y de vuelta. Todo se vuelve lento.
+- **r**: procesos esperando CPU. Si es mayor que la cantidad de CPU todo el tiempo, falta CPU.
+- **b**: procesos bloqueados esperando el disco.
+
+Si el kernel se quedó sin memoria, lo dice en sus mensajes: `journalctl -k | grep -i "out of memory"` muestra qué proceso mató el OOM killer.
+
+## Disco: ¿da abasto?
+
+```bash
+iostat -x 2 3          # uso de cada disco, cada 2 segundos, 3 veces
+sudo iotop -o          # qué proceso lee y escribe (necesita root)
+```
+
+En `iostat -x`, mira **%util** (cuánto tiempo estuvo ocupado el disco: cerca de 100 es saturado) y **r_await / w_await** (milisegundos que espera cada operación; en un SSD deberían ser pocos milisegundos). `iostat`, `mpstat` y `sar` vienen en el paquete **sysstat**.
+
+## El historial: sar
+
+Casi nunca estás mirando justo cuando empieza el problema. **sar** guarda una foto cada 10 minutos y te deja mirar hacia atrás:
+
+```bash
+sudo dnf install sysstat           # o apt install sysstat
+sudo systemctl enable --now sysstat
+sar -u        # CPU de hoy
+sar -r        # memoria
+sar -q        # carga
+sar -b        # disco
+```
+
+Instálalo y actívalo en todos tus servidores **antes** de necesitarlo: el historial empieza el día que lo activas.
+
+## Aliviar sin cortar
+
+Encontraste al culpable y no puedes (o no debes) cortarlo. Opciones:
+
+- **CPU**: `renice 10 -p PID` le baja la prioridad (lección 1.5.1).
+- **Disco**: `ionice -c 3 -p PID` lo pone en la clase *idle*: solo usa el disco cuando nadie más lo necesita.
+- **De ahí en adelante**: programar las tareas pesadas de madrugada (con un timer o con cron, lección 1.5.3) y arrancarlas con `nice -n 10 ionice -c 3 comando`.
+
+Y si el servidor está siempre al límite, ninguna de estas opciones lo arregla: hace falta más CPU, más RAM o un disco más rápido.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejRendimiento} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"free muestra casi nada libre: falta memoria"'>
+    Linux usa la memoria sobrante como caché del disco. Mira la columna available; y si/so en vmstat para saber si de verdad falta.
+  </ErrorComun>
+  <ErrorComun titulo="Load average alto y CPU tranquila">
+    Los procesos en D (esperando el disco) suman a la carga. Mira wa en top e iostat -x.
+  </ErrorComun>
+  <ErrorComun titulo='"bash: iostat: command not found" o sar sin datos'>
+    Instala sysstat y activa su servicio (`systemctl enable --now sysstat`). El historial empieza desde ese momento.
+  </ErrorComun>
+  <ErrorComun titulo="Reiniciar el servidor para que ande más rápido">
+    A veces "funciona" un rato, pero el problema vuelve y perdiste la evidencia (el proceso, los números). Primero mide, después decide.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un recurso por vez: carga (`uptime`), CPU (`top`, `mpstat -P ALL`), memoria (`free -h`, `vmstat`), disco (`iostat -x`, `iotop`), historial (`sar`).
+- Load average: comparar con la cantidad de CPU; en Linux también cuenta los procesos esperando el disco.
+- top: `us/sy` CPU trabajando, `wa` esperando el disco, `st` robada por el hipervisor; `avail Mem` es la memoria que importa.
+- vmstat: `si/so` distintos de 0 = falta RAM; `r` mayor que las CPU = falta CPU; `b` = esperando el disco.
+- iostat -x: `%util` cerca de 100 y `await` alto = disco saturado.
+- Aliviar: `renice` (CPU) e `ionice -c 3` (disco); las tareas pesadas, de madrugada.
+</Resumen>
