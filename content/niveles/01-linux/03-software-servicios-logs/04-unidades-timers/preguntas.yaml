@@ -1,0 +1,102 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Dónde se guarda una unidad de systemd que escribes tú?
+  opciones:
+    - { texto: "/etc/systemd/system/", correcta: true, explicacion: "Es la carpeta del administrador: las actualizaciones no la tocan y tiene prioridad." }
+    - { texto: "/usr/lib/systemd/system/", explicacion: "Es la de los paquetes; se reemplaza al actualizar." }
+    - { texto: "/home/usuario/.config", explicacion: "Ahí van las unidades de usuario, no las del sistema." }
+    - { texto: "/var/log/systemd", explicacion: "/var/log es para registros." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Cambiaste ExecStart en tu archivo .service, reiniciaste el servicio y sigue ejecutando el comando viejo. ¿Qué faltó?
+  opciones:
+    - { texto: "sudo systemctl daemon-reload, para que systemd vuelva a leer el archivo", correcta: true, explicacion: "systemd guarda las unidades en memoria hasta que se le pide releerlas." }
+    - { texto: "Reiniciar el servidor", explicacion: "Funcionaría, pero no hace falta: alcanza con daemon-reload." }
+    - { texto: "systemctl enable", explicacion: "enable solo cambia el arranque automático." }
+    - { texto: "Guardar el archivo con otro nombre", explicacion: "El nombre del archivo es el nombre del servicio." }
+- id: p03
+  tipo: encontrar_error
+  enunciado: Esta unidad no funciona como se espera. Marca las líneas con errores.
+  lenguaje: ini
+  archivo: |
+    [Unit]
+    Description=Agente de métricas
+
+    [Service]
+    ExecStart=agente --config /etc/agente.conf
+    User=agente
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user
+  lineas_con_error: [5, 10]
+  explicacion: ExecStart necesita la ruta completa (por ejemplo /usr/local/bin/agente) y WantedBy necesita el nombre completo del target, multi-user.target.
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Qué Type corresponde a un script de respaldo que copia archivos y termina?
+  opciones:
+    - { texto: "Type=oneshot", correcta: true, explicacion: "Para tareas que hacen algo y terminan." }
+    - { texto: "Type=simple", explicacion: "Es para programas que se quedan corriendo, como un servidor." }
+    - { texto: "Type=forking", explicacion: "Es para programas viejos que se separan en otro proceso al arrancar." }
+    - { texto: "Type=timer", explicacion: "No existe; los timers son otro tipo de unidad." }
+- id: p05
+  tipo: interpretar_salida
+  enunciado: ¿Qué es lo más probable que esté mal?
+  salida: |
+    × agente.service - Agente de métricas
+         Active: failed (Result: exit-code) since Mon 2026-11-02 10:14:05 UTC; 8s ago
+        Process: 2210 ExecStart=/opt/agente/iniciar.sh (code=exited, status=203/EXEC)
+  opciones:
+    - { texto: "systemd no pudo ejecutar /opt/agente/iniciar.sh: no existe, no tiene permiso de ejecución o le falta #!/bin/bash", correcta: true, explicacion: "203/EXEC significa que ni siquiera pudo lanzar el programa." }
+    - { texto: "El usuario de User= no existe", explicacion: "Ese caso da 217/USER." }
+    - { texto: "El script arrancó y encontró un error en su configuración", explicacion: "Eso suele dar 1/FAILURE, con el motivo en el journal." }
+    - { texto: "Falta la sección [Install]", explicacion: "Sin [Install] no se puede habilitar, pero sí arrancar." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: Quieres que nginx (instalado con dnf) se reinicie solo si se cae. ¿Cuál es la forma correcta?
+  opciones:
+    - { texto: "sudo systemctl edit nginx y agregar [Service] con Restart=on-failure", correcta: true, explicacion: "El drop-in sobrevive a las actualizaciones del paquete." }
+    - { texto: "Editar /usr/lib/systemd/system/nginx.service", explicacion: "La próxima actualización de nginx borraría el cambio." }
+    - { texto: "Agregar Restart=on-failure en /etc/nginx/nginx.conf", explicacion: "Esa es la configuración de nginx, no de systemd." }
+    - { texto: "Crear un timer que lo reinicie cada minuto", explicacion: "Reiniciaría también cuando funciona bien." }
+- id: p07
+  tipo: encontrar_error
+  enunciado: Este drop-in quiere cambiar el comando de arranque de un servicio, pero systemd lo rechaza. ¿Qué línea falta? Marca la línea donde debería ir.
+  lenguaje: ini
+  archivo: |
+    [Service]
+    ExecStart=/usr/local/bin/app --modo produccion
+    Environment=APP_LOG=/var/log/app
+  lineas_con_error: [2]
+  explicacion: ExecStart se acumula. Antes del nuevo hay que poner una línea "ExecStart=" vacía para borrar el original; si no, quedan dos y systemd rechaza la unidad.
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Tienes respaldo.service y respaldo.timer. ¿Qué habilitas para que el respaldo siga funcionando después de reiniciar?
+  opciones:
+    - { texto: "El timer: sudo systemctl enable --now respaldo.timer", correcta: true, explicacion: "El timer es el que tiene que estar activo; él lanza el servicio." }
+    - { texto: "El servicio: sudo systemctl enable respaldo.service", explicacion: "Lo ejecutaría una vez al arrancar, no todos los días." }
+    - { texto: "Los dos con enable", explicacion: "El servicio no necesita (ni suele tener) [Install]." }
+    - { texto: "Ninguno: los timers no se habilitan", explicacion: "Sí se habilitan, con WantedBy=timers.target." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: ¿Qué hace Persistent=true en un timer?
+  opciones:
+    - { texto: "Si el servidor estaba apagado a la hora programada, ejecuta la tarea apenas vuelve a encender", correcta: true, explicacion: "Así no se pierde, por ejemplo, el respaldo de una noche con corte de luz." }
+    - { texto: "Hace que la tarea se repita para siempre", explicacion: "Eso lo define OnCalendar." }
+    - { texto: "Guarda la salida de la tarea en un archivo", explicacion: "La salida va al journal igual." }
+    - { texto: "Impide que alguien desactive el timer", explicacion: "No tiene relación con permisos." }
+- id: p10
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra cuándo será la próxima vez que se cumpla la expresión "Sun 03:00".
+  aceptadas: ["systemd-analyze calendar \"Sun 03:00\"", "systemd-analyze calendar 'Sun 03:00'"]
+  explicacion: También muestra la forma normalizada, útil para detectar errores.
+- id: p11
+  tipo: opcion_multiple
+  enunciado: ¿Qué expresión de OnCalendar ejecuta una tarea de lunes a viernes a las 7:30?
+  opciones:
+    - { texto: "Mon..Fri 07:30", correcta: true, explicacion: "Los dos puntos seguidos indican un rango." }
+    - { texto: "*-*-* 07:30", explicacion: "Esa es todos los días." }
+    - { texto: "Mon-Fri 7:30", explicacion: "Los rangos de días se escriben con dos puntos seguidos (..), no con guion." }
+    - { texto: "weekdays 07:30", explicacion: "systemd no reconoce esa palabra." }

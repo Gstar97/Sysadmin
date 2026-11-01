@@ -1,0 +1,40 @@
+tipo: configuracion
+titulo: Arreglar la unidad del inventario
+consigna: >-
+  Un compañero escribió la unidad del sistema de inventario, pero systemd la rechaza. Corrige los
+  errores que marca el editor y deja el servicio así: corre con la cuenta inventario, se reinicia
+  solo si falla y arranca en el modo normal del servidor.
+lenguaje: systemd
+nombre_archivo: /etc/systemd/system/inventario.service
+archivo_inicial: |
+  [Unit]
+  Description=Inventario de la oficina
+  After=network-online.target
+
+  [service]
+  User=inventario
+  Execstart=servidor --puerto 8080
+  WorkingDirectory=/opt/inventario
+
+  [Install]
+  Restart=on-failure
+  WantedBy=multi-user
+reglas:
+  - { tipo: sin_errores, mensaje: "systemd acepta la unidad sin errores" }
+  - { tipo: directiva, contexto: Service, nombre: ExecStart, valor_regex: "^/opt/inventario/bin/servidor\\b", mensaje: "ExecStart usa la ruta completa: /opt/inventario/bin/servidor" }
+  - { tipo: directiva, contexto: Service, nombre: User, valor_regex: "^inventario$", mensaje: "El servicio corre con la cuenta inventario" }
+  - { tipo: directiva, contexto: Service, nombre: Restart, valor_regex: "^on-failure$", mensaje: "Restart=on-failure está en la sección [Service]" }
+  - { tipo: directiva, contexto: Install, nombre: WantedBy, valor_regex: "^multi-user\\.target$", mensaje: "WantedBy apunta a multi-user.target" }
+solucion: |
+  [Unit]
+  Description=Inventario de la oficina
+  After=network-online.target
+
+  [Service]
+  User=inventario
+  ExecStart=/opt/inventario/bin/servidor --puerto 8080
+  WorkingDirectory=/opt/inventario
+  Restart=on-failure
+
+  [Install]
+  WantedBy=multi-user.target

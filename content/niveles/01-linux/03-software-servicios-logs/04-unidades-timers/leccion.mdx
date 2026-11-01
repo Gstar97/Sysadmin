@@ -1,0 +1,183 @@
+---
+id: n1-m3-l4
+titulo: Unidades propias y timers
+minutos: 120
+objetivos:
+  - Escribir un archivo .service para un programa o script propio.
+  - Cambiar una sola opción de un servicio existente con un drop-in (systemctl edit).
+  - Programar tareas con timers de systemd y comprobar cuándo se ejecutan.
+glosario: [daemon-reload, drop-in, timer]
+verificado: 2026-11
+---
+
+import anatomia from './anatomia.svg?raw'
+import editorUnidad from './editor-unidad.yaml'
+import calendario from './calendario.yaml'
+import ejRespaldo from './ej-respaldo.yaml'
+
+En la lección anterior manejaste servicios que vienen con los paquetes. Pero muchas veces el programa es de tu empresa: una aplicación interna, un script de respaldo, un agente de monitoreo. En esta lección vas a escribir tus propias unidades para que systemd los arranque, los vigile y, cuando haga falta, los ejecute a una hora fija.
+
+<AntesDeEmpezar>
+- `systemctl start`, `enable` y `status`, y la diferencia entre ahora y al encender (lección 1.3.3).
+- Un script necesita permiso de ejecución (lección 1.2.2) y una primera línea como `#!/bin/bash`, que indica con qué programa se ejecuta.
+- Las rutas completas: `/usr/local/bin/respaldo.sh`, no `respaldo.sh` (lección 1.1.3).
+</AntesDeEmpezar>
+
+## Dónde viven las unidades
+
+Hay dos carpetas que importan:
+
+| Carpeta | Quién escribe ahí | Qué pasa al actualizar |
+| --- | --- | --- |
+| `/usr/lib/systemd/system/` | Los paquetes | Se reemplaza en cada actualización |
+| `/etc/systemd/system/` | **Tú**, el administrador | No se toca nunca |
+
+Si existe el mismo nombre en las dos, gana el de `/etc`. Es como las instrucciones de un electrodoméstico: el manual del fabricante viene en la caja (y puede cambiar en una versión nueva), pero las notas que tú pegas en el refrigerador son las que se siguen. Por eso **nunca se editan los archivos de `/usr/lib/systemd/system`**: la próxima actualización borraría tus cambios.
+
+## Cómo es un archivo .service
+
+Un archivo de unidad es texto plano, dividido en secciones entre corchetes. Cada línea es `Opción=valor`:
+
+<Diagrama svg={anatomia} alt="Archivo /etc/systemd/system/inventario.service con tres secciones: [Unit] con Description, After y Wants (qué es y que arranque después de la red); [Service] con Type=simple, User=inventario, WorkingDirectory, ExecStart con la ruta completa del programa, Restart=on-failure y RestartSec=5 (cómo se ejecuta); [Install] con WantedBy=multi-user.target (qué hace systemctl enable)." pie="Las tres secciones de una unidad de servicio." />
+
+Las opciones que más vas a usar:
+
+- **ExecStart**: el comando que arranca el programa, **con la ruta completa**. systemd no usa tu `PATH` ni una shell: los `|`, `>` o `&&` no funcionan aquí. Si necesitas eso, ponlo en un script.
+- **Type**: con dos valores alcanza para empezar. `simple` (el valor por defecto) es para programas que se quedan corriendo, como un servidor. `oneshot` es para tareas que hacen algo y terminan, como un respaldo.
+- **User** y **Group**: la cuenta con la que corre. Si el programa no necesita ser root, no lo hagas root (mínimo privilegio, lección 0.2.5).
+- **Restart=on-failure** con **RestartSec=5**: si el programa se cae con error, systemd lo vuelve a arrancar a los 5 segundos.
+- **WantedBy=multi-user.target**: hace que `systemctl enable` lo deje arrancando con el servidor.
+
+<EnSimple>
+Un archivo .service es una ficha con tres partes: qué es ([Unit]), cómo se arranca ([Service]) y cuándo se arranca solo ([Install]). La parte más importante es ExecStart: el comando exacto, con su ruta completa, como si lo escribieras en la terminal pero sin los atajos de la shell.
+</EnSimple>
+
+## Del archivo al servicio funcionando
+
+Los pasos son siempre los mismos:
+
+```bash
+sudo nano /etc/systemd/system/inventario.service    # 1. escribir la unidad
+sudo systemctl daemon-reload                        # 2. que systemd la lea
+sudo systemctl enable --now inventario              # 3. arrancar y habilitar
+systemctl status inventario                         # 4. comprobar
+```
+
+**daemon-reload** es el paso que más se olvida. systemd lee los archivos de unidades al arrancar y los guarda en memoria; si cambias un archivo, sigue usando la versión vieja hasta que se lo pides. Cuando pasa, `systemctl status` te avisa con: *"Warning: The unit file ... changed on disk. Run 'systemctl daemon-reload' to reload units."*
+
+Practica con un archivo real. El editor marca los errores como los vería systemd:
+
+<EditorConfig ejercicio={editorUnidad} />
+
+Si el servicio no arranca, el status te da un código que orienta mucho:
+
+| En el status o el journal | Qué significa |
+| --- | --- |
+| `status=203/EXEC` | No pudo ejecutar el programa: la ruta está mal, falta el permiso de ejecución, o el script no tiene `#!/bin/bash` |
+| `status=217/USER` | La cuenta de `User=` no existe |
+| `status=200/CHDIR` | La carpeta de `WorkingDirectory=` no existe |
+| `status=1/FAILURE` | El programa arrancó pero terminó con error: el motivo está en sus propios mensajes, en el journal |
+
+## Cambiar una opción de un servicio ajeno: drop-ins
+
+¿Y si quieres que nginx (que viene del paquete) se reinicie solo si se cae? No edites su archivo en `/usr/lib`. Usa un **drop-in**: un archivo chico que agrega o cambia solo las opciones que tú quieres, encima del original.
+
+```bash
+sudo systemctl edit nginx
+```
+
+Se abre un editor con el archivo `/etc/systemd/system/nginx.service.d/override.conf`. Escribes solo lo que cambia:
+
+```ini
+[Service]
+Restart=on-failure
+RestartSec=5
+```
+
+Al guardar, `systemctl edit` hace el daemon-reload por ti. `systemctl cat nginx` muestra el archivo original y, debajo, tus drop-ins; `systemctl status` también los lista en la línea **Drop-In**.
+
+<Advertencia titulo="El caso especial de ExecStart">
+La mayoría de las opciones se reemplazan sin más. Pero `ExecStart` se **acumula**: si en un drop-in escribes otro ExecStart, el servicio queda con dos, y systemd lo rechaza (*"has more than one ExecStart= setting"*). Para reemplazarlo, primero se vacía con una línea `ExecStart=` sola, y después se escribe el nuevo:
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/usr/sbin/nginx -g "daemon off;"
+```
+</Advertencia>
+
+## Timers: tareas a una hora fija
+
+Un **timer** es una unidad que lanza un servicio en un momento determinado: todos los días a las 2:30, cada lunes, cada 15 minutos. Es como la alarma del teléfono: no hace el trabajo, solo avisa a quien lo tiene que hacer.
+
+Se arma con dos archivos que se llaman igual:
+
+- `respaldo.service`: **qué** hacer (Type=oneshot, el script).
+- `respaldo.timer`: **cuándo** hacerlo.
+
+```ini
+# /etc/systemd/system/respaldo.timer
+[Unit]
+Description=Respaldo diario de /srv/datos
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+- **OnCalendar** dice cuándo, con el formato `día-de-la-semana año-mes-día hora:minuto:segundo`, donde `*` significa "cualquiera". También acepta palabras: `daily`, `weekly`, `monthly`.
+- **Persistent=true**: si el servidor estaba apagado a la hora indicada, la tarea se ejecuta apenas vuelve a encender.
+- **WantedBy=timers.target** permite habilitar el timer.
+
+Lo que se habilita y arranca es el **timer**, no el servicio: `sudo systemctl enable --now respaldo.timer`. Para ver todos los timers y cuándo les toca: `systemctl list-timers`.
+
+<Emparejar ejercicio={calendario} />
+
+Antes de confiar en una expresión, compruébala:
+
+```text
+$ systemd-analyze calendar "Mon..Fri 08:00"
+  Original form: Mon..Fri 08:00
+Normalized form: Mon..Fri *-*-* 08:00:00
+    Next elapse: Mon 2026-11-02 08:00:00 UTC
+       From now: 1 day 4h left
+```
+
+<Nota titulo="¿Y cron?">
+Seguramente escuches hablar de **cron**, la forma clásica de programar tareas en Linux. Sigue existiendo y la vas a ver en el módulo 1.5. Los timers de systemd tienen algunas ventajas: lo que hace la tarea queda en el journal, se ve con `list-timers` cuándo fue la última vez y cuándo es la próxima, y `Persistent=true` recupera las ejecuciones perdidas.
+</Nota>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejRespaldo} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Cambié el archivo de la unidad y no pasa nada">
+    Falta `sudo systemctl daemon-reload`. systemd sigue usando la versión que leyó antes. El status lo avisa con un *Warning* al final.
+  </ErrorComun>
+  <ErrorComun titulo='status=203/EXEC'>
+    systemd no pudo ejecutar el programa de ExecStart. Revisa la ruta completa (`ls -l` de esa ruta), el permiso de ejecución (`chmod +x`) y, si es un script, que la primera línea sea `#!/bin/bash`.
+  </ErrorComun>
+  <ErrorComun titulo='"has more than one ExecStart= setting"'>
+    Hay dos ExecStart, casi siempre por un drop-in que agregó uno sin vaciar el anterior. En el drop-in, pon primero una línea `ExecStart=` vacía.
+  </ErrorComun>
+  <ErrorComun titulo='"The unit files have no installation config (WantedBy=...)"'>
+    Intentaste habilitar una unidad sin sección [Install]. Si es el servicio que lanza un timer, está bien: habilita el timer. Si es un servicio que tiene que arrancar con el servidor, agrega `[Install]` con `WantedBy=multi-user.target`.
+  </ErrorComun>
+  <ErrorComun titulo="El timer está activo pero la tarea nunca se ejecutó">
+    Mira `systemctl list-timers`: si NEXT es una fecha rara, revisa OnCalendar con `systemd-analyze calendar`. Si LAST tiene fecha pero la tarea no hizo nada, el problema está en el servicio: `journalctl -u respaldo`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Las unidades propias van en `/etc/systemd/system/`; las de los paquetes, en `/usr/lib/systemd/system/` (no se editan).
+- Un .service tiene [Unit] (qué es), [Service] (cómo se ejecuta: ExecStart con ruta completa, Type, User, Restart) y [Install] (WantedBy, para enable).
+- `Type=simple` para programas que se quedan corriendo; `Type=oneshot` para tareas que terminan.
+- Después de crear o cambiar una unidad: `sudo systemctl daemon-reload`.
+- `systemctl edit servicio` crea un drop-in para cambiar solo algunas opciones. ExecStart se vacía antes de reemplazarlo.
+- Un timer (`nombre.timer`) lanza el servicio del mismo nombre según OnCalendar. Se habilita el timer: `enable --now nombre.timer`.
+- `systemctl list-timers` muestra cuándo fue y cuándo será; `systemd-analyze calendar` comprueba una expresión.
+</Resumen>
