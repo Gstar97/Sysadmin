@@ -191,7 +191,7 @@ export class Shell {
   /** Alias del shell interactivo (los que define ~/.bashrc en cada distribución, más los del estudiante). */
   aliases = new Map<string, string>()
   lastExit = 0
-  options = { errexit: false, nounset: false, pipefail: false }
+  options: { errexit: boolean; nounset: boolean; pipefail: boolean; xtrace?: boolean } = { errexit: false, nounset: false, pipefail: false }
   umask = 0o022
   pendingEditor?: EditorRequest
   pendingClear = false
@@ -782,6 +782,18 @@ export class Shell {
     }
   }
 
+  /** bash script.sh: no hace falta el permiso de ejecución. */
+  async runScriptWith(path: string, shown: string, args: string[], io: IO, options: Partial<Shell['options']>): Promise<number> {
+    this.pendingScriptOptions = options
+    try {
+      return await this.runScript(path, shown, args, io, false)
+    } finally {
+      this.pendingScriptOptions = undefined
+    }
+  }
+
+  private pendingScriptOptions?: Partial<Shell['options']>
+
   /** Ejecuta un archivo como script de bash. */
   async runScript(path: string, shown: string, args: string[], io: IO, needExec: boolean): Promise<number> {
     const vfs = this.sys.vfs
@@ -804,6 +816,11 @@ export class Shell {
       }
       throw e
     }
+    return this.runSource(source, shown, args, io, { options: this.pendingScriptOptions })
+  }
+
+  /** Ejecuta un texto como script de bash (bash script.sh, bash -c '...'). */
+  async runSource(source: string, shown: string, args: string[], io: IO, opts: { syntaxOnly?: boolean; options?: Partial<Shell['options']> } = {}): Promise<number> {
     if (source.includes('\r\n')) {
       // Igual que en Linux: el \r al final del shebang o de los comandos rompe el script.
       const first = source.split('\n')[0]
@@ -826,12 +843,13 @@ export class Shell {
       }
       throw e
     }
+    if (opts.syntaxOnly) return 0
     const saved = this.saveState()
     const savedName = this.scriptName
     const savedFns = new Map(this.functions)
     this.positional = args
     this.scriptName = shown
-    this.options = { errexit: false, nounset: false, pipefail: false }
+    this.options = { errexit: false, nounset: false, pipefail: false, ...opts.options }
     try {
       return await this.exec(node, io)
     } catch (e) {

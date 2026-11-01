@@ -1,3 +1,4 @@
+import { VIRTUAL_MOUNTS } from '../storage'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
 import { aclUnion, basename, FsError, modeString, normalizePath, octal, type DefaultAcl, type Inode } from '../vfs'
@@ -550,6 +551,7 @@ register('find', {
     type Test = (abs: string, node: import('../vfs').Inode, depth: number) => boolean
     const tests: Test[] = []
     let maxdepth = Infinity
+    let xdev = false
     let mindepth = 0
     let negateNext = false
     let execCmd: string[] | null = null
@@ -664,6 +666,10 @@ register('find', {
           maxdepth = Number(val)
           i++
           break
+        case '-xdev':
+        case '-mount':
+          xdev = true
+          break
         case '-mindepth':
           mindepth = Number(val)
           i++
@@ -689,6 +695,7 @@ register('find', {
     }
     let code = 0
     const found: string[] = []
+    const mountTargets = new Set([...ctx.sys.storage.mounts.map((m) => m.target), ...VIRTUAL_MOUNTS.map((m) => m.target)])
     for (const p of paths) {
       const start = ctx.sh.resolve(p)
       try {
@@ -697,6 +704,8 @@ register('find', {
           ctx.sh.cred,
           (abs, node, depth) => {
             if (depth > maxdepth) return false
+            // -xdev: no entra en otros sistemas de archivos montados debajo.
+            if (xdev && depth > 0 && mountTargets.has(abs)) return false
             if (depth >= mindepth && tests.every((t) => t(abs, node, depth))) {
               const shown = p === '.' ? (abs === start ? '.' : '.' + abs.slice(start === '/' ? 0 : start.length)) : start === '/' ? abs : p.replace(/\/$/, '') + abs.slice(start.length)
               found.push(shown || '/')
@@ -734,7 +743,8 @@ register('du', {
   usage: 'du [OPTION]... [FILE]...',
   summary: '  -s, --summarize  -h, --human-readable  -a  -c  --max-depth=N',
   run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { summarize: ['s', 'summarize'], human: ['h', 'human-readable'], all: ['a', 'all'], total: ['c', 'total'] }, values: { depth: ['d', 'max-depth'] } })
+    const a = parseArgs(ctx.args, { flags: { summarize: ['s', 'summarize'], human: ['h', 'human-readable'], all: ['a', 'all'], total: ['c', 'total'], x: ['x', 'one-file-system'] }, values: { depth: ['d', 'max-depth'] } })
+    const mountTargets = new Set([...ctx.sys.storage.mounts.map((m) => m.target), ...VIRTUAL_MOUNTS.map((m) => m.target)])
     const targets = a.rest.length ? a.rest : ['.']
     const fmt = (bytes: number) => (a.flags.has('human') ? humanSize(Math.max(4096, Math.ceil(bytes / 4096) * 4096)) : String(Math.max(4, Math.ceil(bytes / 4096) * 4)))
     let code = 0
@@ -749,6 +759,7 @@ register('du', {
           abs,
           ctx.sh.cred,
           (p, node, depth) => {
+            if (a.flags.has('x') && depth > 0 && mountTargets.has(p)) return false
             order.push({ abs: p, depth, dir: node.type === 'dir' })
             sizes.set(p, node.type === 'dir' ? 4096 : sizeOf(node))
           },
@@ -770,7 +781,7 @@ register('du', {
       for (const e of order.reverse()) {
         if (e.depth > maxDepth) continue
         if (!e.dir && !a.flags.has('all') && e.abs !== abs) continue
-        const shown = t.replace(/\/$/, '') + e.abs.slice(abs.length)
+        const shown = abs === '/' ? e.abs : t.replace(/\/$/, '') + e.abs.slice(abs.length)
         ctx.out(`${fmt(sizes.get(e.abs) ?? 0)}\t${shown}\n`)
       }
       grand += sizes.get(abs) ?? 0

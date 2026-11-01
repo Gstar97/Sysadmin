@@ -1,0 +1,113 @@
+---
+id: n1-m4-l6
+titulo: Swap y espacio en disco
+minutos: 120
+objetivos:
+  - Ver, crear y activar swap en una partición, un volumen o un archivo.
+  - Encontrar qué está ocupando un disco con df, du y find.
+  - Liberar espacio sin borrar lo que no se debe, y entender por qué df y du a veces no coinciden.
+glosario: [swap, inodo]
+verificado: 2026-11
+---
+
+import dfDu from './df-du.svg?raw'
+import limpieza from './limpieza.yaml'
+import ejEspacio from './ej-espacio.yaml'
+
+Esta lección junta dos tareas que vas a hacer seguido: darle al servidor un poco de memoria de reserva (la **swap**) y responder a la alerta más común de todas, "el disco está casi lleno". Las dos usan lo que viste en el módulo.
+
+<AntesDeEmpezar>
+- La **swap** es espacio en disco que el sistema usa cuando se queda sin RAM; es mucho más lenta (lección 0.2.3).
+- `df -h` muestra el espacio de cada sistema de archivos montado (lección 1.4.1).
+- `find` busca archivos por nombre, tamaño o fecha (lección 1.1.5).
+</AntesDeEmpezar>
+
+## La swap
+
+Piensa en un escritorio (la RAM) y un archivo en el sótano (el disco). Lo que estás usando va en el escritorio. Si se llena, mandas al sótano lo que hace rato no tocas, para hacer lugar. Funciona, pero si tienes que bajar al sótano a cada rato, todo se vuelve lentísimo.
+
+Para un servidor, un poco de swap es un colchón: evita que, ante un pico de memoria, el kernel tenga que matar procesos (el *OOM killer*). Pero si el servidor la usa todo el tiempo, el problema es que le falta RAM, y la swap no lo resuelve.
+
+```text
+$ swapon --show
+NAME      TYPE      SIZE USED PRIO
+/dev/dm-1 partition   2G   0B   -2
+$ free -h
+               total        used        free      shared  buff/cache   available
+Mem:           3.7Gi       985Mi       1.4Gi       9.4Mi       1.3Gi       2.7Gi
+Swap:          2.0Gi          0B       2.0Gi
+```
+
+La swap puede ser una partición, un volumen de LVM (como `rl-swap` en Rocky) o un **archivo** (como `/swap.img` en Ubuntu). El archivo es lo más práctico para agregar swap a un servidor que ya está funcionando:
+
+```bash
+sudo fallocate -l 2G /swapfile        # reservar el espacio
+sudo chmod 600 /swapfile              # solo root (en la swap queda memoria de los programas)
+sudo mkswap /swapfile                 # darle formato de swap
+sudo swapon /swapfile                 # activarla
+echo '/swapfile none swap defaults 0 0' | sudo tee -a /etc/fstab   # que quede al reiniciar
+```
+
+`swapoff /swapfile` la desactiva (los datos que tenía vuelven a la RAM, así que puede tardar).
+
+<EnSimple>
+La swap es memoria de emergencia en el disco. Está bien tener un poco; si se usa siempre, al servidor le falta RAM.
+</EnSimple>
+
+<Nota titulo="Para más adelante: cuánta swap y cuándo se usa">
+No hay un número mágico. Para un servidor común, entre 1 y 4 GiB suele alcanzar, y algunas aplicaciones (bases de datos, Kubernetes) recomiendan otra cosa. Cuánto prefiere el kernel usar la swap se ajusta con el parámetro `vm.swappiness`, que vas a ver en el módulo 1.5.
+</Nota>
+
+## El disco está casi lleno
+
+Es la alerta más común en cualquier equipo de operaciones. El método:
+
+1. **¿Qué sistema de archivos?** `df -h`. Mira el porcentaje y dónde está montado.
+2. **¿Qué carpeta?** `sudo du -xh --max-depth=1 / | sort -h` (cambia `/` por el punto de montaje). La `-x` evita entrar en otros discos. Repite en la carpeta más grande, bajando un nivel por vez.
+3. **¿Qué archivos?** `sudo find / -xdev -type f -size +500M -exec ls -lh {} +` encuentra los grandes directamente.
+4. **¿Se puede borrar?** Mira de quién es (`ls -l`), de qué paquete (`rpm -qf` o `dpkg -S`) y pregunta. Ante la duda, mover a otro disco.
+
+<Emparejar ejercicio={limpieza} />
+
+Dos lugares que suelen crecer sin que nadie lo note: los logs (lección 1.3.5, con logrotate y `journalctl --vacuum-size`) y el caché de paquetes (`dnf clean all`, `apt clean`).
+
+<Advertencia titulo="No borres un log que se está escribiendo">
+Si borras con `rm` un log que una aplicación tiene abierto, el nombre desaparece pero el espacio **no** se libera: la aplicación sigue escribiendo en el archivo borrado. Para vaciar un log en uso, trúncalo: `sudo sh -c ': > /var/log/app/app.log'` (o `sudo truncate -s 0 archivo`). Y después arregla la causa con logrotate.
+</Advertencia>
+
+## Cuando df y du no coinciden
+
+A veces `df` dice que el disco está lleno y `du` no encuentra nada grande. No es un error: miran cosas distintas.
+
+<Diagrama svg={dfDu} alt="df pregunta al sistema de archivos cuántos bloques tiene ocupados y cuenta todo; du recorre las carpetas y suma solo lo que tiene nombre. Cuando df dice mucho más que du, el espacio está en archivos borrados que un programa tiene abiertos (sudo lsof +L1), en archivos tapados por un montaje (desmontar y mirar) o el problema son los inodos agotados (df -i)." pie="Las tres causas más comunes de la diferencia." />
+
+- **Archivos borrados que siguen abiertos**: `sudo lsof +L1` los lista con el proceso que los tiene. El espacio se libera cuando ese proceso cierra el archivo: reiniciando el servicio (en un horario adecuado).
+- **Archivos tapados por un montaje**: se guardaron en una carpeta cuando el disco no estaba montado (lección 1.4.4).
+- **Inodos agotados**: en ext4 la cantidad de inodos es fija. Con millones de archivos muy chicos (cachés, sesiones), se acaban los inodos aunque sobren bytes, y aparece *"No space left on device"* con `df -h` mostrando espacio libre. `df -i` lo muestra.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejEspacio} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"swapon: /swapfile: insecure permissions 0644, 0600 suggested"'>
+    La swap puede tener datos sensibles de la memoria. `sudo chmod 600 /swapfile` antes de activarla.
+  </ErrorComun>
+  <ErrorComun titulo="Borré archivos y df sigue igual">
+    Algún proceso los tiene abiertos. `sudo lsof +L1` muestra cuál; reinicia ese servicio en un momento adecuado.
+  </ErrorComun>
+  <ErrorComun titulo='"No space left on device" con espacio libre en df -h'>
+    Se agotaron los inodos. `df -i` lo confirma; busca carpetas con muchísimos archivos chicos (`sudo find /ruta -xdev -type f | cut -d/ -f2-4 | sort | uniq -c | sort -n | tail`).
+  </ErrorComun>
+  <ErrorComun titulo="du tarda muchísimo o muestra cosas de otros discos">
+    Sin `-x`, du entra en todos los discos montados debajo (incluidos los de red). Usa `-x` y `--max-depth=1`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- La **swap** es memoria de emergencia en disco; un poco evita que el kernel mate procesos, pero si se usa siempre, falta RAM.
+- Ver: `swapon --show`, `free -h`. Agregar un archivo: `fallocate`, `chmod 600`, `mkswap`, `swapon` y la línea en fstab (`/swapfile none swap defaults 0 0`).
+- Disco lleno: `df -h` → `du -xh --max-depth=1 | sort -h` → `find -xdev -size +500M` → preguntar antes de borrar.
+- Un log en uso se vacía (`: > archivo`), no se borra.
+- Si df y du no coinciden: `lsof +L1` (borrados abiertos), archivos tapados por un montaje, o `df -i` (inodos).
+</Resumen>

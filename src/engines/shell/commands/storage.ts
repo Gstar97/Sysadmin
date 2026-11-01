@@ -848,6 +848,10 @@ register('swapon', {
         ctx.err(`swapon: ${shown}: read swap header failed\n`)
         return false
       }
+      if (!key.startsWith('/dev/')) {
+        const mode = ctx.sys.vfs.stat(key, ROOT_CRED).mode & 0o777
+        if (mode & 0o077) ctx.err(`swapon: ${key}: insecure permissions 0${mode.toString(8)}, 0600 suggested.\n`)
+      }
       s.swaps.push({ path: key, type: key.startsWith('/dev/') ? 'partition' : 'file', size: sig.size, used: 0, prio: -2 - s.swaps.length })
       return true
     }
@@ -1794,6 +1798,33 @@ register('dd', {
     const secs = Math.max(0.05, total / (850 * 1e6))
     ctx.err(`${count}+0 records in\n${count}+0 records out\n${total} bytes (${dfHuman(total, true)}B, ${lsSize(total)}iB) copied, ${secs.toFixed(4)} s, ${dfHuman(total / secs, true)}B/s\n`.replace(/(\d)([KMGT])B/g, '$1 $2B').replace(/(\d)([KMGT])iB/g, '$1 $2iB'))
     return 0
+  },
+})
+
+register('truncate', {
+  usage: 'truncate -s TAMAÑO ARCHIVO...',
+  run(ctx) {
+    const a = parseArgs(ctx.args, { values: { s: ['s', 'size'] } })
+    const size = parseSize(a.values.get('s') ?? '', 1)
+    if (size === undefined || !a.rest.length) {
+      ctx.err("truncate: you must specify either '--size' or '--reference'\n")
+      return 1
+    }
+    let code = 0
+    for (const f of a.rest) {
+      const abs = ctx.sh.resolve(f)
+      try {
+        if (!ctx.sys.vfs.exists(abs)) ctx.sys.vfs.writeFile(abs, '', ctx.sh.cred, { mode: 0o666, umask: ctx.sh.umask })
+        const node = ctx.sys.vfs.stat(abs, ctx.sh.cred)
+        if (!ctx.sys.vfs.can(node, ctx.sh.cred, 2)) throw new Error('Permission denied')
+        node.data = size === 0 ? '' : node.data.slice(0, size)
+        node.size = size === 0 ? undefined : size
+      } catch (e) {
+        ctx.err(`truncate: cannot open '${f}' for writing: ${(e as Error).message}\n`)
+        code = 1
+      }
+    }
+    return code
   },
 })
 
