@@ -1,0 +1,115 @@
+---
+id: n1-m3-l2
+titulo: Otros formatos de software
+minutos: 60
+objetivos:
+  - Reconocer Snap, Flatpak y AppImage, y saber cuándo aparecen en un servidor.
+  - Instalar un binario suelto de forma ordenada, verificando su origen.
+  - Elegir de dónde instalar un programa según lo que va a costar mantenerlo.
+glosario: [snap, binario-estatico, compilar]
+verificado: 2026-11
+---
+
+import formatos from './formatos.svg?raw'
+import caracteristicas from './caracteristicas.yaml'
+import decision from './decision.yaml'
+
+En la lección anterior viste la forma normal de instalar software: paquetes de los repositorios. Pero no todo el software llega así. Algunos programas vienen en formatos que traen todo adentro, otros como un único archivo para copiar, y unos pocos solo como código para compilar. Esta lección es corta: la idea es que los reconozcas cuando aparezcan y sepas elegir.
+
+<AntesDeEmpezar>
+- Un paquete del repositorio usa las bibliotecas que ya tiene el sistema, y se actualiza con `dnf` o `apt` (lección 1.3.1).
+- Cada repositorio extra es alguien a quien le das permiso de instalar como root.
+- `/usr/local/bin` es la carpeta para los programas que instala el administrador a mano (lección 1.1.3).
+</AntesDeEmpezar>
+
+## Formatos que traen todo adentro
+
+Un paquete .rpm o .deb es como una receta que usa los ingredientes de tu cocina: si la receta pide sal, usa la que ya tienes. Por eso es liviano, pero también depende de que tengas la sal correcta. Los formatos de esta sección se parecen más a una comida ya preparada que viene en su envase: traen todo lo que necesitan adentro, así que funcionan igual en cualquier distribución, a cambio de ocupar más espacio y de no usar las actualizaciones del sistema.
+
+| Formato | Quién lo impulsa | Dónde lo vas a ver | Comandos |
+| --- | --- | --- | --- |
+| **Snap** | Canonical (la empresa detrás de Ubuntu) | Ubuntu, también en servidores | `snap find`, `snap install`, `snap list`, `snap refresh` |
+| **Flatpak** | La comunidad, con su tienda Flathub | Escritorios Linux, casi nunca en servidores | `flatpak install`, `flatpak list` |
+| **AppImage** | Cada desarrollador | Escritorios: un solo archivo que se ejecuta | `chmod +x programa.AppImage` y `./programa.AppImage` |
+
+En un servidor Ubuntu, Snap aparece seguido: algunas herramientas solo se publican así, y hay paquetes de apt que en realidad instalan un snap. Dos cosas que conviene saber:
+
+- **Los snaps se actualizan solos**, varias veces por día si hay versiones nuevas, sin esperar a tu ventana de mantenimiento. Con `snap refresh --hold` se pueden pausar, y con `snap refresh --time` ver cuándo toca la próxima.
+- **Cada snap se monta como un disco**. Si ves muchos `loop0`, `loop1`... en `lsblk` o en `df`, no son discos de verdad: son los snaps instalados.
+
+<EnSimple>
+Un paquete normal comparte lo que ya hay en el sistema; Snap, Flatpak y AppImage traen todo consigo. Eso les permite funcionar en cualquier distribución, pero cada uno tiene su propia forma de actualizarse, aparte de dnf o apt.
+</EnSimple>
+
+## Un binario suelto
+
+Muchos programas modernos se distribuyen como un único archivo ejecutable dentro de un `.tar.gz`: lo bajas, lo descomprimes y funciona, porque trae todo lo que necesita adentro (se los llama binarios **estáticos**). Es común en herramientas de monitoreo, de infraestructura y de línea de comandos.
+
+Si te toca instalar uno, hazlo con orden:
+
+```bash
+curl -LO https://medidor.example/medidor-2.4.1-linux-amd64.tar.gz
+curl -LO https://medidor.example/medidor-2.4.1-linux-amd64.tar.gz.sha256
+sha256sum -c medidor-2.4.1-linux-amd64.tar.gz.sha256    # tiene que decir OK
+tar xzf medidor-2.4.1-linux-amd64.tar.gz
+sudo install -m 755 medidor /usr/local/bin/medidor
+medidor --version
+```
+
+- El **hash** (la huella del archivo, lección 0.3.5) que publica el fabricante te asegura que bajaste exactamente lo que ellos publicaron.
+- `/usr/local/bin` es el lugar para lo que instalas a mano: no se mezcla con lo que maneja el gestor de paquetes.
+- Anota en el cuaderno técnico qué instalaste, qué versión y de dónde. Nadie más va a avisarte cuando salga una actualización de seguridad.
+
+## Compilar desde el código
+
+La opción más trabajosa: bajar el código fuente y convertirlo en programa en tu servidor. La receta clásica es:
+
+```bash
+./configure
+make
+sudo make install       # copia todo a /usr/local
+```
+
+Funciona, pero ningún gestor sabe que ese programa existe: no aparece en `rpm -qa`, no se actualiza, y quitarlo prolijamente puede ser difícil. Además, necesitas instalar compiladores y herramientas de desarrollo en el servidor. Queda como último recurso, cuando no hay ninguna otra opción.
+
+## Cómo elegir
+
+<Diagrama svg={formatos} alt="Cinco opciones en orden de preferencia para un servidor: 1, repositorios oficiales con dnf o apt; 2, un repositorio extra confiable o el del fabricante; 3, formatos que traen todo adentro como Snap, Flatpak o AppImage; 4, un binario suelto copiado a /usr/local/bin verificando su hash; 5, compilar desde el código fuente como último recurso." pie="Cuanto más abajo en la lista, más trabajo de mantenimiento queda a tu cargo." />
+
+<Emparejar ejercicio={caracteristicas} />
+
+<Advertencia titulo='Cuidado con "curl ... | sudo bash"'>
+Algunas páginas de instalación proponen pegar algo como `curl https://sitio/install.sh | sudo bash`. Eso baja un script y lo ejecuta como root sin que lo leas. Si el sitio fue atacado, o si el script hace algo que no esperabas, ya pasó. La alternativa es simple: bajar el script, leerlo, y recién ahí ejecutarlo. Y casi siempre ese script lo único que hace es agregar el repositorio del fabricante, cosa que puedes hacer tú a mano.
+</Advertencia>
+
+Ahora te toca decidir en un caso concreto:
+
+<Troubleshooting ejercicio={decision} />
+
+<Nota titulo="Para más adelante: contenedores y gestores de lenguajes">
+Hay dos formas más de llevar software a un servidor que vas a ver en otros niveles. Los **contenedores** (Podman y Docker) empaquetan un programa con todo su entorno y hoy son la forma más común de desplegar aplicaciones. Y los lenguajes tienen sus propios gestores (`pip` para Python, `npm` para JavaScript). Un consejo desde ya: no instales paquetes de Python con `sudo pip install` sobre el sistema; Ubuntu incluso lo bloquea con el error `externally-managed-environment`, para proteger las herramientas del sistema que dependen de Python.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Muchos discos loop en lsblk o df">
+    No es un problema: cada snap instalado se monta como un disco de solo lectura. `snap list` muestra cuáles son. Si te molestan en la salida, `df -x squashfs` los oculta.
+  </ErrorComun>
+  <ErrorComun titulo="Un snap se actualizó solo y cambió el comportamiento">
+    Los snaps se actualizan por su cuenta. En servidores donde los cambios tienen que ser planificados, pausa las actualizaciones (`sudo snap refresh --hold=72h nombre`, o sin tiempo para pausarlo hasta nuevo aviso) y actualiza en la ventana de mantenimiento con `sudo snap refresh nombre`.
+  </ErrorComun>
+  <ErrorComun titulo='"bash: ./medidor: Permission denied" al ejecutar un binario recién bajado'>
+    Los archivos descargados no tienen permiso de ejecución. `chmod +x medidor`, o directamente `sudo install -m 755 medidor /usr/local/bin/`, que copia y pone los permisos a la vez.
+  </ErrorComun>
+  <ErrorComun titulo="Un programa compilado a mano que nadie recuerda">
+    Aparece un `/usr/local/bin/algo` y nadie sabe de dónde salió, qué versión es ni cómo se actualiza. Por eso todo lo que se instala fuera del gestor se documenta en el cuaderno técnico.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Snap, Flatpak y AppImage traen sus bibliotecas adentro: funcionan en cualquier distribución, pero se actualizan aparte de dnf y apt.
+- En servidores Ubuntu, Snap es común: se actualiza solo (se puede pausar con `snap refresh --hold`) y cada snap aparece como un disco loop.
+- Un binario suelto se verifica con el hash del fabricante (`sha256sum -c`), va a `/usr/local/bin` y se documenta.
+- Compilar con `make install` es el último recurso: nadie lo registra ni lo actualiza.
+- El orden de preferencia: repositorios oficiales, repositorio confiable del fabricante, formatos autocontenidos, binario suelto y, al final, compilar.
+- Nunca ejecutes `curl ... | sudo bash` sin leer antes el script.
+</Resumen>

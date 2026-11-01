@@ -1,0 +1,49 @@
+tipo: terminal
+shell: bash
+titulo: Actualizar un servidor Ubuntu
+descripcion: >-
+  El servidor web de la empresa tiene actualizaciones pendientes. Revisa qué hay, actualiza y
+  comprueba en el registro qué cambió.
+estado_inicial:
+  distro: ubuntu
+  hostname: web02
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes:
+    instalados: [nginx]
+    actualizables: [nginx, openssl, curl]
+pasos:
+  - consigna: Baja el catálogo actualizado de los repositorios.
+    verificar:
+      - { comando_usado: 'apt(-get)?\s+update' }
+    pistas:
+      - "Es el paso que no actualiza nada instalado, solo la lista."
+      - "`sudo apt update`"
+    solucion: [sudo apt update]
+    explicacion: Al final apt te dice cuántos paquetes se pueden actualizar.
+  - consigna: Lista cuáles son los paquetes que tienen una versión nueva.
+    verificar:
+      - { comando_usado: 'apt\s+list\s+--upgradable' }
+      - { salida_contiene: nginx }
+    pistas:
+      - "apt list tiene una opción --upgradable."
+      - "`apt list --upgradable`"
+    solucion: [apt list --upgradable]
+    explicacion: En producción, aquí es donde decides si actualizar ahora o en la ventana de mantenimiento.
+  - consigna: Instala las actualizaciones sin que pregunte.
+    verificar:
+      - { comando_usado: 'apt(-get)?\s+(upgrade|full-upgrade)' }
+      - { archivo: /var/log/apt/history.log, contenido_incluye: Upgrade }
+    pistas:
+      - "`sudo apt upgrade -y`"
+    solucion: [sudo apt upgrade -y]
+    explicacion: apt upgrade nunca quita paquetes. Si una actualización necesita quitar algo, hace falta full-upgrade, y conviene revisarlo con más cuidado.
+  - consigna: Mira el final del registro de apt para comprobar qué se actualizó.
+    verificar:
+      - { comando_usado: '(tail|cat|less)\s+.*/var/log/apt/history\.log' }
+    pistas:
+      - "El registro es /var/log/apt/history.log."
+      - "`tail /var/log/apt/history.log`"
+    solucion: [tail /var/log/apt/history.log]
+    explicacion: Cada bloque tiene la fecha, el comando que se usó y la lista de paquetes con la versión anterior y la nueva.

@@ -1,0 +1,77 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué tienen en común Snap, Flatpak y AppImage?
+  opciones:
+    - { texto: "Traen sus propias bibliotecas adentro, así que funcionan en distintas distribuciones", correcta: true, explicacion: "A cambio, ocupan más espacio y se actualizan aparte del gestor del sistema." }
+    - { texto: "Son los formatos oficiales de Rocky", explicacion: "Rocky usa .rpm con dnf." }
+    - { texto: "Se actualizan con dnf upgrade o apt upgrade", explicacion: "Cada uno tiene su propio mecanismo de actualización." }
+    - { texto: "Solo funcionan en servidores", explicacion: "Flatpak y AppImage son sobre todo para escritorios." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Necesitas un programa en un servidor Rocky. ¿Qué opción conviene revisar primero?
+  opciones:
+    - { texto: "Si está en los repositorios oficiales (o en EPEL)", correcta: true, explicacion: "Así se instala, se verifica y se actualiza como todo lo demás." }
+    - { texto: "Compilarlo desde el código fuente", explicacion: "Es el último recurso." }
+    - { texto: "El binario .tar.gz de la página del proyecto", explicacion: "Es válido, pero las actualizaciones quedan a tu cargo." }
+    - { texto: "Un AppImage", explicacion: "AppImage está pensado para escritorios." }
+- id: p03
+  tipo: interpretar_salida
+  enunciado: En un servidor Ubuntu ves esto en lsblk. ¿Qué son los loop?
+  salida: |
+    NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+    loop0     7:0    0 63.9M  1 loop /snap/core20/2318
+    loop1     7:1    0 87.0M  1 loop /snap/lxd/29351
+    sda       8:0    0   40G  0 disk
+    └─sda1    8:1    0   40G  0 part /
+  opciones:
+    - { texto: "Snaps instalados: cada uno se monta como un disco de solo lectura", correcta: true, explicacion: "snap list muestra cuáles son." }
+    - { texto: "Discos nuevos que hay que particionar", explicacion: "Fíjate en RO=1 y en que se montan en /snap." }
+    - { texto: "Copias de seguridad automáticas", explicacion: "No tienen relación con copias de seguridad." }
+    - { texto: "Un error del sistema de archivos", explicacion: "Es el funcionamiento normal de Snap." }
+- id: p04
+  tipo: opcion_multiple
+  enunciado: Bajaste medidor.tar.gz y el fabricante publica un archivo .sha256. ¿Para qué sirve?
+  opciones:
+    - { texto: "Para comprobar con sha256sum -c que el archivo es exactamente el que publicaron", correcta: true, explicacion: "Si un solo byte cambió, el hash no coincide." }
+    - { texto: "Para descomprimir el archivo", explicacion: "Eso lo hace tar." }
+    - { texto: "Es la licencia del programa", explicacion: "Es una huella del archivo." }
+    - { texto: "Para instalarlo con dnf", explicacion: "dnf usa firmas GPG de repositorios, no archivos .sha256." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: ¿Dónde conviene dejar un binario que instalas a mano?
+  opciones:
+    - { texto: "/usr/local/bin", correcta: true, explicacion: "Es la carpeta para lo que instala el administrador, separada de lo que maneja el gestor." }
+    - { texto: "/usr/bin", explicacion: "Es del gestor de paquetes; un archivo tuyo ahí puede pisarse o confundir." }
+    - { texto: "/tmp", explicacion: "Se borra y cualquiera puede escribir ahí." }
+    - { texto: "/etc", explicacion: "/etc es para configuración." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Cuál es el problema principal de instalar con ./configure, make y sudo make install?
+  opciones:
+    - { texto: "Ningún gestor de paquetes sabe que existe: no se actualiza ni se puede quitar fácilmente", correcta: true, explicacion: "Por eso es el último recurso." }
+    - { texto: "Que no funciona en Linux", explicacion: "Funciona; el problema es el mantenimiento." }
+    - { texto: "Que borra los paquetes de dnf", explicacion: "No toca los paquetes del sistema." }
+    - { texto: "Que solo instala en la carpeta del usuario", explicacion: "make install suele copiar a /usr/local." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Una página propone instalar con `curl https://sitio/install.sh | sudo bash`. ¿Qué es lo más prudente?
+  opciones:
+    - { texto: "Bajar el script, leerlo y decidir; muchas veces solo agrega un repositorio que puedes configurar a mano", correcta: true, explicacion: "Así sabes qué se ejecuta como root." }
+    - { texto: "Ejecutarlo: si está en la página oficial es seguro", explicacion: "Una página puede ser atacada y el script se ejecuta como root sin revisión." }
+    - { texto: "Ejecutarlo sin sudo para que sea seguro", explicacion: "Probablemente falle, y sigues sin saber qué hace." }
+    - { texto: "Ejecutarlo dos veces para asegurarse de que se instaló", explicacion: "No resuelve nada." }
+- id: p08
+  tipo: completar_comando
+  enunciado: En Ubuntu, escribe el comando que lista los snaps instalados.
+  aceptadas: [snap list]
+  explicacion: snap list muestra el nombre, la versión, el canal y quién publica cada snap.
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Un snap de un servidor Ubuntu se actualizó solo en horario laboral. ¿Cómo evitas que vuelva a pasar sin quitarlo?
+  opciones:
+    - { texto: "Pausar sus actualizaciones con snap refresh --hold y actualizarlo en la ventana de mantenimiento", correcta: true, explicacion: "Así decides tú cuándo cambia." }
+    - { texto: "Ejecutar apt-mark hold", explicacion: "apt-mark controla paquetes de apt, no snaps." }
+    - { texto: "Desactivar internet", explicacion: "Rompería todo lo demás." }
+    - { texto: "No se puede", explicacion: "Se puede pausar con snap refresh --hold." }

@@ -10,6 +10,46 @@ export function ver(sys: System, n: string): string {
 const SBIN = new Set(['nginx', 'httpd', 'apache2', 'sshd', 'named', 'mariadbd', 'chronyd', 'crond', 'rsyslogd'])
 const binDir = (c: string) => COMMANDS.get(c)?.path ?? (SBIN.has(c) ? '/usr/sbin' : '/usr/bin')
 
+/** Paquete dueño de los comandos básicos del sistema (rpm -qf, dpkg -S): [Rocky, Ubuntu, versión]. */
+const BASE_OWNERS: [string[], string, string, string][] = [
+  [['ls', 'cp', 'mv', 'rm', 'mkdir', 'rmdir', 'cat', 'touch', 'chmod', 'chown', 'chgrp', 'ln', 'head', 'tail', 'sort', 'uniq', 'wc', 'cut', 'tr', 'tee', 'stat', 'du', 'df', 'date', 'echo', 'printf', 'basename', 'dirname', 'realpath', 'id', 'whoami', 'pwd', 'env', 'nl', 'true', 'false', 'sleep', 'base64', 'od', 'test', 'nproc', 'uname', 'groups', 'who', 'readlink'], 'coreutils', 'coreutils', '9.5'],
+  [['grep'], 'grep', 'grep', '3.11'],
+  [['sed'], 'sed', 'sed', '4.9'],
+  [['awk', 'gawk'], 'gawk', 'gawk', '5.3.0'],
+  [['find', 'xargs'], 'findutils', 'findutils', '4.10.0'],
+  [['less'], 'less', 'less', '661'],
+  [['ps', 'top', 'free', 'kill', 'pgrep', 'pkill', 'uptime'], 'procps-ng', 'procps', '4.0.4'],
+  [['systemctl', 'journalctl', 'hostnamectl', 'timedatectl', 'systemd-analyze', 'loginctl'], 'systemd', 'systemd', '257'],
+  [['ip', 'ss'], 'iproute', 'iproute2', '6.11.0'],
+  [['useradd', 'usermod', 'userdel', 'groupadd', 'groupdel', 'chage', 'gpasswd', 'newgrp'], 'shadow-utils', 'passwd', '4.15.0'],
+  [['passwd'], 'passwd', 'passwd', '0.80'],
+  [['su', 'lsblk', 'fdisk', 'mount', 'umount', 'rev', 'column', 'dmesg', 'lscpu'], 'util-linux', 'util-linux', '2.40.2'],
+  [['bash', 'sh'], 'bash', 'bash', '5.2.26'],
+  [['sudo', 'visudo'], 'sudo', 'sudo', '1.9.15'],
+  [['logrotate'], 'logrotate', 'logrotate', '3.22.0'],
+  [['getfacl', 'setfacl'], 'acl', 'acl', '2.3.2'],
+  [['file'], 'file', 'file', '5.45'],
+  [['man', 'whatis', 'apropos'], 'man-db', 'man-db', '2.12.1'],
+]
+
+function ownerOf(sys: System, path: string): { name: string; version: string } | undefined {
+  const cmd = path.replace(/^.*\//, '')
+  const hit = Object.entries(sys.catalog).find(([n, i]) => sys.installed.has(n) && (i.commands?.includes(cmd) || Object.keys(i.files ?? {}).includes(path)))
+  if (hit) return { name: hit[0], version: ver(sys, hit[0]) }
+  if (!/^\/(usr\/)?s?bin\//.test(path) || !sys.vfs.exists(path)) return undefined
+  const base = BASE_OWNERS.find(([cmds]) => cmds.includes(cmd))
+  if (!base) return undefined
+  return { name: sys.distro === 'rocky' ? base[1] : base[2], version: base[3] }
+}
+
+/** Repositorio de donde viene cada paquete en Rocky. */
+function repoOf(n: string): string {
+  if (EPEL_ONLY.has(n)) return 'epel'
+  if (n === 'epel-release') return 'extras'
+  if (['kernel', 'bash', 'coreutils', 'sudo', 'systemd', 'openssh-server', 'chrony', 'cronie', 'firewalld', 'rsyslog', 'tar', 'lsof', 'rsync'].includes(n)) return 'baseos'
+  return 'appstream'
+}
+
 /** Versión siguiente: sube el último número (1.26.3 → 1.26.4). */
 function bump(v: string): string {
   return v.replace(/(\d+)(?!.*\d)/, (d) => String(Number(d) + 1))
@@ -62,7 +102,7 @@ function dnfInstall(ctx: CommandContext, names: string[], yes: boolean): number 
     return 0
   }
   ctx.out(`Dependencies resolved.\n${'='.repeat(80)}\n Package              Architecture     Version                 Repository      Size\n${'='.repeat(80)}\nInstalling:\n`)
-  for (const n of toInstall) ctx.out(` ${n.padEnd(20)} x86_64           ${(ver(sys, n) + '-1.el10').padEnd(23)} ${EPEL_ONLY.has(n) ? 'epel' : 'appstream'}       48 k\n`)
+  for (const n of toInstall) ctx.out(` ${n.padEnd(20)} x86_64           ${(ver(sys, n) + '-1.el10').padEnd(23)} ${repoOf(n).padEnd(9)}       48 k\n`)
   ctx.out(`\nTransaction Summary\n${'='.repeat(80)}\nInstall  ${toInstall.length} Package${toInstall.length > 1 ? 's' : ''}\n\nTotal download size: ${48 * toInstall.length} k\nInstalled size: ${132 * toInstall.length} k\n`)
   ctx.out(`Is this ok [y/N]: y\n`)
   if (!yes) ctx.err('[simulador] Se respondió "y" automáticamente. En scripts se usa -y para no tener que confirmar.\n')
@@ -388,13 +428,13 @@ register('rpm', {
       return 0
     }
     if (opt === '-qf') {
-      const name = (arg ?? '').replace(/^.*\//, '')
-      const hit = Object.entries(sys.catalog).find(([n, i]) => sys.installed.has(n) && (i.commands?.includes(name) || Object.keys(i.files ?? {}).includes(arg)))
+      const path = arg?.startsWith('/') ? arg : ctx.sh.resolve(arg ?? '')
+      const hit = ownerOf(sys, path)
       if (!hit) {
-        ctx.out(`file ${arg} is not owned by any package\n`)
+        ctx.out(sys.vfs.exists(path) ? `file ${path} is not owned by any package\n` : `error: file ${path}: No such file or directory\n`)
         return 1
       }
-      ctx.out(`${hit[0]}-${hit[1].version}-1.el10.x86_64\n`)
+      ctx.out(`${hit.name}-${hit.version}-1.el10.x86_64\n`)
       return 0
     }
     if (opt === '-qi') {
@@ -446,13 +486,13 @@ register('dpkg', {
       return 0
     }
     if (opt === '-S') {
-      const name = (arg ?? '').replace(/^.*\//, '')
-      const hit = Object.entries(sys.catalog).find(([n, i]) => sys.installed.has(n) && (i.commands?.includes(name) || Object.keys(i.files ?? {}).includes(arg)))
+      const path = arg?.startsWith('/') ? arg : (arg ?? '')
+      const hit = path.startsWith('/') ? ownerOf(sys, path) : undefined
       if (!hit) {
         ctx.err(`dpkg-query: no path found matching pattern ${arg}\n`)
         return 1
       }
-      ctx.out(`${hit[0]}: ${arg}\n`)
+      ctx.out(`${hit.name}: ${path}\n`)
       return 0
     }
     ctx.err('dpkg: error: need an action option\n')

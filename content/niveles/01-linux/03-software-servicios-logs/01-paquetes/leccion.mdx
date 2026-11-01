@@ -1,0 +1,207 @@
+---
+id: n1-m3-l1
+titulo: Paquetes y repositorios
+minutos: 180
+objetivos:
+  - Explicar qué es un paquete, una dependencia y un repositorio.
+  - Buscar, instalar, actualizar y quitar software con dnf (Rocky) y apt (Ubuntu).
+  - Averiguar a qué paquete pertenece un archivo y qué archivos instaló un paquete.
+  - Agregar un repositorio extra (EPEL) entendiendo el riesgo, y revisar o deshacer cambios con el historial.
+glosario: [paquete, dependencia, repositorio, gestor-paquetes, firma-gpg, epel]
+verificado: 2026-11
+---
+
+import capas from './capas.svg?raw'
+import tareas from './tareas.yaml'
+import ejPaquetes from './ej-paquetes.yaml'
+import ejApt from './ej-apt.yaml'
+
+Hasta ahora usaste los programas que ya venían con el servidor. Pero un servidor casi nunca se queda así: hay que instalarle un servidor web, una base de datos, herramientas de diagnóstico, y mantener todo actualizado. En Linux eso no se hace bajando instaladores de páginas web, sino con un sistema mucho más ordenado: los **paquetes** y los **repositorios**.
+
+<AntesDeEmpezar>
+- Hay dos grandes familias de distribuciones: la de **Red Hat** (Rocky, AlmaLinux) y la de **Debian** (Ubuntu). Cada una tiene sus propias herramientas (lección 1.1.1).
+- Los programas viven en `/usr/bin`, la configuración en `/etc` y la documentación en `/usr/share/doc` (lección 1.1.3).
+- Instalar software cambia el sistema para todos los usuarios, así que se hace con `sudo` (lección 1.2.5).
+</AntesDeEmpezar>
+
+## Qué es un paquete
+
+Piensa en un mueble que compras para armar. Viene en una caja con todas las piezas, un manual, y una nota que dice "para armarlo necesitas un destornillador". La caja no trae el destornillador: se supone que lo tienes o que lo consigues aparte.
+
+Un **paquete** es lo mismo para un programa: un archivo que trae adentro el programa, su configuración de ejemplo y su documentación, más una ficha con datos como el nombre, la versión, una descripción y la lista de otros paquetes que necesita para funcionar. Esos paquetes que necesita se llaman **dependencias**.
+
+- En Rocky los paquetes son archivos **.rpm**.
+- En Ubuntu son archivos **.deb**.
+
+Son formatos distintos: un .deb no se instala en Rocky ni un .rpm en Ubuntu.
+
+<EnSimple>
+Un paquete es un programa listo para instalar, con una etiqueta que dice qué es, qué versión es y qué otras cosas necesita. Hasta aquí la comparación con el mueble funciona; donde se queda corta es en que, en Linux, el sistema **sí** consigue el destornillador por ti: si un paquete necesita otro, el gestor lo busca y lo instala solo.
+</EnSimple>
+
+## Qué es un repositorio
+
+Un **repositorio** es un servidor en internet que guarda miles de paquetes, ya probados para tu distribución, y un catálogo con la lista de todo lo que tiene. Funciona como la tienda de aplicaciones de un celular: buscas por nombre, ves la descripción, instalas, y cuando sale una versión nueva te avisa.
+
+La diferencia con bajar un instalador de cualquier página es la confianza. Cada paquete de un repositorio viene **firmado** por quien lo armó, con una clave GPG (una especie de sello que no se puede falsificar). Antes de instalar, el sistema revisa que el sello sea el correcto: si alguien modificó el paquete en el camino, la firma no coincide y la instalación se detiene.
+
+## Dos niveles de herramientas
+
+En cada familia hay dos herramientas que trabajan juntas:
+
+<Diagrama svg={capas} alt="Flujo de instalación: los repositorios en internet (baseos, appstream, epel, noble) entregan paquetes firmados a dnf o apt, que buscan en el catálogo, calculan dependencias, descargan, revisan la firma y anotan el historial; luego rpm o dpkg copian los archivos al servidor (/usr/bin, /etc, /usr/share/doc) y llevan la lista de lo instalado." pie="dnf y apt hacen el trabajo inteligente; rpm y dpkg, el trabajo manual de copiar archivos." />
+
+| | Familia Red Hat (Rocky) | Familia Debian (Ubuntu) |
+| --- | --- | --- |
+| Gestor que usas a diario | `dnf` | `apt` |
+| Herramienta de bajo nivel | `rpm` | `dpkg` |
+| Formato de paquete | `.rpm` | `.deb` |
+| Configuración de repositorios | `/etc/yum.repos.d/*.repo` | `/etc/apt/sources.list.d/` |
+
+En el día a día usas `dnf` o `apt`. Las de bajo nivel sirven sobre todo para **consultar**: qué versión hay instalada, qué archivos trajo un paquete o de qué paquete viene un archivo.
+
+<Nota titulo="¿Y yum?">
+En documentación vieja vas a ver `yum`. Es el antecesor de `dnf`: en Rocky, `yum` sigue existiendo como un atajo que ejecuta `dnf`, así que los comandos viejos funcionan. En Fedora ya se usa **DNF5**, una versión nueva; Rocky 10 todavía usa dnf 4. Para lo que ves en esta lección, se escriben igual.
+</Nota>
+
+## Las tareas de todos los días
+
+Empieza por lo más simple: buscar, ver información e instalar.
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    ```bash
+    dnf search htop            # buscar por nombre o descripción
+    dnf info nginx             # descripción, versión y repositorio
+    sudo dnf install nginx     # instalar (pregunta antes; -y responde que sí)
+    sudo dnf remove nginx      # quitar
+    dnf list installed         # todo lo instalado
+    ```
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    ```bash
+    sudo apt update            # primero: bajar el catálogo actualizado
+    apt search htop
+    apt show nginx
+    sudo apt install nginx
+    sudo apt remove nginx      # quitar (purge borra también la configuración)
+    apt list --installed
+    ```
+  </Distro>
+</Distros>
+
+Después, las consultas: ¿esto de dónde salió?, ¿qué trajo este paquete?
+
+| Pregunta | Rocky | Ubuntu |
+| --- | --- | --- |
+| ¿Está instalado y qué versión es? | `rpm -q nginx` | `dpkg -l nginx` |
+| ¿Qué archivos instaló? | `rpm -ql nginx` | `dpkg -L nginx` |
+| ¿De qué paquete es este archivo? | `rpm -qf /usr/bin/ls` | `dpkg -S /usr/bin/ls` |
+| ¿Qué paquete trae un comando que no tengo? | `dnf provides /usr/bin/dig` | `apt-file search bin/dig` (hay que instalar apt-file) |
+
+La última es muy útil: alguien te dice "usa `dig`", escribes `dig` y aparece `command not found`. En Rocky, `dnf provides` te dice que viene en el paquete `bind-utils`; en Ubuntu viene en `bind9-dnsutils` (el nombre viejo, `dnsutils`, también funciona). Los nombres de los paquetes no siempre coinciden con el del comando, y cambian entre distribuciones.
+
+Practica cuál es cuál:
+
+<Emparejar ejercicio={tareas} />
+
+## Actualizar: el punto que más confunde
+
+Actualizar es la tarea más importante del módulo: la mayoría de las intrusiones aprovechan fallas que ya tenían arreglo, en servidores que nadie actualizó.
+
+En **Ubuntu** son dos pasos con nombres engañosos:
+
+1. `sudo apt update` **no actualiza nada instalado**: solo baja el catálogo nuevo de los repositorios, para saber qué versiones existen.
+2. `sudo apt upgrade` instala las versiones nuevas de lo que ya tienes.
+
+Si te saltas el primero, el segundo no encuentra nada nuevo, porque el catálogo es viejo. Y si instalas un paquete con un catálogo muy viejo, puede fallar porque esa versión ya no está en el servidor.
+
+<EnSimple>
+`apt update` es leer el diario para enterarte de qué hay de nuevo. `apt upgrade` es ir a comprarlo. Leer el diario no te trae nada a casa.
+</EnSimple>
+
+En **Rocky** es más directo: `dnf` revisa el catálogo solo cuando hace falta (lo guarda unas horas). `dnf check-update` lista lo que hay para actualizar sin cambiar nada, y `sudo dnf upgrade` lo instala. (`dnf update` es lo mismo que `dnf upgrade`.)
+
+Antes de actualizar un servidor en producción, mira la lista de lo que va a cambiar. Si aparece el **kernel**, el cambio recién se aplica al reiniciar, y eso necesita una ventana de mantenimiento (lección 0.4.3).
+
+## Repositorios: cuáles hay y cómo se agrega uno
+
+Para ver qué repositorios está usando el sistema:
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    `dnf repolist` los lista. Están definidos en archivos `.repo` dentro de `/etc/yum.repos.d/`. Los principales son **baseos** (lo esencial del sistema) y **appstream** (aplicaciones como nginx, bases de datos o lenguajes).
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    Están en `/etc/apt/sources.list.d/ubuntu.sources`, en un formato de bloques llamado **deb822** (antes era una sola línea por repositorio, en `/etc/apt/sources.list`; vas a ver los dos formatos en documentación). Las secciones principales son **main** (soportado por Ubuntu) y **universe** (mantenido por la comunidad).
+  </Distro>
+</Distros>
+
+A veces el programa que necesitas no está en los repositorios oficiales. En la familia Red Hat, el repositorio extra más usado es **EPEL** (Extra Packages for Enterprise Linux), mantenido por el proyecto Fedora. Herramientas comunes como `htop` vienen de ahí. En Rocky se activa instalando un paquete:
+
+```bash
+sudo dnf install epel-release
+```
+
+<Advertencia titulo="Cada repositorio es alguien en quien confías">
+Agregar un repositorio es darle a otra organización permiso para instalar software en tu servidor con permisos de root, ahora y en cada actualización. EPEL es confiable y muy usado; un repositorio que encontraste en un foro, no necesariamente. Antes de agregar uno, pregúntate quién lo mantiene y si de verdad lo necesitas. En Ubuntu pasa lo mismo con los **PPA** (repositorios personales): son útiles, pero los arma cualquier persona.
+</Advertencia>
+
+## Instalar un archivo suelto
+
+A veces un fabricante te da directamente un `.rpm` o un `.deb`. La forma correcta de instalarlo es con el gestor, indicando la ruta con `./` adelante:
+
+```bash
+sudo dnf install ./agente-monitoreo-2.1.rpm     # Rocky
+sudo apt install ./agente-monitoreo_2.1.deb     # Ubuntu
+```
+
+Así el gestor resuelve las dependencias desde los repositorios. Con `rpm -i` o `dpkg -i` el archivo se instala solo si ya tienes todo lo que necesita; si falta algo, se detiene con un error de dependencias (o, en el caso de dpkg, deja el paquete a medio instalar).
+
+## El historial: qué cambió y cómo volver atrás
+
+Cuando algo deja de funcionar, una de las primeras preguntas es "¿qué se instaló o actualizó últimamente?".
+
+<Distros>
+  <Distro nombre="Rocky / AlmaLinux 10">
+    `dnf history` muestra cada transacción con un número. `dnf history info 5` muestra qué cambió en la número 5, y `sudo dnf history undo 5` la deshace (si instaló algo, lo quita; si quitó algo, lo vuelve a poner).
+  </Distro>
+  <Distro nombre="Ubuntu Server LTS">
+    No hay un "deshacer" automático. El registro está en `/var/log/apt/history.log`: cada bloque dice la fecha, el comando que se ejecutó y qué paquetes se instalaron, actualizaron o quitaron.
+  </Distro>
+</Distros>
+
+## Practicar en la terminal
+
+Primero en Rocky: un compañero necesita dos herramientas en el servidor.
+
+<Terminal ejercicio={ejPaquetes} />
+
+Ahora en Ubuntu, con el paso que más se olvida:
+
+<Terminal ejercicio={ejApt} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"No match for argument: htop" (Rocky) o "Unable to locate package htop" (Ubuntu)'>
+    El paquete no está en los repositorios que tienes activos, o el nombre es otro. En Ubuntu, casi siempre falta un `sudo apt update` antes. En Rocky, revisa si viene de EPEL. Y busca el nombre real con `dnf search` o `apt search`: por ejemplo, el comando `dig` viene en `bind-utils` (Rocky) o `bind9-dnsutils` (Ubuntu).
+  </ErrorComun>
+  <ErrorComun titulo='"Could not get lock /var/lib/dpkg/lock-frontend" o "waiting for process with pid ... to finish"'>
+    Otro proceso está instalando o actualizando en ese momento (en Ubuntu, muchas veces la actualización automática de seguridad). Espera a que termine. **No borres el archivo de bloqueo**: si dos instalaciones escriben a la vez, la lista de paquetes puede quedar dañada.
+  </ErrorComun>
+  <ErrorComun titulo='"GPG check FAILED" o "NO_PUBKEY"'>
+    El sistema no tiene la clave para verificar la firma del repositorio, o la firma no coincide. No lo resuelvas desactivando la verificación: consigue la clave oficial desde la página del proyecto. Si la firma no coincide con una clave correcta, el paquete pudo haber sido modificado.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar un .rpm con rpm -i y que falle por dependencias">
+    rpm no busca dependencias. Usa `sudo dnf install ./archivo.rpm` (o `sudo apt install ./archivo.deb` en Ubuntu), que las trae de los repositorios.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un **paquete** trae un programa, su configuración de ejemplo, su documentación y la lista de sus **dependencias**. Rocky usa `.rpm`; Ubuntu, `.deb`.
+- Los **repositorios** son catálogos de paquetes firmados. La firma GPG prueba que nadie los modificó.
+- A diario se usa `dnf` (Rocky) o `apt` (Ubuntu), que resuelven dependencias. `rpm` y `dpkg` sirven para consultar: `-q`/`-l` (qué hay), `-ql`/`-L` (qué archivos), `-qf`/`-S` (de qué paquete es un archivo).
+- En Ubuntu, `apt update` baja el catálogo y `apt upgrade` actualiza. En Rocky, `dnf check-update` mira y `dnf upgrade` actualiza.
+- EPEL agrega software extra a Rocky (`dnf install epel-release`). Cada repositorio nuevo es alguien a quien le das permiso de instalar como root.
+- Un `.rpm` o `.deb` suelto se instala con `dnf install ./archivo` o `apt install ./archivo`.
+- `dnf history` (y `history undo`) en Rocky; `/var/log/apt/history.log` en Ubuntu.
+</Resumen>

@@ -1,0 +1,84 @@
+tipo: troubleshooting
+titulo: El equipo de monitoreo necesita un programa nuevo
+descripcion: >-
+  No hay apuro: cada decisión suma minutos de trabajo, tuyo o de quien venga después. Elige de
+  dónde instalar "medidor", un agente que manda métricas a la consola de monitoreo.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Te piden instalar medidor en los 12 servidores Rocky de la empresa. La página del proyecto
+      ofrece cuatro opciones: un repositorio propio para Rocky y RHEL, un binario en .tar.gz, el
+      código fuente y un comando "curl https://medidor.example/install.sh | sudo bash".
+    opciones:
+      - { texto: "Revisar primero si medidor está en los repositorios oficiales o en EPEL", ir_a: n_buscar, minutos: 2 }
+      - texto: Pegar el comando curl ... | sudo bash en los 12 servidores
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Ese comando ejecuta como root un script que no leíste, bajado de internet en ese
+          momento. Seguridad lo frena en el primer servidor: hay que saber qué hace antes de
+          ejecutarlo. Si lo quieres usar, descárgalo, léelo y recién después decide.
+      - texto: Compilarlo desde el código fuente
+        ir_a: n_compilar
+        minutos: 40
+  n_buscar:
+    situacion: Buscas en los repositorios que ya tienes.
+    evidencia:
+      - titulo: dnf search medidor
+        contenido: |
+          No matches found.
+    opciones:
+      - { texto: "Leer las instrucciones del repositorio del fabricante", ir_a: n_repo, minutos: 3 }
+      - { texto: "Bajar el binario .tar.gz y copiarlo a /usr/local/bin", ir_a: n_binario, minutos: 5 }
+  n_compilar:
+    situacion: >-
+      Compila bien después de instalar varias herramientas de desarrollo en el servidor. Pero
+      queda en /usr/local sin que dnf sepa que existe, y cada versión nueva va a requerir repetir
+      todo en 12 servidores.
+    opciones:
+      - texto: Volver a mirar las otras opciones
+        ir_a: n_buscar
+        minutos: 2
+        consecuencia: Compilar es el último recurso, para cuando no hay ninguna otra forma.
+  n_binario:
+    situacion: >-
+      Funciona en el primer servidor. Ahora tienes que repetir la copia en los otros 11, crear
+      el servicio a mano y acordarte de actualizar cada vez que salga una versión de seguridad.
+    opciones:
+      - texto: Seguir así en los 12 servidores
+        ir_a: n_binario_fin
+        minutos: 30
+      - { texto: "Mejor usar el repositorio del fabricante", ir_a: n_repo, minutos: 2 }
+  n_binario_fin:
+    final: exito
+    resumen: >-
+      Quedó instalado, pero cada actualización es trabajo manual y es fácil que un servidor quede
+      atrás. Si eliges un binario suelto, verifica el hash que publica el fabricante
+      (sha256sum -c) y documenta dónde está y cómo se actualiza. Con un repositorio, todo eso lo
+      hace dnf.
+  n_repo:
+    situacion: >-
+      El fabricante ofrece un archivo .repo con su clave GPG publicada en su sitio oficial. Con
+      eso, dnf puede instalar y actualizar medidor como cualquier otro paquete.
+    evidencia:
+      - titulo: /etc/yum.repos.d/medidor.repo
+        contenido: |
+          [medidor]
+          name=Medidor para RHEL y derivados
+          baseurl=https://repo.medidor.example/el10/$basearch
+          gpgcheck=1
+          gpgkey=https://repo.medidor.example/RPM-GPG-KEY-medidor
+          enabled=1
+    opciones:
+      - { texto: "Agregar el repositorio, instalar con dnf y anotar el cambio en el cuaderno técnico", ir_a: n_fin, minutos: 10 }
+      - texto: Cambiar gpgcheck=0 para que no pida la clave
+        ir_a: n_repo
+        minutos: 2
+        consecuencia: Sin verificación de firma, cualquiera que se meta entre el servidor y el repositorio podría entregar un paquete modificado. La clave oficial está para eso.
+  n_fin:
+    final: exito
+    resumen: >-
+      La mejor opción: medidor se instala, se actualiza con dnf upgrade junto con todo lo demás,
+      la firma se verifica en cada actualización y dnf history registra qué pasó. Agregar un
+      repositorio es confiar en el fabricante, así que se hace solo con fuentes oficiales.

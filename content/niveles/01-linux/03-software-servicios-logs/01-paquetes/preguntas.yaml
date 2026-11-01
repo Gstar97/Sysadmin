@@ -1,0 +1,97 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué es una dependencia de un paquete?
+  opciones:
+    - { texto: "Otro paquete que tiene que estar instalado para que este funcione", correcta: true, explicacion: "Por ejemplo, un programa puede necesitar una biblioteca de cifrado. dnf y apt la instalan solos." }
+    - { texto: "Una versión anterior del mismo paquete", explicacion: "Las versiones anteriores no son dependencias." }
+    - { texto: "El repositorio de donde viene el paquete", explicacion: "Eso es el origen, no una dependencia." }
+    - { texto: "El archivo de configuración del programa", explicacion: "La configuración viene dentro del paquete." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En Ubuntu ejecutas `sudo apt update`. ¿Qué pasó?
+  opciones:
+    - { texto: "Se bajó el catálogo nuevo de los repositorios, pero no se instaló ninguna versión nueva", correcta: true, explicacion: "Para instalar las versiones nuevas hace falta sudo apt upgrade." }
+    - { texto: "Se actualizaron todos los paquetes instalados", explicacion: "Eso lo hace apt upgrade." }
+    - { texto: "Se actualizó apt a una versión nueva", explicacion: "apt update solo refresca la lista de paquetes disponibles." }
+    - { texto: "Se reinició el servidor para aplicar cambios", explicacion: "Ningún comando de apt reinicia el servidor." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: ¿Para qué sirve la firma GPG de los paquetes de un repositorio?
+  opciones:
+    - { texto: "Para comprobar que el paquete viene de quien dice y que nadie lo modificó", correcta: true, explicacion: "Si la firma no coincide, la instalación se detiene." }
+    - { texto: "Para comprimir el paquete y que baje más rápido", explicacion: "La firma no comprime nada." }
+    - { texto: "Para que solo root pueda instalarlo", explicacion: "Eso lo controlan los permisos, no la firma." }
+    - { texto: "Para registrar quién lo instaló", explicacion: "Eso queda en el historial." }
+- id: p04
+  tipo: completar_comando
+  enunciado: En Rocky, escribe el comando que dice de qué paquete viene el archivo /usr/bin/journalctl.
+  aceptadas: [rpm -qf /usr/bin/journalctl, dnf provides /usr/bin/journalctl]
+  explicacion: rpm -qf (query file) busca el dueño de un archivo instalado. dnf provides también sirve, y además funciona con archivos de paquetes que no tienes.
+- id: p05
+  tipo: opcion_multiple
+  enunciado: "`sudo dnf install htop` responde \"No match for argument: htop\" en un Rocky recién instalado. ¿Qué es lo más probable?"
+  opciones:
+    - { texto: "htop no está en los repositorios oficiales: viene de EPEL, que no está activado", correcta: true, explicacion: "Se activa con sudo dnf install epel-release." }
+    - { texto: "Falta ejecutar dnf update antes", explicacion: "dnf refresca el catálogo solo cuando hace falta; ese no es el problema." }
+    - { texto: "htop no existe para Linux", explicacion: "Existe y es muy usado." }
+    - { texto: "Hay que usar rpm en lugar de dnf", explicacion: "rpm no busca en repositorios." }
+- id: p06
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estas afirmaciones sobre agregar repositorios son correctas? (Marca todas las que lo sean.)
+  opciones:
+    - { texto: "Un repositorio nuevo puede instalar software con permisos de root en cada actualización", correcta: true, explicacion: "Por eso solo se agregan repositorios de quien confías." }
+    - { texto: "EPEL lo mantiene el proyecto Fedora y es muy usado en servidores Red Hat", correcta: true, explicacion: "Es el repositorio extra más común en esa familia." }
+    - { texto: "Si un repositorio da error de firma, lo correcto es desactivar la verificación", explicacion: "Hay que conseguir la clave oficial; desactivar la verificación anula la protección." }
+    - { texto: "Los PPA de Ubuntu los puede armar cualquier persona", correcta: true, explicacion: "Son útiles, pero hay que evaluar quién los mantiene." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Un fabricante te da agente.rpm. ¿Cuál es la mejor forma de instalarlo en Rocky?
+  opciones:
+    - { texto: "sudo dnf install ./agente.rpm", correcta: true, explicacion: "dnf resuelve las dependencias desde los repositorios." }
+    - { texto: "sudo rpm -i agente.rpm", explicacion: "Funciona solo si ya tienes todas sus dependencias; si falta algo, falla." }
+    - { texto: "sudo dnf install agente", explicacion: "Sin ./ dnf busca un paquete con ese nombre en los repositorios." }
+    - { texto: "Copiarlo a /usr/bin", explicacion: "Un .rpm no es un programa para ejecutar: es un paquete." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: Ejecutas un comando en Ubuntu y ves esto. ¿Qué conviene hacer?
+  salida: |
+    Waiting for cache lock: Could not get lock /var/lib/dpkg/lock-frontend.
+    It is held by process 1873 (unattended-upgr)... 12s
+  opciones:
+    - { texto: "Esperar: la actualización automática está instalando algo en este momento", correcta: true, explicacion: "Cuando termine, apt sigue solo." }
+    - { texto: "Borrar /var/lib/dpkg/lock-frontend para seguir", explicacion: "Si dos instalaciones escriben a la vez, la base de paquetes puede quedar dañada." }
+    - { texto: "Reiniciar el servidor", explicacion: "Cortaría la actualización a la mitad." }
+    - { texto: "Matar el proceso 1873 con kill -9", explicacion: "Igual que borrar el bloqueo: puede dejar paquetes a medio instalar." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Después de una actualización, una aplicación dejó de funcionar en Rocky. ¿Qué comando te muestra qué cambió y te permite volver atrás?
+  opciones:
+    - { texto: "dnf history (y después dnf history info N y dnf history undo N)", correcta: true, explicacion: "Cada transacción tiene un número y se puede deshacer." }
+    - { texto: "rpm -qa", explicacion: "Lista todo lo instalado, pero no qué cambió ni cuándo." }
+    - { texto: "dnf check-update", explicacion: "Muestra lo pendiente, no lo que ya se hizo." }
+    - { texto: "dnf clean all", explicacion: "Borra el catálogo guardado; no deshace nada." }
+- id: p10
+  tipo: ordenar_pasos
+  enunciado: Ordena los pasos para actualizar con cuidado un servidor Ubuntu en producción.
+  pasos:
+    - sudo apt update
+    - apt list --upgradable
+    - Revisar si hay kernel u otro paquete crítico en la lista
+    - sudo apt upgrade
+    - Revisar /var/log/apt/history.log y que los servicios funcionen
+  explicacion: Primero el catálogo, después mirar, decidir, actualizar y comprobar.
+- id: p11
+  tipo: completar_comando
+  enunciado: En Ubuntu, escribe el comando que lista los archivos que instaló el paquete nginx.
+  aceptadas: [dpkg -L nginx, dpkg --listfiles nginx]
+  explicacion: En Rocky, el equivalente es rpm -ql nginx.
+- id: p12
+  tipo: opcion_multiple
+  enunciado: ¿Qué relación hay entre dnf y rpm?
+  opciones:
+    - { texto: "dnf busca en repositorios y resuelve dependencias; por debajo usa rpm para instalar los archivos", correcta: true, explicacion: "Lo mismo pasa con apt y dpkg en Ubuntu." }
+    - { texto: "Son lo mismo con distinto nombre", explicacion: "rpm no conoce los repositorios." }
+    - { texto: "rpm es más nuevo y reemplaza a dnf", explicacion: "Es al revés: dnf trabaja sobre rpm." }
+    - { texto: "dnf es para Ubuntu y rpm para Rocky", explicacion: "Los dos son de la familia Red Hat." }
