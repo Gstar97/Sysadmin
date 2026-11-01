@@ -61,7 +61,7 @@ export function MatchExercise({ exercise, onComplete }: { exercise: Exercise; on
                   )}
                 >
                   {paired && <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: colorOf(i) }} aria-hidden />}
-                  <span className="flex-1">{p.a}</span>
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{p.a}</span>
                 </button>
               </li>
             )
@@ -79,7 +79,7 @@ export function MatchExercise({ exercise, onComplete }: { exercise: Exercise; on
                   className={cn('flex min-h-11 w-full items-center gap-2 rounded-lg border-2 px-3 py-2 text-left text-sm transition disabled:cursor-default', selectedLeft !== undefined ? 'border-dashed border-accent/60 hover:bg-accent-soft' : 'border-line')}
                 >
                   {left !== -1 && <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: colorOf(left) }} aria-label={`emparejado con ${exercise.pares[left].a}`} />}
-                  <span className="flex-1">{exercise.pares[r].b}</span>
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{exercise.pares[r].b}</span>
                 </button>
               </li>
             )

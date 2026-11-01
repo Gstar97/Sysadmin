@@ -214,6 +214,8 @@ export const guidedStepsSchema = z.strictObject({
         titulo: z.string().min(1),
         detalle: z.string().optional(),
         comandos: z.array(z.string()).default([]),
+        /** Contenido de un archivo para escribir (un script, una configuración), con su ruta. */
+        archivo: z.strictObject({ ruta: z.string().min(1), contenido: z.string().min(1) }).optional(),
         variantes: z.array(z.strictObject({ nombre: z.string().min(1), detalle: z.string().min(1), comandos: z.array(z.string()).default([]) })).default([]),
         comprobar: z.string().optional(),
         si_falla: z.string().optional(),

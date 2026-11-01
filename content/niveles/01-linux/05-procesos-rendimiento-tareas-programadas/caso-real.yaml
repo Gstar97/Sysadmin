@@ -1,0 +1,149 @@
+tipo: troubleshooting
+titulo: El servidor está lento desde el lunes
+descripcion: >-
+  Incidente simulado en archivos01, un servidor Rocky con 4 CPU donde trabaja el área de
+  administración. Cada decisión suma minutos: es jueves y la gente lleva tres días quejándose.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Jueves, 10:20. Administración dice que "desde el lunes" abrir y guardar planillas en la
+      carpeta compartida tarda muchísimo, sobre todo a la mañana. A la tarde mejora.
+    opciones:
+      - { texto: "Mirar la carga y la CPU con uptime y top", ir_a: n_top, minutos: 2 }
+      - texto: Pedir más memoria RAM para la VM
+        ir_a: n1
+        minutos: 20
+        consecuencia: >-
+          El equipo de virtualización tarda en responder y te pregunta en qué te basas. No tienes
+          ningún dato: vuelves al principio.
+      - texto: Reiniciar el servidor a la hora del almuerzo
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          Al volver todo va rápido... hasta el día siguiente a las 9. Además, se perdió la
+          evidencia del momento del problema.
+  n_top:
+    situacion: La carga es alta, pero la CPU casi no trabaja.
+    evidencia:
+      - titulo: uptime
+        contenido: |
+          10:22:41 up 23 days,  3:10,  4 users,  load average: 6.84, 6.51, 5.97
+      - titulo: top -b -n 1 | head -12
+        contenido: |
+          %Cpu(s):  7.2 us,  3.1 sy,  0.0 ni, 41.5 id, 48.2 wa,  0.0 hi,  0.0 si,  0.0 st
+          MiB Mem :   7820.4 total,    402.1 free,   2210.6 used,   5207.7 buff/cache
+          MiB Swap:   2048.0 total,   2048.0 free,      0.0 used.   5609.8 avail Mem
+
+              PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+            48112 root      20   0  228716  12804   3156 D   6.1   0.2   4:18.33 tar
+             1932 root      20   0   61204  14208  11712 D   2.0   0.2  31:02.10 smbd
+             1940 root      20   0   61204  13996  11520 D   1.7   0.2  29:47.55 smbd
+    opciones:
+      - { texto: "Confirmar con iostat -x y ver quién usa el disco con iotop", ir_a: n_disco, minutos: 3 }
+      - texto: Concluir que falta memoria (free muestra solo 402 MiB libres)
+        ir_a: n_top
+        minutos: 5
+        consecuencia: >-
+          avail Mem es 5,6 GiB y la swap está en 0: no falta memoria. Lo que muestra top es una
+          CPU esperando al disco (wa 48 %) y procesos en D.
+      - texto: Matar tar con kill -9 para liberar el disco
+        ir_a: n_kill
+        minutos: 2
+  n_kill:
+    situacion: >-
+      El disco se libera y administración trabaja normal. A la tarde te enteras de que ese tar
+      era el respaldo completo de la carpeta compartida: hoy no hay respaldo, y el archivo quedó
+      cortado a la mitad en /backup.
+    opciones:
+      - texto: Buscar por qué el respaldo corre a la mañana
+        ir_a: n_historial
+        minutos: 4
+        consecuencia: Perdiste el respaldo del día. Había una forma de aliviar sin cortarlo.
+  n_disco:
+    situacion: El disco de datos está saturado y el que lo satura es tar.
+    evidencia:
+      - titulo: iostat -x 2 2 (segunda muestra)
+        contenido: |
+          Device      r/s     w/s   rkB/s   wkB/s  r_await w_await  %util
+          sda        2.0     4.5    38.0    61.0     1.20    2.10    1.9
+          sdb      412.5    31.0 52800.0  1240.0    96.40  181.30   99.6
+      - titulo: sudo iotop -o -b -n 1
+        contenido: |
+          Total DISK READ:  51.56 M/s | Total DISK WRITE:  1.21 M/s
+              TID  PRIO  USER     DISK READ  DISK WRITE  COMMAND
+            48112 be/4 root       49.80 M/s    0.00 B/s  tar czf /backup/compartida-completo.tgz /srv/compartida
+             1932 be/4 root        0.95 M/s    0.62 M/s  smbd: client [192.168.10.41]
+    opciones:
+      - { texto: "Bajarle la prioridad de disco al respaldo con ionice -c 3, sin cortarlo", ir_a: n_alivio, minutos: 2 }
+      - texto: Bajarle la prioridad con renice 19
+        ir_a: n_disco
+        minutos: 3
+        consecuencia: >-
+          renice cambia la prioridad de CPU, y tar casi no usa CPU: lo que satura es el disco.
+          Nada cambia.
+  n_alivio:
+    situacion: >-
+      Con ionice -c 3 -p 48112, tar solo lee cuando nadie más usa el disco. Administración nota
+      la mejora en un minuto y el respaldo sigue, más lento. Falta entender por qué un respaldo
+      completo corre en horario de trabajo.
+    opciones:
+      - { texto: "Mirar el historial de sar de esta semana", ir_a: n_historial, minutos: 3 }
+      - { texto: "Dar el incidente por cerrado", ir_a: n_cerrado_antes, minutos: 1 }
+  n_cerrado_antes:
+    situacion: >-
+      Mañana a las 9 vuelve a pasar exactamente lo mismo, y administración llama de nuevo. Aliviar
+      no es resolver.
+    opciones:
+      - { texto: "Mirar el historial de sar", ir_a: n_historial, minutos: 3 }
+  n_historial:
+    situacion: >-
+      El problema empieza todos los días a las 9. El jueves pasado, a esa hora, no pasaba nada.
+    evidencia:
+      - titulo: sar -u -f /var/log/sa/sa22 (el jueves pasado) | grep -E "08:50|09:00|09:10"
+        contenido: |
+          08:50:01     all      6.12      0.00      2.40      0.81      0.00     90.67
+          09:00:01     all      7.03      0.00      2.88      0.95      0.00     89.14
+          09:10:01     all      7.40      0.00      2.91      1.02      0.00     88.67
+      - titulo: sar -u (hoy) | grep -E "08:50|09:00|09:10"
+        contenido: |
+          08:50:01     all      5.98      0.00      2.35      0.77      0.00     90.90
+          09:00:01     all      6.80      0.00      3.05     47.61      0.00     42.54
+          09:10:01     all      7.15      0.00      3.12     49.03      0.00     40.70
+      - titulo: sudo grep -h compartida /var/log/cron*
+        contenido: |
+          Oct 22 21:00:01 archivos01 CROND[30122]: (root) CMD (/usr/local/bin/respaldo-completo.sh)
+          Oct 24 09:00:01 archivos01 CROND[33561]: (root) CMD (/usr/local/bin/respaldo-completo.sh)
+          Oct 25 09:00:01 archivos01 CROND[35090]: (root) CMD (/usr/local/bin/respaldo-completo.sh)
+          Oct 26 09:00:01 archivos01 CROND[36714]: (root) CMD (/usr/local/bin/respaldo-completo.sh)
+          Oct 27 09:00:01 archivos01 CROND[38257]: (root) CMD (/usr/local/bin/respaldo-completo.sh)
+          Oct 28 09:00:01 archivos01 CROND[40410]: (root) CMD (/usr/local/bin/respaldo-completo.sh)
+          Oct 29 09:00:01 archivos01 CROND[41877]: (root) CMD (/usr/local/bin/respaldo-completo.sh)
+    opciones:
+      - { texto: "Revisar la tarea programada y quién la cambió", ir_a: n_cron, minutos: 3 }
+  n_cron:
+    situacion: El viernes a la tarde alguien cambió el horario del respaldo.
+    evidencia:
+      - titulo: cat /etc/cron.d/respaldo-completo
+        contenido: |
+          # Respaldo completo de /srv/compartida. Se pasa a las 9 de la noche (pedido de Pablo, viernes)
+          0 9 * * *  root  /usr/local/bin/respaldo-completo.sh >> /var/log/respaldo-completo.log 2>&1
+      - titulo: sudo grep cron.d /var/log/secure
+        contenido: |
+          Oct 23 17:42:10 archivos01 sudo[31880]:  pablo : TTY=pts/1 ; PWD=/home/pablo ; USER=root ; COMMAND=/usr/bin/nano /etc/cron.d/respaldo-completo
+    opciones:
+      - { texto: "Corregir la hora a 0 21 * * *, avisar a Pablo y a administración", ir_a: n_ok, minutos: 4 }
+      - texto: Borrar la tarea para que no moleste más
+        ir_a: n_cron
+        minutos: 2
+        consecuencia: Te quedas sin respaldo completo. El problema era el horario, no la tarea.
+  n_ok:
+    final: exito
+    resumen: >-
+      Las 9 de la noche son las 21 en cron: la hora va de 0 a 23, y "0 9" es a las 9 de la
+      mañana. Por eso, desde el sábado, el respaldo completo leía todo el disco de datos en el
+      horario de trabajo (el fin de semana no había nadie para notarlo). Lo resolviste sin adivinar: la carga alta con la CPU libre y wa alto
+      apuntaban al disco, iostat e iotop dijeron quién, ionice -c 3 alivió sin cortar el
+      respaldo, y sar y el registro de cron mostraron desde cuándo. Para que no se repita, anota
+      en el cuaderno técnico el horario del respaldo, y cada cambio de una tarea programada se
+      prueba y se revisa con alguien más.

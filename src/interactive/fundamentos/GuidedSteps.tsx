@@ -22,12 +22,13 @@ function save(key: string, value: number[]) {
   }
 }
 
-function Commands({ lines }: { lines: string[] }) {
+function Commands({ lines, title }: { lines: string[]; title?: string }) {
   const [copied, setCopied] = useState(false)
   if (!lines.length) return null
   return (
     <div className="mt-2 overflow-hidden rounded-lg" style={{ background: 'var(--term-bg)', color: 'var(--term-fg)' }}>
-      <div className="flex justify-end border-b border-white/10 px-2 py-1">
+      <div className={cn('flex items-center border-b border-white/10 px-2 py-1', title ? 'justify-between' : 'justify-end')}>
+        {title && <span className="min-w-0 truncate font-mono text-xs text-white/80">{title}</span>}
         <button
           type="button"
           className="rounded-md px-2 py-0.5 text-xs text-white/80 hover:bg-white/10"
@@ -109,6 +110,7 @@ export function GuidedSteps({ data, storageKey }: { data: GuidedStepsData; stora
                 <div className="space-y-2 px-4 pb-4 pl-13 text-sm">
                   {p.detalle && <RichText text={p.detalle} />}
                   <Commands lines={p.comandos} />
+                  {p.archivo && <Commands title={p.archivo.ruta} lines={p.archivo.contenido.replace(/\n$/, '').split('\n')} />}
                   {p.variantes.length > 0 && (
                     <div>
                       <div className="flex flex-wrap gap-2">
