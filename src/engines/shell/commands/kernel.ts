@@ -130,7 +130,7 @@ register('modinfo', {
   path: '/usr/sbin',
   run(ctx) {
     const fIdx = ctx.args.indexOf('-F')
-    const name = ctx.args.find((x, i) => !x.startsWith('-') && i !== fIdx + 1)
+    const name = ctx.args.find((x, i) => !x.startsWith('-') && (fIdx < 0 || i !== fIdx + 1))
     const m = name ? MODS[norm(name)] : undefined
     if (!name || !m) {
       ctx.err(`modinfo: ERROR: Module ${name ?? ''} not found.\n`)

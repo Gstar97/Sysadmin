@@ -2,7 +2,8 @@ import type { BashState } from './schema'
 import { builtinTimers, daemonReload, type Timer, type UnitDef } from './units'
 import { applyStateStorage, installLayout, parseSize, Storage, GiB, MiB } from './storage'
 import type { PerfState } from './perf'
-import { initKernel, chronyStart, bootModules } from './kernel'
+import { initKernel, chronyStart, bootModules, staticKernelFs, refreshKernelFs } from './kernel'
+import { metrics, MEM_TOTAL_KB } from './perf'
 import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
 import { normalizePath, ROOT_CRED, VFS, type Cred } from './vfs'
@@ -470,7 +471,14 @@ export class System {
     // chronyd decide si está sincronizado según sus fuentes.
     if (this.services.get(this.distro === 'rocky' ? 'chronyd' : 'chrony')?.active) chronyStart(this)
     bootModules(this)
+    staticKernelFs(this)
     this.syncAccountFiles()
+    this.refreshVirtual()
+  }
+
+  /** Regenera /proc y /sys con el estado actual (se llama antes de cada comando). */
+  refreshVirtual() {
+    refreshKernelFs(this, metrics(this), MEM_TOTAL_KB)
   }
 
   // ---------------------------------------------------------------------------

@@ -1,0 +1,71 @@
+tipo: terminal
+shell: bash
+titulo: Ajustar el kernel según la política de seguridad
+descripcion: >-
+  La política de la empresa pide dos cosas para los servidores de archivos: que no se puedan
+  usar memorias USB y que el kernel use poco la swap (vm.swappiness en 10). Los dos cambios
+  tienen que sobrevivir a un reinicio.
+estado_inicial:
+  distro: rocky
+  hostname: archivos01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+pasos:
+  - consigna: Mira qué versión del kernel está corriendo.
+    verificar:
+      - { comando_usado: 'uname\s+-r' }
+    pistas:
+      - "`uname -r`"
+    solucion: [uname -r]
+    explicacion: Es lo primero que se anota en un incidente o al buscar un error conocido.
+  - consigna: Consulta el valor actual de vm.swappiness, leyendo el archivo de /proc/sys o con sysctl.
+    verificar:
+      - { salida_contiene: "60" }
+      - { comando_usado: 'swappiness' }
+    pistas:
+      - "`sysctl vm.swappiness` o `cat /proc/sys/vm/swappiness`"
+    solucion: [sysctl vm.swappiness]
+    explicacion: Las dos formas leen lo mismo. 60 es el valor por defecto del kernel.
+  - consigna: >-
+      Crea /etc/sysctl.d/90-archivos.conf con la línea `vm.swappiness = 10` y aplica todos los
+      archivos de configuración.
+    verificar:
+      - { archivo: /etc/sysctl.d/90-archivos.conf, contenido_incluye: "vm.swappiness = 10" }
+      - { comando_usado: 'sysctl\s+(--system|-p)' }
+      - { salida_contiene: "vm.swappiness = 10" }
+    pistas:
+      - "Con un editor (sudo nano) o con echo y sudo tee. Después, sudo sysctl --system."
+      - "`echo 'vm.swappiness = 10' | sudo tee /etc/sysctl.d/90-archivos.conf` y `sudo sysctl --system`"
+    solucion: ["echo 'vm.swappiness = 10' | sudo tee /etc/sysctl.d/90-archivos.conf", sudo sysctl --system]
+    explicacion: >-
+      sysctl -w cambia el valor solo hasta el próximo reinicio. El archivo en /etc/sysctl.d lo hace
+      permanente, y sysctl --system lo aplica ya, sin reiniciar.
+  - consigna: Comprueba si el módulo de almacenamiento USB está cargado.
+    verificar:
+      - { comando_usado: 'lsmod' }
+    pistas:
+      - "`lsmod | grep usb`"
+    solucion: [lsmod | grep usb]
+    explicacion: No aparece, pero se cargaría solo en cuanto alguien conecte una memoria USB.
+  - consigna: >-
+      Bloquéalo: crea /etc/modprobe.d/no-usb.conf con las líneas `blacklist usb-storage` y
+      `install usb-storage /bin/false`.
+    verificar:
+      - { archivo: /etc/modprobe.d/no-usb.conf, contenido_incluye: "install usb-storage /bin/false" }
+      - { archivo: /etc/modprobe.d/no-usb.conf, contenido_incluye: "blacklist usb-storage" }
+    pistas:
+      - "printf escribe varias líneas con \\n: printf 'línea 1\\nlínea 2\\n' | sudo tee archivo"
+      - "`printf 'blacklist usb-storage\\ninstall usb-storage /bin/false\\n' | sudo tee /etc/modprobe.d/no-usb.conf`"
+    solucion: ["printf 'blacklist usb-storage\\ninstall usb-storage /bin/false\\n' | sudo tee /etc/modprobe.d/no-usb.conf"]
+    explicacion: >-
+      blacklist evita que se cargue solo al detectar el dispositivo; install ... /bin/false hace
+      que cualquier intento de cargarlo falle, incluso uno manual o el de otro módulo que lo pida.
+  - consigna: Prueba que funciona intentando cargarlo a mano.
+    verificar:
+      - { comando_usado: 'modprobe\s+usb[-_]storage' }
+      - { salida_contiene: "could not insert" }
+    pistas:
+      - "`sudo modprobe usb-storage`"
+    solucion: [sudo modprobe usb-storage]
+    explicacion: El error es la prueba de que el bloqueo funciona. Anótalo en la documentación del servidor, para que nadie pierda una tarde buscando por qué no anda una memoria USB.

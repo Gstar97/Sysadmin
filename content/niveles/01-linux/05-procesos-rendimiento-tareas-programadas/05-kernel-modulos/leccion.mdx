@@ -1,0 +1,139 @@
+---
+id: n1-m5-l5
+titulo: Kernel, módulos, /proc y /sys
+minutos: 90
+objetivos:
+  - Leer información del kernel y de los procesos en /proc y de los dispositivos en /sys.
+  - Ver y cambiar parámetros del kernel con sysctl, de forma temporal y permanente.
+  - Ver, cargar, quitar y bloquear módulos del kernel.
+glosario: [kernel, sysctl, modulo-kernel, proc]
+verificado: 2026-11
+---
+
+import ventanas from './ventanas.svg?raw'
+import donde from './donde.yaml'
+import ejKernel from './ej-kernel.yaml'
+
+El kernel es el que reparte la CPU, la memoria y los discos entre los procesos (lección 0.2.1). Casi nunca vas a tocarlo, pero sí vas a necesitar preguntarle cosas ("¿cuánta memoria queda?", "¿qué driver usa esta placa?") y, a veces, ajustar algo ("que no use tanto la swap", "que no acepte memorias USB"). Esta lección te muestra por dónde se hace cada cosa.
+
+<AntesDeEmpezar>
+- El kernel y el espacio de usuario (lección 0.2.1).
+- Procesos y PID (lección 1.5.1).
+- Los parámetros de arranque del kernel en GRUB (lección 1.3.6).
+</AntesDeEmpezar>
+
+## Las ventanas del kernel
+
+El kernel no tiene una pantalla para mirar adentro, pero muestra lo que sabe como si fueran archivos. Piensa en el tablero de un auto: no ves el motor, pero ves la velocidad, el combustible y la temperatura; y algunos controles (las luces, el aire) los puedes cambiar desde ahí. La diferencia es que aquí los "indicadores" se leen con `cat` y los controles se cambian escribiendo en un archivo.
+
+<Diagrama svg={ventanas} alt="El kernel en el centro y cuatro formas de verlo: /proc, con un archivo por cada proceso y datos como la memoria, la carga y la CPU; /proc/sys, con los ajustes que se cambian en marcha mediante sysctl y se hacen permanentes en /etc/sysctl.d; /sys, con los dispositivos y los módulos cargados; y /lib/modules, con los módulos en archivos .ko que se cargan con modprobe y se bloquean en /etc/modprobe.d." pie="Ni /proc ni /sys están en el disco: el kernel arma su contenido cada vez que los lees." />
+
+<Emparejar ejercicio={donde} />
+
+## /proc: el estado de todo
+
+```bash
+uname -r                       # versión del kernel
+cat /proc/cmdline              # parámetros con los que arrancó
+cat /proc/meminfo | head -3    # memoria (lo que resume free)
+cat /proc/loadavg              # carga (lo que muestra uptime)
+grep -c processor /proc/cpuinfo   # cantidad de CPU (lo que dice nproc)
+```
+
+Cada proceso tiene su carpeta, `/proc/PID`. Las más útiles:
+
+```bash
+grep -E 'Name|State|VmRSS' /proc/1234/status   # nombre, estado y memoria
+tr '\0' ' ' < /proc/1234/cmdline; echo         # la línea de comandos completa
+sudo ls -l /proc/1234/fd                       # los archivos que tiene abiertos
+```
+
+En `cmdline` los argumentos van separados por un carácter invisible (el byte cero), por eso se usa `tr` para cambiarlo por espacios. Fíjate que `ps`, `top`, `free` y `uptime`, que viste en las lecciones anteriores, en realidad leen estos archivos y los muestran ordenados.
+
+## /proc/sys y sysctl: los ajustes
+
+Dentro de `/proc/sys` hay cientos de ajustes. `sysctl` los muestra con puntos en lugar de barras: `/proc/sys/vm/swappiness` es `vm.swappiness`.
+
+```bash
+sysctl vm.swappiness                    # ver un valor
+sysctl -a | grep ip_forward             # buscar
+sudo sysctl -w vm.swappiness=10         # cambiar ahora (se pierde al reiniciar)
+```
+
+Para que el cambio sea **permanente**, va en un archivo propio dentro de `/etc/sysctl.d/`, y se aplica sin reiniciar con `sysctl --system`:
+
+```bash
+# /etc/sysctl.d/90-archivos.conf
+# Usar poco la swap: el servidor tiene RAM de sobra (ticket 4512).
+vm.swappiness = 10
+```
+
+<EnSimple>
+`sysctl -w` cambia el ajuste hasta el próximo reinicio. El archivo en `/etc/sysctl.d` hace que se aplique en cada arranque. Lo prolijo es hacer las dos cosas: el archivo, y `sysctl --system` para aplicarlo ya.
+</EnSimple>
+
+Algunos ajustes que vas a ver seguido: `vm.swappiness` (cuánto prefiere usar la swap), `net.ipv4.ip_forward` (reenviar paquetes entre redes, necesario en un router o para contenedores), `fs.inotify.max_user_watches` (cuántos archivos pueden vigilar los programas) y `net.core.somaxconn` (cola de conexiones pendientes). No cambies valores por una receta de internet sin entender qué hacen: anota siempre por qué los cambiaste.
+
+## /sys: los dispositivos
+
+`/sys` muestra el hardware como lo ve el kernel:
+
+```bash
+ls /sys/class/net                        # las placas de red
+cat /sys/class/net/enp0s3/address        # su dirección MAC
+cat /sys/block/sda/queue/rotational      # 1 = disco mecánico, 0 = SSD
+ls /sys/module/usb_storage/parameters    # parámetros de un módulo cargado
+```
+
+## Módulos del kernel
+
+Un **módulo** es una pieza del kernel que se carga solo cuando hace falta: el driver de una placa de red, el soporte para un sistema de archivos, el de las memorias USB. Están en `/lib/modules/VERSIÓN/` como archivos `.ko`. Es como una caja de herramientas: no las tienes todas en la mano, las sacas cuando las necesitas.
+
+```bash
+lsmod                          # los cargados (y quién los usa)
+modinfo usb-storage            # descripción, archivo, dependencias y parámetros
+sudo modprobe wireguard        # cargar uno (y sus dependencias)
+sudo modprobe -r wireguard     # quitarlo, si nadie lo está usando
+```
+
+En los nombres de módulos, `-` y `_` valen lo mismo (`usb-storage` y `usb_storage`). Casi siempre se cargan solos, al detectar el hardware. Si necesitas que uno se cargue en cada arranque, su nombre va en un archivo de `/etc/modules-load.d/` (por ejemplo, `br_netfilter` para Kubernetes, nivel 7).
+
+Para **bloquear** uno (una política de "nada de memorias USB", o un driver que falla), se crea un archivo en `/etc/modprobe.d/`:
+
+```text
+# /etc/modprobe.d/no-usb.conf
+blacklist usb-storage              # que no se cargue solo al detectar el dispositivo
+install usb-storage /bin/false     # que falle cualquier intento de cargarlo
+```
+
+Con `blacklist` solo, el módulo todavía se puede cargar a mano o como dependencia de otro; la línea `install ... /bin/false` cierra esa puerta. Si el módulo hace falta muy temprano en el arranque, también hay que regenerar el initramfs (`dracut -f` en Rocky, `update-initramfs -u` en Ubuntu); para más adelante.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejKernel} />
+
+<ErroresComunes>
+  <ErrorComun titulo="El cambio con sysctl -w desapareció después del reinicio">
+    -w es temporal. Ponlo en un archivo de /etc/sysctl.d/ y aplícalo con `sysctl --system`.
+  </ErrorComun>
+  <ErrorComun titulo='"sysctl: cannot stat /proc/sys/...: No such file or directory"'>
+    El nombre está mal escrito, o el módulo que crea ese ajuste no está cargado (por ejemplo, los net.bridge.* necesitan br_netfilter).
+  </ErrorComun>
+  <ErrorComun titulo='"modprobe: FATAL: Module ... is in use"'>
+    Algo lo está usando (un sistema de archivos montado, una interfaz activa). lsmod muestra quién en la columna Used by.
+  </ErrorComun>
+  <ErrorComun titulo="Pusiste blacklist y el módulo se carga igual">
+    Lo pidió otro módulo o alguien lo cargó a mano. Agrega `install MÓDULO /bin/false`.
+  </ErrorComun>
+  <ErrorComun titulo="Editar archivos de /proc o /sys con un editor">
+    No son archivos de verdad y el editor puede fallar al guardar. Para /proc/sys usa sysctl; para lo demás, `echo valor | sudo tee archivo`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `/proc`: el estado del sistema (`meminfo`, `loadavg`, `cpuinfo`, `cmdline`) y una carpeta por proceso (`status`, `cmdline`, `fd`).
+- `/sys`: dispositivos (`/sys/class/net`, `/sys/block`) y módulos cargados (`/sys/module`).
+- `sysctl clave` para ver, `sysctl -w` para cambiar hasta el reinicio, un archivo en `/etc/sysctl.d/` + `sysctl --system` para que sea permanente.
+- Módulos: `lsmod`, `modinfo`, `modprobe`, `modprobe -r`. Cargar en el arranque: `/etc/modules-load.d/`. Bloquear: `blacklist` + `install MÓDULO /bin/false` en `/etc/modprobe.d/`.
+- Ni /proc ni /sys ocupan disco: el kernel los arma al leerlos.
+</Resumen>

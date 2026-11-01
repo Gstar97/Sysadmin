@@ -320,6 +320,7 @@ export class Shell {
       else chunks.push({ text, stream })
     }
     if (source.trim()) this.typed.push(source.replace(/\n$/, ''))
+    this.sys.refreshVirtual()
     const hist = this.expandHistory(source)
     if ('error' in hist) {
       push('err')(hist.error + '\n')

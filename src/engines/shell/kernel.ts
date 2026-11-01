@@ -169,3 +169,85 @@ export function chronyStart(sys: System) {
   }
 }
 
+
+// ---------------------------------------------------------------------------------------
+// /proc y /sys: se regeneran antes de cada comando para que reflejen el estado actual.
+// ---------------------------------------------------------------------------------------
+
+const STATE_NAMES: Record<string, string> = { R: 'R (running)', S: 'S (sleeping)', D: 'D (disk sleep)', T: 'T (stopped)', Z: 'Z (zombie)', I: 'I (idle)' }
+
+function put(sys: System, path: string, data: string) {
+  const dir = path.slice(0, path.lastIndexOf('/'))
+  if (!sys.vfs.exists(dir)) sys.vfs.mkdirp(dir, ROOT_CRED)
+  sys.vfs.writeFile(path, data, ROOT_CRED, { mode: 0o444 })
+}
+
+/** Lo que no cambia durante el ejercicio: /lib/modules, /sys/class/net y /sys/block. */
+export function staticKernelFs(sys: System) {
+  const rel = sys.sysctl.get('kernel.osrelease') ?? ''
+  const base = `/lib/modules/${rel}`
+  for (const m of Object.values(MODS)) put(sys, `${base}/${m.file}`, '')
+  put(sys, `${base}/modules.dep`, Object.values(MODS).map((m) => `${m.file}: ${m.deps.map((d) => MODS[d]?.file).filter(Boolean).join(' ')}`.trimEnd()).join('\n') + '\n')
+  put(sys, `/boot/config-${rel}`, '# Automatically generated file; DO NOT EDIT.\nCONFIG_64BIT=y\nCONFIG_X86_64=y\nCONFIG_XFS_FS=m\nCONFIG_EXT4_FS=m\nCONFIG_USB_STORAGE=m\n')
+  for (const ifc of [{ name: 'lo', mac: '00:00:00:00:00:00', up: true }, ...sys.interfaces]) {
+    const d = `/sys/class/net/${ifc.name}`
+    put(sys, `${d}/address`, ifc.mac + '\n')
+    put(sys, `${d}/operstate`, (ifc.name === 'lo' ? 'unknown' : ifc.up ? 'up' : 'down') + '\n')
+    put(sys, `${d}/mtu`, (ifc.name === 'lo' ? '65536' : '1500') + '\n')
+    if (ifc.name !== 'lo') put(sys, `${d}/speed`, ifc.up ? '1000\n' : '-1\n')
+  }
+  for (const disk of sys.storage.disks.values()) {
+    const d = `/sys/block/${disk.name}`
+    put(sys, `${d}/size`, `${Math.floor(disk.size / 512)}\n`)
+    put(sys, `${d}/queue/rotational`, disk.rota ? '1\n' : '0\n')
+    put(sys, `${d}/queue/scheduler`, disk.rota ? 'none [mq-deadline] kyber bfq\n' : '[none] mq-deadline kyber bfq\n')
+    put(sys, `${d}/device/model`, disk.model + '\n')
+  }
+  for (const k of ['scaling_governor', 'scaling_cur_freq']) {
+    for (let c = 0; c < 2; c++) put(sys, `/sys/devices/system/cpu/cpu${c}/cpufreq/${k}`, k === 'scaling_governor' ? 'performance\n' : '2400000\n')
+  }
+}
+
+/** /proc/PID, /proc/loadavg, /proc/meminfo, /sys/module y los valores de /proc/sys escritos a mano. */
+export function refreshKernelFs(sys: System, m: { load: number[]; running: number; memFreeKb: number; availKb: number; cacheKb: number; swapTotalKb: number; swapUsedKb: number }, memTotalKb: number) {
+  // Un "echo 1 > /proc/sys/..." cambia el valor del kernel, igual que sysctl -w.
+  for (const key of sys.sysctl.keys()) {
+    try {
+      const v = sys.vfs.readFile(`/proc/sys/${key.replace(/\./g, '/')}`, ROOT_CRED).trim()
+      if (v && v !== sys.sysctl.get(key)) sys.sysctl.set(key, v)
+    } catch {
+      writeProcSys(sys, key, sys.sysctl.get(key) ?? '')
+    }
+  }
+  const procs = sys.procs
+  const maxPid = procs.reduce((a, p) => Math.max(a, p.pid), 0)
+  put(sys, '/proc/loadavg', `${m.load.map((x) => x.toFixed(2)).join(' ')} ${m.running}/${procs.length + 120} ${maxPid}\n`)
+  const kb = (n: number) => `${String(Math.round(n)).padStart(8)} kB`
+  put(sys, '/proc/meminfo', `MemTotal:       ${kb(memTotalKb)}\nMemFree:        ${kb(m.memFreeKb)}\nMemAvailable:   ${kb(m.availKb)}\nBuffers:        ${kb(4268)}\nCached:         ${kb(m.cacheKb - 4268)}\nSwapCached:     ${kb(0)}\nSwapTotal:      ${kb(m.swapTotalKb)}\nSwapFree:       ${kb(m.swapTotalKb - m.swapUsedKb)}\n`)
+  // Una carpeta por proceso.
+  const alive = new Set(procs.map((p) => String(p.pid)))
+  for (const name of sys.vfs.readdir('/proc', ROOT_CRED)) {
+    if (/^\d+$/.test(name) && !alive.has(name)) sys.vfs.removeTree(`/proc/${name}`, ROOT_CRED)
+  }
+  for (const p of procs) {
+    const d = `/proc/${p.pid}`
+    const comm = (p.comm ?? p.cmd.split(/\s+/)[0].split('/').pop() ?? '').replace(/^\[|\]$/g, '').slice(0, 15)
+    const uid = sys.users.get(p.user)?.uid ?? 0
+    put(sys, `${d}/cmdline`, p.cmd.startsWith('[') ? '' : p.cmd.split(/\s+/).join('\0') + '\0')
+    put(sys, `${d}/comm`, comm + '\n')
+    const rss = Math.round((p.mem * memTotalKb) / 100)
+    put(sys, `${d}/status`, `Name:\t${comm}\nState:\t${STATE_NAMES[p.stat[0]] ?? p.stat}\nPid:\t${p.pid}\nPPid:\t${p.ppid}\nUid:\t${uid}\t${uid}\t${uid}\t${uid}\nVmRSS:\t${String(rss).padStart(8)} kB\nThreads:\t1\n`)
+  }
+  // /sys/module: una carpeta por módulo cargado.
+  const loaded = new Set(sys.modules)
+  if (sys.vfs.exists('/sys/module')) {
+    for (const name of sys.vfs.readdir('/sys/module', ROOT_CRED)) if (!loaded.has(name)) sys.vfs.removeTree(`/sys/module/${name}`, ROOT_CRED)
+  }
+  for (const mod of loaded) {
+    if (!sys.vfs.exists(`/sys/module/${mod}/refcnt`)) put(sys, `/sys/module/${mod}/refcnt`, '0\n')
+    for (const prm of MODS[mod]?.params ?? []) {
+      const name = prm.split(':')[0]
+      if (!sys.vfs.exists(`/sys/module/${mod}/parameters/${name}`)) put(sys, `/sys/module/${mod}/parameters/${name}`, /bool/.test(prm) ? 'N\n' : '0\n')
+    }
+  }
+}
