@@ -1,0 +1,152 @@
+tipo: troubleshooting
+titulo: El servicio se cae todas las noches a las 3:00
+descripcion: >-
+  Incidente simulado en un servidor Rocky. Cada decisión suma minutos. El sistema de pedidos de la
+  empresa amaneció caído por tercera noche seguida, y a las 9:00 empieza a recibir pedidos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Son las 8:10. El monitoreo avisa que la aplicación de pedidos no responde desde las 3:00.
+      Las dos noches anteriores pasó lo mismo, y quien estaba de guardia la arrancó con
+      systemctl start sin investigar.
+    opciones:
+      - { texto: "Mirar el estado del servicio con systemctl status pedidos", ir_a: n_status, minutos: 2 }
+      - texto: Arrancarla y seguir con el día, como las otras veces
+        ir_a: n_arrancar
+        minutos: 1
+      - texto: Reiniciar el servidor completo
+        ir_a: n1
+        minutos: 8
+        consecuencia: >-
+          Ocho minutos sin ningún servicio, y la aplicación vuelve. Pero no sabes por qué se cayó,
+          y esta noche va a volver a pasar.
+  n_arrancar:
+    situacion: >-
+      La aplicación vuelve a funcionar. Pero es la tercera noche: si no buscas la causa, mañana
+      a las 3:00 se va a caer otra vez, y cada noche se pierden los pedidos que entran por la web
+      de madrugada.
+    opciones:
+      - { texto: "Ahora sí, investigar con systemctl status pedidos", ir_a: n_status, minutos: 2 }
+  n_status:
+    situacion: El status muestra cómo terminó el proceso.
+    evidencia:
+      - titulo: systemctl status pedidos
+        contenido: |
+          × pedidos.service - Sistema de pedidos
+               Loaded: loaded (/etc/systemd/system/pedidos.service; enabled; preset: disabled)
+               Active: failed (Result: signal) since Mon 2026-11-02 03:00:04 UTC; 5h 10min ago
+              Process: 1422 ExecStart=/opt/pedidos/bin/pedidos (code=killed, signal=HUP)
+             Main PID: 1422 (code=killed, signal=HUP)
+    opciones:
+      - { texto: "Ver en el journal qué pasó en el servidor entre las 3:00 y las 3:05", ir_a: n_journal, minutos: 3 }
+      - texto: Agregar Restart=always con un drop-in y listo
+        ir_a: n_restart
+        minutos: 4
+      - texto: Buscar errores de la aplicación en su propio log
+        ir_a: n_applog
+        minutos: 4
+  n_restart:
+    situacion: >-
+      Con Restart=always, esta noche systemd la va a levantar sola a los pocos segundos. Es una
+      buena red de seguridad, pero no explica por qué la mata una señal HUP a la misma hora todas
+      las noches. Algo, o alguien, se la está mandando.
+    opciones:
+      - { texto: "Dejar el drop-in y buscar quién manda la señal, en el journal de las 3:00", ir_a: n_journal, minutos: 3 }
+  n_applog:
+    situacion: >-
+      El log de la aplicación, /var/log/pedidos/app.log, está vacío: lo crearon a las 3:00. Lo de
+      antes está en app.log.1, y la última línea es un pedido normal a las 2:58. La aplicación no
+      registró ningún error: la mataron desde afuera. Y que el log se haya renovado justo a esa
+      hora es una buena pista.
+    opciones:
+      - { texto: "Ver en el journal qué más pasó a las 3:00", ir_a: n_journal, minutos: 3 }
+  n_journal:
+    situacion: A las 3:00 se ejecutó otra cosa, justo antes de que se cayera la aplicación.
+    evidencia:
+      - titulo: journalctl --since "03:00" --until "03:05"
+        contenido: |
+          Nov 02 03:00:02 app01 systemd[1]: Starting rotar-pedidos.service - Rotar logs de pedidos...
+          Nov 02 03:00:03 app01 systemd[1]: pedidos.service: Main process exited, code=killed, status=1/HUP
+          Nov 02 03:00:03 app01 systemd[1]: pedidos.service: Failed with result 'signal'.
+          Nov 02 03:00:04 app01 systemd[1]: rotar-pedidos.service: Deactivated successfully.
+          Nov 02 03:00:04 app01 systemd[1]: Finished rotar-pedidos.service - Rotar logs de pedidos.
+    opciones:
+      - { texto: "Ver qué es rotar-pedidos: su timer y su unidad", ir_a: n_timer, minutos: 3 }
+      - texto: Desactivar rotar-pedidos para que no moleste
+        ir_a: n_desactivar
+        minutos: 2
+  n_desactivar:
+    situacion: >-
+      La aplicación ya no se cae, pero tres semanas después el disco se llena: nadie rota el log
+      de pedidos, que crece 2 GB por día. Ese timer existía por una razón.
+    opciones:
+      - { texto: "Volver atrás y entender qué hace rotar-pedidos", ir_a: n_timer, minutos: 4 }
+  n_timer:
+    situacion: Es un timer que alguien creó para rotar el log de pedidos todas las noches.
+    evidencia:
+      - titulo: systemctl list-timers rotar-pedidos.timer
+        contenido: |
+          NEXT                        LEFT     LAST                        PASSED      UNIT                ACTIVATES
+          Tue 2026-11-03 03:00:00 UTC 18h left Mon 2026-11-02 03:00:02 UTC 5h 10min ago rotar-pedidos.timer rotar-pedidos.service
+      - titulo: systemctl cat rotar-pedidos.service
+        contenido: |
+          # /etc/systemd/system/rotar-pedidos.service
+          [Unit]
+          Description=Rotar logs de pedidos
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/sbin/logrotate -f /etc/logrotate.d/pedidos
+    opciones:
+      - { texto: "Leer la configuración de logrotate de pedidos", ir_a: n_conf, minutos: 2 }
+  n_conf:
+    situacion: >-
+      El bloque postrotate le manda la señal HUP a la aplicación para que abra el log nuevo. La
+      documentación de la aplicación de pedidos dice: "Para reabrir los archivos de log, envíe la
+      señal USR1. Cualquier otra señal detiene el servicio".
+    evidencia:
+      - titulo: /etc/logrotate.d/pedidos
+        contenido: |
+          /var/log/pedidos/*.log {
+              rotate 14
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 0640 pedidos pedidos
+              postrotate
+                  /usr/bin/systemctl kill -s HUP pedidos.service
+              endscript
+          }
+      - titulo: dnf history (tres días atrás)
+        contenido: |
+          ID | Command line                    | Date and time    | Action(s)
+          41 | install ./pedidos-3.0-1.el10.rpm | 2026-10-30 17:12 | Upgrade
+    opciones:
+      - { texto: "Cambiar HUP por USR1 en el postrotate, probar con logrotate -d y forzar una rotación ahora, con la aplicación vigilada", ir_a: n_prueba, minutos: 6 }
+      - texto: Cambiar el postrotate por copytruncate sin consultar a nadie
+        ir_a: n_conf
+        minutos: 3
+        consecuencia: >-
+          Funcionaría (copytruncate no manda señales), pero la documentación ofrece una forma
+          oficial de reabrir el log. copytruncate puede perder algunas líneas en el momento de la
+          copia, y en un sistema de pedidos eso importa. Mejor seguir lo que dice el fabricante.
+  n_prueba:
+    situacion: >-
+      Con USR1, la rotación forzada funciona: hay un app.log nuevo, la aplicación escribe en él y
+      sigue activa. Revisando el historial, ves que la aplicación se actualizó a la versión 3.0
+      hace tres días, justo antes de la primera caída: el cambio de señal vino con esa versión.
+    opciones:
+      - { texto: "Dejar además Restart=on-failure con un drop-in, documentar y avisar al equipo", ir_a: n_fin, minutos: 5 }
+  n_fin:
+    final: exito
+    resumen: >-
+      La causa: la versión 3.0 de pedidos cambió la señal para reabrir los logs (de HUP a USR1),
+      y la rotación nocturna seguía mandando HUP, que ahora la detiene. Se corrigió el postrotate,
+      se probó con logrotate -d y -f, y se agregó Restart=on-failure como red de seguridad. El
+      método: status (cómo murió), journal en la ventana de tiempo exacta (qué más pasó), el
+      timer y su configuración (por qué), y el historial de paquetes (qué cambió). Arrancar el
+      servicio sin investigar, como las dos noches anteriores, solo postergaba el problema hasta
+      mañana. En el cuaderno técnico queda: revisar la configuración de logrotate cada vez que
+      se actualiza la aplicación.

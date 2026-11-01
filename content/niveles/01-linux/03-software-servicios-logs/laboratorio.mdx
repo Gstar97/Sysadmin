@@ -1,0 +1,39 @@
+---
+titulo: Un servidor web vigilado
+horas: 3
+verificacion:
+  - Actualicé el sistema y revisé el historial de dnf.
+  - Instalé nginx, lo arranqué y lo habilité, y comprobé que responde con curl.
+  - Agregué con un drop-in que nginx se reinicie solo, y lo probé matando el proceso.
+  - Creé una unidad propia y un timer que revisan la página cada 5 minutos, y los validé con systemd-analyze.
+  - Provoqué una falla y la encontré con systemctl --failed y journalctl.
+  - Revisé los logs de nginx, probé su rotación con logrotate -d y la forcé con -f.
+  - Reinicié y comprobé que todo volvió solo, y revisé el tiempo de arranque y los errores.
+  - Repetí el servicio y el timer en ubuntu01.
+  - Documenté el servidor web, las unidades propias y la rotación de logs.
+---
+
+import pasos from './lab-servicios.yaml'
+
+## Objetivo
+
+Poner en práctica todo el módulo en un servidor real: instalar software desde los repositorios, dejarlo funcionando como servicio, hacer que se recupere solo, vigilarlo con una unidad propia y un timer, y controlar sus logs. Es una tarea muy parecida a la que te van a pedir en tu primer trabajo con un servidor web.
+
+## Qué necesitas
+
+- rocky01 y ubuntu01 con acceso a internet, accesibles por SSH.
+- Unas tres horas. Los pasos quedan guardados.
+
+<Advertencia>
+Vas a matar procesos a propósito y a reiniciar el servidor. Toma la instantánea del primer paso. Si algo queda mal, volver a la instantánea lleva segundos.
+</Advertencia>
+
+## Pasos
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Si nginx se cae cada 10 minutos y `Restart=on-failure` lo levanta siempre, ¿el problema está resuelto? ¿Dónde mirarías?
+2. Tu control corre cada 5 minutos. Si la página estuvo caída entre las 3:01 y las 3:04, ¿te enterarías? ¿Qué cambiarías?
+3. ¿Por qué el servicio estado-web.service no tiene sección [Install]? ¿Qué pasaría si lo habilitaras en lugar del timer?

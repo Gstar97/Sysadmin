@@ -1,0 +1,154 @@
+tipo: pasos
+titulo: Un servidor web vigilado
+descripcion: >-
+  Vas a instalar nginx en rocky01 como servicio, hacer que se recupere solo si se cae, crear una
+  unidad propia con un timer que revise cada 5 minutos que la página responda, y revisar y rotar
+  sus logs. Todo por SSH desde tu PC. Al final repites lo que cambia en ubuntu01.
+pasos:
+  - titulo: Toma una instantánea
+    detalle: >-
+      Antes de instalar y cambiar servicios, toma una instantánea de rocky01 llamada
+      antes-de-servicios. En este laboratorio vas a reiniciar el servidor al menos una vez.
+    comprobar: La instantánea aparece en tu hipervisor.
+  - titulo: Actualiza el sistema
+    comandos:
+      - sudo dnf check-update
+      - sudo dnf upgrade -y
+      - dnf history
+    comprobar: "`dnf history` muestra la transacción de hoy con la cantidad de paquetes actualizados."
+    si_falla: >-
+      Si dice que no hay conexión con los repositorios, revisa la red de la máquina virtual
+      (`ping -c 2 rockylinux.org`). Si en la lista aparece un kernel nuevo, reinicia con
+      `sudo reboot` antes de seguir.
+  - titulo: Instala nginx y déjalo funcionando
+    comandos:
+      - sudo dnf install -y nginx
+      - systemctl status nginx
+      - sudo systemctl enable --now nginx
+      - systemctl is-active nginx; systemctl is-enabled nginx
+      - curl -I http://localhost
+    comprobar: "`curl -I` responde `HTTP/1.1 200 OK` y `is-enabled` dice enabled."
+    si_falla: >-
+      Si nginx no arranca, sigue el método de la lección 1.3.3: `systemctl status nginx`,
+      `sudo journalctl -xeu nginx` y `sudo nginx -t`. Si otro programa usa el puerto 80,
+      `sudo ss -tlnp` te dice cuál.
+  - titulo: Pon una página propia
+    detalle: >-
+      En Rocky, nginx sirve los archivos de /usr/share/nginx/html. Opcional: si quieres verla
+      desde el navegador de tu PC, abre el puerto en el firewall (lo vas a ver en detalle en el
+      módulo 1.6).
+    comandos:
+      - echo "<h1>rocky01 funciona</h1>" | sudo tee /usr/share/nginx/html/index.html
+      - curl http://localhost
+      - "sudo firewall-cmd --add-service=http --permanent && sudo firewall-cmd --reload"
+    comprobar: "`curl http://localhost` muestra tu título; desde la PC, http://IP-de-rocky01 también."
+  - titulo: Haz que nginx se recupere solo
+    detalle: >-
+      Con un drop-in, agrega `Restart=on-failure` y `RestartSec=5` a nginx, sin tocar el
+      archivo del paquete. Después simula una caída matando el proceso principal.
+    comandos:
+      - sudo systemctl edit nginx
+      - systemctl cat nginx
+      - systemctl show -p Restart --value nginx
+      - sudo kill -9 $(systemctl show -p MainPID --value nginx)
+      - sleep 6; systemctl status nginx
+    comprobar: >-
+      `show` dice on-failure, y después de matarlo, el status muestra un Main PID nuevo y en el
+      journal aparece "Scheduled restart job".
+    si_falla: >-
+      En el editor de systemctl edit, escribe las líneas entre los dos comentarios de arriba:
+      `[Service]`, `Restart=on-failure` y `RestartSec=5`. Si lo escribiste debajo de "Edits below
+      this comment will be discarded", se descarta.
+  - titulo: Crea el script de control
+    detalle: El script revisa que la página responda con código 200 y lo dice; si no, termina con error.
+    comandos:
+      - |-
+        sudo tee /usr/local/bin/estado-web.sh > /dev/null <<'EOF'
+        #!/bin/bash
+        codigo=$(curl -s -o /dev/null -w '%{http_code}' http://localhost)
+        if [ "$codigo" = "200" ]; then
+            echo "web OK (código $codigo)"
+        else
+            echo "web CAÍDA (código $codigo)"
+            exit 1
+        fi
+        EOF
+      - sudo chmod 755 /usr/local/bin/estado-web.sh
+      - /usr/local/bin/estado-web.sh
+    comprobar: El script dice "web OK (código 200)".
+  - titulo: Conviértelo en servicio con su timer
+    detalle: >-
+      Crea `/etc/systemd/system/estado-web.service` (Type=oneshot, ExecStart con la ruta del
+      script) y `/etc/systemd/system/estado-web.timer` con `OnCalendar=*:0/5` y
+      `WantedBy=timers.target`. Después habilita el timer.
+    comandos:
+      - sudo nano /etc/systemd/system/estado-web.service
+      - sudo nano /etc/systemd/system/estado-web.timer
+      - systemd-analyze verify /etc/systemd/system/estado-web.*
+      - systemd-analyze calendar '*:0/5'
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now estado-web.timer
+      - systemctl list-timers estado-web.timer
+    comprobar: "`list-timers` muestra estado-web.timer con la próxima ejecución en menos de 5 minutos."
+    si_falla: >-
+      Si verify o enable se quejan, revisa los nombres de las secciones ([Unit], [Service],
+      [Timer], [Install]) y que ExecStart tenga la ruta completa. Puedes probar tu archivo en el
+      editor de la lección 1.3.4.
+  - titulo: Provoca una falla y mírala en el journal
+    detalle: Detén nginx, ejecuta el control a mano, y vuelve a arrancarlo.
+    comandos:
+      - sudo systemctl stop nginx
+      - sudo systemctl start estado-web.service
+      - systemctl --failed
+      - journalctl -u estado-web -n 10
+      - sudo systemctl start nginx
+      - sudo systemctl start estado-web.service; systemctl is-failed estado-web
+    comprobar: >-
+      Con nginx detenido, estado-web aparece en `--failed` y el journal dice "web CAÍDA". Al
+      volver, el control termina bien.
+    si_falla: >-
+      Si estado-web sigue apareciendo en --failed después de arreglarlo, es el estado de la
+      ejecución anterior: `sudo systemctl reset-failed estado-web` lo limpia.
+  - titulo: Revisa los logs de nginx y su rotación
+    detalle: >-
+      Genera algo de tráfico, mira el log de accesos y la configuración de logrotate que trajo el
+      paquete, y pruébala.
+    comandos:
+      - for i in $(seq 1 20); do curl -s -o /dev/null http://localhost; done
+      - sudo tail -5 /var/log/nginx/access.log
+      - cat /etc/logrotate.d/nginx
+      - sudo logrotate -d /etc/logrotate.d/nginx
+      - sudo logrotate -f /etc/logrotate.d/nginx
+      - sudo ls -l /var/log/nginx
+      - curl -s -o /dev/null http://localhost; sudo tail -1 /var/log/nginx/access.log
+    comprobar: >-
+      Hay un access.log nuevo con la última visita, y el anterior quedó como access.log.1 (o con
+      la fecha, según la configuración).
+    si_falla: >-
+      Si el access.log nuevo queda vacío y la visita aparece en el viejo, el postrotate no le
+      avisó a nginx. Revisa el bloque postrotate de /etc/logrotate.d/nginx.
+  - titulo: Reinicia y revisa el arranque
+    comandos:
+      - sudo reboot
+      - journalctl --list-boots
+      - systemd-analyze; systemd-analyze blame | head
+      - journalctl -b -p err
+      - systemctl is-active nginx; systemctl list-timers estado-web.timer
+    comprobar: >-
+      Después del reinicio, nginx está activo, el timer sigue programado y `--list-boots` muestra
+      al menos dos arranques (si muestra uno solo, el journal no se guarda en disco: revisa la
+      lección 1.3.5).
+  - titulo: Repite lo que cambia en ubuntu01
+    detalle: |-
+      En ubuntu01 instala nginx y crea el mismo timer. Ten en cuenta:
+      - Primero sudo apt update; después sudo apt install nginx. En Ubuntu, nginx queda arrancado y habilitado apenas se instala.
+      - La página está en /var/www/html/ (el archivo por defecto es index.nginx-debian.html).
+      - El firewall es ufw (si está activo: sudo ufw allow http).
+      - Los mensajes generales están en /var/log/syslog y las actualizaciones en /var/log/apt/history.log.
+    comprobar: El timer de ubuntu01 aparece en list-timers y el journal de estado-web dice "web OK".
+  - titulo: Documenta
+    detalle: >-
+      En tu cuaderno técnico anota: qué instalaste y de qué repositorio, el drop-in de nginx, las
+      dos unidades propias con su contenido, cada cuánto corre el control y dónde mirar sus
+      resultados, y cómo se rotan los logs de nginx.
+    comprobar: Otra persona podría saber, leyendo tu documento, por qué nginx se reinicia solo y dónde ver si la página estuvo caída anoche.
