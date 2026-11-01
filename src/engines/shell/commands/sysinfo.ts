@@ -3,7 +3,7 @@ import { BUILTINS, COMMANDS, formatPrintf, register, type CommandContext } from 
 import { commOf, priorityName, priorityNumber, type JournalEntry } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
-import { CPU_FLAGS, dmiBiosText, efibootmgrText, fdiskText, lsblkText } from '../hardware'
+import { CPU_FLAGS, dmiBiosText, efibootmgrText } from '../hardware'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -427,7 +427,9 @@ register('free', {
     const cols = ['total', 'used', 'free', 'shared', 'buff/cache', 'available']
     ctx.out(`${''.padEnd(8)}${cols.map((c) => c.padStart(12)).join('')}\n`)
     ctx.out(`${'Mem:'.padEnd(8)}${mem.map((v) => row(v).padStart(12)).join('')}\n`)
-    ctx.out(`${'Swap:'.padEnd(8)}${[2097148, 0, 2097148].map((v) => row(v).padStart(12)).join('')}\n`)
+    const swapKb = ctx.sys.storage.swaps.reduce((a, w) => a + w.size / 1024 - 4, 0)
+    const swapUsed = ctx.sys.storage.swaps.reduce((a, w) => a + w.used / 1024, 0)
+    ctx.out(`${'Swap:'.padEnd(8)}${[swapKb, swapUsed, swapKb - swapUsed].map((v) => row(v).padStart(12)).join('')}\n`)
     return 0
   },
 })
@@ -929,69 +931,8 @@ register('lspci', {
   },
 })
 
-register('df', {
-  usage: 'df [OPTION]... [FILE]...',
-  summary: '  -h, --human-readable (potencias de 1024)  -H, --si (potencias de 1000)  -T, --print-type',
-  run(ctx) {
-    const si = ctx.args.some((a) => /^-\w*H/.test(a) || a === '--si')
-    const h = si || ctx.args.some((a) => /^-\w*h/.test(a) || a === '--human-readable')
-    const T = ctx.args.some((a) => /^-\w*T/.test(a))
-    const root = ctx.sys.distro === 'rocky' ? '/dev/mapper/rl-root' : '/dev/mapper/ubuntu--vg-ubuntu--lv'
-    const fsType = ctx.sys.distro === 'rocky' ? 'xfs' : 'ext4'
-    const rows = [
-      [root, fsType, 17_811_456, 4_712_840, '/'],
-      ...(ctx.sys.firmware === 'uefi' ? ([['/dev/sda1', 'vfat', 613_160, 7_256, '/boot/efi']] as const) : []),
-      [ctx.sys.firmware === 'uefi' ? '/dev/sda2' : ctx.sys.distro === 'rocky' ? '/dev/sda1' : '/dev/sda2', ctx.sys.distro === 'rocky' ? 'xfs' : 'ext4', 983_040, 296_960, '/boot'],
-      ['tmpfs', 'tmpfs', 1_921_788, 0, '/dev/shm'],
-      ['tmpfs', 'tmpfs', 768_716, 8_840, '/run'],
-    ] as const
-    // Como coreutils: redondea hacia arriba, con un decimal por debajo de 10.
-    const human = (v: number, suffix: string) => `${v < 10 ? (Math.ceil(v * 10) / 10).toFixed(1) : Math.ceil(v)}${suffix}`
-    const fmt = (kb: number) => {
-      if (!h) return String(kb)
-      if (kb === 0) return '0'
-      const base = si ? 1000 : 1024
-      const bytes = kb * 1024
-      return bytes >= base ** 3 ? human(bytes / base ** 3, 'G') : human(bytes / base ** 2, 'M')
-    }
-    ctx.out(`${'Filesystem'.padEnd(36)}${T ? 'Type   ' : ''}${(h ? 'Size' : '1K-blocks').padStart(10)}${'Used'.padStart(10)}${'Avail'.padStart(10)} Use% Mounted on\n`)
-    for (const [dev, type, size, used, mount] of rows) {
-      ctx.out(`${dev.padEnd(36)}${T ? type.padEnd(7) : ''}${fmt(size).padStart(10)}${fmt(used).padStart(10)}${fmt(size - used).padStart(10)} ${String(Math.ceil((used / size) * 100)).padStart(3)}% ${mount}\n`)
-    }
-    return 0
-  },
-})
 
-register('lsblk', {
-  usage: 'lsblk',
-  run(ctx) {
-    ctx.out(lsblkText(ctx.sys.distro, ctx.sys.firmware))
-    return 0
-  },
-})
 
-register('fdisk', {
-  usage: 'fdisk -l [DEVICE]',
-  summary: '  -l, --list  muestra las tablas de particiones',
-  path: '/usr/sbin',
-  run(ctx) {
-    if (!ctx.args.some((a) => a === '-l' || a === '--list')) {
-      ctx.err('[simulador] En este simulador fdisk solo lista las particiones: usa fdisk -l. Modificar particiones se practica en el nivel de Linux.\n')
-      return 1
-    }
-    if (ctx.sh.user !== 'root') {
-      ctx.err('fdisk: cannot open /dev/sda: Permission denied\n')
-      return 1
-    }
-    const dev = ctx.args.find((a) => a.startsWith('/dev/'))
-    if (dev && dev !== '/dev/sda') {
-      ctx.err(`fdisk: cannot open ${dev}: No such file or directory\n`)
-      return 1
-    }
-    ctx.out(fdiskText(ctx.sys.distro, ctx.sys.firmware))
-    return 0
-  },
-})
 
 register('efibootmgr', {
   usage: 'efibootmgr [-v]',

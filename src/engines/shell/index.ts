@@ -5,6 +5,7 @@ import './commands/sysinfo'
 import './commands/systemd'
 import './commands/logs'
 import './commands/boot'
+import './commands/storage'
 import './commands/pkg'
 import './commands/net'
 import { commandPackage, OTHER_FAMILY } from './packages'
@@ -12,6 +13,7 @@ import { bashStateSchema, type BashCheck, type BashStateInput } from './schema'
 import { COMMANDS, Shell } from './shell'
 import { System } from './system'
 import { modeString, ROOT_CRED, type Inode } from './vfs'
+import { GiB, parseSize } from './storage'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
@@ -193,6 +195,80 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
   }
   if ('paquete' in check) {
     return { ok: sys.installed.has(check.paquete) === check.instalado, label: `paquete ${check.paquete} ${check.instalado ? 'instalado' : 'no instalado'}` }
+  }
+  if ('montaje' in check) {
+    const st = sys.storage
+    const target = check.montaje.replace(/\/$/, '') || '/'
+    const m = st.mounts.find((x) => x.target === target)
+    if (check.montado === false) return { ok: !m, label: `${target} desmontado` }
+    let ok = !!m
+    const parts: string[] = []
+    if (check.dispositivo) {
+      ok &&= !!m && m.dev === st.canonical(check.dispositivo)
+      parts.push(`con ${check.dispositivo}`)
+    }
+    if (check.tipo) {
+      ok &&= m?.fstype === check.tipo
+      parts.push(`(${check.tipo})`)
+    }
+    if (check.tamano_min) {
+      const min = parseSize(check.tamano_min, GiB) ?? 0
+      ok &&= !!m?.dev && (st.sigs.get(m.dev)?.size ?? 0) >= min * 0.98
+      parts.push(`de al menos ${check.tamano_min}`)
+    }
+    return { ok, label: `${target} montado ${parts.join(' ')}`.trim() }
+  }
+  if ('fstab' in check) {
+    const st = sys.storage
+    const target = check.fstab.replace(/\/$/, '') || '/'
+    const e = st.readFstab().find((x) => x.target === target || (target === 'swap' && x.type === 'swap'))
+    if (check.existe === false) return { ok: !e, label: `/etc/fstab sin entrada para ${target}` }
+    let ok = !!e
+    const parts: string[] = []
+    if (check.tipo) {
+      ok &&= e?.type === check.tipo
+      parts.push(check.tipo)
+    }
+    if (check.opciones_incluye) {
+      ok &&= !!e && e.options.split(',').includes(check.opciones_incluye)
+      parts.push(`con ${check.opciones_incluye}`)
+    }
+    if (check.por_uuid) {
+      ok &&= !!e && e.spec.startsWith('UUID=') && !!st.resolveSpec(e.spec)
+      parts.push('por UUID')
+    }
+    return { ok, label: `/etc/fstab monta ${target} ${parts.join(' ')}`.trim() }
+  }
+  if ('volumen' in check) {
+    const [vgName, lvName] = check.volumen.split('/')
+    const lv = sys.storage.vgs.get(vgName)?.lvs.find((l) => l.name === lvName)
+    if (check.existe === false) return { ok: !lv, label: `el volumen ${check.volumen} no existe` }
+    let ok = !!lv
+    if (check.tamano_min) ok &&= !!lv && lv.size >= (parseSize(check.tamano_min, GiB) ?? 0) * 0.98
+    return { ok, label: `volumen lógico ${check.volumen}${check.tamano_min ? ` de al menos ${check.tamano_min}` : ''}` }
+  }
+  if ('grupo_volumenes' in check) {
+    const vg = sys.storage.vgs.get(check.grupo_volumenes)
+    if (check.existe === false) return { ok: !vg, label: `el grupo de volúmenes ${check.grupo_volumenes} no existe` }
+    let ok = !!vg
+    if (check.discos) ok &&= !!vg && check.discos.every((d) => vg.pvs.includes(d.startsWith('/dev/') ? d : `/dev/${d}`))
+    return { ok, label: `grupo de volúmenes ${check.grupo_volumenes}${check.discos ? ` con ${check.discos.join(' y ')}` : ''}` }
+  }
+  if ('particion' in check) {
+    const st = sys.storage
+    const size = st.size(check.particion)
+    if (check.existe === false) return { ok: size === undefined, label: `${check.particion} no existe` }
+    let ok = size !== undefined
+    if (check.tamano_min) ok &&= (size ?? 0) >= (parseSize(check.tamano_min, GiB) ?? 0) * 0.98
+    if (check.fs) ok &&= st.sigs.get(check.particion)?.type === check.fs
+    return { ok, label: `partición ${check.particion}${check.fs ? ` con ${check.fs}` : ''}` }
+  }
+  if ('swap' in check) {
+    const st = sys.storage
+    const key = st.canonical(check.swap) ?? check.swap
+    const on = st.swaps.some((w) => w.path === key)
+    const want = check.activa !== false
+    return { ok: on === want, label: `swap ${check.swap} ${want ? 'activa' : 'desactivada'}` }
   }
   if ('proceso' in check) {
     const found = sys.procs.some((p) => p.cmd.includes(check.proceso))

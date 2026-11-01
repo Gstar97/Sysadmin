@@ -23,6 +23,8 @@ export interface Inode {
   acl?: Acl
   /** ACL por defecto de un directorio: la heredan los archivos que se crean adentro. */
   defaultAcl?: DefaultAcl
+  /** Dispositivo de bloques (/dev/sda): números mayor y menor. */
+  blockDev?: [number, number]
 }
 
 export interface Acl {
@@ -110,6 +112,8 @@ export class VFS {
   readonly root = 1
   /** Hora de referencia para las fechas de modificación. */
   now: () => number = () => Date.now()
+  /** Se llama cuando un archivo pierde su último nombre (para los archivos abiertos por procesos). */
+  onRelease?: (ino: number, node: Inode, path: string) => void
 
   constructor() {
     this.inodes.set(1, { ino: 1, type: 'dir', mode: 0o755, uid: 0, gid: 0, mtime: Date.now(), data: '', entries: new Map(), nlink: 2 })
@@ -337,7 +341,10 @@ export class VFS {
     parent.entries!.delete(name)
     parent.mtime = this.now()
     child.nlink--
-    if (child.nlink <= 0) this.inodes.delete(ino)
+    if (child.nlink <= 0) {
+      this.onRelease?.(ino, child, normalizePath(path))
+      this.inodes.delete(ino)
+    }
   }
 
   rmdir(path: string, cred: Cred): void {
@@ -400,7 +407,10 @@ export class VFS {
         this.inodes.delete(existing)
       } else {
         ex.nlink--
-        if (ex.nlink <= 0) this.inodes.delete(existing)
+        if (ex.nlink <= 0) {
+          this.onRelease?.(existing, ex, dest)
+          this.inodes.delete(existing)
+        }
       }
     }
     src.parent.entries!.delete(src.name)
@@ -468,6 +478,23 @@ export class VFS {
     }
   }
 
+  /** Crea un directorio suelto (sin padre): la raíz de un sistema de archivos nuevo. */
+  newDetachedDir(mode = 0o755): number {
+    const node = this.newInode('dir', mode, ROOT_CRED)
+    return node.ino
+  }
+
+  /** Monta: la carpeta de la ruta pasa a mostrar el contenido del inodo dado. Devuelve el inodo que tapó. */
+  mountAt(path: string, ino: number): number {
+    const abs = normalizePath(path)
+    const parent = this.get(this.resolve(dirname(abs), ROOT_CRED))
+    const name = basename(abs)
+    const prev = parent.entries!.get(name)
+    if (prev === undefined) throw new FsError('ENOENT', path)
+    parent.entries!.set(name, ino)
+    return prev
+  }
+
   /** Recorre un árbol desde una ruta (para find, du, ls -R). */
   walk(
     path: string,
@@ -492,8 +519,8 @@ export class VFS {
 }
 
 /** Convierte permisos numéricos en el formato de ls -l (por ejemplo drwxr-sr-x). */
-export function modeString(node: Pick<Inode, 'type' | 'mode'>): string {
-  const t = node.type === 'dir' ? 'd' : node.type === 'symlink' ? 'l' : '-'
+export function modeString(node: Pick<Inode, 'type' | 'mode'> & { blockDev?: [number, number] }): string {
+  const t = node.blockDev ? 'b' : node.type === 'dir' ? 'd' : node.type === 'symlink' ? 'l' : '-'
   const m = node.mode
   const tri = (shift: number, special: number, ch: string) => {
     const r = m & (4 << shift) ? 'r' : '-'

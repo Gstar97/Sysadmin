@@ -1,5 +1,6 @@
 import type { BashState } from './schema'
 import { builtinTimers, daemonReload, type Timer, type UnitDef } from './units'
+import { applyStateStorage, installLayout, parseSize, Storage, GiB } from './storage'
 import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
 import { normalizePath, ROOT_CRED, VFS, type Cred } from './vfs'
@@ -149,6 +150,7 @@ export class System {
   users = new Map<string, User>()
   groups = new Map<string, Group>()
   services = new Map<string, Service>()
+  storage: Storage
   timers = new Map<string, Timer>()
   /** Target con el que arranca el sistema (systemctl get-default). */
   defaultTarget = 'multi-user.target'
@@ -237,6 +239,11 @@ export class System {
     }
     for (const g of state.grupos) for (const m of g.miembros) if (this.users.has(m)) this.addMember(g.nombre, m)
 
+    // Discos: el del sistema (como lo deja el instalador) y los extra del ejercicio.
+    this.storage = new Storage(this)
+    installLayout(this.storage, this, state.discos, state.uso_raiz ? parseSize(state.uso_raiz, GiB) : undefined)
+    applyStateStorage(this.storage, this, state.discos, state.volumenes)
+
     // Archivos del ejercicio
     const entries = Object.entries(state.archivos).sort(([a], [b]) => a.length - b.length)
     for (const [path, spec] of entries) {
@@ -253,6 +260,7 @@ export class System {
       const node = this.vfs.stat(abs, ROOT_CRED, false)
       if (s.modo) node.mode = parseInt(s.modo, 8)
       else if (s.tipo === 'directorio') node.mode = 0o755
+      if (s.tamano) node.size = parseSize(s.tamano, 1)
       // Sin dueño indicado, lo que está dentro del home de un usuario es de ese usuario
       // (incluidas las carpetas intermedias que se crearon para el archivo).
       const homeUser = [...this.users.values()].find((u) => u.uid >= 1000 && (abs === u.home || abs.startsWith(`${u.home}/`)))
@@ -322,7 +330,27 @@ export class System {
 
     // Procesos y journal
     this.createBaseProcesses(state.usuario)
-    for (const p of state.procesos) this.spawn(p.usuario, p.comando, p.cpu, p.mem)
+    for (const [name, s] of Object.entries(state.servicios)) {
+      const svc = this.services.get(name)
+      for (const f of s.abiertos) {
+        if (!svc?.pid) continue
+        try {
+          this.storage.openFiles.push({ pid: svc.pid, path: normalizePath(f), ino: this.vfs.resolve(f, ROOT_CRED) })
+        } catch {
+          // no existe
+        }
+      }
+    }
+    for (const p of state.procesos) {
+      const proc = this.spawn(p.usuario, p.comando, p.cpu, p.mem)
+      for (const f of p.abiertos) {
+        try {
+          this.storage.openFiles.push({ pid: proc.pid, path: normalizePath(f), ino: this.vfs.resolve(f, ROOT_CRED) })
+        } catch {
+          // el archivo no existe: se ignora
+        }
+      }
+    }
     for (const j of state.journal) {
       this.journal.push({ time: now - j.hace_minutos * 60_000, unit: j.unidad, priority: priorityNumber(j.prioridad), message: j.mensaje, ident: j.unidad.replace(/\.service$/, '') })
     }
@@ -729,6 +757,7 @@ export class System {
           ]
     for (const [name, id, home] of system) this.addSystemUser(name, id, home, name)
     this.addGroup(this.adminGroup, this.distro === 'rocky' ? 10 : 27)
+    this.addGroup('disk', 6)
     if (this.distro === 'rocky') {
       this.addGroup('nginx', 990)
       this.addGroup('apache', 48)

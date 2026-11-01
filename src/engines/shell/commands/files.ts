@@ -56,7 +56,7 @@ register('ls', {
       if (f.has('long')) {
         if (showTotal) ctx.out(`total ${list.reduce((s, e) => s + Math.ceil(sizeOf(e.node) / 4096) * 4, 0)}\n`)
         const rows = list.map((e) => {
-          const size = f.has('human') ? humanSize(sizeOf(e.node)) : String(sizeOf(e.node))
+          const size = e.node.blockDev ? `${e.node.blockDev[0]}, ${e.node.blockDev[1]}` : f.has('human') ? humanSize(sizeOf(e.node)) : String(sizeOf(e.node))
           const target = e.node.type === 'symlink' ? ` -> ${e.node.data}` : ''
           return {
             ino: String(e.node.ino),
@@ -176,7 +176,7 @@ register('rmdir', {
  * Pregunta de confirmación (rm -i, cp -i, mv -i). Si no hay respuesta en la entrada, la terminal
  * simulada responde "y" y lo aclara, porque no puede quedarse esperando.
  */
-function askYes(ctx: CommandContext, question: string, noteShown: { v: boolean }): boolean {
+export function askYes(ctx: CommandContext, question: string, noteShown: { v: boolean }): boolean {
   ctx.err(question)
   let answer = ctx.stdin.readLine()
   if (answer === null) {

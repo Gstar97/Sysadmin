@@ -9,8 +9,12 @@ const fileSpecSchema = z.union([
     dueno: z.string().optional(),
     grupo: z.string().optional(),
     destino: z.string().optional(),
+    /** Tamaño aparente del archivo (por ejemplo 2G): para simular archivos grandes. */
+    tamano: z.string().optional(),
   }),
 ])
+
+const fsKind = z.enum(['xfs', 'ext4', 'vfat', 'swap'])
 
 export const bashStateSchema = z.strictObject({
   distro: z.enum(['rocky', 'ubuntu']).default('rocky'),
@@ -54,6 +58,8 @@ export const bashStateSchema = z.strictObject({
         hace_minutos: z.number().optional(),
         /** Timers: hace cuánto se ejecutó por última vez. */
         ultima_hace_minutos: z.number().optional(),
+        /** Archivos que el proceso del servicio tiene abiertos. */
+        abiertos: z.array(z.string()).default([]),
       }),
     )
     .default({}),
@@ -72,9 +78,56 @@ export const bashStateSchema = z.strictObject({
         comando: z.string(),
         cpu: z.number().default(0),
         mem: z.number().default(0.1),
+        /** Archivos que el proceso tiene abiertos (si se borran, siguen ocupando espacio). */
+        abiertos: z.array(z.string()).default([]),
       }),
     )
     .default([]),
+  /** Discos extra (sdb, sdc...), vacíos o con particiones. */
+  discos: z
+    .array(
+      z.strictObject({
+        nombre: z.string().regex(/^sd[b-z]$/),
+        tamano: z.string(),
+        tabla: z.enum(['gpt', 'msdos']).optional(),
+        particiones: z
+          .array(
+            z.strictObject({
+              tamano: z.string(),
+              tipo: z.enum(['linux', 'lvm', 'swap']).default('linux'),
+              fs: fsKind.optional(),
+              montaje: z.string().optional(),
+              usado: z.string().optional(),
+              fstab: z.boolean().default(true),
+            }),
+          )
+          .default([]),
+      }),
+    )
+    .default([]),
+  /** Grupos de volúmenes LVM extra, armados sobre discos enteros o particiones. */
+  volumenes: z
+    .array(
+      z.strictObject({
+        vg: z.string(),
+        discos: z.array(z.string()),
+        lvs: z
+          .array(
+            z.strictObject({
+              nombre: z.string(),
+              tamano: z.string(),
+              fs: fsKind.optional(),
+              montaje: z.string().optional(),
+              usado: z.string().optional(),
+              fstab: z.boolean().default(true),
+            }),
+          )
+          .default([]),
+      }),
+    )
+    .default([]),
+  /** Espacio ocupado en la raíz (por defecto, unos 4,3 GiB del sistema instalado). */
+  uso_raiz: z.string().optional(),
   red: z
     .strictObject({
       interfaces: z
@@ -151,6 +204,27 @@ export const bashCheckSchema = z.union([
   z.strictObject({ comando_usado: z.string() }),
   z.strictObject({ directorio_actual: z.string() }),
   z.strictObject({ usuario_actual: z.string() }),
+  z.strictObject({
+    /** Carpeta que tiene que estar montada (o no). */
+    montaje: z.string(),
+    montado: z.boolean().default(true),
+    dispositivo: z.string().optional(),
+    tipo: z.string().optional(),
+    /** Tamaño mínimo del sistema de archivos montado (por ejemplo 4G). */
+    tamano_min: z.string().optional(),
+  }),
+  z.strictObject({
+    /** Entrada de /etc/fstab para esa carpeta. */
+    fstab: z.string(),
+    existe: z.boolean().default(true),
+    tipo: z.string().optional(),
+    opciones_incluye: z.string().optional(),
+    por_uuid: z.boolean().optional(),
+  }),
+  z.strictObject({ volumen: z.string(), existe: z.boolean().default(true), tamano_min: z.string().optional() }),
+  z.strictObject({ grupo_volumenes: z.string(), existe: z.boolean().default(true), discos: z.array(z.string()).optional() }),
+  z.strictObject({ particion: z.string(), existe: z.boolean().default(true), tamano_min: z.string().optional(), fs: z.string().optional() }),
+  z.strictObject({ swap: z.string(), activa: z.boolean().default(true) }),
 ])
 
 export type BashState = z.infer<typeof bashStateSchema>

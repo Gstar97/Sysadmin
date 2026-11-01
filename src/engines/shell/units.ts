@@ -384,6 +384,8 @@ export function needsReload(sys: System, unit: string): boolean {
 
 /** systemctl daemon-reload: vuelve a leer todas las unidades. */
 export function daemonReload(sys: System) {
+  // systemd también vuelve a leer /etc/fstab (las unidades .mount).
+  sys.storage.fstabSeen = sys.storage.fstabText()
   for (const svc of [...sys.services.values()]) {
     // Una unidad propia cuyo archivo se borró desaparece (si estaba detenida).
     if (svc.unit?.custom && !customFragment(sys, `${svc.name}.service`) && !svc.pkg) {
