@@ -6,6 +6,7 @@ import { validateFstab } from './fstab'
 import { findDirectives, validateNginx } from './nginx'
 import { validateSshd } from './sshd'
 import { validateSudoers } from './sudoers'
+import { validateSystemd } from './systemd'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -36,6 +37,8 @@ export function validateConfig(lang: ConfigLanguage, text: string): Validation {
       return { diagnostics: validateFstab(text).diagnostics }
     case 'sudoers':
       return { diagnostics: validateSudoers(text).diagnostics }
+    case 'systemd':
+      return validateSystemd(text)
     case 'texto':
       return { diagnostics: [] }
   }
@@ -103,6 +106,11 @@ export function evaluateRules(lang: ConfigLanguage, text: string, rules: ConfigR
           return { ok: found.some((d) => !re || re.test(d.args.join(' '))), mensaje: r.mensaje }
         }
         const entries = validation.entries ?? []
+        if (lang === 'systemd') {
+          // En systemd vale la última aparición dentro de la sección (contexto = Service, Timer...).
+          const last = entries.filter((e) => e.key === `${r.contexto}.${r.nombre}`).at(-1)
+          return { ok: !!last && (!re || re.test(last.value)), mensaje: r.mensaje }
+        }
         const found = entries.filter((e) => e.key.toLowerCase() === r.nombre.toLowerCase())
         // En sshd vale la primera aparición.
         const first = found[0]

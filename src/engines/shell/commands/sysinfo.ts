@@ -1,6 +1,6 @@
 import { parseArgs } from '../args'
 import { BUILTINS, COMMANDS, formatPrintf, register, type CommandContext } from '../shell'
-import { commOf, priorityName, priorityNumber, type JournalEntry, type Service } from '../system'
+import { commOf, priorityName, priorityNumber, type JournalEntry } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
 import { CPU_FLAGS, dmiBiosText, efibootmgrText, fdiskText, lsblkText } from '../hardware'
@@ -14,295 +14,8 @@ function journalTime(ms: number): string {
   return `${MONTHS[d.getMonth()]} ${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function ago(ms: number): string {
-  const s = Math.max(1, Math.round((Date.now() - ms) / 1000))
-  if (s < 60) return `${s}s ago`
-  const m = Math.round(s / 60)
-  if (m < 60) return `${m}min ago`
-  const h = Math.floor(m / 60)
-  if (h < 48) return `${h}h ${m % 60}min ago`
-  return `${Math.floor(h / 24)} days ago`
-}
-
-function sinceStamp(ms: number): string {
-  const d = new Date(ms)
-  return `${DAYS[d.getDay()]} ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} UTC`
-}
-
 /** Comprobaciones extra al arrancar un servicio (por ejemplo, validar la configuración de nginx). */
 export const SERVICE_CHECKS: Record<string, (ctx: CommandContext) => string | undefined> = {}
-
-function unitName(n: string) {
-  return n.replace(/\.service$/, '')
-}
-
-function canManage(ctx: CommandContext, verb: string, unit: string): boolean {
-  if (ctx.sh.user === 'root') return true
-  ctx.err(`Failed to ${verb} ${unit}.service: Access denied\nSee system logs and 'systemctl status ${unit}.service' for details.\n`)
-  return false
-}
-
-function startService(ctx: CommandContext, svc: Service): boolean {
-  const extra = SERVICE_CHECKS[svc.name]?.(ctx)
-  const conflict = [...ctx.sys.services.values()].find((o) => o !== svc && o.active && o.ports.some((p) => svc.ports.includes(p)))
-  const failure = svc.failMessage ?? extra ?? (conflict ? `bind() to 0.0.0.0:${svc.ports.find((p) => conflict.ports.includes(p))} failed (98: Address already in use)` : undefined)
-  if (failure) {
-    svc.active = false
-    svc.failed = true
-    svc.since = Date.now()
-    const pid = ctx.sys.allocPid()
-    ctx.sys.journal.push({ time: Date.now(), unit: `${svc.name}.service`, priority: 3, message: failure, ident: svc.name, pid })
-    ctx.sys.journal.push({ time: Date.now(), unit: `${svc.name}.service`, priority: 3, message: `${svc.name}.service: Control process exited, code=exited, status=1/FAILURE`, ident: 'systemd', pid: 1 })
-    ctx.sys.journal.push({ time: Date.now(), unit: `${svc.name}.service`, priority: 3, message: `Failed to start ${svc.name}.service - ${svc.description}.`, ident: 'systemd', pid: 1 })
-    ctx.err(`Job for ${svc.name}.service failed because the control process exited with error code.\nSee "systemctl status ${svc.name}.service" and "journalctl -xeu ${svc.name}.service" for details.\n`)
-    return false
-  }
-  if (!svc.active) {
-    svc.active = true
-    svc.failed = false
-    svc.since = Date.now()
-    svc.pid = ctx.sys.spawnService(svc.name).pid
-    ctx.sys.journal.push({ time: Date.now(), unit: `${svc.name}.service`, priority: 6, message: `Started ${svc.name}.service - ${svc.description}.`, ident: 'systemd', pid: 1 })
-  }
-  return true
-}
-
-function stopService(ctx: CommandContext, svc: Service) {
-  if (!svc.active) return
-  svc.active = false
-  svc.failed = false
-  svc.since = Date.now()
-  ctx.sys.procs = ctx.sys.procs.filter((p) => p.pid !== svc.pid && p.cmd !== svc.name)
-  svc.pid = undefined
-  ctx.sys.journal.push({ time: Date.now(), unit: `${svc.name}.service`, priority: 6, message: `Stopped ${svc.name}.service - ${svc.description}.`, ident: 'systemd', pid: 1 })
-}
-
-function statusText(ctx: CommandContext, svc: Service): string {
-  const unitPath = ctx.sys.vfs.exists(`/etc/systemd/system/${svc.name}.service`) ? `/etc/systemd/system/${svc.name}.service` : `/usr/lib/systemd/system/${svc.name}.service`
-  const enabled = svc.enabled ? 'enabled' : 'disabled'
-  const dot = svc.active ? '\x1b[0;1;32m●\x1b[0m' : svc.failed ? '\x1b[0;1;31m×\x1b[0m' : '○'
-  const active = svc.active
-    ? `\x1b[0;1;32mactive (running)\x1b[0m since ${sinceStamp(svc.since)}; ${ago(svc.since)}`
-    : svc.failed
-      ? `\x1b[0;1;31mfailed\x1b[0m (Result: exit-code) since ${sinceStamp(svc.since)}; ${ago(svc.since)}`
-      : 'inactive (dead)'
-  let out = `${dot} ${svc.name}.service - ${svc.description}\n     Loaded: loaded (${unitPath}; ${enabled}; preset: disabled)\n     Active: ${active}\n`
-  if (svc.active && svc.pid) {
-    out += `   Main PID: ${svc.pid} (${svc.name})\n      Tasks: ${svc.ports.length ? 3 : 1} (limit: 22950)\n     Memory: 4.2M\n        CPU: 61ms\n     CGroup: /system.slice/${svc.name}.service\n             └─${svc.pid} ${svc.name}\n`
-  }
-  const logs = ctx.sys.journal.filter((j) => j.unit === `${svc.name}.service`).slice(-5)
-  if (logs.length) out += '\n' + logs.map((j) => `${journalTime(j.time)} ${ctx.sys.hostname} ${j.ident}[${j.pid ?? 1}]: ${j.message}`).join('\n') + '\n'
-  return out
-}
-
-register('systemctl', {
-  usage: 'systemctl [OPTIONS...] COMMAND [UNIT...]',
-  summary:
-    '  status | start | stop | restart | reload | enable [--now] | disable [--now] | is-active | is-enabled | is-failed\n  list-units [--type=service] [--state=failed] | list-unit-files | daemon-reload | mask | unmask | cat | reset-failed',
-  run(ctx) {
-    const flags = ctx.args.filter((a) => a.startsWith('-'))
-    const [verb, ...rawUnits] = ctx.args.filter((a) => !a.startsWith('-'))
-    const units = rawUnits.map(unitName)
-    const sys = ctx.sys
-    const now = flags.includes('--now')
-    const find = (u: string): Service | undefined => sys.services.get(u)
-    const notFound = (u: string, action = 'start') => {
-      ctx.err(action === 'status' ? `Unit ${u}.service could not be found.\n` : `Failed to ${action} ${u}.service: Unit ${u}.service not found.\n`)
-    }
-    switch (verb ?? 'list-units') {
-      case 'status': {
-        if (!units.length) {
-          ctx.out(`● ${sys.hostname}\n    State: running\n    Units: ${sys.services.size} loaded\n     Jobs: 0 queued\n   Failed: ${[...sys.services.values()].filter((s) => s.failed).length} units\n`)
-          return 0
-        }
-        let code = 0
-        for (const u of units) {
-          const svc = find(u)
-          if (!svc) {
-            notFound(u, 'status')
-            code = 4
-            continue
-          }
-          ctx.out(statusText(ctx, svc))
-          if (!svc.active) code = 3
-        }
-        return code
-      }
-      case 'start':
-      case 'restart':
-      case 'reload':
-      case 'try-restart': {
-        let code = 0
-        for (const u of units) {
-          const svc = find(u)
-          if (!svc) {
-            notFound(u, verb)
-            code = 5
-            continue
-          }
-          if (!canManage(ctx, verb, u)) return 1
-          if (svc.enabled === false && (svc as Service & { masked?: boolean }).masked) {
-            ctx.err(`Failed to ${verb} ${u}.service: Unit ${u}.service is masked.\n`)
-            code = 1
-            continue
-          }
-          if (verb === 'reload' && !svc.active) {
-            ctx.err(`Job for ${u}.service invalid.\n`)
-            code = 1
-            continue
-          }
-          if (verb === 'restart') stopService(ctx, svc)
-          if (verb === 'reload') {
-            const err = SERVICE_CHECKS[svc.name]?.(ctx)
-            if (err) {
-              ctx.err(`Job for ${u}.service failed.\nSee "systemctl status ${u}.service" and "journalctl -xeu ${u}.service" for details.\n`)
-              sys.journal.push({ time: Date.now(), unit: `${u}.service`, priority: 3, message: err, ident: u })
-              code = 1
-            } else sys.journal.push({ time: Date.now(), unit: `${u}.service`, priority: 6, message: `Reloaded ${u}.service - ${svc.description}.`, ident: 'systemd', pid: 1 })
-            continue
-          }
-          if (!startService(ctx, svc)) code = 1
-        }
-        return code
-      }
-      case 'stop': {
-        for (const u of units) {
-          const svc = find(u)
-          if (!svc) {
-            notFound(u, 'stop')
-            return 5
-          }
-          if (!canManage(ctx, 'stop', u)) return 1
-          stopService(ctx, svc)
-        }
-        return 0
-      }
-      case 'enable':
-      case 'disable': {
-        let code = 0
-        for (const u of units) {
-          const svc = find(u)
-          if (!svc) {
-            ctx.err(`Failed to ${verb} unit: Unit file ${u}.service does not exist.\n`)
-            code = 1
-            continue
-          }
-          if (ctx.sh.user !== 'root') {
-            ctx.err(`Failed to ${verb} unit: Access denied\n`)
-            return 1
-          }
-          const want = verb === 'enable'
-          if (svc.enabled !== want) {
-            svc.enabled = want
-            ctx.err(
-              want
-                ? `Created symlink '/etc/systemd/system/multi-user.target.wants/${u}.service' → '/usr/lib/systemd/system/${u}.service'.\n`
-                : `Removed '/etc/systemd/system/multi-user.target.wants/${u}.service'.\n`,
-            )
-          }
-          if (now) {
-            if (want) {
-              if (!startService(ctx, svc)) code = 1
-            } else stopService(ctx, svc)
-          }
-        }
-        return code
-      }
-      case 'is-active': {
-        const svc = find(units[0] ?? '')
-        const st = svc ? (svc.active ? 'active' : svc.failed ? 'failed' : 'inactive') : 'inactive'
-        if (!flags.includes('--quiet') && !flags.includes('-q')) ctx.out(st + '\n')
-        return st === 'active' ? 0 : 3
-      }
-      case 'is-enabled': {
-        const svc = find(units[0] ?? '')
-        if (!svc) {
-          ctx.err(`Failed to get unit file state for ${units[0]}.service: No such file or directory\n`)
-          return 1
-        }
-        ctx.out((svc.enabled ? 'enabled' : 'disabled') + '\n')
-        return svc.enabled ? 0 : 1
-      }
-      case 'is-failed': {
-        const svc = find(units[0] ?? '')
-        ctx.out((svc?.failed ? 'failed' : svc?.active ? 'active' : 'inactive') + '\n')
-        return svc?.failed ? 0 : 1
-      }
-      case 'list-units':
-      case 'list-unit-files': {
-        const stateFilter = flags.find((f) => f.startsWith('--state='))?.split('=')[1]
-        let list = [...sys.services.values()].sort((a, b) => a.name.localeCompare(b.name))
-        if (stateFilter === 'failed') list = list.filter((s) => s.failed)
-        if (stateFilter === 'running' || stateFilter === 'active') list = list.filter((s) => s.active)
-        if (verb === 'list-unit-files') {
-          ctx.out('UNIT FILE                          STATE    PRESET\n')
-          for (const s of list) ctx.out(`${(s.name + '.service').padEnd(34)} ${(s.enabled ? 'enabled' : 'disabled').padEnd(8)} disabled\n`)
-          ctx.out(`\n${list.length} unit files listed.\n`)
-          return 0
-        }
-        if (!flags.some((f) => f.includes('all'))) list = list.filter((s) => s.active || s.failed)
-        ctx.out('  UNIT                          LOAD   ACTIVE SUB     DESCRIPTION\n')
-        for (const s of list) {
-          ctx.out(`${s.failed ? '●' : ' '} ${(s.name + '.service').padEnd(29)} loaded ${(s.active ? 'active' : s.failed ? 'failed' : 'inactive').padEnd(6)} ${(s.active ? 'running' : s.failed ? 'failed' : 'dead').padEnd(7)} ${s.description}\n`)
-        }
-        ctx.out(`\nLOAD   = Reflects whether the unit definition was properly loaded.\nACTIVE = The high-level unit activation state, i.e. generalization of SUB.\nSUB    = The low-level unit activation state, values depend on unit type.\n\n${list.length} loaded units listed.\n`)
-        return 0
-      }
-      case 'daemon-reload': {
-        if (ctx.sh.user !== 'root') {
-          ctx.err('Failed to reload daemon: Access denied\n')
-          return 1
-        }
-        // Registrar las unidades nuevas de /etc/systemd/system.
-        for (const f of sys.vfs.readdir('/etc/systemd/system', ROOT_CRED)) {
-          const m = /^(.+)\.service$/.exec(f)
-          if (!m || sys.services.has(m[1])) continue
-          const text = sys.vfs.readFile(`/etc/systemd/system/${f}`, ROOT_CRED)
-          const desc = /^Description=(.*)$/m.exec(text)?.[1] ?? m[1]
-          sys.services.set(m[1], { name: m[1], description: desc, active: false, enabled: false, failed: false, ports: [], since: Date.now() })
-        }
-        return 0
-      }
-      case 'cat': {
-        const svc = find(units[0] ?? '')
-        if (!svc) {
-          ctx.err(`No files found for ${units[0]}.service.\n`)
-          return 1
-        }
-        const custom = `/etc/systemd/system/${svc.name}.service`
-        if (sys.vfs.exists(custom)) ctx.out(`# ${custom}\n${sys.vfs.readFile(custom, ROOT_CRED)}`)
-        else ctx.out(`# /usr/lib/systemd/system/${svc.name}.service\n[Unit]\nDescription=${svc.description}\nAfter=network-online.target\n\n[Service]\nType=forking\nExecStart=/usr/sbin/${svc.name}\n\n[Install]\nWantedBy=multi-user.target\n`)
-        return 0
-      }
-      case 'edit': {
-        if (!canManage(ctx, 'edit', units[0] ?? '')) return 1
-        const path = `/etc/systemd/system/${units[0]}.service.d/override.conf`
-        sys.vfs.mkdirp(`/etc/systemd/system/${units[0]}.service.d`, ROOT_CRED)
-        ctx.sh.pendingEditor = { path, content: sys.vfs.exists(path) ? sys.vfs.readFile(path, ROOT_CRED) : '[Service]\n', editor: 'systemctl edit' }
-        return 0
-      }
-      case 'mask':
-      case 'unmask': {
-        const svc = find(units[0] ?? '')
-        if (!svc) return 1
-        ;(svc as Service & { masked?: boolean }).masked = verb === 'mask'
-        if (verb === 'mask') svc.enabled = false
-        ctx.err(verb === 'mask' ? `Created symlink '/etc/systemd/system/${svc.name}.service' → '/dev/null'.\n` : `Removed '/etc/systemd/system/${svc.name}.service'.\n`)
-        return 0
-      }
-      case 'reset-failed':
-        for (const s of sys.services.values()) s.failed = false
-        return 0
-      case 'reboot':
-      case 'poweroff':
-        ctx.err('[simulador] El servidor no se reinicia ni se apaga en el simulador.\n')
-        return 0
-      default:
-        ctx.err(`Unknown command verb '${verb}'.\n`)
-        return 1
-    }
-  },
-})
 
 function parseSince(v: string): number | undefined {
   const now = Date.now()
@@ -326,24 +39,71 @@ function parseSince(v: string): number | undefined {
   return Number.isNaN(t) ? undefined : t
 }
 
+/** PID estable para las entradas del journal que no lo guardaron. */
+function entryPid(e: JournalEntry): number {
+  if (e.pid !== undefined) return e.pid
+  if (e.ident === 'systemd') return 1
+  let h = 0
+  for (const c of e.ident + Math.floor(e.time / 1000)) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return 900 + (h % 4000)
+}
+
+const CATALOG_FAILED = (unit: string) =>
+  `░░ Subject: A start job for unit ${unit} has failed\n░░ Defined-By: systemd\n░░ Support: https://wiki.rockylinux.org/\n░░ \n░░ A start job for unit ${unit} has finished with a failure.\n░░ \n░░ The job identifier is 1873 and the job result is failed.`
+
 register('journalctl', {
-  usage: 'journalctl [OPTIONS...]',
-  summary: '  -u UNIT  -p PRIORITY  -n LINES  -f  -b  -r  -e  -x  --since TIME  --until TIME  --no-pager',
+  usage: 'journalctl [OPTIONS...] [MATCHES...]',
+  summary:
+    '  -u UNIT  -p PRIORITY  -n LINES  -f  -b [-1]  -r  -e  -x  -k  -g PATTERN  --since TIME  --until TIME\n  -o short|short-iso|cat|json|verbose  --disk-usage  --vacuum-size=SIZE  --vacuum-time=TIME  --list-boots  --no-pager',
   run(ctx) {
     const a = parseArgs(ctx.args, {
-      flags: { f: ['f', 'follow'], b: ['b', 'boot'], r: ['r', 'reverse'], e: ['e', 'pager-end'], x: ['x', 'catalog'], k: ['k', 'dmesg'], nopager: ['no-pager'], q: ['q', 'quiet'] },
-      values: { u: ['u', 'unit'], p: ['p', 'priority'], n: ['n', 'lines'], since: ['S', 'since'], until: ['U', 'until'], o: ['o', 'output'], t: ['t', 'identifier'] },
+      flags: {
+        f: ['f', 'follow'], b: ['b', 'boot'], r: ['r', 'reverse'], e: ['e', 'pager-end'], x: ['x', 'catalog'], k: ['k', 'dmesg'], nopager: ['no-pager'], q: ['q', 'quiet'],
+        disk: ['disk-usage'], boots: ['list-boots'], utc: ['utc'], nohost: ['no-hostname'],
+      },
+      values: { u: ['u', 'unit'], p: ['p', 'priority'], n: ['n', 'lines'], since: ['S', 'since'], until: ['U', 'until'], o: ['o', 'output'], t: ['t', 'identifier'], g: ['g', 'grep'], vsize: ['vacuum-size'], vtime: ['vacuum-time'] },
     })
     const user = ctx.sh.user
     const privileged = user === 'root' || ctx.sys.groupsOf(user).some((g) => ['wheel', 'adm', 'systemd-journal'].includes(g))
+    if (a.flags.has('disk')) {
+      ctx.out(`Archived and active journals take up ${privileged ? '24.0M' : '8.0M'} in the file system.\n`)
+      return 0
+    }
+    if (a.values.has('vsize') || a.values.has('vtime')) {
+      if (user !== 'root') {
+        ctx.err('Failed to vacuum: Permission denied\n')
+        return 1
+      }
+      ctx.out(`Vacuuming done, freed 0B of archived journals from /var/log/journal/4b0c2f1e9a7d4c55b1e2f30a8d6c7e91.\nVacuuming done, freed 0B of archived journals from /var/log/journal.\n`)
+      return 0
+    }
+    if (a.flags.has('boots')) {
+      ctx.out(`IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY\n  0 8c1f2a7e4b6d4e0f9a3b5c7d1e2f3a4b ${new Date(ctx.sys.bootTime).toISOString().replace('T', ' ').slice(0, 19)} UTC ${new Date().toISOString().replace('T', ' ').slice(0, 19)} UTC\n`)
+      return 0
+    }
     if (!privileged) {
       ctx.out('Hint: You are currently not seeing messages from other users and the system.\n      Users in groups \'adm\', \'systemd-journal\', \'wheel\' can see all messages.\n      Pass -q to turn off this notice.\n-- No entries --\n')
       return 0
     }
+    // "-b -1": un arranque anterior. El simulador solo tiene el arranque actual.
+    const bIdx = ctx.args.findIndex((x) => x === '-b' || x === '--boot')
+    if (bIdx >= 0 && /^-\d+$/.test(ctx.args[bIdx + 1] ?? '')) {
+      ctx.err(`Data from the specified boot (${ctx.args[bIdx + 1]}) is not available: No such boot ID in journal\n`)
+      return 1
+    }
     let entries: JournalEntry[] = [...ctx.sys.journal]
-    if (a.values.has('u')) {
-      const unit = a.values.get('u')!.replace(/\.service$/, '')
-      entries = entries.filter((e) => e.unit.replace(/\.service$/, '') === unit)
+    const unitsWanted = (a.all.get('u') ?? []).map((u) => (/\.(service|timer|target|scope)$/.test(u) ? u : `${u}.service`))
+    // Coincidencias del estilo _SYSTEMD_UNIT=nginx.service o SYSLOG_IDENTIFIER=sudo.
+    for (const m of a.rest) {
+      const kv = /^(_SYSTEMD_UNIT|SYSLOG_IDENTIFIER|_COMM|PRIORITY)=(.+)$/.exec(m)
+      if (!kv) continue
+      if (kv[1] === '_SYSTEMD_UNIT') unitsWanted.push(/\./.test(kv[2]) ? kv[2] : `${kv[2]}.service`)
+      if (kv[1] === 'SYSLOG_IDENTIFIER' || kv[1] === '_COMM') entries = entries.filter((e) => e.ident === kv[2])
+      if (kv[1] === 'PRIORITY') entries = entries.filter((e) => e.priority === Number(kv[2]))
+    }
+    if (unitsWanted.length) {
+      const norm = (u: string) => (/\./.test(u) ? u : `${u}.service`)
+      entries = entries.filter((e) => unitsWanted.includes(norm(e.unit)))
     }
     if (a.values.has('t')) entries = entries.filter((e) => e.ident === a.values.get('t'))
     if (a.values.has('p')) {
@@ -352,30 +112,67 @@ register('journalctl', {
       const toN = (s: string) => (/^\d$/.test(s) ? Number(s) : priorityNumber(s))
       entries = entries.filter((e) => e.priority >= toN(lo) && e.priority <= toN(hi))
     }
+    if (a.values.has('g')) {
+      const pat = a.values.get('g')!
+      let re: RegExp
+      try {
+        // Como journalctl: sin mayúsculas en el patrón, no distingue mayúsculas de minúsculas.
+        re = new RegExp(pat, pat === pat.toLowerCase() ? 'i' : '')
+      } catch {
+        ctx.err(`Failed to compile pattern "${pat}"\n`)
+        return 1
+      }
+      entries = entries.filter((e) => re.test(e.message))
+    }
     if (a.flags.has('k')) entries = entries.filter((e) => e.ident === 'kernel')
     if (a.values.has('since')) {
       const t = parseSince(a.values.get('since')!)
-      if (t !== undefined) entries = entries.filter((e) => e.time >= t)
+      if (t === undefined) {
+        ctx.err(`Failed to parse timestamp: ${a.values.get('since')}\n`)
+        return 1
+      }
+      entries = entries.filter((e) => e.time >= t)
     }
     if (a.values.has('until')) {
       const t = parseSince(a.values.get('until')!)
-      if (t !== undefined) entries = entries.filter((e) => e.time <= t)
+      if (t === undefined) {
+        ctx.err(`Failed to parse timestamp: ${a.values.get('until')}\n`)
+        return 1
+      }
+      entries = entries.filter((e) => e.time <= t)
     }
     entries.sort((x, y) => x.time - y.time)
-    const n = a.values.has('n') ? Number(a.values.get('n')) : a.flags.has('e') ? 1000 : undefined
+    const n = a.values.has('n') ? Number(a.values.get('n')) : a.flags.has('e') ? 1000 : a.flags.has('f') ? 10 : undefined
     if (n !== undefined) entries = entries.slice(-n)
     if (a.flags.has('r')) entries.reverse()
     if (!entries.length) {
       ctx.out('-- No entries --\n')
       return 0
     }
-    if (a.values.get('o') === 'json') {
-      for (const e of entries) ctx.out(JSON.stringify({ __REALTIME_TIMESTAMP: String(e.time * 1000), PRIORITY: String(e.priority), SYSLOG_IDENTIFIER: e.ident, _SYSTEMD_UNIT: e.unit, MESSAGE: e.message }) + '\n')
-      return 0
-    }
+    const fmt = a.values.get('o') ?? 'short'
+    const host = a.flags.has('nohost') ? '' : ` ${ctx.sys.hostname}`
     for (const e of entries) {
-      const line = `${journalTime(e.time)} ${ctx.sys.hostname} ${e.ident}[${e.pid ?? 1}]: ${e.message}`
+      const pid = entryPid(e)
+      if (fmt === 'json') {
+        ctx.out(JSON.stringify({ __REALTIME_TIMESTAMP: String(e.time * 1000), PRIORITY: String(e.priority), SYSLOG_IDENTIFIER: e.ident, _PID: String(pid), _SYSTEMD_UNIT: e.unit, _HOSTNAME: ctx.sys.hostname, MESSAGE: e.message }) + '\n')
+        continue
+      }
+      if (fmt === 'json-pretty' || fmt === 'verbose') {
+        const d = new Date(e.time)
+        ctx.out(
+          fmt === 'verbose'
+            ? `${d.toISOString().replace('T', ' ').replace('Z', '')} UTC\n    PRIORITY=${e.priority}\n    SYSLOG_IDENTIFIER=${e.ident}\n    _PID=${pid}\n    _SYSTEMD_UNIT=${e.unit}\n    _HOSTNAME=${ctx.sys.hostname}\n    MESSAGE=${e.message}\n`
+            : JSON.stringify({ __REALTIME_TIMESTAMP: String(e.time * 1000), PRIORITY: String(e.priority), SYSLOG_IDENTIFIER: e.ident, _PID: String(pid), _SYSTEMD_UNIT: e.unit, MESSAGE: e.message }, null, '\t') + '\n',
+        )
+        continue
+      }
+      let line: string
+      if (fmt === 'cat') line = e.message
+      else if (fmt === 'short-iso') line = `${new Date(e.time).toISOString().replace(/\.\d+Z$/, '+00:00')}${host} ${e.ident}[${pid}]: ${e.message}`
+      else line = `${journalTime(e.time)}${host} ${e.ident}[${pid}]: ${e.message}`
       ctx.out((ctx.isTTY && e.priority <= 3 ? `\x1b[1;31m${line}\x1b[0m` : ctx.isTTY && e.priority === 4 ? `\x1b[1;33m${line}\x1b[0m` : line) + '\n')
+      const failed = /^Failed to start (\S+)/.exec(e.message)
+      if (a.flags.has('x') && failed && e.ident === 'systemd') ctx.out(CATALOG_FAILED(failed[1]) + '\n')
     }
     if (a.flags.has('f')) ctx.err('[simulador] journalctl -f se queda mostrando líneas nuevas en vivo; aquí termina enseguida. En un servidor real se corta con Ctrl+C.\n')
     return 0
@@ -849,7 +646,7 @@ register('nl', {
 
 /** Comandos de administración: sección 8 del manual. El resto va en la 1. */
 const MAN_SECTION: Record<string, number> = Object.fromEntries(
-  ['useradd', 'usermod', 'userdel', 'groupadd', 'groupdel', 'fdisk', 'visudo', 'shutdown', 'reboot', 'poweroff', 'halt', 'dmidecode', 'lspci', 'efibootmgr', 'ip', 'ss', 'ifconfig', 'adduser', 'ufw', 'dnf', 'yum', 'apt', 'apt-get', 'rpm'].map((c) => [c, 8]),
+  ['useradd', 'usermod', 'userdel', 'groupadd', 'groupdel', 'fdisk', 'visudo', 'shutdown', 'reboot', 'poweroff', 'halt', 'dmidecode', 'lspci', 'efibootmgr', 'ip', 'ss', 'ifconfig', 'adduser', 'ufw', 'dnf', 'yum', 'apt', 'apt-get', 'rpm', 'logrotate', 'grubby', 'grub2-mkconfig', 'grub-mkconfig', 'update-grub', 'dracut', 'update-initramfs', 'faillock', 'authselect'].map((c) => [c, 8]),
 )
 
 /** Formatos de archivo (sección 5). */
@@ -865,6 +662,23 @@ const MAN_FILES: Record<string, { desc: string; body: string; see: string }> = {
   hosts: { desc: 'static table lookup for hostnames', body: 'This manual page describes the format of the /etc/hosts file. For each\nhost a single line should be present with the following information:\n\n  IP_address canonical_hostname [aliases...]', see: 'hostname(1), resolv.conf(5)' },
   sudoers: { desc: 'default sudo security policy plugin', body: 'The sudoers policy plugin determines a user\'s sudo privileges. The\nsudoers file should always be edited with the visudo command.', see: 'sudo(8), visudo(8)' },
   'sshd_config': { desc: 'OpenSSH daemon configuration file', body: 'sshd(8) reads configuration data from /etc/ssh/sshd_config. The file\ncontains keyword-argument pairs, one per line. Lines starting with # and\nempty lines are interpreted as comments.', see: 'sshd(8)' },
+  'systemd.unit': {
+    desc: 'Unit configuration',
+    body: 'A unit file is a plain text ini-style file that encodes information about a\nservice, a socket, a device, a mount point, a timer, etc. Sections: [Unit]\n(Description=, After=, Wants=, Requires=) and [Install] (WantedBy=).\n\nSystem units live in /usr/lib/systemd/system (from packages) and\n/etc/systemd/system (local administrator, takes precedence). Drop-in files\nin /etc/systemd/system/NAME.d/*.conf change single settings.',
+    see: 'systemctl(1), systemd.service(5), systemd.timer(5)',
+  },
+  'systemd.service': {
+    desc: 'Service unit configuration',
+    body: 'The [Service] section: Type= (simple, exec, forking, oneshot, notify),\nExecStart= (command with absolute path), User=, Group=, WorkingDirectory=,\nEnvironment=, Restart= (no, on-failure, always), RestartSec=.\n\nOnly Type=oneshot services may have more than one ExecStart= line.',
+    see: 'systemd.unit(5), systemd.exec(5)',
+  },
+  'systemd.timer': {
+    desc: 'Timer unit configuration',
+    body: 'A timer unit activates the service with the same name (or Unit=) at the\ngiven times. [Timer] settings: OnCalendar= (calendar event, see\nsystemd.time(7)), OnBootSec=, OnUnitActiveSec=, Persistent= (catch up runs\nmissed while the system was off), RandomizedDelaySec=.\n\nTimers are enabled with WantedBy=timers.target in [Install].',
+    see: 'systemd.unit(5), systemd.time(7), systemd-analyze(1)',
+  },
+  'journald.conf': { desc: 'Journal service configuration files', body: 'Storage= (volatile, persistent, auto, none), SystemMaxUse=, MaxRetentionSec=,\nForwardToSyslog=. With Storage=auto the journal is kept on disk only if\n/var/log/journal exists.', see: 'journalctl(1), systemd-journald.service(8)' },
+  'logrotate.conf': { desc: 'logrotate configuration (see logrotate(8))', body: 'Directives: daily, weekly, monthly, rotate N, size N, compress,\ndelaycompress, missingok, notifempty, create MODE OWNER GROUP, copytruncate,\ndateext, su USER GROUP, postrotate ... endscript.', see: 'logrotate(8)' },
   'crontab': { desc: 'tables for driving cron', body: 'A crontab file contains instructions to the cron daemon of the general form:\n"run this command at this time on this date".\n\n  minute  hour  day-of-month  month  day-of-week  command', see: 'cron(8), crontab(1)' },
 }
 
@@ -906,6 +720,16 @@ const MAN_DESC: Record<string, string> = {
   id: 'print real and effective user and group IDs',
   systemctl: 'Control the systemd system and service manager',
   journalctl: 'Print log entries from the systemd journal',
+  'systemd-analyze': 'Analyze and debug system manager',
+  logrotate: 'rotates, compresses, and mails system logs',
+  zcat: 'compress or expand files',
+  grubby: 'command line tool for configuring grub and zipl',
+  'grub2-mkconfig': 'Generate a GRUB configuration file.',
+  'grub-mkconfig': 'generate a GRUB configuration file',
+  'update-grub': 'stub for grub-mkconfig',
+  dracut: 'low-level tool for generating an initramfs/initrd image',
+  lsinitrd: 'tool to show the contents of an initramfs image',
+  'update-initramfs': 'generate an initramfs image',
   ps: 'report a snapshot of the current processes',
   kill: 'send a signal to a process',
   top: 'display Linux processes',

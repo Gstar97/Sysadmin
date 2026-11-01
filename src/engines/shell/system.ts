@@ -1,4 +1,5 @@
 import type { BashState } from './schema'
+import { builtinTimers, daemonReload, type Timer, type UnitDef } from './units'
 import { cpuinfoText } from './hardware'
 import { BASE_INSTALLED, ROCKY_PACKAGES, UBUNTU_PACKAGES, type PackageInfo } from './packages'
 import { normalizePath, ROOT_CRED, VFS, type Cred } from './vfs'
@@ -36,6 +37,15 @@ export interface Service {
   pkg?: string
   since: number
   pid?: number
+  masked?: boolean
+  /** Definición leída de los archivos de unidad (se actualiza con daemon-reload). */
+  unit?: UnitDef
+  /** Cómo estaban los archivos de la unidad al cargarla, para avisar si cambiaron. */
+  loadedSig?: string
+  /** Última ejecución del proceso principal: PID, código ("0/SUCCESS", "203/EXEC"...) y comando. */
+  lastExit?: { pid: number; status: string; cmd: string; time: number }
+  /** Resultado de la última activación: success, exit-code, resources... */
+  result?: string
 }
 
 export interface Proc {
@@ -139,6 +149,13 @@ export class System {
   users = new Map<string, User>()
   groups = new Map<string, Group>()
   services = new Map<string, Service>()
+  timers = new Map<string, Timer>()
+  /** Target con el que arranca el sistema (systemctl get-default). */
+  defaultTarget = 'multi-user.target'
+  /** Parámetros del kernel configurados para el próximo arranque (grubby, grub2-mkconfig). */
+  kernelArgs = ''
+  /** Última rotación de cada log (estado de logrotate). */
+  logrotateState = new Map<string, number>()
   procs: Proc[] = []
   journal: JournalEntry[] = []
   installed = new Set<string>()
@@ -256,22 +273,37 @@ export class System {
       else if (owner) node.gid = this.users.get(owner)?.gid ?? 0
     }
 
-    // Servicios del ejercicio
+    // Servicios del ejercicio (los nombres terminados en .timer configuran timers)
     for (const [name, s] of Object.entries(state.servicios)) {
+      if (name.endsWith('.timer')) continue
       if (s.paquete && !this.installed.has(s.paquete)) this.installPackage(s.paquete, true)
       const existing = this.services.get(name)
+      const failed = s.fallido && !s.activo
       this.services.set(name, {
         name,
         description: s.descripcion ?? existing?.description ?? `${name} service`,
         active: s.activo,
         enabled: s.habilitado,
-        failed: false,
+        failed,
         failMessage: s.falla,
         ports: s.puertos.length ? s.puertos : existing?.ports ?? [],
         pkg: s.paquete ?? existing?.pkg,
-        since: now - 3_600_000,
-        pid: s.activo ? this.allocPid() : undefined,
+        since: now - (s.hace_minutos ?? 60) * 60_000,
+        pid: s.activo ? this.spawnService(name, now - (s.hace_minutos ?? 60) * 60_000).pid : undefined,
+        result: failed ? 'exit-code' : undefined,
       })
+    }
+    // Unidades de systemd: las del sistema y las propias de /etc/systemd/system.
+    for (const t of builtinTimers(this)) this.timers.set(t.name, t)
+    daemonReload(this)
+    for (const [name, s] of Object.entries(state.servicios)) {
+      if (!name.endsWith('.timer')) continue
+      const t = this.timers.get(name.slice(0, -6))
+      if (!t) continue
+      t.active = s.activo
+      t.enabled = s.habilitado
+      t.since = now - (s.hace_minutos ?? 60) * 60_000
+      if (s.ultima_hace_minutos !== undefined) t.last = now - s.ultima_hace_minutos * 60_000
     }
 
     // Red
@@ -607,7 +639,14 @@ export class System {
       '/proc/cpuinfo': cpuinfoText(),
       '/proc/meminfo': 'MemTotal:        3843580 kB\nMemFree:         1520332 kB\nMemAvailable:    2788416 kB\nBuffers:            4268 kB\nCached:          1381420 kB\nSwapTotal:       2097148 kB\nSwapFree:        2097148 kB\n',
       '/proc/loadavg': '0.08 0.12 0.09 1/187 1450\n',
-      '/proc/version': 'Linux version 6.12.0-55.el10.x86_64 (mockbuild@rocky) (gcc 14.2.1) #1 SMP PREEMPT_DYNAMIC\n',
+      '/proc/version':
+        this.distro === 'rocky'
+          ? 'Linux version 6.12.0-55.el10.x86_64 (mockbuild@rocky) (gcc 14.2.1) #1 SMP PREEMPT_DYNAMIC\n'
+          : 'Linux version 6.8.0-58-generic (buildd@lcy02-amd64-074) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0) #60-Ubuntu SMP PREEMPT_DYNAMIC\n',
+      ...bootFiles(this.distro, this.firmware),
+      ...logrotateFiles(this.distro),
+      '/etc/systemd/journald.conf':
+        '#  This file is part of systemd.\n#\n# Entries in this file show the compile time defaults. Local configuration\n# should be created by either modifying this file, or by creating "drop-ins" in\n# the journald.conf.d/ subdirectory.\n\n[Journal]\n#Storage=auto\n#Compress=yes\n#SystemMaxUse=\n#SystemKeepFree=\n#MaxRetentionSec=0\n#ForwardToSyslog=no\n',
       '/dev/null': '',
       '/var/log/lastlog': '',
     }
@@ -633,6 +672,11 @@ export class System {
       v.mkdirp(p.slice(0, p.lastIndexOf('/')) || '/', ROOT_CRED)
       v.writeFile(p, c, ROOT_CRED)
     }
+    this.kernelArgs = KERNEL_ARGS[this.distro]
+    for (const d of ['/usr/lib/systemd/system', '/etc/systemd/system/multi-user.target.wants', '/etc/systemd/system/timers.target.wants', '/var/log/journal', '/etc/logrotate.d', '/run/systemd/system']) v.mkdirp(d, ROOT_CRED)
+    v.symlink('/usr/lib/systemd/system/multi-user.target', '/etc/systemd/system/default.target', ROOT_CRED)
+    if (this.distro === 'ubuntu') v.stat('/usr/lib/rsyslog/rsyslog-rotate', ROOT_CRED).mode = 0o755
+    v.stat('/boot/grub2/grubenv'.replace('grub2', this.distro === 'rocky' ? 'grub2' : 'grub'), ROOT_CRED).mode = 0o600
     // La partición EFI se monta con umask=0077: solo root puede ver su contenido.
     if (this.firmware === 'uefi') v.stat('/boot/efi', ROOT_CRED).mode = 0o700
     v.stat('/etc/sudoers', ROOT_CRED).mode = 0o440
@@ -728,6 +772,93 @@ export class System {
     this.spawn(user, '-bash', 0, 0.1, sshd.pid, Date.now(), 'bash')
   }
 
+}
+
+// ---------------------------------------------------------------------------------------
+// Arranque (GRUB, kernel, initramfs) y rotación de logs
+// ---------------------------------------------------------------------------------------
+
+export const KERNEL_VERSION = { rocky: '6.12.0-55.el10.x86_64', ubuntu: '6.8.0-58-generic' } as const
+export const MACHINE_ID = '4b0c2f1e9a7d4c55b1e2f30a8d6c7e91'
+
+const KERNEL_ARGS = {
+  rocky: 'root=/dev/mapper/rl-root ro crashkernel=2G-64G:256M,64G-:512M resume=/dev/mapper/rl-swap rd.lvm.lv=rl/root rd.lvm.lv=rl/swap',
+  ubuntu: 'root=/dev/mapper/ubuntu--vg-ubuntu--lv ro',
+}
+
+export function rockyBootEntry(args: string): string {
+  const k = KERNEL_VERSION.rocky
+  return `title Rocky Linux (${k}) 10.0 (Red Quartz)\nversion ${k}\nlinux /vmlinuz-${k}\ninitrd /initramfs-${k}.img $tuned_initrd\noptions ${args}\ngrub_users $grub_users\ngrub_arg --unrestricted\ngrub_class rocky\n`
+}
+
+export function grubCfg(distro: 'rocky' | 'ubuntu', cmdlineExtra: string, timeout: string): string {
+  if (distro === 'rocky') {
+    return `#\n# DO NOT EDIT THIS FILE\n#\n# It is automatically generated by grub2-mkconfig using templates\n# from /etc/grub.d and settings from /etc/default/grub\n#\n\n### BEGIN /etc/grub.d/00_header ###\nset pager=1\nif [ -f \${config_directory}/grubenv ]; then\n  load_env -f \${config_directory}/grubenv\nfi\nset timeout=${timeout}\n### END /etc/grub.d/00_header ###\n\n### BEGIN /etc/grub.d/10_linux ###\ninsmod part_gpt\ninsmod xfs\nset kernelopts="root=/dev/mapper/rl-root ro ${cmdlineExtra}"\nblscfg\n### END /etc/grub.d/10_linux ###\n`
+  }
+  const k = KERNEL_VERSION.ubuntu
+  return `#\n# DO NOT EDIT THIS FILE\n#\n# It is automatically generated by grub-mkconfig using templates\n# from /etc/grub.d and settings from /etc/default/grub\n#\n\n### BEGIN /etc/grub.d/00_header ###\nset timeout=${timeout}\n### END /etc/grub.d/00_header ###\n\n### BEGIN /etc/grub.d/10_linux ###\nmenuentry 'Ubuntu' --class ubuntu --class gnu-linux --class gnu --class os {\n\tlinux\t/vmlinuz-${k} root=/dev/mapper/ubuntu--vg-ubuntu--lv ro ${cmdlineExtra}\n\tinitrd\t/initrd.img-${k}\n}\nmenuentry 'Ubuntu, with Linux ${k} (recovery mode)' --class ubuntu --class gnu-linux --class gnu --class os {\n\tlinux\t/vmlinuz-${k} root=/dev/mapper/ubuntu--vg-ubuntu--lv ro recovery nomodeset dis_ucode_ldr\n\tinitrd\t/initrd.img-${k}\n}\n### END /etc/grub.d/10_linux ###\n`
+}
+
+function bootFiles(distro: 'rocky' | 'ubuntu', firmware: 'bios' | 'uefi'): Record<string, string> {
+  const k = KERNEL_VERSION[distro]
+  if (distro === 'rocky') {
+    return {
+      '/etc/default/grub':
+        'GRUB_TIMEOUT=5\nGRUB_DISTRIBUTOR="$(sed \'s, release .*$,,g\' /etc/system-release)"\nGRUB_DEFAULT=saved\nGRUB_DISABLE_SUBMENU=true\nGRUB_TERMINAL_OUTPUT="console"\nGRUB_CMDLINE_LINUX="crashkernel=2G-64G:256M,64G-:512M resume=/dev/mapper/rl-swap rd.lvm.lv=rl/root rd.lvm.lv=rl/swap"\nGRUB_DISABLE_RECOVERY="true"\nGRUB_ENABLE_BLSCFG=true\n',
+      '/boot/grub2/grub.cfg': grubCfg('rocky', 'crashkernel=2G-64G:256M,64G-:512M resume=/dev/mapper/rl-swap rd.lvm.lv=rl/root rd.lvm.lv=rl/swap', '5'),
+      '/boot/grub2/grubenv': `# GRUB Environment Block\nsaved_entry=${MACHINE_ID}-${k}\nboot_success=1\n`,
+      [`/boot/loader/entries/${MACHINE_ID}-${k}.conf`]: rockyBootEntry(KERNEL_ARGS.rocky),
+      [`/boot/loader/entries/${MACHINE_ID}-0-rescue.conf`]: `title Rocky Linux (0-rescue-${MACHINE_ID}) 10.0 (Red Quartz)\nversion 0-rescue-${MACHINE_ID}\nlinux /vmlinuz-0-rescue-${MACHINE_ID}\ninitrd /initramfs-0-rescue-${MACHINE_ID}.img\noptions ${KERNEL_ARGS.rocky}\ngrub_users $grub_users\ngrub_arg --unrestricted\ngrub_class rocky\n`,
+      [`/boot/vmlinuz-${k}`]: '',
+      [`/boot/initramfs-${k}.img`]: '',
+      [`/boot/vmlinuz-0-rescue-${MACHINE_ID}`]: '',
+      [`/boot/initramfs-0-rescue-${MACHINE_ID}.img`]: '',
+      [`/boot/config-${k}`]: '',
+      [`/boot/System.map-${k}`]: '',
+      '/proc/cmdline': `BOOT_IMAGE=(hd0,${firmware === 'uefi' ? 'gpt2' : 'msdos1'})/vmlinuz-${k} ${KERNEL_ARGS.rocky}\n`,
+      '/etc/dracut.conf': '# PUT YOUR CONFIG IN separate files\n# in /etc/dracut.conf.d named "<name>.conf"\n# SEE man dracut.conf(5) for options\n',
+    }
+  }
+  return {
+    '/etc/default/grub':
+      '# If you change this file, run \'update-grub\' afterwards to update\n# /boot/grub/grub.cfg.\n# For full documentation of the options in this file, see:\n#   info -f grub -n \'Simple configuration\'\n\nGRUB_DEFAULT=0\nGRUB_TIMEOUT_STYLE=hidden\nGRUB_TIMEOUT=0\nGRUB_DISTRIBUTOR=`( . /etc/os-release; echo ${NAME:-Ubuntu} ) 2>/dev/null || echo Ubuntu`\nGRUB_CMDLINE_LINUX_DEFAULT=""\nGRUB_CMDLINE_LINUX=""\n',
+    '/boot/grub/grub.cfg': grubCfg('ubuntu', '', '0'),
+    '/boot/grub/grubenv': '# GRUB Environment Block\n',
+    [`/boot/vmlinuz-${k}`]: '',
+    [`/boot/initrd.img-${k}`]: '',
+    [`/boot/config-${k}`]: '',
+    [`/boot/System.map-${k}`]: '',
+    '/proc/cmdline': `BOOT_IMAGE=/vmlinuz-${k} ${KERNEL_ARGS.ubuntu}\n`,
+    '/etc/initramfs-tools/initramfs.conf': '#\n# initramfs.conf\n# Configuration file for mkinitramfs(8). See initramfs.conf(5).\n#\n\nMODULES=most\nBUSYBOX=auto\nCOMPRESS=zstd\n',
+  }
+}
+
+function logrotateFiles(distro: 'rocky' | 'ubuntu'): Record<string, string> {
+  if (distro === 'rocky') {
+    return {
+      '/etc/logrotate.conf':
+        '# see "man logrotate" for details\n\n# global options do not affect preceding include directives\n\n# rotate log files weekly\nweekly\n\n# keep 4 weeks worth of backlogs\nrotate 4\n\n# create new (empty) log files after rotating old ones\ncreate\n\n# use date as a suffix of the rotated file\ndateext\n\n# uncomment this if you want your log files compressed\n#compress\n\n# packages drop log rotation information into this directory\ninclude /etc/logrotate.d\n\n# system-specific logs may be also be configured here.\n',
+      '/etc/logrotate.d/rsyslog':
+        '/var/log/cron\n/var/log/maillog\n/var/log/messages\n/var/log/secure\n/var/log/spooler\n{\n    missingok\n    sharedscripts\n    postrotate\n        /usr/bin/systemctl -s HUP kill rsyslog.service >/dev/null 2>&1 || true\n    endscript\n}\n',
+      '/etc/logrotate.d/dnf': '/var/log/hawkey.log {\n    missingok\n    notifempty\n    rotate 4\n    weekly\n    create\n}\n',
+      '/etc/logrotate.d/btmp': '# no packages own btmp -- we\'ll rotate it here\n/var/log/btmp {\n    missingok\n    monthly\n    create 0660 root utmp\n    rotate 1\n}\n',
+      '/var/lib/logrotate/logrotate.status': 'logrotate state -- version 2\n',
+      '/var/log/maillog': '',
+      '/var/log/spooler': '',
+      '/var/log/hawkey.log': '',
+      '/var/log/btmp': '',
+    }
+  }
+  return {
+    '/etc/logrotate.conf':
+      '# see "man logrotate" for details\n\n# global options do not affect preceding include directives\n\n# rotate log files weekly\nweekly\n\n# use the adm group by default, since this is the owning group\n# of /var/log/.\nsu root adm\n\n# keep 4 weeks worth of backlogs\nrotate 4\n\n# create new (empty) log files after rotating old ones\ncreate\n\n# use date as a suffix of the rotated file\n#dateext\n\n# uncomment this if you want your log files compressed\n#compress\n\n# packages drop log rotation information into this directory\ninclude /etc/logrotate.d\n\n# system-specific logs may also be configured here.\n',
+    '/etc/logrotate.d/rsyslog':
+      '/var/log/syslog\n/var/log/mail.log\n/var/log/kern.log\n/var/log/auth.log\n/var/log/user.log\n/var/log/cron.log\n{\n\trotate 4\n\tweekly\n\tmissingok\n\tnotifempty\n\tcompress\n\tdelaycompress\n\tsharedscripts\n\tpostrotate\n\t\t/usr/lib/rsyslog/rsyslog-rotate\n\tendscript\n}\n',
+    '/etc/logrotate.d/apt': '/var/log/apt/term.log {\n  rotate 12\n  monthly\n  compress\n  missingok\n  notifempty\n}\n\n/var/log/apt/history.log {\n  rotate 12\n  monthly\n  compress\n  missingok\n  notifempty\n}\n',
+    '/usr/lib/rsyslog/rsyslog-rotate': '#!/bin/sh\n\nif [ -d /run/systemd/system ]; then\n    systemctl kill -s HUP rsyslog.service\nelse\n    invoke-rc.d rsyslog rotate > /dev/null\nfi\n',
+    '/var/lib/logrotate/status': 'logrotate state -- version 2\n',
+    '/var/log/kern.log': '',
+  }
 }
 
 // ---------------------------------------------------------------------------------------

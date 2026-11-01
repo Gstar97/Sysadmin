@@ -349,7 +349,13 @@ register('sed', {
           }
           if (c.op === 'p') extra += current + '\n'
           if (c.op === 's') {
-            const repl = c.repl!.replace(/\\(\d)/g, '$$$1').replace(/(^|[^\\])&/g, '$1$$&').replace(/\\&/g, '&').replace(/\\\//g, '/')
+            const repl = c
+              .repl!.replace(/\\(\d)/g, '$$$1')
+              .replace(/(^|[^\\])&/g, '$1$$&')
+              .replace(/\\&/g, '&')
+              .replace(/\\\//g, '/')
+              .replace(/\\n/g, '\n')
+              .replace(/\\t/g, '\t')
             const before = current
             current = current.replace(c.re!, repl)
             if (c.print && before !== current) extra += current + '\n'

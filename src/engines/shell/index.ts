@@ -2,9 +2,12 @@ import './commands/files'
 import './commands/text'
 import './commands/users'
 import './commands/sysinfo'
+import './commands/systemd'
+import './commands/logs'
+import './commands/boot'
 import './commands/pkg'
 import './commands/net'
-import { commandPackage } from './packages'
+import { commandPackage, OTHER_FAMILY } from './packages'
 import { bashStateSchema, type BashCheck, type BashStateInput } from './schema'
 import { COMMANDS, Shell } from './shell'
 import { System } from './system'
@@ -26,7 +29,7 @@ function installBinaries(sys: System) {
     node.size = BINARY_SIZES[name] ?? 24_000 + ([...name].reduce((h, c) => h * 31 + c.charCodeAt(0), 7) % 160_000)
   }
   // Herramientas que solo existen en una de las dos familias de distribuciones.
-  const otherFamily = sys.distro === 'rocky' ? ['apt', 'apt-get', 'apt-cache', 'dpkg', 'adduser', 'ufw'] : ['dnf', 'yum', 'rpm', 'firewall-cmd', 'nmcli', 'authselect']
+  const otherFamily = OTHER_FAMILY[sys.distro]
   for (const [name, def] of COMMANDS) {
     if (otherFamily.includes(name)) continue
     const pkg = commandPackage(sys.distro, name)
@@ -170,7 +173,8 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
     return { ok, label: `grupo ${check.grupo}${check.miembros ? ` con ${check.miembros.join(', ')}` : ' existe'}` }
   }
   if ('servicio' in check) {
-    const s = sys.services.get(check.servicio)
+    const timer = check.servicio.endsWith('.timer') ? sys.timers.get(check.servicio.slice(0, -6)) : undefined
+    const s = timer ?? sys.services.get(check.servicio.replace(/\.service$/, ''))
     let ok = !!s
     const parts: string[] = []
     if (check.activo !== undefined) {
@@ -181,7 +185,11 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
       ok &&= s?.enabled === check.habilitado
       parts.push(check.habilitado ? 'habilitado al arranque' : 'deshabilitado')
     }
-    return { ok, label: `servicio ${check.servicio}: ${parts.join(', ') || 'existe'}` }
+    if (check.fallido !== undefined) {
+      ok &&= !timer && (s as { failed?: boolean } | undefined)?.failed === check.fallido
+      parts.push(check.fallido ? 'en estado failed' : 'sin fallas')
+    }
+    return { ok, label: `${timer ? 'timer' : 'servicio'} ${check.servicio}: ${parts.join(', ') || 'existe'}` }
   }
   if ('paquete' in check) {
     return { ok: sys.installed.has(check.paquete) === check.instalado, label: `paquete ${check.paquete} ${check.instalado ? 'instalado' : 'no instalado'}` }

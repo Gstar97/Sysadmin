@@ -260,7 +260,14 @@ export const BASE_INSTALLED = {
 }
 
 /** Comandos que solo existen si su paquete está instalado. */
+/** Herramientas que solo existen en la otra familia de distribuciones (en esta, "command not found"). */
+export const OTHER_FAMILY: Record<'rocky' | 'ubuntu', string[]> = {
+  rocky: ['apt', 'apt-get', 'apt-cache', 'dpkg', 'adduser', 'ufw', 'grub-mkconfig', 'update-grub', 'update-initramfs'],
+  ubuntu: ['dnf', 'yum', 'rpm', 'firewall-cmd', 'nmcli', 'authselect', 'grub2-mkconfig', 'grubby', 'dracut', 'lsinitrd'],
+}
+
 export function commandPackage(distro: 'rocky' | 'ubuntu', command: string): string | undefined {
+  if (OTHER_FAMILY[distro].includes(command)) return '(otra familia)'
   const catalog = distro === 'rocky' ? ROCKY_PACKAGES : UBUNTU_PACKAGES
   for (const [name, info] of Object.entries(catalog)) {
     if (info.commands?.includes(command)) return name

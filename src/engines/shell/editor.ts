@@ -1,5 +1,6 @@
 /** Guardado del editor de texto de la terminal (nano, vim, crontab -e, visudo, systemctl edit). */
 import { checkSudoers } from './commands/users'
+import { daemonReload } from './units'
 import type { EditorRequest, Shell } from './shell'
 import { FsError, ROOT_CRED } from './vfs'
 
@@ -52,7 +53,20 @@ export function saveEditor(sh: Shell, req: EditorRequest, content: string): Save
     return { ok: true, message: 'crontab: installing new crontab' }
   }
   if (req.editor === 'systemctl edit') {
-    vfs.writeFile(req.path, text, ROOT_CRED)
+    // Como systemctl edit: se queda solo lo que está antes de la marca, sin las líneas "###".
+    const marker = text.indexOf('### Edits below this comment will be discarded')
+    const kept = (marker >= 0 ? text.slice(0, marker) : text)
+      .split('\n')
+      .filter((l) => !l.startsWith('### '))
+      .join('\n')
+      .trim()
+    if (!kept) {
+      if (vfs.exists(req.path) && marker >= 0) vfs.unlink(req.path, ROOT_CRED)
+      return { ok: true, message: `Editing "${req.path}" canceled: temporary file is empty.` }
+    }
+    vfs.writeFile(req.path, kept + '\n', ROOT_CRED)
+    // systemctl edit hace daemon-reload solo al terminar.
+    daemonReload(sh.sys)
     return { ok: true }
   }
   try {

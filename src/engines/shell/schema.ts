@@ -48,6 +48,12 @@ export const bashStateSchema = z.strictObject({
         falla: z.string().optional(),
         puertos: z.array(z.number().int()).default([]),
         paquete: z.string().optional(),
+        /** Empieza en estado "failed" (por ejemplo, se cayó durante la noche). */
+        fallido: z.boolean().default(false),
+        /** Hace cuánto cambió de estado (por defecto, una hora). */
+        hace_minutos: z.number().optional(),
+        /** Timers: hace cuánto se ejecutó por última vez. */
+        ultima_hace_minutos: z.number().optional(),
       }),
     )
     .default({}),
@@ -137,7 +143,7 @@ export const bashCheckSchema = z.union([
     bloqueado: z.boolean().optional(),
   }),
   z.strictObject({ grupo: z.string(), existe: z.boolean().default(true), miembros: z.array(z.string()).optional() }),
-  z.strictObject({ servicio: z.string(), activo: z.boolean().optional(), habilitado: z.boolean().optional() }),
+  z.strictObject({ servicio: z.string(), activo: z.boolean().optional(), habilitado: z.boolean().optional(), fallido: z.boolean().optional() }),
   z.strictObject({ paquete: z.string(), instalado: z.boolean().default(true) }),
   z.strictObject({ proceso: z.string(), existe: z.boolean().default(true) }),
   z.strictObject({ salida_contiene: z.string() }),

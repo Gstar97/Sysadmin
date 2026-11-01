@@ -28,6 +28,7 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   sshd: '/etc/ssh/sshd_config',
   fstab: '/etc/fstab',
   sudoers: '/etc/sudoers.d/archivo',
+  systemd: '/etc/systemd/system/app.service',
   texto: 'archivo.txt',
 }
 
@@ -40,6 +41,7 @@ function languageFor(lang: ConfigLanguage): Extension {
     case 'yaml':
       return yaml()
     case 'sshd':
+    case 'systemd':
       return StreamLanguage.define(properties)
     case 'fstab':
     case 'sudoers':

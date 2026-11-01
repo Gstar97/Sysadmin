@@ -9,6 +9,8 @@ export interface OptSpec {
 export interface ParsedArgs {
   flags: Set<string>
   values: Map<string, string>
+  /** Todos los valores de cada opción, en orden (para opciones que se repiten, como -u en journalctl). */
+  all: Map<string, string[]>
   rest: string[]
   unknown?: string
 }
@@ -16,6 +18,11 @@ export interface ParsedArgs {
 export function parseArgs(args: string[], spec: OptSpec): ParsedArgs {
   const flags = new Set<string>()
   const values = new Map<string, string>()
+  const all = new Map<string, string[]>()
+  const setValue = (k: string, v: string) => {
+    values.set(k, v)
+    all.set(k, [...(all.get(k) ?? []), v])
+  }
   const rest: string[] = []
   const flagByShort = new Map<string, string>()
   const flagByLong = new Map<string, string>()
@@ -39,7 +46,7 @@ export function parseArgs(args: string[], spec: OptSpec): ParsedArgs {
       if (flagByLong.has(name)) flags.add(flagByLong.get(name)!)
       else if (valueByLong.has(name)) {
         const v = inline ?? args[++i]
-        if (v !== undefined) values.set(valueByLong.get(name)!, v)
+        if (v !== undefined) setValue(valueByLong.get(name)!, v)
       } else unknown ??= a
       continue
     }
@@ -49,7 +56,7 @@ export function parseArgs(args: string[], spec: OptSpec): ParsedArgs {
         if (flagByShort.has(ch)) flags.add(flagByShort.get(ch)!)
         else if (valueByShort.has(ch)) {
           const v = a.slice(j + 1) || args[++i]
-          if (v !== undefined) values.set(valueByShort.get(ch)!, v)
+          if (v !== undefined) setValue(valueByShort.get(ch)!, v)
           break
         } else {
           unknown ??= `-${ch}`
@@ -59,5 +66,5 @@ export function parseArgs(args: string[], spec: OptSpec): ParsedArgs {
     }
     rest.push(a)
   }
-  return { flags, values, rest, unknown }
+  return { flags, values, all, rest, unknown }
 }
