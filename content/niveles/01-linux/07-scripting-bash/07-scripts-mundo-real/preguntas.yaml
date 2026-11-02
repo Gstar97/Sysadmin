@@ -1,0 +1,68 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué es lo que más valor le da a un respaldo?
+  opciones:
+    - { texto: "Haber comprobado que se puede restaurar", correcta: true, explicacion: "Un respaldo nunca restaurado es solo una esperanza." }
+    - { texto: "Que esté comprimido", explicacion: "Ahorra espacio, pero no dice si sirve." }
+    - { texto: "Que se haga todos los días", explicacion: "Si no sirve, hacerlo seguido no ayuda." }
+    - { texto: "Que tenga fecha en el nombre", explicacion: "Ayuda a ordenarlos, nada más." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En Rocky, sudo respaldo.sh responde command not found, pero respaldo.sh (sin sudo) funciona. ¿Por qué?
+  opciones:
+    - { texto: "sudo busca en secure_path, que no incluye /usr/local/bin; hay que usar la ruta completa", correcta: true, explicacion: "Lo mismo vale para cron, con su PATH mínima." }
+    - { texto: "root no tiene permiso de ejecución", explicacion: "root puede ejecutarlo." }
+    - { texto: "Falta el shebang", explicacion: "Sin sudo funciona, así que no es eso." }
+    - { texto: "El script está dañado", explicacion: "No." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando que comprueba las sumas de control guardadas en respaldo.tar.gz.sha256.
+  aceptadas: [sha256sum -c respaldo.tar.gz.sha256, sha256sum --check respaldo.tar.gz.sha256]
+  explicacion: Responde OK o FAILED por cada archivo.
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que borra los .tar.gz de /backup con más de 7 días de antigüedad, mostrando cada uno.
+  aceptadas: ["find /backup -name '*.tar.gz' -mtime +7 -print -delete", 'find /backup -name "*.tar.gz" -mtime +7 -print -delete', "find /backup -type f -name '*.tar.gz' -mtime +7 -print -delete", "find /backup -name '*.tar.gz' -mtime +7 -delete -print"]
+  explicacion: Prueba primero sin -delete.
+- id: p05
+  tipo: opcion_multiple
+  enunciado: ¿Por qué el script de respaldo cuenta las entradas del tar y falla si hay una sola?
+  opciones:
+    - { texto: "Para detectar un respaldo vacío (solo la carpeta, sin archivos) y no guardarlo como si estuviera bien", correcta: true, explicacion: "Si no, durante semanas habría respaldos inútiles con código 0." }
+    - { texto: "Para que sea más rápido", explicacion: "No." }
+    - { texto: "Porque tar no funciona con una sola entrada", explicacion: "Funciona." }
+    - { texto: "Para la rotación", explicacion: "La rotación usa la fecha." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Por qué el reporte de salud usa set -uo pipefail pero no -e?
+  opciones:
+    - { texto: "Para que una parte que falle (un comando que no existe en ese servidor) no corte el resto del reporte", correcta: true, explicacion: "Cada script elige su modo estricto según lo que hace." }
+    - { texto: "Porque -e no funciona con echo", explicacion: "Funciona." }
+    - { texto: "Por error", explicacion: "Es a propósito." }
+    - { texto: "Porque -e es más lento", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: El script de alta de usuarios se ejecuta dos veces con el mismo CSV. ¿Qué pasa la segunda vez?
+  opciones:
+    - { texto: "Dice \"ya existe\" para cada usuario y no cambia nada: es idempotente", correcta: true, explicacion: "Revisa con id antes de crear." }
+    - { texto: "Duplica los usuarios", explicacion: "Linux no permite dos usuarios con el mismo nombre, y el script lo revisa antes." }
+    - { texto: "Les cambia la contraseña a todos", explicacion: "Los que existen se saltan." }
+    - { texto: "Falla con error", explicacion: "No." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Un script que corre como root desde cron está en /usr/local/bin con permisos 777. ¿Qué problema hay?
+  opciones:
+    - { texto: "Cualquier usuario puede editarlo y lo que agregue se ejecuta como root", correcta: true, explicacion: "Dueño root y 755." }
+    - { texto: "Ninguno, así cualquiera lo puede usar", explicacion: "Usarlo alcanza con 755." }
+    - { texto: "cron no ejecuta archivos con 777", explicacion: "Lo ejecuta, y ese es el problema." }
+    - { texto: "Ocupa más espacio", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: ¿Dónde conviene guardar los respaldos de /srv/datos?
+  opciones:
+    - { texto: "En otro disco como mínimo, y mejor en otro servidor", correcta: true, explicacion: "Si se rompe el disco, se lleva el original y la copia." }
+    - { texto: "En /srv/datos/respaldos", explicacion: "Mismo disco, y además se respaldaría a sí mismo." }
+    - { texto: "En /tmp", explicacion: "Se borra." }
+    - { texto: "No importa dónde", explicacion: "Importa mucho." }

@@ -537,62 +537,131 @@ register(['awk', 'gawk'], {
   },
 })
 
+/** Diferencias entre dos listas de líneas, en el formato normal de diff. Devuelve si hubo cambios. */
+function diffLines(a: string[], b: string[], out: (s: string) => void): boolean {
+  // LCS para un diff mínimo en formato normal.
+  const n = a.length
+  const m = b.length
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+  let i = 0
+  let j = 0
+  const hunks: { del: string[]; add: string[]; ai: number; bj: number }[] = []
+  let cur: { del: string[]; add: string[]; ai: number; bj: number } | null = null
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      if (cur) hunks.push(cur)
+      cur = null
+      i++
+      j++
+    } else if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) {
+      cur ??= { del: [], add: [], ai: i, bj: j }
+      cur.add.push(b[j++])
+    } else {
+      cur ??= { del: [], add: [], ai: i, bj: j }
+      cur.del.push(a[i++])
+    }
+  }
+  if (cur) hunks.push(cur)
+  const range = (st: number, len: number) => (len <= 1 ? String(st + (len ? 1 : 0)) : `${st + 1},${st + len}`)
+  for (const h of hunks) {
+    const op = h.del.length && h.add.length ? 'c' : h.del.length ? 'd' : 'a'
+    const left = op === 'a' ? String(h.ai) : range(h.ai, h.del.length)
+    const right = op === 'd' ? String(h.bj) : range(h.bj, h.add.length)
+    out(`${left}${op}${right}\n`)
+    for (const l of h.del) out(`< ${l}\n`)
+    if (op === 'c') out('---\n')
+    for (const l of h.add) out(`> ${l}\n`)
+  }
+  return hunks.length > 0
+}
+
 register('diff', {
-  usage: 'diff [OPTION]... FILES',
+  usage: 'diff [-r] [-q] ARCHIVO1 ARCHIVO2',
+  summary: '  -r  comparar carpetas completas  -q  solo decir si difieren',
   run(ctx) {
-    const files = ctx.args.filter((x) => !x.startsWith('-'))
+    const flags = ctx.args.filter((x) => x.startsWith('-')).join('')
+    const recursive = /r/.test(flags) || ctx.args.includes('--recursive')
+    const brief = /q/.test(flags) || ctx.args.includes('--brief')
+    const files = ctx.args.filter((x) => !x.startsWith('-') || x === '-')
     if (files.length !== 2) {
       ctx.err("diff: missing operand after '" + (files[0] ?? 'diff') + "'\n")
       return 2
     }
-    let a: string[]
-    let b: string[]
-    try {
-      a = lines(ctx.sys.vfs.readFile(ctx.sh.resolve(files[0]), ctx.sh.cred))
-      b = lines(ctx.sys.vfs.readFile(ctx.sh.resolve(files[1]), ctx.sh.cred))
-    } catch (e) {
-      if (e instanceof FsError) {
-        ctx.err(`diff: ${e.path}: ${e.message}\n`)
+    const vfs = ctx.sys.vfs
+    const cred = ctx.sh.cred
+    const isDir = (p: string) => vfs.exists(p, cred) && vfs.stat(p, cred).type === 'dir'
+    let changed = false
+    let trouble = false
+    const compareFiles = (pa: string, pb: string, shownA: string, shownB: string, header: boolean) => {
+      let a: string
+      let b: string
+      try {
+        a = shownA === '-' ? ctx.stdin.readAll() : vfs.readFile(pa, cred)
+        b = shownB === '-' ? ctx.stdin.readAll() : vfs.readFile(pb, cred)
+      } catch (e) {
+        if (e instanceof FsError) {
+          ctx.err(`diff: ${e.path}: ${e.message}\n`)
+          trouble = true
+          return
+        }
+        throw e
+      }
+      if (a === b) return
+      changed = true
+      if (brief) {
+        ctx.out(`Files ${shownA} and ${shownB} differ\n`)
+        return
+      }
+      if (header) ctx.out(`diff -r ${shownA} ${shownB}\n`)
+      diffLines(lines(a), lines(b), ctx.out)
+    }
+    const compareDirs = (pa: string, pb: string, shownA: string, shownB: string) => {
+      const na = new Set(vfs.readdir(pa, cred))
+      const nb = new Set(vfs.readdir(pb, cred))
+      for (const name of [...new Set([...na, ...nb])].sort()) {
+        const ca = `${pa}/${name}`
+        const cb = `${pb}/${name}`
+        if (!na.has(name)) {
+          ctx.out(`Only in ${shownB}: ${name}\n`)
+          changed = true
+          continue
+        }
+        if (!nb.has(name)) {
+          ctx.out(`Only in ${shownA}: ${name}\n`)
+          changed = true
+          continue
+        }
+        const da = isDir(ca)
+        const db = isDir(cb)
+        if (da && db) {
+          if (recursive) compareDirs(ca, cb, `${shownA}/${name}`, `${shownB}/${name}`)
+          else ctx.out(`Common subdirectories: ${shownA}/${name} and ${shownB}/${name}\n`)
+        } else if (da !== db) {
+          ctx.out(`File ${da ? shownA : shownB}/${name} is a directory while file ${da ? shownB : shownA}/${name} is a regular file\n`)
+          changed = true
+        } else compareFiles(ca, cb, `${shownA}/${name}`, `${shownB}/${name}`, true)
+      }
+    }
+    const [fa, fb] = files
+    const pa = fa === '-' ? '-' : ctx.sh.resolve(fa)
+    const pb = fb === '-' ? '-' : ctx.sh.resolve(fb)
+    for (const [p, f] of [[pa, fa], [pb, fb]]) {
+      if (p !== '-' && !vfs.exists(p, cred)) {
+        ctx.err(`diff: ${f}: No such file or directory\n`)
         return 2
       }
-      throw e
     }
-    // LCS para un diff mínimo en formato normal.
-    const n = a.length
-    const m = b.length
-    const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
-    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
-    let i = 0
-    let j = 0
-    let changed = false
-    const hunks: { del: string[]; add: string[]; ai: number; bj: number }[] = []
-    let cur: { del: string[]; add: string[]; ai: number; bj: number } | null = null
-    while (i < n || j < m) {
-      if (i < n && j < m && a[i] === b[j]) {
-        if (cur) hunks.push(cur)
-        cur = null
-        i++
-        j++
-      } else if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) {
-        cur ??= { del: [], add: [], ai: i, bj: j }
-        cur.add.push(b[j++])
-      } else {
-        cur ??= { del: [], add: [], ai: i, bj: j }
-        cur.del.push(a[i++])
-      }
-    }
-    if (cur) hunks.push(cur)
-    const range = (s: number, len: number) => (len <= 1 ? String(s + (len ? 1 : 0)) : `${s + 1},${s + len}`)
-    for (const h of hunks) {
-      changed = true
-      const op = h.del.length && h.add.length ? 'c' : h.del.length ? 'd' : 'a'
-      const left = op === 'a' ? String(h.ai) : range(h.ai, h.del.length)
-      const right = op === 'd' ? String(h.bj) : range(h.bj, h.add.length)
-      ctx.out(`${left}${op}${right}\n`)
-      for (const l of h.del) ctx.out(`< ${l}\n`)
-      if (op === 'c') ctx.out('---\n')
-      for (const l of h.add) ctx.out(`> ${l}\n`)
-    }
+    const da = pa !== '-' && isDir(pa)
+    const db = pb !== '-' && isDir(pb)
+    if (da && db) compareDirs(pa, pb, fa.replace(/\/$/, ''), fb.replace(/\/$/, ''))
+    else if (da || db) {
+      // diff archivo carpeta: compara con el archivo del mismo nombre dentro de la carpeta.
+      const name = (da ? fb : fa).split('/').pop()!
+      if (da) compareFiles(`${pa}/${name}`, pb, `${fa.replace(/\/$/, '')}/${name}`, fb, false)
+      else compareFiles(pa, `${pb}/${name}`, fa, `${fb.replace(/\/$/, '')}/${name}`, false)
+    } else compareFiles(pa, pb, fa, fb, false)
+    if (trouble) return 2
     return changed ? 1 : 0
   },
 })

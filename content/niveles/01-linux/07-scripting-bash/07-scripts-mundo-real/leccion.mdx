@@ -1,0 +1,137 @@
+---
+id: n1-m7-l7
+titulo: Scripts del mundo real
+minutos: 180
+objetivos:
+  - Escribir un respaldo con verificación, suma de control, rotación y registro.
+  - Escribir un reporte de salud del servidor y un alta de usuarios desde un CSV.
+  - "Llevar un script a producción: dónde instalarlo, cómo programarlo y cómo saber si falla."
+glosario: [rotacion-respaldos, hash]
+verificado: 2026-11
+---
+
+import ciclo from './ciclo.svg?raw'
+import checklist from './checklist.yaml'
+import ejRespaldo from './ej-respaldo.yaml'
+
+Con todo lo del módulo ya puedes escribir las herramientas que se usan de verdad en un servidor. En esta lección vas a ver tres, completas, que son la base del laboratorio y del proyecto del nivel: un respaldo en el que se puede confiar, un reporte de salud y un alta de usuarios a partir de una lista. Y lo que hace la diferencia entre un script que funciona en tu terminal y uno que funciona en producción.
+
+<AntesDeEmpezar>
+- Todo el módulo, en especial funciones, modo estricto y registro (lección 1.7.5).
+- cron y /etc/cron.d (lección 1.5.3).
+- Usuarios, grupos y sudo (módulo 1.2).
+</AntesDeEmpezar>
+
+## 1. Un respaldo en el que se puede confiar
+
+Hacer una copia es fácil. Lo difícil es saber, sin mirar, que la copia de anoche sirve. Piensa en la rueda de repuesto del auto: no alcanza con tenerla, tiene que estar inflada, y eso solo lo sabes si la revisas antes de necesitarla. Un buen respaldo hace cinco cosas:
+
+<Diagrama svg={ciclo} alt="Las cinco etapas de un respaldo confiable: copiar con tar czf, verificar con tar tzf que se puede leer y no está vacío, sellar con sha256sum, rotar borrando los de más de 7 días con find -mtime +7 -delete, y registrar con log, logger y el código de salida. Si la verificación falla, el script termina con exit 1 y un mensaje claro. Y de vez en cuando, la prueba de restaurar en una carpeta temporal y comparar con diff -r." pie="Copiar, verificar, sellar, rotar, registrar. Y de vez en cuando, restaurar." />
+
+El script completo está en el ejercicio de esta lección. Las partes que lo hacen confiable:
+
+```bash
+tar czf "$archivo" -C "$(dirname "$origen")" "$nombre" || falla "tar terminó con error"
+cantidad=$(tar tzf "$archivo" | wc -l)                 # ¿se puede leer?
+if (( cantidad <= 1 )); then                           # ¿tiene algo adentro?
+  rm -f "$archivo"
+  falla "el respaldo de $origen no tiene archivos"
+fi
+sha256sum "$archivo" > "$archivo.sha256"               # para comprobarlo después
+find "$destino" -name "$nombre-*.tar.gz*" -mtime +"$dias" -print -delete   # rotación
+```
+
+Dos ideas que vas a usar siempre: el respaldo **va a otro disco** (o mejor, a otro servidor: si el disco se rompe, se lleva el original y la copia), y **restaurar se prueba** de vez en cuando. En el nivel 3 vas a ver herramientas especializadas (restic, borg) y la regla 3-2-1; la lógica es la misma.
+
+## 2. Un reporte de salud
+
+```bash
+#!/bin/bash
+# salud.sh: estado general del servidor, para revisar cada mañana.
+set -uo pipefail                      # sin -e: queremos el reporte aunque una parte falle
+
+echo "== $(hostname) — $(date '+%F %R') =="
+echo "Carga: $(cut -d' ' -f1-3 /proc/loadavg)  (CPU: $(nproc))"
+free -h | awk '/^Mem/ {print "Memoria: " $3 " usada de " $2 ", disponible " $7}'
+echo "Discos con más del 80 %:"
+df -h --output=pcent,target -x tmpfs -x devtmpfs | awk 'NR > 1 && $1+0 > 80 {print "  " $2 " al " $1}'
+echo "Servicios con fallas:"
+systemctl --failed --no-legend | awk '{print "  " $1}' | grep . || echo "  ninguno"
+echo "Intentos fallidos de SSH (hoy): $(journalctl -u sshd --since today 2>/dev/null | grep -c 'Failed password')"
+```
+
+Fíjate en el `set -uo pipefail` **sin -e**: en un reporte conviene que una parte que falla no corte las demás. Cada herramienta tiene su forma de usar el modo estricto.
+
+## 3. Alta de usuarios desde un CSV
+
+```bash
+#!/bin/bash
+# alta-usuarios.sh: crea los usuarios de un CSV (usuario,nombre,grupo). Idempotente.
+# Uso: alta-usuarios.sh [-n] archivo.csv
+set -euo pipefail
+prueba=0
+[ "${1:-}" = "-n" ] && { prueba=1; shift; }
+csv="${1:?Uso: alta-usuarios.sh [-n] archivo.csv}"
+
+tail -n +2 "$csv" | while IFS=, read -r usuario nombre grupo; do
+  [ -z "$usuario" ] && continue
+  if id "$usuario" &>/dev/null; then
+    echo "ya existe: $usuario"
+    continue
+  fi
+  if (( prueba )); then
+    echo "crearía: $usuario ($nombre) en $grupo"
+    continue
+  fi
+  getent group "$grupo" >/dev/null || groupadd "$grupo"
+  clave=$(openssl rand -base64 12)
+  useradd -m -c "$nombre" -G "$grupo" "$usuario"
+  echo "$usuario:$clave" | chpasswd
+  chage -d 0 "$usuario"                       # cambiarla en el primer inicio de sesión
+  echo "creado: $usuario  clave temporal: $clave"
+done
+```
+
+Es **idempotente**: si lo ejecutas dos veces, la segunda solo dice "ya existe". Las claves temporales se entregan por un canal seguro (nunca por el mismo correo que el nombre de usuario) y se fuerzan a cambiar con `chage -d 0`.
+
+## De tu terminal a producción
+
+<Ordenar ejercicio={checklist} />
+
+- **Dónde**: `/usr/local/bin` para herramientas que pueden usar todos; `/usr/local/sbin` para las de administración. Dueño root y permisos 755: que nadie más pueda modificarlo (un script que corre como root y que un usuario puede editar es una puerta abierta).
+- **Con sudo y en cron, ruta completa**: sudo busca en su propia lista de carpetas (`secure_path`), que en Rocky no incluye `/usr/local/bin`; cron tiene una PATH mínima.
+- **Versionado**: guarda los scripts en un repositorio git del equipo. Vas a saber qué cambió, cuándo y quién (git se ve en profundidad en el nivel 4).
+- **Avisar si falla**: el código de salida, el registro (`logger -t`) y, para lo importante, un aviso (correo o el monitoreo, en el nivel 5). Un timer de systemd con `OnFailure=` también puede avisar.
+
+<EnSimple>
+Un script de producción no termina cuando funciona en tu terminal: termina cuando está instalado con permisos correctos, programado con rutas completas, guardado en git, y alguien revisó el primer resultado.
+</EnSimple>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejRespaldo} />
+
+<ErroresComunes>
+  <ErrorComun titulo="sudo: respaldo.sh: command not found">
+    sudo no busca en /usr/local/bin en Rocky (secure_path). Usa la ruta completa: `sudo /usr/local/bin/respaldo.sh`.
+  </ErrorComun>
+  <ErrorComun titulo="El respaldo existe pero está vacío">
+    Falta verificar el contenido (`tar tzf ... | wc -l`) y fallar si no hay nada. Es el caso real de este módulo.
+  </ErrorComun>
+  <ErrorComun titulo="Los respaldos llenaron el disco">
+    Falta la rotación, o el patrón de find no coincide con los nombres. Prueba primero con `-print` y sin `-delete`.
+  </ErrorComun>
+  <ErrorComun titulo="El respaldo está en el mismo disco que los datos">
+    Si ese disco se rompe, se pierden los dos. Otro disco como mínimo; mejor, otro servidor.
+  </ErrorComun>
+  <ErrorComun titulo="Un usuario común puede editar un script que corre como root">
+    Cualquiera que lo edite tiene root. Dueño root, permisos 755 y la carpeta tampoco escribible por otros.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Respaldo confiable: copiar → verificar (legible y no vacío) → sha256sum → rotar (`find -mtime +N -delete`) → registrar; si falla, `exit 1`. Y restaurar de prueba con `diff -r`.
+- Reporte de salud: carga, memoria, discos, servicios con fallas, intentos de SSH; sin `-e` para que una parte no corte las demás.
+- Alta desde CSV: idempotente, modo -n, clave temporal con `openssl rand` y `chage -d 0`.
+- Producción: `/usr/local/bin` o `sbin`, root y 755, rutas completas con sudo y cron, git, registro y alguien que mire el resultado.
+</Resumen>

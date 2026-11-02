@@ -1,6 +1,7 @@
 import { parseArgs } from '../args'
 import { metrics } from '../perf'
-import { BUILTINS, register, type CommandContext } from '../shell'
+import { BUILTINS, COMMANDS, register, type CommandContext } from '../shell'
+import { commandPackage } from '../packages'
 import { ROOT_CRED } from '../vfs'
 import { systemAuth } from '../system'
 
@@ -605,10 +606,25 @@ register('sudo', {
     // sudo usa la unión de la umask del usuario y 0022: lo que se crea con sudo no queda escribible por el grupo.
     const savedUmask = ctx.sh.umask
     ctx.sh.umask = savedUmask | 0o022
+    // sudo busca los comandos en secure_path (de /etc/sudoers), no en el PATH del usuario.
+    const savedPath = ctx.sh.vars.get('PATH')
+    let securePath: string | undefined
     try {
+      securePath = /^\s*Defaults\s+secure_path\s*=\s*"?([^"\n]+)"?/m.exec(ctx.sys.vfs.readFile('/etc/sudoers', ROOT_CRED))?.[1]?.trim()
+    } catch {
+      // sin sudoers
+    }
+    try {
+      if (securePath) ctx.sh.vars.set('PATH', securePath)
+      const name0 = command[0]
+      if (!name0.includes('/') && !ctx.sh.findInPath(name0) && !(COMMANDS.has(name0) && ctx.sys.isCommandAvailable(name0, (c) => commandPackage(ctx.sys.distro, c)))) {
+        ctx.err(`sudo: ${name0}: command not found\n`)
+        return 1
+      }
       return await ctx.sh.asUser(target, () => ctx.sh.invoke(command, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY }))
     } finally {
       ctx.sh.umask = savedUmask
+      if (savedPath !== undefined) ctx.sh.vars.set('PATH', savedPath)
     }
   },
 })
