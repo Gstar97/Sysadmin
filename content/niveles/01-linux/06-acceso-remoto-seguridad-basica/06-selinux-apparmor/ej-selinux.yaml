@@ -1,0 +1,108 @@
+tipo: terminal
+shell: bash
+titulo: El catálogo que SELinux no deja ver
+descripcion: >-
+  En web01 (Rocky), Pablo dejó configurado un sitio nuevo: nginx tiene que servir /srv/catalogo
+  en el puerto 8090. Copió los archivos desde su home y se fue sin reiniciar nginx. Tu trabajo es
+  que funcione, sin apagar SELinux.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: pablo }
+  paquetes:
+    instalados: [nginx]
+  servicios:
+    nginx: { activo: true, habilitado: true }
+  archivos:
+    /etc/nginx/conf.d/catalogo.conf: |
+      server {
+          listen 8090;
+          root /srv/catalogo;
+          index index.html;
+      }
+    /srv/catalogo/index.html:
+      contenido: "<h1>Catálogo 2026</h1>\n"
+      etiqueta: user_home_t
+pasos:
+  - consigna: Mira en qué modo está SELinux.
+    verificar:
+      - { comando_usado: 'getenforce|sestatus' }
+      - { salida_contiene: nforcing }
+    pistas:
+      - "`getenforce`"
+    solucion: [getenforce]
+    explicacion: >-
+      Enforcing: las reglas se aplican. Así tiene que quedar.
+  - consigna: Reinicia nginx para que tome la configuración nueva.
+    verificar:
+      - { comando_usado: 'systemctl\s+restart\s+nginx' }
+      - { salida_contiene: failed }
+    pistas:
+      - "`sudo systemctl restart nginx`"
+    solucion: [sudo systemctl restart nginx]
+    explicacion: Falla. nginx -t diría que la sintaxis está bien, así que el problema es otro.
+  - consigna: Busca en el registro de auditoría qué denegó SELinux en los últimos minutos.
+    verificar:
+      - { comando_usado: 'ausearch\s+.*-m\s+avc' }
+      - { salida_contiene: name_bind }
+    pistas:
+      - "`sudo ausearch -m avc -ts recent`"
+    solucion: [sudo ausearch -m avc -ts recent]
+    explicacion: >-
+      "denied { name_bind } ... src=8090 ... httpd_t ... unreserved_port_t": nginx (que corre como
+      httpd_t) no tiene permiso para usar el puerto 8090, porque no está etiquetado como puerto web.
+  - consigna: >-
+      Instala la herramienta semanage (paquete policycoreutils-python-utils) y etiqueta el 8090
+      como puerto web (http_port_t). Después reinicia nginx.
+    verificar:
+      - { paquete: policycoreutils-python-utils, instalado: true }
+      - { comando_usado: 'semanage\s+port\s+-a\s+-t\s+http_port_t\s+-p\s+tcp\s+8090' }
+      - { servicio: nginx, activo: true }
+    pistas:
+      - "`sudo dnf install -y policycoreutils-python-utils`, `sudo semanage port -a -t http_port_t -p tcp 8090` y `sudo systemctl restart nginx`"
+    solucion: [sudo dnf install -y policycoreutils-python-utils, sudo semanage port -a -t http_port_t -p tcp 8090, sudo systemctl restart nginx]
+    explicacion: Ahora nginx arranca. El cambio de semanage es permanente.
+  - consigna: Pide la página.
+    verificar:
+      - { comando_usado: 'curl\s+.*8090' }
+      - { salida_contiene: "403" }
+    pistas:
+      - "`curl -s http://localhost:8090`"
+    solucion: [curl -s http://localhost:8090]
+    explicacion: 403 Forbidden. Los permisos del archivo están bien (644), así que vuelve a mirar qué dice SELinux.
+  - consigna: Mira la etiqueta del archivo que no se puede leer.
+    verificar:
+      - { comando_usado: 'ls\s+.*-\w*Z' }
+      - { salida_contiene: user_home_t }
+    pistas:
+      - "`ls -Z /srv/catalogo`"
+    solucion: [ls -Z /srv/catalogo]
+    explicacion: >-
+      user_home_t: la etiqueta de los archivos de un home. Pablo lo movió con mv, y mv conserva la
+      etiqueta. nginx solo puede leer archivos con etiquetas de contenido web, como
+      httpd_sys_content_t.
+  - consigna: >-
+      Agrega una regla para que todo lo que esté en /srv/catalogo sea contenido web, y aplícala a
+      lo que ya existe.
+    verificar:
+      - { comando_usado: 'semanage\s+fcontext\s+-a\s+-t\s+httpd_sys_content_t\s+.*/srv/catalogo\(/\.\*\)\?' }
+      - { comando_usado: 'restorecon\s+.*/srv/catalogo' }
+      - { salida_contiene: httpd_sys_content_t }
+    pistas:
+      - "La regla lleva una expresión que incluye lo de adentro: \"/srv/catalogo(/.*)?\""
+      - "`sudo semanage fcontext -a -t httpd_sys_content_t \"/srv/catalogo(/.*)?\"` y `sudo restorecon -Rv /srv/catalogo`"
+    solucion: ['sudo semanage fcontext -a -t httpd_sys_content_t "/srv/catalogo(/.*)?"', sudo restorecon -Rv /srv/catalogo]
+    explicacion: >-
+      La regla dice qué etiqueta corresponde; restorecon la aplica. Con chcon también se puede
+      cambiar, pero el próximo restorecon (o un reetiquetado completo) lo deshace.
+  - consigna: Comprueba que el catálogo ya se ve.
+    verificar:
+      - { comando_usado: 'curl\s+.*8090' }
+      - { salida_contiene: Catálogo 2026 }
+    pistas:
+      - "`curl -s http://localhost:8090`"
+    solucion: [curl -s http://localhost:8090]
+    explicacion: Funciona, con SELinux en enforcing. Falta abrir el 8090 en el firewall para que se vea desde afuera (lección 1.6.5).

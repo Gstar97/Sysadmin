@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 330" font-family="system-ui, sans-serif" font-size="12.5">
+  <defs>
+    <marker id="fse" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+  </defs>
+  <text x="20" y="28" font-weight="700" fill="currentColor">Cada acceso pasa por dos controles</text>
+  <rect x="20" y="50" width="170" height="64" rx="10" fill="var(--info-soft, #e0e9fd)" stroke="currentColor"/>
+  <text x="105" y="76" text-anchor="middle" font-weight="700" fill="currentColor">nginx</text>
+  <text x="105" y="96" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11.5" fill="currentColor">tipo: httpd_t</text>
+  <rect x="280" y="50" width="220" height="64" rx="10" fill="var(--surface, #fff)" stroke="currentColor"/>
+  <text x="390" y="74" text-anchor="middle" font-weight="700" fill="currentColor">1. Permisos (rwx, dueño)</text>
+  <text x="390" y="94" text-anchor="middle" font-size="11.5" fill="currentColor">¿el usuario nginx puede leer?</text>
+  <rect x="580" y="50" width="260" height="64" rx="10" fill="var(--warn-soft, #fbf0d0)" stroke="currentColor"/>
+  <text x="710" y="74" text-anchor="middle" font-weight="700" fill="currentColor">2. SELinux (etiquetas)</text>
+  <text x="710" y="94" text-anchor="middle" font-size="11.5" fill="currentColor">¿httpd_t puede leer ese tipo?</text>
+  <g stroke="currentColor" stroke-width="1.5" marker-end="url(#fse)">
+    <line x1="190" y1="82" x2="276" y2="82"/>
+    <line x1="500" y1="82" x2="576" y2="82"/>
+  </g>
+  <g font-family="ui-monospace, monospace" font-size="12" fill="currentColor">
+    <text x="20" y="170">/var/www/html/index.html</text>
+    <text x="20" y="200">/srv/catalogo/index.html (movido con mv)</text>
+    <text x="20" y="230">/srv/catalogo/index.html (después de restorecon)</text>
+    <text x="410" y="170">httpd_sys_content_t</text>
+    <text x="410" y="200">user_home_t</text>
+    <text x="410" y="230">httpd_sys_content_t</text>
+  </g>
+  <g font-size="12.5" font-weight="700">
+    <text x="660" y="170" fill="var(--ok, #1a7f37)">pasa</text>
+    <text x="660" y="200" fill="var(--danger, #c62828)">denegado (403)</text>
+    <text x="660" y="230" fill="var(--ok, #1a7f37)">pasa</text>
+  </g>
+  <text x="20" y="276" font-size="11.5" fill="currentColor">La etiqueta completa es usuario:rol:TIPO:nivel (por ejemplo, system_u:object_r:httpd_sys_content_t:s0).</text>
+  <text x="20" y="294" font-size="11.5" fill="currentColor">Para el trabajo diario importa el tipo. ls -Z muestra la de los archivos y ps -Z la de los procesos.</text>
+  <text x="20" y="312" font-size="11.5" fill="currentColor">Aunque los permisos digan que sí, si SELinux dice que no, no se puede.</text>
+</svg>

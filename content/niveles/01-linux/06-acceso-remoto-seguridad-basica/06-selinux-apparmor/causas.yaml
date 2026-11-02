@@ -1,0 +1,11 @@
+tipo: emparejar
+consigna: Une cada denegación de SELinux con su arreglo correcto.
+pares:
+  - { a: "nginx no puede leer archivos que se movieron desde un home (user_home_t)", b: "restorecon -Rv sobre la carpeta (y una regla con semanage fcontext si la ubicación no es estándar)" }
+  - { a: "nginx no arranca al escuchar en el puerto 8090", b: "semanage port -a -t http_port_t -p tcp 8090" }
+  - { a: "sshd no arranca después de cambiar al puerto 2222", b: "semanage port -a -t ssh_port_t -p tcp 2222" }
+  - { a: "nginx como proxy no puede conectarse a la aplicación de atrás", b: "setsebool -P httpd_can_network_connect on" }
+  - { a: "Un sitio nuevo en /srv/www2 nunca tuvo etiqueta web", b: "semanage fcontext -a -t httpd_sys_content_t \"/srv/www2(/.*)?\" y restorecon -Rv /srv/www2" }
+explicacion: >-
+  Ninguno se arregla con setenforce 0. Casi todos los problemas de SELinux son de estos tres
+  tipos: la etiqueta de un archivo, la de un puerto o un booleano.
