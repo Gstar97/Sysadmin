@@ -7,6 +7,9 @@ import { findDirectives, validateNginx } from './nginx'
 import { validateSshd } from './sshd'
 import { validateSudoers } from './sudoers'
 import { validateSystemd } from './systemd'
+import { validateKea } from './kea'
+import { validateNamed } from './named'
+import { validateZone } from './zone'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -19,8 +22,20 @@ export interface Validation {
   entries?: { key: string; value: string; line: number }[]
 }
 
-export function validateConfig(lang: ConfigLanguage, text: string): Validation {
+export function validateConfig(lang: ConfigLanguage, text: string, fileName?: string): Validation {
   switch (lang) {
+    case 'zona': {
+      // El nombre de la zona sale del archivo (db.empresa.local) o, si no, de su SOA.
+      const fromFile = /(?:^|\/)(?:db\.)?([a-z0-9.-]+?)(?:\.zone|\.db)?$/i.exec(fileName ?? '')?.[1]
+      let zone = fromFile && fromFile.includes('.') ? fromFile : 'empresa.local'
+      // db.192.168.10 es la zona inversa de esa red: 10.168.192.in-addr.arpa.
+      if (/^\d+(\.\d+){0,2}$/.test(zone)) zone = `${zone.split('.').reverse().join('.')}.in-addr.arpa`
+      return validateZone(text, zone)
+    }
+    case 'named':
+      return validateNamed(text)
+    case 'kea':
+      return validateKea(text)
     case 'nginx':
       return validateNginx(text)
     case 'compose':

@@ -176,6 +176,20 @@ export interface NetIface {
   ip?: string
   mac: string
   up: boolean
+  /** Direcciones IPv6 globales o ULA configuradas (la de enlace local se agrega sola). */
+  ipv6: string[]
+  /** La interfaz pide su dirección por DHCP. */
+  dhcp: boolean
+  speed: number
+  duplex: 'full' | 'half'
+  autoneg: boolean
+  mtu: number
+}
+
+export interface Neighbor {
+  mac: string
+  dev: string
+  state: 'REACHABLE' | 'STALE' | 'FAILED' | 'PERMANENT'
 }
 
 export interface FirewallState {
@@ -253,6 +267,14 @@ export class System {
   /** Último inicio de sesión por SSH de cada usuario (para "Last login"). */
   lastLogins = new Map<string, { time: number; from: string }>()
   dnsRecords: Record<string, string> = {}
+  /** Servidores DNS con los que arrancó el ejercicio (resolvedores que funcionan aunque no sean del laboratorio). */
+  initialDns: string[] = []
+  /** Resolvedores que no responden. */
+  dnsDown: string[] = []
+  /** Tabla ARP (ip neigh). */
+  neigh = new Map<string, Neighbor>()
+  /** Resolución por DNS del laboratorio (la instala el módulo de DNS para no crear dependencias circulares). */
+  static resolver?: (sys: System, name: string) => string | undefined | null
   /** Hay salida a internet: cualquier IP pública responde si la puerta de enlace funciona. */
   internet = true
   sites: Record<string, string> = {}
@@ -274,7 +296,7 @@ export class System {
   /** Paquetes instalados con una actualización pendiente. */
   upgradable = new Set<string>()
   /** Cambios de red pendientes de nmcli (se aplican con "nmcli connection up"). */
-  nmPending = new Map<string, { address?: string; gateway?: string; dns?: string[] }>()
+  nmPending = new Map<string, { address?: string; gateway?: string; dns?: string[]; method?: string; ipv6?: string[] }>()
   bootTime: number
   private nextPid = 800
 
@@ -428,9 +450,22 @@ export class System {
     }
 
     // Red
-    this.interfaces = state.red.interfaces.map((i) => ({ name: i.nombre, ip: i.ip, mac: i.mac ?? macFor(i.nombre + state.hostname), up: i.estado === 'UP' }))
+    this.interfaces = state.red.interfaces.map((i) => ({
+      name: i.nombre,
+      ip: i.ip,
+      mac: i.mac ?? macFor(i.nombre + state.hostname),
+      up: i.estado === 'UP',
+      ipv6: i.ipv6,
+      dhcp: i.dhcp,
+      speed: i.velocidad,
+      duplex: i.duplex,
+      autoneg: i.autonegociacion,
+      mtu: i.mtu,
+    }))
     this.gateway = state.red.puerta_enlace
     this.dns = state.red.dns
+    this.initialDns = [...state.red.dns]
+    this.dnsDown = state.red.dns_caidos
     for (const h of state.red.alcanzables) this.reachable.add(h)
     if (this.gateway) this.reachable.add(this.gateway)
     this.internet = state.red.internet
@@ -641,6 +676,13 @@ export class System {
       this.vfs.mkdirp(path.slice(0, path.lastIndexOf('/')) || '/', ROOT_CRED)
       if (!this.vfs.exists(path)) this.vfs.writeFile(path, content, ROOT_CRED)
     }
+    for (const [path, perm] of Object.entries(info.perms ?? {})) {
+      if (!this.vfs.exists(path)) continue
+      const node = this.vfs.stat(path, ROOT_CRED)
+      node.mode = perm.mode
+      const gid = perm.group ? this.groups.get(perm.group)?.gid : undefined
+      if (gid !== undefined) node.gid = gid
+    }
     for (const [link, target] of Object.entries(info.links ?? {})) {
       this.vfs.mkdirp(link.slice(0, link.lastIndexOf('/')) || '/', ROOT_CRED)
       if (!this.vfs.exists(link, ROOT_CRED, false)) this.vfs.symlink(target, link, ROOT_CRED)
@@ -726,6 +768,10 @@ export class System {
       }
     } catch {
       // sin /etc/hosts
+    }
+    if (System.resolver) {
+      const r = System.resolver(this, name)
+      if (r !== null) return r
     }
     if (this.dns.length === 0) return undefined
     return this.dnsRecords[name]

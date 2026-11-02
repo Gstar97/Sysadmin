@@ -83,6 +83,16 @@ export const packetScenarioSchema = z.strictObject({
             .strictObject({ origen: z.string(), destino: z.string(), ttl: z.number().int().optional(), protocolo: z.string().optional() })
             .optional(),
           enlace: z.strictObject({ origen: z.string(), destino: z.string(), tipo: z.string().default('Ethernet II') }).optional(),
+          /** ARP viaja directo sobre Ethernet (EtherType 0x0806), sin encabezado IP. */
+          arp: z
+            .strictObject({
+              operacion: z.enum(['solicitud', 'respuesta', 'gratuito']),
+              mac_emisor: z.string(),
+              ip_emisor: z.string(),
+              mac_objetivo: z.string(),
+              ip_objetivo: z.string(),
+            })
+            .optional(),
         }),
       }),
     )
@@ -190,7 +200,7 @@ const configRuleSchema = z.discriminatedUnion('tipo', [
   }),
 ])
 
-export const configLanguages = ['nginx', 'compose', 'ansible', 'yaml', 'sshd', 'fstab', 'sudoers', 'systemd', 'texto'] as const
+export const configLanguages = ['nginx', 'compose', 'ansible', 'yaml', 'sshd', 'fstab', 'sudoers', 'systemd', 'zona', 'named', 'kea', 'texto'] as const
 
 export const configExerciseSchema = z.strictObject({
   tipo: z.literal('configuracion'),

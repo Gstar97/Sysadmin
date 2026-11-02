@@ -1,0 +1,132 @@
+tipo: troubleshooting
+titulo: El sistema de facturación se corta a cada rato
+descripcion: >-
+  Incidente simulado en un estudio contable de 25 personas. Una red, un switch por piso y un
+  servidor con el sistema de facturación. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Martes, 10:15. Desde ayer a la tarde, el sistema de facturación (en srv-fact,
+      192.168.20.15) "se corta": a veces anda perfecto y de repente da error de conexión;
+      al rato vuelve. No le pasa a todos al mismo tiempo. Ayer instalaron un reloj de control
+      de asistencia nuevo en la entrada.
+    evidencia:
+      - titulo: Lo que ve un usuario
+        contenido: |
+          Error: no se pudo conectar con el servidor de facturación (192.168.20.15:5432).
+          Reintentar...
+    opciones:
+      - { texto: "Mirar desde tu PC qué pasa con la conexión a 192.168.20.15", ir_a: n_ping, minutos: 3 }
+      - texto: Reiniciar srv-fact, que es lo más rápido
+        ir_a: n_reinicio
+        minutos: 10
+      - texto: Cambiar el cable del servidor
+        ir_a: n_cable
+        minutos: 15
+  n_reinicio:
+    situacion: >-
+      Diez minutos con todo el estudio sin facturar. Al volver, anda... durante seis minutos.
+      Después, otra vez el error para algunos usuarios. Reiniciar no cambió la causa.
+    opciones:
+      - { texto: "Investigar la conexión desde tu PC", ir_a: n_ping, minutos: 3 }
+  n_cable:
+    situacion: >-
+      Cambias el cable y el puerto del switch. El problema sigue igual: un cable dañado haría
+      fallar a todos a la vez, no a algunos sí y a otros no.
+    opciones:
+      - { texto: "Investigar la conexión desde tu PC", ir_a: n_ping, minutos: 3 }
+  n_ping:
+    situacion: >-
+      Haces un ping largo al servidor desde tu PC y, en el medio, miras la tabla ARP.
+    evidencia:
+      - titulo: ping y tabla ARP desde tu PC
+        contenido: |
+          $ ping 192.168.20.15
+          64 bytes from 192.168.20.15: icmp_seq=1 ttl=64 time=0.42 ms
+          64 bytes from 192.168.20.15: icmp_seq=2 ttl=64 time=0.39 ms
+          64 bytes from 192.168.20.15: icmp_seq=3 ttl=64 time=3.81 ms
+          64 bytes from 192.168.20.15: icmp_seq=4 ttl=64 time=3.95 ms
+          $ ip neigh show 192.168.20.15
+          192.168.20.15 dev enp0s3 lladdr 3c:7c:3f:51:0a:22 REACHABLE
+          ... dos minutos después ...
+          $ ip neigh show 192.168.20.15
+          192.168.20.15 dev enp0s3 lladdr 00:1b:21:8e:14:15 STALE
+    opciones:
+      - { texto: "La MAC de 192.168.20.15 cambia: comprobar quién contesta con arping", ir_a: n_arping, minutos: 3 }
+      - texto: El ping responde, así que la red está bien y el problema es del programa
+        ir_a: n_programa
+        minutos: 20
+  n_programa:
+    situacion: >-
+      Pasas veinte minutos revisando los registros del sistema de facturación: no hay errores
+      en el servidor, porque las conexiones que fallan nunca le llegan. El ping responde siempre
+      porque contesta "alguien", pero no siempre el mismo equipo. Vuelve a mirar la tabla ARP.
+    opciones:
+      - { texto: "Volver a la evidencia de la tabla ARP y usar arping", ir_a: n_arping, minutos: 3 }
+  n_arping:
+    situacion: >-
+      Preguntas varias veces quién tiene 192.168.20.15.
+    evidencia:
+      - titulo: sudo arping -c 3 -I enp0s3 192.168.20.15
+        contenido: |
+          ARPING 192.168.20.15 from 192.168.20.40 enp0s3
+          Unicast reply from 192.168.20.15 [00:1B:21:8E:14:15]  0.512ms
+          Unicast reply from 192.168.20.15 [3C:7C:3F:51:0A:22]  2.871ms
+          Unicast reply from 192.168.20.15 [00:1B:21:8E:14:15]  0.498ms
+          Unicast reply from 192.168.20.15 [3C:7C:3F:51:0A:22]  2.902ms
+          Sent 2 probes (1 broadcast(s))
+          Received 4 response(s)
+      - titulo: ip -br link en srv-fact
+        contenido: |
+          eno1             UP             00:1b:21:8e:14:15 <BROADCAST,MULTICAST,UP,LOWER_UP>
+    opciones:
+      - { texto: "Hay dos equipos con la misma IP: buscar en el switch dónde está la MAC 3c:7c:3f:51:0a:22", ir_a: n_switch, minutos: 5 }
+      - texto: Bloquear la MAC desconocida en todos los switches y listo
+        ir_a: n_bloqueo
+        minutos: 10
+  n_bloqueo:
+    situacion: >-
+      Bloqueas la MAC y la facturación vuelve a andar. Una hora después llama la encargada:
+      el reloj de asistencia nuevo "no marca" y nadie puede fichar la salida. Lo bloqueaste
+      sin saber qué era. Hay que encontrar el equipo y corregir su IP.
+    opciones:
+      - { texto: "Buscar en el switch dónde está esa MAC", ir_a: n_switch, minutos: 5 }
+  n_switch:
+    situacion: >-
+      En el switch de la planta baja buscas la MAC en la tabla.
+    evidencia:
+      - titulo: show mac address-table address 3c7c.3f51.0a22
+        contenido: |
+          Mac Address Table
+          -------------------------------------------
+          Vlan    Mac Address       Type        Ports
+          ----    -----------       --------    -----
+             1    3c7c.3f51.0a22    DYNAMIC     Fa0/14
+      - titulo: Etiqueta del puerto Fa0/14 en el panel de conexiones
+        contenido: "Fa0/14 → toma 14 → hall de entrada (reloj de asistencia, instalado ayer)"
+    opciones:
+      - { texto: "Hablar con el técnico del reloj y cambiarle la IP por una libre, comprobada con arping -D", ir_a: n_fin, minutos: 15 }
+      - texto: Cambiarle la IP al servidor de facturación, que es más fácil
+        ir_a: n_cambio_srv
+        minutos: 10
+  n_cambio_srv:
+    situacion: >-
+      Cambias la IP de srv-fact. Ahora 25 PC tienen configurada la dirección vieja en el
+      programa de facturación y nadie se conecta. Mover el servidor por culpa de un equipo
+      mal configurado es arreglar el lado equivocado. Vuelves la IP a 192.168.20.15.
+    opciones:
+      - { texto: "Corregir la IP del reloj", ir_a: n_fin, minutos: 15 }
+  n_fin:
+    final: exito
+    situacion: >-
+      El técnico había copiado la configuración de red de un manual de ejemplo de otra
+      instalación, con IP fija 192.168.20.15. Le asignas 192.168.20.60 (antes compruebas con
+      arping -D que está libre). En cinco minutos, todas las PC tienen en su tabla ARP la MAC
+      correcta del servidor y la facturación no vuelve a cortarse.
+    resumen: >-
+      Una falla intermitente con un único equipo, que a algunos les anda y a otros no, es la
+      firma de una IP duplicada. La tabla ARP mostró la pista (la MAC de la IP cambiaba) y
+      arping la confirmó (dos MAC contestan). La tabla MAC del switch dijo en qué puerto estaba
+      el intruso. Para prevenirlo: un inventario de IP fijas, reservas de DHCP para los equipos
+      que necesitan IP fija, y comprobar con arping -D antes de usar una dirección.

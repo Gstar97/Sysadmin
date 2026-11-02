@@ -1,0 +1,95 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué indican los tres primeros bytes de una dirección MAC?
+  opciones:
+    - { texto: "El fabricante de la placa (OUI)", correcta: true, explicacion: "El IEEE asigna cada OUI a un fabricante; los otros tres bytes los asigna él." }
+    - { texto: "La red a la que pertenece el equipo", explicacion: "Eso lo dice la IP con su máscara; la MAC no tiene parte de red." }
+    - { texto: "El puerto del switch", explicacion: "El puerto lo aprende el switch; no está en la MAC." }
+    - { texto: "La versión de Ethernet", explicacion: "No hay información de versión en la MAC." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿A quién va dirigida una trama con destino ff:ff:ff:ff:ff:ff?
+  opciones:
+    - { texto: "A todos los equipos de la red local (broadcast)", correcta: true, explicacion: "El switch la inunda por todos los puertos menos el de entrada." }
+    - { texto: "Al router", explicacion: "El router tiene su propia MAC unicast." }
+    - { texto: "A ningún equipo: es una dirección inválida", explicacion: "Es la dirección de broadcast." }
+    - { texto: "A todos los equipos de internet", explicacion: "Un broadcast no sale de la red local: el router no lo reenvía." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿De qué parte de la trama aprende un switch dónde está cada equipo?
+  opciones:
+    - { texto: "De la MAC de origen y el puerto por donde entró la trama", correcta: true, explicacion: "Anota esa MAC en ese puerto en su tabla." }
+    - { texto: "De la MAC de destino", explicacion: "El destino lo usa para decidir a dónde mandar la trama, no para aprender." }
+    - { texto: "De la IP de origen", explicacion: "Un switch de capa 2 no mira las IP." }
+    - { texto: "Se lo configura el administrador a mano", explicacion: "Se puede, pero normalmente aprende solo." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un switch recibe por el puerto 3 una trama para una MAC que no está en su tabla. ¿Qué hace?
+  opciones:
+    - { texto: "La inunda por todos los puertos menos el 3", correcta: true, explicacion: "Así le llega al destino, esté donde esté; los demás la descartan." }
+    - { texto: "La descarta", explicacion: "Descarta solo si el destino está en el mismo puerto de entrada." }
+    - { texto: "La devuelve por el puerto 3", explicacion: "Nunca la devuelve por donde entró." }
+    - { texto: "Le pregunta al router dónde está", explicacion: "El switch no consulta a nadie: inunda y aprende de la respuesta." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La tabla del switch dice que la MAC de B está en el puerto 2. A, en el puerto 1, le manda una trama a B. ¿Qué hace el switch?
+  opciones:
+    - { texto: "La reenvía solo por el puerto 2", correcta: true, explicacion: "Conoce el destino y está en otro puerto: reenvía directo." }
+    - { texto: "La inunda por todos los puertos", explicacion: "Inunda solo cuando no conoce el destino." }
+    - { texto: "La descarta", explicacion: "Descarta si el destino está en el mismo puerto de entrada." }
+    - { texto: "La manda al router", explicacion: "A y B están en la misma red: el router no interviene." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una red tiene tres switches conectados entre sí y 200 equipos, sin ningún router en el medio. ¿Cuántos dominios de broadcast hay?
+  opciones:
+    - { texto: "Uno", correcta: true, explicacion: "Los switches inundan los broadcast por todos sus puertos: llegan a los 200 equipos." }
+    - { texto: "Tres, uno por switch", explicacion: "Los switches no dividen dominios de broadcast." }
+    - { texto: "200, uno por equipo", explicacion: "Eso se parece más a los dominios de colisión de cada puerto." }
+    - { texto: "Ninguno", explicacion: "Siempre hay al menos uno." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué equipo divide la red en varios dominios de broadcast?
+  opciones:
+    - { texto: "El router (también se logra con VLAN)", correcta: true, explicacion: "Un router no reenvía broadcast de una interfaz a otra." }
+    - { texto: "El switch", explicacion: "El switch divide dominios de colisión, no de broadcast." }
+    - { texto: "El hub", explicacion: "El hub no divide nada: repite todo por todos los puertos." }
+    - { texto: "El punto de acceso", explicacion: "Extiende la misma red: mismo dominio de broadcast." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: ¿Qué sabes de esta máquina por su MAC?
+  salida: |
+    $ ip -br link
+    lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP>
+    enp0s3           UP             08:00:27:5e:aa:12 <BROADCAST,MULTICAST,UP,LOWER_UP>
+  opciones:
+    - { texto: "Es una máquina virtual de VirtualBox (OUI 08:00:27) y enp0s3 tiene enlace", correcta: true, explicacion: "08:00:27 es el OUI de VirtualBox, y UP con LOWER_UP indica que la interfaz está activa y con enlace." }
+    - { texto: "Es un equipo físico de VMware", explicacion: "VMware usa 00:50:56 o 00:0c:29." }
+    - { texto: "enp0s3 no tiene cable", explicacion: "LOWER_UP indica que hay enlace." }
+    - { texto: "Tiene la IP 08:00:27", explicacion: "Eso es parte de la MAC, no una IP." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un colega propone filtrar por MAC el Wi-Fi de la oficina para que "solo entren los equipos conocidos". ¿Cuál es el problema?
+  opciones:
+    - { texto: "La MAC se cambia fácilmente: cualquiera puede copiar la de un equipo permitido", correcta: true, explicacion: "Para controlar acceso se usa WPA2/WPA3 Enterprise con usuario o certificado (módulo 2.6)." }
+    - { texto: "Las MAC cambian todos los días", explicacion: "No cambian solas, salvo las aleatorias de los teléfonos." }
+    - { texto: "El Wi-Fi no usa MAC", explicacion: "El Wi-Fi sí usa MAC." }
+    - { texto: "No hay ningún problema: es la forma recomendada", explicacion: "No es un control de seguridad confiable." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una trama llega a un switch con la suma de control (FCS) incorrecta. ¿Qué pasa?
+  opciones:
+    - { texto: "El switch la descarta, y si era TCP, el emisor la va a reenviar al no recibir confirmación", correcta: true, explicacion: "Ethernet detecta el error pero no avisa: la recuperación queda en manos de capas de arriba." }
+    - { texto: "El switch la corrige", explicacion: "La FCS sirve para detectar errores, no para corregirlos." }
+    - { texto: "El switch le avisa al emisor", explicacion: "Ethernet no manda avisos de error." }
+    - { texto: "La reenvía igual", explicacion: "Una trama dañada se descarta." }

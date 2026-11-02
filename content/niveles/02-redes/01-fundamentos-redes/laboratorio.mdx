@@ -1,0 +1,46 @@
+---
+titulo: Red mínima, con ARP y tablas MAC a la vista
+horas: 2
+verificacion:
+  - Armé la red de la oficina en el constructor de topologías y los tres objetivos de ping dan verde.
+  - Vi en la consola del switch qué MAC aprendió en cada puerto.
+  - Conecté dos máquinas virtuales por una red interna y les puse IP con ip addr.
+  - Capturé con tcpdump una solicitud y una respuesta ARP y las identifiqué.
+  - Vi la tabla de vecinos antes y después del ping, y la vacié.
+  - Provoqué una IP duplicada, la detecté con arping y la quité.
+---
+
+import topologia from './lab-topologia.yaml'
+import consola from './lab-consola.yaml'
+import pasos from './lab-red-minima.yaml'
+
+## Objetivo
+
+Ver funcionando todo lo del módulo: cables, switch, MAC y ARP. Primero en la plataforma, donde puedes equivocarte sin consecuencias, y después en tus máquinas virtuales, donde vas a ver las tramas de verdad.
+
+## Qué necesitas
+
+- La plataforma para las partes 1 y 2.
+- Para la parte 3: rocky01 y ubuntu01 (las máquinas virtuales del nivel 1) y unas dos horas en total.
+
+## Parte 1: armar la red en el constructor
+
+Conecta los equipos y configura el servidor. Si un ping falla, el constructor te dice por qué: lee el motivo antes de cambiar algo.
+
+<Topologia ejercicio={topologia} />
+
+## Parte 2: la consola del switch
+
+Así se ve lo que aprendió el switch en un equipo real (con sintaxis Cisco, que vas a usar mucho en el módulo 2.4).
+
+<Terminal ejercicio={consola} />
+
+## Parte 3: tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. En la parte 3, ¿por qué la respuesta ARP no es un broadcast si la solicitud sí lo era?
+2. Si conectaras una tercera máquina a la red interna "labred", ¿vería la solicitud ARP de rocky01? ¿Y la respuesta de ubuntu01?
+3. En la red de tu casa o de tu trabajo, ¿cuántos equipos comparten el mismo dominio de broadcast? ¿Te parece mucho?

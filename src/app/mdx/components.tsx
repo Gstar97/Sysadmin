@@ -43,6 +43,11 @@ const UnitsCalculator = lazy(() => import('@/interactive/fundamentos/UnitsCalcul
 const BitOps = lazy(() => import('@/interactive/fundamentos/BitOps').then((m) => ({ default: m.BitOps })))
 const PermissionsCalcView = lazy(() => import('@/interactive/linux/PermissionsCalc').then((m) => ({ default: m.PermissionsCalc })))
 const VimSimulatorView = lazy(() => import('@/interactive/vim/VimSimulator').then((m) => ({ default: m.VimSimulator })))
+const PoeCalculatorView = lazy(() => import('@/interactive/redes/PoeCalculator').then((m) => ({ default: m.PoeCalculator })))
+const MacTableSimView = lazy(() => import('@/interactive/redes/MacTableSim').then((m) => ({ default: m.MacTableSim })))
+const AddressClassifierView = lazy(() => import('@/interactive/redes/AddressClassifier').then((m) => ({ default: m.AddressClassifier })))
+const VlsmDesignerView = lazy(() => import('@/interactive/redes/VlsmDesigner').then((m) => ({ default: m.VlsmDesigner })))
+const NatSimView = lazy(() => import('@/interactive/redes/NatSim').then((m) => ({ default: m.NatSim })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
 function Loading() {
@@ -323,6 +328,46 @@ export function CalculadoraPermisos(props: ComponentProps<typeof PermissionsCalc
   )
 }
 
+export function CalculadoraPoe(props: ComponentProps<typeof PoeCalculatorView>) {
+  return (
+    <Island>
+      <PoeCalculatorView {...props} />
+    </Island>
+  )
+}
+
+export function SimuladorSwitch() {
+  return (
+    <Island>
+      <MacTableSimView />
+    </Island>
+  )
+}
+
+export function ClasificadorIp() {
+  return (
+    <Island>
+      <AddressClassifierView />
+    </Island>
+  )
+}
+
+export function DisenadorVlsm(props: ComponentProps<typeof VlsmDesignerView>) {
+  return (
+    <Island>
+      <VlsmDesignerView {...props} />
+    </Island>
+  )
+}
+
+export function SimuladorNat() {
+  return (
+    <Island>
+      <NatSimView />
+    </Island>
+  )
+}
+
 export function SimuladorVim({ ejercicio }: { ejercicio: unknown }) {
   const { value, error } = useExercise('vim', ejercicio)
   if (error) return <ExerciseError error={error} />
@@ -503,6 +548,11 @@ export const mdxComponents = {
   AntesDeEmpezar,
   SimuladorVim,
   CalculadoraPermisos,
+  CalculadoraPoe,
+  SimuladorSwitch,
+  ClasificadorIp,
+  DisenadorVlsm,
+  SimuladorNat,
   ErroresComunes,
   ErrorComun,
   Resumen,

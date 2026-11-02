@@ -1,0 +1,52 @@
+tipo: paquetes
+titulo: Cuando el destino está en otra red
+descripcion: >-
+  Ahora la PC hace ping a 8.8.8.8, en internet. No va a preguntar por la MAC de 8.8.8.8:
+  pregunta por la de su puerta de enlace.
+nodos:
+  - { id: pc, etiqueta: "PC 192.168.10.50", tipo: pc, x: 0, y: 80 }
+  - { id: sw, etiqueta: Switch, tipo: switch, x: 200, y: 80 }
+  - { id: r1, etiqueta: "Router 192.168.10.1", tipo: router, x: 400, y: 80 }
+  - { id: net, etiqueta: "Internet (8.8.8.8)", tipo: internet, x: 600, y: 80 }
+enlaces:
+  - { a: pc, b: sw }
+  - { a: sw, b: r1 }
+  - { a: r1, b: net }
+pasos:
+  - desde: pc
+    hacia: r1
+    titulo: "¿Quién tiene 192.168.10.1?"
+    explicacion: >-
+      8.8.8.8 no está en la red 192.168.10.0/24, así que la PC tiene que entregarle el paquete a
+      la puerta de enlace. Lo que necesita es la MAC del router, y eso es lo que pregunta.
+    capas:
+      enlace: { origen: "52:54:00:aa:10:50", destino: "ff:ff:ff:ff:ff:ff", tipo: "Ethernet II · 0806 (ARP)" }
+      arp: { operacion: solicitud, mac_emisor: "52:54:00:aa:10:50", ip_emisor: 192.168.10.50, mac_objetivo: "00:00:00:00:00:00", ip_objetivo: 192.168.10.1 }
+  - desde: r1
+    hacia: pc
+    titulo: El router responde con su MAC
+    explicacion: El router contesta con la MAC de su interfaz de la LAN.
+    capas:
+      enlace: { origen: "52:54:00:12:35:02", destino: "52:54:00:aa:10:50", tipo: "Ethernet II · 0806 (ARP)" }
+      arp: { operacion: respuesta, mac_emisor: "52:54:00:12:35:02", ip_emisor: 192.168.10.1, mac_objetivo: "52:54:00:aa:10:50", ip_objetivo: 192.168.10.50 }
+  - desde: pc
+    hacia: r1
+    titulo: "IP de 8.8.8.8, MAC del router"
+    explicacion: >-
+      Esta es la clave de todo el tema: la IP de destino es la del equipo final (8.8.8.8), pero
+      la MAC de destino es la del router, que es el siguiente salto. Las IP viajan de punta a
+      punta; las MAC solo sirven dentro de cada red.
+    capas:
+      aplicacion: { protocolo: ICMP, datos: "Echo request (ping)" }
+      red: { origen: 192.168.10.50, destino: 8.8.8.8, ttl: 64, protocolo: ICMP }
+      enlace: { origen: "52:54:00:aa:10:50", destino: "52:54:00:12:35:02" }
+  - desde: r1
+    hacia: net
+    titulo: El router arma una trama nueva
+    explicacion: >-
+      El router saca la trama, mira la IP de destino, baja el TTL y arma una trama nueva para
+      la siguiente red con sus propias MAC. La IP de destino sigue siendo 8.8.8.8.
+    capas:
+      aplicacion: { protocolo: ICMP, datos: "Echo request (ping)" }
+      red: { origen: "200.45.10.7 (tras el NAT)", destino: 8.8.8.8, ttl: 63, protocolo: ICMP }
+      enlace: { origen: "00:1e:bd:7c:00:01", destino: "MAC del equipo del proveedor" }

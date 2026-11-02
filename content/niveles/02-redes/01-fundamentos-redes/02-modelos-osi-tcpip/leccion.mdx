@@ -1,0 +1,115 @@
+---
+id: n2-m1-l2
+titulo: Modelos OSI y TCP/IP
+minutos: 150
+objetivos:
+  - Nombrar las capas de OSI y de TCP/IP y qué se resuelve en cada una.
+  - Explicar la encapsulación y las unidades de datos (datos, segmento, paquete, trama, bits).
+  - Usar el modelo de capas para ubicar un problema y elegir por dónde empezar a diagnosticar.
+glosario: [modelo-osi, encapsulacion, pdu, trama, paquete-ip, segmento]
+verificado: 2026-11
+---
+
+import capas from './capas.svg?raw'
+import encapsular from './encapsular.yaml'
+import ordenOsi from './orden-osi.yaml'
+import fallasCapa from './fallas-capa.yaml'
+
+Para que un navegador en Buenos Aires hable con un servidor en Fráncfort tienen que ponerse de acuerdo muchísimas cosas: cómo se representa un bit en el cable, a quién va cada mensaje, qué pasa si se pierde un pedazo, en qué idioma se pide la página. Resolver todo de una sola vez sería imposible. Por eso las redes se piensan en **capas**: cada una resuelve un problema y se apoya en la de abajo, sin preocuparse por los detalles de las demás.
+
+<AntesDeEmpezar>
+- El mapa de capas que viste en el nivel 0 (lección 0.4.5): ahora lo vas a usar para trabajar.
+- Las piezas de la red de la lección anterior: placa de red, switch y router.
+- Los puertos y el DNS (lección 1.6.1).
+</AntesDeEmpezar>
+
+## La idea de las capas
+
+Piensa en mandar un regalo por correo a otro país. Tú escribes la carta (lo que quieres decir). La metes en un sobre con la dirección del destinatario. El correo de tu ciudad pone ese sobre en una bolsa rotulada "para Fráncfort". La bolsa viaja en un camión, después en un avión. En cada etapa alguien agrega o lee **su propio rótulo**, y a nadie le importa qué dice la carta. Al llegar, se hace todo al revés: se abre la bolsa, se lee el sobre, se entrega la carta.
+
+En una red pasa lo mismo: cada capa agrega su **encabezado** al mensaje al enviar y lo saca al recibir. Donde la comparación no llega: en una red, los "rótulos" se agregan y se quitan en microsegundos, y un mensaje grande se parte en muchos paquetes que pueden viajar por caminos distintos.
+
+<EnSimple>
+Cada capa hace un trabajo y le pasa el resultado a la de abajo, envuelto en un sobre nuevo. Al llegar, cada capa abre su sobre y le pasa el contenido a la de arriba.
+</EnSimple>
+
+## Los dos modelos
+
+Hay dos modelos y vas a usar los dos:
+
+- **OSI** (7 capas) es el modelo de referencia: nadie lo implementa tal cual, pero es el idioma común. Cuando alguien dice "es un problema de capa 2" o "un switch de capa 3", habla en OSI.
+- **TCP/IP** (4 capas) es el que funciona de verdad en internet y en tu red.
+
+<Diagrama svg={capas} alt="Las siete capas de OSI (aplicación, presentación, sesión, transporte, red, enlace de datos y física) al lado de las cuatro de TCP/IP: aplicación agrupa las tres de arriba de OSI, transporte coincide, internet equivale a red, y acceso a la red agrupa enlace y física. Para cada una se indica la unidad de datos (datos, segmento, paquete, trama, bits) y ejemplos (HTTP, TCP, IP, Ethernet, cable)." pie="Las capas 5 a 7 de OSI se juntan en la de aplicación de TCP/IP; la 1 y la 2, en la de acceso a la red." />
+
+Qué resuelve cada capa, de abajo hacia arriba:
+
+| Capa OSI | Qué resuelve | Dirección que usa | Equipos típicos |
+| --- | --- | --- | --- |
+| 1 · Física | Convertir bits en señales (eléctricas, luz, radio) | — | Cables, conectores, fibras |
+| 2 · Enlace | Llevar el mensaje al siguiente equipo de la misma red | MAC | Switch, punto de acceso |
+| 3 · Red | Llevar el mensaje de una red a otra, hasta el destino final | IP | Router |
+| 4 · Transporte | Llevar los datos al programa correcto, y reenviar lo que se pierde (TCP) | Puerto | Firewall |
+| 5 · Sesión | Mantener una conversación abierta | — | — |
+| 6 · Presentación | Formato y cifrado de los datos | — | — |
+| 7 · Aplicación | Lo que el programa quiere decir (pedir una página, mandar un correo) | Nombres (URL, correo) | Servidores, proxies |
+
+<Nota titulo="Las capas 5 y 6 en la práctica">
+En TCP/IP, la sesión y la presentación las resuelve el propio programa (o una biblioteca como TLS, que cifra). Por eso dónde va TLS es motivo de discusión: muchos lo ubican en la capa 6 y otros entre la 4 y la 7. Para diagnosticar no importa tanto: importa saber que el cifrado es un paso propio que puede fallar (un certificado vencido) aunque todo lo de abajo funcione.
+</Nota>
+
+<Ordenar ejercicio={ordenOsi} />
+
+## Encapsulación, capa por capa
+
+Cada capa le pone nombre propio al conjunto que arma: la aplicación produce **datos**; con el encabezado de TCP es un **segmento** (con UDP se le dice datagrama); con el de IP, un **paquete**; con el de Ethernet, una **trama**; y en el cable son **bits**. A estos nombres se los llama **unidades de datos de protocolo** (PDU). Sirven para hablar con precisión: un switch reenvía tramas, un router reenvía paquetes.
+
+Mira el ejemplo paso a paso: los primeros pasos pasan dentro de la PC, mientras se arma el mensaje.
+
+<SimuladorPaquetes escenario={encapsular} />
+
+Fíjate en dos cosas del simulador:
+
+1. Los datos HTTP del primer paso llegan **intactos** al servidor. Ninguna capa de abajo los mira.
+2. El switch solo necesitó leer la MAC de destino. Cada equipo trabaja hasta la capa que necesita: el switch hasta la 2, el router hasta la 3, un firewall que filtra puertos hasta la 4.
+
+<Pregunta id="p04" />
+
+## Usar las capas para diagnosticar
+
+El modelo de capas es, sobre todo, una herramienta para no perderse cuando algo falla. Si cada capa depende de la de abajo, una falla en la capa 1 rompe todo lo de arriba; pero una falla en la 7 deja todo lo de abajo funcionando. Eso te permite descartar:
+
+- Si `ping` a la IP del servidor responde, las capas 1 a 3 funcionan entre los dos equipos. El problema está más arriba.
+- Si `ping` al nombre falla pero a la IP responde, el problema es la resolución de nombres (el DNS es un servicio de aplicación).
+- Si el puerto responde (`nc -zv servidor 443`) pero la página da error, todo hasta la capa 4 anda: mira la aplicación.
+
+Hay tres formas de recorrer las capas, y las vas a usar según el caso (el módulo 2.7 las trabaja a fondo):
+
+- **De abajo hacia arriba**: empiezas por el cable y subes. Conviene cuando sospechas algo físico (un equipo "no tiene red").
+- **De arriba hacia abajo**: empiezas por la aplicación. Conviene cuando el resto de la red anda y falla un servicio.
+- **Dividir por la mitad**: empiezas por la capa 3 (un ping). Si responde, el problema está arriba; si no, abajo. Es la más rápida cuando no tienes ninguna pista.
+
+<Emparejar ejercicio={fallasCapa} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Memorizar las siete capas y no saber qué hace cada una">
+    Saber el nombre de la capa 5 sirve para un examen; saber que el switch trabaja con MAC y el router con IP te sirve todos los días. Prioriza el "qué resuelve" y "con qué dirección".
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que el switch cambia los paquetes">
+    El switch reenvía la trama tal como llegó. Quien cambia algo (las MAC, el TTL) es el router, al pasar de una red a otra. Lo vas a ver en la lección de ARP y en el módulo 2.5.
+  </ErrorComun>
+  <ErrorComun titulo="Reiniciar el servicio cuando el problema es de abajo">
+    Si no responde ni el ping a la IP, reiniciar nginx no va a cambiar nada. Primero ubica la capa que falla.
+  </ErrorComun>
+  <ErrorComun titulo="Concluir que &quot;la red anda&quot; porque hay luz en el puerto">
+    La luz solo dice que la capa física tiene enlace. Puede haber una IP mal puesta (capa 3) o un firewall (capa 4) que igual corten la comunicación.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Las redes se piensan en capas: cada una resuelve un problema, agrega su encabezado al enviar y lo saca al recibir.
+- OSI (7 capas) es el idioma común; TCP/IP (4 capas) es el que se usa. Aplicación de TCP/IP = capas 5 a 7 de OSI; acceso a la red = capas 1 y 2.
+- Unidades: datos (aplicación), segmento (transporte), paquete (red), trama (enlace), bits (física).
+- Direcciones por capa: MAC en la 2, IP en la 3, puerto en la 4. Switch trabaja en la 2, router en la 3.
+- Para diagnosticar: de abajo hacia arriba, de arriba hacia abajo, o empezar por la mitad con un ping.
+</Resumen>

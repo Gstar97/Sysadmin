@@ -10,6 +10,7 @@ import {
   clientConfig,
   fingerprintOf,
   hostByIp,
+  learnNeighbor,
   hostKey,
   hostTag,
   inbound,
@@ -121,6 +122,7 @@ async function connect(ctx: CommandContext, o: ConnectOpts, via: System = ctx.sy
     return null
   }
   dbg(`Connecting to ${hostname} [${ip}] port ${port}.`)
+  learnNeighbor(via, ip)
   const host = hostByIp(via, ip)
   const fail = (why: string) => {
     if (via !== client) ctx.err(`channel 0: open failed: connect failed: ${why}\nstdio forwarding failed\nConnection closed by UNKNOWN port 65535\n`)

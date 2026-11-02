@@ -1,0 +1,97 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿En qué capa del modelo OSI trabaja un switch común?
+  opciones:
+    - { texto: "Capa 2 (enlace de datos)", correcta: true, explicacion: "Reenvía tramas según la dirección MAC de destino." }
+    - { texto: "Capa 3 (red)", explicacion: "Esa es la del router, que trabaja con direcciones IP. (Existen switches de capa 3, que además enrutan: se ven en el módulo 2.4.)" }
+    - { texto: "Capa 1 (física)", explicacion: "En la capa 1 están los cables y los hubs, que solo repiten señales." }
+    - { texto: "Capa 7 (aplicación)", explicacion: "El switch no mira el contenido de los mensajes." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cómo se llama la unidad de datos de la capa de red (con el encabezado IP)?
+  opciones:
+    - { texto: "Paquete", correcta: true, explicacion: "Datos → segmento → paquete → trama → bits." }
+    - { texto: "Trama", explicacion: "La trama es la unidad de la capa de enlace (Ethernet)." }
+    - { texto: "Segmento", explicacion: "El segmento es la unidad de transporte (TCP)." }
+    - { texto: "Bit", explicacion: "Los bits son la capa física." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: El modelo TCP/IP junta en una sola capa de "aplicación" tres capas de OSI. ¿Cuáles?
+  opciones:
+    - { texto: "Sesión, presentación y aplicación (5, 6 y 7)", correcta: true, explicacion: "En TCP/IP, lo que hacen esas tres capas lo resuelve el programa o una biblioteca como TLS." }
+    - { texto: "Física, enlace y red (1, 2 y 3)", explicacion: "Física y enlace se juntan en acceso a la red; la de red es aparte." }
+    - { texto: "Transporte, sesión y presentación", explicacion: "Transporte es una capa propia en los dos modelos." }
+    - { texto: "Red, transporte y aplicación", explicacion: "Son tres capas distintas también en TCP/IP." }
+- id: p04
+  tipo: ordenar_pasos
+  enunciado: Ordena cómo se arma un pedido web en la PC antes de salir por el cable (encapsulación).
+  pasos:
+    - "El navegador escribe el pedido HTTP"
+    - "TCP agrega los puertos de origen y destino"
+    - "IP agrega las direcciones IP de origen y destino"
+    - "Ethernet agrega las direcciones MAC y forma la trama"
+    - "La capa física manda los bits por el cable"
+  explicacion: Cada capa envuelve lo que le da la de arriba. Al recibir, el orden es el inverso.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Desde tu PC, ping a la IP del servidor web responde, pero el navegador muestra "502 Bad Gateway". ¿Dónde está el problema?
+  opciones:
+    - { texto: "En la capa de aplicación: el servidor web responde, pero algo detrás de él falla", correcta: true, explicacion: "Que haya respuesta HTTP prueba que todas las capas de abajo funcionan." }
+    - { texto: "En la capa física", explicacion: "Si la física fallara, no habría ping ni respuesta HTTP." }
+    - { texto: "En la capa de red", explicacion: "El ping a la IP responde: la capa 3 anda." }
+    - { texto: "En el switch", explicacion: "Si el switch fallara, no llegaría ninguna respuesta." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un paquete pasa por un switch y después por un router. ¿Cuál de los dos cambia las direcciones MAC de la trama?
+  opciones:
+    - { texto: "El router, al armar una trama nueva para la siguiente red", correcta: true, explicacion: "El router saca el encabezado Ethernet, decide por dónde sigue el paquete y arma una trama nueva con sus MAC." }
+    - { texto: "El switch", explicacion: "El switch reenvía la trama sin modificarla." }
+    - { texto: "Los dos", explicacion: "Solo el router; el switch no cambia nada." }
+    - { texto: "Ninguno: las MAC se mantienen de punta a punta", explicacion: "Las que se mantienen de punta a punta son las IP; las MAC cambian en cada tramo." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un usuario dice que "no tiene red". En su escritorio, la luz del puerto de la placa está apagada. ¿Qué enfoque de diagnóstico conviene?
+  opciones:
+    - { texto: "De abajo hacia arriba: revisar cable, puerto y placa antes que cualquier configuración", correcta: true, explicacion: "Una luz apagada apunta a la capa física: empezar por ahí ahorra tiempo." }
+    - { texto: "De arriba hacia abajo: revisar el navegador", explicacion: "Sin enlace físico, ninguna aplicación va a funcionar." }
+    - { texto: "Reinstalar el sistema operativo", explicacion: "Es una medida desproporcionada antes de revisar un cable." }
+    - { texto: "Revisar el DNS", explicacion: "El DNS es aplicación; sin capa 1 ni siquiera llegas a él." }
+- id: p08
+  tipo: respuesta_multiple
+  enunciado: ping a 8.8.8.8 responde, pero ping a google.com dice "Name or service not known". ¿Qué puedes concluir? (Marca todas las correctas.)
+  opciones:
+    - { texto: "Las capas 1 a 3 hasta internet funcionan", correcta: true, explicacion: "Llegas a una IP de internet y vuelve la respuesta." }
+    - { texto: "El problema está en la resolución de nombres (DNS)", correcta: true, explicacion: "Falla traducir el nombre a IP, que es un servicio de aplicación." }
+    - { texto: "La puerta de enlace está mal configurada", explicacion: "Si lo estuviera, no llegarías a 8.8.8.8." }
+    - { texto: "El cable está dañado", explicacion: "Con el cable dañado no habría ping a ninguna parte." }
+- id: p09
+  tipo: interpretar_salida
+  enunciado: Mira el resultado de estas pruebas contra el servidor de la intranet. ¿Hasta qué capa está todo bien?
+  salida: |
+    $ ping -c 2 192.168.10.20
+    64 bytes from 192.168.10.20: icmp_seq=1 ttl=64 time=0.41 ms
+    64 bytes from 192.168.10.20: icmp_seq=2 ttl=64 time=0.39 ms
+    $ nc -zv 192.168.10.20 443
+    nc: connect to 192.168.10.20 port 443 (tcp) failed: Connection refused
+  opciones:
+    - { texto: "Hasta la capa 3: el equipo responde, pero en el puerto 443 no hay ningún servicio", correcta: true, explicacion: "Refused quiere decir que llegaste y no hay nada escuchando en ese puerto: falla en la capa 4 o en el servicio." }
+    - { texto: "Hasta la capa 1: el cable funciona y nada más", explicacion: "El ping responde, así que también funcionan las capas 2 y 3." }
+    - { texto: "Todo funciona", explicacion: "El puerto 443 rechaza la conexión." }
+    - { texto: "Nada funciona", explicacion: "El ping responde." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un firewall filtra tráfico según el puerto de destino. ¿Hasta qué capa necesita leer cada paquete, como mínimo?
+  opciones:
+    - { texto: "Hasta la capa 4, donde están los puertos", correcta: true, explicacion: "Un firewall con reglas de puerto lee los encabezados IP y TCP/UDP." }
+    - { texto: "Solo la capa 2", explicacion: "En la trama no hay puertos." }
+    - { texto: "Solo la capa 3", explicacion: "IP no tiene puertos: están en TCP o UDP." }
+    - { texto: "La capa 7 siempre", explicacion: "Leer el contenido es propio de los firewalls de nueva generación; para filtrar puertos no hace falta." }

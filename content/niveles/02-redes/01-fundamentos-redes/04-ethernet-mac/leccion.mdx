@@ -1,0 +1,107 @@
+---
+id: n2-m1-l4
+titulo: Ethernet y direcciones MAC
+minutos: 120
+objetivos:
+  - Leer una dirección MAC, reconocer el fabricante (OUI) y saber si es unicast, multicast o broadcast.
+  - Explicar cómo un switch aprende direcciones y decide si reenvía, inunda o descarta una trama.
+  - Diferenciar dominio de colisión y dominio de broadcast, y saber qué equipo divide cada uno.
+glosario: [ethernet, oui, tabla-mac, broadcast, dominio-colision, dominio-broadcast, mtu]
+verificado: 2026-11
+---
+
+import trama from './trama.svg?raw'
+import ejMac from './ej-mac.yaml'
+
+Ethernet es la tecnología de casi todas las redes cableadas, y el Wi-Fi funciona con las mismas ideas. Esta lección mira de cerca la capa 2: cómo se arma una trama, qué es una dirección MAC y qué hace un switch con cada trama que recibe. Es lo que necesitas para entender, en la lección que sigue, cómo un equipo encuentra a otro dentro de su red.
+
+<AntesDeEmpezar>
+- La trama es la unidad de la capa 2, y el switch trabaja en esa capa (lección 2.1.2).
+- Hexadecimal: cada par de dígitos es un byte (lección 0.3.2).
+</AntesDeEmpezar>
+
+## La trama Ethernet
+
+Una trama es un sobre con una forma fija. Adelante va un **preámbulo** que "despierta" al receptor; después, la **MAC de destino** (va primero para que el switch pueda decidir apenas la lee), la **MAC de origen**, un campo **tipo** que dice qué viene adentro (IPv4, IPv6 o ARP), los **datos** (el paquete IP) y al final una suma de control (**FCS**). Si la suma no coincide, la trama llegó dañada y se descarta sin avisar a nadie: TCP, más arriba, se ocupa de pedirla de nuevo.
+
+<Diagrama svg={trama} alt="Una trama Ethernet II: preámbulo (8 bytes), MAC de destino (6), MAC de origen (6), tipo (2; 0800 IPv4, 86DD IPv6, 0806 ARP), datos de 46 a 1500 bytes y FCS (4). Debajo, una dirección MAC 08:00:27:4a:91:0e dividida en el OUI del fabricante (08:00:27, VirtualBox) y el número de la placa; los bits especiales del primer byte indican multicast y administración local." pie="La MAC de destino va primero; los datos son el paquete IP, de hasta 1500 bytes (la MTU)." />
+
+El tamaño máximo de los datos es **1500 bytes**: es la **MTU** de Ethernet. Un paquete más grande hay que partirlo. Vas a ver la MTU en `ip link` (`mtu 1500`) y va a reaparecer en el módulo 2.7, cuando una VPN agrega encabezados y lo que antes entraba deja de entrar.
+
+## La dirección MAC
+
+Cada placa de red trae grabada de fábrica una dirección de 48 bits (6 bytes), escrita en hexadecimal: `08:00:27:4a:91:0e`. Funciona como el número de serie de un electrodoméstico: los primeros tres bytes son el **OUI**, que identifica al fabricante (lo asigna el IEEE), y los otros tres los asigna el fabricante a cada placa.
+
+Donde la comparación no llega: una MAC se puede cambiar por software (las máquinas virtuales inventan la suya, y los teléfonos usan una al azar en cada red Wi-Fi para que no los sigan). Por eso la MAC identifica una placa en la red local, pero no sirve como prueba de identidad.
+
+Tres tipos de destino:
+
+- **Unicast**: una MAC concreta. La trama es para un solo equipo.
+- **Broadcast**: `ff:ff:ff:ff:ff:ff`. La trama es para **todos** los equipos de la red local.
+- **Multicast**: el bit más bajo del primer byte en 1 (por ejemplo, `01:00:5e:...`). La trama es para un grupo.
+
+Algunos OUI que vas a ver seguido: `08:00:27` (VirtualBox), `52:54:00` (máquinas virtuales de KVM/QEMU), `00:50:56` (VMware) y `00:15:5d` (Hyper-V). Para el resto, cualquier buscador de OUI te dice el fabricante.
+
+<Terminal ejercicio={ejMac} />
+
+<EnSimple>
+La MAC es la dirección física de la placa de red: viene de fábrica y sirve para encontrar a un equipo dentro de la misma red local. Los primeros tres pares de dígitos dicen quién fabricó la placa.
+</EnSimple>
+
+## Cómo aprende un switch
+
+Un switch recién encendido no sabe dónde está nadie. Aprende mirando el **origen** de cada trama que le llega: "la MAC `aa:...:0a` entró por el puerto 1, así que está en el puerto 1". Lo anota en su **tabla de direcciones MAC** (en Cisco, `show mac address-table`). Después, para decidir qué hacer con una trama, mira el **destino**:
+
+1. **Destino conocido, en otro puerto**: la **reenvía** solo por ese puerto.
+2. **Destino desconocido** (o broadcast): la **inunda**, o sea, la manda por todos los puertos menos por el que entró. El equipo que tiene esa MAC la acepta; los demás la descartan.
+3. **Destino en el mismo puerto por el que entró**: la **descarta**, porque ya llegó a ese lado (pasa cuando del puerto cuelga otro switch o un hub).
+
+Las entradas que no se usan se borran solas después de un rato (300 segundos por defecto en la mayoría de los switches), para que la tabla no se llene de equipos que ya no están.
+
+Pruébalo: antes de cada envío, predice qué va a hacer el switch.
+
+<SimuladorSwitch />
+
+<Pregunta id="p05" />
+
+## Dominios de colisión y de broadcast
+
+Dos ideas que vas a escuchar en cualquier curso de redes:
+
+- **Dominio de colisión**: el grupo de equipos que, si transmiten a la vez, chocan. Con un **hub** (un equipo viejo que repetía todo por todos los puertos) toda la red era un único dominio de colisión. Con un **switch**, cada puerto es su propio dominio, y con full dúplex directamente no hay colisiones.
+- **Dominio de broadcast**: el grupo de equipos a los que llega un broadcast. Un switch **inunda** los broadcast por todos sus puertos, así que todos los equipos conectados a switches, sin un router en el medio, forman **un solo dominio de broadcast**. Solo un **router** (o las VLAN del módulo 2.4) lo divide.
+
+| Equipo | Divide dominios de colisión | Divide dominios de broadcast |
+| --- | --- | --- |
+| Hub | No | No |
+| Switch | Sí (uno por puerto) | No |
+| Router | Sí | Sí (uno por interfaz) |
+
+¿Por qué importa? Porque cada broadcast lo procesan todos los equipos del dominio. En una red plana de 2000 equipos, los broadcast (ARP, DHCP, anuncios de impresoras) consumen ancho de banda y CPU de todos. Dividir la red en partes más chicas es una de las razones de las subredes (módulo 2.2) y de las VLAN.
+
+<Nota titulo="Para más adelante">
+Si dos switches se conectan con dos cables, un broadcast da vueltas para siempre y la red se cae en segundos (tormenta de broadcast). Spanning Tree, en el módulo 2.4, evita esos bucles.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar la MAC para dar acceso o bloquear equipos">
+    Una MAC se cambia en segundos por software, y los teléfonos usan MAC aleatorias en cada Wi-Fi. Sirve para organizar (reservas de DHCP, inventario), no como control de seguridad.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que un switch separa los broadcast">
+    Un switch inunda los broadcast por todos sus puertos. Para dividir el dominio de broadcast hace falta un router o VLAN.
+  </ErrorComun>
+  <ErrorComun titulo="Alarmarse porque el switch inunda tramas">
+    Inundar un destino desconocido es normal: pasa con cada equipo nuevo y después de que una entrada vence. Es raro solo si pasa todo el tiempo (la tabla se llenó o hay un bucle).
+  </ErrorComun>
+  <ErrorComun titulo="Confundir la MAC con la IP">
+    La MAC es de la placa y sirve dentro de la red local; la IP se configura y sirve para llegar a otras redes. Un mismo equipo cambia de IP al mudarse de red, pero su MAC no.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Trama Ethernet: MAC de destino, MAC de origen, tipo (0800 IPv4, 86DD IPv6, 0806 ARP), datos de hasta 1500 bytes (MTU) y FCS para detectar errores.
+- MAC: 48 bits en hexadecimal; los primeros 3 bytes son el OUI (fabricante). Unicast, broadcast (`ff:ff:ff:ff:ff:ff`) o multicast. Se puede cambiar por software.
+- El switch aprende la MAC de origen y el puerto; según el destino, reenvía por un puerto, inunda por todos menos el de entrada, o descarta. Las entradas viejas se borran (300 s).
+- Dominio de colisión: lo divide el switch (uno por puerto). Dominio de broadcast: solo lo divide un router o VLAN.
+- `ip -br link` (Linux) muestra las placas y sus MAC.
+</Resumen>

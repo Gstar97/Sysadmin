@@ -5,8 +5,13 @@ import { percent } from '@/lib/cn'
 import { Button, Callout, Card, PageHeader } from '@/ui'
 import {
   Advertencia,
+  CalculadoraPoe,
   CalculadoraUnidades,
+  ClasificadorIp,
   ComparadorDiscos,
+  DisenadorVlsm,
+  SimuladorNat,
+  SimuladorSwitch,
   Consejo,
   ConversorBases,
   DiagramaInteractivo,
@@ -53,6 +58,7 @@ const SECTIONS = [
   { id: 'powershell', titulo: 'PowerShell' },
   { id: 'cisco', titulo: 'Consola Cisco' },
   { id: 'subnetting', titulo: 'Subnetting' },
+  { id: 'redes', titulo: 'Redes: PoE, switch, VLSM, NAT' },
   { id: 'topologia', titulo: 'Topologías' },
   { id: 'paquetes', titulo: 'Paquetes' },
   { id: 'diagrama', titulo: 'Diagrama' },
@@ -133,6 +139,14 @@ export default function GalleryPage() {
 
       <Section id="subnetting" titulo="Calculadora y entrenador de subnetting" descripcion="Calculadora IPv4 con vista binaria y división en subredes, calculadora IPv6 con EUI-64, y práctica con ejercicios al azar por tipo y dificultad, explicación paso a paso, estadísticas y modo contrarreloj.">
         <Subnetting />
+      </Section>
+
+      <Section id="redes" titulo="Redes: PoE, tabla MAC, direcciones, VLSM y NAT" descripcion="Presupuesto PoE de un switch, cómo aprende direcciones un switch (con predicción), clasificador de direcciones IPv4, diseñador VLSM con revisión de solapamientos y la tabla de traducciones NAT/PAT con redirección de puertos y CGNAT.">
+        <CalculadoraPoe />
+        <SimuladorSwitch />
+        <ClasificadorIp />
+        <DisenadorVlsm />
+        <SimuladorNat />
       </Section>
 
       <Section id="topologia" titulo="Armador de topologías" descripcion="Arrastra equipos, conecta cables y configúralos con formularios o con la consola. El ping muestra el recorrido sobre el diagrama y, si falla, explica dónde y por qué.">

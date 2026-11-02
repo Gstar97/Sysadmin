@@ -1,0 +1,113 @@
+---
+id: n2-m1-l1
+titulo: Qué es una red
+minutos: 90
+objetivos:
+  - Diferenciar LAN, WAN e internet, y reconocer los equipos de una red (placa de red, switch, router, punto de acceso y firewall).
+  - Explicar el modelo cliente-servidor y en qué se diferencia de una red entre pares.
+  - Distinguir la topología física de la lógica y reconocer las topologías más comunes.
+glosario: [lan, wan, switch, router, punto-acceso, cliente-servidor, topologia-red]
+verificado: 2026-11
+---
+
+import oficina from './oficina.svg?raw'
+import puntos from './oficina.yaml'
+import equipos from './equipos.yaml'
+import topologias from './topologias.yaml'
+
+Una red es un grupo de equipos conectados para compartir información y servicios: archivos, impresoras, una página web, la salida a internet. Detrás de algo tan cotidiano como abrir el correo hay una cadena de equipos y acuerdos que este nivel va a desarmar pieza por pieza, desde el cable hasta la VPN. Esta primera lección es el mapa: qué piezas hay y para qué sirve cada una.
+
+<AntesDeEmpezar>
+- Qué son una dirección IP, un puerto y el DNS (lección 0.4.5).
+- Lo que ya usaste en el servidor: `ip -br a`, `ip route` y la puerta de enlace (lección 1.6.1).
+- Bits y bytes, y la diferencia entre Mb/s y MB/s (lección 0.3.3).
+</AntesDeEmpezar>
+
+## LAN, WAN e internet
+
+Piensa en una empresa con dos sedes. Dentro de cada edificio hay pasillos propios por los que la gente circula libremente: eso es la **LAN** (red de área local), los equipos de un mismo lugar conectados con cables y Wi-Fi que son de la empresa. Para ir de una sede a la otra hay que salir a la ruta, que no es tuya y por la que pagas peaje: eso es una **WAN** (red de área amplia), un enlace que se contrata a un proveedor para unir lugares lejanos. Y la red de rutas de todo el país, que une millones de edificios de todo tipo, es **internet**: la red de redes, que nadie administra entera.
+
+Donde la comparación no alcanza: en una LAN no hay "pasillos" que se llenen de gente; si un equipo manda muchos datos, comparte el ancho de banda del cable y del switch, no un espacio físico.
+
+| | LAN | WAN | Internet |
+| --- | --- | --- | --- |
+| Alcance | Un edificio, un piso, una casa | Ciudades o países | Todo el mundo |
+| De quién es | Tuya | Del proveedor (la alquilas) | De nadie en particular |
+| Velocidad típica | 1 a 10 Gb/s por equipo | De 10 Mb/s a varios Gb/s | Según tu contrato |
+| Costo | Compras los equipos una vez | Abono mensual | Abono a un proveedor (ISP) |
+
+<EnSimple>
+LAN: tus equipos en un mismo lugar. WAN: un enlace contratado para unir lugares lejanos. Internet: la unión de todas las redes del mundo.
+</EnSimple>
+
+## Los equipos de una red
+
+Toca cada parte del diagrama para ver qué hace.
+
+<DiagramaInteractivo svg={oficina} datos={puntos} alt="Red de una oficina: notebook y teléfono conectados por Wi-Fi a un punto de acceso; PC, impresora y servidor cableados a un switch; el switch conectado a un router con firewall, que sale a internet y, por un enlace WAN, a una sucursal." />
+
+Cinco piezas aparecen en casi todas las redes:
+
+- **Placa de red (NIC)**: lo que conecta un equipo a la red, por cable o inalámbrica. Cada una trae grabada una dirección única, la **MAC** (lección 4).
+- **Switch**: conecta los equipos de la misma red local. Si la LAN fuera un edificio, el switch sería el conserje que sabe en qué oficina está cada persona y le lleva cada sobre directo.
+- **Router**: une redes distintas. Es la oficina de correo del barrio: lo que va a otra red se le entrega a él, y él decide por dónde sigue. Para los equipos de la LAN es la **puerta de enlace**.
+- **Punto de acceso**: conecta por Wi-Fi a la red cableada. No es un router: solo extiende la LAN sin cables.
+- **Firewall**: decide qué tráfico pasa y cuál no, según reglas.
+
+<Nota titulo="El aparato de tu casa hace todo junto">
+El equipo que te instala el proveedor en tu casa es un router, un switch de 4 puertos, un punto de acceso Wi-Fi y un firewall en una sola caja. En una empresa suelen ser equipos separados, porque cada función se dimensiona y se administra por su cuenta.
+</Nota>
+
+<Emparejar ejercicio={equipos} />
+
+## Clientes y servidores
+
+Casi todo lo que pasa en una red sigue el modelo **cliente-servidor**: uno pide y otro atiende. Es como un restaurante: el cliente llega cuando quiere y pide; la cocina (el servidor) está siempre lista para recibir pedidos y atiende a muchos a la vez. Cuando abres una página, tu navegador es el cliente y el equipo que la tiene es el servidor; cuando la PC imprime, la impresora hace de servidor.
+
+Lo importante para un sysadmin: **el cliente inicia la conversación**. El servidor tiene que estar escuchando en un puerto conocido (443 para HTTPS, 22 para SSH) y el cliente elige un puerto cualquiera para la respuesta. Por eso los firewalls se configuran pensando en "quién inicia": se abren los puertos de los servicios en el servidor, no en los clientes.
+
+La alternativa es la red **entre pares** (P2P): todos los equipos son a la vez clientes y servidores, como cuando dos PC de una casa comparten carpetas entre sí sin un servidor central. Sirve para pocos equipos; en una empresa se vuelve inmanejable porque no hay un lugar donde controlar permisos, copias de seguridad ni accesos.
+
+<Pregunta id="p03" />
+
+## Cómo se dibuja una red: topologías
+
+La **topología física** es cómo están los cables; la **lógica**, cómo viajan los datos. Hoy casi todas las LAN son una **estrella**: cada equipo con su cable hasta el switch. Cuando la red crece, se arma una **estrella extendida**: un switch por piso y todos colgados de uno central. Entre switches y routers importantes se agregan enlaces de más para tener caminos alternativos: es una **malla** (parcial, porque una malla completa entre todos sería carísima).
+
+<Emparejar ejercicio={topologias} />
+
+<Consejo titulo="Para más adelante">
+Los enlaces redundantes entre switches crean bucles, y un bucle en una red local la tumba en segundos. El protocolo que lo evita (Spanning Tree) se ve en el módulo 2.4. Por ahora quédate con que "más cables" no siempre es "más seguro".
+</Consejo>
+
+## Cómo se mide una red
+
+Dos palabras que vas a escuchar todo el tiempo:
+
+- **Ancho de banda**: cuántos datos pasan por segundo (Mb/s, Gb/s). Es el ancho de la ruta.
+- **Latencia**: cuánto tarda un dato en llegar (milisegundos). Es lo larga que es la ruta.
+
+Una conexión satelital puede tener mucho ancho de banda y una latencia enorme (600 ms): sirve para descargar un archivo grande, pero una videollamada se siente con retraso. En una LAN la latencia es menor a 1 ms; hasta otro continente, unos 150 ms.
+
+<ErroresComunes>
+  <ErrorComun titulo="Llamar &quot;router&quot; a cualquier equipo de red">
+    Un switch no une redes ni sabe de internet, y un punto de acceso tampoco. Si confundes las funciones, buscas la falla en el equipo equivocado: "no hay internet" casi nunca es el switch.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que el Wi-Fi es otra red">
+    Normalmente el punto de acceso conecta los equipos inalámbricos a la misma LAN cableada. Tienen IP de la misma red y se hablan con los cableados. (Una red de invitados separada sí es otra red, y se arma a propósito.)
+  </ErrorComun>
+  <ErrorComun titulo="Confundir ancho de banda con velocidad de respuesta">
+    Contratar más megas no baja la latencia. Si una aplicación "se siente lenta" con conexión rápida, mide la latencia (ping) antes de pedir más ancho de banda.
+  </ErrorComun>
+  <ErrorComun titulo="Abrir puertos en los clientes">
+    El cliente inicia la conexión; el que necesita el puerto abierto es el servidor. Abrir puertos en todas las PC no arregla nada y agranda la superficie de ataque.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- LAN: equipos propios en un mismo lugar, rápida y sin costo por uso. WAN: enlace contratado entre lugares lejanos. Internet: la red de redes.
+- Placa de red (con su MAC), switch (une equipos de la misma red), router (une redes; es la puerta de enlace), punto de acceso (Wi-Fi a la red cableada), firewall (decide qué pasa).
+- Cliente-servidor: el cliente inicia, el servidor escucha en un puerto conocido. En una red entre pares todos hacen de todo.
+- Topología física (cables) y lógica (cómo viajan los datos). Hoy: estrella y estrella extendida, con enlaces redundantes en malla parcial.
+- Ancho de banda (cuánto) y latencia (cuánto tarda) son cosas distintas.
+</Resumen>

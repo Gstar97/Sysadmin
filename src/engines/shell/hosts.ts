@@ -513,10 +513,51 @@ export function routeTo(from: System, ip: string): boolean {
   return from.reachable.has(ip)
 }
 
-/** El servidor de la red que tiene esa IP. */
+/** El servidor de la red que tiene esa IP (si dos la comparten, el que respondió el último ARP). */
 export function hostByIp(from: System, ip: string): System | undefined {
   if (from.ownIps().includes(ip)) return from
-  return from.lab.find((h) => h.ownIps().includes(ip))
+  const owners = from.lab.filter((h) => h.ownIps().includes(ip))
+  if (owners.length > 1) {
+    const mac = from.neigh.get(ip)?.mac
+    return owners.find((h) => h.interfaces.some((i) => i.mac === mac)) ?? owners[0]
+  }
+  return owners[0]
+}
+
+/** MAC de la interfaz de un servidor que tiene esa IP. */
+export function macOf(h: System, ip: string): string | undefined {
+  return h.interfaces.find((i) => i.ip?.split('/')[0] === ip)?.mac
+}
+
+const GATEWAY_MAC = '52:54:00:12:35:02'
+const arpTurn = new WeakMap<System, number>()
+
+/**
+ * Resolución ARP antes de hablar con una IP: si está en una red conectada, aprende su MAC (o
+ * la de la puerta de enlace, si está afuera). Con una IP duplicada, cada vez puede contestar
+ * un equipo distinto: por eso las fallas por IP duplicada son intermitentes.
+ */
+export function learnNeighbor(from: System, ip: string) {
+  if (from.ownIps().includes(ip) || ip.startsWith('127.')) return
+  const iface = from.interfaces.find((i) => i.up && i.ip && inSubnet(ip, i.ip))
+  if (!iface) {
+    const gw = from.gateway
+    if (gw && gw !== ip && from.interfaces.some((i) => i.up && i.ip && inSubnet(gw, i.ip))) learnNeighbor(from, gw)
+    return
+  }
+  const owners = from.lab.filter((h) => h.ownIps().includes(ip))
+  if (owners.length) {
+    const turn = arpTurn.get(from) ?? 0
+    arpTurn.set(from, turn + 1)
+    const h = owners[turn % owners.length]
+    from.neigh.set(ip, { mac: macOf(h, ip)!, dev: iface.name, state: 'REACHABLE' })
+    return
+  }
+  if (ip === from.gateway || from.isReachable(ip)) {
+    from.neigh.set(ip, { mac: ip === from.gateway ? GATEWAY_MAC : `52:54:00:${ip.split('.').slice(1).map((o) => Number(o).toString(16).padStart(2, '0')).join(':')}`, dev: iface.name, state: 'REACHABLE' })
+    return
+  }
+  from.neigh.set(ip, { mac: '', dev: iface.name, state: 'FAILED' })
 }
 
 export const FW_SERVICES: Record<string, string> = { ssh: '22/tcp', http: '80/tcp', https: '443/tcp', 'dhcpv6-client': '546/udp', cockpit: '9090/tcp', dns: '53/udp', mysql: '3306/tcp', postgresql: '5432/tcp', samba: '445/tcp', nfs: '2049/tcp', ntp: '123/udp', smtp: '25/tcp', ftp: '21/tcp' }

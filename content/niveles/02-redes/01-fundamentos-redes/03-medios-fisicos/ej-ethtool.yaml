@@ -1,0 +1,34 @@
+tipo: terminal
+shell: bash
+titulo: Velocidad y dúplex de las placas
+descripcion: >-
+  Desde que movieron el servidor de rack, las copias de seguridad que van por la segunda
+  placa (enp0s8) tardan cuatro veces más. Revisa cómo negoció cada placa.
+estado_inicial:
+  distro: rocky
+  hostname: backup01
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.30/24 }
+      - { nombre: enp0s8, ip: 10.10.0.30/24, velocidad: 100, duplex: half, autonegociacion: false }
+pasos:
+  - consigna: Mira la velocidad y el dúplex de la placa principal, enp0s3.
+    verificar:
+      - { comando_usado: ethtool enp0s3 }
+    pistas: ["ethtool seguido del nombre de la placa."]
+    solucion: [ethtool enp0s3]
+    explicacion: 1000Mb/s, Full y autonegociación activada. Así tiene que estar una placa de 1 Gb/s.
+  - consigna: Ahora mira la placa de las copias, enp0s8. ¿Qué tiene de raro?
+    verificar:
+      - { comando_usado: ethtool enp0s8 }
+      - { salida_contiene: "Half" }
+    pistas: ["Compara las líneas Speed, Duplex y Auto-negotiation con las de enp0s3."]
+    solucion: [ethtool enp0s8]
+    explicacion: >-
+      100Mb/s, dúplex Half y autonegociación apagada. Alguien fijó la velocidad a mano (o el
+      puerto del switch quedó forzado) y el otro extremo negoció otra cosa. Con un extremo en
+      half y el otro en full hay colisiones y retransmisiones: todo anda, pero lento. Se
+      arregla dejando la autonegociación activada en los dos extremos (o fijando lo mismo en
+      ambos) y revisando el cable: un cable dañado también puede bajar la velocidad a 100.

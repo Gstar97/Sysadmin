@@ -1,0 +1,74 @@
+tipo: paquetes
+titulo: Encapsular y desencapsular un pedido web
+descripcion: >-
+  La PC pide la página de la intranet al servidor, que está en la misma red. Mira cómo se
+  arma el mensaje capa por capa en la PC, viaja por el switch y se desarma en el servidor.
+nodos:
+  - { id: pc, etiqueta: "PC 192.168.10.50", tipo: pc, x: 0, y: 80 }
+  - { id: sw, etiqueta: Switch, tipo: switch, x: 220, y: 80 }
+  - { id: srv, etiqueta: "Intranet 192.168.10.20", tipo: servidor, x: 440, y: 80 }
+enlaces:
+  - { a: pc, b: sw }
+  - { a: sw, b: srv }
+pasos:
+  - desde: pc
+    hacia: pc
+    titulo: "Capa de aplicación: el pedido"
+    explicacion: >-
+      El navegador escribe el pedido HTTP: "dame la página /". Todavía no sabe nada de cables
+      ni de direcciones: solo el contenido. Esto es lo que, al final, va a leer el servidor web.
+    capas:
+      aplicacion: { protocolo: HTTP, datos: "GET / HTTP/1.1 · Host: intranet.empresa.local" }
+  - desde: pc
+    hacia: pc
+    titulo: "Capa de transporte: los puertos"
+    explicacion: >-
+      TCP le pone su encabezado: puerto de destino 80 (el del servidor web) y un puerto de
+      origen alto, elegido al azar, para que la respuesta vuelva a este navegador y no a otro
+      programa. Ahora el conjunto es un segmento.
+    capas:
+      aplicacion: { protocolo: HTTP, datos: "GET / HTTP/1.1 · Host: intranet.empresa.local" }
+      transporte: { protocolo: TCP, origen: 51744, destino: 80, flags: "PSH, ACK" }
+  - desde: pc
+    hacia: pc
+    titulo: "Capa de red: las direcciones IP"
+    explicacion: >-
+      IP agrega la dirección de origen (la PC) y la de destino (el servidor), y el TTL, que
+      baja en 1 en cada router y evita que un paquete dé vueltas para siempre. Ahora es un
+      paquete.
+    capas:
+      aplicacion: { protocolo: HTTP, datos: "GET / HTTP/1.1 · Host: intranet.empresa.local" }
+      transporte: { protocolo: TCP, origen: 51744, destino: 80, flags: "PSH, ACK" }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: TCP }
+  - desde: pc
+    hacia: sw
+    titulo: "Capa de enlace: las direcciones MAC, y al cable"
+    explicacion: >-
+      Ethernet envuelve todo en una trama con la MAC de origen y la de destino (el servidor,
+      porque está en la misma red). La capa física la convierte en señales eléctricas por el
+      cable. Mira cómo cada capa encierra a la anterior: los datos HTTP siguen intactos adentro.
+    capas:
+      aplicacion: { protocolo: HTTP, datos: "GET / HTTP/1.1 · Host: intranet.empresa.local" }
+      transporte: { protocolo: TCP, origen: 51744, destino: 80, flags: "PSH, ACK" }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: TCP }
+      enlace: { origen: "52:54:00:aa:10:50", destino: "52:54:00:aa:10:20" }
+  - desde: sw
+    hacia: srv
+    titulo: El switch solo mira la capa 2
+    explicacion: >-
+      El switch lee la MAC de destino, sabe en qué puerto está el servidor y saca la trama por
+      ahí. No abre el paquete ni cambia nada: trabaja en la capa de enlace.
+    capas:
+      aplicacion: { protocolo: HTTP, datos: "GET / HTTP/1.1 · Host: intranet.empresa.local" }
+      transporte: { protocolo: TCP, origen: 51744, destino: 80, flags: "PSH, ACK" }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: TCP }
+      enlace: { origen: "52:54:00:aa:10:50", destino: "52:54:00:aa:10:20" }
+  - desde: srv
+    hacia: srv
+    titulo: "El servidor desencapsula"
+    explicacion: >-
+      La placa de red ve que la MAC de destino es la suya y acepta la trama; el sistema saca el
+      encabezado Ethernet, ve que la IP es la suya, saca el de IP, mira el puerto 80 y le
+      entrega los datos al programa que escucha ahí (nginx). nginx solo ve el pedido HTTP.
+    capas:
+      aplicacion: { protocolo: HTTP, datos: "GET / HTTP/1.1 · Host: intranet.empresa.local" }

@@ -1,0 +1,66 @@
+tipo: paquetes
+titulo: ARP antes del primer ping
+descripcion: >-
+  La PC (192.168.10.50) quiere hacer ping al servidor (192.168.10.20), que está en su misma
+  red. Sabe su IP, pero no su MAC, y sin MAC no puede armar la trama.
+nodos:
+  - { id: pc, etiqueta: "PC 192.168.10.50", tipo: pc, x: 0, y: 120 }
+  - { id: sw, etiqueta: Switch, tipo: switch, x: 230, y: 120 }
+  - { id: srv, etiqueta: "Servidor 192.168.10.20", tipo: servidor, x: 460, y: 40 }
+  - { id: imp, etiqueta: "Impresora 192.168.10.30", tipo: pc, x: 460, y: 200 }
+enlaces:
+  - { a: pc, b: sw }
+  - { a: sw, b: srv }
+  - { a: sw, b: imp }
+pasos:
+  - desde: pc
+    hacia: sw
+    titulo: "Solicitud ARP: ¿quién tiene 192.168.10.20?"
+    explicacion: >-
+      La PC no tiene la MAC del servidor en su tabla ARP, así que pregunta a todos: arma una
+      trama de broadcast (destino ff:ff:ff:ff:ff:ff) con un mensaje ARP que dice "busco la
+      MAC de 192.168.10.20; soy 192.168.10.50 y esta es mi MAC". No hay encabezado IP: ARP va
+      directo dentro de la trama.
+    capas:
+      enlace: { origen: "52:54:00:aa:10:50", destino: "ff:ff:ff:ff:ff:ff", tipo: "Ethernet II · 0806 (ARP)" }
+      arp: { operacion: solicitud, mac_emisor: "52:54:00:aa:10:50", ip_emisor: 192.168.10.50, mac_objetivo: "00:00:00:00:00:00", ip_objetivo: 192.168.10.20 }
+  - desde: sw
+    hacia: imp
+    titulo: El switch inunda el broadcast
+    explicacion: >-
+      Es un broadcast: el switch lo manda por todos los puertos menos el de entrada. Le llega a
+      la impresora, que ve que la IP buscada no es la suya y no contesta (aunque aprovecha para
+      anotar la MAC de la PC).
+    capas:
+      enlace: { origen: "52:54:00:aa:10:50", destino: "ff:ff:ff:ff:ff:ff", tipo: "Ethernet II · 0806 (ARP)" }
+      arp: { operacion: solicitud, mac_emisor: "52:54:00:aa:10:50", ip_emisor: 192.168.10.50, mac_objetivo: "00:00:00:00:00:00", ip_objetivo: 192.168.10.20 }
+  - desde: sw
+    hacia: srv
+    titulo: Le llega también al servidor
+    explicacion: >-
+      El servidor ve que preguntan por su IP. Anota la MAC de la PC en su propia tabla ARP
+      (seguro le va a responder pronto) y prepara la respuesta.
+    capas:
+      enlace: { origen: "52:54:00:aa:10:50", destino: "ff:ff:ff:ff:ff:ff", tipo: "Ethernet II · 0806 (ARP)" }
+      arp: { operacion: solicitud, mac_emisor: "52:54:00:aa:10:50", ip_emisor: 192.168.10.50, mac_objetivo: "00:00:00:00:00:00", ip_objetivo: 192.168.10.20 }
+  - desde: srv
+    hacia: pc
+    titulo: "Respuesta ARP: 192.168.10.20 soy yo"
+    explicacion: >-
+      La respuesta ya no es broadcast: va directo a la MAC de la PC, que el servidor acaba de
+      aprender. Dice "192.168.10.20 está en 52:54:00:aa:10:20". La PC lo guarda en su tabla
+      ARP durante unos minutos.
+    capas:
+      enlace: { origen: "52:54:00:aa:10:20", destino: "52:54:00:aa:10:50", tipo: "Ethernet II · 0806 (ARP)" }
+      arp: { operacion: respuesta, mac_emisor: "52:54:00:aa:10:20", ip_emisor: 192.168.10.20, mac_objetivo: "52:54:00:aa:10:50", ip_objetivo: 192.168.10.50 }
+  - desde: pc
+    hacia: srv
+    titulo: Ahora sí, el ping
+    explicacion: >-
+      Con la MAC en la tabla, la PC arma la trama del ping (ICMP dentro de IP dentro de
+      Ethernet) dirigida a la MAC del servidor. Los próximos paquetes ya no necesitan ARP
+      hasta que la entrada venza.
+    capas:
+      aplicacion: { protocolo: ICMP, datos: "Echo request (ping)" }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: ICMP }
+      enlace: { origen: "52:54:00:aa:10:50", destino: "52:54:00:aa:10:20" }

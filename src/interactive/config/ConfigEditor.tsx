@@ -3,6 +3,7 @@ import { yaml } from '@codemirror/lang-yaml'
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language'
 import { nginx } from '@codemirror/legacy-modes/mode/nginx'
 import { properties } from '@codemirror/legacy-modes/mode/properties'
+import { javascript } from '@codemirror/legacy-modes/mode/javascript'
 import { shell } from '@codemirror/legacy-modes/mode/shell'
 import { linter, lintGutter, type Diagnostic as CmDiagnostic } from '@codemirror/lint'
 import type { Extension, Text } from '@codemirror/state'
@@ -29,6 +30,9 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   fstab: '/etc/fstab',
   sudoers: '/etc/sudoers.d/archivo',
   systemd: '/etc/systemd/system/app.service',
+  zona: '/var/named/db.empresa.local',
+  named: '/etc/named.conf',
+  kea: '/etc/kea/kea-dhcp4.conf',
   texto: 'archivo.txt',
 }
 
@@ -45,7 +49,11 @@ function languageFor(lang: ConfigLanguage): Extension {
       return StreamLanguage.define(properties)
     case 'fstab':
     case 'sudoers':
+    case 'zona':
+    case 'named':
       return StreamLanguage.define(shell)
+    case 'kea':
+      return StreamLanguage.define(javascript)
     case 'texto':
       return []
   }
@@ -86,7 +94,7 @@ export function ConfigEditor({ exercise, onComplete }: Props) {
   const [results, setResults] = useState<RuleResult[]>()
   const [showSolution, setShowSolution] = useState(false)
   const lang = exercise.lenguaje
-  const validation = useMemo(() => validateConfig(lang, text), [lang, text])
+  const validation = useMemo(() => validateConfig(lang, text, exercise.nombre_archivo), [lang, text, exercise.nombre_archivo])
   const errors = validation.diagnostics.filter((d) => d.severity === 'error')
 
   useEffect(() => {
@@ -100,7 +108,7 @@ export function ConfigEditor({ exercise, onComplete }: Props) {
         languageFor(lang),
         syntaxHighlighting(highlight),
         lintGutter(),
-        linter((ev) => toCm(validateConfig(lang, ev.state.doc.toString()).diagnostics, ev.state.doc), { delay: 400 }),
+        linter((ev) => toCm(validateConfig(lang, ev.state.doc.toString(), exercise.nombre_archivo).diagnostics, ev.state.doc), { delay: 400 }),
         theme,
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({ 'aria-label': `Editor de ${FILE_NAMES[lang]}`, autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
@@ -117,7 +125,7 @@ export function ConfigEditor({ exercise, onComplete }: Props) {
       v.destroy()
       view.current = null
     }
-  }, [lang, exercise.archivo_inicial])
+  }, [lang, exercise.archivo_inicial, exercise.nombre_archivo])
 
   const replace = (content: string) => {
     const v = view.current

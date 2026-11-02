@@ -1,0 +1,90 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué sirve ARP?
+  opciones:
+    - { texto: "Para averiguar la MAC que corresponde a una IP de la red local", correcta: true, explicacion: "Sin la MAC de destino no se puede armar la trama." }
+    - { texto: "Para traducir nombres en IP", explicacion: "Eso lo hace el DNS." }
+    - { texto: "Para asignar IP a los equipos", explicacion: "Eso lo hace DHCP." }
+    - { texto: "Para elegir la ruta hacia otra red", explicacion: "Eso lo decide la tabla de rutas." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cómo viaja una solicitud ARP?
+  opciones:
+    - { texto: "Como broadcast: le llega a todos los equipos de la red local", correcta: true, explicacion: "Todavía no se sabe la MAC del destino, así que se pregunta a todos." }
+    - { texto: "Directo a la MAC del destino", explicacion: "Eso es justo lo que no se sabe todavía. La respuesta sí va directa." }
+    - { texto: "Al servidor DNS", explicacion: "ARP no usa DNS." }
+    - { texto: "Al router, que la reenvía a internet", explicacion: "Los routers no reenvían broadcast: ARP no sale de la red local." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando de Linux que muestra la tabla de vecinos (tabla ARP).
+  aceptadas: [ip neigh, ip n, ip neighbor, ip neigh show, ip n show, ip neighbour]
+  explicacion: En Windows es arp -a.
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tu PC (192.168.10.50/24) hace ping a 8.8.8.8 por primera vez. ¿Por la MAC de qué IP pregunta con ARP?
+  opciones:
+    - { texto: "Por la de su puerta de enlace", correcta: true, explicacion: "8.8.8.8 está en otra red: el paquete se le entrega al router." }
+    - { texto: "Por la de 8.8.8.8", explicacion: "ARP no sale de la red local; nadie en la LAN tiene esa IP." }
+    - { texto: "Por la del servidor DNS", explicacion: "Para un ping a una IP no se usa DNS." }
+    - { texto: "No hace ARP para destinos de internet", explicacion: "Hace ARP, pero por la puerta de enlace." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un paquete va de tu PC a un servidor de internet pasando por tres routers. ¿Qué cambia en cada salto?
+  opciones:
+    - { texto: "Las MAC de origen y destino (y el TTL); las IP siguen iguales", correcta: true, explicacion: "Cada router arma una trama nueva para la siguiente red. (El NAT de la salida, que verás en el módulo 2.3, es la excepción: cambia la IP de origen.)" }
+    - { texto: "Las IP de origen y destino", explicacion: "Las IP identifican los extremos y viajan de punta a punta." }
+    - { texto: "Nada", explicacion: "Las MAC cambian en cada red." }
+    - { texto: "Solo los puertos", explicacion: "Los puertos no cambian (salvo NAT)." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: Una PC no sale a internet. ¿Qué te dice esta salida?
+  salida: |
+    $ ip neigh
+    192.168.10.1 dev enp0s3 FAILED
+  opciones:
+    - { texto: "ARP no consigue la MAC de la puerta de enlace: el problema es de capa 2 (cable, puerto, VLAN o router apagado)", correcta: true, explicacion: "Sin la MAC del router, la PC no puede entregarle ningún paquete." }
+    - { texto: "El DNS no funciona", explicacion: "Esto pasa antes del DNS." }
+    - { texto: "El router bloquea el ping", explicacion: "Bloquear ping no impide que conteste ARP." }
+    - { texto: "Todo está bien: la entrada existe", explicacion: "FAILED quiere decir que nadie contestó." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Los usuarios dicen que la impresora "a veces" no imprime, y otras veces sí, sin patrón. ¿Qué sospechas primero?
+  opciones:
+    - { texto: "Una IP duplicada: otro equipo tiene la misma IP y contesta ARP algunas veces", correcta: true, explicacion: "Se confirma con arping: aparecen dos MAC para la misma IP." }
+    - { texto: "El cable de la impresora está cortado", explicacion: "Un cable cortado falla siempre." }
+    - { texto: "El DNS", explicacion: "Si imprime por IP, el DNS no interviene." }
+    - { texto: "El presupuesto PoE", explicacion: "Una impresora no suele alimentarse por PoE." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Antes de ponerle a mano la IP 192.168.10.80 a un equipo nuevo, quieres comprobar que nadie la usa. ¿Qué comando sirve?
+  opciones:
+    - { texto: "sudo arping -D -I enp0s3 192.168.10.80", correcta: true, explicacion: "Detección de direcciones duplicadas: si nadie contesta, la IP está libre." }
+    - { texto: "ping 192.168.10.80", explicacion: "Sirve como pista, pero un equipo con firewall puede no contestar ping y aun así usar la IP; ARP no se puede bloquear así." }
+    - { texto: "ip neigh flush all", explicacion: "Vacía la tabla, no comprueba nada." }
+    - { texto: "dig 192.168.10.80", explicacion: "dig consulta el DNS." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En un clúster, el servidor de respaldo toma la IP del principal cuando este falla. ¿Qué hace para que los clientes empiecen a mandarle el tráfico enseguida?
+  opciones:
+    - { texto: "Manda un ARP gratuito anunciando que esa IP ahora está en su MAC", correcta: true, explicacion: "Los equipos actualizan su tabla ARP sin esperar a que venza la entrada vieja." }
+    - { texto: "Cambia su MAC por la del principal", explicacion: "Algunos sistemas lo hacen, pero lo habitual es anunciar la IP con un ARP gratuito." }
+    - { texto: "Reinicia el switch", explicacion: "No hace falta, y cortaría toda la red." }
+    - { texto: "Espera a que los clientes vacíen su tabla", explicacion: "Eso tardaría minutos: justo lo que se quiere evitar." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Por qué un atacante conectado a la red local puede hacerse pasar por la puerta de enlace?
+  opciones:
+    - { texto: "Porque ARP no autentica: cualquiera puede responder (o anunciar) que la IP del router está en su MAC", correcta: true, explicacion: "Es el envenenamiento de ARP; los switches administrables tienen defensas como la inspección dinámica de ARP." }
+    - { texto: "Porque el router comparte su contraseña por broadcast", explicacion: "No es así." }
+    - { texto: "Porque las MAC no se pueden cambiar", explicacion: "Al contrario: se pueden cambiar, y además ARP no verifica nada." }
+    - { texto: "No puede: ARP está cifrado", explicacion: "ARP no tiene cifrado ni autenticación." }

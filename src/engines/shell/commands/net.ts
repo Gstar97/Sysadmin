@@ -1,4 +1,8 @@
-import { FW_SERVICES, hostByIp, inbound, routeTo, sourceIp } from '../hosts'
+import { compressIpv6, eui64, expandIpv6, ipv6Network } from '../../network/ip'
+import { FW_SERVICES, hostByIp, inbound, learnNeighbor, routeTo, sourceIp } from '../hosts'
+import type { NetIface, System } from '../system'
+import { namedListen, unboundListen } from '../dns'
+import { keaListen, dhcpConfigure } from './dnsserver'
 import { nginxServe } from '../web'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
@@ -52,12 +56,44 @@ function canReach(ctx: CommandContext, ip: string): boolean {
   return ctx.sys.isReachable(ip)
 }
 
+/** Dirección IPv6 de enlace local: en Ubuntu sale de la MAC (EUI-64); en Rocky es aleatoria y estable. */
+export function linkLocal(sys: System, iface: NetIface): string {
+  if (sys.distro === 'ubuntu') return `fe80::${eui64(iface.mac)}`
+  let h = 0
+  for (const c of iface.mac + sys.hostname) h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0
+  const g = (n: number) => ((h >>> n) & 0xffff).toString(16)
+  return compressIpv6(`fe80:0:0:0:${g(0)}:${g(7)}:${((h * 7) & 0xffff).toString(16)}:${g(13)}`)!
+}
+
+/** Todas las IPv6 de una interfaz (las configuradas y la de enlace local), con prefijo. */
+export function ipv6List(sys: System, iface: NetIface): string[] {
+  if (!iface.up) return iface.ipv6
+  return [...iface.ipv6, `${linkLocal(sys, iface)}/64`]
+}
+
+function v6Net(cidr: string): string {
+  const [a, p] = cidr.split('/')
+  return `${ipv6Network(a, Number(p ?? 64))}/${p ?? 64}`
+}
+
+function sameV6Net(ip: string, cidr: string): boolean {
+  const [, p] = cidr.split('/')
+  return ipv6Network(ip, Number(p ?? 64)) === ipv6Network(cidr.split('/')[0], Number(p ?? 64))
+}
+
+function maskOf(prefix: number): string {
+  const m = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0
+  return [24, 16, 8, 0].map((sh) => (m >>> sh) & 255).join('.')
+}
+
 register('ip', {
   usage: 'ip [ OPTIONS ] OBJECT { COMMAND | help }',
-  summary: '  ip addr [show|add|del]  ip link [show|set DEV up|down]  ip route [show|add|del]  ip neigh',
+  summary: '  ip [-4|-6] [-br] addr [show|add|del|flush]  ip link [show|set DEV up|down|mtu N]  ip route [show|add|del]  ip neigh [show|flush|del]',
   path: '/usr/sbin',
   run(ctx) {
     const brief = ctx.args.includes('-br') || ctx.args.includes('-brief')
+    const only6 = ctx.args.includes('-6')
+    const only4 = ctx.args.includes('-4')
     const args = ctx.args.filter((a) => !a.startsWith('-'))
     const obj = args[0] ?? 'help'
     const cmd = args[1] ?? 'show'
@@ -68,64 +104,129 @@ register('ip', {
       ctx.err('RTNETLINK answers: Operation not permitted\n')
       return true
     }
+    const devArg = () => {
+      const i = args.indexOf('dev')
+      return i >= 0 ? args[i + 1] : undefined
+    }
+    const findIf = (dev?: string) => {
+      const iface = sys.interfaces.find((i) => i.name === dev)
+      if (!iface) ctx.err(`Cannot find device "${dev ?? ''}"\n`)
+      return iface
+    }
     if (objName === 'addr' || objName === 'link') {
-      if (cmd === 'add' || cmd === 'del') {
+      if (objName === 'addr' && (cmd === 'add' || cmd === 'del' || cmd === 'delete')) {
         if (needRoot()) return 2
         const cidr = args[2]
-        const dev = args[args.indexOf('dev') + 1]
-        const iface = sys.interfaces.find((i) => i.name === dev)
-        if (!iface) {
-          ctx.err(`Cannot find device "${dev}"\n`)
-          return 1
+        const iface = findIf(devArg())
+        if (!iface) return 1
+        if (cidr?.includes(':')) {
+          const [addr, p] = cidr.split('/')
+          if (!expandIpv6(addr) || (p !== undefined && !/^\d+$/.test(p))) {
+            ctx.err(`Error: inet6 prefix is expected rather than "${cidr}".\n`)
+            return 1
+          }
+          const norm = `${compressIpv6(addr)}/${p ?? 128}`
+          if (cmd === 'add') {
+            if (iface.ipv6.includes(norm)) {
+              ctx.err('RTNETLINK answers: File exists\n')
+              return 2
+            }
+            iface.ipv6.push(norm)
+          } else {
+            if (!iface.ipv6.includes(norm)) {
+              ctx.err('RTNETLINK answers: Cannot assign requested address\n')
+              return 2
+            }
+            iface.ipv6 = iface.ipv6.filter((x) => x !== norm)
+          }
+          return 0
         }
         if (cmd === 'add') {
-          if (!/^\d+\.\d+\.\d+\.\d+\/\d+$/.test(cidr ?? '')) {
+          if (!/^\d+\.\d+\.\d+\.\d+(\/\d+)?$/.test(cidr ?? '') || cidr!.split('/')[0].split('.').some((o) => Number(o) > 255)) {
             ctx.err(`Error: any valid prefix is expected rather than "${cidr}".\n`)
             return 1
           }
-          iface.ip = cidr
-        } else iface.ip = undefined
+          const full = cidr!.includes('/') ? cidr! : `${cidr}/32`
+          if (iface.ip === full) {
+            ctx.err('RTNETLINK answers: File exists\n')
+            return 2
+          }
+          iface.ip = full
+          iface.dhcp = false
+        } else {
+          if (cidr && iface.ip && iface.ip.split('/')[0] !== cidr.split('/')[0]) {
+            ctx.err('RTNETLINK answers: Cannot assign requested address\n')
+            return 2
+          }
+          iface.ip = undefined
+        }
+        return 0
+      }
+      if (objName === 'addr' && cmd === 'flush') {
+        if (needRoot()) return 2
+        const iface = findIf(devArg() ?? args[2])
+        if (!iface) return 1
+        if (!only6) iface.ip = undefined
+        if (!only4) iface.ipv6 = []
         return 0
       }
       if (cmd === 'set') {
         if (needRoot()) return 2
         const dev = args[2] === 'dev' ? args[3] : args[2]
-        const iface = sys.interfaces.find((i) => i.name === dev)
-        if (!iface) {
-          ctx.err(`Cannot find device "${dev}"\n`)
-          return 1
-        }
+        const iface = findIf(dev)
+        if (!iface) return 1
         if (args.includes('up')) iface.up = true
         if (args.includes('down')) iface.up = false
+        const mtu = args.indexOf('mtu')
+        if (mtu >= 0) iface.mtu = Number(args[mtu + 1])
         return 0
       }
-      const devIdx = args.indexOf('dev')
-      const devFilter = devIdx >= 0 ? args[devIdx + 1] : cmd === 'show' && args[2] ? args[2] : undefined
-      const all = [{ name: 'lo', ip: '127.0.0.1/8', mac: '00:00:00:00:00:00', up: true }, ...sys.interfaces].filter((i) => !devFilter || i.name === devFilter)
-      if (devFilter && !all.length) {
+      const devFilter = devArg() ?? (cmd === 'show' && args[2] ? args[2] : undefined)
+      type Row = { name: string; ip?: string; mac: string; up: boolean; mtu: number; v6: string[]; dhcp: boolean }
+      const rows: Row[] = [
+        { name: 'lo', ip: '127.0.0.1/8', mac: '00:00:00:00:00:00', up: true, mtu: 65536, v6: ['::1/128'], dhcp: false },
+        ...sys.interfaces.map((i) => ({ name: i.name, ip: i.ip, mac: i.mac, up: i.up, mtu: i.mtu, v6: ipv6List(sys, i), dhcp: i.dhcp })),
+      ].filter((i) => !devFilter || i.name === devFilter)
+      if (devFilter && !rows.length) {
         ctx.err(`Device "${devFilter}" does not exist.\n`)
         return 1
       }
-      all.forEach((i, idx) => {
+      rows.forEach((i, idx) => {
         const state = i.name === 'lo' ? 'UNKNOWN' : i.up ? 'UP' : 'DOWN'
         if (brief) {
-          ctx.out(`${i.name.padEnd(16)} ${state.padEnd(14)} ${objName === 'link' ? i.mac : (i.ip ?? '')}\n`)
+          const fl = i.name === 'lo' ? '<LOOPBACK,UP,LOWER_UP>' : i.up ? '<BROADCAST,MULTICAST,UP,LOWER_UP>' : '<BROADCAST,MULTICAST>'
+          const addrs = objName === 'link' ? `${i.mac} ${fl}` : [...(only6 ? [] : i.ip ? [i.ip] : []), ...(only4 ? [] : i.v6)].join(' ')
+          ctx.out(`${i.name.padEnd(16)} ${state.padEnd(14)} ${addrs}\n`)
           return
         }
+        if (objName === 'addr' && only6 && !i.v6.length) return
+        if (objName === 'addr' && only4 && !i.ip) return
         const flags = i.name === 'lo' ? '<LOOPBACK,UP,LOWER_UP>' : i.up ? '<BROADCAST,MULTICAST,UP,LOWER_UP>' : '<BROADCAST,MULTICAST>'
-        ctx.out(`${idx + 1}: ${i.name}: ${flags} mtu ${i.name === 'lo' ? 65536 : 1500} qdisc ${i.name === 'lo' ? 'noqueue' : 'fq_codel'} state ${state} group default qlen 1000\n`)
-        ctx.out(`    link/${i.name === 'lo' ? 'loopback' : 'ether'} ${i.mac} brd ${i.name === 'lo' ? '00:00:00:00:00:00' : 'ff:ff:ff:ff:ff:ff'}\n`)
-        if (objName === 'addr' && i.ip) {
-          ctx.out(i.name === 'lo' ? `    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host noprefixroute \n       valid_lft forever preferred_lft forever\n` : `    inet ${i.ip} brd ${broadcastOf(i.ip)} scope global noprefixroute ${i.name}\n       valid_lft forever preferred_lft forever\n`)
+        ctx.out(`${idx + 1}: ${i.name}: ${flags} mtu ${i.mtu} qdisc ${i.name === 'lo' ? 'noqueue' : 'fq_codel'} state ${state} group default qlen 1000\n`)
+        if (!only6 && !only4) ctx.out(`    link/${i.name === 'lo' ? 'loopback' : 'ether'} ${i.mac} brd ${i.name === 'lo' ? '00:00:00:00:00:00' : 'ff:ff:ff:ff:ff:ff'}\n`)
+        if (objName !== 'addr') return
+        if (i.ip && !only6) {
+          if (i.name === 'lo') ctx.out('    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n')
+          else {
+            const prefix = Number(i.ip.split('/')[1])
+            const brd = prefix < 31 ? ` brd ${broadcastOf(i.ip)}` : ''
+            ctx.out(`    inet ${i.ip}${brd} scope global ${i.dhcp ? 'dynamic ' : ''}noprefixroute ${i.name}\n       valid_lft ${i.dhcp ? '3596sec' : 'forever'} preferred_lft ${i.dhcp ? '3596sec' : 'forever'}\n`)
+          }
+        }
+        if (!only4) {
+          for (const v of i.v6) {
+            const scope = v.startsWith('::1') ? 'host' : v.startsWith('fe80') ? 'link' : 'global'
+            ctx.out(`    inet6 ${v} scope ${scope}${scope === 'host' ? ' noprefixroute' : scope === 'link' ? ' noprefixroute' : ' noprefixroute'} \n       valid_lft forever preferred_lft forever\n`)
+          }
         }
       })
       return 0
     }
     if (objName === 'route') {
-      if (cmd === 'add' || cmd === 'del' || cmd === 'replace') {
+      if (cmd === 'add' || cmd === 'del' || cmd === 'replace' || cmd === 'delete') {
         if (needRoot()) return 2
         if (args[2] === 'default') {
-          if (cmd === 'del') sys.gateway = undefined
+          if (cmd === 'del' || cmd === 'delete') sys.gateway = undefined
           else {
             const via = args[args.indexOf('via') + 1]
             if (cmd === 'add' && sys.gateway) {
@@ -143,16 +244,30 @@ register('ip', {
         }
         return 0
       }
+      if (only6) {
+        for (const i of sys.interfaces.filter((x) => x.up)) for (const v of ipv6List(sys, i)) ctx.out(`${v.startsWith('fe80') ? 'fe80::/64' : v6Net(v)} dev ${i.name} proto kernel metric ${v.startsWith('fe80') ? 1024 : 100} pref medium\n`)
+        ctx.out('::1 dev lo proto kernel metric 256 pref medium\n')
+        return 0
+      }
       for (const i of sys.interfaces.filter((x) => x.up && x.ip)) {
-        if (sys.gateway && inSubnet(sys.gateway, i.ip!)) ctx.out(`default via ${sys.gateway} dev ${i.name} proto static metric 100 \n`)
+        if (sys.gateway && inSubnet(sys.gateway, i.ip!)) ctx.out(`default via ${sys.gateway} dev ${i.name} proto ${i.dhcp ? 'dhcp' : 'static'} metric 100 \n`)
       }
       for (const i of sys.interfaces.filter((x) => x.up && x.ip)) ctx.out(`${networkOf(i.ip!)} dev ${i.name} proto kernel scope link src ${i.ip!.split('/')[0]} metric 100 \n`)
       return 0
     }
     if (objName === 'neigh') {
-      if (sys.gateway && sys.isReachable(sys.gateway)) {
-        const iface = sys.interfaces.find((i) => i.up && i.ip && inSubnet(sys.gateway!, i.ip))
-        ctx.out(`${sys.gateway} dev ${iface?.name ?? 'eth0'} lladdr 52:54:00:12:35:02 REACHABLE\n`)
+      if (cmd === 'flush' || cmd === 'del' || cmd === 'delete') {
+        if (needRoot()) return 2
+        if (cmd === 'flush') sys.neigh.clear()
+        else if (!sys.neigh.delete(args[2] ?? '')) {
+          ctx.err('RTNETLINK answers: No such file or directory\n')
+          return 2
+        }
+        return 0
+      }
+      if (!sys.neigh.size && sys.gateway && sys.isReachable(sys.gateway)) learnNeighbor(sys, sys.gateway)
+      for (const [ip, n] of sys.neigh) {
+        ctx.out(n.state === 'FAILED' ? `${ip} dev ${n.dev} FAILED \n` : `${ip} dev ${n.dev} lladdr ${n.mac} ${n.state} \n`)
       }
       return 0
     }
@@ -161,21 +276,56 @@ register('ip', {
   },
 })
 
-register('ping', {
-  usage: 'ping [-c count] [-i interval] destination',
+/** ping a una IPv6: responde quien tenga esa dirección en una red /64 compartida (o de enlace local). */
+function ping6(ctx: CommandContext, host: string, count: number, quiet: boolean): number {
+  const sys = ctx.sys
+  const [addrRaw, zone] = host.split('%')
+  const addr = compressIpv6(addrRaw)
+  if (!addr) {
+    ctx.err(`ping: ${host}: Name or service not known\n`)
+    return 2
+  }
+  const mine = sys.interfaces.flatMap((i) => ipv6List(sys, i).map((c) => ({ i, c })))
+  const isLL = addr.startsWith('fe80')
+  if (isLL && !zone) {
+    ctx.err(`ping: Warning: IPv6 link-local address on ICMP datagram socket may require ifname or scope-id => use: address%<ifname|scope-id>\nping: connect: Invalid argument\n`)
+    return 2
+  }
+  const own = addr === '::1' || mine.some((m) => m.c.split('/')[0] === addr)
+  const via = mine.find((m) => (isLL ? m.i.name === zone : !m.c.startsWith('fe80') && sameV6Net(addr, m.c)))
+  if (!own && !via) {
+    ctx.err('ping: connect: Network is unreachable\n')
+    return 2
+  }
+  const target = own ? sys : sys.lab.find((h) => h.interfaces.some((i) => ipv6List(h, i).some((c) => c.split('/')[0] === addr)))
+  const ok = own || !!target
+  ctx.out(`PING ${host} (${addr}) 56 data bytes\n`)
+  for (let n = 1; n <= count; n++) {
+    if (ok) {
+      if (!quiet) ctx.out(`64 bytes from ${addr}${zone ? `%${zone}` : ''}: icmp_seq=${n} ttl=64 time=${(own ? 0.03 : 0.5 + Math.random() * 0.2).toFixed(3)} ms\n`)
+    } else if (!quiet) ctx.out(`From ${via!.c.split('/')[0]} icmp_seq=${n} Destination unreachable: Address unreachable\n`)
+  }
+  ctx.out(`\n--- ${host} ping statistics ---\n${count} packets transmitted, ${ok ? count : 0} received, ${ok ? '' : `+${count} errors, `}${ok ? 0 : 100}% packet loss, time ${(count - 1) * 1001}ms\n`)
+  return ok ? 0 : 1
+}
+
+register(['ping', 'ping6'], {
+  usage: 'ping [-4|-6] [-c count] [-i interval] destination',
   async run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { q: ['q'], n: ['n'] }, values: { c: ['c'], i: ['i'], W: ['W'], w: ['w'] } })
+    const a = parseArgs(ctx.args, { flags: { q: ['q'], n: ['n'], '4': ['4'], '6': ['6'] }, values: { c: ['c'], i: ['i'], W: ['W'], w: ['w'] } })
     const host = a.rest[0]
     if (!host) {
       ctx.err('ping: usage error: Destination address required\n')
       return 2
     }
+    const count = a.values.has('c') ? Number(a.values.get('c')) : 4
+    if (host.includes(':') || ctx.name === 'ping6' || ctx.args.includes('-6')) return ping6(ctx, host, count, a.flags.has('q'))
     const ip = ctx.sys.resolveHost(host)
     if (!ip) {
       ctx.err(`ping: ${host}: Name or service not known\n`)
       return 2
     }
-    const count = a.values.has('c') ? Number(a.values.get('c')) : 4
+    learnNeighbor(ctx.sys, ip)
     const r = route(ctx, ip)
     if (!r.ok) {
       ctx.err('ping: connect: Network is unreachable\n')
@@ -211,6 +361,16 @@ function listeningSockets(ctx: CommandContext) {
   const out: { proto: string; local: string; port: number; proc: string; pid: number }[] = []
   for (const s of ctx.sys.services.values()) {
     if (!s.active) continue
+    // Los DNS y Kea escuchan en direcciones concretas: se ven en ss tal como están configurados.
+    const addrs = s.name === 'named' ? namedListen(ctx.sys) : s.name === 'unbound' ? unboundListen(ctx.sys) : s.name.startsWith('kea-dhcp4') ? keaListen(ctx.sys) : undefined
+    if (addrs) {
+      for (const ad of addrs) {
+        if (s.name.startsWith('kea')) out.push({ proto: 'udp', local: ad, port: 67, proc: 'kea-dhcp4', pid: s.pid ?? 1 })
+        else for (const proto of ['udp', 'tcp']) out.push({ proto, local: ad, port: 53, proc: s.name, pid: s.pid ?? 1 })
+      }
+      if (s.name === 'named') out.push({ proto: 'tcp', local: '127.0.0.1', port: 953, proc: 'named', pid: s.pid ?? 1 })
+      continue
+    }
     for (const p of s.ports) {
       const proto = p === 53 || p === 123 ? 'udp' : 'tcp'
       out.push({ proto, local: p === 323 ? '127.0.0.1' : '0.0.0.0', port: p, proc: s.name, pid: s.pid ?? 1 })
@@ -252,106 +412,10 @@ register('ifconfig', {
   usage: 'ifconfig [interface]',
   run(ctx) {
     for (const i of ctx.sys.interfaces) {
-      ctx.out(`${i.name}: flags=${i.up ? '4163<UP,BROADCAST,RUNNING,MULTICAST>' : '4098<BROADCAST,MULTICAST>'}  mtu 1500\n${i.ip ? `        inet ${i.ip.split('/')[0]}  netmask 255.255.255.0  broadcast ${broadcastOf(i.ip)}\n` : ''}        ether ${i.mac}  txqueuelen 1000  (Ethernet)\n\n`)
+      const v6 = ipv6List(ctx.sys, i).map((c) => `        inet6 ${c.split('/')[0]}  prefixlen ${c.split('/')[1]}  scopeid ${c.startsWith('fe80') ? '0x20<link>' : '0x0<global>'}\n`).join('')
+      ctx.out(`${i.name}: flags=${i.up ? '4163<UP,BROADCAST,RUNNING,MULTICAST>' : '4098<BROADCAST,MULTICAST>'}  mtu ${i.mtu}\n${i.ip ? `        inet ${i.ip.split('/')[0]}  netmask ${maskOf(Number(i.ip.split('/')[1]))}  broadcast ${broadcastOf(i.ip)}\n` : ''}${v6}        ether ${i.mac}  txqueuelen 1000  (Ethernet)\n\n`)
     }
     ctx.out('lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n\n')
-    return 0
-  },
-})
-
-function dnsServerReachable(ctx: CommandContext, server?: string): string | undefined {
-  const s = server ?? ctx.sys.dns[0]
-  if (!s) return undefined
-  return canReach(ctx, s) || ctx.sys.ownIps().includes(s) ? s : undefined
-}
-
-function lookup(ctx: CommandContext, name: string, type: string): string[] {
-  const recs = ctx.sys.dnsRecords
-  const key = type === 'A' ? name : `${type} ${name}`
-  const v = recs[key] ?? recs[key.replace(/\.$/, '')]
-  return v ? v.split(/\s*;\s*/) : []
-}
-
-register('dig', {
-  usage: 'dig [@server] name [type] [+short]',
-  run(ctx) {
-    const short = ctx.args.includes('+short')
-    let server: string | undefined
-    let reverse = false
-    const words: string[] = []
-    for (let i = 0; i < ctx.args.length; i++) {
-      const a = ctx.args[i]
-      if (a.startsWith('@')) server = a.slice(1)
-      else if (a === '-x') reverse = true
-      else if (!a.startsWith('+')) words.push(a)
-    }
-    let name = words[0] ?? '.'
-    let type = (words[1] ?? 'A').toUpperCase()
-    if (reverse) {
-      type = 'PTR'
-      name = name.split('.').reverse().join('.') + '.in-addr.arpa'
-    }
-    const srv = dnsServerReachable(ctx, server)
-    if (!srv) {
-      ctx.out(`;; communications error to ${server ?? ctx.sys.dns[0] ?? '127.0.0.53'}#53: timed out\n;; communications error to ${server ?? ctx.sys.dns[0] ?? '127.0.0.53'}#53: timed out\n\n; <<>> DiG 9.18.33 <<>> ${ctx.args.join(' ')}\n;; global options: +cmd\n;; no servers could be reached\n`)
-      return 9
-    }
-    const answers = lookup(ctx, name.replace(/\.$/, ''), type)
-    if (short) {
-      if (answers.length) ctx.out(answers.join('\n') + '\n')
-      return 0
-    }
-    const fq = name.endsWith('.') ? name : `${name}.`
-    ctx.out(`\n; <<>> DiG 9.18.33 <<>> ${ctx.args.filter((a) => !a.startsWith('+')).join(' ')}\n;; global options: +cmd\n;; Got answer:\n;; ->>HEADER<<- opcode: QUERY, status: ${answers.length ? 'NOERROR' : 'NXDOMAIN'}, id: ${1000 + Math.floor(Math.random() * 60000)}\n;; flags: qr rd ra; QUERY: 1, ANSWER: ${answers.length}, AUTHORITY: 0, ADDITIONAL: 1\n\n;; QUESTION SECTION:\n;${fq}\t\t\tIN\t${type}\n\n`)
-    if (answers.length) {
-      ctx.out(';; ANSWER SECTION:\n')
-      for (const ans of answers) ctx.out(`${fq}\t\t300\tIN\t${type}\t${ans}\n`)
-      ctx.out('\n')
-    }
-    ctx.out(`;; Query time: 14 msec\n;; SERVER: ${srv}#53(${srv}) (UDP)\n;; WHEN: ${new Date().toUTCString()}\n;; MSG SIZE  rcvd: ${40 + answers.length * 16}\n\n`)
-    return 0
-  },
-})
-
-register('nslookup', {
-  usage: 'nslookup name [server]',
-  run(ctx) {
-    const [name, server] = ctx.args.filter((a) => !a.startsWith('-'))
-    const srv = dnsServerReachable(ctx, server)
-    if (!srv) {
-      ctx.out(';; communications error to ' + (server ?? ctx.sys.dns[0]) + '#53: timed out\n;; no servers could be reached\n\n')
-      return 1
-    }
-    ctx.out(`Server:\t\t${srv}\nAddress:\t${srv}#53\n\n`)
-    const answers = lookup(ctx, name ?? '', 'A')
-    if (!answers.length) {
-      ctx.out(`** server can't find ${name}: NXDOMAIN\n\n`)
-      return 1
-    }
-    ctx.out(`Non-authoritative answer:\n${answers.map((a) => `Name:\t${name}\nAddress: ${a}`).join('\n')}\n\n`)
-    return 0
-  },
-})
-
-register('host', {
-  usage: 'host name',
-  run(ctx) {
-    const name = ctx.args.find((a) => !a.startsWith('-'))
-    if (!name) {
-      ctx.err('Usage: host [-aCdilrTvVw] [-c class] [-N ndots] [-t type] [-W time] hostname [server]\n')
-      return 1
-    }
-    if (!dnsServerReachable(ctx)) {
-      ctx.out(';; communications error to ' + ctx.sys.dns[0] + '#53: timed out\n;; no servers could be reached\n')
-      return 1
-    }
-    const answers = lookup(ctx, name, 'A')
-    if (!answers.length) {
-      ctx.out(`Host ${name} not found: 3(NXDOMAIN)\n`)
-      return 1
-    }
-    for (const a of answers) ctx.out(`${name} has address ${a}\n`)
-    for (const mx of lookup(ctx, name, 'MX')) ctx.out(`${name} mail is handled by ${mx}\n`)
     return 0
   },
 })
@@ -391,6 +455,7 @@ register(['curl', 'wget'], {
       return ctx.name === 'wget' ? 4 : 6
     }
     let res: { status: number; body: string; server: string } | undefined
+    learnNeighbor(ctx.sys, ip)
     const remote = hostByIp(ctx.sys, ip)
     if (remote && remote !== ctx.sys) {
       const failed = (why: string, code: number) => {
@@ -665,7 +730,7 @@ register('nmcli', {
             ctx.err(`Error: ${name} - no such connection profile.\n`)
             return 10
           }
-          ctx.out(`connection.id:                          ${i.name}\nconnection.interface-name:              ${i.name}\nipv4.method:                            manual\nipv4.addresses:                         ${i.ip ?? '--'}\nipv4.gateway:                           ${sys.gateway ?? '--'}\nipv4.dns:                               ${sys.dns.join(',') || '--'}\n`)
+          ctx.out(`connection.id:                          ${i.name}\nconnection.interface-name:              ${i.name}\nipv4.method:                            ${i.dhcp ? 'auto' : 'manual'}\nipv4.addresses:                         ${i.ip ?? '--'}\nipv4.gateway:                           ${sys.gateway ?? '--'}\nipv4.dns:                               ${sys.dns.join(',') || '--'}\n`)
           return 0
         }
         ctx.out('NAME    UUID                                  TYPE      DEVICE \n')
@@ -689,7 +754,14 @@ register('nmcli', {
           if (key === 'ipv4.addresses') pending.address = val
           else if (key === 'ipv4.gateway') pending.gateway = val
           else if (key === 'ipv4.dns') pending.dns = val.split(/[ ,]+/).filter(Boolean)
-          else if (key === 'ipv4.method' || key === 'connection.autoconnect') continue
+          else if (key === 'ipv4.method') {
+            if (!['auto', 'manual', 'disabled', 'link-local', 'shared'].includes(val)) {
+              ctx.err(`Error: failed to modify ipv4.method: '${val}' not among [auto, link-local, manual, shared, disabled].\n`)
+              return 2
+            }
+            pending.method = val
+          } else if (key === 'ipv6.addresses') pending.ipv6 = val.split(/[ ,]+/).filter(Boolean)
+          else if (key === 'ipv6.method' || key === 'connection.autoconnect' || key === 'ipv6.gateway') continue
           else {
             ctx.err(`Error: invalid property '${key}'.\n`)
             return 2
@@ -700,6 +772,19 @@ register('nmcli', {
       }
       if (cmd === 'up' || cmd === 'reload') {
         const p = sys.nmPending.get(name!)
+        if (p?.method === 'auto') iface.dhcp = true
+        if (p?.method === 'manual') iface.dhcp = false
+        if (p?.ipv6) iface.ipv6 = p.ipv6.map((x) => (x.includes('/') ? x : `${x}/64`))
+        if (iface.dhcp && !p?.address) {
+          sys.nmPending.delete(name!)
+          if (!dhcpConfigure(sys, iface.name)) {
+            ctx.err(`Error: Connection activation failed: IP configuration could not be reserved (no available address, timeout, etc.)\nHint: use 'journalctl -xe NM_CONNECTION=3c1f0d2a-8b4e-4f6a-9e21-6d0b7a5c4e19 + NM_DEVICE=${iface.name}' to get more details.\n`)
+            sys.log('NetworkManager.service', `<warn>  [${(Date.now() / 1000).toFixed(4)}] dhcp4 (${iface.name}): request timed out`, 4)
+            return 4
+          }
+          ctx.out(`Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/${sys.interfaces.indexOf(iface) + 2})\n`)
+          return 0
+        }
         if (p?.address) iface.ip = p.address
         if (p?.gateway) {
           sys.gateway = p.gateway

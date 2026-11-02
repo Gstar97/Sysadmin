@@ -79,10 +79,10 @@ export function checkVimExercise(ex: VimExercise): ExerciseProblem[] {
 
 export function checkConfigExercise(ex: ConfigExercise): ExerciseProblem[] {
   const problems: ExerciseProblem[] = []
-  const initial = evaluateRules(ex.lenguaje, ex.archivo_inicial, ex.reglas)
+  const initial = evaluateRules(ex.lenguaje, ex.archivo_inicial, ex.reglas, validateConfig(ex.lenguaje, ex.archivo_inicial, ex.nombre_archivo))
   if (initial.every((r) => r.ok)) problems.push({ level: 'warning', message: 'el archivo inicial ya cumple todas las reglas: no hay nada que corregir' })
   if (ex.solucion) {
-    const v = validateConfig(ex.lenguaje, ex.solucion)
+    const v = validateConfig(ex.lenguaje, ex.solucion, ex.nombre_archivo)
     for (const d of v.diagnostics.filter((x) => x.severity === 'error')) problems.push({ level: 'error', message: `la solución tiene un error en la línea ${d.line}: ${d.message}` })
     for (const r of evaluateRules(ex.lenguaje, ex.solucion, ex.reglas, v)) if (!r.ok) problems.push({ level: 'error', message: `la solución no cumple la regla "${r.mensaje}"` })
   } else problems.push({ level: 'warning', message: 'no tiene solución de referencia' })

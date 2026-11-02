@@ -1,0 +1,37 @@
+tipo: terminal
+shell: ios
+titulo: Lo que ve el switch
+descripcion: >-
+  Ya está todo cableado como en la parte 1. Desde la consola del switch, mira qué MAC aprendió
+  en cada puerto.
+estado_inicial:
+  consola: SW1
+  topologia:
+    dispositivos:
+      - { id: PC1, nombre: PC-Recepcion, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.50.11/24 }] }
+      - { id: PC2, nombre: PC-Contable, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.50.12/24 }] }
+      - { id: SRV, nombre: Servidor, tipo: servidor, interfaces: [{ nombre: eth0, ip: 192.168.50.10/24 }] }
+      - { id: SW1, nombre: SW1, tipo: switch }
+    enlaces:
+      - { a: "PC1:eth0", b: "SW1:Fa0/1" }
+      - { a: "PC2:eth0", b: "SW1:Fa0/2" }
+      - { a: "SRV:eth0", b: "SW1:Fa0/24" }
+pasos:
+  - consigna: Muestra la tabla de direcciones MAC del switch.
+    verificar:
+      - { comando_usado: show mac address-table }
+      - { salida_contiene: "Fa0/24" }
+    pistas: ["show mac address-table (también funciona en el modo usuario, el del prompt SW1>)."]
+    solucion: [show mac address-table]
+    explicacion: >-
+      Una línea por equipo: la VLAN (1, la que traen todos los puertos de fábrica), la MAC, el
+      tipo DYNAMIC (aprendida, no configurada a mano) y el puerto. El servidor está en Fa0/24.
+  - consigna: Mira el estado de las interfaces en una línea cada una.
+    verificar:
+      - { comando_usado: show ip interface brief }
+    pistas: ["show ip interface brief (se abrevia sh ip int br)."]
+    solucion: [show ip interface brief]
+    explicacion: >-
+      Los puertos con un equipo conectado están up/up (capa 1 y capa 2 funcionando). Los que no
+      tienen cable figuran down. Un switch de capa 2 no tiene IP en sus puertos: por eso dice
+      unassigned.

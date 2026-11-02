@@ -1,0 +1,98 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál es la distancia máxima de un enlace Ethernet por cable de cobre (par trenzado)?
+  opciones:
+    - { texto: "100 metros, contando los cables cortos de cada extremo", correcta: true, explicacion: "Es el límite de todas las categorías hasta Cat6A." }
+    - { texto: "1 kilómetro", explicacion: "Esa distancia es para fibra." }
+    - { texto: "10 metros", explicacion: "Es mucho más: 100 m." }
+    - { texto: "No tiene límite si el cable es de buena calidad", explicacion: "La señal se degrada: el límite es de la norma." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Hay que unir dos edificios separados por 3 km. ¿Qué medio conviene?
+  opciones:
+    - { texto: "Fibra monomodo", correcta: true, explicacion: "Llega a kilómetros y no le afecta la diferencia de tierras entre edificios." }
+    - { texto: "Cobre Cat6A", explicacion: "El cobre llega a 100 m." }
+    - { texto: "Fibra multimodo", explicacion: "La multimodo llega a cientos de metros, no a kilómetros." }
+    - { texto: "Un cable DAC", explicacion: "Los DAC son para pocos metros dentro del rack." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué permite PoE?
+  opciones:
+    - { texto: "Alimentar un equipo (teléfono, cámara, punto de acceso) por el mismo cable de red", correcta: true, explicacion: "El switch PoE manda la electricidad junto con los datos." }
+    - { texto: "Aumentar la velocidad del cable", explicacion: "PoE no cambia la velocidad." }
+    - { texto: "Usar fibra en lugar de cobre", explicacion: "PoE solo funciona por cobre: la fibra no conduce electricidad." }
+    - { texto: "Cifrar el tráfico", explicacion: "No tiene relación con el cifrado." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un punto de acceso Wi-Fi 7 consume hasta 40 W. ¿Qué norma PoE necesita, como mínimo?
+  opciones:
+    - { texto: "802.3bt Tipo 3 (PoE++, 60 W en el switch y 51 W en el equipo)", correcta: true, explicacion: "802.3at llega a 25,5 W en el equipo: no alcanza." }
+    - { texto: "802.3af (PoE)", explicacion: "Le llegan 12,95 W como máximo." }
+    - { texto: "802.3at (PoE+)", explicacion: "Le llegan 25,5 W como máximo." }
+    - { texto: "Cualquiera: el equipo toma lo que necesita", explicacion: "Cada norma tiene un máximo por puerto." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un switch PoE+ de 24 puertos tiene un presupuesto de 195 W y reserva por clase. ¿Cuántos puntos de acceso que necesitan PoE+ puede alimentar a la vez?
+  opciones:
+    - { texto: "6 (6 × 30 W = 180 W; con 7 serían 210 W)", correcta: true, explicacion: "El límite es el presupuesto total, no la cantidad de puertos." }
+    - { texto: "24", explicacion: "24 × 30 W = 720 W: mucho más que los 195 W." }
+    - { texto: "13", explicacion: "13 × 30 W = 390 W." }
+    - { texto: "7", explicacion: "7 × 30 W = 210 W, más que 195 W." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Compraste un módulo SFP+ 10GBASE-LR para un enlace por fibra multimodo de 80 m entre dos racks y no levanta. ¿Por qué?
+  opciones:
+    - { texto: "LR es para fibra monomodo; para multimodo hace falta un módulo SR", correcta: true, explicacion: "Cada módulo es para un tipo de fibra." }
+    - { texto: "80 m es demasiada distancia para fibra", explicacion: "La fibra llega mucho más lejos." }
+    - { texto: "Los módulos SFP+ no funcionan en racks", explicacion: "Sí funcionan." }
+    - { texto: "Hay que activar PoE en el puerto", explicacion: "PoE no se usa con fibra." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: Un servidor tiene las transferencias muy lentas, aunque no se cae nunca. ¿Qué muestra esta salida?
+  salida: |
+    $ ethtool enp0s8
+    Settings for enp0s8:
+    	Speed: 100Mb/s
+    	Duplex: Half
+    	Auto-negotiation: off
+    	Link detected: yes
+  opciones:
+    - { texto: "La placa quedó fijada a 100 Mb/s en half dúplex: probablemente el otro extremo está en full y hay colisiones", correcta: true, explicacion: "Hay que dejar la autonegociación activada en los dos extremos." }
+    - { texto: "Todo está bien: hay enlace", explicacion: "Que haya enlace no quiere decir que sea bueno." }
+    - { texto: "El cable está desconectado", explicacion: "Link detected: yes." }
+    - { texto: "Falta configurar la IP", explicacion: "ethtool no muestra la IP; el problema es la negociación." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC con placa de 1 Gb/s y switch de 1 Gb/s negocia solo 100 Mb/s. ¿Qué revisas primero?
+  opciones:
+    - { texto: "El cable y los conectores: 1 Gb/s usa los cuatro pares y 100 Mb/s solo dos", correcta: true, explicacion: "Un par cortado o mal crimpado hace que la negociación baje a 100." }
+    - { texto: "La configuración del DNS", explicacion: "El DNS no afecta la velocidad del enlace." }
+    - { texto: "Reinstalar el driver primero", explicacion: "Puede pasar, pero es mucho menos común que un cable dañado." }
+    - { texto: "El presupuesto PoE", explicacion: "Una PC no se alimenta por PoE." }
+- id: p09
+  tipo: respuesta_multiple
+  enunciado: ¿Qué ventajas tiene la fibra frente al cobre? (Marca todas las correctas.)
+  opciones:
+    - { texto: "Llega mucho más lejos", correcta: true, explicacion: "Cientos de metros (multimodo) o kilómetros (monomodo)." }
+    - { texto: "No le afecta la interferencia eléctrica", correcta: true, explicacion: "Transmite luz, no electricidad." }
+    - { texto: "No conduce electricidad entre edificios", correcta: true, explicacion: "Evita problemas de tierras distintas y rayos." }
+    - { texto: "Puede alimentar equipos con PoE", explicacion: "PoE es solo por cobre." }
+    - { texto: "Siempre es más barata", explicacion: "Para distancias cortas, el cobre suele ser más barato." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un técnico fijó un puerto del switch a 100 Mb/s full dúplex y dejó la PC en automático. ¿Qué pasa normalmente?
+  opciones:
+    - { texto: "La PC no puede negociar, detecta 100 Mb/s y asume half dúplex: queda un extremo en full y otro en half", correcta: true, explicacion: "Es el desacuerdo de dúplex clásico: errores, retransmisiones y lentitud." }
+    - { texto: "Los dos quedan en 100 full sin problemas", explicacion: "Sin negociación, el extremo automático asume half." }
+    - { texto: "No hay enlace", explicacion: "Sí hay enlace; el problema es que es malo." }
+    - { texto: "La PC sube a 1 Gb/s", explicacion: "El switch está fijado en 100." }

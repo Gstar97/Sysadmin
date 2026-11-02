@@ -15,6 +15,7 @@ const STEP_MS = 1400
 
 const LAYER_INFO: { key: keyof Layers; name: string; pdu: string; color: string }[] = [
   { key: 'enlace', name: 'Capa 2 · Enlace', pdu: 'Trama', color: 'var(--info)' },
+  { key: 'arp', name: 'ARP (dentro de la trama)', pdu: 'Mensaje ARP', color: 'var(--accent)' },
   { key: 'red', name: 'Capa 3 · Red', pdu: 'Paquete', color: 'var(--accent)' },
   { key: 'transporte', name: 'Capa 4 · Transporte', pdu: 'Segmento', color: 'var(--warn)' },
   { key: 'aplicacion', name: 'Capa 7 · Aplicación', pdu: 'Datos', color: 'var(--ok)' },
@@ -30,6 +31,17 @@ function fields(layers: Layers, key: keyof Layers): [string, string][] {
         ['MAC origen', e.origen],
         ['MAC destino', e.destino],
         ['Tipo', e.tipo],
+      ]
+    }
+    case 'arp': {
+      const a = l as NonNullable<Layers['arp']>
+      const op = { solicitud: 'Solicitud (1)', respuesta: 'Respuesta (2)', gratuito: 'ARP gratuito (anuncio)' }[a.operacion]
+      return [
+        ['Operación', op],
+        ['MAC emisor', a.mac_emisor],
+        ['IP emisor', a.ip_emisor],
+        ['MAC buscada', a.mac_objetivo],
+        ['IP buscada', a.ip_objetivo],
       ]
     }
     case 'red': {

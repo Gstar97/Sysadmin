@@ -182,24 +182,35 @@ const stateShape = {
             ip: z.string().optional(),
             mac: z.string().optional(),
             estado: z.enum(['UP', 'DOWN']).default('UP'),
+            ipv6: z.array(z.string()).default([]),
+            /** Pide la dirección por DHCP al levantar la conexión (sin ip fija). */
+            dhcp: z.boolean().default(false),
+            /** Velocidad negociada en Mb/s y dúplex (ethtool). */
+            velocidad: z.number().int().default(1000),
+            duplex: z.enum(['full', 'half']).default('full'),
+            autonegociacion: z.boolean().default(true),
+            mtu: z.number().int().default(1500),
           }),
         )
-        .default([{ nombre: 'enp0s3', ip: '192.168.1.10/24', estado: 'UP' }]),
+        .default([{ nombre: 'enp0s3', ip: '192.168.1.10/24', estado: 'UP', ipv6: [], dhcp: false, velocidad: 1000, duplex: 'full', autonegociacion: true, mtu: 1500 }]),
       puerta_enlace: z.string().optional().default('192.168.1.1'),
       dns: z.array(z.string()).default(['192.168.1.1']),
       alcanzables: z.array(z.string()).default([]),
       internet: z.boolean().default(true),
       registros_dns: z.record(z.string(), z.string()).default({}),
       sitios_web: z.record(z.string(), z.string()).default({}),
+      /** Resolvedores (que no son del laboratorio) que no responden. */
+      dns_caidos: z.array(z.string()).default([]),
     })
     .default({
-      interfaces: [{ nombre: 'enp0s3', ip: '192.168.1.10/24', estado: 'UP' }],
+      interfaces: [{ nombre: 'enp0s3', ip: '192.168.1.10/24', estado: 'UP', ipv6: [], dhcp: false, velocidad: 1000, duplex: 'full', autonegociacion: true, mtu: 1500 }],
       puerta_enlace: '192.168.1.1',
       dns: ['192.168.1.1'],
       alcanzables: [],
       internet: true,
       registros_dns: {},
       sitios_web: {},
+      dns_caidos: [],
     }),
   /** Intentos fallidos de inicio de sesión registrados por pam_faillock, por usuario. */
   faillock: z.record(z.string(), z.number().int().min(0)).default({}),
@@ -293,6 +304,19 @@ const singleCheckSchema = z.union([
   z.strictObject({ grupo_volumenes: z.string(), existe: z.boolean().default(true), discos: z.array(z.string()).optional() }),
   z.strictObject({ particion: z.string(), existe: z.boolean().default(true), tamano_min: z.string().optional(), fs: z.string().optional() }),
   z.strictObject({ swap: z.string(), activa: z.boolean().default(true) }),
+  /**
+   * Resolución DNS desde este servidor: el nombre responde (con esa IP, si se indica) usando el
+   * servidor dado o los de /etc/resolv.conf. Con estado: NXDOMAIN, REFUSED o sin_respuesta.
+   */
+  z.strictObject({
+    resuelve: z.string(),
+    tipo: z.string().default('A'),
+    servidor: z.string().optional(),
+    responde: z.string().optional(),
+    estado: z.enum(['NOERROR', 'NXDOMAIN', 'REFUSED', 'SERVFAIL', 'sin_respuesta']).default('NOERROR'),
+  }),
+  /** La interfaz tiene una IPv4 dentro de esa red (por ejemplo, recibida por DHCP). */
+  z.strictObject({ interfaz: z.string(), ip_en: z.string().optional(), ipv6: z.string().optional(), activa: z.boolean().optional() }),
 ])
 
 /** Una verificación, o la misma en otro servidor de la red: { en: web01, verificar: {...} }. */

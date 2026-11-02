@@ -1,0 +1,36 @@
+tipo: terminal
+shell: bash
+titulo: Las direcciones MAC del servidor
+descripcion: >-
+  Vas a anotar en el inventario las placas de red de srv-archivos. Mira cuántas tiene, sus
+  MAC y si están conectadas.
+estado_inicial:
+  distro: ubuntu
+  hostname: srv-archivos
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.40/24, mac: "08:00:27:4a:91:0e" }
+      - { nombre: eno2, mac: "08:00:27:4a:91:0f", estado: DOWN }
+pasos:
+  - consigna: Muestra las placas de red con su dirección MAC, una por línea.
+    verificar:
+      - { comando_usado: ip }
+      - { salida_contiene: "08:00:27:4a:91:0e" }
+    pistas: ["ip -br link muestra nombre, estado y MAC en una línea."]
+    solucion: [ip -br link]
+    explicacion: >-
+      lo es la interfaz de loopback (el propio equipo). eno1 y eno2 son dos placas físicas:
+      las dos empiezan con 08:00:27, el OUI de VirtualBox, porque srv-archivos es una máquina virtual con dos placas. Los
+      últimos tres bytes las distinguen.
+  - consigna: Mira el detalle completo de eno2. ¿Por qué no tiene IP?
+    verificar:
+      - { comando_usado: ip }
+      - { salida_contiene: "eno2" }
+    pistas: ["ip link show eno2 (o ip a show eno2)."]
+    solucion: [ip a show eno2]
+    explicacion: >-
+      Dice state DOWN y entre los indicadores no aparecen UP ni LOWER_UP: la interfaz está
+      apagada (con un cable desenchufado verías NO-CARRIER). Una placa apagada no tiene
+      tráfico aunque tenga MAC: la MAC viene grabada en la placa, la IP se configura.

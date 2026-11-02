@@ -14,9 +14,13 @@ import './commands/net'
 import './commands/ssh'
 import './commands/security'
 import './commands/scriptutil'
+import './commands/dnsserver'
+import './commands/netdiag'
+import { dhcpConfigure } from './commands/dnsserver'
 import { commandPackage, OTHER_FAMILY } from './packages'
 import { bashStateSchema, type BashCheck, type BashState, type BashStateInput } from './schema'
-import { hostKey, inbound, knownLine, makeKey } from './hosts'
+import { hostKey, inbound, inSubnet, knownLine, makeKey } from './hosts'
+import { nameservers, query, type DnsAnswer } from './dns'
 import { COMMANDS, Shell } from './shell'
 import { System } from './system'
 import { modeString, ROOT_CRED, type Inode } from './vfs'
@@ -63,7 +67,7 @@ function linkHosts(base: System, state: BashState) {
   if (!state.servidores.length) return
   const remotes = state.servidores.map((h) => {
     const { ip, clave_conocida: _k, en_dns: _d, ...rest } = h
-    const red = h.red.interfaces.length === 1 && h.red.interfaces[0].ip === '192.168.1.10/24' ? { ...h.red, interfaces: [{ nombre: 'enp0s3', ip: ip.includes('/') ? ip : `${ip}/24`, estado: 'UP' as const }] } : h.red
+    const red = h.red.interfaces.length === 1 && h.red.interfaces[0].ip === '192.168.1.10/24' ? { ...h.red, interfaces: [{ ...h.red.interfaces[0], nombre: 'enp0s3', ip: ip.includes('/') ? ip : `${ip}/24`, estado: 'UP' as const }] } : h.red
     const sys = new System({ ...rest, red, servidores: [] })
     installBinaries(sys)
     return { spec: h, sys, ip: ip.split('/')[0] }
@@ -76,6 +80,8 @@ function linkHosts(base: System, state: BashState) {
   const baseIp = base.ownIps()[1]
   if (baseIp) names[base.hostname] = baseIp
   for (const s of all) for (const [n, ip] of Object.entries(names)) s.dnsRecords[n] ??= ip
+  // Los equipos que piden dirección por DHCP la reciben al arrancar si hay un servidor Kea funcionando.
+  for (const s of all) for (const i of s.interfaces) if (i.dhcp && !i.ip) dhcpConfigure(s, i.name)
   // known_hosts del usuario del ejercicio.
   const user = base.users.get(state.usuario)
   if (!user) return
@@ -155,6 +161,37 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
 }
 
 function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string }>): CheckResult {
+  if ('resuelve' in check) {
+    const servers = check.servidor ? [check.servidor] : nameservers(sys)
+    let r: DnsAnswer | undefined
+    for (const srv of servers.length ? servers : ['127.0.0.1']) {
+      r = query(sys, srv, check.resuelve, check.tipo)
+      if (!r.error) break
+    }
+    const state = !r || r.error ? 'sin_respuesta' : r.status
+    let ok = state === check.estado
+    if (ok && check.responde) ok = !!r?.answer.some((a) => a.type === check.tipo && a.data.replace(/\.$/, '') === check.responde!.replace(/\.$/, ''))
+    return { ok, label: `${check.resuelve} (${check.tipo})${check.responde ? ` responde ${check.responde}` : check.estado !== 'NOERROR' ? ` da ${check.estado}` : ' resuelve'}${check.servidor ? ` en ${check.servidor}` : ''}` }
+  }
+  if ('interfaz' in check) {
+    const i = sys.interfaces.find((x) => x.name === check.interfaz)
+    if (!i) return { ok: false, label: `la interfaz ${check.interfaz} existe` }
+    let ok = true
+    const parts: string[] = []
+    if (check.activa !== undefined) {
+      ok &&= i.up === check.activa
+      parts.push(check.activa ? 'activa' : 'apagada')
+    }
+    if (check.ip_en) {
+      ok &&= !!i.ip && inSubnet(i.ip.split('/')[0], check.ip_en)
+      parts.push(`con una IP de ${check.ip_en}`)
+    }
+    if (check.ipv6) {
+      ok &&= i.ipv6.some((v) => v.split('/')[0] === check.ipv6!.split('/')[0])
+      parts.push(`con la IPv6 ${check.ipv6}`)
+    }
+    return { ok, label: `${check.interfaz} ${parts.join(' y ')}` }
+  }
   if ('ufw_activo' in check) return { ok: sys.ufw.active === check.ufw_activo, label: `ufw ${check.ufw_activo ? 'activo' : 'inactivo'}` }
   if ('firewall_permite' in check) {
     const [port, proto = 'tcp'] = check.firewall_permite.split('/')
