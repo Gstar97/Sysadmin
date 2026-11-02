@@ -1,0 +1,36 @@
+---
+titulo: Acceso seguro con bastión, firewall mínimo y SELinux
+horas: 3
+verificacion:
+  - Entro a los dos servidores con mi clave (con frase de paso) y sin contraseña.
+  - rocky01 solo acepta SSH desde el bastión, y llego con ProxyJump.
+  - En los dos servidores, PasswordAuthentication y PermitRootLogin están en no (sshd -T).
+  - ufw está activo en el bastión y firewalld en rocky01 permite solo lo necesario.
+  - El sitio de /srv/sitio se ve en el puerto 8090 con SELinux en enforcing.
+  - Documenté accesos, reglas y cambios de SELinux.
+---
+
+import pasos from './lab-acceso.yaml'
+
+## Objetivo
+
+Dejar tus dos servidores como se dejan en una empresa: un único punto de entrada (el bastión), acceso solo con clave, firewalls que permiten lo justo y un servicio web funcionando en un lugar no estándar sin apagar SELinux.
+
+## Qué necesitas
+
+- rocky01 y ubuntu01 encendidos, con la red solo-anfitrión, y la terminal de tu PC.
+- Unas tres horas.
+
+<Advertencia>
+Este laboratorio está pensado para que, si te equivocas, te quedes afuera de algún servidor. Es parte del aprendizaje, pero hazlo con las instantáneas del primer paso y con la consola del hipervisor a mano: es tu entrada de emergencia, igual que la consola del proveedor en la nube.
+</Advertencia>
+
+## Pasos
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Si el bastión se cae, ¿cómo entras a rocky01? ¿Qué harías en una empresa para que eso no pase?
+2. ¿Qué cambia si alguien consigue tu clave privada? ¿Y si además no tiene frase de paso?
+3. En los pasos 8 y 9, ¿qué habría pasado si hubieras copiado el index.html con cp en lugar de moverlo con mv?

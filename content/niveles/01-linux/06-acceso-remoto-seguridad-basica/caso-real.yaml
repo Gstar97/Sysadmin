@@ -1,0 +1,124 @@
+tipo: troubleshooting
+titulo: Sin acceso después de cambiar sshd_config
+descripcion: >-
+  Incidente simulado en tienda01, un servidor Rocky en la nube que atiende la tienda en línea.
+  La web sigue funcionando, pero nadie puede entrar a administrarlo. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Viernes, 18:40. Para "endurecer" tienda01, Martín cambió sshd para que escuche en el puerto
+      2222 y no acepte contraseñas. Reinició sshd, cerró la sesión y se fue. A las 19:30 hay que
+      aplicar un parche urgente y nadie puede entrar.
+    evidencia:
+      - titulo: Desde tu equipo
+        contenido: |
+          $ ssh -p 2222 admin@tienda01
+          ssh: connect to host tienda01 port 2222: Connection refused
+          $ ssh admin@tienda01
+          ssh: connect to host tienda01 port 22: Connection refused
+    opciones:
+      - { texto: "Analizar qué dice cada error antes de tocar nada", ir_a: n_analisis, minutos: 2 }
+      - texto: Reiniciar el servidor desde el panel del proveedor
+        ir_a: n_reinicio
+        minutos: 6
+      - texto: Pedir que restauren la copia de la noche anterior
+        ir_a: n1
+        minutos: 30
+        consecuencia: >-
+          Perderías los pedidos de todo el día de la tienda. El proveedor te pregunta si estás
+          seguro; mejor buscar otra salida.
+  n_reinicio:
+    situacion: >-
+      Seis minutos con la tienda caída para todos los clientes. Al volver, la web funciona... y
+      SSH sigue respondiendo Connection refused en los dos puertos. El problema está en la
+      configuración, y reiniciar no la cambia.
+    opciones:
+      - { texto: "Analizar los errores", ir_a: n_analisis, minutos: 2 }
+  n_analisis:
+    situacion: >-
+      "Connection refused" en los dos puertos: llegas al servidor, pero nada escucha. sshd no
+      está funcionando. No es el firewall (daría timed out o no route to host). Necesitas entrar
+      por otro lado que no sea SSH.
+    opciones:
+      - { texto: "Abrir la consola serie del proveedor de nube (la pantalla del servidor)", ir_a: n_consola, minutos: 3 }
+      - texto: Probar otros puertos al azar (2200, 22222...)
+        ir_a: n_analisis
+        minutos: 4
+        consecuencia: Todos dan refused. sshd no está escuchando en ninguno.
+  n_consola:
+    situacion: >-
+      Entras por la consola serie con el usuario admin y su contraseña (la consola no depende de
+      sshd). Miras por qué sshd no arranca.
+    evidencia:
+      - titulo: sudo systemctl status sshd
+        contenido: |
+          × sshd.service - OpenSSH server daemon
+               Active: failed (Result: exit-code) since Fri 2026-11-06 18:39:12 -03
+          Nov 06 18:39:12 tienda01 sshd[4410]: error: Bind to port 2222 on 0.0.0.0 failed: Permission denied.
+          Nov 06 18:39:12 tienda01 sshd[4410]: fatal: Cannot bind any address.
+      - titulo: cat /etc/ssh/sshd_config.d/01-endurecido.conf
+        contenido: |
+          Port 2222
+          PasswordAuthentication no
+          PermitRootLogin no
+    opciones:
+      - { texto: "Ver si SELinux bloqueó el puerto (ausearch -m avc)", ir_a: n_selinux, minutos: 2 }
+      - texto: Apagar SELinux (setenforce 0) y arrancar sshd
+        ir_a: n_setenforce
+        minutos: 2
+      - texto: Cambiar de nuevo al puerto 22 y arrancar sshd
+        ir_a: n_vuelta22
+        minutos: 3
+  n_setenforce:
+    situacion: >-
+      sshd arranca y puedes entrar por el 2222... con SELinux en permissive para todo el servidor.
+      El lunes, en la revisión de seguridad, lo detectan; además, al primer reinicio sshd va a
+      volver a fallar, porque setenforce 0 no dura.
+    opciones:
+      - texto: Volver a enforcing y arreglarlo bien
+        ir_a: n_selinux
+        minutos: 2
+        consecuencia: Bien. Lo temporal sirvió para confirmar la causa, nada más.
+  n_vuelta22:
+    situacion: >-
+      Con Port 22, sshd arranca y vuelves a entrar. Aplicas el parche a tiempo. Pero el pedido era
+      mover SSH al 2222, y queda pendiente entender por qué no anduvo.
+    opciones:
+      - { texto: "Ahora sí, investigar con calma y hacer bien el cambio de puerto", ir_a: n_selinux, minutos: 3 }
+  n_selinux:
+    situacion: SELinux no deja a sshd usar el 2222, que no está etiquetado como puerto de SSH.
+    evidencia:
+      - titulo: sudo ausearch -m avc -ts today
+        contenido: |
+          type=AVC msg=audit(1793987952.114:2210): avc:  denied  { name_bind } for  pid=4410 comm="sshd" src=2222 scontext=system_u:system_r:sshd_t:s0-s0:c0.c1023 tcontext=system_u:object_r:unreserved_port_t:s0 tclass=tcp_socket permissive=0
+      - titulo: sudo firewall-cmd --list-all | grep -E 'services|ports'
+        contenido: |
+          services: dhcpv6-client http https ssh
+          ports:
+    opciones:
+      - { texto: "Etiquetar el 2222 como ssh_port_t, abrirlo en el firewall y arrancar sshd", ir_a: n_arreglo, minutos: 4 }
+      - texto: Etiquetar el 2222 y arrancar sshd (el firewall después)
+        ir_a: n_selinux
+        minutos: 3
+        consecuencia: >-
+          sshd arranca, pero desde afuera el 2222 da No route to host: el firewall solo permite el
+          servicio ssh, que es el 22. Hacían falta las dos cosas.
+  n_arreglo:
+    situacion: >-
+      Con semanage port -a -t ssh_port_t -p tcp 2222 y firewall-cmd --permanent --add-port=2222/tcp
+      más --reload, sshd arranca. Desde tu equipo, ssh -p 2222 admin@tienda01 entra con clave.
+      19:22: aplicas el parche a tiempo.
+    opciones:
+      - { texto: "Cerrar el puerto 22 en el firewall y dejar escrito lo que pasó", ir_a: n_ok, minutos: 5 }
+  n_ok:
+    final: exito
+    resumen: >-
+      Martín cambió el puerto en sshd, pero no le avisó a SELinux ni al firewall, reinició y cerró
+      su única sesión sin probar. sshd no pudo usar el 2222 y se detuvo: nadie podía entrar. La
+      salida fue la consola del proveedor, que no depende de SSH. El orden seguro para cambiar el
+      puerto en Rocky: semanage port y firewall primero; sshd -t; dejar la sesión abierta; reiniciar;
+      probar desde otra terminal; recién después cerrar el puerto viejo. Como red de seguridad
+      extra, antes de reiniciar se puede programar con at una vuelta atrás automática en 10
+      minutos (copiar la configuración anterior y reiniciar sshd) y cancelarla con atrm si todo
+      salió bien.
