@@ -1,0 +1,65 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En Rocky ejecutas sudo firewall-cmd --permanent --add-service=http, pero la web sigue sin verse desde afuera. ¿Qué falta?
+  opciones:
+    - { texto: "sudo firewall-cmd --reload, para que la configuración permanente se aplique", correcta: true, explicacion: "--permanent guarda; --reload aplica." }
+    - { texto: "Reiniciar nginx", explicacion: "nginx no tiene que ver con el firewall." }
+    - { texto: "Instalar ufw", explicacion: "En Rocky se usa firewalld; no hay que mezclar." }
+    - { texto: "Nada, tarda unos minutos", explicacion: "Sin reload, no se aplica nunca (hasta reiniciar)." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Vas a activar ufw en un servidor al que entras por SSH. ¿Qué haces primero?
+  opciones:
+    - { texto: "sudo ufw allow OpenSSH", correcta: true, explicacion: "Al activarlo, todo lo que no está permitido se descarta." }
+    - { texto: "sudo ufw enable", explicacion: "Sin permitir SSH antes, te quedas afuera." }
+    - { texto: "sudo ufw reset", explicacion: "Borra las reglas; no ayuda." }
+    - { texto: "Reiniciar el servidor", explicacion: "No tiene relación." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando de firewalld que abre el puerto 8090/tcp de forma permanente.
+  aceptadas: [sudo firewall-cmd --permanent --add-port=8090/tcp, firewall-cmd --permanent --add-port=8090/tcp, sudo firewall-cmd --add-port=8090/tcp --permanent]
+  explicacion: Después, sudo firewall-cmd --reload.
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando de ufw que permite el puerto 3306 solo desde la red 192.168.10.0/24.
+  aceptadas: [sudo ufw allow from 192.168.10.0/24 to any port 3306, ufw allow from 192.168.10.0/24 to any port 3306, sudo ufw allow from 192.168.10.0/24 to any port 3306 proto tcp]
+  explicacion: Mucho mejor que abrir el puerto a cualquiera.
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Desde otro equipo, nc -zv servidor 5432 responde "Connection timed out", y el servidor es Ubuntu con ufw activo. ¿Qué indica?
+  opciones:
+    - { texto: "Que ufw descarta ese puerto en silencio: no hay regla que lo permita", correcta: true, explicacion: "ufw no responde: por eso el cliente espera hasta rendirse." }
+    - { texto: "Que el servicio está apagado", explicacion: "Eso daría refused (si el firewall dejara pasar)." }
+    - { texto: "Que el DNS no funciona", explicacion: "nc ya resolvió el nombre." }
+    - { texto: "Que el cable está desconectado", explicacion: "Puede ser, pero con ufw activo y sin regla, es lo esperable." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: ¿Qué deja pasar este servidor Rocky?
+  salida: |
+    public (active)
+      interfaces: enp0s3
+      services: dhcpv6-client http ssh
+      ports: 8090/tcp
+  opciones:
+    - { texto: "SSH (22), web (80) y el puerto 8090, además de DHCPv6", correcta: true, explicacion: "Todo lo demás se rechaza." }
+    - { texto: "Todo, porque está en public", explicacion: "public es la zona; dentro, solo lo listado." }
+    - { texto: "Solo el 8090", explicacion: "services también abre puertos." }
+    - { texto: "Nada: el firewall está apagado", explicacion: "(active) indica que está funcionando." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Por qué no alcanza con probar el firewall desde el mismo servidor (curl localhost)?
+  opciones:
+    - { texto: "Porque las conexiones locales no pasan por las reglas de entrada", correcta: true, explicacion: "La prueba que vale es desde otro equipo." }
+    - { texto: "Porque curl no funciona en local", explicacion: "Funciona." }
+    - { texto: "Porque localhost no tiene puertos", explicacion: "Sí tiene." }
+    - { texto: "Sí alcanza", explicacion: "Puede darte un falso positivo." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: Un compañero propone "desactivemos el firewall, así funciona la aplicación nueva". ¿Qué le respondes?
+  opciones:
+    - { texto: "Mejor averiguar qué puerto usa (ss -tlnp) y permitir solo ese, y si se puede solo desde la red que lo necesita", correcta: true, explicacion: "Arreglas el problema sin exponer todo lo demás." }
+    - { texto: "Está bien, es más rápido", explicacion: "Deja expuesto todo lo que escuche en el servidor." }
+    - { texto: "Hay que reinstalar el servidor", explicacion: "No hace falta." }
+    - { texto: "Hay que cambiar a otro firewall", explicacion: "El firewall no es el problema." }

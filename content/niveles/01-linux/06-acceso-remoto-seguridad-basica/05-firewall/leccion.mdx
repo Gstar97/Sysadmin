@@ -1,0 +1,112 @@
+---
+id: n1-m6-l5
+titulo: Firewall del host
+minutos: 120
+objetivos:
+  - Explicar qué hace el firewall de un servidor y por qué se permite solo lo necesario.
+  - Manejar firewalld en Rocky (servicios, puertos, runtime y permanente).
+  - Manejar ufw en Ubuntu sin quedarte afuera, incluidas reglas por origen.
+  - Comprobar el resultado desde otro equipo.
+glosario: [firewall, firewalld, ufw]
+verificado: 2026-11
+---
+
+import filtro from './filtro.svg?raw'
+import reglas from './reglas.yaml'
+import ejFirewall from './ej-firewall.yaml'
+
+Un servidor recién instalado puede tener servicios escuchando que nadie pidió, o que alguien deja encendidos "un rato para probar". El **firewall** del servidor es la segunda barrera: aunque algo quede escuchando, solo llegan las conexiones a los puertos que permitiste. En esta lección vas a manejar los dos que vas a encontrar: **firewalld** en Rocky y **ufw** en Ubuntu.
+
+<AntesDeEmpezar>
+- Puertos, `ss -tlnp` y la diferencia entre refused y timed out (lección 1.6.1).
+- Entrar a otro servidor por SSH (lecciones 1.6.2 a 1.6.4).
+</AntesDeEmpezar>
+
+## La idea: una lista de lo permitido
+
+Piensa en la recepción de un edificio de oficinas con una lista de visitas: solo pasa quien está en la lista, aunque las oficinas tengan la puerta abierta. Así trabaja un buen firewall: **todo cerrado salvo lo que está en la lista**. Donde la comparación no llega: el firewall no mira quién eres, solo a qué puerto vas y (si lo configuras) desde qué dirección vienes. Para saber quién eres están las contraseñas y las claves.
+
+<Diagrama svg={filtro} alt="Cuatro conexiones llegan a web01, a los puertos 22, 80, 5432 y 9090. El firewall tiene permitidos ssh y http, así que las del 22 y el 80 llegan a sshd y a nginx. Las del 5432 y 9090 se cortan: firewalld las rechaza (el cliente ve No route to host) y ufw las descarta sin responder (el cliente ve Connection timed out)." pie="Solo pasa lo que está en la lista. El resto se corta antes de llegar al servicio." />
+
+Debajo, los dos usan el filtro de paquetes del kernel (**nftables**). firewalld y ufw son formas más cómodas de escribir esas reglas; no mezcles las dos en el mismo servidor.
+
+## firewalld (Rocky)
+
+firewalld viene activo en Rocky y organiza las reglas en **zonas**. La placa de red está en la zona `public`, que de entrada permite `ssh`, `cockpit` y `dhcpv6-client`.
+
+```bash
+sudo firewall-cmd --state                     # running
+sudo firewall-cmd --list-all                  # lo que permite la zona activa
+sudo firewall-cmd --get-services | tr ' ' '\n' | grep http   # los nombres de servicio conocidos
+```
+
+firewalld tiene dos configuraciones: la que está funcionando ahora (**runtime**) y la que se carga al arrancar (**permanent**). Lo más claro es trabajar siempre con `--permanent` y aplicar con `--reload`:
+
+```bash
+sudo firewall-cmd --permanent --add-service=http       # por nombre de servicio
+sudo firewall-cmd --permanent --add-port=8090/tcp      # un puerto suelto
+sudo firewall-cmd --permanent --remove-service=cockpit # cerrar lo que no se usa
+sudo firewall-cmd --reload                             # aplicar
+```
+
+<EnSimple>
+Sin `--permanent`, el cambio dura hasta que reinicies. Con `--permanent`, se guarda pero no se aplica hasta el `--reload`. Usa los dos juntos y no te vas a confundir.
+</EnSimple>
+
+Una conexión a un puerto cerrado en firewalld recibe un rechazo, y el cliente ve **No route to host**. Para más adelante: las zonas permiten tratar distinto a cada red (por ejemplo, `--add-source=192.168.10.0/24` en la zona `trusted`) y las *rich rules* permiten reglas por origen y puerto a la vez.
+
+## ufw (Ubuntu)
+
+En Ubuntu Server, ufw viene **instalado pero apagado**. Por defecto, al activarlo, descarta todo lo que entra y deja salir todo lo que sale. Por eso el orden importa:
+
+```bash
+sudo ufw allow OpenSSH          # PRIMERO: que SSH siga entrando
+sudo ufw enable                 # después activarlo
+sudo ufw allow 80/tcp           # abrir la web
+sudo ufw allow from 192.168.10.0/24 to any port 5432    # solo desde la red de oficina
+sudo ufw status verbose         # ver las reglas y lo que se hace por defecto
+sudo ufw status numbered        # numeradas...
+sudo ufw delete 3               # ...para borrar una
+```
+
+`OpenSSH` y `Nginx Full` son **perfiles de aplicación**: nombres para los puertos de cada programa (`sudo ufw app list`). Una conexión a un puerto cerrado con ufw no recibe respuesta: el cliente espera y ve **Connection timed out**.
+
+<Emparejar ejercicio={reglas} />
+
+## No te quedes afuera
+
+El firewall es la otra forma clásica de perder el acceso a un servidor (la primera es sshd_config). Las mismas reglas de la lección 1.6.3:
+
+- Antes de activar o cambiar reglas, asegúrate de que **SSH está permitido**.
+- Deja **una sesión abierta** mientras pruebas.
+- Prueba **desde otro equipo**: `nc -zv servidor 22`, `curl -I http://servidor`. Desde el mismo servidor no se ve el efecto del firewall.
+- Si cambias el puerto de SSH, ábrelo en el firewall **antes** de reiniciar sshd (y en Rocky, avísale a SELinux: próxima lección).
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejFirewall} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Abrí el puerto y sigue sin verse">
+    En firewalld, ¿usaste `--permanent` sin `--reload`? Mira `--list-all`. Y revisa que el servicio escuche en 0.0.0.0 y no en 127.0.0.1 (`ss -tlnp`).
+  </ErrorComun>
+  <ErrorComun titulo="Después de reiniciar, se perdió la regla">
+    La agregaste sin `--permanent` (solo runtime). `sudo firewall-cmd --runtime-to-permanent` guarda lo que está funcionando ahora.
+  </ErrorComun>
+  <ErrorComun titulo="Activé ufw y se cortó todo">
+    Faltó `ufw allow OpenSSH` antes del `enable`. Hace falta la consola del hipervisor o del proveedor para entrar y corregirlo.
+  </ErrorComun>
+  <ErrorComun titulo="Desactivar el firewall para que algo funcione">
+    Lo hace funcionar y deja todo expuesto. Averigua qué puerto necesita (`ss -tlnp`) y permite solo ese, idealmente solo desde la red que lo usa.
+  </ErrorComun>
+  <ErrorComun titulo="Probar el firewall desde el mismo servidor">
+    Las conexiones locales no pasan por las reglas de entrada. La prueba que vale es desde otro equipo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Firewall: todo cerrado salvo lo que se permite. Es una segunda barrera, no reemplaza configurar bien cada servicio.
+- firewalld (Rocky): `--list-all`, `--permanent --add-service=` / `--add-port=` / `--remove-service=` y `--reload`. Puerto cerrado: No route to host.
+- ufw (Ubuntu): `allow OpenSSH` antes de `enable`; `allow 80/tcp`; `allow from RED to any port N`; `status numbered` y `delete N`. Puerto cerrado: timed out.
+- Siempre: SSH permitido, sesión abierta, y probar desde otro equipo (`nc -zv`, `curl -I`).
+</Resumen>

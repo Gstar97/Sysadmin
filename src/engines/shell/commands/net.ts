@@ -574,7 +574,21 @@ register('ufw', {
           return 0
         }
         ctx.out(`Status: active\n${rest[0] === 'verbose' ? 'Logging: on (low)\nDefault: deny (incoming), allow (outgoing), disabled (routed)\nNew profiles: skip\n' : ''}\n${rest[0] === 'numbered' ? '     ' : ''}To                         Action      From\n${rest[0] === 'numbered' ? '     ' : ''}--                         ------      ----\n`)
-        u.rules.forEach((r, i) => ctx.out(`${rest[0] === 'numbered' ? `[${String(i + 1).padStart(2)}] ` : ''}${r.target.padEnd(26)} ${r.action.toUpperCase().padEnd(11)} Anywhere\n`))
+        {
+          // Como ufw: cada regla sin origen tiene también su versión para IPv6.
+          const rows: { to: string; action: string; from: string }[] = []
+          const v6: typeof rows = []
+          for (const r of u.rules) {
+            const m = /^(?:proto (tcp|udp) )?from (\S+)(?: to any)?(?: port (\d+))?(?: proto (tcp|udp))?$/i.exec(r.target)
+            const action = r.action.toUpperCase()
+            if (m) rows.push({ to: m[3] ? `${m[3]}${m[1] ?? m[4] ? `/${m[1] ?? m[4]}` : ''}` : 'Anywhere', action, from: m[2] === 'any' ? 'Anywhere' : m[2] })
+            else {
+              rows.push({ to: r.target, action, from: 'Anywhere' })
+              v6.push({ to: `${r.target} (v6)`, action, from: 'Anywhere (v6)' })
+            }
+          }
+          ;[...rows, ...(rest[0] === 'numbered' ? [] : v6)].forEach((r, i) => ctx.out(`${rest[0] === 'numbered' ? `[${String(i + 1).padStart(2)}] ` : ''}${r.to.padEnd(26)} ${r.action.padEnd(11)} ${r.from}\n`))
+        }
         return 0
       case 'allow':
       case 'deny': {
@@ -608,6 +622,13 @@ register('ufw', {
         ctx.out(before === u.rules.length ? 'Could not delete non-existent rule\n' : 'Rule deleted\nRule deleted (v6)\n')
         return 0
       }
+      case 'app':
+        if (rest[0] === 'list') {
+          ctx.out(`Available applications:\n  OpenSSH\n${ctx.sys.installed.has('nginx') ? '  Nginx Full\n  Nginx HTTP\n  Nginx HTTPS\n' : ''}${ctx.sys.installed.has('apache2') ? '  Apache\n  Apache Full\n  Apache Secure\n' : ''}`)
+          return 0
+        }
+        ctx.err('ERROR: Invalid syntax\n')
+        return 1
       case 'reset':
         u.rules = []
         u.active = false

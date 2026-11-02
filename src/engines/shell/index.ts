@@ -15,7 +15,7 @@ import './commands/ssh'
 import './commands/security'
 import { commandPackage, OTHER_FAMILY } from './packages'
 import { bashStateSchema, type BashCheck, type BashState, type BashStateInput } from './schema'
-import { hostKey, knownLine, makeKey } from './hosts'
+import { hostKey, inbound, knownLine, makeKey } from './hosts'
 import { COMMANDS, Shell } from './shell'
 import { System } from './system'
 import { modeString, ROOT_CRED, type Inode } from './vfs'
@@ -154,6 +154,12 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
 }
 
 function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string }>): CheckResult {
+  if ('ufw_activo' in check) return { ok: sys.ufw.active === check.ufw_activo, label: `ufw ${check.ufw_activo ? 'activo' : 'inactivo'}` }
+  if ('firewall_permite' in check) {
+    const [port, proto = 'tcp'] = check.firewall_permite.split('/')
+    const res = inbound(sys, Number(port), proto === 'udp' ? 'udp' : 'tcp', check.desde ?? '203.0.113.10') === 'ok'
+    return { ok: res === check.permite, label: `el firewall ${check.permite ? 'deja pasar' : 'bloquea'} ${check.firewall_permite}${check.desde ? ` desde ${check.desde}` : ''}` }
+  }
   if ('archivo' in check) {
     const exists = sys.vfs.exists(check.archivo, ROOT_CRED, false)
     const parts: string[] = []

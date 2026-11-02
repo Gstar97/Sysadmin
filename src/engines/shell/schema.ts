@@ -263,6 +263,10 @@ const singleCheckSchema = z.union([
   z.strictObject({ salida_contiene: z.string() }),
   z.strictObject({ salida_regex: z.string() }),
   z.strictObject({ comando_usado: z.string() }),
+  /** ufw activo (o no) en Ubuntu. */
+  z.strictObject({ ufw_activo: z.boolean() }),
+  /** El firewall del servidor deja pasar ese puerto (ej.: "80/tcp"), desde cualquier origen o desde la IP dada. */
+  z.strictObject({ firewall_permite: z.string(), desde: z.string().optional(), permite: z.boolean().default(true) }),
   z.strictObject({ directorio_actual: z.string() }),
   z.strictObject({ usuario_actual: z.string() }),
   z.strictObject({
