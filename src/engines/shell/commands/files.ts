@@ -1,7 +1,7 @@
 import { VIRTUAL_MOUNTS } from '../storage'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
-import { aclUnion, basename, FsError, modeString, normalizePath, octal, type DefaultAcl, type Inode } from '../vfs'
+import { aclUnion, basename, FsError, modeString, normalizePath, octal, type DefaultAcl, type Inode, ROOT_CRED } from '../vfs'
 import { applyChmod, COLOR, fsErr, humanSize, lines, lsDate, readInputs, sizeOf } from './util'
 
 function colorName(name: string, node: Inode, tty: boolean): string {
@@ -269,7 +269,11 @@ register('cp', {
         vfs.copy(abs, destAbs, ctx.sh.cred, { recursive: a.flags.has('recursive') || a.flags.has('archive'), preserve: a.flags.has('archive') || a.flags.has('preserve') })
         if (a.flags.has('verbose')) ctx.out(`'${s}' -> '${target}'\n`)
       } catch (e) {
-        code = fsErr(ctx, e, 'cannot stat', s)
+        // El error puede ser del origen (no existe) o del destino (sin permiso para crear).
+        if (e instanceof FsError && e.path !== abs && !e.path.startsWith(abs + '/')) {
+          ctx.err(`cp: cannot create ${vfs.exists(abs) && vfs.stat(abs, ROOT_CRED).type === 'dir' ? 'directory' : 'regular file'} '${finalTarget(ctx, s, dest)}': ${e.message}\n`)
+          code = 1
+        } else code = fsErr(ctx, e, 'cannot stat', s)
       }
     }
     return code

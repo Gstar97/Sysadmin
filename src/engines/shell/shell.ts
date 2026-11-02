@@ -1,7 +1,8 @@
+import { arith, ArithError } from './arith'
 import { commandPackage } from './packages'
-import { IncompleteInput, parse, ShellSyntaxError, type Node, type Redir, type Word } from './parser'
+import { IncompleteInput, parse, ShellSyntaxError, tokenize, type Assign, type Node, type Redir, type Word } from './parser'
 import { System } from './system'
-import { FsError, normalizePath, type Cred } from './vfs'
+import { FsError, normalizePath, ROOT_CRED, type Cred } from './vfs'
 
 export interface OutputChunk {
   text: string
@@ -200,7 +201,26 @@ export class Shell {
   pendingClear = false
   /** Salida completa (stdout + stderr) de la última línea ejecutada. */
   lastOutput = ''
-  private localsStack: Map<string, string | undefined>[] = []
+  private localsStack: Map<string, { value: string | undefined; array?: Map<string, string>; assoc: boolean }>[] = []
+  /** Arreglos: índice (o clave) → valor. Los asociativos además están en assoc. */
+  arrays = new Map<string, Map<string, string>>()
+  assoc = new Set<string>()
+  readonlyVars = new Set<string>()
+  /** trap: señal (EXIT, ERR, INT, TERM) → comandos. */
+  traps = new Map<string, string>()
+  /** exec > archivo: redirección que queda para el resto del script. */
+  private persistIO?: { fromOut: (s: string) => void; toOut: (s: string) => void; fromErr: (s: string) => void; toErr: (s: string) => void }
+  private funcStack: string[] = []
+  private psubCount = 0
+
+  /** <(comando): la salida queda en /dev/fd/63 (62, 61...) para leerla como archivo. */
+  private async processSubst(src: string): Promise<string> {
+    const out = await this.captureCommand(src)
+    const path = `/dev/fd/${63 - (this.psubCount++ % 20)}`
+    this.sys.vfs.mkdirp('/dev/fd', ROOT_CRED)
+    this.sys.vfs.writeFile(path, out, ROOT_CRED, { mode: 0o666 })
+    return path
+  }
   private conditionDepth = 0
 
   constructor(sys: System, user: string, cwd?: string) {
@@ -420,11 +440,40 @@ export class Shell {
    */
   private expandHistory(src: string): { text: string; changed: boolean } | { error: string } {
     if (!src.includes('!')) return { text: src, changed: false }
+    // Las líneas de un here-document no pasan por la expansión del historial.
+    if (src.includes('\n') && /<<-?\s*['"]?\w/.test(src)) {
+      const lines = src.split('\n')
+      const out: string[] = []
+      const pending: string[] = []
+      let changed = false
+      for (const line of lines) {
+        if (pending.length) {
+          out.push(line)
+          if (line.replace(/^\t+/, '') === pending[0]) pending.shift()
+          continue
+        }
+        const r = this.expandHistoryLine(line)
+        if ('error' in r) return r
+        changed ||= r.changed
+        out.push(r.text)
+        for (const m of line.matchAll(/<<-?\s*(['"]?)([A-Za-z_][\w-]*)\1/g)) if (line[m.index! + 2] !== '<') pending.push(m[2])
+      }
+      return { text: out.join('\n'), changed }
+    }
+    return this.expandHistoryLine(src)
+  }
+
+  private expandHistoryLine(src: string): { text: string; changed: boolean } | { error: string } {
+    if (!src.includes('!')) return { text: src, changed: false }
     let out = ''
     let changed = false
     let inSingle = false
     for (let i = 0; i < src.length; i++) {
       const c = src[i]
+      if (c === '!' && src[i - 1] === '{' && src[i - 2] === '$') {
+        out += c
+        continue
+      }
       if (c === "'" ) inSingle = !inSingle
       if (c === '\\' && !inSingle) {
         out += c + (src[i + 1] ?? '')
@@ -470,6 +519,7 @@ export class Shell {
         for (const item of node.items) {
           code = await this.exec(item, io)
           this.lastExit = code
+          if (code !== 0 && this.conditionDepth === 0 && this.traps.has('ERR')) await this.runTrap('ERR', io)
           this.checkErrexit(code)
         }
         return code
@@ -574,6 +624,43 @@ export class Shell {
       case 'func':
         this.functions.set(node.name, node.body)
         return 0
+      case 'arith':
+        return this.withRedirs(node.redirs, io, async (rio) => {
+          try {
+            const v = evalArith(await this.expandArithText(node.expr), this)
+            if (this.options.xtrace) rio.err(`${this.ps4()}(( ${node.expr.trim()} ))\n`)
+            return v !== 0 ? 0 : 1
+          } catch (e) {
+            if (e instanceof ExpansionError) {
+              rio.err(e.message + '\n')
+              return 1
+            }
+            throw e
+          }
+        })
+      case 'forArith':
+        return this.withRedirs(node.redirs, io, async (rio) => {
+          let code = 0
+          let guard = 0
+          const ev = async (x: string) => (x.trim() ? evalArith(await this.expandArithText(x), this) : 1)
+          await ev(node.init || '0')
+          while ((await ev(node.cond)) !== 0) {
+            if (++guard > 100000) {
+              rio.err('[simulador] El bucle se cortó después de 100000 vueltas.\n')
+              break
+            }
+            try {
+              code = await this.exec(node.body, rio)
+            } catch (e) {
+              if (e instanceof LoopSignal) {
+                if (e.levels > 1) throw new LoopSignal(e.kind, e.levels - 1)
+                if (e.kind === 'break') break
+              } else throw e
+            }
+            await ev(node.step || '0')
+          }
+          return code
+        })
     }
   }
 
@@ -593,16 +680,31 @@ export class Shell {
   }
 
   private saveState() {
-    return { cwd: this.cwd, vars: new Map(this.vars), exported: new Set(this.exported), positional: [...this.positional], options: { ...this.options }, umask: this.umask }
+    return {
+      cwd: this.cwd,
+      vars: new Map(this.vars),
+      arrays: new Map([...this.arrays].map(([k, v]) => [k, new Map(v)])),
+      assoc: new Set(this.assoc),
+      exported: new Set(this.exported),
+      positional: [...this.positional],
+      options: { ...this.options },
+      umask: this.umask,
+      traps: new Map(this.traps),
+      persistIO: this.persistIO,
+    }
   }
 
   private restoreState(s: ReturnType<Shell['saveState']>) {
     this.cwd = s.cwd
     this.vars = s.vars
+    this.arrays = s.arrays
+    this.assoc = s.assoc
     this.exported = s.exported
     this.positional = s.positional
     this.options = s.options
     this.umask = s.umask
+    this.traps = s.traps
+    this.persistIO = s.persistIO
   }
 
   private async execPipeline(cmds: Node[], negate: boolean, io: IO): Promise<number> {
@@ -725,6 +827,7 @@ export class Shell {
   }
 
   private async execSimple(node: Extract<Node, { kind: 'simple' }>, io: IO): Promise<number> {
+    if (node.line !== undefined && this.scriptName !== '-bash' && !this.noLine) this.vars.set('LINENO', String(node.line))
     const isTest = node.words[0]?.parts.length === 1 && node.words[0].parts[0].t === 'lit' && node.words[0].parts[0].v === '[['
     let argv: string[]
     try {
@@ -742,7 +845,14 @@ export class Shell {
     }
 
     if (argv.length === 0) {
-      for (const a of node.assigns) this.setVar(a.name, (await this.expandWord(a.value, { split: false, glob: false })).join(' '))
+      for (const a of node.assigns) {
+        const r = await this.doAssign(a, io)
+        if (r !== 0) {
+          if (this.scriptName !== '-bash' && this.readonlyHit) throw new ExitSignal(1)
+          return r
+        }
+      }
+      if (this.options.xtrace && node.assigns.length) io.err(node.assigns.map((a) => `${this.ps4()}${a.name}${a.index !== undefined ? `[${a.index}]` : ''}${a.append ? '+' : ''}=${a.array ? '(...)' : this.vars.get(a.name) ?? this.getVar(a.name) ?? ''}`).join('\n') + '\n')
       if (node.redirs.length) {
         const prepared = await this.prepareRedirs(node.redirs, io)
         if (typeof prepared === 'number') return prepared
@@ -757,8 +867,27 @@ export class Shell {
       restore.push([a.name, this.vars.get(a.name)])
       this.vars.set(a.name, (await this.expandWord(a.value, { split: false, glob: false })).join(' '))
     }
+    // declare/local/readonly con arreglos: nombre=( ... )
+    if (['declare', 'typeset', 'local', 'readonly'].includes(argv[0])) {
+      for (const w of node.words) {
+        if (!w.array) continue
+        const lit = w.parts[0]?.t === 'lit' ? w.parts[0].v : ''
+        const m = /^([A-Za-z_]\w*)(\+?)=/.exec(lit)
+        if (!m) continue
+        if (argv[0] === 'local') this.declareLocal(m[1])
+        if (argv.slice(1).some((x) => /^-\w*A/.test(x))) this.assoc.add(m[1])
+        await this.doAssign({ name: m[1], append: m[2] === '+', value: { parts: [] }, array: w.array }, io)
+        const idx = argv.findIndex((x) => x.startsWith(`${m[1]}=`) || x.startsWith(`${m[1]}+=`))
+        if (idx > 0) argv[idx] = m[1]
+      }
+    }
+    if (this.options.xtrace) io.err(`${this.ps4()}${argv.map(traceQuote).join(' ')}\n`)
     try {
-      const prepared = await this.prepareRedirs(node.redirs, io)
+      // exec > archivo: desde ahí, lo que iba a la terminal va al archivo.
+      const pio = this.persistIO
+      const baseIO = pio ? { ...io, out: io.out === pio.fromOut ? pio.toOut : io.out, err: io.err === pio.fromErr ? pio.toErr : io.err, isTTY: io.out === pio.fromOut && pio.toOut !== pio.fromOut ? false : io.isTTY } : io
+      if (argv[0] === 'exec' && argv.length === 1) return this.execRedirect(node.redirs, baseIO, io)
+      const prepared = await this.prepareRedirs(node.redirs, baseIO)
       if (typeof prepared === 'number') return prepared
       try {
         return await this.invoke(argv, prepared.io)
@@ -773,6 +902,137 @@ export class Shell {
     }
   }
 
+  private readonlyHit = false
+  /** Dentro de un trap o de $( ), LINENO no cambia (sigue siendo la línea del script). */
+  private noLine = 0
+
+  /** Ejecuta lo que se registró con trap para esa señal (sin que un error ahí corte nada). */
+  private async runTrap(sig: string, io: IO) {
+    const cmd = this.traps.get(sig)
+    if (!cmd) return
+    const saved = this.lastExit
+    this.traps.delete(sig === 'EXIT' ? 'EXIT' : '__none__')
+    const pio = this.persistIO
+    const tio = pio ? { ...io, out: io.out === pio.fromOut ? pio.toOut : io.out, err: io.err === pio.fromErr ? pio.toErr : io.err } : io
+    this.noLine++
+    try {
+      await this.exec(parse(cmd), tio)
+    } catch (e) {
+      if (!(e instanceof ExitSignal || e instanceof ReturnSignal || e instanceof LoopSignal)) throw e
+    } finally {
+      this.noLine--
+    }
+    this.lastExit = saved
+  }
+
+  /** exec sin comando: las redirecciones quedan para el resto del script (exec >> log 2>&1). */
+  private async execRedirect(redirs: Redir[], cur: IO, orig: IO): Promise<number> {
+    let out = cur.out
+    let err = cur.err
+    try {
+      for (const r of redirs) {
+        if (r.op === '2>&1') {
+          err = out
+          continue
+        }
+        if (r.op === '>&2') {
+          out = err
+          continue
+        }
+        if (!r.target) continue
+        const path = this.resolve((await this.expandWord(r.target, { split: false })).join(' '))
+        if (path === '/dev/null') {
+          const sink = () => undefined
+          if (r.op.startsWith('2')) err = sink
+          else if (r.op.startsWith('&')) out = err = sink
+          else out = sink
+          continue
+        }
+        const append = r.op.endsWith('>>')
+        if (!append || !this.sys.vfs.exists(path, this.cred)) this.sys.vfs.writeFile(path, '', this.cred, { mode: 0o666, umask: this.umask })
+        const cred = this.cred
+        const sink = (txt: string) => {
+          try {
+            this.sys.vfs.writeFile(path, txt, cred, { append: true })
+          } catch {
+            // sin permiso: se pierde, como en bash
+          }
+        }
+        this.sys.vfs.writeFile(path, '', cred, { append: true })
+        if (r.op === '2>' || r.op === '2>>') err = sink
+        else if (r.op === '&>' || r.op === '&>>') out = err = sink
+        else out = sink
+      }
+    } catch (e) {
+      if (e instanceof FsError) {
+        cur.err(`bash: ${e.path}: ${e.message}\n`)
+        return 1
+      }
+      throw e
+    }
+    this.persistIO = { fromOut: this.persistIO?.fromOut ?? orig.out, toOut: out, fromErr: this.persistIO?.fromErr ?? orig.err, toErr: err }
+    return 0
+  }
+
+  /** Una asignación: x=1, x+=1, a[2]=x, a=(uno dos), m=([clave]=valor). */
+  async doAssign(a: Assign, io: IO): Promise<number> {
+    this.readonlyHit = false
+    if (this.readonlyVars.has(a.name)) {
+      io.err(`bash: ${a.name}: readonly variable\n`)
+      this.readonlyHit = true
+      return 1
+    }
+    try {
+      if (a.array) {
+        if (this.assoc.has(a.name)) {
+          const m = a.append ? new Map(this.arrays.get(a.name) ?? []) : new Map<string, string>()
+          for (const w of a.array) {
+            const text = (await this.expandWord(w, { split: false, glob: false })).join(' ')
+            const kv = /^\[([^\]]+)\]=(.*)$/s.exec(text)
+            if (kv) m.set(kv[1], kv[2])
+          }
+          this.arrays.set(a.name, m)
+          this.vars.delete(a.name)
+          return 0
+        }
+        const values: string[] = []
+        const explicit = new Map<string, string>()
+        for (const w of a.array) {
+          const first = w.parts[0]
+          if (first?.t === 'lit' && !first.q && /^\[[^\]]+\]=/.test(first.v)) {
+            const text = (await this.expandWord(w, { split: false, glob: false })).join(' ')
+            const kv = /^\[([^\]]+)\]=(.*)$/s.exec(text)!
+            explicit.set(String(evalArith(kv[1], this)), kv[2])
+          } else values.push(...(await this.expandWord(w)))
+        }
+        if (explicit.size) this.setArray(a.name, explicit, a.append)
+        else this.setArray(a.name, values, a.append)
+        return 0
+      }
+      const v = (await this.expandWord(a.value, { split: false, glob: false })).join(' ')
+      if (a.index !== undefined) {
+        const key = await this.expandText(a.index)
+        const cur = a.append ? (this.getElem(a.name, key) ?? '') : ''
+        this.setElem(a.name, key, cur + v)
+        return 0
+      }
+      if (a.append && this.vars.get(a.name) !== undefined && /^-?\d+$/.test(this.vars.get(a.name)!) && this.integerVars.has(a.name)) {
+        this.setVar(a.name, String(Number(this.vars.get(a.name)) + evalArith(v, this)))
+        return 0
+      }
+      this.setVar(a.name, a.append ? (this.getVar(a.name) ?? '') + v : this.integerVars.has(a.name) ? String(evalArith(v, this)) : v)
+      return 0
+    } catch (e) {
+      if (e instanceof ExpansionError) {
+        io.err(e.message + '\n')
+        return 1
+      }
+      throw e
+    }
+  }
+
+  integerVars = new Set<string>()
+
   /** Ejecuta un comando ya expandido: builtin, función, script o comando del sistema. */
   async invoke(argv: string[], io: IO): Promise<number> {
     const [name, ...args] = argv
@@ -784,6 +1044,7 @@ export class Shell {
       const savedPos = this.positional
       this.positional = args
       this.localsStack.push(new Map())
+      this.funcStack.push(name)
       try {
         return await this.exec(fn, io)
       } catch (e) {
@@ -792,9 +1053,14 @@ export class Shell {
       } finally {
         const locals = this.localsStack.pop()!
         for (const [k, v] of locals) {
-          if (v === undefined) this.vars.delete(k)
-          else this.vars.set(k, v)
+          this.arrays.delete(k)
+          this.assoc.delete(k)
+          if (v.value === undefined) this.vars.delete(k)
+          else this.vars.set(k, v.value)
+          if (v.array) this.arrays.set(k, v.array)
+          if (v.assoc) this.assoc.add(k)
         }
+        this.funcStack.pop()
         this.positional = savedPos
       }
     }
@@ -953,13 +1219,23 @@ export class Shell {
     this.positional = args
     this.scriptName = shown
     this.options = { errexit: false, nounset: false, pipefail: false, ...opts.options }
+    this.traps = new Map()
+    this.persistIO = undefined
+    this.vars.set('OPTIND', '1')
+    this.vars.delete('__OPTSUB')
+    let code = 0
     try {
-      return await this.exec(node, io)
+      code = await this.exec(node, io)
+      return code
     } catch (e) {
-      if (e instanceof ExitSignal) return e.code
-      if (e instanceof ReturnSignal) return e.code
+      if (e instanceof ExitSignal) return (code = e.code)
+      if (e instanceof ReturnSignal) return (code = e.code)
       throw e
     } finally {
+      if (this.traps.has('EXIT')) {
+        this.lastExit = code
+        await this.runTrap('EXIT', io)
+      }
       this.restoreState(saved)
       this.scriptName = savedName
       this.functions = savedFns
@@ -987,19 +1263,97 @@ export class Shell {
         return String(this.cred.uid)
       case 'RANDOM':
         return String(Math.floor(Math.random() * 32768))
+      case 'FUNCNAME':
+        return this.funcStack[this.funcStack.length - 1]
+      case 'LINENO':
+        return this.vars.get('LINENO') ?? '1'
     }
     if (/^\d+$/.test(name)) return this.positional[Number(name) - 1]
+    const arr = this.arrays.get(name)
+    if (arr) return arr.get('0')
     return this.vars.get(name)
   }
 
   setVar(name: string, value: string) {
+    const arr = this.arrays.get(name)
+    if (arr && !this.assoc.has(name)) {
+      arr.set('0', value)
+      return
+    }
     this.vars.set(name, value)
+  }
+
+  /** Índice de un arreglo: aritmética en los indexados, texto en los asociativos. */
+  arrayKey(name: string, index: string): string {
+    if (this.assoc.has(name)) return index
+    const n = evalArith(index, this)
+    if (n < 0) {
+      const keys = [...(this.arrays.get(name)?.keys() ?? [])].map(Number)
+      return String((keys.length ? Math.max(...keys) + 1 : 0) + n)
+    }
+    return String(n)
+  }
+
+  getElem(name: string, index: string): string | undefined {
+    const arr = this.arrays.get(name)
+    if (!arr) return index === '0' || (!this.assoc.has(name) && evalArith(index, this) === 0) ? this.getVar(name) : undefined
+    return arr.get(this.arrayKey(name, index))
+  }
+
+  setElem(name: string, index: string, value: string) {
+    let arr = this.arrays.get(name)
+    if (!arr) {
+      arr = new Map()
+      const scalar = this.vars.get(name)
+      if (scalar !== undefined && !this.assoc.has(name)) arr.set('0', scalar)
+      this.vars.delete(name)
+      this.arrays.set(name, arr)
+    }
+    arr.set(this.arrayKey(name, index), value)
+  }
+
+  /** Valores de un arreglo en orden (los indexados por número). */
+  arrayValues(name: string): string[] {
+    const arr = this.arrays.get(name)
+    if (!arr) {
+      const v = this.vars.get(name)
+      return v === undefined ? [] : [v]
+    }
+    return this.arrayKeys(name).map((k) => arr.get(k) ?? '')
+  }
+
+  arrayKeys(name: string): string[] {
+    const arr = this.arrays.get(name)
+    if (!arr) return this.vars.has(name) ? ['0'] : []
+    const keys = [...arr.keys()]
+    return this.assoc.has(name) ? keys : keys.sort((a, b) => Number(a) - Number(b))
+  }
+
+  setArray(name: string, values: string[] | Map<string, string>, append = false) {
+    const arr = append ? (this.arrays.get(name) ?? new Map<string, string>()) : new Map<string, string>()
+    if (values instanceof Map) for (const [k, v] of values) arr.set(k, v)
+    else {
+      let next = append && arr.size ? Math.max(...[...arr.keys()].map(Number).filter((n) => !Number.isNaN(n))) + 1 : 0
+      for (const v of values) arr.set(String(next++), v)
+    }
+    this.vars.delete(name)
+    this.arrays.set(name, arr)
+  }
+
+  unsetVar(name: string) {
+    this.vars.delete(name)
+    this.arrays.delete(name)
+    this.assoc.delete(name)
+    this.exported.delete(name)
   }
 
   declareLocal(name: string, value?: string) {
     const scope = this.localsStack[this.localsStack.length - 1]
     if (!scope) return false
-    if (!scope.has(name)) scope.set(name, this.vars.get(name))
+    if (scope.has(name) && value === undefined) return true
+    if (!scope.has(name)) scope.set(name, { value: this.vars.get(name), array: this.arrays.get(name), assoc: this.assoc.has(name) })
+    this.arrays.delete(name)
+    this.assoc.delete(name)
     if (value !== undefined) this.vars.set(name, value)
     else this.vars.delete(name)
     return true
@@ -1040,9 +1394,10 @@ export class Shell {
       if (node.kind === 'simple' && node.words[1]) return this.expandWord(node.words[1], { split: false, glob: false })
       return [opts.raw]
     }
-    // "$@" entre comillas: un argumento por parámetro.
-    if (word.parts.length === 1 && word.parts[0].t === 'var' && word.parts[0].name === '@' && word.parts[0].q) {
-      return [...this.positional]
+    // "$@" o "${a[@]}" solos y vacíos: ninguna palabra.
+    if (word.parts.length === 1 && word.parts[0].t === 'var' && word.parts[0].q && !word.parts[0].op && (word.parts[0].name === '@' || word.parts[0].index === '@') && !word.parts[0].mode) {
+      const r = await this.expandVar(word.parts[0])
+      return split ? r.values : [r.values.join(' ')]
     }
     const fields: { text: string; pattern: string; hasGlob: boolean; quotedEmpty: boolean }[] = []
     let cur = { text: '', pattern: '', hasGlob: false, quotedEmpty: false }
@@ -1064,7 +1419,8 @@ export class Shell {
         appendQuoted(s)
         return
       }
-      const pieces = s.split(/[ \t\n]+/)
+      const ifs = this.vars.get('IFS')
+      const pieces = ifs === undefined || ifs === ' \t\n' ? s.split(/[ \t\n]+/) : ifs === '' ? [s] : s.split(new RegExp(`[${ifs.replace(/[\]\\^-]/g, '\\$&')}]${/^[ \t\n]+$/.test(ifs) ? '+' : ''}`))
       pieces.forEach((p, idx) => {
         if (idx > 0) {
           if (started || cur.text) fields.push(cur)
@@ -1094,7 +1450,20 @@ export class Shell {
         if (part.q) appendQuoted(v)
         else appendUnquotedLit(v)
       } else if (part.t === 'var') {
-        appendExpansion(this.expandVar(part), part.q)
+        const r = await this.expandVar(part)
+        if (r.multi && part.q && r.sep === ' ' && split) {
+          // "$@" y "${a[@]}": cada valor es una palabra aparte.
+          r.values.forEach((v, k) => {
+            if (k > 0) {
+              fields.push(cur)
+              cur = { text: '', pattern: '', hasGlob: false, quotedEmpty: false }
+            }
+            appendQuoted(v)
+          })
+        } else if (r.multi && !part.q) r.values.forEach((v, k) => appendExpansion((k > 0 ? ' ' : '') + v, false))
+        else appendExpansion(r.values.join(r.sep), part.q)
+      } else if (part.t === 'psub') {
+        appendQuoted(await this.processSubst(part.src))
       } else if (part.t === 'cmd') {
         const output = await this.captureCommand(part.src)
         appendExpansion(output.replace(/\n+$/, ''), part.q)
@@ -1120,42 +1489,161 @@ export class Shell {
   }
 
   private async expandArithText(expr: string): Promise<string> {
-    let out = expr
-    for (const m of [...expr.matchAll(/\$\(([^)]*)\)/g)]) {
-      out = out.replace(m[0], (await this.captureCommand(m[1])).trim())
-    }
-    return out.replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*|[0-9#?])\}?/g, (_, n) => this.getVar(n) ?? '0')
+    if (!expr.includes('$') && !expr.includes('`')) return expr
+    return this.expandText(expr)
   }
 
-  private expandVar(part: Extract<Word['parts'][number], { t: 'var' }>): string {
-    const value = this.getVar(part.name)
-    if (part.op === '#') return String((value ?? '').length)
-    switch (part.op) {
-      case ':-':
-        return value ? value : (part.arg ?? '')
-      case '-':
-        return value !== undefined ? value : (part.arg ?? '')
-      case ':=':
-        if (!value) {
-          this.setVar(part.name, part.arg ?? '')
-          return part.arg ?? ''
+  /** Expande un texto como si estuviera entre comillas dobles ($var, ${...}, $(...), $((...))). */
+  async expandText(text: string): Promise<string> {
+    if (!/[$`\\]/.test(text)) return text
+    try {
+      const toks = tokenize(`"${text.replace(/(?<!\\)"/g, '\\"')}"`)
+      const w = toks.find((t) => t.type === 'word') as { word: Word } | undefined
+      if (!w) return text
+      return (await this.expandWord(w.word, { split: false, glob: false })).join(' ')
+    } catch (e) {
+      if (e instanceof ExpansionError) throw e
+      return text
+    }
+  }
+
+  /** Prefijo de la traza de bash -x (PS4). */
+  ps4(): string {
+    return this.vars.get('PS4') ?? '+ '
+  }
+
+  /** Expande ${...}. Devuelve varios valores para "$@" y "${a[@]}". */
+  private async expandVar(part: Extract<Word['parts'][number], { t: 'var' }>): Promise<{ values: string[]; multi: boolean; sep: string }> {
+    const one = (v: string) => ({ values: [v], multi: false, sep: ' ' })
+    const name = part.name
+    if (part.index !== undefined && part.index !== '@' && part.index !== '*' && /[$`]/.test(part.index)) part = { ...part, index: await this.expandText(part.index) }
+    const isArrayRef = part.index === '@' || part.index === '*'
+    const allArgs = name === '@' || name === '*'
+    const sepFor = (star: boolean) => (star ? (this.vars.get('IFS') ?? ' ')[0] ?? '' : ' ')
+    // ${!x} indirecta, ${!a[@]} claves
+    if (part.mode === 'indirect') {
+      const target = this.getVar(name) ?? ''
+      const m = /^([A-Za-z_]\w*)(?:\[(.+)\])?$/.exec(target)
+      if (!m) return one('')
+      return one((m[2] !== undefined ? this.getElem(m[1], m[2]) : this.getVar(m[1])) ?? '')
+    }
+    if (part.mode === 'keys') return { values: this.arrayKeys(name), multi: true, sep: sepFor(part.index === '*') }
+    if (part.mode === 'len') {
+      if (isArrayRef) return one(String(this.arrayValues(name).length))
+      if (allArgs) return one(String(this.positional.length))
+      const v = part.index !== undefined ? this.getElem(name, part.index) : this.getVar(name)
+      return one(String([...(v ?? '')].length))
+    }
+    // Lista de valores (arreglo completo o todos los argumentos).
+    let list: string[] | undefined
+    if (isArrayRef) list = this.arrayValues(name)
+    else if (allArgs) list = [...this.positional]
+    const star = part.index === '*' || name === '*'
+    const value: string | undefined = list ? (list.length ? list.join(sepFor(star)) : undefined) : part.index !== undefined ? this.getElem(name, part.index) : this.getVar(name)
+    const set = value !== undefined
+    const arg = async () => (part.arg !== undefined ? this.expandText(part.arg.replace(/^"(.*)"$/s, '$1')) : '')
+    const op = part.op
+    if (op === ':-' || op === '-') {
+      if ((op === ':-' && !value) || (op === '-' && !set)) return one(await arg())
+    } else if (op === ':=' || op === '=') {
+      if ((op === ':=' && !value) || (op === '=' && !set)) {
+        const v = await arg()
+        if (part.index !== undefined && !isArrayRef) this.setElem(name, part.index, v)
+        else this.setVar(name, v)
+        return one(v)
+      }
+    } else if (op === ':+' || op === '+') {
+      return one((op === ':+' ? !!value : set) ? await arg() : '')
+    } else if (op === ':?' || op === '?') {
+      if ((op === ':?' && !value) || (op === '?' && !set)) throw new ExpansionError(`bash: ${name}: ${(await arg()) || (op === ':?' ? 'parameter null or not set' : 'parameter not set')}`)
+    } else if (op) {
+      const transform = await this.patternOp(op, part.arg ?? '')
+      if (list) {
+        const vals = transform ? list.map(transform) : list
+        if (op === ':') {
+          const [offS, lenS] = splitTop(part.arg ?? '')
+          const off = evalArith(offS || '0', this)
+          const start = off < 0 ? Math.max(0, vals.length + off) : off
+          const sliced = lenS !== undefined ? vals.slice(start, start + evalArith(lenS, this)) : vals.slice(start)
+          return { values: sliced, multi: true, sep: sepFor(star) }
         }
-        return value
-      case ':+':
-        return value ? (part.arg ?? '') : ''
-      case ':?':
-        if (!value) throw new ExpansionError(`bash: ${part.name}: ${part.arg || 'parameter null or not set'}`)
-        return value
+        return { values: vals, multi: true, sep: sepFor(star) }
+      }
+      if (op === ':') {
+        const [offS, lenS] = splitTop(part.arg ?? '')
+        const v = [...(value ?? '')]
+        const off = evalArith(offS || '0', this)
+        const start = off < 0 ? Math.max(0, v.length + off) : off
+        let end = v.length
+        if (lenS !== undefined) {
+          const len = evalArith(lenS, this)
+          end = len < 0 ? v.length + len : start + len
+        }
+        return one(v.slice(start, end).join(''))
+      }
+      return one(transform ? transform(value ?? '') : (value ?? ''))
     }
-    if (value === undefined && this.options.nounset && !/^[?$#@*0]$/.test(part.name)) {
-      throw new ExpansionError(`bash: ${part.name}: unbound variable`)
+    if (list) return { values: list, multi: true, sep: sepFor(star) }
+    if (!set && this.options.nounset && !/^[?$#@*0]$/.test(name)) throw new ExpansionError(`bash: ${name}${part.index !== undefined ? `[${part.index}]` : ''}: unbound variable`)
+    return one(value ?? '')
+  }
+
+  /** # ## % %% / // /# /% ^ ^^ , ,, : una función que transforma cada valor. */
+  private async patternOp(op: string, rawArg: string): Promise<((v: string) => string) | undefined> {
+    if (op === ':') return undefined
+    const toRe = (pat: string, anchor: 'start' | 'end' | 'full' | 'none', lazy: boolean) => {
+      let src = ''
+      for (let k = 0; k < pat.length; k++) {
+        const c = pat[k]
+        if (c === '\\' && k + 1 < pat.length) src += pat[++k].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        else if (c === '*') src += lazy ? '.*?' : '.*'
+        else if (c === '?') src += '.'
+        else if (c === '[') {
+          const b = bracketToRe(pat, k)
+          if (b) {
+            src += b.re
+            k = b.end
+          } else src += '\\['
+        } else src += c.replace(/[.+^${}()|\]\\]/g, '\\$&')
+      }
+      return new RegExp(anchor === 'start' ? `^(?:${src})` : anchor === 'end' ? `(?:${src})$` : anchor === 'full' ? `^(?:${src})$` : src, 's')
     }
-    return value ?? ''
+    if (op === '^' || op === '^^' || op === ',' || op === ',,') {
+      const pat = rawArg ? toRe(await this.expandText(rawArg), 'full', false) : undefined
+      const conv = (ch: string) => (!pat || pat.test(ch) ? (op[0] === '^' ? ch.toUpperCase() : ch.toLowerCase()) : ch)
+      return (v) => (op.length === 2 ? [...v].map(conv).join('') : v ? conv(v[0]) + v.slice(1) : v)
+    }
+    if (op === '#' || op === '##' || op === '%' || op === '%%') {
+      const pat = toRe(await this.expandText(rawArg.replace(/^"(.*)"$/s, '$1')), 'full', false)
+      return (v) => {
+        const chars = [...v]
+        if (op === '#' || op === '##') {
+          const order = op === '#' ? chars.map((_, k) => k).concat(chars.length) : [chars.length, ...chars.map((_, k) => chars.length - 1 - k)]
+          for (const k of order) if (pat.test(chars.slice(0, k).join(''))) return chars.slice(k).join('')
+        } else {
+          const order = op === '%' ? [chars.length, ...chars.map((_, k) => chars.length - 1 - k)] : chars.map((_, k) => k).concat(chars.length)
+          for (const k of order) if (pat.test(chars.slice(k).join(''))) return chars.slice(0, k).join('')
+        }
+        return v
+      }
+    }
+    // / // /# /%: patrón/reemplazo
+    const sl = findUnescapedSlash(rawArg)
+    const pat = await this.expandText(sl < 0 ? rawArg : rawArg.slice(0, sl))
+    const rep = sl < 0 ? '' : await this.expandText(rawArg.slice(sl + 1))
+    const re = toRe(pat, op === '/#' ? 'start' : op === '/%' ? 'end' : 'none', false)
+    if (!pat) return (v) => v
+    if (op === '//') {
+      const g = new RegExp(re.source, 'gs')
+      return (v) => v.replace(g, () => rep)
+    }
+    return (v) => v.replace(re, () => rep)
   }
 
   async captureCommand(src: string): Promise<string> {
     let out = ''
     const saved = this.saveState()
+    this.noLine++
     try {
       const node = parse(src)
       await this.exec(node, { stdin: new Stdin(), out: (s) => (out += s), err: () => undefined, isTTY: false })
@@ -1164,6 +1652,7 @@ export class Shell {
         // errores de sintaxis dentro de $( ) se ignoran
       }
     } finally {
+      this.noLine--
       const exit = this.lastExit
       this.restoreState(saved)
       this.lastExit = exit
@@ -1205,90 +1694,83 @@ export class Shell {
 
 export class ExpansionError extends Error {}
 
+/** Separa "offset:largo" de ${v:offset:largo} (respetando paréntesis). */
+/** Cómo muestra bash -x cada palabra: entre comillas simples si hace falta. */
+function traceQuote(w: string): string {
+  if (w === '') return "''"
+  return /^[\w@%+=:,./-]+$/.test(w) ? w : `'${w.replace(/'/g, "'\\''")}'`
+}
+
+const POSIX_CLASSES: Record<string, string> = { space: '\\s', blank: ' \\t', digit: '0-9', alpha: 'A-Za-z', alnum: 'A-Za-z0-9', upper: 'A-Z', lower: 'a-z', punct: '!-\\/:-@\\[-`{-~', xdigit: '0-9A-Fa-f', print: '\\x20-\\x7e', graph: '\\x21-\\x7e', cntrl: '\\x00-\\x1f' }
+
+/** [abc], [!a-z], [[:space:]]: la clase de un patrón de bash como expresión regular. */
+export function bracketToRe(pat: string, start: number): { re: string; end: number } | undefined {
+  let k = start + 1
+  let neg = false
+  if (pat[k] === '!' || pat[k] === '^') {
+    neg = true
+    k++
+  }
+  let body = ''
+  let first = true
+  while (k < pat.length) {
+    if (pat[k] === ']' && !first) return { re: `[${neg ? '^' : ''}${body}]`, end: k }
+    first = false
+    const cls = /^\[:([a-z]+):\]/.exec(pat.slice(k))
+    if (cls) {
+      body += POSIX_CLASSES[cls[1]] ?? ''
+      k += cls[0].length
+      continue
+    }
+    const ch = pat[k]
+    body += ch === '\\' || ch === ']' || ch === '[' || ch === '^' ? '\\' + ch : ch
+    k++
+  }
+  return undefined
+}
+
+function splitTop(arg: string): [string, string | undefined] {
+  let depth = 0
+  for (let k = 0; k < arg.length; k++) {
+    if (arg[k] === '(') depth++
+    if (arg[k] === ')') depth--
+    if (arg[k] === ':' && depth === 0) return [arg.slice(0, k), arg.slice(k + 1)]
+  }
+  return [arg, undefined]
+}
+
+function findUnescapedSlash(s: string): number {
+  for (let k = 0; k < s.length; k++) {
+    if (s[k] === '\\') {
+      k++
+      continue
+    }
+    if (s[k] === '/') return k
+  }
+  return -1
+}
+
 // ---------------------------------------------------------------------------------------
 // Aritmética $(( ))
 // ---------------------------------------------------------------------------------------
 
-/** Número de bash: decimal, octal (017), hexadecimal (0x1F) o en cualquier base (2#1010, 16#ff). */
-function parseBashNumber(t: string): number {
-  const bad = () => new ExpansionError(`bash: ${t}: value too great for base (error token is "${t}")`)
-  if (/^0[xX]/.test(t)) {
-    if (!/^0[xX][0-9a-fA-F]+$/.test(t)) throw bad()
-    return parseInt(t.slice(2), 16)
-  }
-  const m = /^(\d+)#([0-9a-zA-Z@_]+)$/.exec(t)
-  if (m) {
-    const base = Number(m[1])
-    if (base < 2 || base > 64) throw new ExpansionError(`bash: ${t}: invalid arithmetic base (error token is "${t}")`)
-    const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@_'
-    let v = 0
-    for (const ch of m[2]) {
-      const d = base <= 36 ? alphabet.indexOf(ch.toLowerCase()) : alphabet.indexOf(ch)
-      if (d < 0 || d >= base) throw bad()
-      v = v * base + d
-    }
-    return v
-  }
-  if (/^0\d+$/.test(t)) {
-    if (/[89]/.test(t)) throw bad()
-    return parseInt(t, 8)
-  }
-  return parseInt(t, 10)
-}
 
-/** Aritmética de bash ($(( )) y let), con la misma precedencia de operadores que bash. */
+/** Aritmética de bash ($(( )), (( )), let), con asignaciones y arreglos. */
 export function evalArith(expr: string, sh?: Shell): number {
-  const tokens = expr.match(/0[xX][0-9a-zA-Z]+|\d+#[0-9a-zA-Z@_]+|\d+|[A-Za-z_][A-Za-z0-9_]*|\*\*|<<|>>|<=|>=|==|!=|&&|\|\||[-+*/%()<>!~&|^]/g) ?? []
-  let pos = 0
-  const peek = () => tokens[pos]
-  const next = () => tokens[pos++]
-  const primary = (): number => {
-    const t = next()
-    if (t === undefined) return 0
-    if (t === '(') {
-      const v = or()
-      next()
-      return v
-    }
-    if (t === '-') return -primary()
-    if (t === '+') return primary()
-    if (t === '!') return primary() ? 0 : 1
-    if (t === '~') return ~primary()
-    if (/^\d/.test(t)) return parseBashNumber(t)
-    const v = sh?.getVar(t)
-    if (!v) return 0
-    return /^\s*-?\d/.test(v) ? (/^-?(0[xX]|\d+#|0\d)/.test(v.trim()) ? parseBashNumber(v.trim()) : parseInt(v, 10) || 0) : 0
+  try {
+    return arith(expr, {
+      get: (name, index) => (sh ? (index !== undefined ? sh.getElem(name, index) : sh.getVar(name)) : undefined),
+      set: (name, value, index) => {
+        if (!sh) return
+        if (sh.readonlyVars.has(name)) throw new ExpansionError(`bash: ${name}: readonly variable`)
+        if (index !== undefined) sh.setElem(name, index, value)
+        else sh.setVar(name, value)
+      },
+    })
+  } catch (e) {
+    if (e instanceof ArithError) throw new ExpansionError(e.message)
+    throw e
   }
-  const power = (): number => {
-    const base = primary()
-    if (peek() === '**') {
-      next()
-      return base ** power()
-    }
-    return base
-  }
-  const binary = (sub: () => number, ops: string[], apply: (op: string, a: number, b: number) => number) => (): number => {
-    let v = sub()
-    while (ops.includes(peek())) {
-      const op = next()
-      v = apply(op, v, sub())
-    }
-    return v
-  }
-  const mul = binary(power, ['*', '/', '%'], (op, a, b) => {
-    if ((op === '/' || op === '%') && b === 0) throw new ExpansionError('bash: division by 0 (error token is "0")')
-    return op === '*' ? a * b : op === '/' ? Math.trunc(a / b) : a % b
-  })
-  const add = binary(mul, ['+', '-'], (op, a, b) => (op === '+' ? a + b : a - b))
-  const shift = binary(add, ['<<', '>>'], (op, a, b) => (op === '<<' ? a << b : a >> b))
-  const rel = binary(shift, ['<', '>', '<=', '>='], (op, a, b) => Number(op === '<' ? a < b : op === '>' ? a > b : op === '<=' ? a <= b : a >= b))
-  const eq = binary(rel, ['==', '!='], (op, a, b) => Number(op === '==' ? a === b : a !== b))
-  const band = binary(eq, ['&'], (_, a, b) => a & b)
-  const bxor = binary(band, ['^'], (_, a, b) => a ^ b)
-  const bor = binary(bxor, ['|'], (_, a, b) => a | b)
-  const and = binary(bor, ['&&'], (_, a, b) => Number(!!a && !!b))
-  const or: () => number = binary(and, ['||'], (_, a, b) => Number(!!a || !!b))
-  return or()
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1439,7 +1921,8 @@ export function evalTest(sh: Shell, args: string[], extended: boolean): boolean 
         case '=~': {
           try {
             const m = new RegExp(b).exec(a)
-            if (m) sh.vars.set('BASH_REMATCH', m[0])
+            if (m) sh.setArray('BASH_REMATCH', [...m].map((x) => x ?? ''))
+            else sh.setArray('BASH_REMATCH', [])
             return !!m
           } catch {
             return false
@@ -1628,23 +2111,140 @@ export const BUILTINS: Record<string, Builtin> = {
     }
     return 0
   },
-  unset: (sh, args) => {
+  unset: (sh, args, io) => {
+    const onlyFn = args.includes('-f')
     for (const a of args.filter((x) => !x.startsWith('-'))) {
-      sh.vars.delete(a)
-      sh.exported.delete(a)
-      sh.functions.delete(a)
+      const el = /^([A-Za-z_]\w*)\[(.+)\]$/.exec(a)
+      if (el) {
+        sh.arrays.get(el[1])?.delete(sh.arrayKey(el[1], el[2]))
+        continue
+      }
+      if (sh.readonlyVars.has(a)) {
+        io.err(`bash: unset: ${a}: cannot unset: readonly variable\n`)
+        return 1
+      }
+      if (!onlyFn) sh.unsetVar(a)
+      if (onlyFn || !sh.vars.has(a)) sh.functions.delete(a)
     }
     return 0
   },
   local: (sh, args, io) => {
-    for (const a of args) {
+    const flags = args.filter((a) => /^-[aAirx]+$/.test(a)).join('')
+    for (const a of args.filter((x) => !/^-[aAirx]+$/.test(x))) {
       const [k, ...v] = a.split('=')
       if (!sh.declareLocal(k, v.length ? v.join('=') : undefined)) {
         io.err('bash: local: can only be used in a function\n')
         return 1
       }
+      if (flags.includes('A')) {
+        sh.assoc.add(k)
+        if (!sh.arrays.has(k)) sh.arrays.set(k, new Map())
+      } else if (flags.includes('a') && !sh.arrays.has(k)) sh.arrays.set(k, new Map())
+      if (flags.includes('i')) sh.integerVars.add(k)
+      if (flags.includes('r')) sh.readonlyVars.add(k)
     }
     return 0
+  },
+  declare: (sh, args, io) => declareBuiltin(sh, args, io, 'declare'),
+  typeset: (sh, args, io) => declareBuiltin(sh, args, io, 'typeset'),
+  readonly: (sh, args, io) => declareBuiltin(sh, ['-r', ...args], io, 'readonly'),
+  let: (sh, args, io) => {
+    let v = 0
+    try {
+      for (const a of args) v = evalArith(a, sh)
+    } catch (e) {
+      if (e instanceof ExpansionError) {
+        io.err(e.message.replace(/^bash: /, 'bash: let: ') + '\n')
+        return 1
+      }
+      throw e
+    }
+    return v !== 0 ? 0 : 1
+  },
+  mapfile: (sh, args, io) => mapfileBuiltin(sh, args, io),
+  getopts: (sh, args, io) => {
+    // getopts "ab:c" opt [args...]: una opción por llamada, con OPTIND y OPTARG.
+    const [spec = '', name = 'opt', ...rest] = args
+    const list = rest.length ? rest : sh.positional
+    const silent = spec.startsWith(':')
+    const opts = silent ? spec.slice(1) : spec
+    let ind = Number(sh.vars.get('OPTIND') ?? '1') || 1
+    let sub = Number(sh.vars.get('__OPTSUB') ?? '1') || 1
+    const word = list[ind - 1]
+    if (!word || word === '--' || !word.startsWith('-') || word === '-') {
+      if (word === '--') sh.vars.set('OPTIND', String(ind + 1))
+      sh.setVar(name, '?')
+      sh.vars.delete('__OPTSUB')
+      return 1
+    }
+    const ch = word[sub]
+    const advance = () => {
+      if (sub + 1 >= word.length) {
+        ind++
+        sub = 1
+      } else sub++
+    }
+    const pos = opts.indexOf(ch)
+    if (pos < 0 || ch === ':') {
+      advance()
+      sh.vars.set('OPTIND', String(ind))
+      sh.vars.set('__OPTSUB', String(sub))
+      sh.setVar(name, '?')
+      if (silent) sh.setVar('OPTARG', ch)
+      else io.err(`${sh.getVar('0')}: illegal option -- ${ch}\n`)
+      return 0
+    }
+    if (opts[pos + 1] === ':') {
+      let value: string | undefined
+      if (sub + 1 < word.length) value = word.slice(sub + 1)
+      else value = list[ind]
+      const used = sub + 1 < word.length ? 1 : 2
+      ind += used
+      sub = 1
+      sh.vars.set('OPTIND', String(ind))
+      sh.vars.set('__OPTSUB', '1')
+      if (value === undefined) {
+        if (silent) {
+          sh.setVar(name, ':')
+          sh.setVar('OPTARG', ch)
+        } else {
+          io.err(`${sh.getVar('0')}: option requires an argument -- ${ch}\n`)
+          sh.setVar(name, '?')
+        }
+        return 0
+      }
+      sh.setVar('OPTARG', value)
+      sh.setVar(name, ch)
+      return 0
+    }
+    advance()
+    sh.vars.set('OPTIND', String(ind))
+    sh.vars.set('__OPTSUB', String(sub))
+    sh.setVar(name, ch)
+    return 0
+  },
+  readarray: (sh, args, io) => mapfileBuiltin(sh, args, io),
+  trap: (sh, args, io) => {
+    if (!args.length || args[0] === '-p') {
+      for (const [sig, cmd] of sh.traps) io.out(`trap -- '${cmd}' ${sig}\n`)
+      return 0
+    }
+    if (args[0] === '-l') {
+      io.out(' 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 9) SIGKILL\t15) SIGTERM\n')
+      return 0
+    }
+    const [cmd, ...sigs] = args
+    for (const raw of sigs) {
+      const sig = raw.toUpperCase().replace(/^SIG/, '').replace(/^0$/, 'EXIT')
+      if (cmd === '-' || cmd === '') sh.traps.delete(sig)
+      else sh.traps.set(sig, cmd)
+    }
+    return 0
+  },
+  exec: async (sh, args, io) => {
+    // exec comando: lo ejecuta y el shell termina con su código.
+    const code = await sh.invoke(args, io)
+    throw new ExitSignal(code)
   },
   set: (sh, args, io) => {
     if (args.length === 0) {
@@ -1659,11 +2259,13 @@ export const BUILTINS: Record<string, Builtin> = {
         if (opt === 'pipefail') sh.options.pipefail = on
         if (opt === 'errexit') sh.options.errexit = on
         if (opt === 'nounset') sh.options.nounset = on
+        if (opt === 'xtrace') sh.options.xtrace = on
         continue
       }
       if (/^[-+][euxo]+$/.test(a)) {
         if (a.includes('e')) sh.options.errexit = on
         if (a.includes('u')) sh.options.nounset = on
+        if (a.includes('x')) sh.options.xtrace = on
         if (a.includes('o') && args[i + 1] === 'pipefail') {
           sh.options.pipefail = on
           i++
@@ -1700,12 +2302,18 @@ export const BUILTINS: Record<string, Builtin> = {
   },
   read: (sh, args, io) => {
     let raw = false
+    let arrayName: string | undefined
     const names: string[] = []
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === '-r') raw = true
-      else if (args[i] === '-p') io.err(args[++i] ?? '')
-      else if (args[i] === '-s') continue
-      else names.push(args[i])
+      const a = args[i]
+      if (/^-[rsa]+$/.test(a) && (a.includes('r') || a.includes('s') || a.includes('a'))) {
+        if (a.includes('r')) raw = true
+        if (a.includes('a')) arrayName = args[++i]
+      } else if (a === '-p') {
+        const prompt = args[++i] ?? ''
+        if (io.stdin.empty) io.err(prompt)
+      } else if (a === '-t' || a === '-n' || a === '-d') i++
+      else names.push(a)
     }
     let line = io.stdin.readLine()
     if (line === null) return 1
@@ -1713,6 +2321,10 @@ export const BUILTINS: Record<string, Builtin> = {
     const vars = names.length ? names : ['REPLY']
     const ifs = sh.vars.get('IFS')
     const parts = ifs !== undefined && ifs !== ' \t\n' ? line.split(new RegExp(`[${ifs.replace(/[\]\\^-]/g, '\\$&')}]`)) : line.trim().split(/\s+/)
+    if (arrayName) {
+      sh.setArray(arrayName, line.trim() === '' && (ifs === undefined || ifs === ' \t\n') ? [] : parts)
+      return 0
+    }
     vars.forEach((v, idx) => sh.setVar(v, idx === vars.length - 1 ? parts.slice(idx).join(ifs && ifs !== ' \t\n' ? ifs[0] : ' ') : (parts[idx] ?? '')))
     return 0
   },
@@ -1741,8 +2353,15 @@ export const BUILTINS: Record<string, Builtin> = {
       io.err("bash: syntax error near unexpected token `newline'\n")
       return 2
     }
+    // La expresión regular de =~ puede llevar ( ) |: se junta en un solo argumento.
+    const a = args.slice(0, -1)
+    for (let k = a.indexOf('=~'); k >= 0 && k < a.length; k = a.indexOf('=~', k + 1)) {
+      let end = k + 1
+      while (end < a.length && a[end] !== '&&' && a[end] !== '||') end++
+      a.splice(k + 1, end - k - 1, a.slice(k + 1, end).join(''))
+    }
     try {
-      return evalTest(sh, args.slice(0, -1), true) ? 0 : 1
+      return evalTest(sh, a, true) ? 0 : 1
     } catch (e) {
       io.err((e as Error).message + '\n')
       return 2
@@ -1767,6 +2386,14 @@ export const BUILTINS: Record<string, Builtin> = {
   },
   type: (sh, args, io) => {
     let code = 0
+    if (args[0] === '-t') {
+      for (const a of args.slice(1)) {
+        const kind = sh.aliases.has(a) ? 'alias' : RESERVED_WORDS.has(a) ? 'keyword' : sh.functions.has(a) ? 'function' : BUILTINS[a] ? 'builtin' : COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c)) ? 'file' : ''
+        if (kind) io.out(kind + '\n')
+        else code = 1
+      }
+      return code
+    }
     for (const a of args) {
       if (sh.aliases.has(a)) io.out(`${a} is aliased to \`${sh.aliases.get(a)}'\n`)
       else if (BUILTINS[a]) io.out(`${a} is a shell builtin\n`)
@@ -1857,4 +2484,65 @@ export const BUILTINS: Record<string, Builtin> = {
     sh.pendingClear = true
     return 0
   },
+}
+
+const RESERVED_WORDS = new Set(['if', 'then', 'elif', 'else', 'fi', 'for', 'in', 'do', 'done', 'while', 'until', 'case', 'esac', 'function', '{', '}', '!', '[[', ']]', 'select', 'time'])
+
+/** declare / typeset / readonly: -a -A -i -r -x -p y -f. */
+function declareBuiltin(sh: Shell, args: string[], io: IO, name: string): number {
+  const flags = args.filter((a) => /^[-+][aAirxpfF]+$/.test(a)).join('')
+  const names = args.filter((a) => !/^[-+][aAirxpfF]+$/.test(a))
+  if (flags.includes('p') || (!names.length && (flags.includes('r') || flags === '' || flags.includes('x')))) {
+    const show = names.length ? names : name === 'readonly' ? [...sh.readonlyVars] : [...new Set([...sh.vars.keys(), ...sh.arrays.keys()])].sort()
+    let code = 0
+    for (const n of show) {
+      const arr = sh.arrays.get(n)
+      const opts = `${arr ? (sh.assoc.has(n) ? 'A' : 'a') : ''}${sh.integerVars.has(n) ? 'i' : ''}${sh.readonlyVars.has(n) ? 'r' : ''}${sh.exported.has(n) ? 'x' : ''}` || '-'
+      if (arr) io.out(`declare -${opts} ${n}=(${sh.arrayKeys(n).map((k) => `[${k}]="${arr.get(k)}"`).join(' ')})\n`)
+      else if (sh.vars.has(n)) io.out(`declare -${opts.replace(/^-$/, '-')} ${n}="${sh.vars.get(n)}"\n`)
+      else {
+        io.err(`bash: declare: ${n}: not found\n`)
+        code = 1
+      }
+    }
+    return code
+  }
+  if (flags.includes('f')) {
+    for (const [fn] of sh.functions) io.out(`declare -f ${fn}\n`)
+    return 0
+  }
+  const plus = args.some((a) => a.startsWith('+'))
+  for (const item of names) {
+    const [k, ...v] = item.split('=')
+    if (sh.readonlyVars.has(k) && v.length) {
+      io.err(`bash: ${k}: readonly variable\n`)
+      return 1
+    }
+    if (flags.includes('A')) {
+      sh.assoc.add(k)
+      if (!sh.arrays.has(k)) sh.arrays.set(k, new Map())
+    } else if (flags.includes('a') && !sh.arrays.has(k)) sh.setArray(k, sh.vars.has(k) ? [sh.vars.get(k)!] : [])
+    if (flags.includes('i')) {
+      if (plus) sh.integerVars.delete(k)
+      else sh.integerVars.add(k)
+    }
+    if (v.length) sh.setVar(k, sh.integerVars.has(k) ? String(evalArith(v.join('='), sh)) : v.join('='))
+    if (flags.includes('x')) {
+      if (plus) sh.exported.delete(k)
+      else sh.exported.add(k)
+    }
+    if (flags.includes('r')) sh.readonlyVars.add(k)
+  }
+  return 0
+}
+
+/** mapfile -t arreglo < archivo: una línea por elemento. */
+function mapfileBuiltin(sh: Shell, args: string[], io: IO): number {
+  const strip = args.includes('-t')
+  const name = args.filter((a) => !a.startsWith('-')).pop() ?? 'MAPFILE'
+  const lines: string[] = []
+  let line: string | null
+  while ((line = io.stdin.readLine()) !== null) lines.push(strip ? line : line + '\n')
+  sh.setArray(name, lines)
+  return 0
 }

@@ -5,12 +5,34 @@
 
 export type Part =
   | { t: 'lit'; v: string; q: boolean }
-  | { t: 'var'; name: string; q: boolean; op?: string; arg?: string }
+  | {
+      t: 'var'
+      name: string
+      q: boolean
+      /** Operador de la expansión: :- - := = :+ + :? ? # ## % %% / // /# /% ^ ^^ , ,, : (subcadena). */
+      op?: string
+      arg?: string
+      /** Índice de arreglo: a[3], m[clave], a[@], a[*]. */
+      index?: string
+      /** ${#x} largo, ${!a[@]} claves, ${!x} indirecta. */
+      mode?: 'len' | 'keys' | 'indirect'
+    }
   | { t: 'cmd'; src: string; q: boolean }
   | { t: 'arith'; expr: string; q: boolean }
+  | { t: 'psub'; src: string; dir: '<' | '>'; q: boolean }
 
 export interface Word {
   parts: Part[]
+  /** a=(uno dos tres): los elementos del arreglo. */
+  array?: Word[]
+}
+
+export interface Assign {
+  name: string
+  index?: string
+  append?: boolean
+  value: Word
+  array?: Word[]
 }
 
 export interface Redir {
@@ -20,7 +42,9 @@ export interface Redir {
 }
 
 export type Node =
-  | { kind: 'simple'; assigns: { name: string; value: Word }[]; words: Word[]; redirs: Redir[] }
+  | { kind: 'simple'; assigns: Assign[]; words: Word[]; redirs: Redir[]; line?: number }
+  | { kind: 'arith'; expr: string; redirs: Redir[] }
+  | { kind: 'forArith'; init: string; cond: string; step: string; body: Node; redirs: Redir[] }
   | { kind: 'pipeline'; negate: boolean; cmds: Node[] }
   | { kind: 'andor'; first: Node; rest: { op: '&&' | '||'; node: Node }[] }
   | { kind: 'list'; items: Node[] }
@@ -41,7 +65,8 @@ export class IncompleteInput extends Error {
 export class ShellSyntaxError extends Error {}
 
 type Token =
-  | { type: 'word'; word: Word; raw: string; plain: boolean }
+  | { type: 'word'; word: Word; raw: string; plain: boolean; line?: number }
+  | { type: 'arith'; expr: string }
   | { type: 'op'; op: string; heredoc?: { body: string; expand: boolean } }
   | { type: 'nl' }
   | { type: 'eof' }
@@ -82,6 +107,62 @@ function matchParen(src: string, start: number): number {
   throw new IncompleteInput()
 }
 
+/** Busca el } que cierra ${ ... }, respetando comillas y ${ } anidados. */
+function matchBrace(src: string, start: number): number {
+  let depth = 1
+  let i = start
+  while (i < src.length) {
+    const c = src[i]
+    if (c === '\\') {
+      i += 2
+      continue
+    }
+    if (c === "'") {
+      const end = src.indexOf("'", i + 1)
+      if (end < 0) throw new IncompleteInput()
+      i = end + 1
+      continue
+    }
+    if (c === '"') {
+      i++
+      while (i < src.length && src[i] !== '"') i += src[i] === '\\' ? 2 : 1
+      i++
+      continue
+    }
+    if (c === '$' && src[i + 1] === '{') {
+      depth++
+      i += 2
+      continue
+    }
+    if (c === '}') {
+      depth--
+      if (depth === 0) return i
+    }
+    i++
+  }
+  throw new IncompleteInput()
+}
+
+/** Interpreta lo que va entre ${ y }. */
+function braceVar(body: string, quoted: boolean): Part {
+  const bad = () => new ShellSyntaxError(`bash: \${${body}}: bad substitution`)
+  const NAME = '([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?$#@*!-])'
+  let m = new RegExp(`^#${NAME}(?:\\[([^\\]]+)\\])?$`).exec(body)
+  if (m) return { t: 'var', name: m[1], index: m[2], mode: 'len', q: quoted }
+  if (body === '#') return { t: 'var', name: '#', q: quoted }
+  m = /^!([A-Za-z_][A-Za-z0-9_]*)\[([@*])\]$/.exec(body)
+  if (m) return { t: 'var', name: m[1], index: m[2], mode: 'keys', q: quoted }
+  m = /^!([A-Za-z_][A-Za-z0-9_]*)$/.exec(body)
+  if (m) return { t: 'var', name: m[1], mode: 'indirect', q: quoted }
+  m = new RegExp(`^${NAME}(?:\\[([^\\]]+)\\])?([\\s\\S]*)$`).exec(body)
+  if (!m) throw bad()
+  const [, name, index, rest] = m
+  if (!rest) return { t: 'var', name, index, q: quoted }
+  const op = /^(:[-=+?]|[-=+?]|##|#|%%|%|\/\/|\/#|\/%|\/|\^\^|\^|,,|,|:)/.exec(rest)
+  if (!op) throw bad()
+  return { t: 'var', name, index, op: op[1], arg: rest.slice(op[1].length), q: quoted }
+}
+
 export function tokenize(src: string): Token[] {
   const tokens: Token[] = []
   const pendingHeredocs: { delim: string; strip: boolean; token: { heredoc?: { body: string; expand: boolean } }; expand: boolean }[] = []
@@ -104,14 +185,10 @@ export function tokenize(src: string): Token[] {
       return { t: 'cmd', src: inner, q: quoted }
     }
     if (next === '{') {
-      const end = src.indexOf('}', i + 2)
-      if (end < 0) throw new IncompleteInput()
+      const end = matchBrace(src, i + 2)
       const body = src.slice(i + 2, end)
       i = end + 1
-      const m = /^(#?)([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?$#@*])(?:(:?[-=+?])(.*))?$/s.exec(body)
-      if (!m) throw new ShellSyntaxError(`bash: \${${body}}: bad substitution`)
-      if (m[1]) return { t: 'var', name: m[2], q: quoted, op: '#' }
-      return { t: 'var', name: m[2], q: quoted, op: m[3], arg: m[4] }
+      return braceVar(body, quoted)
     }
     const special = /^[?$#@*0-9!]/.exec(next ?? '')
     if (special) {
@@ -127,7 +204,13 @@ export function tokenize(src: string): Token[] {
     return { t: 'lit', v: '$', q: quoted }
   }
 
+  const lineOf = (at: number) => {
+    let n = 1
+    for (let k = 0; k < at; k++) if (src[k] === '\n') n++
+    return n
+  }
   const readWord = (): Token => {
+    const startAt = i
     const parts: Part[] = []
     let raw = ''
     let plain = true
@@ -198,6 +281,25 @@ export function tokenize(src: string): Token[] {
         if (buf || parts.length === 0) pushLit(buf, true)
         continue
       }
+      if (c === '$' && src[i + 1] === "'") {
+        // $'...': comillas con secuencias de escape (\n, \t, \\, \').
+        let j = i + 2
+        let buf = ''
+        while (j < src.length && src[j] !== "'") {
+          if (src[j] === '\\' && j + 1 < src.length) {
+            const e = src[j + 1]
+            buf += e === 'n' ? '\n' : e === 't' ? '\t' : e === 'r' ? '\r' : e === 'e' ? '\x1b' : e === '0' ? '\0' : e
+            j += 2
+            continue
+          }
+          buf += src[j++]
+        }
+        if (j >= src.length) throw new IncompleteInput()
+        pushLit(buf, true)
+        plain = false
+        i = j + 1
+        continue
+      }
       if (c === '$') {
         plain = false
         parts.push(readDollar(false))
@@ -215,7 +317,7 @@ export function tokenize(src: string): Token[] {
       raw += c
       i++
     }
-    return { type: 'word', word: { parts }, raw, plain }
+    return { type: 'word', word: { parts }, raw, plain, line: lineOf(startAt) }
   }
 
   const readHeredocBodies = () => {
@@ -270,6 +372,22 @@ export function tokenize(src: string): Token[] {
         continue
       }
     }
+    if (c === '(' && src[i + 1] === '(') {
+      // (( expresión )): aritmética como comando.
+      const end = matchParen(src, i + 2)
+      if (src[end + 1] === ')') {
+        tokens.push({ type: 'arith', expr: src.slice(i + 2, end) })
+        i = end + 2
+        continue
+      }
+    }
+    if ((c === '<' || c === '>') && src[i + 1] === '(') {
+      // <(comando): sustitución de procesos.
+      const end = matchParen(src, i + 2)
+      tokens.push({ type: 'word', word: { parts: [{ t: 'psub', src: src.slice(i + 2, end), dir: c, q: false }] }, raw: src.slice(i, end + 1), plain: false })
+      i = end + 1
+      continue
+    }
     if (OP_CHARS.has(c)) {
       const three = src.slice(i, i + 3)
       const two = src.slice(i, i + 2)
@@ -295,7 +413,17 @@ export function tokenize(src: string): Token[] {
       tokens.push({ type: 'op', op })
       continue
     }
-    tokens.push(readWord())
+    const w = readWord()
+    // nombre=( ... ): arreglo.
+    if (w.type === 'word' && src[i] === '(' && /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=$/.test(w.raw)) {
+      const end = matchParen(src, i + 1)
+      const inner = src.slice(i + 1, end)
+      i = end + 1
+      const elems = tokenize(inner.replace(/\n/g, ' ')).filter((t): t is Extract<Token, { type: 'word' }> => t.type === 'word').map((t) => t.word)
+      w.word.array = elems
+      w.raw += `(${inner})`
+    }
+    tokens.push(w)
   }
   if (pendingHeredocs.length) throw new IncompleteInput()
   tokens.push({ type: 'eof' })
@@ -404,6 +532,12 @@ export function parse(src: string): Node {
   function parseCommand(): Node {
     const t = peek()
     if (t.type === 'eof') throw new IncompleteInput()
+    if (t.type === 'arith') {
+      next()
+      const redirs: Redir[] = []
+      parseRedirs(redirs)
+      return { kind: 'arith', expr: t.expr, redirs }
+    }
     if (t.type === 'op' && t.op === '(') {
       next()
       const body = parseList([')'])
@@ -456,7 +590,9 @@ export function parse(src: string): Node {
   }
 
   function parseSimple(): Node {
-    const assigns: { name: string; value: Word }[] = []
+    const startTok = peek()
+    const line = startTok.type === 'word' ? startTok.line : undefined
+    const assigns: Assign[] = []
     const words: Word[] = []
     const redirs: Redir[] = []
     // [[ ... ]]: los operadores && || < > ( ) son parte de la expresión, no de la línea de comandos.
@@ -484,13 +620,13 @@ export function parse(src: string): Node {
       if (words.length === 0) {
         const first = t.word.parts[0]
         if (first && first.t === 'lit' && !first.q) {
-          const m = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(first.v)
+          const m = /^([A-Za-z_][A-Za-z0-9_]*)(?:\[([^\]]*)\])?(\+?)=/.exec(first.v)
           if (m) {
             next()
             const valueParts: Part[] = [{ ...first, v: first.v.slice(m[0].length) }, ...t.word.parts.slice(1)].filter(
               (p) => !(p.t === 'lit' && p.v === ''),
             )
-            assigns.push({ name: m[1], value: { parts: valueParts } })
+            assigns.push({ name: m[1], index: m[2], append: m[3] === '+', value: { parts: valueParts }, array: t.word.array })
             continue
           }
         }
@@ -499,7 +635,7 @@ export function parse(src: string): Node {
       words.push(t.word)
     }
     if (words.length === 0 && assigns.length === 0 && redirs.length === 0) fail(peek())
-    return { kind: 'simple', assigns, words, redirs }
+    return { kind: 'simple', assigns, words, redirs, line }
   }
 
   function parseIf(): Node {
@@ -533,6 +669,19 @@ export function parse(src: string): Node {
 
   function parseFor(): Node {
     next() // for
+    if (peek().type === 'arith') {
+      const expr = (next() as { expr: string }).expr
+      const parts = expr.split(';')
+      if (parts.length !== 3) throw new ShellSyntaxError('bash: syntax error: arithmetic expression required')
+      skipNl()
+      if (isOp(peek(), ';')) next()
+      expectWord('do')
+      const body = parseList(['done'])
+      expectWord('done')
+      const redirs: Redir[] = []
+      parseRedirs(redirs)
+      return { kind: 'forArith', init: parts[0], cond: parts[1], step: parts[2], body, redirs }
+    }
     const nameTok = next()
     if (nameTok.type !== 'word') fail(nameTok)
     const name = (nameTok as { raw: string }).raw

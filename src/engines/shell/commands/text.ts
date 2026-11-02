@@ -1,3 +1,4 @@
+import { AwkError, runAwk } from '../awk'
 import { parseArgs } from '../args'
 import { register } from '../shell'
 import { FsError } from '../vfs'
@@ -314,15 +315,20 @@ register('sed', {
       return 1
     }
     const toRe = (p: string, flags = '') => new RegExp(bracketPosixClasses(a.flags.has('E') ? p : breToJs(p)), flags)
-    type Cmd = { addr?: RegExp | number | '$'; op: 's' | 'd' | 'p'; re?: RegExp; repl?: string; global?: boolean; print?: boolean }
+    type Cmd = { addr?: RegExp | number | '$'; op: 's' | 'd' | 'p' | 'i' | 'a' | 'c'; re?: RegExp; repl?: string; global?: boolean; print?: boolean; text?: string }
     const cmds: Cmd[] = []
-    for (const part of script.split(/;(?![^/]*\/[^/]*\/)/)) {
+    for (const part of splitSedScript(script)) {
       const s = part.trim()
       if (!s) continue
       let m = /^(?:(\d+|\$)|\/((?:\\.|[^/])*)\/)?\s*s(.)((?:\\.|(?!\3).)*)\3((?:\\.|(?!\3).)*)\3([gIpi0-9]*)$/.exec(s)
       if (m) {
         const flags = m[6]
         cmds.push({ addr: m[1] ? (m[1] === '$' ? '$' : Number(m[1])) : m[2] !== undefined ? toRe(m[2]) : undefined, op: 's', re: toRe(m[4], (flags.includes('g') ? 'g' : '') + (/[Ii]/.test(flags) ? 'i' : '')), repl: m[5], print: flags.includes('p') })
+        continue
+      }
+      const ia = /^(?:(\d+|\$)|\/((?:\\.|[^/])*)\/)?\s*([iac])\s*\\?\s?(.*)$/.exec(s)
+      if (ia) {
+        cmds.push({ addr: ia[1] ? (ia[1] === '$' ? '$' : Number(ia[1])) : ia[2] !== undefined ? toRe(ia[2]) : undefined, op: ia[3] as 'i' | 'a' | 'c', text: ia[4] })
         continue
       }
       m = /^(?:(\d+|\$)|\/((?:\\.|[^/])*)\/)?\s*([dp])$/.exec(s)
@@ -340,10 +346,18 @@ register('sed', {
         let current = line
         let deleted = false
         let extra = ''
+        let after = ''
         for (const c of cmds) {
           const hit = c.addr === undefined || (c.addr === '$' ? idx === ls.length - 1 : typeof c.addr === 'number' ? c.addr === idx + 1 : c.addr.test(current))
           if (!hit) continue
           if (c.op === 'd') {
+            deleted = true
+            break
+          }
+          if (c.op === 'i') out += c.text + '\n'
+          if (c.op === 'a') after += c.text + '\n'
+          if (c.op === 'c') {
+            out += c.text + '\n'
             deleted = true
             break
           }
@@ -362,7 +376,7 @@ register('sed', {
           }
         }
         if (deleted) return
-        out += extra + (a.flags.has('n') ? '' : current + '\n')
+        out += extra + (a.flags.has('n') ? '' : current + '\n') + after
       })
       return out
     }
@@ -390,151 +404,54 @@ register('sed', {
 })
 
 register(['awk', 'gawk'], {
-  usage: "awk [-F fs] 'program' [file ...]",
-  summary: "  Soporta: {print $1}, -F, condiciones /regex/ y $N==valor, NR, NF, $NF, BEGIN/END y sumas simples.",
+  usage: "awk [-F fs] [-v var=valor] 'programa' [archivo ...]",
+  summary: "  Patrones y acciones, BEGIN/END, $1..$NF, NR, NF, arreglos (cuenta[$1]++), for (k in a),\n  if/while/for, printf, length, substr, split, sub, gsub, tolower, toupper.",
   run(ctx) {
-    const a = parseArgs(ctx.args, { values: { F: ['F', 'field-separator'], v: ['v', 'assign'] } })
-    const program = a.rest[0]
-    if (!program) {
-      ctx.err("usage: awk [-F fs][-v var=value][prog | -f progfile][file ...]\n")
+    const args = [...ctx.args]
+    let fs: string | undefined
+    const vars: Record<string, string> = {}
+    let program: string | undefined
+    const files: string[] = []
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]
+      if (program === undefined && a === '-F') fs = args[++i]
+      else if (program === undefined && a.startsWith('-F')) fs = a.slice(2)
+      else if (program === undefined && a === '-v') {
+        const [k, ...v] = (args[++i] ?? '').split('=')
+        vars[k] = v.join('=')
+      } else if (program === undefined && a.startsWith('-v')) {
+        const [k, ...v] = a.slice(2).split('=')
+        vars[k] = v.join('=')
+      } else if (program === undefined && a === '-f') {
+        try {
+          program = ctx.sys.vfs.readFile(ctx.sh.resolve(args[++i] ?? ''), ctx.sh.cred)
+        } catch {
+          ctx.err(`awk: can't open file ${args[i]}\n`)
+          return 2
+        }
+      } else if (program === undefined) program = a
+      else files.push(a)
+    }
+    if (program === undefined) {
+      ctx.err('usage: awk [-F fs][-v var=value][prog | -f progfile][file ...]\n')
       return 2
     }
-    const inputs = readInputs(ctx, a.rest.slice(1))
+    if (fs === 't' || fs === '\\t') fs = '\t'
+    const inputs = readInputs(ctx, files)
     if (typeof inputs === 'number') return 2
-    const fs = a.values.get('F')
-    const vars: Record<string, number | string> = {}
-    if (a.values.has('v')) {
-      const [k, v] = a.values.get('v')!.split('=')
-      vars[k] = v
-    }
-    // Bloques: [patrón] { acciones }
-    const blocks: { pattern: string; action: string }[] = []
-    const re = /\s*(BEGIN|END|[^{]*?)\s*\{([^}]*)\}/g
-    let m: RegExpExecArray | null
-    let consumed = 0
-    while ((m = re.exec(program))) {
-      blocks.push({ pattern: m[1].trim(), action: m[2].trim() })
-      consumed = re.lastIndex
-    }
-    if (!blocks.length || program.slice(consumed).trim()) {
-      const pat = program.slice(consumed).trim() || program.trim()
-      blocks.push({ pattern: pat, action: 'print' })
-    }
-    let NR = 0
-    let fields: string[] = []
-    let line = ''
-    const field = (n: number) => (n === 0 ? line : (fields[n - 1] ?? ''))
-    const evalExpr = (expr: string): string | number => {
-      const e = expr.trim()
-      if (/^".*"$/.test(e)) return e.slice(1, -1).replace(/\\t/g, '\t').replace(/\\n/g, '\n')
-      if (/^\d+(\.\d+)?$/.test(e)) return Number(e)
-      if (e === 'NR') return NR
-      if (e === 'NF') return fields.length
-      if (e === '$NF') return fields[fields.length - 1] ?? ''
-      let fm = /^\$\(?NF\s*-\s*(\d+)\)?$/.exec(e)
-      if (fm) return fields[fields.length - 1 - Number(fm[1])] ?? ''
-      fm = /^\$(\d+)$/.exec(e)
-      if (fm) return field(Number(fm[1]))
-      if (/^[A-Za-z_]\w*$/.test(e)) return vars[e] ?? ''
-      const arith = /^(.+?)\s*([-+*/%])\s*(.+)$/.exec(e)
-      if (arith) {
-        const x = Number(evalExpr(arith[1])) || 0
-        const y = Number(evalExpr(arith[3])) || 0
-        return arith[2] === '+' ? x + y : arith[2] === '-' ? x - y : arith[2] === '*' ? x * y : arith[2] === '/' ? x / y : x % y
+    try {
+      return runAwk(program, inputs, { fs, vars }, {
+        out: ctx.out,
+        err: ctx.err,
+        writeFile: (path, data, append) => ctx.sys.vfs.writeFile(ctx.sh.resolve(path), data, ctx.sh.cred, { append, mode: 0o644, umask: ctx.sh.umask }),
+      })
+    } catch (e) {
+      if (e instanceof AwkError) {
+        ctx.err(e.message + '\n')
+        return 2
       }
-      return e
+      throw e
     }
-    const evalPrintArgs = (args: string) => {
-      if (!args.trim()) return line
-      return args
-        .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
-        .map((part) =>
-          part
-            .trim()
-            .split(/\s+(?=(?:[^"]*"[^"]*")*[^"]*$)/)
-            .map((tok) => String(evalExpr(tok)))
-            .join(''),
-        )
-        .join(' ')
-    }
-    const matchPattern = (p: string): boolean => {
-      if (!p) return true
-      const rm = /^\/(.*)\/$/.exec(p)
-      if (rm) return new RegExp(rm[1]).test(line)
-      const cm = /^(.+?)\s*(==|!=|>=|<=|>|<|~)\s*(.+)$/.exec(p)
-      if (cm) {
-        const l = evalExpr(cm[1])
-        const r = cm[2] === '~' ? cm[3].replace(/^\/|\/$/g, '') : evalExpr(cm[3])
-        if (cm[2] === '~') return new RegExp(String(r)).test(String(l))
-        const ln = Number(l)
-        const rn = Number(r)
-        const numeric = !Number.isNaN(ln) && !Number.isNaN(rn) && String(l).trim() !== '' && String(r).trim() !== ''
-        const lv = numeric ? ln : String(l)
-        const rv = numeric ? rn : String(r)
-        switch (cm[2]) {
-          case '==':
-            return lv === rv
-          case '!=':
-            return lv !== rv
-          case '>':
-            return lv > rv
-          case '<':
-            return lv < rv
-          case '>=':
-            return lv >= rv
-          case '<=':
-            return lv <= rv
-        }
-      }
-      return !!evalExpr(p)
-    }
-    const run = (action: string) => {
-      for (const stmt of action.split(';').map((s) => s.trim()).filter(Boolean)) {
-        const pm = /^printf\s*\(?\s*"(.*?)"\s*(?:,\s*(.*?))?\)?$/.exec(stmt)
-        if (pm) {
-          const values = pm[2] ? pm[2].split(',').map((x) => String(evalExpr(x))) : []
-          let i = 0
-          ctx.out(pm[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/%-?\d*(?:\.\d+)?[sdf]/g, (spec) => {
-            const v = values[i++] ?? ''
-            const w = Number(/\d+/.exec(spec)?.[0] ?? 0)
-            const s = spec.endsWith('f') ? Number(v).toFixed(Number(/\.(\d+)/.exec(spec)?.[1] ?? 6)) : spec.endsWith('d') ? String(Math.trunc(Number(v))) : v
-            return spec.includes('-') ? s.padEnd(w) : s.padStart(w)
-          }))
-          continue
-        }
-        const pr = /^print\s*(.*)$/.exec(stmt)
-        if (pr) {
-          ctx.out(evalPrintArgs(pr[1]) + '\n')
-          continue
-        }
-        const asg = /^([A-Za-z_]\w*)\s*(\+=|-=|=)\s*(.+)$/.exec(stmt)
-        if (asg) {
-          const v = evalExpr(asg[3])
-          const cur = Number(vars[asg[1]] ?? 0)
-          vars[asg[1]] = asg[2] === '+=' ? cur + Number(v) : asg[2] === '-=' ? cur - Number(v) : v
-          continue
-        }
-        const inc = /^([A-Za-z_]\w*)\+\+$/.exec(stmt)
-        if (inc) {
-          vars[inc[1]] = Number(vars[inc[1]] ?? 0) + 1
-          continue
-        }
-      }
-    }
-    for (const b of blocks) if (b.pattern === 'BEGIN') run(b.action)
-    for (const inp of inputs) {
-      for (const l of lines(inp.data)) {
-        NR++
-        line = l
-        fields = fs ? l.split(fs.length === 1 ? fs : new RegExp(fs)) : l.trim().split(/\s+/).filter(Boolean)
-        for (const b of blocks) {
-          if (b.pattern === 'BEGIN' || b.pattern === 'END') continue
-          if (matchPattern(b.pattern)) run(b.action)
-        }
-      }
-    }
-    for (const b of blocks) if (b.pattern === 'END') run(b.action)
-    return 0
   },
 })
 
@@ -776,4 +693,54 @@ for (const [name, toUnix] of [
       return code
     },
   })
+}
+
+/** Separa los comandos de sed por ; o salto de línea, sin cortar dentro de s/.../.../ ni /regex/. */
+function splitSedScript(script: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let i = 0
+  while (i < script.length) {
+    const c = script[i]
+    if (c === ';' || c === '\n') {
+      out.push(cur)
+      cur = ''
+      i++
+      continue
+    }
+    if (c === '/' && cur.trim() === '') {
+      // dirección /regex/
+      const end = findDelim(script, i + 1, '/')
+      cur += script.slice(i, end + 1)
+      i = end + 1
+      continue
+    }
+    if (c === 's' && /^\s*(\d+|\$|\/(?:\\.|[^/])*\/)?\s*$/.test(cur) && i + 1 < script.length) {
+      const d = script[i + 1]
+      const a = findDelim(script, i + 2, d)
+      const b = findDelim(script, a + 1, d)
+      let k = b + 1
+      while (k < script.length && /[gIpi0-9w]/.test(script[k])) k++
+      cur += script.slice(i, k)
+      i = k
+      continue
+    }
+    cur += c
+    i++
+  }
+  out.push(cur)
+  return out
+}
+
+function findDelim(s: string, start: number, d: string): number {
+  let k = start
+  while (k < s.length) {
+    if (s[k] === '\\') {
+      k += 2
+      continue
+    }
+    if (s[k] === d) return k
+    k++
+  }
+  return s.length - 1
 }
