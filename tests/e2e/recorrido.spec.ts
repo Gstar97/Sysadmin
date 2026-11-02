@@ -57,7 +57,7 @@ test('caso real y examen del módulo', async ({ page }) => {
   await expect(page.getByText('nginx: [emerg] unexpected "}"')).toBeVisible()
   await page.goto('/examen/n0-m1')
   await expect(page.getByRole('button', { name: 'Empezar el examen' })).toBeVisible()
-  await expect(page.getByText(/Cuenta como examen de salteo/)).toBeVisible()
+  await expect(page.getByText(/Cuenta como examen de suficiencia/)).toBeVisible()
 })
 
 test('modo oscuro', async ({ page }) => {

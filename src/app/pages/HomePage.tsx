@@ -20,7 +20,7 @@ import { Badge, ButtonLink, Callout, Card, EmptyState, Icon, ProgressBar, Stat }
 const KIND_LABEL: Record<Attempt['kind'], string> = {
   mini_test: 'Mini test',
   examen: 'Examen de módulo',
-  salteo: 'Examen de salteo',
+  salteo: 'Examen de suficiencia',
   diagnostico: 'Diagnóstico',
   simulacro: 'Simulacro',
 }

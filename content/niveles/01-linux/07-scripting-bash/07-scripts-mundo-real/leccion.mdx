@@ -41,7 +41,7 @@ sha256sum "$archivo" > "$archivo.sha256"               # para comprobarlo despu�
 find "$destino" -name "$nombre-*.tar.gz*" -mtime +"$dias" -print -delete   # rotación
 ```
 
-Dos ideas que vas a usar siempre: el respaldo **va a otro disco** (o mejor, a otro servidor: si el disco se rompe, se lleva el original y la copia), y **restaurar se prueba** de vez en cuando. En el nivel 3 vas a ver herramientas especializadas (restic, borg) y la regla 3-2-1; la lógica es la misma.
+Dos ideas que vas a usar siempre: el respaldo **va a otro disco** (o mejor, a otro servidor: si el disco se rompe, se lleva el original y la copia), y **restaurar se prueba** de vez en cuando. En el nivel 5 vas a ver herramientas especializadas (restic, borg) y la regla 3-2-1; la lógica es la misma.
 
 ## 2. Un reporte de salud
 
@@ -100,8 +100,8 @@ Es **idempotente**: si lo ejecutas dos veces, la segunda solo dice "ya existe". 
 
 - **Dónde**: `/usr/local/bin` para herramientas que pueden usar todos; `/usr/local/sbin` para las de administración. Dueño root y permisos 755: que nadie más pueda modificarlo (un script que corre como root y que un usuario puede editar es una puerta abierta).
 - **Con sudo y en cron, ruta completa**: sudo busca en su propia lista de carpetas (`secure_path`), que en Rocky no incluye `/usr/local/bin`; cron tiene una PATH mínima.
-- **Versionado**: guarda los scripts en un repositorio git del equipo. Vas a saber qué cambió, cuándo y quién (git se ve en profundidad en el nivel 4).
-- **Avisar si falla**: el código de salida, el registro (`logger -t`) y, para lo importante, un aviso (correo o el monitoreo, en el nivel 5). Un timer de systemd con `OnFailure=` también puede avisar.
+- **Versionado**: guarda los scripts en un repositorio git del equipo. Vas a saber qué cambió, cuándo y quién (git se ve en profundidad en el nivel 6).
+- **Avisar si falla**: el código de salida, el registro (`logger -t`) y, para lo importante, un aviso (correo o el monitoreo, en el nivel 6). Un timer de systemd con `OnFailure=` también puede avisar.
 
 <EnSimple>
 Un script de producción no termina cuando funciona en tu terminal: termina cuando está instalado con permisos correctos, programado con rutas completas, guardado en git, y alguien revisó el primer resultado.

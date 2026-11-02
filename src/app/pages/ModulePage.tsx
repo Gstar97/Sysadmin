@@ -68,16 +68,16 @@ export default function ModulePage() {
 
       {state?.diagnostic === 'dominado' && !isModuleComplete(mod, snap) && examAvailable && (
         <Callout tone="ok" title="El diagnóstico marcó este módulo como dominado">
-          Se puede rendir directamente el examen de salteo: con 85% o más el módulo queda completado.{' '}
+          Se puede presentar directamente el examen de suficiencia: con 85% o más el módulo queda completado.{' '}
           <Link to={`/examen/${mod.id}`} className="font-medium text-accent">
-            Rendir el examen
+            Presentar el examen
           </Link>
         </Callout>
       )}
 
       {toReview.length > 0 && !isModuleComplete(mod, snap) && (
         <Callout tone="info" title="Recomendado después del último examen">
-          Repasar solo estas lecciones antes de volver a rendir:
+          Repasar solo estas lecciones antes de volver a presentarlo:
           <ul className="mt-1 list-disc pl-5">
             {toReview.map((id) => (
               <li key={id}>
@@ -142,7 +142,7 @@ export default function ModulePage() {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-muted">O aprobar el examen de salteo con 85% o más.</p>
+            <p className="mt-3 text-xs text-muted">O aprobar el examen de suficiencia con 85% o más.</p>
           </Card>
 
           {mod.lab && (
@@ -190,11 +190,11 @@ export default function ModulePage() {
                 <p className="text-sm">
                   {kind === 'examen'
                     ? 'Todas las lecciones están completas: se aprueba con 70%.'
-                    : 'Todavía faltan lecciones: rendirlo ahora cuenta como examen de salteo y se aprueba con 85%.'}
+                    : 'Todavía faltan lecciones: presentarlo ahora cuenta como examen de suficiencia y se aprueba con 85%.'}
                 </p>
                 {state?.examBest !== undefined && <p className="mt-1 text-sm text-muted">Mejor resultado: {percent(state.examBest)}</p>}
                 <div className="mt-3">
-                  <ButtonLink to={`/examen/${mod.id}`}>{kind === 'examen' ? 'Rendir el examen' : 'Rendir examen de salteo'}</ButtonLink>
+                  <ButtonLink to={`/examen/${mod.id}`}>{kind === 'examen' ? 'Presentar el examen' : 'Presentar el examen de suficiencia'}</ButtonLink>
                 </div>
               </>
             ) : (

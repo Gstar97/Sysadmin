@@ -1,7 +1,7 @@
 ############################################################################################
 #                                                                                          #
 #          ARQUITECTURA TÉCNICA DE LA PLATAFORMA                                           #
-#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 3                       #
+#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 4b                      #
 #                                                                                          #
 ############################################################################################
 
@@ -12,7 +12,7 @@
   4.  Estructura del repositorio
   5.  Contenido separado del código (formatos de archivo)
   6.  Motores y componentes interactivos
-  7.  Evaluaciones, diagnóstico y salteo (reglas exactas)
+  7.  Evaluaciones, diagnóstico y suficiencia (reglas exactas)
   8.  Progreso y almacenamiento (hoy local, mañana con usuarios y base de datos)
   9.  Funciones de la plataforma
   10. Calidad, pruebas y accesibilidad
@@ -527,6 +527,53 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       el próximo arranque": el simulador no reinicia.
     · Los comandos de una sola familia (apt, dnf, grubby, update-grub...) no existen en
       la otra: dan "command not found", como en un servidor real.
+  - Nivel 1, parte 2 (módulos 1.4 a 1.7):
+    · Almacenamiento (engines/shell/storage.ts): discos, tablas MBR y GPT, particiones,
+      firmas de sistemas de archivos y LVM completo (pv*, vg*, lv*, con -r), montajes y
+      fstab (por UUID y LABEL, nofail, findmnt --verify, aviso de daemon-reload), swap
+      en partición y en archivo, df con --output, du -x, find -xdev y archivos borrados
+      que siguen abiertos (lsof +L1). Las instalaciones de Rocky (BIOS y UEFI) y Ubuntu
+      quedan como las deja cada instalador.
+    · Rendimiento (perf.ts): un único modelo de CPU, memoria, disco y carga para que
+      top, uptime, free, vmstat, iostat, mpstat, sar (con historial) e iotop cuenten la
+      misma historia; nice, renice e ionice cambian el resultado. /proc (meminfo,
+      loadavg, una carpeta por proceso) y /sys (placas de red, discos, módulos) se
+      regeneran antes de cada comando.
+    · Kernel y hora (kernel.ts): sysctl (también escribiendo en /proc/sys), módulos
+      (lsmod, modinfo, modprobe con blacklist e install /bin/false), timedatectl con zona
+      horaria real en date, chrony con fuentes alcanzables o no según la red, cron con
+      validación, at, /etc/crontab y anacrontab de cada familia.
+    · Varios servidores (hosts.ts y commands/ssh.ts): el ejercicio puede declarar otros
+      servidores (servidores:), cada uno un sistema simulado completo, con sus redes. ssh
+      con huella del servidor y known_hosts (también la clave cambiada), contraseña o
+      clave (ssh-keygen, ssh-copy-id, ssh-agent, ssh-add), StrictModes, permisos de la
+      clave privada, sshd_config real de cada distribución con Include y "gana el primer
+      valor", AllowUsers/AllowGroups, PermitRootLogin, sshd -t y -T, ~/.ssh/config,
+      bastión con -J y ProxyJump, comandos remotos, scp y rsync (barra final, -n,
+      --delete). El firewall de cada servidor (firewalld rechaza, ufw descarta) y sus
+      servicios deciden si una conexión es refused, timed out o no route to host; ping,
+      nc, curl y getent usan la misma red. En Ubuntu, el puerto de ssh.socket cambia con
+      daemon-reload. Las verificaciones pueden mirar otro servidor ({ en: web01, ... }).
+    · SELinux y AppArmor (selinux.ts y commands/security.ts): etiquetas por ruta con
+      reglas locales de semanage fcontext, mv que conserva la etiqueta y cp que toma la
+      del destino, restorecon, chcon, puertos con tipo (semanage port), booleanos
+      (getsebool, setsebool -P), denegaciones AVC en audit.log (ausearch, audit2why),
+      ls/ps/id -Z. nginx (web.ts) lee su configuración con include, sirve la carpeta y el
+      puerto configurados y respeta permisos y SELinux (403 con el error en error.log);
+      nginx -t. En Ubuntu, aa-status, aa-complain y aa-enforce.
+    · Bash para scripts (shell.ts, parser.ts, arith.ts): arreglos indexados y
+      asociativos, todas las formas de ${...} (# ## % %% / // ^^ ,, :desde:largo,
+      :- := :+ :?, ${#x}, ${!x}, ${!a[@]}), (( )), for ((;;)), let, aritmética completa,
+      <(comando), $'...', getopts, trap EXIT y ERR, LINENO, exec >> log 2>&1, bash -x
+      (traza con +), declare/local/readonly/typeset, mapfile, shopt (nullglob,
+      dotglob), IFS al separar palabras, BASH_REMATCH, scripts del PATH por su nombre,
+      sudo con secure_path y las partes de una tubería en un proceso aparte (el while
+      al final de una tubería pierde sus variables, como en bash).
+    · Herramientas de texto y scripts: awk nuevo (awk.ts: arreglos, for-in, printf,
+      funciones de texto, rangos, redirección), sed con direcciones, rangos, !, -i.bak y
+      varios -e, tr -c, diff -r, tar (c/t/x, z, -C, --exclude, con fallas reales),
+      gzip/gunzip/zcat, mktemp, seq, bc, cmp, paste, timeout, flock, chpasswd y openssl
+      rand.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el celular aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -618,13 +665,13 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     lecciones en proporción a sus horas y con al menos una por lección. Se priorizan
     preguntas no vistas y se mezclan los tipos.
   - Si el estudiante ya completó todas las lecciones del módulo, se aprueba con 70%.
-  - Si no las completó, el examen cuenta como examen de salteo y se aprueba con 85%. La
+  - Si no las completó, el examen cuenta como examen de suficiencia y se aprueba con 85%. La
     plataforma lo avisa antes de empezar.
 
 7.3 Módulo completado
   - Por cursada: lecciones completadas + examen con 70% o más + caso real resuelto +
     laboratorio marcado como hecho (con su lista de verificación).
-  - Por salteo: examen con 85% o más. El laboratorio y el caso real quedan sugeridos.
+  - Por suficiencia: examen con 85% o más. El laboratorio y el caso real quedan sugeridos.
 
 7.4 Recomendaciones después de un examen
   - Se calcula el porcentaje de aciertos por lección dentro del examen. Las lecciones por
@@ -638,7 +685,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     termina con menos de 40% de aciertos, el diagnóstico se detiene y los niveles
     siguientes quedan como "estudiar".
   - Marca por módulo: todas sus preguntas correctas = "dominado" (se sugiere el examen de
-    salteo); 50% o más = "repasar"; menos de 50% = "estudiar".
+    suficiencia); 50% o más = "repasar"; menos de 50% = "estudiar".
   - El diagnóstico nunca da un módulo por aprobado.
 
 7.6 Próximo paso recomendado (panel del estudiante)
@@ -647,7 +694,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     2. Lecciones recomendadas por exámenes fallados.
     3. Continuar el módulo en curso.
     4. Siguiente módulo en el orden de la carrera; si está "dominado", sugerir su examen de
-       salteo; si le faltan requisitos, avisarlo.
+       suficiencia; si le faltan requisitos, avisarlo.
 
 7.7 Fortalezas y temas débiles
   - Se calculan por lección y por etiqueta a partir de todas las respuestas, dando más
@@ -662,7 +709,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
   - Perfil: nombre visible y preferencias (tema, tamaño de letra, límite diario de
     tarjetas).
   - Progreso de lección: estado, mejor puntaje, intentos, tiempo activo y última visita.
-  - Intentos de evaluación: tipo (mini test, examen, salteo, diagnóstico, simulacro),
+  - Intentos de evaluación: tipo (mini test, examen, suficiencia, diagnóstico, simulacro),
     fecha, cada pregunta con su respuesta y si fue correcta, puntaje y resultado.
   - Estado de módulo: estado, marca del diagnóstico, laboratorio y caso real.
   - Notas personales por lección.
@@ -723,7 +770,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     de referencia con miles de casos al azar, entrenador de subnetting, terminal bash,
     PowerShell, motor de red y consola IOS, validadores de configuración, corrección de
     los seis tipos de pregunta (incluida la corrección con el simulador), armado de
-    exámenes y diagnóstico, reglas de avance completas (lección, examen, salteo,
+    exámenes y diagnóstico, reglas de avance completas (lección, examen, suficiencia,
     laboratorio, caso real, insignia) y los ejercicios de la galería.
   - Validación de contenido (sección 5.6) en cada compilación.
   - Pruebas de punta a punta con Playwright, en escritorio y en celular, sobre el
@@ -792,7 +839,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     - Aplicación, navegación, temas, diseño para celular.
     - Carga y validación de contenido, índice de búsqueda y glosario.
     - Motor de evaluaciones con los seis tipos de pregunta, mini tests, exámenes de
-      módulo, salteo, diagnóstico y recomendaciones.
+      módulo, suficiencia, diagnóstico y recomendaciones.
     - Todos los componentes interactivos de la sección 6, cada uno con ejercicios de
       demostración reales en una página de galería.
     - Progreso en IndexedDB con exportación e importación, panel, mapa, notas, repaso
@@ -816,9 +863,14 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       de glosario nuevos, 19 ejercicios de terminal, 1 de vim y 2 de editor de
       configuración que el validador resuelve. Todo el contenido nuevo sigue el estilo
       de 5.7 (EnSimple y AntesDeEmpezar en cada lección).
-    - 4b (siguiente, después de la revisión): módulos 1.4 a 1.7 (discos, procesos y
-      tareas programadas, acceso remoto y seguridad básica, scripting en bash) y el
-      proyecto integrador del nivel.
+    - 4b (HECHA, en revisión): módulos 1.4 Discos y almacenamiento, 1.5 Procesos,
+      rendimiento y tareas programadas, 1.6 Acceso remoto y seguridad básica y 1.7
+      Scripting en Bash, y el proyecto integrador "Servidor Linux para una pequeña
+      oficina" con su verificación final y la plantilla del documento de entrega.
+      24 lecciones, cada módulo con laboratorio guiado, examen y caso real; 213
+      preguntas, 145 tarjetas, 49 términos de glosario nuevos y 24 ejercicios de
+      terminal que el validador resuelve en el simulador. El simulador creció con lo
+      descripto en 6.1 (Nivel 1, parte 2).
 
   Etapa 5 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
   El nivel de Redes también se puede entregar en dos partes.

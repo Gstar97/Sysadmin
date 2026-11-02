@@ -491,7 +491,7 @@ register('openssl', {
       else ctx.out(btoa(String.fromCharCode(...bytes)) + '\n')
       return 0
     }
-    ctx.err(`[simulador] openssl ${sub ?? ''} no está simulado: solo rand y version. Los certificados se ven en el nivel 3.\n`)
+    ctx.err(`[simulador] openssl ${sub ?? ''} no está simulado: solo rand y version. Los certificados se ven en el nivel 4.\n`)
     return 1
   },
 })

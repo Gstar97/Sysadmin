@@ -90,7 +90,7 @@ export default function ExamPage() {
             </li>
           </ul>
           {kind === 'salteo' && (
-            <Callout tone="warn" title="Cuenta como examen de salteo">
+            <Callout tone="warn" title="Cuenta como examen de suficiencia">
               Como todavía no están completas todas las lecciones, este examen sirve para saltear el módulo: con 85% o más queda
               completado. Si no se alcanza, la plataforma recomienda solo las lecciones de los temas que fallaron.
             </Callout>
@@ -143,14 +143,14 @@ function ExamResults({
           <ButtonLink to={`/modulo/${moduleId}`}>Volver al módulo</ButtonLink>
           {!passed && (
             <Button variant="secondary" onClick={onRetry}>
-              Rendir de nuevo
+              Presentarlo de nuevo
             </Button>
           )}
         </div>
       </Card>
 
       {!passed && review.length > 0 && (
-        <Callout tone="info" title="Lecciones recomendadas antes de volver a rendir">
+        <Callout tone="info" title="Lecciones recomendadas antes de volver a presentarlo">
           <ul className="list-disc pl-5">
             {review.map((id) => (
               <li key={id}>

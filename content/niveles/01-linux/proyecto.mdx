@@ -1,0 +1,154 @@
+---
+titulo: Servidor Linux para una pequeña oficina
+horas: 16
+entregables:
+  - Rocky Linux o AlmaLinux 10, o Ubuntu Server LTS, instalado con LVM.
+  - Usuarios y grupos por departamento con carpetas compartidas y permisos correctos.
+  - SSH solo con claves, firewall mínimo y SELinux o AppArmor activo.
+  - Backup diario automático con rotación, verificación y registro.
+  - Documento de entrega con qué se hizo, cómo se opera y cómo se recupera.
+---
+
+import verificacion from './proyecto-verificacion.yaml'
+
+## El pedido
+
+Este proyecto cierra el Nivel 1 y es tu primer trabajo completo de administrador: un servidor desde cero, configurado, asegurado, respaldado y documentado para que otra persona lo pueda operar. Llega así:
+
+```text
+De: Lucía Ríos <lucia@estudioriosyasoc.example>
+Asunto: Servidor para la oficina
+
+Hola. Somos un estudio contable de 8 personas: 3 en administración, 4 en contabilidad
+y yo en la gerencia. Hoy cada uno guarda las cosas en su computadora y cuando alguien
+falta no encontramos nada. Necesitamos:
+
+- Un lugar común para los archivos, con una carpeta por área. Contabilidad no quiere
+  que administración vea sus carpetas; yo necesito poder ver todo.
+- Que se haga copia de todo, todas las noches, y poder recuperar algo de hace hasta
+  dos semanas.
+- Que Martín, el chico que nos ayuda con las computadoras, pueda administrarlo
+  desde su casa, de forma segura.
+- Que nos dejes por escrito cómo se usa y qué hacer si pasa algo.
+
+Ya tenemos una máquina con dos discos de 500 GB y uno de 1 TB. ¡Gracias!
+```
+
+Lo vas a hacer en una máquina virtual nueva (`oficina01`), con tres discos virtuales chicos que representan los de la oficina: uno para el sistema, uno para los datos y otro para los respaldos. Puede ser Rocky o Ubuntu; si tienes tiempo, hazlo en uno y después repite lo básico en el otro.
+
+| Fase | Se apoya en | Tiempo estimado |
+| --- | --- | --- |
+| 1. Diseño en papel | Todo el nivel | 1 h |
+| 2. Instalación y almacenamiento | Módulos 1.1 y 1.4 | 3 h |
+| 3. Usuarios, grupos y carpetas | Módulo 1.2 | 3 h |
+| 4. Acceso remoto y seguridad | Módulos 1.3 y 1.6 | 3 h |
+| 5. Respaldos y tareas automáticas | Módulos 1.5 y 1.7 | 3 h |
+| 6. Documento de entrega y verificación | — | 3 h |
+
+## 1. Diseño en papel
+
+Antes de tocar la máquina, escribe en tu cuaderno las decisiones. Cambiarlas en papel es gratis; en un servidor con datos, no.
+
+- **Discos**: qué va en cada uno y con qué tamaño. Por ejemplo: disco 1 con el sistema (LVM del instalador); disco 2 con un grupo LVM `datos` y un volumen `compartido` montado en `/srv/compartido`, dejando espacio libre para crecer; disco 3 montado en `/backup`.
+- **Grupos y personas**: un grupo por área (`administracion`, `contabilidad`, `gerencia`), uno para quien administra (`soporte`), y la lista de usuarios con su grupo en un CSV.
+- **Carpetas y permisos**: quién lee y quién escribe en cada carpeta. Una tabla de "carpeta × grupo" lo deja claro.
+- **Acceso**: quién entra por SSH, cómo (clave) y desde dónde.
+- **Respaldos**: qué se respalda (`/srv/compartido` y `/etc`), dónde, a qué hora, cuántos días se guardan (el pedido dice dos semanas: 14) y cómo se va a saber si fallan.
+
+**Criterio de calidad:** con tu diseño, otra persona podría hacer la instalación sin preguntarte nada.
+
+## 2. Instalación y almacenamiento
+
+- Instala el sistema en el disco 1 con LVM y un hostname con criterio (`oficina01`).
+- Actualiza, configura la zona horaria y comprueba que chrony sincroniza.
+- Arma el grupo `datos` en el disco 2, el volumen `compartido` (XFS en Rocky, ext4 en Ubuntu) y móntalo por UUID en `/srv/compartido`. No uses todo el espacio: deja al menos un tercio libre.
+- Formatea el disco 3 y móntalo por UUID en `/backup`.
+- Revisa con `findmnt --verify`, reinicia, y comprueba que todo vuelve.
+
+**Criterio de calidad:** `lsblk -f` y `df -h` muestran exactamente lo que dice tu diseño, sobrevive a un reinicio y el grupo de datos tiene espacio para agrandar `/srv/compartido` sin apagar nada.
+
+## 3. Usuarios, grupos y carpetas
+
+- Crea los grupos y da de alta a las ocho personas con tu `alta-usuarios.sh` (laboratorio del módulo 1.7), con claves temporales que se cambian en el primer inicio de sesión.
+- Crea `/srv/compartido/administracion`, `contabilidad`, `gerencia` y `comun`, cada una con su grupo, permisos `2770` (SGID para que lo nuevo herede el grupo) y `comun` para todos.
+- Da a gerencia permiso de lectura en todas las carpetas con una ACL, también por defecto (para lo que se cree después).
+- Configura sudo para el grupo `soporte` con un archivo en `/etc/sudoers.d`, revisado con `visudo -c`.
+
+**Criterio de calidad:** probado con usuarios reales (sección de verificación): cada área escribe solo en lo suyo, gerencia lee todo, los archivos nuevos quedan con el grupo correcto y nadie más que soporte tiene sudo.
+
+## 4. Acceso remoto y seguridad
+
+- Martín (usuario del grupo `soporte`) entra con su clave SSH. Configura en `/etc/ssh/sshd_config.d/01-oficina.conf`: `PasswordAuthentication no`, `PermitRootLogin no` y `AllowGroups soporte`, con el orden seguro (sesión abierta, `sshd -t`, reload, prueba desde otra terminal).
+- Firewall con lo mínimo: SSH (y nada más por ahora; el servicio de archivos para Windows, Samba, llega en el nivel 4).
+- SELinux en enforcing (Rocky) o AppArmor activo (Ubuntu). Si algo choca, arréglalo con lo de la lección 1.6.6, nunca apagándolo.
+- Revisa que no quede nada escuchando que no corresponda (`ss -tlnp`).
+
+**Criterio de calidad:** desde tu PC, entrar con contraseña falla con `Permission denied (publickey)`, con la clave funciona, y `ss -tlnp` y el firewall muestran solo lo que está en tu diseño.
+
+## 5. Respaldos y tareas automáticas
+
+- Instala tu `respaldo.sh` (lección 1.7.7) en `/usr/local/sbin`, con dueño root y permisos 755, y adáptalo: que respalde `/srv/compartido` y `/etc`, guarde 14 días y deje todo en el journal con `logger -t respaldo`.
+- Prográmalo con un **timer de systemd** (lección 1.3.4) todas las noches a las 2:30, con `Persistent=true` (si la máquina estaba apagada, corre al encender). El servicio es `Type=oneshot` y llama al script con ruta completa.
+- Agrega el reporte de salud (`salud.sh`) los días hábiles a las 7:30, guardando cada reporte en `/var/log/salud/`, y una regla de logrotate (o la limpieza del laboratorio 1.7) para que esos archivos no crezcan para siempre.
+- Haz una restauración de prueba completa y anota cuánto tardó.
+
+**Criterio de calidad:** `systemctl list-timers` muestra el próximo respaldo, el registro muestra el último con "ok", la restauración de prueba da `diff -r` sin diferencias y, si se fuerza un fallo, el script termina con error y no deja un respaldo vacío.
+
+## 6. Documento de entrega
+
+Es el entregable que más se valora en un trabajo real: lo que queda cuando tú ya no estás. Escríbelo en texto plano (`entrega-oficina01.txt`) con esta estructura:
+
+```text
+SERVIDOR oficina01 — DOCUMENTO DE ENTREGA
+Fecha: ...   Preparado por: ...   Para: Estudio Ríos y Asociados
+
+1. RESUMEN
+   Qué es este servidor, para qué sirve y qué NO hace (todavía).
+
+2. CÓMO SE ACCEDE
+   Quién puede entrar, cómo (clave SSH), desde dónde. Qué hacer si se pierde la clave.
+   Acceso de emergencia: consola del equipo (y dónde está la contraseña de emergencia).
+
+3. ALMACENAMIENTO
+   Discos, volúmenes, qué se monta dónde. Cómo agrandar /srv/compartido (comandos).
+
+4. USUARIOS, GRUPOS Y CARPETAS
+   Tabla carpeta × grupo. Cómo dar de alta y de baja a un empleado (paso a paso).
+
+5. SEGURIDAD
+   SSH, firewall, SELinux/AppArmor: qué se configuró y en qué archivos.
+
+6. RESPALDOS
+   Qué, dónde, cuándo y cuántos días. Cómo saber si el de anoche salió bien.
+   CÓMO RECUPERAR UN ARCHIVO (paso a paso, con un ejemplo).
+   Última prueba de restauración: fecha, resultado y cuánto tardó.
+
+7. TAREAS PROGRAMADAS Y REGISTROS
+   Qué corre solo, cuándo, y dónde deja su salida.
+
+8. PROCEDIMIENTOS
+   Reiniciar con seguridad. Disco lleno. Un servicio no arranca. Me quedé sin acceso.
+
+9. PENDIENTES Y RECOMENDACIONES
+   Lo que conviene hacer después (por ejemplo: respaldo fuera de la oficina, Samba).
+```
+
+**Criterio de calidad:** otra persona, solo con el documento, puede dar de alta a un empleado y recuperar un archivo borrado ayer.
+
+## Verificación final
+
+<PasosGuiados ejercicio={verificacion} />
+
+## Revisión antes de entregar
+
+| Criterio | Falta | Bien | Muy bien |
+| --- | --- | --- | --- |
+| Almacenamiento | Todo en una partición o sin LVM | LVM, /srv y /backup separados y por UUID | Espacio libre planificado y procedimiento para agrandar probado |
+| Usuarios y carpetas | Permisos abiertos (777) o sin probar | Grupos, SGID y ACL de gerencia funcionando | Altas con script idempotente y prueba con usuarios de cada área |
+| Seguridad | Contraseñas por SSH o SELinux apagado | Solo claves, firewall mínimo, SELinux/AppArmor activo | AllowGroups, nada escuchando de más y todo verificado desde afuera |
+| Respaldos | Copia manual o sin verificar | Timer diario, rotación de 14 días y registro | Restauración probada y medida, y fallo forzado detectado |
+| Documento | Notas sueltas | Cubre las nueve secciones | Otra persona lo usó con éxito para las dos tareas de prueba |
+
+<Consejo>
+Toma una instantánea `entrega-nivel-1` cuando termines. Vas a seguir con este mismo servidor: en el Nivel 2, su lugar en la red de la oficina; en el Nivel 4, Samba para que las computadoras con Windows vean las carpetas, y en el Nivel 5, respaldos fuera de la oficina.
+</Consejo>

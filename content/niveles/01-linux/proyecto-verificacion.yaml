@@ -1,0 +1,87 @@
+tipo: pasos
+titulo: Verificación final antes de entregar
+descripcion: >-
+  Recorre estos pasos en el servidor terminado, de ser posible después de un reinicio. Cada uno
+  comprueba un entregable con comandos que viste en el nivel. Los comandos son para Rocky; donde
+  cambia algo en Ubuntu, está la variante.
+pasos:
+  - titulo: Reinicia y comprueba que todo vuelve solo
+    detalle: Un servidor que funciona hasta el primer reinicio no está terminado.
+    comandos:
+      - sudo systemctl reboot
+      - systemctl --failed
+      - findmnt --verify
+    comprobar: systemctl --failed no muestra nada y findmnt --verify no da errores.
+    si_falla: Si no arranca, usa el modo de emergencia (lección 1.3.6) y revisa fstab con la copia que guardaste.
+  - titulo: Almacenamiento con LVM
+    comandos:
+      - lsblk -f
+      - sudo vgs && sudo lvs
+      - df -h /srv /backup
+    comprobar: El sistema y los datos están en volúmenes LVM separados, el grupo de datos tiene espacio libre para crecer, y /backup está en otro disco que /srv.
+  - titulo: Usuarios, grupos y carpetas
+    comandos:
+      - getent group administracion contabilidad gerencia
+      - ls -ld /srv/compartido/*
+      - getfacl /srv/compartido/contabilidad
+      - sudo -l -U un_usuario_de_soporte
+    comprobar: >-
+      Cada departamento tiene su grupo y su carpeta (con SGID y sin acceso para "otros"), gerencia
+      puede leer todo por ACL, y solo el grupo de soporte tiene sudo.
+  - titulo: Prueba los permisos como usuarios reales
+    detalle: Con un usuario de cada departamento (sudo -u o iniciando sesión).
+    comandos:
+      - sudo -u un_usuario_de_contabilidad touch /srv/compartido/contabilidad/prueba.txt
+      - sudo -u un_usuario_de_administracion ls /srv/compartido/contabilidad
+      - ls -l /srv/compartido/contabilidad/prueba.txt
+    comprobar: Contabilidad puede crear (y el archivo queda con el grupo contabilidad); administración recibe Permission denied.
+  - titulo: Acceso remoto y seguridad
+    variantes:
+      - nombre: Rocky
+        detalle: 'En el servidor:'
+        comandos:
+          - sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin|allowgroups'
+          - sudo firewall-cmd --list-all
+          - getenforce
+      - nombre: Ubuntu
+        detalle: 'En el servidor:'
+        comandos:
+          - sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin|allowgroups'
+          - sudo ufw status verbose
+          - sudo aa-status | head -3
+    comprobar: >-
+      Contraseñas por SSH y root desactivados, solo lo necesario abierto en el firewall, y
+      SELinux en Enforcing (o AppArmor cargado). Desde tu PC, ssh -o PubkeyAuthentication=no
+      responde Permission denied (publickey).
+  - titulo: Hora sincronizada
+    comandos:
+      - timedatectl
+      - chronyc sources
+    comprobar: System clock synchronized yes y una fuente con ^*.
+  - titulo: Respaldo automático
+    comandos:
+      - systemctl list-timers | grep respaldo
+      - journalctl -t respaldo --since yesterday
+      - ls -lh /backup | tail -5
+    comprobar: El timer tiene una próxima ejecución, el registro muestra la última con "ok" y los archivos tienen tamaño razonable (no 45 bytes).
+  - titulo: Prueba de restauración
+    detalle: La prueba que convierte un respaldo en un respaldo.
+    comandos:
+      - mkdir -p /tmp/restaurar
+      - sudo tar xzf "$(ls -t /backup/compartido-*.tar.gz | head -1)" -C /tmp/restaurar
+      - sudo diff -r /srv/compartido /tmp/restaurar/compartido && echo idénticos
+      - sudo sha256sum -c "$(ls -t /backup/compartido-*.sha256 | head -1)"
+    comprobar: diff no muestra diferencias (salvo lo que cambió desde el respaldo) y la suma de control da OK.
+  - titulo: Fuerza un fallo del respaldo
+    detalle: >-
+      Cambia por un momento el origen del respaldo a una carpeta que no existe (o vacía) y
+      ejecútalo a mano. Después déjalo como estaba.
+    comandos:
+      - sudo /usr/local/sbin/respaldo.sh /srv/no-existe /backup; echo $?
+      - systemctl status respaldo.service --no-pager | head -5
+    comprobar: El script termina con un código distinto de 0 y queda registrado; no deja un archivo vacío en /backup.
+  - titulo: Revisa el documento de entrega con otra persona
+    detalle: >-
+      Pídele a alguien que, leyendo solo tu documento, te explique cómo daría de alta a un
+      empleado nuevo y cómo recuperaría un archivo borrado ayer. Corrige lo que no se entienda.
+    comprobar: La otra persona pudo responder las dos preguntas sin preguntarte nada.

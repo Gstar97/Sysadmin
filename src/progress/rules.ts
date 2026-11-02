@@ -302,7 +302,7 @@ export function nextStep(content: ContentIndex, snap: ProgressSnapshot, now = ne
       return {
         kind: 'recomendada',
         title: `Repasar: ${lesson.titulo}`,
-        description: 'Es uno de los temas que fallaron en el último examen. Después se puede volver a rendir.',
+        description: 'Es uno de los temas que fallaron en el último examen. Después se puede volver a presentar.',
         url: `/leccion/${lesson.id}`,
       }
     }
@@ -331,7 +331,7 @@ export function nextStep(content: ContentIndex, snap: ProgressSnapshot, now = ne
       if (snap.modules[mod.id]?.diagnostic === 'dominado' && isExamAvailable(mod)) {
         return {
           kind: 'salteo',
-          title: `Rendir el examen de salteo de ${mod.numero} ${mod.titulo}`,
+          title: `Presentar el examen de suficiencia de ${mod.numero} ${mod.titulo}`,
           description: 'El diagnóstico lo marcó como dominado. Con 85% o más, el módulo queda completado.',
           url: `/examen/${mod.id}`,
           warning,
@@ -362,7 +362,7 @@ export function nextStep(content: ContentIndex, snap: ProgressSnapshot, now = ne
   return {
     kind: 'fin',
     title: 'Todo lo publicado está completo',
-    description: 'Se puede repasar con las tarjetas o rendir simulacros mientras se publican los próximos niveles.',
+    description: 'Se puede repasar con las tarjetas o hacer simulacros mientras se publican los próximos niveles.',
     url: '/mapa',
   }
 }

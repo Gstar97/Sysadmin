@@ -69,7 +69,7 @@ export default function DiagnosticPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader eyebrow="Opcional" title="Diagnóstico inicial">
         Un test corto por nivel (unas 10 preguntas) para no perder tiempo con lo que ya se sabe. Marca cada módulo como dominado,
-        a repasar o a estudiar. No aprueba módulos: a los dominados les sugiere rendir el examen de salteo.
+        a repasar o a estudiar. No aprueba módulos: a los dominados les sugiere presentar el examen de suficiencia.
       </PageHeader>
 
       {eligibleLevels.length === 0 ? (
