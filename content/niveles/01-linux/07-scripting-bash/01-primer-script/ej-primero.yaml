@@ -1,0 +1,70 @@
+tipo: terminal
+shell: bash
+titulo: Tu primer script
+descripcion: >-
+  Vas a escribir un script que muestra los datos básicos del servidor, hacerlo ejecutable y
+  dejarlo disponible para todos como un comando más.
+estado_inicial:
+  distro: rocky
+  hostname: app01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+pasos:
+  - consigna: >-
+      Crea ~/info.sh con este contenido (con nano, o con cat y un here-document):
+      la línea #!/bin/bash, un comentario, servidor=$(hostname), echo "Servidor: $servidor" y df -h /.
+    verificar:
+      - { archivo: /home/ana/info.sh, contenido_incluye: "#!/bin/bash" }
+      - { archivo: /home/ana/info.sh, contenido_incluye: "servidor=$(hostname)" }
+    pistas:
+      - "Con un here-document: cat > ~/info.sh <<'FIN' ... FIN (las comillas en 'FIN' evitan que $ se expanda al escribir)."
+      - "`cat > ~/info.sh <<'FIN'` y después las líneas, y FIN para terminar."
+    solucion: ["cat > ~/info.sh <<'FIN'\n#!/bin/bash\n# info.sh: datos básicos del servidor\nservidor=$(hostname)\necho \"Servidor: $servidor\"\ndf -h /\nFIN"]
+    explicacion: Un script es un archivo de texto con comandos. La primera línea dice con qué programa se lee.
+  - consigna: Intenta ejecutarlo con ./info.sh.
+    verificar:
+      - { comando_usado: '\./info\.sh' }
+      - { salida_contiene: Permission denied }
+    pistas:
+      - "`cd ~` y `./info.sh`"
+    solucion: [cd ~, ./info.sh]
+    explicacion: Al crearlo, el archivo no tiene permiso de ejecución. Es una protección, no un error del script.
+  - consigna: Dale permiso de ejecución y ejecútalo.
+    verificar:
+      - { archivo: /home/ana/info.sh, modo: "0775" }
+      - { salida_contiene: "Servidor: app01" }
+    pistas:
+      - "`chmod +x info.sh` y `./info.sh`"
+    solucion: [chmod +x info.sh, ./info.sh]
+    explicacion: "./ indica que el programa está en la carpeta actual: bash no busca ahí si no se lo pides."
+  - consigna: >-
+      Prueba el problema de las comillas: guarda "informe final.txt" en una variable y crea el
+      archivo con touch, sin comillas. Después mira qué se creó.
+    verificar:
+      - { archivo: /home/ana/informe, existe: true }
+      - { comando_usado: 'ls' }
+    pistas:
+      - "`archivo=\"informe final.txt\"`, `touch $archivo` y `ls`"
+    solucion: ['archivo="informe final.txt"', touch $archivo, ls]
+    explicacion: Se crearon dos archivos, "informe" y "final.txt", porque el espacio partió el valor en dos palabras.
+  - consigna: Ahora créalo bien, con la variable entre comillas dobles, y borra los dos archivos de más.
+    verificar:
+      - { archivo: "/home/ana/informe final.txt", existe: true }
+      - { archivo: /home/ana/informe, existe: false }
+      - { archivo: /home/ana/final.txt, existe: false }
+    pistas:
+      - "`touch \"$archivo\"` y `rm informe final.txt`"
+    solucion: ['touch "$archivo"', rm informe final.txt]
+    explicacion: '"$archivo" es una sola palabra, tenga los espacios que tenga. Pon siempre las variables entre comillas dobles.'
+  - consigna: >-
+      Instala el script como un comando para todos: cópialo a /usr/local/bin/info-servidor (sin
+      .sh) y ejecútalo por su nombre desde cualquier carpeta.
+    verificar:
+      - { archivo: /usr/local/bin/info-servidor, existe: true }
+      - { comando_usado: '^info-servidor' }
+      - { salida_contiene: "Servidor: app01" }
+    pistas:
+      - "`sudo cp info.sh /usr/local/bin/info-servidor`, `cd /tmp` e `info-servidor`"
+    solucion: [sudo cp info.sh /usr/local/bin/info-servidor, cd /tmp, info-servidor]
+    explicacion: /usr/local/bin está en el PATH de todos y es el lugar para los scripts propios del servidor (no lo toca el gestor de paquetes).

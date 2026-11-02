@@ -903,6 +903,23 @@ export class Shell {
   }
 
   private readonlyHit = false
+
+  /** Busca un ejecutable en las carpetas del PATH, en orden. */
+  findInPath(name: string): { path: string; binary: boolean } | undefined {
+    for (const dir of (this.getVar('PATH') ?? '').split(':')) {
+      if (!dir) continue
+      const path = `${dir.replace(/\/$/, '')}/${name}`
+      try {
+        if (!this.sys.vfs.exists(path, this.cred)) continue
+        const node = this.sys.vfs.stat(path, this.cred)
+        if (node.type !== 'file' || !this.sys.vfs.can(node, this.cred, 1)) continue
+        return { path, binary: node.data.startsWith('\x7fELF') }
+      } catch {
+        continue
+      }
+    }
+    return undefined
+  }
   /** Dentro de un trap o de $( ), LINENO no cambia (sigue siendo la línea del script). */
   private noLine = 0
 
@@ -1071,6 +1088,10 @@ export class Shell {
       if (/^\/(usr\/)?s?bin\//.test(path) && COMMANDS.has(base)) return this.runCommand(base, args, io)
       return this.runScript(path, name, args, io, true)
     }
+
+    // Scripts propios en el PATH (/usr/local/bin, ~/bin...): van antes que los programas del sistema que estén más adelante en el PATH.
+    const inPath = this.findInPath(name)
+    if (inPath && !inPath.binary) return this.runScript(inPath.path, name, args, io, true)
 
     const def = COMMANDS.get(name)
     if (def) {
@@ -2398,6 +2419,7 @@ export const BUILTINS: Record<string, Builtin> = {
       if (sh.aliases.has(a)) io.out(`${a} is aliased to \`${sh.aliases.get(a)}'\n`)
       else if (BUILTINS[a]) io.out(`${a} is a shell builtin\n`)
       else if (sh.functions.has(a)) io.out(`${a} is a function\n`)
+      else if (sh.findInPath(a) && !sh.findInPath(a)!.binary) io.out(`${a} is ${sh.findInPath(a)!.path}\n`)
       else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c))) {
         io.out(`${a} is ${COMMANDS.get(a)!.path ?? '/usr/bin'}/${a}\n`)
       } else {
@@ -2472,6 +2494,8 @@ export const BUILTINS: Record<string, Builtin> = {
       for (const a of args.slice(1)) {
         if (sh.aliases.has(a)) io.out(args[0] === '-v' ? `alias ${a}='${sh.aliases.get(a)}'\n` : `${a} is aliased to \`${sh.aliases.get(a)}'\n`)
         else if (BUILTINS[a]) io.out(args[0] === '-v' ? `${a}\n` : `${a} is a shell builtin\n`)
+        else if (sh.functions.has(a)) io.out(args[0] === '-v' ? `${a}\n` : `${a} is a function\n`)
+        else if (sh.findInPath(a) && !sh.findInPath(a)!.binary) io.out(`${sh.findInPath(a)!.path}\n`)
         else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c))) io.out(`${COMMANDS.get(a)!.path ?? '/usr/bin'}/${a}\n`)
         else code = 1
       }

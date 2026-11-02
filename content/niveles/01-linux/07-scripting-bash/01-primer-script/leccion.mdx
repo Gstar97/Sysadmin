@@ -1,0 +1,98 @@
+---
+id: n1-m7-l1
+titulo: El primer script
+minutos: 120
+objetivos:
+  - Escribir un script con shebang, comentarios, variables y comandos.
+  - Hacerlo ejecutable y correrlo de las distintas formas posibles.
+  - Usar comillas correctamente para que las variables no se rompan.
+  - Instalar un script como comando del servidor.
+glosario: [script, shebang, variable-shell]
+verificado: 2026-11
+---
+
+import anatomia from './anatomia.svg?raw'
+import comillas from './comillas.yaml'
+import ejPrimero from './ej-primero.yaml'
+
+Hasta ahora escribiste cada comando a mano. Cuando una tarea se repite (el reporte de los lunes, el alta de un usuario, el respaldo de la noche) conviene escribirla una vez en un **script** y dejar que la máquina la repita igual cada vez. Este módulo es sobre eso: empezar con scripts chicos y terminar con herramientas que usarías en un trabajo real.
+
+<AntesDeEmpezar>
+- Redirecciones y tuberías (lección 1.1.7) y un editor de texto (lección 1.1.8).
+- Permisos, en especial el de ejecución (lección 1.2.2).
+- El PATH: dónde busca bash los programas (lección 1.1.2).
+</AntesDeEmpezar>
+
+## Qué es un script
+
+Un script es una receta: una lista de pasos escrita una vez para que cualquiera la siga igual. La diferencia es que quien la sigue es bash, al pie de la letra y sin sentido común: si un paso falla, por defecto sigue con el próximo como si nada (en la lección siguiente vas a ver cómo evitarlo).
+
+<Diagrama svg={anatomia} alt="Un script de ejemplo con sus partes: la primera línea #!/bin/bash (el shebang, que indica qué programa lee el archivo); comentarios con qué hace, quién lo escribió y cómo se usa; variables como servidor=$(hostname) y hoy=$(date +%F); los comandos, como echo y df -h; y exit 0 al final, el código de salida." pie="Shebang, comentarios, variables, comandos y código de salida." />
+
+La primera línea, `#!/bin/bash`, se llama **shebang**: le dice al sistema con qué programa leer el archivo. Sin ella, el script lo interpreta el shell que lo lance, que puede no ser bash.
+
+## Crearlo y ejecutarlo
+
+```bash
+nano ~/info.sh               # escribirlo
+chmod +x ~/info.sh           # darle permiso de ejecución
+./info.sh                    # ejecutarlo desde su carpeta (./ = "aquí mismo")
+bash info.sh                 # o pasárselo a bash (no necesita el permiso x)
+```
+
+Bash no busca programas en la carpeta actual (por seguridad), por eso hace falta `./`. Para usarlo como cualquier comando, va en una carpeta del PATH: `/usr/local/bin` para scripts del servidor (para todos los usuarios) o `~/bin` para los tuyos. La extensión `.sh` es solo una costumbre; los comandos instalados suelen ir sin ella.
+
+## Variables
+
+```bash
+servidor=$(hostname)          # sin espacios alrededor del =
+limite=90
+echo "El servidor $servidor avisa al pasar el $limite %"
+echo "Hoy es ${hoy}_informe"  # con llaves, cuando hay letras pegadas
+```
+
+- `nombre=valor` **sin espacios**: `limite = 90` intenta ejecutar un comando llamado `limite`.
+- `$(comando)` guarda la salida de un comando en la variable (sustitución de comandos).
+- Por convención, las variables propias van en minúsculas; las MAYÚSCULAS se reservan para las del sistema (`PATH`, `HOME`, `USER`) y las que se exportan.
+
+## Comillas: la fuente de errores número uno
+
+<Emparejar ejercicio={comillas} />
+
+- **Comillas dobles** `"..."`: expanden `$variables` y `$(comandos)`, pero mantienen todo como una sola palabra.
+- **Comillas simples** `'...'`: todo literal, nada se expande.
+- **Sin comillas**: el valor se parte en palabras en cada espacio, y los `*` se convierten en nombres de archivos.
+
+<EnSimple>
+Pon siempre las variables entre comillas dobles: `"$archivo"`. Te vas a ahorrar los errores más difíciles de encontrar, los que aparecen solo cuando un nombre trae un espacio.
+</EnSimple>
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejPrimero} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"Permission denied" al ejecutar ./script.sh'>
+    Falta el permiso de ejecución: `chmod +x script.sh`. O ejecútalo con `bash script.sh`.
+  </ErrorComun>
+  <ErrorComun titulo='"command not found" con el script en la carpeta actual'>
+    Bash no busca en la carpeta actual: usa `./script.sh`, o instálalo en una carpeta del PATH.
+  </ErrorComun>
+  <ErrorComun titulo='"limite: command not found" al asignar'>
+    Hay espacios alrededor del `=`. Es `limite=90`, todo junto.
+  </ErrorComun>
+  <ErrorComun titulo="El script funciona con unos archivos y falla con otros">
+    Casi siempre son variables sin comillas y un nombre con espacios. `"$variable"`.
+  </ErrorComun>
+  <ErrorComun titulo='"bad interpreter: /bin/bash^M"'>
+    El archivo se escribió en Windows y tiene finales de línea CRLF. `dos2unix script.sh` lo arregla (lección 0.3.5).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un script es un archivo de texto con comandos; empieza con `#!/bin/bash`.
+- `chmod +x` y `./script.sh`, o `bash script.sh`. Para usarlo como comando: `/usr/local/bin` (todos) o `~/bin` (solo tú).
+- Variables: `nombre=valor` sin espacios; `$(comando)` guarda la salida; `${nombre}` cuando hay letras pegadas.
+- Comillas dobles expanden y mantienen una sola palabra; simples, todo literal. Variables siempre como `"$variable"`.
+- Comentarios con qué hace, quién y cómo se usa: el que viene después (o tú en seis meses) lo va a agradecer.
+</Resumen>

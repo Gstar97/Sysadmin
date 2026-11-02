@@ -570,7 +570,9 @@ register('which', {
     for (const c of ctx.args) {
       const def = COMMANDS.get(c)
       const available = def && ctx.sys.isCommandAvailable(c, (x) => commandPackage(ctx.sys.distro, x))
-      if (available) ctx.out(`${def.path ?? '/usr/bin'}/${c}\n`)
+      const script = ctx.sh.findInPath(c)
+      if (script && !script.binary) ctx.out(`${script.path}\n`)
+      else if (available) ctx.out(`${def.path ?? '/usr/bin'}/${c}\n`)
       else {
         if (ctx.sys.distro === 'rocky') ctx.err(`/usr/bin/which: no ${c} in (${ctx.sh.vars.get('PATH')})\n`)
         code = 1
