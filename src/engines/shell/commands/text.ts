@@ -281,16 +281,18 @@ register('tr', {
   usage: 'tr [OPTION]... SET1 [SET2]',
   summary: '  -d, --delete  -s, --squeeze-repeats',
   run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { d: ['d', 'delete'], s: ['s', 'squeeze-repeats'] } })
+    const a = parseArgs(ctx.args, { flags: { d: ['d', 'delete'], s: ['s', 'squeeze-repeats'], c: ['c', 'C', 'complement'] } })
     const input = ctx.stdin.readAll()
     const set1 = expandTrSet(a.rest[0] ?? '')
     const set2 = expandTrSet(a.rest[1] ?? '')
+    const comp = a.flags.has('c')
     let out = ''
     for (const c of input) {
       const i = set1.indexOf(c)
+      const inSet = comp ? i < 0 : i >= 0
       if (a.flags.has('d')) {
-        if (i < 0) out += c
-      } else if (i >= 0 && set2) out += set2[Math.min(i, set2.length - 1)]
+        if (!inSet) out += c
+      } else if (inSet && set2) out += comp ? set2[set2.length - 1] : set2[Math.min(i, set2.length - 1)]
       else out += c
     }
     if (a.flags.has('s')) {

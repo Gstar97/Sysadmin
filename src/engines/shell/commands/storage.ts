@@ -1206,6 +1206,52 @@ register('df', {
     }
     const fmt = (bytes: number) => (h ? dfHuman(bytes, si) : String(Math.ceil(bytes / 1024)))
     const devW = Math.max(14, ...rows.map((r) => r.dev.length)) + 1
+    // --output=campo,campo: columnas a elección (lo más cómodo para scripts).
+    const outArg = ctx.args.find((a) => a.startsWith('--output'))
+    if (outArg) {
+      const fields = (outArg.includes('=') ? outArg.split('=')[1] : 'source,fstype,itotal,iused,iavail,ipcent,size,used,avail,pcent,file,target').split(',')
+      const head: Record<string, string> = { source: 'Filesystem', fstype: 'Type', size: h ? 'Size' : '1K-blocks', used: 'Used', avail: 'Avail', pcent: 'Use%', target: 'Mounted on', itotal: 'Inodes', iused: 'IUsed', iavail: 'IFree', ipcent: 'IUse%', file: 'File' }
+      const bad = fields.find((f) => !head[f])
+      if (bad) {
+        ctx.err(`df: option --output: field '${bad}' unknown\nTry 'df --help' for more information.\n`)
+        return 1
+      }
+      const val = (r: DfRow, f: string): string => {
+        const avail = Math.max(0, r.size - r.used)
+        const total = Math.floor(r.size / 4096 / 4)
+        const iu = Math.min(total, Math.round(r.used / 16384))
+        switch (f) {
+          case 'source':
+            return r.dev
+          case 'fstype':
+            return r.type
+          case 'size':
+            return fmt(r.size)
+          case 'used':
+            return fmt(r.used)
+          case 'avail':
+            return fmt(avail)
+          case 'pcent':
+            return `${r.size ? Math.ceil((r.used / r.size) * 100) : 0}%`
+          case 'itotal':
+            return String(total)
+          case 'iused':
+            return String(iu)
+          case 'iavail':
+            return String(total - iu)
+          case 'ipcent':
+            return `${total ? Math.ceil((iu / total) * 100) : 0}%`
+          case 'file':
+            return files[0] ?? '-'
+          default:
+            return r.target
+        }
+      }
+      const table = [fields.map((f) => head[f]), ...rows.map((r) => fields.map((f) => val(r, f)))]
+      const widths = fields.map((_, k) => Math.max(...table.map((row) => row[k].length)))
+      for (const row of table) ctx.out(row.map((c, k) => (['source', 'fstype', 'target', 'file'].includes(fields[k]) ? c.padEnd(widths[k]) : c.padStart(widths[k]))).join(' ').trimEnd() + '\n')
+      return 0
+    }
     if (inodes) {
       ctx.out(`${'Filesystem'.padEnd(devW)}${T ? 'Type   ' : ''}${'Inodes'.padStart(9)}${'IUsed'.padStart(7)}${'IFree'.padStart(9)} IUse% Mounted on\n`)
       for (const r of rows) {

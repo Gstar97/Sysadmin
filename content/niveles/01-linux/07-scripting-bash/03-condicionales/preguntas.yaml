@@ -1,0 +1,66 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: En bash, ¿qué decide si se ejecuta la rama then de un if?
+  opciones:
+    - { texto: "Que la condición (un comando) termine con código 0", correcta: true, explicacion: "0 es verdadero para if." }
+    - { texto: "Que la condición imprima \"true\"", explicacion: "if no mira la salida, mira el código." }
+    - { texto: "Que la condición devuelva 1", explicacion: "1 es falso." }
+    - { texto: "Que haya un else", explicacion: "El else es opcional." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué pregunta [ -d "$destino" ]?
+  opciones:
+    - { texto: "Si existe y es una carpeta", correcta: true, explicacion: "-f sería archivo común; -e cualquier cosa." }
+    - { texto: "Si se puede borrar", explicacion: "No." }
+    - { texto: "Si está vacía", explicacion: "No mira el contenido." }
+    - { texto: "Si es un disco", explicacion: "Es para carpetas." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: "Con x vacía, [ $x = \"si\" ] da \"unary operator expected\". ¿Cómo se arregla?"
+  opciones:
+    - { texto: "Con comillas: [ \"$x\" = \"si\" ]", correcta: true, explicacion: "Sin comillas, la variable vacía desaparece y la prueba queda incompleta." }
+    - { texto: "Quitando los espacios", explicacion: "Los espacios son obligatorios." }
+    - { texto: "Usando == en lugar de =", explicacion: "El problema es la variable sin comillas." }
+    - { texto: "Poniendo x en mayúsculas", explicacion: "No cambia nada." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe la condición con (( )) que pregunta si uso es mayor o igual a 90.
+  aceptadas: ["(( uso >= 90 ))", "((uso >= 90))", "((uso>=90))", "(( $uso >= 90 ))"]
+  explicacion: Dentro de (( )) no hace falta el $ para las variables.
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe una línea que cree la carpeta $destino solo si no existe, usando || (sin if).
+  aceptadas: ['[ -d "$destino" ] || mkdir -p "$destino"', '[[ -d "$destino" ]] || mkdir -p "$destino"', '[ -d "$destino" ] || mkdir "$destino"', 'test -d "$destino" || mkdir -p "$destino"']
+  explicacion: >-
+    (mkdir -p solo, sin la prueba, también funciona: no da error si ya existe.)
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué hace la rama *) en un case?
+  opciones:
+    - { texto: "Atrapa cualquier valor que no coincidió con las opciones anteriores", correcta: true, explicacion: "Es el lugar para el mensaje de uso." }
+    - { texto: "Lista los archivos", explicacion: "Dentro de case es un patrón." }
+    - { texto: "Repite el case", explicacion: "No." }
+    - { texto: "Termina el script", explicacion: "Solo si le pones exit." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Qué devuelve [ 10 \> 9 ]?
+  opciones:
+    - { texto: "Falso, porque compara textos y \"1\" va antes que \"9\"", correcta: true, explicacion: "Para números: -gt o (( 10 > 9 ))." }
+    - { texto: "Verdadero", explicacion: "Como números sí, pero así compara textos." }
+    - { texto: "Error de sintaxis", explicacion: "Con la barra es válido." }
+    - { texto: "Crea un archivo llamado 9", explicacion: "Eso pasaría sin la barra." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: ¿Qué hace if ! id laura &>/dev/null; then ...?
+  opciones:
+    - { texto: "Ejecuta la rama si el usuario laura NO existe", correcta: true, explicacion: "! invierte el código; &>/dev/null descarta la salida." }
+    - { texto: "Borra a laura", explicacion: "id solo consulta." }
+    - { texto: "Ejecuta la rama si laura existe", explicacion: "El ! lo invierte." }
+    - { texto: "Da error de sintaxis", explicacion: "Es válido." }
+- id: p09
+  tipo: completar_comando
+  enunciado: Escribe el comando que revisa la sintaxis de respaldo.sh sin ejecutarlo.
+  aceptadas: [bash -n respaldo.sh, bash -n ./respaldo.sh]
+  explicacion: Útil para encontrar un fi o un ;; que falta.

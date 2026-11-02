@@ -1,0 +1,124 @@
+---
+id: n1-m7-l3
+titulo: Condicionales
+minutos: 120
+objetivos:
+  - Tomar decisiones con if, elif y else según el resultado de un comando o de una prueba.
+  - Usar las pruebas de archivos, textos y números con [ ], [[ ]] y (( )).
+  - Elegir entre varias opciones con case.
+glosario: [condicional, test]
+verificado: 2026-11
+---
+
+import decision from './decision.svg?raw'
+import pruebas from './pruebas.yaml'
+import ejCondicionales from './ej-condicionales.yaml'
+
+Un script que no decide nada hace lo mismo pase lo que pase: copia aunque la carpeta no exista, avisa aunque todo esté bien. Con condicionales, el script mira la situación y actúa según corresponda, como harías tú.
+
+<AntesDeEmpezar>
+- Códigos de salida, `&&` y `||` (lección 1.7.2).
+- Variables y comillas (lección 1.7.1).
+</AntesDeEmpezar>
+
+## if: hacer algo solo si se cumple una condición
+
+La idea es la de todos los días: "si llueve, llevo paraguas; si está nublado, una campera; si no, nada". Bash lo escribe así:
+
+```bash
+if CONDICIÓN; then
+  ...
+elif OTRA_CONDICIÓN; then
+  ...
+else
+  ...
+fi
+```
+
+Lo importante: en bash, la condición es **un comando**, y "verdadero" significa que terminó con código 0. Por eso puedes usar cualquier comando:
+
+```bash
+if grep -q "ERROR" /var/log/app.log; then
+  echo "Hay errores en el registro"
+fi
+if ! id "laura" &>/dev/null; then
+  echo "laura no existe"
+fi
+```
+
+<Diagrama svg={decision} alt="Diagrama de decisión de espacio.sh: con el uso del disco en 87, primero se pregunta si es mayor o igual a 90 (no), después si es mayor o igual a 80 (sí), y se muestra AVISO con exit 1. Si hubiera sido mayor o igual a 90, CRÍTICO con exit 2; si no se cumpliera ninguna, OK con exit 0." pie="Se evalúan en orden y se ejecuta solo la primera rama que se cumple." />
+
+## Las pruebas: [ ], [[ ]] y (( ))
+
+Para preguntar por archivos, textos o números se usan comandos de prueba:
+
+| Para | Cómo | Ejemplos |
+| --- | --- | --- |
+| Archivos | `[ -f ]` archivo, `-d` carpeta, `-e` existe, `-r` `-w` `-x` permisos, `-s` no vacío | `[ -d "$destino" ]` |
+| Textos | `=` `!=`, `-z` vacío, `-n` no vacío | `[ "$respuesta" = "si" ]` |
+| Números (con `[ ]`) | `-eq` `-ne` `-lt` `-le` `-gt` `-ge` | `[ "$n" -gt 10 ]` |
+| Números (con `(( ))`) | `==` `!=` `<` `<=` `>` `>=` | `(( uso >= 90 ))` |
+
+`[ ]` es el clásico (funciona en cualquier shell); dentro, **los espacios son obligatorios** (`[ -f x ]`, no `[-f x]`) y las variables van entre comillas. `[[ ]]` es la versión de bash: admite comodines (`[[ $f == *.log ]]`), expresiones regulares (`=~`) y `&&` `||` adentro. `(( ))` es para cuentas y comparaciones de números, y es la forma más legible.
+
+<Emparejar ejercicio={pruebas} />
+
+Un detalle que confunde: con `[ ]`, `<` y `>` comparan textos, no números (`[ 10 \> 9 ]` es falso, porque "1" va antes que "9"). Para números, `-gt` o `(( ))`.
+
+<EnSimple>
+if ejecuta un comando y mira si salió bien. Para preguntar por archivos y textos usa `[ ]` (con espacios y comillas); para números, `(( ))`.
+</EnSimple>
+
+## Atajos con && y ||
+
+Para decisiones de una línea:
+
+```bash
+[ -d "$destino" ] || mkdir -p "$destino"        # si no existe, créala
+[ "$(id -u)" -eq 0 ] || { echo "Ejecutar como root" >&2; exit 1; }
+```
+
+Úsalos para cosas cortas. Si hay más de un paso por rama, un if se lee mejor.
+
+## case: elegir entre varias opciones
+
+Cuando una variable puede tomar varios valores, case es más claro que una cadena de elif:
+
+```bash
+case "$1" in
+  inicio)          echo "Arrancando" ;;
+  fin|detener)     echo "Deteniendo" ;;
+  *.log)           echo "Es un registro" ;;
+  *)               echo "Uso: $0 inicio|fin" >&2; exit 2 ;;
+esac
+```
+
+Cada opción termina con `;;`. Los patrones admiten comodines y `|` para varias alternativas; `*)` atrapa todo lo demás (siempre conviene ponerlo, con el mensaje de uso).
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejCondicionales} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"[: missing `]`" o "command not found" con [ ]'>
+    Faltan espacios: `[ -f "$x" ]`, con un espacio después de `[` y antes de `]`.
+  </ErrorComun>
+  <ErrorComun titulo='"unary operator expected"'>
+    Una variable vacía sin comillas: `[ $x = "si" ]` queda `[ = "si" ]`. Pon `"$x"`.
+  </ErrorComun>
+  <ErrorComun titulo="Comparar números con = o con >">
+    `=` compara textos ("10" y "010" son distintos) y `>` dentro de `[ ]` es una redirección o una comparación de textos. Usa `-gt` o `(( ))`.
+  </ErrorComun>
+  <ErrorComun titulo="Falta el fi, el then o el ;; del case">
+    "syntax error: unexpected end of file" suele ser un if sin fi o un case sin esac. `bash -n script.sh` revisa la sintaxis sin ejecutar.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- `if comando; then ...; elif ...; else ...; fi`: la condición es un comando; 0 es verdadero.
+- Archivos: `[ -f ]`, `[ -d ]`, `[ -e ]`, `[ -s ]`, `[ -r/-w/-x ]`. Textos: `=`, `!=`, `-z`, `-n`. Números: `-eq/-gt/...` o `(( ))`.
+- `[ ]` con espacios y comillas; `[[ ]]` admite comodines, `=~` y `&&` `||`; `(( ))` para números.
+- `cond || accion` y `cond && accion` para decisiones cortas.
+- `case "$valor" in patrón) ... ;; *) ... ;; esac` para varias opciones.
+- `bash -n script.sh` revisa la sintaxis sin ejecutar.
+</Resumen>
