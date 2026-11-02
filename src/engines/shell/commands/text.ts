@@ -305,57 +305,125 @@ register('tr', {
 })
 
 register('sed', {
-  usage: "sed [OPTION]... {script} [input-file]...",
-  summary: "  -n  -i  -E  -e script   (s/old/new/[g], /re/d, Np, /re/p)",
+  usage: "sed [-n] [-E] [-i[SUFIJO]] [-e script]... {script} [archivo]...",
+  summary: "  -n  no mostrar cada línea  -E  regex extendidas  -i[.bak]  editar el archivo (con copia)\n  Direcciones: N, $, /re/, N,M, /a/,/b/, y ! para negar.  Comandos: s/a/b/[gIp], d, p, i, a, c, q, =, y/abc/xyz/",
   run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { n: ['n', 'quiet', 'silent'], i: ['i', 'in-place'], E: ['E', 'r', 'regexp-extended'] }, values: { e: ['e', 'expression'] } })
-    let rest = a.rest
-    const script = a.values.get('e') ?? rest[0]
-    if (!a.values.has('e')) rest = rest.slice(1)
-    if (!script) {
-      ctx.err('Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]...\n')
-      return 1
+    // Opciones a mano: -i admite un sufijo pegado (-i.bak) y -e puede repetirse.
+    let quiet = false
+    let ere = false
+    let inPlace: string | undefined
+    const scripts: string[] = []
+    const files: string[] = []
+    for (let k = 0; k < ctx.args.length; k++) {
+      const x = ctx.args[k]
+      if (x === '-e' || x === '--expression') scripts.push(ctx.args[++k] ?? '')
+      else if (x.startsWith('--expression=')) scripts.push(x.slice(13))
+      else if (x === '-n' || x === '--quiet' || x === '--silent') quiet = true
+      else if (x === '-E' || x === '-r' || x === '--regexp-extended') ere = true
+      else if (x === '--in-place') inPlace = ''
+      else if (x.startsWith('--in-place=')) inPlace = x.slice(11)
+      else if (x.startsWith('-i')) inPlace = x.slice(2)
+      else if (/^-[nErs]+$/.test(x)) {
+        if (x.includes('n')) quiet = true
+        if (x.includes('E') || x.includes('r')) ere = true
+      } else if (/^-[nE]*i/.test(x)) {
+        if (x.includes('n')) quiet = true
+        if (x.includes('E')) ere = true
+        inPlace = x.slice(x.indexOf('i') + 1)
+      } else files.push(x)
     }
-    const toRe = (p: string, flags = '') => new RegExp(bracketPosixClasses(a.flags.has('E') ? p : breToJs(p)), flags)
-    type Cmd = { addr?: RegExp | number | '$'; op: 's' | 'd' | 'p' | 'i' | 'a' | 'c'; re?: RegExp; repl?: string; global?: boolean; print?: boolean; text?: string }
+    if (!scripts.length) {
+      const first = files.shift()
+      if (first === undefined) {
+        ctx.err('Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]...\n')
+        return 1
+      }
+      scripts.push(first)
+    }
+    const toRe = (p: string, flags = '') => new RegExp(bracketPosixClasses(ere ? p : breToJs(p)), flags)
+    type Addr = number | '$' | RegExp
+    type Cmd = { a1?: Addr; a2?: Addr; neg: boolean; op: string; re?: RegExp; repl?: string; print?: boolean; text?: string; from?: string; to?: string; inRange?: boolean }
     const cmds: Cmd[] = []
-    for (const part of splitSedScript(script)) {
-      const s = part.trim()
-      if (!s) continue
-      let m = /^(?:(\d+|\$)|\/((?:\\.|[^/])*)\/)?\s*s(.)((?:\\.|(?!\3).)*)\3((?:\\.|(?!\3).)*)\3([gIpi0-9]*)$/.exec(s)
-      if (m) {
-        const flags = m[6]
-        cmds.push({ addr: m[1] ? (m[1] === '$' ? '$' : Number(m[1])) : m[2] !== undefined ? toRe(m[2]) : undefined, op: 's', re: toRe(m[4], (flags.includes('g') ? 'g' : '') + (/[Ii]/.test(flags) ? 'i' : '')), repl: m[5], print: flags.includes('p') })
-        continue
+    for (const part of scripts.flatMap((x) => splitSedScript(x))) {
+      let t = part.trim()
+      if (!t) continue
+      const readAddr = (): Addr | undefined => {
+        let m = /^(\d+|\$)/.exec(t)
+        if (m) {
+          t = t.slice(m[0].length)
+          return m[1] === '$' ? '$' : Number(m[1])
+        }
+        m = /^\/((?:\\.|[^/])*)\/(I?)/.exec(t)
+        if (m) {
+          t = t.slice(m[0].length)
+          return toRe(m[1], m[2] ? 'i' : '')
+        }
+        return undefined
       }
-      const ia = /^(?:(\d+|\$)|\/((?:\\.|[^/])*)\/)?\s*([iac])\s*\\?\s?(.*)$/.exec(s)
-      if (ia) {
-        cmds.push({ addr: ia[1] ? (ia[1] === '$' ? '$' : Number(ia[1])) : ia[2] !== undefined ? toRe(ia[2]) : undefined, op: ia[3] as 'i' | 'a' | 'c', text: ia[4] })
-        continue
+      const a1 = readAddr()
+      let a2: Addr | undefined
+      if (a1 !== undefined && t.startsWith(',')) {
+        t = t.slice(1)
+        a2 = readAddr()
       }
-      m = /^(?:(\d+|\$)|\/((?:\\.|[^/])*)\/)?\s*([dp])$/.exec(s)
-      if (m) {
-        cmds.push({ addr: m[1] ? (m[1] === '$' ? '$' : Number(m[1])) : m[2] !== undefined ? toRe(m[2]) : undefined, op: m[3] as 'd' | 'p' })
-        continue
+      t = t.trimStart()
+      let neg = false
+      if (t.startsWith('!')) {
+        neg = true
+        t = t.slice(1).trimStart()
       }
-      ctx.err(`sed: -e expression #1, char ${s.length}: unknown command: \`${s.slice(-1)}'\n`)
-      return 1
+      const bad = () => {
+        ctx.err(`sed: -e expression #1, char ${part.length}: unknown command: \`${t.slice(0, 1) || part.slice(-1)}'\n`)
+        return 1
+      }
+      const op = t[0]
+      if (op === 's') {
+        const d = t[1]
+        const e1 = findDelim(t, 2, d)
+        const e2 = findDelim(t, e1 + 1, d)
+        const flags = t.slice(e2 + 1)
+        if (e1 >= t.length - 1 && t[e1] !== d) return bad()
+        cmds.push({ a1, a2, neg, op: 's', re: toRe(t.slice(2, e1), (flags.includes('g') ? 'g' : '') + (/[Ii]/.test(flags) ? 'i' : '')), repl: t.slice(e1 + 1, e2), print: flags.includes('p') })
+      } else if (op === 'y') {
+        const d = t[1]
+        const e1 = findDelim(t, 2, d)
+        const e2 = findDelim(t, e1 + 1, d)
+        cmds.push({ a1, a2, neg, op: 'y', from: t.slice(2, e1), to: t.slice(e1 + 1, e2) })
+      } else if (op === 'i' || op === 'a' || op === 'c') {
+        cmds.push({ a1, a2, neg, op, text: t.slice(1).replace(/^\s*\\?\s?/, '') })
+      } else if (op === 'd' || op === 'p' || op === 'q' || op === '=' || op === 'Q') {
+        cmds.push({ a1, a2, neg, op })
+      } else return bad()
     }
     const process = (data: string) => {
       const ls = lines(data)
       let out = ''
-      ls.forEach((line, idx) => {
-        let current = line
+      const matches = (addr: Addr, line: string, n: number) => (addr === '$' ? n === ls.length : typeof addr === 'number' ? addr === n : addr.test(line))
+      for (let idx = 0; idx < ls.length; idx++) {
+        const n = idx + 1
+        let current = ls[idx]
         let deleted = false
-        let extra = ''
         let after = ''
+        let quit = false
         for (const c of cmds) {
-          const hit = c.addr === undefined || (c.addr === '$' ? idx === ls.length - 1 : typeof c.addr === 'number' ? c.addr === idx + 1 : c.addr.test(current))
+          let hit: boolean
+          if (c.a1 === undefined) hit = true
+          else if (c.a2 === undefined) hit = matches(c.a1, current, n)
+          else if (c.inRange) {
+            hit = true
+            if (typeof c.a2 === 'number' ? n >= c.a2 : matches(c.a2, current, n)) c.inRange = false
+          } else if (matches(c.a1, current, n)) {
+            hit = true
+            c.inRange = !(typeof c.a2 === 'number' ? n >= c.a2 : false)
+          } else hit = false
+          if (c.neg) hit = !hit
           if (!hit) continue
           if (c.op === 'd') {
             deleted = true
             break
           }
+          if (c.op === 'p') out += current + '\n'
+          if (c.op === '=') out += n + '\n'
           if (c.op === 'i') out += c.text + '\n'
           if (c.op === 'a') after += c.text + '\n'
           if (c.op === 'c') {
@@ -363,7 +431,12 @@ register('sed', {
             deleted = true
             break
           }
-          if (c.op === 'p') extra += current + '\n'
+          if (c.op === 'q' || c.op === 'Q') {
+            quit = true
+            if (c.op === 'Q') deleted = true
+            break
+          }
+          if (c.op === 'y') current = [...current].map((ch) => (c.from!.includes(ch) ? (c.to![c.from!.indexOf(ch)] ?? ch) : ch)).join('')
           if (c.op === 's') {
             const repl = c
               .repl!.replace(/\\(\d)/g, '$$$1')
@@ -374,19 +447,26 @@ register('sed', {
               .replace(/\\t/g, '\t')
             const before = current
             current = current.replace(c.re!, repl)
-            if (c.print && before !== current) extra += current + '\n'
+            if (c.print && before !== current) out += current + '\n'
           }
         }
-        if (deleted) return
-        out += extra + (a.flags.has('n') ? '' : current + '\n') + after
-      })
+        if (!deleted) out += (quiet ? '' : current + '\n') + after
+        else out += after
+        if (quit) break
+      }
+      for (const c of cmds) c.inRange = false
       return out
     }
-    if (a.flags.has('i')) {
-      for (const f of rest) {
+    if (inPlace !== undefined) {
+      if (!files.length) {
+        ctx.err('sed: no input files\n')
+        return 1
+      }
+      for (const f of files) {
         const abs = ctx.sh.resolve(f)
         try {
           const data = ctx.sys.vfs.readFile(abs, ctx.sh.cred)
+          if (inPlace) ctx.sys.vfs.writeFile(abs + inPlace, data, ctx.sh.cred, { mode: ctx.sys.vfs.stat(abs, ctx.sh.cred).mode & 0o777 })
           ctx.sys.vfs.writeFile(abs, process(data), ctx.sh.cred)
         } catch (e) {
           if (e instanceof FsError) {
@@ -398,9 +478,9 @@ register('sed', {
       }
       return 0
     }
-    const inputs = readInputs(ctx, rest)
+    const inputs = readInputs(ctx, files)
     if (typeof inputs === 'number') return 2
-    ctx.out(process(inputs.map((i) => i.data).join('')))
+    ctx.out(process(inputs.map((x) => x.data).join('')))
     return 0
   },
 })
@@ -717,7 +797,7 @@ function splitSedScript(script: string): string[] {
       i = end + 1
       continue
     }
-    if (c === 's' && /^\s*(\d+|\$|\/(?:\\.|[^/])*\/)?\s*$/.test(cur) && i + 1 < script.length) {
+    if ((c === 's' || c === 'y') && /^\s*((\d+|\$|\/(?:\\.|[^/])*\/I?)(\s*,\s*(\d+|\$|\/(?:\\.|[^/])*\/I?))?)?\s*!?\s*$/.test(cur) && i + 1 < script.length) {
       const d = script[i + 1]
       const a = findDelim(script, i + 2, d)
       const b = findDelim(script, a + 1, d)

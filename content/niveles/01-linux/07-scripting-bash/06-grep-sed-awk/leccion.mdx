@@ -1,0 +1,143 @@
+---
+id: n1-m7-l6
+titulo: Procesamiento de texto con grep, sed y awk
+minutos: 180
+objetivos:
+  - Elegir líneas con grep usando expresiones regulares.
+  - Editar texto y archivos de configuración con sed, de forma segura.
+  - "Trabajar con columnas en awk: filtrar, sumar, contar y dar formato."
+  - Combinar las tres con sort, uniq, cut y wc para responder preguntas sobre registros.
+glosario: [expresion-regular, awk]
+verificado: 2026-11
+---
+
+import herramientas from './herramientas.svg?raw'
+import regex from './regex.yaml'
+import ejTexto from './ej-texto.yaml'
+
+En Linux casi todo es texto: los registros, la configuración, la salida de los comandos. Saber cortarlo y resumirlo desde la terminal es lo que convierte "hay un problema con la web" en "desde las 10:01 una sola IP pidió /admin, /.env y /config.php". Esta lección te da las tres herramientas clásicas.
+
+<AntesDeEmpezar>
+- grep, cut, sort, uniq y wc básicos (lecciones 1.1.5 y 1.1.7).
+- Tuberías (lección 1.1.7) y scripts (lecciones 1.7.1 a 1.7.5).
+</AntesDeEmpezar>
+
+## Tres herramientas, tres trabajos
+
+Piensa en un informe impreso de cien páginas. Con un resaltador marcas las líneas que te interesan (eso es **grep**); con corrector y bolígrafo cambias palabras (**sed**); con una calculadora sumas una columna de números (**awk**). Donde la comparación no llega: las tres trabajan línea por línea, a toda velocidad, y se pueden encadenar.
+
+<Diagrama svg={herramientas} alt="grep elige líneas (por ejemplo, las que tienen 404, las que no son comentarios, cuántas tienen ERROR o en qué archivos aparece puerto); sed cambia texto (reemplazar, editar un archivo dejando copia, borrar comentarios, mostrar un rango de líneas); awk trabaja con columnas (imprimir la 1 y la 9, separar por dos puntos, filtrar por una columna, sumar). Juntas en una tubería: awk elige las IP de los 404, sort las ordena, uniq -c las cuenta, sort -rn pone arriba las más frecuentes y head se queda con las tres primeras." pie="grep elige, sed cambia, awk calcula. Y una tubería las junta." />
+
+## Expresiones regulares
+
+Las tres usan **expresiones regulares**: patrones para describir texto. Lo mínimo:
+
+| Pieza | Significa |
+| --- | --- |
+| `^` y `$` | principio y fin de la línea |
+| `.` | cualquier carácter (para un punto literal: `\.`) |
+| `*` `+` `?` | cero o más, uno o más, cero o uno, de lo anterior |
+| `[abc]`, `[0-9]`, `[^0-9]` | uno de esos caracteres; `^` adentro niega |
+| `(a\|b)` | a o b |
+| `\s`, `\b` | un espacio o tab; borde de palabra |
+
+<Emparejar ejercicio={regex} />
+
+## grep: elegir líneas
+
+```bash
+grep 'error' app.log                   # las líneas que contienen error
+grep -i 'error' app.log                # sin distinguir mayúsculas
+grep -v '^#' app.conf                  # las que NO empiezan con #
+grep -c ' 404 ' access.log             # cuántas
+grep -n 'puerto' app.conf              # con número de línea
+grep -rn 'puerto' /etc/app/            # en toda una carpeta
+grep -l 'puerto' /etc/app/*.conf       # solo los nombres de archivo
+grep -E '(GET|POST) /admin' access.log # expresión extendida
+grep -oE '^[0-9.]+' access.log         # solo la parte que coincide
+grep -A2 -B1 'Traceback' app.log       # con contexto: 2 líneas después, 1 antes
+```
+
+Usa `grep -E` siempre que el patrón tenga `+ ? | ( )`: es la sintaxis que vas a reconocer en otras herramientas. Y pon el patrón entre comillas simples, para que bash no toque los `$` ni los `*`.
+
+## sed: cambiar texto
+
+```bash
+sed 's/http:/https:/' sitio.conf          # el primer reemplazo de cada línea (muestra el resultado)
+sed 's/http:/https:/g' sitio.conf         # todos los de cada línea
+sed -i.bak 's/^puerto=.*/puerto=9090/' app.conf   # en el archivo, con copia app.conf.bak
+sed '/^\s*#/d; /^$/d' app.conf            # borrar comentarios y líneas vacías
+sed -n '10,20p' app.log                   # solo de la 10 a la 20
+sed -n '/^\[db\]/,/^\[/p' app.ini         # de la sección [db] a la siguiente
+sed -E 's#/var/www/(\w+)#/srv/\1#' f      # otro separador (#) y un grupo (\1)
+```
+
+Con `-i`, sed reescribe el archivo. **Siempre** prueba primero sin `-i` (te muestra cómo quedaría) y después usa `-i.bak` para quedarte con una copia. Para archivos de configuración con formato propio (sshd_config, nginx), después de editarlos con sed revisa con su verificador (`sshd -t`, `nginx -t`).
+
+<EnSimple>
+sed sin -i solo muestra cómo quedaría: úsalo así para probar. Cuando estés seguro, `-i.bak` cambia el archivo y deja una copia del original.
+</EnSimple>
+
+## awk: columnas, filtros y cuentas
+
+awk parte cada línea en columnas (`$1`, `$2`... `$NF` la última; `$0` la línea entera) y para cada línea ejecuta lo que le pidas:
+
+```bash
+awk '{print $1, $9}' access.log                       # columnas 1 y 9
+awk -F: '{print $1, $7}' /etc/passwd                  # separador :
+awk '$9 == 404' access.log                            # filtrar por una columna
+awk '$9 >= 500 {print $7}' access.log                 # condición y acción
+awk '{s += $10} END {print s}' access.log             # sumar una columna
+awk '{n[$1]++} END {for (ip in n) print n[ip], ip}' access.log   # contar por clave
+awk -F: '$3 >= 1000 {printf "%-12s %s\n", $1, $6}' /etc/passwd   # con formato
+```
+
+- `NR` es el número de línea y `NF` la cantidad de columnas.
+- `BEGIN { }` se ejecuta antes de leer y `END { }` al final (para los totales).
+- Los **arreglos** (`n[$1]++`) agrupan por la clave que quieras: es la forma de contar o sumar por IP, por usuario, por código...
+
+## Juntarlas
+
+La combinación más útil de todas, para contar cualquier cosa:
+
+```bash
+... | sort | uniq -c | sort -rn | head
+```
+
+`sort` pone juntas las repetidas, `uniq -c` las cuenta, `sort -rn` ordena por la cuenta de mayor a menor y `head` se queda con las primeras. Algunos ejemplos reales:
+
+```bash
+awk '{print $1}' access.log | sort | uniq -c | sort -rn | head -5      # las 5 IP con más pedidos
+grep 'Failed password' /var/log/secure | grep -oE 'from [0-9.]+' | sort | uniq -c | sort -rn   # quién intenta entrar por SSH
+ps -eo user= | sort | uniq -c | sort -rn                               # procesos por usuario
+```
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejTexto} />
+
+<ErroresComunes>
+  <ErrorComun titulo="grep encuentra de más">
+    El patrón es demasiado general: ' 404 ' con espacios, `^` y `$` para anclar, `-w` para palabras completas.
+  </ErrorComun>
+  <ErrorComun titulo="El + o el | de grep no funcionan">
+    En grep sin -E se escriben `\+` y `\|`. Usa `grep -E`.
+  </ErrorComun>
+  <ErrorComun titulo="sed -i rompió un archivo de configuración">
+    Prueba siempre sin -i y usa `-i.bak`. Para volver: `mv archivo.bak archivo`. Después, el verificador del servicio.
+  </ErrorComun>
+  <ErrorComun titulo="awk '{print $1}' entre comillas dobles no imprime nada">
+    Con comillas dobles, bash reemplaza `$1` antes de que awk lo vea. Los programas de awk van entre comillas simples.
+  </ErrorComun>
+  <ErrorComun titulo="uniq -c no junta las repetidas">
+    uniq solo junta las que están seguidas: antes va `sort`.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Expresiones regulares: `^ $ . * + ? [ ] ( | )`; usa `grep -E` y `sed -E`; patrones entre comillas simples.
+- grep: `-i -v -c -n -r -l -o -w -A -B`.
+- sed: `s/a/b/g`, `/re/d`, `-n 'N,Mp'`; probar sin -i y editar con `-i.bak`.
+- awk: `$1..$NF`, `-F:`, `'condición {acción}'`, `BEGIN/END`, `s += $N`, `n[$1]++` y `for (k in n)`, `printf`.
+- Para contar: `... | sort | uniq -c | sort -rn | head`.
+</Resumen>

@@ -1,0 +1,100 @@
+tipo: terminal
+shell: bash
+titulo: Sacarle información a un registro
+descripcion: >-
+  En web01 tienes el registro de accesos de nginx de esta mañana y el archivo de configuración
+  de una aplicación. Vas a responder preguntas concretas con grep, sed y awk, sin abrir ningún
+  editor.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: lperez, shell: /bin/bash }
+    - { nombre: deploy, shell: /sbin/nologin }
+  archivos:
+    /home/ana/access.log: |
+      203.0.113.5 - - [02/Nov/2026:10:01:02 +0000] "GET / HTTP/1.1" 200 5120 "-" "Mozilla/5.0"
+      198.51.100.7 - - [02/Nov/2026:10:01:05 +0000] "GET /admin HTTP/1.1" 404 153 "-" "curl/8.9.1"
+      203.0.113.5 - - [02/Nov/2026:10:02:00 +0000] "POST /login HTTP/1.1" 200 890 "-" "Mozilla/5.0"
+      192.0.2.44 - - [02/Nov/2026:10:03:10 +0000] "GET /wp-login.php HTTP/1.1" 404 153 "-" "bot"
+      198.51.100.7 - - [02/Nov/2026:10:04:00 +0000] "GET /.env HTTP/1.1" 404 153 "-" "curl/8.9.1"
+      203.0.113.9 - - [02/Nov/2026:10:05:30 +0000] "GET /catalogo HTTP/1.1" 200 20480 "-" "Mozilla/5.0"
+      198.51.100.7 - - [02/Nov/2026:10:06:00 +0000] "GET /config.php HTTP/1.1" 404 153 "-" "curl/8.9.1"
+      203.0.113.5 - - [02/Nov/2026:10:07:12 +0000] "GET /catalogo HTTP/1.1" 500 512 "-" "Mozilla/5.0"
+    /home/ana/app.conf: |
+      # Configuración de la tienda
+      puerto=8080
+
+      # Base de datos
+      db_host=db01
+      db_usuario=tienda
+      #debug=1
+      registro=/var/log/tienda/app.log
+pasos:
+  - consigna: ¿Cuántas peticiones terminaron en 404?
+    verificar:
+      - { comando_usado: '(grep\s+-c|awk|wc\s+-l)' }
+      - { salida_regex: '^\s*4\s*$' }
+    pistas:
+      - "El código es la columna 9. Con grep: buscar ' 404 ' entre espacios y contar con -c."
+      - "`grep -c ' 404 ' access.log` o `awk '$9 == 404' access.log | wc -l`"
+    solucion: ["grep -c ' 404 ' access.log"]
+    explicacion: Con espacios alrededor se evita contar un 404 que aparezca en otro lado (un tamaño, una ruta).
+  - consigna: Muestra la IP y la ruta de cada 404.
+    verificar:
+      - { comando_usado: 'awk\s+.*\$9' }
+      - { salida_contiene: "198.51.100.7 /.env" }
+    pistas:
+      - "`awk '$9 == 404 {print $1, $7}' access.log`"
+    solucion: ["awk '$9 == 404 {print $1, $7}' access.log"]
+    explicacion: /admin, /wp-login.php, /.env, /config.php... son pedidos típicos de robots que buscan agujeros conocidos.
+  - consigna: ¿Qué IP generó más 404? Arma la tubería que las cuenta y las ordena de mayor a menor.
+    verificar:
+      - { comando_usado: 'uniq\s+-c' }
+      - { salida_regex: '^\s*3 198\.51\.100\.7' }
+    pistas:
+      - "awk elige las IP de los 404; sort las agrupa; uniq -c cuenta; sort -rn ordena."
+      - "`awk '$9 == 404 {print $1}' access.log | sort | uniq -c | sort -rn`"
+    solucion: ["awk '$9 == 404 {print $1}' access.log | sort | uniq -c | sort -rn"]
+    explicacion: Esa IP es candidata a bloquearse en el firewall. Esta tubería (sort | uniq -c | sort -rn) sirve para contar casi cualquier cosa.
+  - consigna: Suma cuántos bytes se enviaron por cada código de estado, con un arreglo de awk.
+    verificar:
+      - { comando_usado: 'awk\s+.*END' }
+      - { salida_contiene: "200 26490" }
+    pistas:
+      - "En awk, total[$9] += $10 suma la columna 10 agrupando por la 9. En END se recorre con for (k in total)."
+      - "`awk '{total[$9] += $10} END {for (k in total) print k, total[k]}' access.log`"
+    solucion: ["awk '{total[$9] += $10} END {for (k in total) print k, total[k]}' access.log"]
+    explicacion: Los arreglos de awk agrupan por la clave que quieras. Es como una tabla dinámica de una hoja de cálculo, en una línea.
+  - consigna: Muestra la configuración efectiva de app.conf, sin comentarios ni líneas vacías.
+    verificar:
+      - { comando_usado: 'grep\s+-\w*v|sed\s+.*d' }
+      - { salida_contiene: "db_host=db01" }
+      - { salida_no_contiene: "#" }
+    pistas:
+      - "Una línea para descartar: empieza con # (con espacios opcionales antes) o está vacía."
+      - "`grep -Ev '^\\s*(#|$)' app.conf`"
+    solucion: ["grep -Ev '^\\s*(#|$)' app.conf"]
+    explicacion: >-
+      Es lo primero que se hace con un archivo de configuración largo: ver solo lo que está activo.
+  - consigna: Cambia db_host a db02 directamente en el archivo, dejando una copia del original en app.conf.bak, y compara los dos.
+    verificar:
+      - { archivo: /home/ana/app.conf, contenido_incluye: "db_host=db02" }
+      - { archivo: /home/ana/app.conf.bak, contenido_incluye: "db_host=db01" }
+    pistas:
+      - "`sed -i.bak 's/^db_host=.*/db_host=db02/' app.conf` y `diff app.conf.bak app.conf`"
+    solucion: ["sed -i.bak 's/^db_host=.*/db_host=db02/' app.conf", diff app.conf.bak app.conf]
+    explicacion: Con ^ y .* se reemplaza la línea entera sin importar el valor anterior. -i.bak es la red de seguridad.
+  - consigna: Por último, lista los usuarios del servidor que tienen bash como shell, leyendo /etc/passwd con awk.
+    verificar:
+      - { comando_usado: 'awk\s+-F\s*:?' }
+      - { salida_contiene: lperez }
+      - { salida_no_contiene: deploy }
+    pistas:
+      - "En /etc/passwd los campos van separados por : y el shell es el 7."
+      - "`awk -F: '$7 ~ /bash$/ {print $1}' /etc/passwd`"
+    solucion: ["awk -F: '$7 ~ /bash$/ {print $1}' /etc/passwd"]
+    explicacion: >-
+      -F: cambia el separador de columnas; ~ compara con una expresión regular.

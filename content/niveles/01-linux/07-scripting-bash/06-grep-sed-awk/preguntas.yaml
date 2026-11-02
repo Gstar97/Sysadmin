@@ -1,0 +1,71 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué hace grep -v '^#' app.conf?
+  opciones:
+    - { texto: "Muestra las líneas que NO empiezan con #", correcta: true, explicacion: "-v invierte; ^ ancla al principio." }
+    - { texto: "Muestra solo los comentarios", explicacion: "Sin -v sería eso." }
+    - { texto: "Borra los comentarios del archivo", explicacion: "grep no modifica archivos." }
+    - { texto: "Cuenta los comentarios", explicacion: "Eso sería -c." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: >-
+    ¿Qué imprime awk -F: '{print $1}' /etc/passwd?
+  opciones:
+    - { texto: "El nombre de cada usuario (la primera columna separada por :)", correcta: true, explicacion: "-F: cambia el separador." }
+    - { texto: "La primera línea", explicacion: "$1 es la primera columna, no la primera línea." }
+    - { texto: "Las contraseñas", explicacion: "Están en /etc/shadow, y no en la columna 1." }
+    - { texto: "Nada, falta un archivo", explicacion: "/etc/passwd es el archivo." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe el comando que cambia en app.conf todas las apariciones de 8080 por 9090, editando el archivo y dejando una copia app.conf.bak.
+  aceptadas: ["sed -i.bak 's/8080/9090/g' app.conf", 'sed -i.bak "s/8080/9090/g" app.conf', "sed -i.bak -e 's/8080/9090/g' app.conf"]
+  explicacion: Prueba antes sin -i para ver el resultado.
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando de awk que suma la columna 10 de access.log y muestra el total al final.
+  aceptadas: ["awk '{s += $10} END {print s}' access.log", "awk '{suma += $10} END {print suma}' access.log", "awk '{total += $10} END {print total}' access.log", "awk '{s+=$10} END {print s}' access.log"]
+  explicacion: END se ejecuta después de leer todas las líneas.
+- id: p05
+  tipo: opcion_multiple
+  enunciado: ¿Por qué awk '{print $1}' access.log | uniq -c no cuenta bien las IP?
+  opciones:
+    - { texto: "uniq solo junta líneas iguales que están seguidas: falta un sort antes", correcta: true, explicacion: "La tubería correcta: sort | uniq -c | sort -rn." }
+    - { texto: "awk no imprime la columna 1", explicacion: "Sí la imprime." }
+    - { texto: "uniq -c no existe", explicacion: "Existe." }
+    - { texto: "Las IP no se pueden contar", explicacion: "Sí se puede." }
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué coincide con la expresión ^[0-9]+$ (con grep -E)?
+  opciones:
+    - { texto: "Una línea formada solo por dígitos", correcta: true, explicacion: "^ y $ anclan; [0-9]+ uno o más dígitos." }
+    - { texto: "Cualquier línea que tenga un número", explicacion: "Sin ^ y $ sería eso." }
+    - { texto: "Una línea vacía", explicacion: "+ pide al menos uno." }
+    - { texto: "Una línea que empieza con +", explicacion: "+ es un operador aquí." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: "awk \"{print $1}\" archivo (con comillas dobles) no imprime lo esperado. ¿Por qué?"
+  opciones:
+    - { texto: "Bash reemplaza $1 (vacío) antes de pasarle el programa a awk", correcta: true, explicacion: "Los programas de awk van entre comillas simples." }
+    - { texto: "awk no acepta comillas dobles", explicacion: "Acepta, pero bash expande antes." }
+    - { texto: "El archivo está vacío", explicacion: "No es la causa." }
+    - { texto: "Falta -F", explicacion: "Por defecto separa en espacios." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe el comando que muestra solo las líneas 50 a 60 de app.log.
+  aceptadas: ["sed -n '50,60p' app.log", 'sed -n "50,60p" app.log', "awk 'NR>=50 && NR<=60' app.log", "head -60 app.log | tail -11", "head -n 60 app.log | tail -n 11"]
+  explicacion: -n evita que sed muestre las demás.
+- id: p09
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    $ grep 'Failed password' /var/log/secure | grep -oE 'from [0-9.]+' | sort | uniq -c | sort -rn | head -3
+        412 from 203.0.113.80
+         37 from 198.51.100.22
+          2 from 192.168.10.5
+  opciones:
+    - { texto: "Una IP intentó entrar por SSH 412 veces con contraseñas incorrectas: probablemente un robot", correcta: true, explicacion: "Es candidata a bloquearse; y con claves y PasswordAuthentication no, esos intentos no tienen chance." }
+    - { texto: "Hubo 412 inicios de sesión correctos", explicacion: "Son fallidos (Failed password)." }
+    - { texto: "El servidor tiene 412 usuarios", explicacion: "Es la cuenta de intentos por IP." }
+    - { texto: "192.168.10.5 es la más peligrosa", explicacion: "Tiene 2 intentos; probablemente alguien que se equivocó." }
