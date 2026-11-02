@@ -1,0 +1,111 @@
+tipo: troubleshooting
+titulo: Los respaldos terminan bien, pero están vacíos
+descripcion: >-
+  Incidente simulado en archivos01 (Rocky). El respaldo nocturno corre todas las noches y su
+  registro dice OK. Hoy alguien necesita un archivo de hace dos semanas. Cada decisión suma
+  minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:10. Contabilidad borró por error el archivo balance-septiembre.xlsx hace dos
+      semanas y lo necesita hoy para una auditoría. Hay respaldos diarios en /backup, con
+      retención de 60 días.
+    opciones:
+      - { texto: "Restaurar el respaldo de hace 15 días en una carpeta temporal", ir_a: n_restaurar, minutos: 4 }
+      - texto: Decirle a contabilidad que lo pida a quien se lo mandó
+        ir_a: n1
+        minutos: 10
+        consecuencia: El archivo lo armaron ellos; nadie más lo tiene. Hay que buscarlo en los respaldos.
+  n_restaurar:
+    situacion: El respaldo de hace 15 días no tiene nada adentro.
+    evidencia:
+      - titulo: tar tzf /backup/datos-2026-10-18.tar.gz | wc -l
+        contenido: |
+          0
+      - titulo: ls -lh /backup | tail -6
+        contenido: |
+          -rw-r--r--. 1 root root 2.1G Oct  1 02:31 datos-2026-10-01.tar.gz
+          -rw-r--r--. 1 root root 2.1G Oct  2 02:31 datos-2026-10-02.tar.gz
+          -rw-r--r--. 1 root root   45 Oct  3 02:30 datos-2026-10-03.tar.gz
+          -rw-r--r--. 1 root root   45 Oct  4 02:30 datos-2026-10-04.tar.gz
+          -rw-r--r--. 1 root root   45 Nov  1 02:30 datos-2026-11-01.tar.gz
+          -rw-r--r--. 1 root root   45 Nov  2 02:30 datos-2026-11-02.tar.gz
+    opciones:
+      - { texto: "Mirar el registro del respaldo y el script", ir_a: n_registro, minutos: 3 }
+      - texto: Probar con el respaldo de anoche
+        ir_a: n_restaurar
+        minutos: 3
+        consecuencia: También pesa 45 bytes. Desde el 3 de octubre, todos son iguales.
+  n_registro:
+    situacion: El registro dice que todo salió bien, todas las noches.
+    evidencia:
+      - titulo: tail -3 /var/log/respaldo.log
+        contenido: |
+          2026-10-31 02:30:01 Respaldo terminado OK
+          2026-11-01 02:30:01 Respaldo terminado OK
+          2026-11-02 02:30:01 Respaldo terminado OK
+      - titulo: cat /usr/local/bin/respaldo.sh
+        contenido: |
+          #!/bin/bash
+          ORIGEN=/srv/datos
+          DESTINO=/backup
+          tar czf $DESTINO/datos-$(date +%F).tar.gz $ORIGEN 2>/dev/null
+          find $DESTINO -name 'datos-*.tar.gz' -mtime +60 -delete
+          echo "$(date '+%F %T') Respaldo terminado OK" >> /var/log/respaldo.log
+    opciones:
+      - { texto: "Ejecutar el tar a mano, sin 2>/dev/null, para ver el error", ir_a: n_causa, minutos: 3 }
+      - texto: Reinstalar tar
+        ir_a: n_registro
+        minutos: 6
+        consecuencia: tar funciona; el problema es qué se le pide.
+  n_causa:
+    situacion: El origen ya no existe.
+    evidencia:
+      - titulo: tar czf /tmp/prueba.tar.gz /srv/datos; echo $?
+        contenido: |
+          tar: Removing leading `/' from member names
+          tar: /srv/datos: Cannot stat: No such file or directory
+          tar: Exiting with failure status due to previous errors
+          2
+      - titulo: ls /srv
+        contenido: |
+          compartida
+      - titulo: grep -h "srv" /var/log/secure* | grep 'Oct  2'
+        contenido: |
+          Oct  2 18:05:44 archivos01 sudo[22104]: pablo : TTY=pts/0 ; PWD=/srv ; USER=root ; COMMAND=/usr/bin/mv /srv/datos /srv/compartida
+    opciones:
+      - { texto: "Recuperar el archivo del último respaldo bueno (2 de octubre) y avisar a contabilidad", ir_a: n_recuperar, minutos: 6 }
+      - { texto: "Corregir solo ORIGEN en el script", ir_a: n_parche, minutos: 2 }
+  n_parche:
+    situacion: >-
+      Con ORIGEN=/srv/compartida, el respaldo de esta noche va a funcionar. Pero el script sigue
+      igual de ciego: la próxima vez que algo falle (un disco lleno, otra carpeta movida) va a
+      seguir escribiendo OK. Y todavía falta el archivo de contabilidad.
+    opciones:
+      - { texto: "Recuperar el archivo del último respaldo bueno", ir_a: n_recuperar, minutos: 6 }
+  n_recuperar:
+    situacion: >-
+      En datos-2026-10-02.tar.gz está balance-septiembre.xlsx, en la versión del 2 de octubre.
+      Contabilidad confirma que no lo cambió después: alcanza para la auditoría. Ahora hay que
+      arreglar el script de verdad.
+    opciones:
+      - { texto: "Reescribir el script: modo estricto, sin 2>/dev/null, verificación del contenido, código de salida y aviso", ir_a: n_ok, minutos: 20 }
+      - texto: Agregar 2>&1 al log y dejar el resto
+        ir_a: n_recuperar
+        minutos: 5
+        consecuencia: >-
+          Ahora el error queda escrito... al lado de "Respaldo terminado OK". Nadie lee el
+          registro todos los días: el script tiene que fallar y avisar.
+  n_ok:
+    final: exito
+    resumen: >-
+      El 2 de octubre se renombró /srv/datos a /srv/compartida. Desde esa noche, tar no encontró
+      el origen, creó un archivo vacío y terminó con error, pero el error iba a /dev/null, el
+      script no tenía set -e ni revisaba el código, y la última línea escribía "OK" pasara lo que
+      pasara: cron vio un 0 y el registro, un OK. Durante un mes no hubo respaldos reales. Se
+      salvó el archivo porque la retención era de 60 días. El script nuevo usa set -euo pipefail,
+      no oculta errores, verifica que el respaldo tenga contenido (tar tzf | wc -l), guarda la
+      suma de control, termina con exit 1 si algo falla y deja el resultado en el journal
+      (logger), que el monitoreo revisa. Y quedó en el procedimiento de cambios: si se mueve una
+      carpeta, se revisa qué scripts la usan (grep -r /srv/datos /usr/local /etc/cron.d).
