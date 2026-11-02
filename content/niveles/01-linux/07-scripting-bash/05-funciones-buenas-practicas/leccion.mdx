@@ -1,0 +1,133 @@
+---
+id: n1-m7-l5
+titulo: Funciones y buenas prácticas
+minutos: 120
+objetivos:
+  - Escribir funciones con argumentos, variables locales y códigos de retorno.
+  - Organizar un script en partes (configuración, funciones, opciones, validación, trabajo).
+  - Agregar opciones con getopts, registro, limpieza con trap y protección contra ejecuciones dobles.
+  - Probar y depurar con modo de prueba, bash -n y bash -x.
+glosario: [funcion-bash, idempotente]
+verificado: 2026-11
+---
+
+import estructura from './estructura.svg?raw'
+import partes from './partes.yaml'
+import ejFunciones from './ej-funciones.yaml'
+
+Un script de cinco líneas se entiende solo. Uno de ciento cincuenta, escrito hace un año por alguien que ya no está, se entiende solo si se escribió con orden. Esta lección no agrega mucha sintaxis nueva: es sobre cómo escribir scripts que otros (y tú mismo, más adelante) puedan leer, probar y confiar.
+
+<AntesDeEmpezar>
+- Argumentos, códigos de salida y modo estricto (lección 1.7.2).
+- Condicionales y bucles (lecciones 1.7.3 y 1.7.4).
+</AntesDeEmpezar>
+
+## Funciones
+
+Una función es un pedazo de script con nombre, que se puede usar varias veces. Funciona como un comando más: recibe argumentos (`$1`, `$2`, `"$@"`), escribe su resultado en la salida y termina con un código.
+
+```bash
+log() {
+  echo "$(date '+%F %T') $*" | tee -a "$LOG"
+}
+
+espacio_libre() {
+  local carpeta="$1"                       # local: la variable existe solo dentro de la función
+  df --output=avail -BG "$carpeta" | tail -1 | tr -dc '0-9'
+}
+
+es_root() {
+  [ "$(id -u)" -eq 0 ]                     # el código del último comando es el de la función
+}
+
+libre=$(espacio_libre /srv)                # el resultado se captura con $( )
+es_root || { echo "Hay que ejecutarlo como root" >&2; exit 1; }
+```
+
+Tres reglas: las funciones se definen **antes** de usarlas; las variables internas van con **`local`** (si no, pisan las del resto del script); y `return N` es para el código (éxito o fallo), no para devolver datos (los datos se escriben con echo y se capturan con `$( )`).
+
+Si varias herramientas comparten funciones, pueden ir en un archivo aparte que cada script carga con `source /usr/local/lib/comun.sh` (o su forma corta, `. archivo`).
+
+## La estructura de un script prolijo
+
+Piensa en una receta bien escrita: arriba el nombre y para cuántos es, después los ingredientes, después los pasos. Nadie empieza a cocinar sin haber revisado que tiene todo. Un script es igual: primero se prepara y se valida, y solo después se toca algo.
+
+<Diagrama svg={estructura} alt="Las siete partes de un script, en orden: encabezado con el shebang y un comentario de uso; set -euo pipefail; configuración con rutas y valores por defecto; funciones chicas como log, die y uso; lectura de opciones con getopts; validación de argumentos y requisitos; y el trabajo, con registro de inicio y fin." pie="Primero se prepara y se valida; recién al final se cambia algo." />
+
+<Ordenar ejercicio={partes} />
+
+## Opciones con getopts
+
+```bash
+dias=7
+prueba=0
+while getopts "nd:" opt; do       # n sin valor, d: con valor (los dos puntos)
+  case $opt in
+    n) prueba=1 ;;
+    d) dias=$OPTARG ;;            # el valor de la opción
+    *) uso ;;                     # opción desconocida
+  esac
+done
+shift $((OPTIND - 1))             # lo que queda en $1, $2... son los argumentos sin opción
+```
+
+Una opción **-n** (o `--dry-run`) que muestre lo que haría sin hacerlo es la mejor costumbre en cualquier script que borre, mueva o cambie cosas.
+
+## Registro, limpieza y una sola ejecución a la vez
+
+```bash
+LOG=/var/log/limpiar.log
+log() { echo "$(date '+%F %T') $*" | tee -a "$LOG"; }
+logger -t limpiar "terminó bien"                       # también al journal (journalctl -t limpiar)
+
+tmp=$(mktemp)                                          # archivo temporal con nombre único
+trap 'rm -f "$tmp"' EXIT                               # se borra al terminar, pase lo que pase
+
+exec 9>/run/limpiar.lock                               # evitar dos ejecuciones superpuestas
+flock -n 9 || { echo "Ya hay otra ejecución en curso" >&2; exit 1; }
+```
+
+`trap ... EXIT` se ejecuta al salir del script, sea porque terminó, porque falló con `set -e` o porque se llamó a `exit`. Es el lugar para borrar temporales. `trap ... ERR` se ejecuta cuando falla un comando, y es útil para dejar en el registro en qué línea (`$LINENO`). La forma más simple de usar `flock` es desde cron: `flock -n /run/limpiar.lock /usr/local/bin/limpiar.sh`.
+
+<EnSimple>
+Funciones chicas, todo lo configurable arriba, validar antes de tocar nada, registrar lo que se hizo, y un modo de prueba. Con eso, tus scripts van a estar mejor que la mayoría de los que vas a encontrar.
+</EnSimple>
+
+## Probar y depurar
+
+- `bash -n script.sh`: revisa la sintaxis sin ejecutar.
+- `bash -x script.sh`: muestra cada comando, ya expandido, antes de ejecutarlo (con un `+` adelante). Dentro del script, `set -x` y `set +x` lo activan solo en un tramo.
+- El modo `-n` del propio script, sobre datos de prueba.
+- **ShellCheck** (`dnf install ShellCheck` desde EPEL, o `apt install shellcheck`): analiza el script y avisa de los errores típicos (variables sin comillas, comparaciones mal hechas). Úsalo en tu equipo con cada script que escribas.
+
+Y una idea para más adelante, que vas a ver mucho con Ansible (nivel 4): un script **idempotente** se puede ejecutar dos veces sin hacer daño (por ejemplo, `mkdir -p` en lugar de `mkdir`, o revisar si el usuario existe antes de crearlo).
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejFunciones} />
+
+<ErroresComunes>
+  <ErrorComun titulo='"command not found" al llamar una función'>
+    Se llama antes de definirla. Bash lee de arriba hacia abajo: las funciones van al principio.
+  </ErrorComun>
+  <ErrorComun titulo="Una función cambia variables del resto del script">
+    Faltó `local` en sus variables.
+  </ErrorComun>
+  <ErrorComun titulo="return 42 para devolver un dato">
+    return es para el código (0 a 255). El dato se escribe con echo y se captura con `$(funcion)`.
+  </ErrorComun>
+  <ErrorComun titulo="El script con set -e se corta en ((contador++))">
+    `(( ))` devuelve 1 cuando el resultado es 0, y `set -e` lo toma como un fallo. Usa `contador=$((contador + 1))`.
+  </ErrorComun>
+  <ErrorComun titulo="Quedan archivos temporales después de un error">
+    Faltó `trap 'rm -f "$tmp"' EXIT` justo después de crearlos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Funciones: `nombre() { ...; }`, argumentos con `$1` y `"$@"`, variables con `local`, código con `return`, datos con echo y `$( )`. Se definen antes de usarse.
+- Estructura: encabezado → `set -euo pipefail` → configuración → funciones → getopts → validación → trabajo.
+- `getopts "nd:"` con case; `shift $((OPTIND - 1))`. Siempre un modo de prueba (-n).
+- Registro con fecha (`log`), `logger -t` para el journal, `mktemp` + `trap 'rm ...' EXIT`, `flock` para no superponerse.
+- Depurar: `bash -n` (sintaxis), `bash -x` (traza), ShellCheck en tu equipo.
+</Resumen>

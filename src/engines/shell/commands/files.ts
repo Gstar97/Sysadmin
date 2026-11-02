@@ -559,6 +559,7 @@ register('find', {
     let mindepth = 0
     let negateNext = false
     let execCmd: string[] | null = null
+    let explicitPrint = false
     let execBatch = false
     const add = (t: Test) => {
       const neg = negateNext
@@ -679,6 +680,7 @@ register('find', {
           i++
           break
         case '-print':
+          explicitPrint = true
           break
         case '-exec': {
           const end = ctx.args.indexOf(';', i)
@@ -735,6 +737,7 @@ register('find', {
       if (found.length) await ctx.sh.invoke(argv, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY })
     } else if (execCmd) {
       for (const f of found) {
+        if (explicitPrint) ctx.out(f + '\n')
         const argv = execCmd.map((x) => (x === '{}' ? f : x))
         await ctx.sh.invoke(argv, { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY })
       }

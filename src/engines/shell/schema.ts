@@ -13,6 +13,8 @@ const fileSpecSchema = z.union([
     tamano: z.string().optional(),
     /** Tipo de SELinux puesto a mano (por ejemplo user_home_t, como queda al moverlo desde un home). */
     etiqueta: z.string().optional(),
+    /** Hace cuántos días se modificó por última vez (para find -mtime, logrotate, limpiezas). */
+    antiguedad_dias: z.number().optional(),
   }),
 ])
 

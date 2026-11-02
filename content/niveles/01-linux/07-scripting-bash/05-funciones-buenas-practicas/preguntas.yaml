@@ -1,0 +1,68 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Para qué sirve local dentro de una función?
+  opciones:
+    - { texto: "Para que la variable exista solo dentro de la función y no pise una del resto del script", correcta: true, explicacion: "Sin local, las variables de una función son globales." }
+    - { texto: "Para que la función sea más rápida", explicacion: "No cambia la velocidad." }
+    - { texto: "Para que la variable se guarde en un archivo", explicacion: "No." }
+    - { texto: "Para exportarla a otros programas", explicacion: "Eso es export." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Una función tiene que devolver el nombre de un archivo. ¿Cómo lo hace?
+  opciones:
+    - { texto: "Lo escribe con echo, y quien la llama lo captura con $(funcion)", correcta: true, explicacion: "return solo devuelve un código de 0 a 255." }
+    - { texto: "Con return \"archivo.txt\"", explicacion: "return acepta solo números." }
+    - { texto: "Con exit \"archivo.txt\"", explicacion: "exit termina el script entero." }
+    - { texto: "No se puede", explicacion: "Con echo y $( ) sí." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe la línea que borra el archivo de la variable tmp al terminar el script, pase lo que pase.
+  aceptadas: ["trap 'rm -f \"$tmp\"' EXIT", "trap 'rm -f $tmp' EXIT", "trap \"rm -f '$tmp'\" EXIT", "trap 'rm -f -- \"$tmp\"' EXIT", "trap 'rm \"$tmp\"' EXIT"]
+  explicacion: EXIT se ejecuta al salir por cualquier motivo.
+- id: p04
+  tipo: opcion_multiple
+  enunciado: En getopts "nd:", ¿qué indican los dos puntos después de la d?
+  opciones:
+    - { texto: "Que -d necesita un valor, que queda en $OPTARG", correcta: true, explicacion: "Por ejemplo -d 14." }
+    - { texto: "Que -d es obligatoria", explicacion: "getopts no tiene opciones obligatorias." }
+    - { texto: "Que n y d son lo mismo", explicacion: "No." }
+    - { texto: "Que se termina la lista", explicacion: "No." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: Un script con set -euo pipefail se corta en la línea ((contador++)) la primera vez. ¿Por qué?
+  opciones:
+    - { texto: "(( )) devuelve 1 cuando el resultado es 0 (el valor anterior), y set -e lo toma como fallo", correcta: true, explicacion: "contador=$((contador + 1)) evita el problema." }
+    - { texto: "contador no está definida", explicacion: "Con set -u daría unbound variable, otro mensaje." }
+    - { texto: "++ no existe en bash", explicacion: "Existe." }
+    - { texto: "Falta el $", explicacion: "Dentro de (( )) no hace falta." }
+- id: p06
+  tipo: completar_comando
+  enunciado: Escribe el comando que ejecuta limpiar.sh mostrando cada comando antes de ejecutarlo.
+  aceptadas: [bash -x limpiar.sh, bash -x ./limpiar.sh]
+  explicacion: Para un tramo solo, set -x y set +x dentro del script.
+- id: p07
+  tipo: opcion_multiple
+  enunciado: Un respaldo programado cada hora a veces tarda más de una hora y arrancan dos a la vez. ¿Qué agregas?
+  opciones:
+    - { texto: "flock, para que una ejecución no arranque si la anterior sigue (flock -n archivo.lock comando)", correcta: true, explicacion: "Con -n, la segunda sale enseguida en lugar de esperar." }
+    - { texto: "Más memoria al servidor", explicacion: "No evita la superposición." }
+    - { texto: "set -e", explicacion: "No tiene relación." }
+    - { texto: "Un sleep al principio", explicacion: "No garantiza nada." }
+- id: p08
+  tipo: opcion_multiple
+  enunciado: ¿Qué quiere decir que un script es idempotente?
+  opciones:
+    - { texto: "Que ejecutarlo dos veces deja el mismo resultado que ejecutarlo una, sin errores ni daño", correcta: true, explicacion: "Por ejemplo, mkdir -p en lugar de mkdir." }
+    - { texto: "Que no usa variables", explicacion: "No." }
+    - { texto: "Que corre solo como root", explicacion: "No." }
+    - { texto: "Que no tiene funciones", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: ¿Por qué toda la validación va antes del trabajo?
+  opciones:
+    - { texto: "Porque un script que falla a mitad de camino deja las cosas a medias", correcta: true, explicacion: "Mejor fallar antes de tocar nada." }
+    - { texto: "Porque bash lo exige", explicacion: "Bash no lo exige." }
+    - { texto: "Para que sea más rápido", explicacion: "No es por velocidad." }
+    - { texto: "No importa el orden", explicacion: "Importa mucho." }

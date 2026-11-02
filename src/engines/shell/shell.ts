@@ -2416,6 +2416,7 @@ export const BUILTINS: Record<string, Builtin> = {
       return 2
     }
   },
+  '.': (sh, args, io) => BUILTINS.source(sh, args, io),
   source: async (sh, args, io) => {
     if (!args[0]) {
       io.err('bash: source: filename argument required\n')

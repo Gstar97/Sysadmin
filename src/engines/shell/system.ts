@@ -373,6 +373,7 @@ export class System {
       else if (s.tipo === 'directorio') node.mode = 0o755
       if (s.tamano) node.size = parseSize(s.tamano, 1)
       if (s.etiqueta) node.selabel = `unconfined_u:object_r:${s.etiqueta}:s0`
+      if (s.antiguedad_dias !== undefined) node.mtime = Date.now() - s.antiguedad_dias * 86_400_000
       // Sin dueño indicado, lo que está dentro del home de un usuario es de ese usuario
       // (incluidas las carpetas intermedias que se crearon para el archivo).
       const homeUser = [...this.users.values()].find((u) => u.uid >= 1000 && (abs === u.home || abs.startsWith(`${u.home}/`)))
