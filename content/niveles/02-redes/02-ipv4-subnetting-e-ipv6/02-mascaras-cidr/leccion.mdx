@@ -1,0 +1,113 @@
+---
+id: n2-m2-l2
+titulo: Máscaras y CIDR
+minutos: 150
+objetivos:
+  - Convertir máscaras entre notación decimal y prefijo (/24 equivale a 255.255.255.0).
+  - Calcular la dirección de red, el broadcast, el rango utilizable y la cantidad de hosts de cualquier dirección con prefijo.
+glosario: [mascara-red, direccion-red, broadcast-subred]
+verificado: 2026-11
+---
+
+import and from './and.svg?raw'
+import ejMascara from './ej-mascara.yaml'
+
+La lección anterior dejó una idea: el prefijo dice dónde termina la red. Ahora vas a aprender a hacer las cuentas que salen de eso, que son siempre las mismas cuatro: **dirección de red**, **broadcast**, **rango utilizable** y **cantidad de hosts**. Son la base del subnetting y de casi todo el diagnóstico de direccionamiento ("¿esta PC está en la misma red que su puerta de enlace?").
+
+<AntesDeEmpezar>
+- La parte de red y la parte de host de una IPv4 (lección anterior).
+- La operación AND: el resultado es 1 solo si los dos bits son 1 (lección 0.3.4).
+- Las potencias de 2: 2, 4, 8, 16, 32, 64, 128, 256 (lección 0.3.1).
+</AntesDeEmpezar>
+
+## La máscara: dos formas de escribir lo mismo
+
+La **máscara de red** es otra forma de escribir el prefijo: 32 bits con **unos en la parte de red y ceros en la parte de host**, escritos en decimal como una IP. Un `/24` son 24 unos seguidos de 8 ceros: `11111111.11111111.11111111.00000000` = `255.255.255.0`. Windows y muchos equipos piden la máscara; Linux y los routers modernos usan el prefijo.
+
+Los valores que puede tener un octeto de máscara son pocos, porque los unos siempre van juntos a la izquierda:
+
+| Bits en 1 del octeto | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Valor | 0 | 128 | 192 | 224 | 240 | 248 | 252 | 254 | 255 |
+
+Con esa tabla conviertes cualquier máscara: `/26` = 24 + 2 → `255.255.255.192`. `/20` = 16 + 4 → `255.255.240.0`. Y al revés: `255.255.255.248` = 24 + 5 = `/29`.
+
+Los prefijos que más vas a ver:
+
+| Prefijo | Máscara | Direcciones | Hosts utilizables | Uso típico |
+| --- | --- | --- | --- | --- |
+| /8 | 255.0.0.0 | 16.777.216 | 16.777.214 | Bloques muy grandes (10.0.0.0/8) |
+| /16 | 255.255.0.0 | 65.536 | 65.534 | El espacio de una empresa grande |
+| /24 | 255.255.255.0 | 256 | 254 | La red típica de oficina |
+| /25 | 255.255.255.128 | 128 | 126 | Media /24 |
+| /26 | 255.255.255.192 | 64 | 62 | Un área chica |
+| /27 | 255.255.255.224 | 32 | 30 | Servidores, impresoras |
+| /28 | 255.255.255.240 | 16 | 14 | Un grupo chico de equipos |
+| /30 | 255.255.255.252 | 4 | 2 | Enlace entre dos routers (clásico) |
+| /31 | 255.255.255.254 | 2 | 2 | Enlace entre dos routers (moderno) |
+| /32 | 255.255.255.255 | 1 | 1 | Un solo equipo (rutas a un host, loopbacks) |
+
+<EnSimple>
+La máscara es el prefijo escrito "en forma de IP": unos donde está la red, ceros donde está el host. /24 y 255.255.255.0 dicen exactamente lo mismo.
+</EnSimple>
+
+## Las cuatro cuentas
+
+Toma `192.168.10.77/26`. Para no perderte, trabaja solo con el octeto donde cae el corte (aquí, el cuarto: 24 bits van enteros a la red y el corte está 2 bits adentro del último octeto).
+
+1. **Dirección de red**: la IP con todos los bits de host en 0. Se obtiene haciendo **IP AND máscara**.
+2. **Broadcast**: la IP con todos los bits de host en 1. Es la última dirección de la red.
+3. **Rango utilizable**: de la red + 1 al broadcast − 1. Esas son las que se les ponen a los equipos.
+4. **Hosts utilizables**: 2 elevado a los bits de host, menos 2 (la red y el broadcast no se usan para equipos).
+
+<Diagrama svg={and} alt="Cálculo para 192.168.10.77/26 con el último octeto en binario: la IP 01001101 (77) con la máscara 11000000 (192) da la red 01000000 (64); con los bits de host en 1, el broadcast 01111111 (127). Resultado: red 192.168.10.64/26, broadcast 192.168.10.127, rango de .65 a .126, 62 hosts." pie="Red: bits de host en 0. Broadcast: bits de host en 1. En el medio, los equipos." />
+
+Una comparación para la dirección de red y el broadcast: en un edificio, la dirección de red es el número de la calle (identifica el edificio entero, no un departamento) y el broadcast es el portero eléctrico que suena en todos los departamentos a la vez. Ninguno de los dos es un departamento donde viva alguien.
+
+Pruébalo con la herramienta: escribe una IP y una máscara y mira el AND bit por bit.
+
+<OperacionesBits modo="red" />
+
+## Un atajo sin binario
+
+Cuando el corte cae dentro de un octeto, el tamaño de cada red es **256 menos el valor de la máscara en ese octeto**. Con `/26` el octeto vale 192, así que las redes son de 256 − 192 = **64** direcciones: empiezan en 0, 64, 128 y 192. La IP 77 cae en el bloque que empieza en 64: red `.64`, broadcast `.127` (la siguiente red menos uno). Es el método del **tamaño de bloque**, y en la lección 4 lo vas a usar para resolver todo de cabeza.
+
+Practica las cuatro cuentas con direcciones al azar. Empieza en dificultad 1 (cortes en el último octeto) y sube cuando te salgan sin errores:
+
+<Subnetting modo="practica" tipos={['red', 'broadcast', 'rango', 'hosts', 'misma_red']} dificultad={1} />
+
+<Pregunta id="p07" />
+
+## Las dos excepciones: /31 y /32
+
+- **/32** es una sola dirección: no tiene red ni broadcast aparte. Se usa para rutas a un único equipo y para las interfaces de loopback de los routers.
+- **/31** tiene dos direcciones y las dos son utilizables (RFC 3021): en un enlace punto a punto entre dos routers no hace falta broadcast. Ahorra la mitad de direcciones que el `/30` clásico. Algunos equipos viejos no lo soportan; por eso todavía vas a ver muchos `/30`.
+
+## En la terminal
+
+`ipcalc` hace las cuatro cuentas por ti. Úsalo para comprobar las tuyas, no para reemplazarlas: en una entrevista o un examen no vas a tenerlo.
+
+<Terminal ejercicio={ejMascara} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Darle a un equipo la dirección de red o la de broadcast">
+    En 192.168.10.64/26, ni la .64 ni la .127 se pueden usar para equipos. Linux te deja configurarlas, pero el equipo no se va a comunicar bien.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de restar 2 al contar hosts">
+    Un /26 tiene 64 direcciones pero 62 hosts utilizables. Si el área necesita 64 equipos, un /26 no alcanza.
+  </ErrorComun>
+  <ErrorComun titulo="Escribir máscaras imposibles">
+    255.255.255.100 no es una máscara: los unos tienen que ir juntos. Los valores válidos de un octeto son 0, 128, 192, 224, 240, 248, 252, 254 y 255.
+  </ErrorComun>
+  <ErrorComun titulo="Calcular todo en binario siempre">
+    Solo hace falta el octeto donde cae el corte; los anteriores son todos red (se copian) y los posteriores son todos host (0 en la red, 255 en el broadcast).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Máscara = prefijo escrito como IP: unos en la red, ceros en el host. Valores de un octeto: 0, 128, 192, 224, 240, 248, 252, 254, 255.
+- Red = IP AND máscara (bits de host en 0). Broadcast = bits de host en 1. Utilizables: entre los dos. Hosts = 2^bits de host − 2.
+- Atajo: tamaño de bloque = 256 − valor de la máscara en el octeto del corte; la red es el múltiplo del bloque que contiene la IP.
+- /31: dos direcciones utilizables (enlaces entre routers). /32: una sola dirección.
+- `ipcalc IP/prefijo` para comprobar.
+</Resumen>

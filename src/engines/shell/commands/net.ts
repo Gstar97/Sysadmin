@@ -267,6 +267,7 @@ register('ip', {
       }
       if (!sys.neigh.size && sys.gateway && sys.isReachable(sys.gateway)) learnNeighbor(sys, sys.gateway)
       for (const [ip, n] of sys.neigh) {
+        if ((only6 && !ip.includes(':')) || (only4 && ip.includes(':'))) continue
         ctx.out(n.state === 'FAILED' ? `${ip} dev ${n.dev} FAILED \n` : `${ip} dev ${n.dev} lladdr ${n.mac} ${n.state} \n`)
       }
       return 0
@@ -299,6 +300,11 @@ function ping6(ctx: CommandContext, host: string, count: number, quiet: boolean)
   }
   const target = own ? sys : sys.lab.find((h) => h.interfaces.some((i) => ipv6List(h, i).some((c) => c.split('/')[0] === addr)))
   const ok = own || !!target
+  // NDP: el vecino queda en la tabla, igual que con ARP en IPv4.
+  if (target && target !== sys && via) {
+    const mac = target.interfaces.find((i) => ipv6List(target, i).some((c) => c.split('/')[0] === addr))?.mac
+    if (mac) sys.neigh.set(addr, { mac, dev: via.i.name, state: 'REACHABLE' })
+  } else if (!own && via) sys.neigh.set(addr, { mac: '', dev: via.i.name, state: 'FAILED' })
   ctx.out(`PING ${host} (${addr}) 56 data bytes\n`)
   for (let n = 1; n <= count; n++) {
     if (ok) {

@@ -1,0 +1,95 @@
+---
+id: n2-m2-l1
+titulo: Direcciones IPv4
+minutos: 120
+objetivos:
+  - Explicar la estructura de una IPv4 y cómo el prefijo separa la parte de red de la parte de host.
+  - Reconocer los rangos privados (RFC 1918), loopback, APIPA (169.254.0.0/16), CGNAT (100.64.0.0/10), multicast y documentación.
+  - Entender por qué las clases son historia y hoy se usa CIDR.
+glosario: [ipv4, rfc1918, apipa, cgnat, cidr, multicast]
+verificado: 2026-11
+---
+
+import ipv4 from './ipv4.svg?raw'
+import ejIpcalc from './ej-ipcalc.yaml'
+
+En el módulo anterior viste que la IP es la dirección que viaja de punta a punta, y la MAC la que cambia en cada salto. Este módulo es sobre las IP: cómo se leen, cómo se dividen y cómo se planifican. Es el tema con más cuentas de todo el nivel, y también uno de los que más se usa en el trabajo diario y en las certificaciones. Vamos de a un paso por vez, empezando por leer una dirección.
+
+<AntesDeEmpezar>
+- Pasar de decimal a binario y al revés, y qué es un octeto (lecciones 0.3.1 y 0.3.2).
+- La operación AND entre bits (lección 0.3.4).
+- Que en una red local los equipos se hablan directo y para salir usan la puerta de enlace (lección 2.1.5).
+</AntesDeEmpezar>
+
+## Una dirección, dos partes
+
+Una IPv4 tiene **32 bits**, que se escriben como cuatro números del 0 al 255 separados por puntos (cada uno es un **octeto**, 8 bits). Pero lo que la hace útil es que se divide en dos partes:
+
+- La **parte de red** dice en qué red está el equipo.
+- La **parte de host** dice qué equipo es dentro de esa red.
+
+Es como un número de teléfono fijo con código de área: `11 4567-8901`. El código de área (la red) te lleva a la ciudad; el resto (el host), a una línea concreta. Todos los teléfonos de la misma ciudad comparten el código. Donde la comparación no llega: en IP el corte entre red y host no está fijo en un lugar; lo dice el **prefijo** (el `/24`), y puede caer en el medio de un octeto, como vas a ver en la próxima lección.
+
+<Diagrama svg={ipv4} alt="La IP 192.168.10.37 en decimal y en binario, con los primeros 24 bits marcados como parte de red (192.168.10) y los últimos 8 como parte de host (37). Debajo, los rangos especiales: privadas 10.0.0.0/8, 172.16.0.0/12 y 192.168.0.0/16; CGNAT 100.64.0.0/10; loopback 127.0.0.0/8; enlace local 169.254.0.0/16; multicast 224.0.0.0/4; y documentación 192.0.2.0/24, 198.51.100.0/24 y 203.0.113.0/24." pie="El prefijo marca dónde termina la red. Y hay rangos con un significado especial que conviene reconocer de un vistazo." />
+
+En `192.168.10.37/24`, los primeros 24 bits (`192.168.10`) son la red y el último octeto (`37`) es el equipo. Dos direcciones con la misma parte de red están en la misma red y se hablan directo.
+
+<EnSimple>
+Una IPv4 son cuatro números. El número después de la barra dice cuántos bits del principio son "el barrio" (la red); lo que sobra es "la casa" (el equipo).
+</EnSimple>
+
+## Direcciones con significado especial
+
+No todas las direcciones son iguales. Algunos rangos están reservados y te dicen mucho con solo verlos:
+
+- **Privadas (RFC 1918)**: `10.0.0.0/8`, `172.16.0.0/12` y `192.168.0.0/16`. Se usan dentro de las redes de empresas y casas, y se pueden repetir en todo el mundo, porque no se enrutan en internet: para salir pasan por NAT (lección 2.3.5). Ojo con el rango 172: va de `172.16` a `172.31`. `172.32.1.1` ya es pública.
+- **Públicas**: el resto de las unicast. Son únicas en todo internet y las asignan los registros regionales (en América Latina, LACNIC) a los proveedores.
+- **Loopback**: `127.0.0.0/8`. Todo 127.x.x.x es el propio equipo; nunca sale a la red.
+- **Enlace local o APIPA**: `169.254.0.0/16`. Un equipo se pone una de estas cuando pidió una IP por DHCP y nadie le contestó. Si ves una 169.254 en una PC, la pregunta es "¿por qué no le llega el DHCP?" (lección 2.3.4).
+- **CGNAT**: `100.64.0.0/10` (de 100.64 a 100.127). La usa el proveedor cuando comparte una misma IP pública entre muchos clientes. Si la WAN de tu router tiene una de estas, no tienes una IP pública propia.
+- **Multicast**: `224.0.0.0/4` (primer octeto de 224 a 239). Un mensaje para un grupo de equipos.
+- **Documentación**: `192.0.2.0/24`, `198.51.100.0/24` y `203.0.113.0/24`. Para manuales y ejemplos; nunca en una red real.
+- **Broadcast limitado**: `255.255.255.255`, "todos los equipos de esta red".
+
+Practica hasta reconocerlas sin pensar:
+
+<ClasificadorIp />
+
+En Linux, `ipcalc` te dice el tipo de cualquier dirección (además de muchas otras cosas que vas a usar en las próximas lecciones):
+
+<Terminal ejercicio={ejIpcalc} />
+
+## Las clases: historia que todavía se escucha
+
+Al principio, el corte entre red y host dependía del primer octeto: **clase A** (de 1 a 126, red de 8 bits), **clase B** (de 128 a 191, 16 bits) y **clase C** (de 192 a 223, 24 bits). Era simple, pero muy rígido: una empresa que necesitaba 300 direcciones no entraba en una clase C (254 equipos) y recibía una clase B entera (65.534). Así se desperdiciaron millones de direcciones.
+
+En 1993 se reemplazó por **CIDR** (enrutamiento sin clases): el corte se indica con el prefijo y puede ir en cualquier bit. Hoy las clases solo sobreviven en el vocabulario ("una clase C" para decir "un /24") y en algunas preguntas de examen. Lo importante es el prefijo.
+
+<Nota titulo="¿Por qué se acabaron las IPv4?">
+32 bits dan unos 4300 millones de direcciones, menos que personas en el mundo, y cada persona usa varios equipos. Los registros regionales agotaron las IPv4 libres a lo largo de la década de 2010. Por eso existen las privadas con NAT, el CGNAT y, sobre todo, IPv6 (lección 7 de este módulo).
+</Nota>
+
+<Pregunta id="p06" />
+
+<ErroresComunes>
+  <ErrorComun titulo="Creer que todo 172.x es privado">
+    Solo de 172.16 a 172.31 (172.16.0.0/12). Una regla de firewall para "redes privadas" escrita como 172.0.0.0/8 deja pasar direcciones públicas.
+  </ErrorComun>
+  <ErrorComun titulo="Ver una 169.254 y configurar la IP a mano">
+    La 169.254 es un síntoma: el equipo no recibió respuesta del DHCP. Poner una IP fija lo tapa; hay que encontrar por qué no llega el DHCP.
+  </ErrorComun>
+  <ErrorComun titulo="Usar en la documentación interna IP reales de otras empresas">
+    Para ejemplos y plantillas están los rangos de documentación (192.0.2.0/24 y compañía). Si alguien copia el ejemplo tal cual, no apunta a un equipo ajeno.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar en clases al calcular">
+    10.1.1.0/24 no es "una clase A": es una red /24. Desde CIDR, lo único que define el tamaño de la red es el prefijo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una IPv4 tiene 32 bits en cuatro octetos (0 a 255). El prefijo (/24) dice cuántos bits del principio son la red; el resto es el host.
+- Privadas: 10.0.0.0/8, 172.16.0.0/12 (172.16 a 172.31) y 192.168.0.0/16; no salen a internet sin NAT.
+- Especiales: 127.0.0.0/8 loopback, 169.254.0.0/16 APIPA (no llegó el DHCP), 100.64.0.0/10 CGNAT, 224.0.0.0/4 multicast, 192.0.2.0/24 y otras dos para documentación.
+- Las clases A, B y C son historia: desde 1993 manda CIDR y el corte puede ir en cualquier bit.
+- `ipcalc dirección` muestra el tipo (Address space) y los datos de la red.
+</Resumen>

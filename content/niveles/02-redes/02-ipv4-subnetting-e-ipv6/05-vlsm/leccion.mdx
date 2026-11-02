@@ -1,0 +1,100 @@
+---
+id: n2-m2-l5
+titulo: VLSM
+minutos: 180
+objetivos:
+  - Diseñar un plan de direccionamiento con subredes de distinto tamaño y sin solapamientos.
+  - Documentar el plan en una tabla de direccionamiento que cualquiera del equipo pueda usar.
+glosario: [vlsm, plan-direccionamiento]
+verificado: 2026-11
+---
+
+import vlsm from './vlsm.svg?raw'
+
+En la vida real las áreas no tienen el mismo tamaño: Ventas tiene 100 personas, Gerencia tiene 10, y el enlace con la sucursal necesita solo 2 direcciones. Si las divides a todas en partes iguales, o desperdicias muchísimo o no te alcanza. **VLSM** (máscaras de subred de longitud variable) es hacer subnetting con un prefijo distinto para cada subred, el justo para lo que necesita. Es lo que vas a usar en el laboratorio de este módulo y en el proyecto del nivel.
+
+<AntesDeEmpezar>
+- Elegir el prefijo según la cantidad de hosts y listar subredes (lección 2.2.3).
+- El tamaño de bloque y dónde puede empezar una subred (lección anterior).
+</AntesDeEmpezar>
+
+## El problema con las partes iguales
+
+Tienes `192.168.30.0/24` y necesitas: Ventas 100 hosts, Administración 50, IT 25, Gerencia 10 y dos enlaces entre routers de 2 hosts cada uno. Son 6 subredes.
+
+- Con subredes **iguales** del tamaño de la más grande (/25, 126 hosts), solo entran **2** en un /24. No alcanza.
+- Con subredes iguales para que entren 6 (/27, 8 subredes), Ventas no entra en 30 hosts.
+
+Es como repartir un terreno en lotes: si todos los lotes son iguales al más grande que necesitas, se te acaba el terreno; si son todos chicos, la fábrica no entra. Lo lógico es hacer lotes de distinto tamaño, empezando por los grandes. Donde la comparación no llega: en un terreno puedes poner un lote donde quieras; en IP, cada subred tiene que empezar en un **múltiplo de su tamaño**, y eso es lo que obliga a ordenar.
+
+## El método: de la más grande a la más chica
+
+1. **Ordena** las necesidades de mayor a menor.
+2. Para cada una, elige el **prefijo más chico que alcanza** (2ʰ − 2 ≥ hosts).
+3. **Ubica** cada subred en la primera dirección libre que sea múltiplo de su tamaño. Si empiezas por las grandes, cada una cae justo después de la anterior, sin huecos.
+4. **Documenta** el resultado, incluido el espacio que queda libre.
+
+<Diagrama svg={vlsm} alt="La red 192.168.30.0/24 repartida con VLSM: Ventas /25 (.0 a .127), Administración /26 (.128 a .191), IT /27 (.192 a .223), Gerencia /28 (.224 a .239), dos enlaces WAN /30 (.240 y .244) y un /29 libre (.248). Los pasos: ordenar de mayor a menor, elegir el prefijo justo, ubicar cada bloque en un múltiplo de su tamaño y documentar." pie="Empezando por la más grande, cada subred cae alineada justo después de la anterior." />
+
+<EnSimple>
+VLSM es darle a cada área una subred de su tamaño. El único secreto es ir de la más grande a la más chica, así cada una encaja pegada a la anterior.
+</EnSimple>
+
+### El ejemplo, resuelto
+
+| Área | Hosts | Prefijo | Red | Rango utilizable | Broadcast | Puerta de enlace |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ventas | 100 | /25 (126) | 192.168.30.0 | .1 a .126 | .127 | .1 |
+| Administración | 50 | /26 (62) | 192.168.30.128 | .129 a .190 | .191 | .129 |
+| IT | 25 | /27 (30) | 192.168.30.192 | .193 a .222 | .223 | .193 |
+| Gerencia | 10 | /28 (14) | 192.168.30.224 | .225 a .238 | .239 | .225 |
+| Enlace R1-R2 | 2 | /30 (2) | 192.168.30.240 | .241 y .242 | .243 | — |
+| Enlace R1-R3 | 2 | /30 (2) | 192.168.30.244 | .245 y .246 | .247 | — |
+| Libre | — | /29 | 192.168.30.248 | — | — | — |
+
+Detalles que hacen a un buen plan:
+
+- **Una convención para la puerta de enlace**: la primera utilizable de cada subred (.1, .129...). Cualquiera puede deducirla sin buscar.
+- **Margen para crecer**: si Ventas tiene 100 personas hoy y va a tener 130 el año que viene, un /25 no alcanza. Muchas empresas planifican con el doble de lo actual.
+- **El espacio libre, a la vista**: anota qué bloques quedan disponibles; si no, en dos años alguien superpone una subred nueva.
+
+## Ahora tú
+
+Primero el ejemplo de arriba (tápalo e intenta hacerlo sin mirar). El diseñador revisa cada subred: que sea una dirección de red válida, que alcance, que no se superponga con otra y que esté dentro del espacio disponible.
+
+<DisenadorVlsm red="192.168.30.0/24" areas={[{ nombre: 'Ventas', hosts: 100 }, { nombre: 'Administración', hosts: 50 }, { nombre: 'IT', hosts: 25 }, { nombre: 'Gerencia', hosts: 10 }, { nombre: 'Enlace R1-R2', hosts: 2 }, { nombre: 'Enlace R1-R3', hosts: 2 }]} />
+
+Ahora con casos al azar (botón "Otro caso"):
+
+<DisenadorVlsm />
+
+<Pregunta id="p06" />
+
+## La tabla de direccionamiento
+
+El resultado de un diseño VLSM no es el cálculo: es la **tabla de direccionamiento**, el documento que usan todos los que configuran equipos. Como mínimo lleva: área o función, red con prefijo, puerta de enlace, rango para equipos con IP fija, rango para DHCP, VLAN (módulo 2.4) y observaciones. Se guarda junto con el resto de la documentación (lección 0.4.4), y se actualiza **antes** de configurar, no después.
+
+Una distribución habitual dentro de cada subred: la primera dirección para la puerta de enlace, un tramo chico para equipos con IP fija (servidores, impresoras), y el resto para el DHCP. Escribirlo en la tabla evita la causa número uno de IP duplicadas: alguien que pone a mano una IP que el DHCP ya le dio a otro.
+
+<ErroresComunes>
+  <ErrorComun titulo="Empezar por las subredes chicas">
+    Si ubicas primero los /30 al principio, la /25 ya no puede empezar en .0 y quedan huecos que no sirven. Siempre de mayor a menor.
+  </ErrorComun>
+  <ErrorComun titulo="Superponer subredes">
+    192.168.30.128/25 y 192.168.30.192/27 se pisan: la segunda está dentro de la primera. El diseñador lo detecta; en la vida real lo detecta un usuario que "no llega" a algo.
+  </ErrorComun>
+  <ErrorComun titulo="Calcular justo, sin margen">
+    Un área con 62 personas en un /26 está llena el primer día. Suma la puerta de enlace, las impresoras y el crecimiento antes de elegir el prefijo.
+  </ErrorComun>
+  <ErrorComun titulo="Diseñar y no documentar">
+    Un plan que solo está en la cabeza de quien lo hizo se rompe en la primera ampliación. La tabla de direccionamiento es parte del trabajo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- VLSM: cada subred con el prefijo justo para sus hosts, en lugar de subredes iguales.
+- Método: ordenar de mayor a menor → prefijo más chico que alcanza → ubicar cada una en la primera dirección libre múltiplo de su tamaño → documentar.
+- Dejar margen para crecer y anotar el espacio libre.
+- La tabla de direccionamiento (red, puerta de enlace, IP fijas, DHCP, VLAN) es el entregable, y se actualiza antes de configurar.
+- Convención útil: la puerta de enlace es la primera utilizable de cada subred.
+</Resumen>

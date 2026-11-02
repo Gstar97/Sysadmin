@@ -1150,3 +1150,113 @@
   alias: [conflicto de IP]
   definicion: Dos equipos con la misma IP en la misma red. Los dos contestan ARP y las conexiones fallan de forma intermitente. Se detecta con arping.
   leccion: n2-m1-l5
+- id: ipv4
+  termino: IPv4
+  alias: [dirección IPv4, octeto]
+  definicion: Dirección de 32 bits que se escribe como cuatro números de 0 a 255. Se divide en parte de red y parte de host según el prefijo.
+  leccion: n2-m2-l1
+- id: rfc1918
+  termino: Direcciones privadas
+  alias: [RFC 1918, IP privada]
+  definicion: Rangos 10.0.0.0/8, 172.16.0.0/12 y 192.168.0.0/16, para usar dentro de las redes. No se enrutan en internet; para salir pasan por NAT.
+  leccion: n2-m2-l1
+- id: apipa
+  termino: APIPA
+  alias: [enlace local, "169.254"]
+  definicion: Dirección 169.254.x.x que un equipo se asigna solo cuando pidió una IP por DHCP y no recibió respuesta. Es un síntoma de que falla el DHCP.
+  leccion: n2-m2-l1
+- id: cgnat
+  termino: CGNAT
+  alias: [NAT del proveedor, 100.64.0.0/10]
+  definicion: NAT que hace el proveedor para compartir una IP pública entre muchos clientes, usando el rango 100.64.0.0/10. Con CGNAT no se puede publicar un servicio con una simple redirección de puertos.
+  leccion: n2-m2-l1
+- id: cidr
+  termino: CIDR
+  alias: [prefijo, notación CIDR, /24]
+  definicion: Forma actual de indicar el tamaño de una red con un prefijo (/24, /26) que dice cuántos bits son de red. Reemplazó a las clases A, B y C en 1993.
+  leccion: n2-m2-l1
+- id: multicast
+  termino: Multicast
+  alias: [multidifusión, 224.0.0.0/4]
+  definicion: Envío a un grupo de equipos interesados. En IPv4 usa el rango 224.0.0.0/4; en Ethernet, MAC con el bit más bajo del primer byte en 1.
+  leccion: n2-m2-l1
+- id: direccion-red
+  termino: Dirección de red
+  alias: [red, identificador de red]
+  definicion: Primera dirección de una red, con todos los bits de host en 0. Identifica a la red entera y no se le asigna a ningún equipo. Se calcula con IP AND máscara.
+  leccion: n2-m2-l2
+- id: broadcast-subred
+  termino: Dirección de broadcast
+  alias: [broadcast de la subred]
+  definicion: Última dirección de una red, con todos los bits de host en 1. Un paquete enviado a ella llega a todos los equipos de esa red. No se le asigna a ningún equipo.
+  leccion: n2-m2-l2
+- id: subnetting
+  termino: Subnetting
+  alias: [división en subredes]
+  definicion: Partir una red en subredes más chicas tomando bits prestados de la parte de host. Sirve para separar por función, achicar los dominios de broadcast y ordenar.
+  leccion: n2-m2-l3
+- id: subred
+  termino: Subred
+  alias: [subnet]
+  definicion: Cada una de las redes que resultan de dividir una red más grande. Es su propio dominio de broadcast; para pasar de una a otra hace falta un router.
+  leccion: n2-m2-l3
+- id: bits-prestados
+  termino: Bits prestados
+  alias: [bits de subred]
+  definicion: Bits que se pasan de la parte de host a la de red al hacer subnetting. Con n bits prestados salen 2ⁿ subredes.
+  leccion: n2-m2-l3
+- id: tamano-bloque
+  termino: Tamaño de bloque
+  alias: [número mágico, block size]
+  definicion: De a cuánto avanzan las subredes en el octeto donde cae el corte; es 256 menos el valor de la máscara en ese octeto. Con /26, 64.
+  leccion: n2-m2-l4
+- id: vlsm
+  termino: VLSM
+  alias: [máscara de longitud variable]
+  definicion: Diseño de subredes con un prefijo distinto para cada una, según los hosts que necesita. Se asigna de la más grande a la más chica para que encajen sin huecos.
+  leccion: n2-m2-l5
+- id: plan-direccionamiento
+  termino: Plan de direccionamiento
+  alias: [tabla de direccionamiento]
+  definicion: Documento con cada subred de la empresa, su prefijo, puerta de enlace, rangos de IP fijas y de DHCP, VLAN y espacio libre. Se actualiza antes de configurar.
+  leccion: n2-m2-l5
+- id: sumarizacion
+  termino: Sumarización
+  alias: [resumen de rutas, superred, agregación]
+  definicion: Anunciar varias redes contiguas con una sola ruta de prefijo más corto. Exige que las redes formen un bloque alineado; si no, el resumen abarca redes ajenas.
+  leccion: n2-m2-l6
+- id: wildcard
+  termino: Máscara wildcard
+  alias: [wildcard, máscara inversa]
+  definicion: Máscara invertida (255.255.255.255 menos la máscara) en la que 0 significa que el bit tiene que coincidir y 1 que no importa. La usan las ACL y OSPF de Cisco.
+  leccion: n2-m2-l6
+- id: ipv6
+  termino: IPv6
+  alias: [dirección IPv6]
+  definicion: Versión de IP con direcciones de 128 bits en 8 grupos hexadecimales. Cada LAN es un /64; no hay broadcast y NDP reemplaza a ARP.
+  leccion: n2-m2-l7
+- id: enlace-local-ipv6
+  termino: Dirección de enlace local (IPv6)
+  alias: [fe80, link-local]
+  definicion: Dirección fe80::/10 que toda interfaz con IPv6 se asigna sola. Sirve para hablar con los equipos de la misma red y no se enruta fuera de ella.
+  leccion: n2-m2-l7
+- id: ula
+  termino: ULA
+  alias: [dirección única local, fd00]
+  definicion: Direcciones IPv6 fc00::/7 (en la práctica fd00::/8) para redes internas. Son el equivalente de las privadas de IPv4.
+  leccion: n2-m2-l7
+- id: slaac
+  termino: SLAAC
+  alias: [autoconfiguración sin estado]
+  definicion: Forma en que un equipo IPv6 arma su propia dirección con el prefijo /64 que anuncia el router, sin servidor DHCP.
+  leccion: n2-m2-l7
+- id: ndp
+  termino: NDP
+  alias: [descubrimiento de vecinos, Neighbor Discovery]
+  definicion: Protocolo de IPv6, dentro de ICMPv6, que averigua la MAC de los vecinos (como ARP), encuentra los routers y detecta direcciones duplicadas.
+  leccion: n2-m2-l7
+- id: doble-pila
+  termino: Doble pila
+  alias: [dual stack]
+  definicion: Equipos y redes que usan IPv4 e IPv6 a la vez. Obliga a configurar firewall, DNS y servicios para las dos versiones.
+  leccion: n2-m2-l7

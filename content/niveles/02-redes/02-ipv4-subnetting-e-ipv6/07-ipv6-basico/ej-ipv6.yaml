@@ -1,0 +1,53 @@
+tipo: terminal
+shell: bash
+titulo: IPv6 en el laboratorio
+descripcion: >-
+  srv-a y srv-b están en la misma red. srv-b ya tiene su dirección IPv6 privada
+  (fd00:10::20/64). Vas a configurar srv-a y comprobar que se ven por IPv6.
+estado_inicial:
+  distro: rocky
+  hostname: srv-a
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  red:
+    interfaces: [{ nombre: enp0s3, ip: 192.168.10.10/24 }]
+  servidores:
+    - { ip: 192.168.10.20, hostname: srv-b, red: { interfaces: [{ nombre: enp0s3, ip: 192.168.10.20/24, ipv6: ["fd00:10::20/64"] }] } }
+pasos:
+  - consigna: Mira las direcciones IPv6 de srv-a.
+    verificar:
+      - { comando_usado: ip -6 }
+      - { salida_contiene: "fe80::" }
+    pistas: ["ip -6 addr (o ip -6 a)."]
+    solucion: [ip -6 addr]
+    explicacion: >-
+      Aunque nadie configuró IPv6, la placa ya tiene una dirección fe80::...: es la de enlace
+      local, que toda interfaz con IPv6 se pone sola. Sirve para hablar con los vecinos de la
+      misma red (y la usa NDP), pero no sale de ella.
+  - consigna: Intenta un ping a fd00:10::20.
+    verificar:
+      - { comando_usado: ping }
+    pistas: ["ping -c 2 fd00:10::20"]
+    solucion: [ping -c 2 fd00:10::20]
+    explicacion: >-
+      "Network is unreachable": srv-a no tiene ninguna dirección en la red fd00:10::/64, así que
+      no sabe por dónde mandar el paquete. Es lo mismo que pasaría en IPv4 sin una IP de la red
+      del destino ni puerta de enlace.
+  - consigna: Agrégale a enp0s3 la dirección fd00:10::10 con prefijo /64 (hace falta sudo).
+    verificar:
+      - { interfaz: enp0s3, ipv6: "fd00:10::10" }
+    pistas: ["sudo ip -6 addr add fd00:10::10/64 dev enp0s3"]
+    solucion: [sudo ip -6 addr add fd00:10::10/64 dev enp0s3]
+    explicacion: >-
+      fd00::/8 es el rango de direcciones únicas locales (ULA): el equivalente de las privadas
+      de IPv4. Con /64, los primeros 64 bits (fd00:10:0:0) son la red.
+  - consigna: Ahora sí, haz ping a srv-b por IPv6 y mira la tabla de vecinos IPv6.
+    verificar:
+      - { comando_usado: ip -6 neigh }
+      - { salida_contiene: "fd00:10::20" }
+    pistas: ["ping -c 2 fd00:10::20 y después ip -6 neigh."]
+    solucion: [ping -c 2 fd00:10::20, ip -6 neigh]
+    explicacion: >-
+      El ping responde, y en la tabla de vecinos aparece srv-b con su MAC. En IPv6 no hay ARP:
+      ese trabajo lo hace NDP, con mensajes de solicitud y anuncio de vecino que van por
+      multicast en lugar de broadcast.

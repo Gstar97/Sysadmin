@@ -1,0 +1,105 @@
+tipo: troubleshooting
+titulo: La subred nueva no sale a internet
+descripcion: >-
+  Incidente simulado en una distribuidora. Ayer se habilitó una subred nueva para el depósito
+  y hoy algunas PC salen a internet y otras no. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Miércoles, 8:40. El depósito estrena su subred: según el plan, 10.8.4.64/26 (puerta de
+      enlace 10.8.4.65). El técnico que instaló las PC del depósito dejó una nota: "IP fijas
+      de .66 a .100, máscara 255.255.255.240, gateway .65". De las 30 PC, unas 13 navegan bien;
+      el resto no sale ni a internet ni a los servidores de la casa central.
+    evidencia:
+      - titulo: Fragmento del plan de direccionamiento
+        contenido: |
+          Área       Red              Puerta de enlace   IP fijas      DHCP
+          Depósito   10.8.4.64/26     10.8.4.65          .66 a .100    (sin DHCP)
+    opciones:
+      - { texto: "Comparar la máscara de la nota con la del plan", ir_a: n_mascara, minutos: 2 }
+      - texto: Reiniciar el router de la sucursal
+        ir_a: n_router
+        minutos: 12
+      - texto: Mirar una PC que no anda
+        ir_a: n_pc
+        minutos: 4
+  n_router:
+    situacion: >-
+      Doce minutos sin red en todo el depósito, incluidas las 13 PC que andaban. Al volver, todo
+      queda igual que antes. El router tiene bien su interfaz (10.8.4.65/26): el problema no
+      parece estar ahí.
+    opciones:
+      - { texto: "Mirar una PC que no anda", ir_a: n_pc, minutos: 4 }
+  n_pc:
+    situacion: >-
+      Te sientas en la PC del puesto 22, que no navega.
+    evidencia:
+      - titulo: ip -br a y ip route en la PC del puesto 22
+        contenido: |
+          $ ip -br a
+          enp1s0           UP             10.8.4.87/28
+          $ ip route
+          10.8.4.80/28 dev enp1s0 proto kernel scope link src 10.8.4.87 metric 100
+          $ sudo ip route add default via 10.8.4.65
+          Error: Nexthop has invalid gateway.
+      - titulo: Una PC que sí anda (puesto 3)
+        contenido: |
+          $ ip -br a
+          enp1s0           UP             10.8.4.70/28
+          $ ip route
+          default via 10.8.4.65 dev enp1s0 proto static metric 100
+          10.8.4.64/28 dev enp1s0 proto kernel scope link src 10.8.4.70 metric 100
+    opciones:
+      - { texto: "Calcular en qué red queda cada PC con /28", ir_a: n_mascara, minutos: 3 }
+      - texto: Agregarle a la PC del puesto 22 una ruta forzada hacia .65
+        ir_a: n_parche
+        minutos: 10
+  n_parche:
+    situacion: >-
+      Consigues que esa PC salga agregando a mano una ruta al .65 por la interfaz y después la
+      ruta por defecto. Funciona, pero es un parche: quedan 16 PC más, y cada una va a tener
+      problemas para hablar con las de las otras /28 del depósito. La causa sigue ahí.
+    opciones:
+      - { texto: "Buscar la causa: comparar la máscara con el plan", ir_a: n_mascara, minutos: 3 }
+  n_mascara:
+    situacion: >-
+      La nota del técnico dice 255.255.255.240, o sea /28: bloques de 16. El plan dice /26:
+      bloques de 64. Con /28, cada PC cree que su red es mucho más chica de lo que es.
+    evidencia:
+      - titulo: Con la máscara equivocada (/28)
+        contenido: |
+          PC .66 a .78   → red 10.8.4.64/28  (.65 a .78)  → la puerta de enlace .65 está adentro: anda
+          PC .79         → es el broadcast de 10.8.4.64/28: no debería usarse
+          PC .80 a .95   → red 10.8.4.80/28  → la .65 está afuera: no hay salida
+          PC .96 a .100  → red 10.8.4.96/28  → la .65 está afuera: no hay salida
+      - titulo: Con la máscara del plan (/26)
+        contenido: |
+          Todas, de .66 a .100 → red 10.8.4.64/26 (.65 a .126) → la .65 está adentro: anda
+    opciones:
+      - { texto: "Corregir la máscara a 255.255.255.192 (/26) en todas las PC del depósito", ir_a: n_fix, minutos: 25 }
+      - texto: Cambiar la interfaz del router a /28 para que coincida con las PC
+        ir_a: n_router28
+        minutos: 8
+  n_router28:
+    situacion: >-
+      Con el router en /28, ahora solo las PC de .66 a .78 tienen salida, igual que antes, y
+      además la red ya no coincide con el plan ni con las rutas de la casa central, que apuntan a
+      10.8.4.64/26. El error está en las PC: lo que hay que corregir es lo que se apartó del plan.
+    opciones:
+      - { texto: "Volver el router a /26 y corregir las PC", ir_a: n_fix, minutos: 30 }
+  n_fix:
+    final: exito
+    situacion: >-
+      Corriges la máscara en las PC (y la .79, que caía en el broadcast de una /28, ahora es una
+      dirección normal de la /26). Todas salen a internet y llegan a la casa central. Agregas una
+      nota al procedimiento de instalación: la máscara sale de la tabla de direccionamiento, no
+      de la memoria.
+    resumen: >-
+      Una máscara mal puesta parte la red en pedazos que los equipos no comparten: los que
+      quedan en el mismo pedazo que la puerta de enlace andan, y los demás no tienen salida. La
+      pista fue "unas sí y otras no" y el error de Linux "Nexthop has invalid gateway": la puerta
+      de enlace tiene que estar dentro de la red del equipo. Se resolvió comparando con el plan
+      y corrigiendo lo que se había apartado de él. Para que no se repita: usar DHCP (que
+      entrega la máscara correcta a todos) o, como mínimo, copiar la configuración de la tabla
+      de direccionamiento.

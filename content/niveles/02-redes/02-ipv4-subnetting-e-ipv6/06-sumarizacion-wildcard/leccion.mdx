@@ -1,0 +1,88 @@
+---
+id: n2-m2-l6
+titulo: Sumarización y máscaras wildcard
+minutos: 90
+objetivos:
+  - Sumarizar varias redes contiguas en una sola ruta y reconocer cuándo no se puede.
+  - Calcular máscaras wildcard, que se usan en las ACL y en OSPF.
+glosario: [sumarizacion, wildcard]
+verificado: 2026-11
+---
+
+import sumarizar from './sumarizar.svg?raw'
+
+Dos herramientas cortas que se apoyan en lo que ya sabes de máscaras. La **sumarización** junta muchas redes en una sola ruta, y hace que las tablas de los routers sean más chicas y más fáciles de leer. La **máscara wildcard** es una máscara escrita al revés, que vas a encontrar en las configuraciones de equipos Cisco (ACL en el módulo 2.6, OSPF en el 2.5).
+
+<AntesDeEmpezar>
+- Máscaras, prefijos y tamaño de bloque (lecciones 2.2.2 y 2.2.4).
+- Pasar un octeto a binario (lección 0.3.1).
+</AntesDeEmpezar>
+
+## Sumarizar: una ruta en lugar de muchas
+
+La sucursal tiene cuatro redes: `172.16.20.0/24`, `172.16.21.0/24`, `172.16.22.0/24` y `172.16.23.0/24`. El router de la casa central podría tener cuatro rutas, una para cada una, todas por el mismo camino. O una sola: "todo lo que empiece con 172.16.20.0/22 va a la sucursal".
+
+Es como el correo: el centro de distribución de otra provincia no necesita una regla para cada calle de tu ciudad; le alcanza con "todo lo que tenga este código postal va al camión de tal ciudad". Donde la comparación no llega: en IP, para que el resumen sea exacto, las redes tienen que ser **contiguas** y formar un bloque alineado; si no, la ruta resumida también abarcaría redes que no son de la sucursal.
+
+### Cómo se calcula
+
+1. Escribe en binario el octeto donde las redes cambian.
+2. Cuenta cuántos bits tienen **en común** desde la izquierda.
+3. El resumen es la primera red con ese prefijo.
+
+<Diagrama svg={sumarizar} alt="Las redes 172.16.20.0, 21, 22 y 23 con prefijo /24, con el tercer octeto en binario (00010100, 00010101, 00010110, 00010111): los primeros seis bits coinciden y los dos últimos cambian. Con 16 + 6 = 22 bits en común, el resumen es 172.16.20.0/22. Debajo, la máscara 255.255.252.0 y su wildcard 0.0.3.255." pie="Los bits en común forman el prefijo del resumen." />
+
+### El atajo y la trampa
+
+Con el tamaño de bloque se hace más rápido: 4 redes /24 seguidas forman un bloque de 4 en el tercer octeto, o sea un /22 (como 2² = 4, se restan 2 bits: 24 − 2). Pero solo si el bloque **empieza en un múltiplo de 4**. Dos ejemplos:
+
+- `10.1.8.0/24` a `10.1.11.0/24` → 8 es múltiplo de 4: resumen exacto `10.1.8.0/22`.
+- `10.1.6.0/24` a `10.1.9.0/24` → 6 no es múltiplo de 4. El /22 que contiene a 6 y 7 es `10.1.4.0/22`, que incluye también 4 y 5, y el 8 y el 9 quedan en otro. No hay un resumen exacto en una sola ruta: hacen falta dos (`10.1.6.0/23` y `10.1.8.0/23`).
+
+<EnSimple>
+Sumarizar es decir "todo lo que empieza así, va por acá". Funciona perfecto cuando las redes forman un bloque prolijo (2, 4, 8... seguidas y alineadas); si no, el resumen se come redes ajenas.
+</EnSimple>
+
+<Advertencia>
+Un resumen demasiado amplio es peligroso: si la casa central resume `172.16.0.0/16` hacia la sucursal pero algunas de esas redes están en otra sede, el tráfico va al lugar equivocado. Resume solo lo que realmente está detrás de ese camino.
+</Advertencia>
+
+<Pregunta id="p05" />
+
+## La máscara wildcard
+
+Una **wildcard** se obtiene restando la máscara de `255.255.255.255`, octeto por octeto. En binario es la máscara invertida: donde la máscara tiene unos, la wildcard tiene ceros.
+
+| Prefijo | Máscara | Wildcard |
+| --- | --- | --- |
+| /24 | 255.255.255.0 | 0.0.0.255 |
+| /26 | 255.255.255.192 | 0.0.0.63 |
+| /30 | 255.255.255.252 | 0.0.0.3 |
+| /22 | 255.255.252.0 | 0.0.3.255 |
+| /32 | 255.255.255.255 | 0.0.0.0 (un solo equipo) |
+
+Se lee así: un **0** quiere decir "este bit tiene que coincidir" y un **1**, "este bit no importa". En una ACL de Cisco, `permit 192.168.10.0 0.0.0.255` deja pasar todo lo que empiece con 192.168.10; `permit 192.168.10.5 0.0.0.0` (o `host 192.168.10.5`), solo ese equipo. Las vas a escribir en los módulos 2.5 y 2.6; por ahora, que te salga la cuenta.
+
+## A practicar
+
+<Subnetting modo="practica" tipos={['sumarizacion', 'wildcard']} dificultad={2} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Sumarizar redes que no forman un bloque alineado">
+    10.1.6.0/24 a 10.1.9.0/24 son cuatro redes seguidas, pero no hay un /22 que las contenga solo a ellas. Revisa que el inicio sea múltiplo de la cantidad de redes.
+  </ErrorComun>
+  <ErrorComun titulo="Poner la máscara donde va la wildcard">
+    En una ACL de Cisco, `192.168.10.0 255.255.255.0` no significa /24: el equipo lo interpreta como wildcard y casi siempre termina haciendo otra cosa. En OSPF y en las ACL va la wildcard (0.0.0.255).
+  </ErrorComun>
+  <ErrorComun titulo="Resumir de más">
+    Un resumen que abarca redes que están en otro lado manda tráfico al lugar equivocado. El resumen tiene que coincidir con lo que hay detrás.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Sumarizar: varias redes contiguas en una sola ruta. Se cuentan los bits en común desde la izquierda.
+- Atajo: 2ⁿ redes seguidas del mismo tamaño → se restan n bits al prefijo, si el inicio es múltiplo de 2ⁿ.
+- Si no forman un bloque alineado, hacen falta varias rutas; un resumen de más manda tráfico a donde no corresponde.
+- Wildcard = 255.255.255.255 − máscara. 0 = tiene que coincidir; 1 = no importa. /24 → 0.0.0.255; /30 → 0.0.0.3.
+- Se usa en las ACL y OSPF de Cisco.
+</Resumen>

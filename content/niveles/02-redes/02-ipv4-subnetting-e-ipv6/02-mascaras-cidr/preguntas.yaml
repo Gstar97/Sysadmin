@@ -1,0 +1,100 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué máscara equivale a /24?
+  opciones:
+    - { texto: "255.255.255.0", correcta: true, explicacion: "24 unos: tres octetos en 255 y el último en 0." }
+    - { texto: "255.255.0.0", explicacion: "Eso es /16." }
+    - { texto: "255.255.255.255", explicacion: "Eso es /32." }
+    - { texto: "255.255.255.128", explicacion: "Eso es /25." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuántos hosts utilizables tiene una red /26?
+  opciones:
+    - { texto: "62", correcta: true, explicacion: "6 bits de host: 2⁶ = 64 direcciones, menos la de red y la de broadcast." }
+    - { texto: "64", explicacion: "Son 64 direcciones, pero dos no se pueden usar para equipos." }
+    - { texto: "26", explicacion: "26 son los bits de red." }
+    - { texto: "126", explicacion: "Eso es /25." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué prefijo corresponde a la máscara 255.255.255.240?
+  opciones:
+    - { texto: "/28", correcta: true, explicacion: "240 son 4 unos (11110000): 24 + 4 = 28." }
+    - { texto: "/24", explicacion: "Sería 255.255.255.0." }
+    - { texto: "/30", explicacion: "Sería 255.255.255.252." }
+    - { texto: "/20", explicacion: "Sería 255.255.240.0: el 240 en el tercer octeto." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la dirección de red de 192.168.10.77/26?
+  opciones:
+    - { texto: "192.168.10.64", correcta: true, explicacion: "Bloques de 64: 0, 64, 128, 192. El 77 cae en el que empieza en 64." }
+    - { texto: "192.168.10.0", explicacion: "Sería con /24." }
+    - { texto: "192.168.10.77", explicacion: "Esa es la dirección del equipo." }
+    - { texto: "192.168.10.127", explicacion: "Ese es el broadcast." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es el broadcast de 10.40.8.140/25?
+  opciones:
+    - { texto: "10.40.8.255", correcta: true, explicacion: "Bloques de 128: 140 cae en el que va de 128 a 255." }
+    - { texto: "10.40.8.127", explicacion: "Ese es el broadcast del primer bloque (0 a 127)." }
+    - { texto: "10.40.255.255", explicacion: "Sería con /16." }
+    - { texto: "10.40.8.128", explicacion: "Esa es la dirección de red." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un área necesita 30 equipos y quieres desperdiciar lo menos posible. ¿Qué prefijo usas?
+  opciones:
+    - { texto: "/27 (30 hosts utilizables)", correcta: true, explicacion: "2⁵ − 2 = 30: entra justo." }
+    - { texto: "/28", explicacion: "Solo 14 hosts." }
+    - { texto: "/26", explicacion: "Alcanza (62), pero sobra mucho." }
+    - { texto: "/30", explicacion: "Solo 2 hosts." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC tiene 192.168.1.100/26 y su puerta de enlace es 192.168.1.1. ¿Puede salir de su red?
+  opciones:
+    - { texto: "No: la red de la PC va de .64 a .127 y la puerta de enlace .1 está en otra red", correcta: true, explicacion: "La puerta de enlace tiene que estar en la misma red que el equipo; Linux ni siquiera la acepta (Nexthop has invalid gateway)." }
+    - { texto: "Sí: las dos empiezan con 192.168.1", explicacion: "Con /26 el corte está dentro del último octeto: no alcanza con mirar los tres primeros." }
+    - { texto: "Sí, si el router responde ping", explicacion: "Aunque responda, la PC no lo considera en su red." }
+    - { texto: "Depende del DNS", explicacion: "El DNS no tiene relación con esto." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: ¿Cuál de estas direcciones se le puede asignar a un equipo de esta red?
+  salida: |
+    $ ipcalc 172.16.5.200/29
+    Address:	172.16.5.200
+    Network:	172.16.5.200/29
+    Netmask:	255.255.255.248 = 29
+    Broadcast:	172.16.5.207
+    HostMin:	172.16.5.201
+    HostMax:	172.16.5.206
+    Hosts/Net:	6
+  opciones:
+    - { texto: "172.16.5.203", correcta: true, explicacion: "Está entre HostMin (.201) y HostMax (.206)." }
+    - { texto: "172.16.5.200", explicacion: "Es la dirección de red." }
+    - { texto: "172.16.5.207", explicacion: "Es el broadcast." }
+    - { texto: "172.16.5.208", explicacion: "Ya es de la red siguiente." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Para un enlace punto a punto entre dos routers, ¿qué ventaja tiene /31 frente a /30?
+  opciones:
+    - { texto: "Usa 2 direcciones en lugar de 4, y las dos son utilizables (no hace falta broadcast)", correcta: true, explicacion: "RFC 3021. Algunos equipos viejos no lo soportan." }
+    - { texto: "Permite conectar más de dos routers", explicacion: "Sigue siendo para dos extremos." }
+    - { texto: "Es más rápido", explicacion: "El prefijo no cambia la velocidad." }
+    - { texto: "Ninguna: /31 no es válido", explicacion: "Es válido y se usa mucho en redes nuevas." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Cuál es el rango utilizable de 10.20.30.40/20?
+  opciones:
+    - { texto: "10.20.16.1 a 10.20.31.254", correcta: true, explicacion: "/20: el corte está en el tercer octeto con bloques de 16 (256 − 240). 30 cae en el bloque 16 a 31: red 10.20.16.0, broadcast 10.20.31.255." }
+    - { texto: "10.20.30.1 a 10.20.30.254", explicacion: "Sería con /24." }
+    - { texto: "10.20.0.1 a 10.20.255.254", explicacion: "Sería con /16." }
+    - { texto: "10.20.32.1 a 10.20.47.254", explicacion: "Ese es el bloque siguiente." }

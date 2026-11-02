@@ -416,7 +416,7 @@ function Practice({ tipos, dificultad }: { tipos?: SubnetExerciseType[]; dificul
             else check()
           }}
         >
-          <p className="font-medium">{exercise.enunciado}</p>
+          <p className="font-medium [overflow-wrap:anywhere]">{exercise.enunciado}</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {exercise.campos.map((f, i) => (
               <label key={f.id} className="block">

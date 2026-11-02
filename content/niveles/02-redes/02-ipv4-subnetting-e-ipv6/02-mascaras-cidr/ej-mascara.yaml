@@ -1,0 +1,33 @@
+tipo: terminal
+shell: bash
+titulo: Los datos de la red de un servidor
+descripcion: >-
+  Te toca documentar la red del servidor app02. Averigua su dirección, su red y su broadcast
+  sin hacer las cuentas a mano (después las vas a poder comprobar tú).
+estado_inicial:
+  distro: rocky
+  hostname: app02
+  usuario: admin
+  red:
+    interfaces: [{ nombre: enp0s3, ip: 10.40.8.140/25 }]
+    puerta_enlace: 10.40.8.129
+pasos:
+  - consigna: Mira la IP y el prefijo de la placa.
+    verificar:
+      - { comando_usado: ip }
+      - { salida_contiene: "10.40.8.140/25" }
+    pistas: ["ip -br a"]
+    solucion: [ip -br a]
+    explicacion: >-
+      Tiene 10.40.8.140 con /25: 25 bits de red, 7 de host.
+  - consigna: Usa ipcalc con esa dirección y su prefijo para ver la red, la máscara y el broadcast.
+    verificar:
+      - { comando_usado: ipcalc }
+      - { salida_contiene: "10.40.8.255" }
+    pistas: ["ipcalc 10.40.8.140/25"]
+    solucion: [ipcalc 10.40.8.140/25]
+    explicacion: >-
+      Con /25 (máscara 255.255.255.128) el último octeto se parte en dos mitades: de 0 a 127 y
+      de 128 a 255. 140 cae en la segunda: red 10.40.8.128, broadcast 10.40.8.255, equipos de
+      .129 a .254 (126 hosts). La puerta de enlace, .129, es la primera utilizable, como es
+      costumbre.

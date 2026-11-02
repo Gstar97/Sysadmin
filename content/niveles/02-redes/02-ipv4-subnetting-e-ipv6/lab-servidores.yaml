@@ -1,0 +1,53 @@
+tipo: terminal
+shell: bash
+titulo: La subred de servidores, en IPv4 e IPv6
+descripcion: >-
+  Según tu plan, la subred de Servidores es 172.20.10.224/28 (puerta de enlace .225) y su
+  prefijo IPv6 es fd00:20:4::/64. db01 ya está configurado (172.20.10.227 y fd00:20:4::227).
+  Te toca app01, recién instalado.
+estado_inicial:
+  distro: rocky
+  hostname: app01
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  red:
+    interfaces: [{ nombre: enp0s3 }]
+    dns: [172.20.10.226]
+  servidores:
+    - { ip: 172.20.10.227, hostname: db01, red: { interfaces: [{ nombre: enp0s3, ip: 172.20.10.227/28, ipv6: ["fd00:20:4::227/64"] }], puerta_enlace: 172.20.10.225 } }
+pasos:
+  - consigna: Mira cómo está la placa enp0s3 de app01.
+    verificar:
+      - { comando_usado: ip }
+    pistas: ["ip -br a"]
+    solucion: [ip -br a]
+    explicacion: No tiene IPv4, solo la IPv6 de enlace local (fe80::), que se pone sola.
+  - consigna: >-
+      Configura la conexión enp0s3 con nmcli, de forma permanente: IPv4 172.20.10.226/28, puerta
+      de enlace 172.20.10.225, método manual, e IPv6 fd00:20:4::226/64. Después levanta la conexión.
+    verificar:
+      - { interfaz: enp0s3, ip_en: 172.20.10.224/28, ipv6: "fd00:20:4::226" }
+    pistas:
+      - "sudo nmcli connection modify enp0s3 ipv4.addresses 172.20.10.226/28 ipv4.gateway 172.20.10.225 ipv4.method manual ipv6.addresses fd00:20:4::226/64 ipv6.method manual"
+      - "Después: sudo nmcli connection up enp0s3"
+    solucion:
+      - sudo nmcli connection modify enp0s3 ipv4.addresses 172.20.10.226/28 ipv4.gateway 172.20.10.225 ipv4.method manual ipv6.addresses fd00:20:4::226/64 ipv6.method manual
+      - sudo nmcli connection up enp0s3
+    explicacion: >-
+      nmcli guarda la configuración en el perfil de NetworkManager: sobrevive a un reinicio, a
+      diferencia de ip addr. El cambio se aplica al levantar la conexión.
+  - consigna: Comprueba la ruta por defecto.
+    verificar:
+      - { comando_usado: ip route }
+      - { salida_contiene: "default via 172.20.10.225" }
+    pistas: ["ip route"]
+    solucion: [ip route]
+    explicacion: La puerta de enlace .225 está dentro de la /28 (de .225 a .238), así que el sistema la acepta.
+  - consigna: Prueba la conectividad con db01 por IPv4 y por IPv6.
+    verificar:
+      - { comando_usado: ping }
+      - { salida_contiene: "64 bytes from fd00:20:4::227" }
+    pistas: ["ping -c 2 172.20.10.227 y después ping -c 2 fd00:20:4::227."]
+    solucion: [ping -c 2 172.20.10.227, ping -c 2 fd00:20:4::227]
+    explicacion: >-
+      Las dos versiones responden: doble pila funcionando dentro de la subred.

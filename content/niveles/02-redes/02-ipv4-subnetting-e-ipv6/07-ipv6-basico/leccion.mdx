@@ -1,0 +1,136 @@
+---
+id: n2-m2-l7
+titulo: IPv6 básico
+minutos: 180
+objetivos:
+  - Escribir y abreviar direcciones IPv6 correctamente (RFC 5952).
+  - Reconocer los tipos de dirección (global, enlace local fe80::/10, ULA fc00::/7, multicast) y por qué las LAN usan /64.
+  - Explicar SLAAC frente a DHCPv6, NDP (que reemplaza a ARP) y la doble pila.
+glosario: [ipv6, enlace-local-ipv6, ula, slaac, ndp, doble-pila]
+verificado: 2026-11
+---
+
+import ipv6 from './ipv6.svg?raw'
+import ejIpv6 from './ej-ipv6.yaml'
+
+Las IPv4 se agotaron (lección 2.2.1), y la solución de fondo es **IPv6**: direcciones de 128 bits, tantas que se pueden dar millones a cada persona del planeta. Una parte grande del tráfico de internet ya va por IPv6, y los proveedores lo entregan cada vez más. Todo lo que aprendiste sigue valiendo (prefijos, subredes, puerta de enlace), pero cambian la escritura, algunos nombres y un par de mecanismos. Esta lección es lo básico para leerlo, configurarlo y no asustarse.
+
+<AntesDeEmpezar>
+- El sistema hexadecimal: cada dígito son 4 bits (lección 0.3.2).
+- Prefijos, subredes y puerta de enlace en IPv4 (lecciones anteriores de este módulo).
+- ARP y por qué usa broadcast (lección 2.1.5).
+</AntesDeEmpezar>
+
+## Cómo se escribe
+
+Una IPv6 son **128 bits** escritos en **8 grupos de 4 dígitos hexadecimales** separados por dos puntos: `2001:0db8:0a10:0005:0000:0000:0000:0020`. Es larguísima, así que se abrevia con dos reglas:
+
+1. Se sacan los **ceros a la izquierda** de cada grupo: `0db8` → `db8`, `0005` → `5`, `0000` → `0`.
+2. La secuencia **más larga** de grupos que son todos cero se reemplaza por `::`, **una sola vez** (si fueran dos, no se sabría cuántos ceros hay en cada una).
+
+Además, el estándar (RFC 5952) pide **minúsculas** y, si hay dos secuencias de ceros del mismo largo, abreviar la primera. Así cada dirección tiene una única forma correcta: `2001:db8:a10:5::20`.
+
+<Diagrama svg={ipv6} alt="La dirección 2001:0db8:0a10:0005:0000:0000:0000:0020 dividida en prefijo del sitio (48 bits), subred (16 bits) e identificador de interfaz (64 bits); abreviada queda 2001:db8:a10:5::20/64. Debajo, los tipos: global 2000::/3, enlace local fe80::/10, ULA fc00::/7, multicast ff00::/8, loopback ::1, sin especificar :: y documentación 2001:db8::/32." pie="La mitad izquierda es la red (/64) y la derecha identifica al equipo." />
+
+Practica las dos direcciones: abreviar y expandir.
+
+<Subnetting modo="practica" tipos={['ipv6_abreviar', 'ipv6_expandir']} dificultad={1} />
+
+<EnSimple>
+Una IPv6 es una dirección mucho más larga escrita en hexadecimal. Se acorta sacando ceros: los de adelante de cada grupo, y una tanda de grupos en cero que se reemplaza por "::".
+</EnSimple>
+
+## Los tipos que vas a ver
+
+| Prefijo | Tipo | Equivalente en IPv4 | Para qué |
+| --- | --- | --- | --- |
+| `2000::/3` | Unicast global | Pública | Direcciones que se enrutan en internet (empiezan con 2 o 3) |
+| `fe80::/10` | Enlace local | Algo parecido a 169.254 | Toda interfaz tiene una; solo sirve en su propia red |
+| `fc00::/7` (en la práctica `fd00::/8`) | ULA, única local | Privada (RFC 1918) | Redes internas que no salen a internet |
+| `ff00::/8` | Multicast | Multicast (y reemplaza al broadcast) | Mensajes a un grupo |
+| `::1` | Loopback | 127.0.0.1 | El propio equipo |
+| `2001:db8::/32` | Documentación | 192.0.2.0/24 | Ejemplos y manuales |
+
+Dos diferencias importantes con IPv4:
+
+- **Una interfaz tiene varias direcciones a la vez**: su enlace local `fe80::` siempre, y además una o más globales o ULA. Es normal.
+- **No existe el broadcast**. Todo lo que en IPv4 era "a todos" se hace con multicast, que solo procesan los equipos interesados.
+
+## Siempre /64 en las LAN
+
+En IPv6 la regla es simple: **cada red local es un /64**. Los primeros 64 bits son la red y los otros 64 identifican al equipo. Sí, cada LAN tiene 2⁶⁴ direcciones: sobran. A cambio, no hace falta calcular cuántos hosts entran; solo se planifican **subredes**:
+
+- Un proveedor le da a una empresa un **/48**: los 16 bits entre el /48 y el /64 dan **65.536 subredes /64**.
+- A un hogar le suele dar un **/56**: 256 subredes.
+
+Para hacer subnetting en IPv6 se usan esos bits del medio, casi siempre de a grupos enteros: `2001:db8:a10:1::/64` para Ventas, `2001:db8:a10:2::/64` para Administración, y así. Mucho más fácil que en IPv4.
+
+<Subnetting modo="practica" tipos={['ipv6_red']} dificultad={1} />
+
+<Pregunta id="p07" />
+
+## Cómo consigue su dirección un equipo
+
+Hay tres formas, y el router de la red avisa cuál usar en sus **anuncios de router** (RA), que manda periódicamente por multicast:
+
+- **SLAAC** (autoconfiguración sin estado): el equipo toma el prefijo /64 que anuncia el router y arma él solo los 64 bits de la derecha. Es lo más común. Por eso las LAN necesitan /64: SLAAC no funciona con otro prefijo.
+- **DHCPv6**: un servidor reparte las direcciones, como en IPv4. Se usa cuando la empresa quiere control centralizado.
+- **Manual**: en servidores y routers, como en IPv4.
+
+Los 64 bits del equipo, con SLAAC, se arman de dos formas: a partir de la MAC (**EUI-64**: se parte la MAC en dos, se pone `fffe` en el medio y se invierte un bit) o con un número **aleatorio y estable** (lo que hacen por privacidad Windows, macOS y muchas distribuciones Linux, para que tu dirección no te identifique de una red a otra).
+
+<Consejo titulo="El DNS en IPv6">
+Con SLAAC el equipo consigue dirección y puerta de enlace, pero el DNS lo puede recibir en el mismo anuncio del router (opción RDNSS) o de un DHCPv6. Si un equipo tiene IPv6 pero no resuelve nombres por IPv6, revisa eso.
+</Consejo>
+
+## NDP: el reemplazo de ARP
+
+En IPv6 no hay ARP. Su trabajo, y algo más, lo hace **NDP** (descubrimiento de vecinos), que va dentro de ICMPv6:
+
+- **Solicitud y anuncio de vecino** (NS/NA): "¿quién tiene esta IPv6?" y "soy yo, esta es mi MAC". La solicitud va a un grupo multicast especial calculado a partir de la dirección buscada, así que no la procesa toda la red.
+- **Solicitud y anuncio de router** (RS/RA): así se encuentra la puerta de enlace y el prefijo.
+- **Detección de direcciones duplicadas** (DAD): antes de usar una dirección, el equipo pregunta si alguien la tiene. En IPv6 viene incluido por defecto.
+
+<Advertencia titulo="No bloquees ICMPv6">
+En IPv4 muchos bloquean ICMP "por seguridad" sin grandes consecuencias. En IPv6, bloquear ICMPv6 rompe NDP, la autoconfiguración y la detección del tamaño máximo de paquete: la red deja de funcionar. Los firewalls tienen que dejar pasar los tipos de ICMPv6 necesarios.
+</Advertencia>
+
+## Doble pila
+
+Durante años (probablemente muchos más), IPv4 e IPv6 conviven. La forma más común es la **doble pila**: cada equipo tiene direcciones de los dos y usa IPv6 cuando el destino lo tiene, o IPv4 si no. Para ti, como administrador, significa que cada cosa que configures (firewall, DNS, monitoreo) tiene que contemplar las dos versiones. Un servicio que escucha solo en IPv4, o un firewall que solo filtra IPv4, son fallas típicas.
+
+En Linux, los mismos comandos de siempre con `-6`:
+
+```bash
+ip -6 addr                                     # direcciones IPv6
+ip -6 route                                    # rutas IPv6
+sudo ip -6 addr add fd00:10::10/64 dev enp0s3  # agregar una
+ping -6 fd00:10::20                            # o ping, que detecta IPv6 solo
+ip -6 neigh                                    # vecinos (el resultado de NDP)
+```
+
+<Terminal ejercicio={ejIpv6} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar :: dos veces en una dirección">
+    2001:db8::1::5 es inválida: no se puede saber cuántos ceros hay en cada ::. Se abrevia solo la secuencia más larga.
+  </ErrorComun>
+  <ErrorComun titulo="Usar prefijos distintos de /64 en una LAN">
+    SLAAC necesita /64. Con /80 o /96 en una red de clientes, los equipos no se autoconfiguran. (En enlaces entre routers se usan /127, y está bien.)
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que IPv6 &quot;no está&quot; porque nadie lo configuró">
+    Las interfaces tienen dirección de enlace local siempre, y si el router manda anuncios, también global. Un servicio escuchando en :: (todas las direcciones) queda accesible por IPv6 aunque solo hayas pensado en IPv4.
+  </ErrorComun>
+  <ErrorComun titulo="Hacer ping a una fe80:: sin decir por qué interfaz">
+    Las de enlace local existen en todas las placas, así que hay que indicar cuál: ping fe80::1%enp0s3.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- IPv6: 128 bits en 8 grupos hexadecimales. Se abrevia sacando ceros a la izquierda y reemplazando una vez la secuencia más larga de grupos en 0 por ::, en minúsculas.
+- Tipos: 2000::/3 global, fe80::/10 enlace local (siempre), fc00::/7 ULA (privada, en la práctica fd00::/8), ff00::/8 multicast, ::1 loopback. No hay broadcast.
+- Cada LAN es un /64. El proveedor da /48 (empresas) o /56 (hogares) y se subdivide en /64.
+- Dirección del equipo: SLAAC (el equipo la arma con el prefijo que anuncia el router), DHCPv6 o manual.
+- NDP reemplaza a ARP (y encuentra routers y detecta duplicados) usando ICMPv6: no hay que bloquearlo.
+- Doble pila: IPv4 e IPv6 a la vez; firewall, DNS y servicios tienen que contemplar las dos. Comandos: ip -6 addr, ip -6 route, ping -6, ip -6 neigh.
+</Resumen>

@@ -1,0 +1,96 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál de estas direcciones es privada?
+  opciones:
+    - { texto: "172.20.5.10", correcta: true, explicacion: "Está dentro de 172.16.0.0/12 (de 172.16 a 172.31)." }
+    - { texto: "172.32.5.10", explicacion: "172.32 queda fuera del rango privado: es pública." }
+    - { texto: "8.8.8.8", explicacion: "Es pública (un resolvedor DNS de Google)." }
+    - { texto: "200.45.10.7", explicacion: "Es pública." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una PC con Windows muestra la IP 169.254.33.12. ¿Qué te dice?
+  opciones:
+    - { texto: "Pidió una IP por DHCP y no recibió respuesta", correcta: true, explicacion: "169.254.0.0/16 es enlace local (APIPA): se la pone sola cuando falla el DHCP." }
+    - { texto: "Está conectada a internet con IP pública", explicacion: "169.254 no se enruta en internet." }
+    - { texto: "Es la IP del router", explicacion: "Es una dirección automática de la propia PC." }
+    - { texto: "Tiene CGNAT", explicacion: "CGNAT es 100.64.0.0/10." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: En 10.20.30.40/16, ¿cuál es la parte de red?
+  opciones:
+    - { texto: "10.20", correcta: true, explicacion: "/16 son los primeros 16 bits: los dos primeros octetos." }
+    - { texto: "10", explicacion: "Eso sería con /8." }
+    - { texto: "10.20.30", explicacion: "Eso sería con /24." }
+    - { texto: "40", explicacion: "40 es parte del host." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La interfaz WAN del router de una sucursal tiene la IP 100.72.14.9. ¿Qué significa?
+  opciones:
+    - { texto: "El proveedor usa CGNAT: comparte una IP pública entre muchos clientes", correcta: true, explicacion: "100.64.0.0/10 es el rango de CGNAT (RFC 6598)." }
+    - { texto: "Es una IP pública propia", explicacion: "Está en el rango reservado para CGNAT." }
+    - { texto: "Es una IP privada de la LAN", explicacion: "No es RFC 1918, y además está en la WAN." }
+    - { texto: "Es una dirección de documentación", explicacion: "Las de documentación son 192.0.2.0/24, 198.51.100.0/24 y 203.0.113.0/24." }
+- id: p05
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estas direcciones no deberían aparecer como origen en un paquete que llega desde internet? (Marca todas las correctas.)
+  opciones:
+    - { texto: "10.4.4.4", correcta: true, explicacion: "Es privada: no se enruta en internet." }
+    - { texto: "127.0.0.1", correcta: true, explicacion: "Es loopback: nunca sale de un equipo." }
+    - { texto: "192.168.1.50", correcta: true, explicacion: "Es privada." }
+    - { texto: "203.0.113.20", correcta: true, explicacion: "Es de documentación: no se usa en redes reales." }
+    - { texto: "181.30.2.2", explicacion: "Es pública: puede llegar desde internet." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con las clases, una empresa que necesitaba 300 direcciones recibía una clase B (65.534). ¿Qué cambió CIDR?
+  opciones:
+    - { texto: "Permite poner el corte entre red y host en cualquier bit, y asignar bloques del tamaño justo", correcta: true, explicacion: "Por ejemplo, un /23 (510 hosts) para esa empresa." }
+    - { texto: "Agregó más bits a las direcciones", explicacion: "Eso lo hace IPv6; CIDR sigue con 32 bits." }
+    - { texto: "Eliminó las direcciones privadas", explicacion: "Las privadas siguen existiendo." }
+    - { texto: "Hizo obligatorio el uso de NAT", explicacion: "NAT es otra cosa." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor responde a ping 127.0.0.1 pero no a su propia IP de la red. ¿Qué descartas?
+  opciones:
+    - { texto: "Que el problema sea la pila TCP/IP del sistema en general: el loopback funciona", correcta: true, explicacion: "127.0.0.1 prueba la pila sin salir a la red; el problema está en la interfaz o su configuración." }
+    - { texto: "Que el cable esté bien", explicacion: "El loopback no usa el cable: no dice nada de él." }
+    - { texto: "Que la IP esté bien configurada", explicacion: "Justamente eso puede estar mal." }
+    - { texto: "Nada: el loopback no sirve para diagnosticar", explicacion: "Sirve para separar problemas de la pila de problemas de la red." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: ¿Qué tipo de dirección es esta?
+  salida: |
+    $ ipcalc 224.0.0.5
+    Address:	224.0.0.5
+    ...
+    Address space:	Multicast
+  opciones:
+    - { texto: "Multicast: va a un grupo de equipos (224.0.0.5 la usa OSPF para hablar con sus vecinos)", correcta: true, explicacion: "De 224 a 239 en el primer octeto es multicast." }
+    - { texto: "Una IP privada de un router", explicacion: "Es multicast, no unicast." }
+    - { texto: "Broadcast", explicacion: "El broadcast limitado es 255.255.255.255." }
+    - { texto: "Una dirección de clase A", explicacion: "224 era clase D (multicast)." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un firewall tiene la regla "bloquear entrantes desde 172.0.0.0/8 porque son privadas". ¿Qué problema tiene?
+  opciones:
+    - { texto: "Bloquea también direcciones públicas: el rango privado es solo 172.16.0.0/12", correcta: true, explicacion: "172.0 a 172.15 y 172.32 a 172.255 son públicas." }
+    - { texto: "Ninguno", explicacion: "La regla abarca mucho más que el rango privado." }
+    - { texto: "Le faltan 10.0.0.0/8 y 192.168.0.0/16, pero lo que tiene está bien", explicacion: "Además de lo que falta, lo que tiene está mal." }
+    - { texto: "172.0.0.0/8 no es un prefijo válido", explicacion: "Es válido; el problema es que es demasiado amplio." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Escribes un manual interno con ejemplos de configuración. ¿Qué IP conviene usar en los ejemplos de servidores públicos?
+  opciones:
+    - { texto: "Las de documentación, como 203.0.113.10", correcta: true, explicacion: "Están reservadas para eso (RFC 5737): si alguien copia el ejemplo, no apunta a un equipo real." }
+    - { texto: "8.8.8.8, que todos conocen", explicacion: "Es un servicio real de Google." }
+    - { texto: "Cualquier IP inventada, como 50.50.50.50", explicacion: "Probablemente sea de alguien." }
+    - { texto: "127.0.0.1", explicacion: "Es el propio equipo, no un servidor público." }

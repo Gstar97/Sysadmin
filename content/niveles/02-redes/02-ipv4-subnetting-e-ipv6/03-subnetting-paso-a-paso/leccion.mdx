@@ -1,0 +1,113 @@
+---
+id: n2-m2-l3
+titulo: Subnetting paso a paso
+minutos: 240
+objetivos:
+  - Dividir una red en subredes iguales según la cantidad de subredes o de hosts que hacen falta.
+  - Listar todas las subredes resultantes con su red, rango utilizable y broadcast.
+glosario: [subnetting, subred, bits-prestados]
+verificado: 2026-11
+---
+
+import division from './division.svg?raw'
+import metodo from './metodo.yaml'
+
+Tienes una red y necesitas partirla en varias más chicas: una para cada área de la empresa, una para los servidores, una para el Wi-Fi de invitados. Eso es **subnetting**. Esta lección va despacio, con un método de seis pasos que sirve siempre; en la próxima vas a aprender a hacerlo rápido, de cabeza.
+
+<AntesDeEmpezar>
+- Máscara, dirección de red, broadcast y hosts utilizables (lección anterior).
+- Que un router divide dominios de broadcast y un switch no (lección 2.1.4).
+</AntesDeEmpezar>
+
+## Para qué se divide una red
+
+Tres razones, en orden de importancia en el día a día:
+
+1. **Separar por función y seguridad**: con los invitados en su propia subred, un firewall puede impedir que lleguen a los servidores. Con todos en la misma red, no hay dónde poner esa regla.
+2. **Achicar los dominios de broadcast**: cada subred es su propio dominio (los routers no reenvían broadcast). Mil equipos en una sola red reciben los ARP y los DHCP de los otros mil.
+3. **Ordenar**: si las impresoras están en `192.168.20.192/26`, cualquiera que vea `.200` sabe qué es.
+
+Piensa en un edificio de oficinas. Si todo el edificio es un solo salón enorme, cada anuncio por altoparlante lo escuchan todos y cualquiera entra a cualquier lado. Si lo divides en pisos con su recepción, cada piso tiene sus anuncios y para pasar de uno a otro hay que pasar por recepción (el router). Donde la comparación no llega: las subredes no tienen paredes físicas; están en el mismo cableado si quieres, y lo que las separa es el direccionamiento y el router (o las VLAN del módulo 2.4).
+
+## La idea: tomar bits prestados
+
+Para dividir una red, **se toman bits de la parte de host y se pasan a la parte de red**. Cada bit prestado duplica la cantidad de subredes y divide por dos el tamaño de cada una:
+
+| Bits prestados | Subredes | Partiendo de un /24 queda | Hosts por subred |
+| --- | --- | --- | --- |
+| 1 | 2 | /25 | 126 |
+| 2 | 4 | /26 | 62 |
+| 3 | 8 | /27 | 30 |
+| 4 | 16 | /28 | 14 |
+| 5 | 32 | /29 | 6 |
+
+Es un intercambio: más subredes, menos hosts en cada una. Con 2 bits prestados, un `/24` se parte en cuatro `/26`:
+
+<Diagrama svg={division} alt="La red 192.168.20.0/24 partida en cuatro subredes /26: .0 (hosts .1 a .62, broadcast .63), .64 (hosts .65 a .126, broadcast .127), .128 (hosts .129 a .190, broadcast .191) y .192 (hosts .193 a .254, broadcast .255), asignadas a Ventas, Administración, Depósito y Servidores." pie="Los dos bits prestados (00, 01, 10, 11) dan cuatro subredes que avanzan de 64 en 64." />
+
+<EnSimple>
+Subnetting es partir una red en pedazos iguales. Cada bit que "le robas" a los equipos duplica la cantidad de pedazos y los hace la mitad de grandes.
+</EnSimple>
+
+## El método, en seis pasos
+
+<Ordenar ejercicio={metodo} />
+
+### Ejemplo 1: por cantidad de subredes
+
+**Dividir 192.168.20.0/24 en 6 subredes iguales.**
+
+1. Hacen falta 6 subredes.
+2. Bits prestados: el menor n con 2ⁿ ≥ 6. Con 2 bits hay 4 (no alcanza); con **3 bits hay 8**. Sobran 2 para crecer, y está bien.
+3. Nuevo prefijo: 24 + 3 = **/27** (máscara 255.255.255.224).
+4. Bits de host que quedan: 32 − 27 = 5. Tamaño de bloque: 2⁵ = **32**.
+5. Subredes: .0, .32, .64, .96, .128, .160, .192, .224 (ocho).
+6. La primera: red `192.168.20.0/27`, hosts `.1` a `.30`, broadcast `.31`. La segunda: red `.32`, hosts `.33` a `.62`, broadcast `.63`. Y así: cada broadcast es la red siguiente menos uno.
+
+### Ejemplo 2: por cantidad de hosts
+
+**Dividir 10.10.0.0/16 en subredes de al menos 500 hosts cada una. ¿Cuántas salen?**
+
+1. Hacen falta 500 hosts por subred.
+2. Bits de host necesarios: el menor h con 2ʰ − 2 ≥ 500. 2⁸ − 2 = 254 no alcanza; **2⁹ − 2 = 510** sí. Quedan 9 bits de host.
+3. Nuevo prefijo: 32 − 9 = **/23**. Se prestaron 23 − 16 = 7 bits: salen 2⁷ = **128 subredes**.
+4. Tamaño de bloque: 512 direcciones, que en el tercer octeto son **2** (512 / 256).
+5. Subredes: 10.10.0.0/23, 10.10.2.0/23, 10.10.4.0/23... hasta 10.10.254.0/23.
+6. La primera: red `10.10.0.0`, hosts de `10.10.0.1` a `10.10.1.254`, broadcast `10.10.1.255`. Fíjate que el rango **cruza el octeto**: `10.10.0.255` y `10.10.1.0` son direcciones de equipos normales en un `/23`.
+
+<Nota titulo="¿Por qué &quot;el menor que alcanza&quot;?">
+Con más bits prestados de los necesarios tendrías subredes demasiado chicas; con menos, no te alcanzan. Cuando las áreas necesitan tamaños distintos, el método es otro: VLSM (lección 5), donde cada subred tiene su propio prefijo.
+</Nota>
+
+<Pregunta id="p05" />
+
+## Ahora tú
+
+La calculadora divide cualquier red para que compares tus resultados; la práctica te da ejercicios al azar. Resuélvelos primero en papel, con los seis pasos.
+
+<Subnetting modo="practica" tipos={['subredes', 'mascara', 'red', 'broadcast']} dificultad={2} />
+
+<Subnetting modo="calculadora" />
+
+<ErroresComunes>
+  <ErrorComun titulo="Contar mal los bits prestados">
+    Con 2 bits hay 4 subredes, no 2. Para 5 subredes hacen falta 3 bits (8 subredes), porque 2 bits dan solo 4. Escribe las potencias de 2 al costado y compara.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar el −2 al pedir hosts">
+    Para 30 equipos, 2⁵ − 2 = 30 alcanza justo; para 31, ya hacen falta 6 bits de host. Y suma los equipos que se olvidan: la puerta de enlace, las impresoras, el crecimiento.
+  </ErrorComun>
+  <ErrorComun titulo="Hacer que las subredes empiecen donde no deben">
+    Una /27 no puede empezar en .40: tiene que empezar en un múltiplo de 32 (.0, .32, .64...). Si empieza en otro lado, se superpone con la de al lado.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que el rango no puede cruzar un octeto">
+    En una /23, 10.10.0.255 es un equipo más. Lo único que no se usa es la primera dirección de la red y la última.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Subnetting: partir una red en subredes más chicas para separar por función, achicar los dominios de broadcast y ordenar.
+- Se toman bits prestados de la parte de host: cada bit duplica las subredes y divide por dos su tamaño.
+- Método: cuántas hacen falta → bits prestados (2ⁿ ≥ subredes, o 2ʰ − 2 ≥ hosts) → nuevo prefijo → tamaño de bloque → listar sumando el bloque → red, primera, última y broadcast de cada una.
+- Cada subred empieza en un múltiplo de su tamaño, y su broadcast es la siguiente red menos uno.
+- Con prefijos menores a /24, el rango puede cruzar octetos.
+</Resumen>

@@ -1,0 +1,92 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué permite VLSM?
+  opciones:
+    - { texto: "Usar un prefijo distinto para cada subred, según los hosts que necesita", correcta: true, explicacion: "Así se aprovecha el espacio en lugar de hacer todas las subredes del tamaño de la más grande." }
+    - { texto: "Tener más de 32 bits en una IPv4", explicacion: "Una IPv4 siempre tiene 32 bits." }
+    - { texto: "Usar subredes que se superponen", explicacion: "Las subredes nunca se pueden superponer." }
+    - { texto: "No necesitar router entre subredes", explicacion: "Entre subredes siempre hace falta un router." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Al diseñar con VLSM, ¿en qué orden conviene asignar las subredes?
+  opciones:
+    - { texto: "De la que necesita más hosts a la que necesita menos", correcta: true, explicacion: "Así cada subred cae alineada justo después de la anterior, sin huecos." }
+    - { texto: "De la más chica a la más grande", explicacion: "Deja huecos y puede impedir ubicar las grandes." }
+    - { texto: "En orden alfabético", explicacion: "El nombre no importa para el cálculo." }
+    - { texto: "En cualquier orden: da lo mismo", explicacion: "El orden importa por la alineación." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué prefijo le das a un enlace punto a punto entre dos routers, si los equipos no soportan /31?
+  opciones:
+    - { texto: "/30 (2 hosts)", correcta: true, explicacion: "Una dirección para cada router." }
+    - { texto: "/24", explicacion: "Desperdicia 252 direcciones." }
+    - { texto: "/32", explicacion: "Una sola dirección: no alcanza para dos routers." }
+    - { texto: "/29", explicacion: "Alcanza (6), pero sobra." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En 192.168.30.0/24, ya asignaste 192.168.30.0/25 a Ventas. ¿Dónde empieza la subred /26 de Administración?
+  opciones:
+    - { texto: "192.168.30.128", correcta: true, explicacion: "La /25 termina en .127; .128 es múltiplo de 64: la /26 entra justo ahí." }
+    - { texto: "192.168.30.126", explicacion: ".126 es un equipo de Ventas, y no es múltiplo de 64." }
+    - { texto: "192.168.30.64", explicacion: "Está dentro de la subred de Ventas." }
+    - { texto: "192.168.30.192", explicacion: "Es válida, pero deja libre el bloque .128 a .191 sin motivo." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál de estos pares de subredes se superpone?
+  opciones:
+    - { texto: "192.168.30.128/25 y 192.168.30.192/27", correcta: true, explicacion: "La /25 va de .128 a .255: la /27 está adentro." }
+    - { texto: "192.168.30.0/25 y 192.168.30.128/26", explicacion: "La primera termina en .127; la segunda empieza en .128." }
+    - { texto: "192.168.30.224/28 y 192.168.30.240/30", explicacion: "La /28 termina en .239." }
+    - { texto: "10.0.0.0/24 y 10.0.1.0/24", explicacion: "Son consecutivas, no se tocan." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un área tiene hoy 58 equipos y se espera que crezca un 20% el año que viene. ¿Qué prefijo eliges?
+  opciones:
+    - { texto: "/25 (126 hosts): con crecimiento serían unos 70 y un /26 (62) ya no alcanza", correcta: true, explicacion: "Planificar sin margen obliga a rehacer el direccionamiento al poco tiempo." }
+    - { texto: "/26 (62 hosts)", explicacion: "Alcanza hoy, pero no con el crecimiento esperado." }
+    - { texto: "/27 (30 hosts)", explicacion: "No alcanza ni hoy." }
+    - { texto: "/16", explicacion: "Es enorme para 70 equipos y desperdicia el espacio." }
+- id: p07
+  tipo: respuesta_multiple
+  enunciado: ¿Qué debería figurar en la tabla de direccionamiento de cada subred? (Marca todas las correctas.)
+  opciones:
+    - { texto: "Red con prefijo", correcta: true, explicacion: "Es lo básico." }
+    - { texto: "Puerta de enlace", correcta: true, explicacion: "La necesitan todos los que configuran equipos." }
+    - { texto: "Rango reservado para IP fijas y rango para DHCP", correcta: true, explicacion: "Evita IP duplicadas." }
+    - { texto: "VLAN y área", correcta: true, explicacion: "Para saber dónde y para qué se usa." }
+    - { texto: "Las contraseñas de los equipos", explicacion: "Las credenciales van en un gestor de contraseñas, no en la tabla." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Con 10.50.0.0/22 necesitas subredes para 300, 200, 60 y 2 hosts. ¿Cuál es una asignación correcta?
+  opciones:
+    - { texto: "10.50.0.0/23, 10.50.2.0/24, 10.50.3.0/26, 10.50.3.64/30", correcta: true, explicacion: "300 → /23 (510); 200 → /24 (254); 60 → /26 (62); 2 → /30. Cada una empieza donde termina la anterior." }
+    - { texto: "10.50.0.0/24, 10.50.1.0/24, 10.50.2.0/26, 10.50.2.64/30", explicacion: "Un /24 tiene 254 hosts: no alcanza para 300." }
+    - { texto: "10.50.0.0/23, 10.50.1.0/24, 10.50.3.0/26, 10.50.3.64/30", explicacion: "10.50.1.0/24 está dentro de 10.50.0.0/23." }
+    - { texto: "No alcanza el espacio", explicacion: "Sí alcanza: 512 + 256 + 64 + 4 = 836 de 1024." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Por qué no se puede ubicar una subred /27 en 192.168.30.208?
+  opciones:
+    - { texto: "Porque una /27 tiene que empezar en un múltiplo de 32, y 208 no lo es", correcta: true, explicacion: "Los inicios válidos son .192 y .224; .208 es múltiplo de 16 (sirve para una /28)." }
+    - { texto: "Porque .208 es un broadcast", explicacion: "No es broadcast de ninguna /27." }
+    - { texto: "Sí se puede", explicacion: "No es una dirección de red válida para /27." }
+    - { texto: "Porque las /27 solo pueden ir al principio de la red", explicacion: "Pueden ir en cualquier múltiplo de 32." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un técnico configuró una impresora con IP fija 192.168.30.150 y al otro día hay una IP duplicada. La subred es .128/26. ¿Qué faltó en el plan?
+  opciones:
+    - { texto: "Separar en la tabla un rango para IP fijas fuera del rango que reparte el DHCP", correcta: true, explicacion: "El DHCP le dio .150 a otro equipo porque nadie le dijo que estaba reservada." }
+    - { texto: "Usar una subred más grande", explicacion: "El tamaño no tiene que ver con la duplicación." }
+    - { texto: "Poner la impresora en la .255", explicacion: "La .255 no pertenece a esa subred y además sería broadcast de otra." }
+    - { texto: "Nada: es inevitable", explicacion: "Se evita documentando y separando rangos (o con reservas de DHCP)." }

@@ -1,0 +1,68 @@
+tipo: pasos
+titulo: El plan, en tus máquinas virtuales
+descripcion: >-
+  Vas a poner en rocky01 y ubuntu01 las direcciones de la subred de Servidores de tu plan, en
+  IPv4 e IPv6, de forma permanente, y a comprobar que se ven por las dos versiones.
+pasos:
+  - titulo: Escribe la tabla de direccionamiento
+    detalle: >-
+      En un archivo de texto (direccionamiento.txt en tu carpeta de documentación) copia el plan
+      de la parte 1: para cada área, red con prefijo, puerta de enlace, rango para IP fijas y
+      rango para DHCP. Agrega una columna con el prefijo IPv6 de cada área (fd00:20:1::/64 para
+      la primera, fd00:20:2::/64 para la segunda...). Deja anotado el espacio libre.
+    comprobar: La tabla tiene las cinco áreas, sus puertas de enlace y sus prefijos IPv6, y el espacio libre.
+  - titulo: Prepara la red interna
+    detalle: >-
+      Usa la red interna "labred" del laboratorio 2.1 (segunda placa en las dos máquinas). Si no
+      la tienes, créala como en ese laboratorio. Toma una instantánea antes de seguir.
+    comprobar: Las dos máquinas tienen una segunda placa en la red interna y una instantánea antes-de-vlsm.
+  - titulo: Configura rocky01 con nmcli
+    detalle: >-
+      Con nmcli la configuración queda guardada. Reemplaza enp0s8 por el nombre de tu placa y,
+      si la conexión tiene otro nombre (nmcli connection show), usa ese.
+    comandos:
+      - sudo nmcli connection modify enp0s8 ipv4.addresses 172.20.10.226/28 ipv4.method manual ipv6.addresses fd00:20:4::226/64 ipv6.method manual
+      - sudo nmcli connection up enp0s8
+      - ip -br a show enp0s8
+    comprobar: ip -br a muestra 172.20.10.226/28 y fd00:20:4::226/64 en enp0s8 (además de una fe80::).
+  - titulo: Configura ubuntu01 con netplan
+    detalle: >-
+      Ubuntu guarda la configuración de red en archivos YAML de /etc/netplan. Crea uno nuevo
+      para la placa del laboratorio (con permisos 600, que netplan exige) y aplícalo.
+    comandos:
+      - |
+        sudo tee /etc/netplan/60-labred.yaml > /dev/null <<'EOF'
+        network:
+          version: 2
+          ethernets:
+            enp0s8:
+              addresses:
+                - 172.20.10.227/28
+                - fd00:20:4::227/64
+        EOF
+      - sudo chmod 600 /etc/netplan/60-labred.yaml
+      - sudo netplan try
+    comprobar: netplan try aplica la configuración y te pide confirmar con Enter; ip -br a show enp0s8 muestra las dos direcciones.
+  - titulo: Prueba las dos versiones de IP
+    comandos:
+      - ping -c 3 172.20.10.227
+      - ping -c 3 fd00:20:4::227
+      - ip neigh show dev enp0s8
+    detalle: >-
+      Desde rocky01. En la tabla de vecinos aparecen dos entradas para ubuntu01: una IPv4 (por
+      ARP) y una IPv6 (por NDP), con la misma MAC.
+    comprobar: Los dos ping responden y ip neigh muestra la MAC de ubuntu01 para las dos direcciones.
+  - titulo: Prueba un error a propósito
+    detalle: >-
+      En rocky01, cambia por un momento el prefijo a /29 (con nmcli, como antes, poniendo
+      172.20.10.226/29) y vuelve a hacer ping a .227. Con /29 la red de rocky01 va de .224 a
+      .231, así que todavía llega. Ahora prueba con 172.20.10.234/29: su red va de .232 a .239 y
+      .227 queda afuera: "Network is unreachable". Vuelve a dejar 172.20.10.226/28.
+    comprobar: Viste fallar el ping con 172.20.10.234/29 y volviste a la configuración del plan.
+  - titulo: Reinicia y comprueba que quedó guardado
+    comandos:
+      - sudo reboot
+    detalle: >-
+      Después del reinicio, vuelve a mirar las direcciones en las dos máquinas. Si alguna se
+      perdió, revisa que la hayas configurado con nmcli o netplan y no con ip addr.
+    comprobar: Después de reiniciar, las dos máquinas tienen sus direcciones del plan y los ping siguen respondiendo.

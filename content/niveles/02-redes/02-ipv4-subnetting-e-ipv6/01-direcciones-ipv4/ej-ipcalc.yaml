@@ -1,0 +1,38 @@
+tipo: terminal
+shell: bash
+titulo: ¿Pública o privada? Pregúntale a ipcalc
+descripcion: >-
+  En un inventario viejo aparecen estas direcciones y nadie sabe cuáles son internas. ipcalc
+  te dice de qué rango es cada una (en la línea Address space).
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: admin
+pasos:
+  - consigna: Mira qué tipo de dirección es 172.20.14.9.
+    verificar:
+      - { comando_usado: ipcalc }
+      - { salida_contiene: "Private Use" }
+    pistas: ["ipcalc 172.20.14.9"]
+    solucion: [ipcalc 172.20.14.9]
+    explicacion: >-
+      172.20 está entre 172.16 y 172.31: es privada.
+  - consigna: Ahora 172.40.14.9. ¿Es privada también?
+    verificar:
+      - { comando_usado: ipcalc }
+      - { salida_contiene: "Internet" }
+    pistas: ["ipcalc 172.40.14.9"]
+    solucion: [ipcalc 172.40.14.9]
+    explicacion: >-
+      No: 172.40 está fuera de 172.16.0.0/12, así que es pública ("Internet"). Es la trampa más
+      común con el rango 172: no todo lo que empieza con 172 es privado.
+  - consigna: Por último, 100.70.3.1, que es la IP que figura en la WAN del router de la sucursal.
+    verificar:
+      - { comando_usado: ipcalc }
+      - { salida_contiene: "Shared Address Space" }
+    pistas: ["ipcalc 100.70.3.1"]
+    solucion: [ipcalc 100.70.3.1]
+    explicacion: >-
+      Shared Address Space es el rango de CGNAT (100.64.0.0/10): el proveedor no le dio a la
+      sucursal una IP pública propia, sino una compartida. Eso va a importar cuando quieras
+      publicar un servicio desde ahí (lección 2.3.5).

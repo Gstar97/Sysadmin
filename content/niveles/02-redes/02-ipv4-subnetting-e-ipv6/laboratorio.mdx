@@ -1,0 +1,54 @@
+---
+titulo: Plan VLSM de cinco áreas, en IPv4 e IPv6
+horas: 3
+verificacion:
+  - Diseñé el plan VLSM de las cinco áreas y el diseñador no marca errores.
+  - Escribí la tabla de direccionamiento con puertas de enlace, rangos y prefijos IPv6.
+  - Configuré app01 con nmcli en la plataforma y respondió a ping por IPv4 e IPv6.
+  - Configuré rocky01 (nmcli) y ubuntu01 (netplan) con las direcciones de la subred de Servidores.
+  - Las dos máquinas se ven por IPv4 e IPv6 y la configuración sobrevive a un reinicio.
+  - Provoqué un error de máscara a propósito y entendí por qué falló.
+---
+
+import servidores from './lab-servidores.yaml'
+import pasos from './lab-vlsm.yaml'
+
+## Objetivo
+
+Hacer lo que hace un administrador cuando llega una empresa nueva: diseñar el direccionamiento, documentarlo y aplicarlo en los equipos, en IPv4 e IPv6.
+
+## El pedido
+
+Una fábrica chica te pasa sus necesidades. Tiene asignado el bloque **172.20.10.0/24** para IPv4 y el prefijo ULA **fd00:20::/48** para IPv6:
+
+| Área | Equipos hoy | Comentario |
+| --- | --- | --- |
+| Producción | 90 | Terminales de planta y sensores |
+| Ventas | 45 | Va a crecer un poco |
+| Administración | 20 | |
+| Servidores | 12 | Con IP fija |
+| Enlace con el depósito | 2 | Entre dos routers |
+
+## Parte 1: el diseño
+
+Asigna una subred a cada área. Hay más de una respuesta válida: lo importante es que todo entre, sin superposiciones, y que dejes algo de margen. Para IPv6, una /64 por área: `fd00:20:1::/64` para Producción, `fd00:20:2::/64` para Ventas, y así (el enlace también puede llevar una /64, o una /127).
+
+<DisenadorVlsm red="172.20.10.0/24" areas={[{ nombre: 'Producción', hosts: 90 }, { nombre: 'Ventas', hosts: 45 }, { nombre: 'Administración', hosts: 20 }, { nombre: 'Servidores', hosts: 12 }, { nombre: 'Enlace depósito', hosts: 2 }]} />
+
+<Nota>
+Para el resto del laboratorio se usa la solución que ordena de mayor a menor: Servidores queda en 172.20.10.224/28 (puerta de enlace .225, equipos de .226 a .238) y su prefijo IPv6 es fd00:20:4::/64. Si tu plan es distinto, adapta las direcciones.
+</Nota>
+
+## Parte 2: un servidor en la plataforma
+
+<Terminal ejercicio={servidores} />
+
+## Parte 3: tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Ventas tiene 45 equipos y "va a crecer un poco". ¿Le diste un /26 (62) o un /25? ¿Qué pasa con el resto del plan si en dos años necesita 70?
+2. ¿Por qué en IPv6 no tuviste que calcular cuántos equipos entraban en cada área?
+3. Si mañana la fábrica abre un área nueva de 25 equipos, ¿dónde la pondrías según tu tabla?

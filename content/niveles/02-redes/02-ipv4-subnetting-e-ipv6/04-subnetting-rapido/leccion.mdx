@@ -1,0 +1,89 @@
+---
+id: n2-m2-l4
+titulo: Subnetting rápido
+minutos: 180
+objetivos:
+  - Resolver subnetting de cabeza con el método del tamaño de bloque.
+  - Responder preguntas tipo examen (red, broadcast, rango, hosts, misma red) en menos de un minuto.
+glosario: [tamano-bloque]
+verificado: 2026-11
+---
+
+import bloque from './bloque.svg?raw'
+import prefijoBloque from './prefijo-bloque.yaml'
+
+Con el método de la lección anterior resuelves cualquier ejercicio. El problema es el tiempo: en el trabajo alguien te pregunta "¿la .130 está en la misma red que la .126 con /25?" y espera la respuesta ya, y en los exámenes de certificación tienes menos de un minuto por pregunta. Esta lección es de velocidad: un solo truco, el **tamaño de bloque**, y mucha práctica.
+
+<AntesDeEmpezar>
+- Máscaras, red, broadcast y hosts (lección 2.2.2).
+- Dividir redes con el método de seis pasos (lección anterior).
+</AntesDeEmpezar>
+
+## El truco del tamaño de bloque
+
+Todas las cuentas salen de una sola pregunta: **¿de a cuánto avanzan las redes?** Como los números de las casas de una calle que se numera de a 10: si sabes que las manzanas empiezan en 0, 100, 200..., la casa 347 está en la manzana que empieza en 300 y termina en 399. No hace falta mirar nada más.
+
+Pasos para cualquier dirección con prefijo:
+
+1. **¿En qué octeto cae el corte?** /25 a /32 → el cuarto; /17 a /24 → el tercero; /9 a /16 → el segundo.
+2. **Tamaño de bloque** = 256 − valor de la máscara en ese octeto (o directamente de la tabla de abajo).
+3. **Red** = el múltiplo del bloque más grande que no se pasa del número de la IP en ese octeto. Los octetos de la izquierda se copian; los de la derecha van en 0.
+4. **Broadcast** = la red siguiente menos uno en ese octeto; los octetos de la derecha van en 255.
+5. **Hosts** = 2 elevado a los bits de host, menos 2.
+
+<Diagrama svg={bloque} alt="Tabla de 1 a 8 bits de red en el octeto del corte: máscaras 128, 192, 224, 240, 248, 252, 254, 255 y tamaños de bloque 128, 64, 32, 16, 8, 4, 2, 1. Ejemplo con 172.16.45.200/21: el corte cae en el tercer octeto con bloque 8; 45 está en el bloque que empieza en 40; red 172.16.40.0/21, broadcast 172.16.47.255, rango de 172.16.40.1 a 172.16.47.254, 2046 hosts." pie="Solo hace falta saber en qué octeto cae el corte y de a cuánto avanzan las redes." />
+
+<Emparejar ejercicio={prefijoBloque} />
+
+<EnSimple>
+Averigua de a cuánto saltan las redes (el bloque). La red de una IP es el último salto que no se pasa de ella; el broadcast, el salto siguiente menos uno.
+</EnSimple>
+
+## Cinco preguntas típicas, resueltas en segundos
+
+**1. ¿Red y broadcast de 10.1.1.100/27?** Corte en el cuarto octeto, bloque 32. Múltiplos: 0, 32, 64, **96**, 128. Red `10.1.1.96`, broadcast `10.1.1.127`.
+
+**2. ¿192.168.1.130 y 192.168.1.126 están en la misma red con /25?** Bloque 128: la red de .126 es .0 y la de .130 es .128. **No**: están en redes distintas, aunque sean "vecinas".
+
+**3. ¿Cuántos hosts tiene un /20?** Bits de host: 32 − 20 = 12. 2¹² − 2 = **4094**. (Ayuda saber de memoria 2¹⁰ = 1024.)
+
+**4. ¿Qué máscara necesitas para 120 hosts?** El primer valor de 2ʰ − 2 que alcanza: 126 (h = 7) → /25 → `255.255.255.128`.
+
+**5. ¿Última dirección utilizable de 172.20.0.0/22?** Corte en el tercer octeto, bloque 4: la red va de 172.20.0.0 a 172.20.3.255. Última utilizable: **172.20.3.254**.
+
+<Consejo titulo="Para el examen y para la vida">
+Antes de empezar, escribe en un papel la fila de los bloques (128, 64, 32, 16, 8, 4, 2, 1) y las potencias de 2 hasta 2¹⁶. Con eso a la vista, el 90% de las preguntas se responde sin cuentas.
+</Consejo>
+
+<Pregunta id="p04" />
+
+## A practicar con reloj
+
+La práctica tiene un modo **contrarreloj** de cinco minutos: resuelve todos los que puedas. Al principio vas a ir lento; después de unas cuantas rondas, la mayoría te va a salir en menos de 30 segundos. Vuelve a esta práctica unos minutos por día durante una semana: la velocidad viene de la repetición, no de entender más.
+
+<Subnetting modo="practica" tipos={['red', 'broadcast', 'rango', 'hosts', 'mascara', 'misma_red']} dificultad={2} />
+
+Cuando la dificultad 2 te salga sin errores, sube a la 3: aparecen cortes en el segundo y el tercer octeto, que son los que más se equivocan.
+
+<ErroresComunes>
+  <ErrorComun titulo="Calcular el bloque en el octeto equivocado">
+    En un /20 el corte está en el tercer octeto (16 + 4), no en el cuarto. Primero ubica el octeto, después el bloque.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar los octetos de la derecha">
+    En 172.16.45.200/21 el broadcast es 172.16.47.255, no 172.16.47.0: todos los octetos a la derecha del corte van en 255 en el broadcast y en 0 en la red.
+  </ErrorComun>
+  <ErrorComun titulo="Comparar solo los primeros tres octetos para saber si dos IP están en la misma red">
+    Con /25 o más largo, el corte está dentro del cuarto octeto: .126 y .130 son de redes distintas con /25.
+  </ErrorComun>
+  <ErrorComun titulo="Practicar solo una vez">
+    La velocidad se pierde si no se usa. Cinco minutos de contrarreloj por día rinden más que dos horas una sola vez.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Ubica el octeto del corte (/25-/32 el cuarto, /17-/24 el tercero, /9-/16 el segundo).
+- Bloque = 256 − máscara en ese octeto: 128, 64, 32, 16, 8, 4, 2, 1 para 1 a 8 bits.
+- Red = último múltiplo del bloque que no se pasa de la IP (derecha en 0). Broadcast = siguiente red − 1 (derecha en 255).
+- Hosts = 2^(32 − prefijo) − 2. Conviene saber de memoria las potencias de 2 hasta 2¹⁶.
+- Practica con el contrarreloj unos minutos por día.
+</Resumen>
