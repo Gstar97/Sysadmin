@@ -1,0 +1,129 @@
+---
+id: n1-m7-l2
+titulo: Argumentos, entrada y códigos de salida
+minutos: 120
+objetivos:
+  - Recibir argumentos ($1, $#, "$@") y explicar cómo se usa el script si faltan.
+  - Leer datos de la entrada con read.
+  - Separar la salida normal de los errores y devolver un código de salida que signifique algo.
+  - Activar el modo estricto (set -euo pipefail) y saber qué hace cada opción.
+glosario: [codigo-salida, argumento, stderr]
+verificado: 2026-11
+---
+
+import flujo from './flujo.svg?raw'
+import especiales from './especiales.yaml'
+import ejArgumentos from './ej-argumentos.yaml'
+
+Un script que siempre hace lo mismo sirve para poco. Uno que recibe datos ("revisa este servicio", "respalda esta carpeta") y avisa cómo le fue se puede usar en cien lugares: a mano, desde cron, desde otro script o desde un sistema de monitoreo. Esta lección trata de esa comunicación: lo que entra y lo que sale.
+
+<AntesDeEmpezar>
+- Tu primer script, variables y comillas (lección 1.7.1).
+- Redirecciones, incluidas `2>` y `2>&1` (lección 1.1.7).
+</AntesDeEmpezar>
+
+## Lo que entra y lo que sale
+
+Piensa en un trámite en una ventanilla: entregas papeles (los argumentos), a veces te piden algún dato más en el momento (la entrada), te devuelven un resultado (la salida), te avisan si algo estaba mal (los errores) y te dicen si el trámite quedó aprobado o no (el código de salida). Donde la comparación no llega: el código de salida es solo un número, y nadie lo ve si no lo miras.
+
+<Diagrama svg={flujo} alt="Un script recibe argumentos ($1, $2, el conjunto con $@ y la cantidad con $#) y datos por la entrada estándar (con read, desde el teclado, una tubería o un archivo). Devuelve el resultado por la salida estándar, los avisos por la salida de errores (echo con mayor que ampersand 2) y un código de salida (exit 0 o exit 1, que se lee con $?)." pie="Resultado por stdout, avisos por stderr, y siempre un código de salida." />
+
+## Argumentos
+
+```bash
+./respaldar.sh /srv/datos /backup
+```
+
+Dentro del script, `$1` es `/srv/datos`, `$2` es `/backup`, `$#` es `2` y `"$@"` son todos, cada uno como una palabra (respetando los que tengan espacios).
+
+<Emparejar ejercicio={especiales} />
+
+Un script que necesita argumentos tiene que decir cómo se usa si faltan, y salir con un código de error:
+
+```bash
+if [ $# -ne 2 ]; then
+  echo "Uso: $0 ORIGEN DESTINO" >&2
+  exit 2
+fi
+origen="$1"
+destino="$2"
+```
+
+Ponerles nombre (`origen="$1"`) hace el resto del script mucho más fácil de leer. Para un valor por defecto: `limite="${2:-90}"` (si no viene el segundo argumento, 90). Más adelante vas a ver `getopts`, para opciones como `-v` o `-n 5` (lección 1.7.5).
+
+## Leer de la entrada
+
+```bash
+read -r -p "Usuario: " usuario       # una línea del teclado (o de una tubería)
+read -r -s -p "Contraseña: " clave   # -s: no se ve lo que escribes
+while read -r linea; do              # una vuelta por cada línea de la entrada
+  echo "procesando: $linea"
+done < lista.txt
+```
+
+Usa siempre `-r`, para que las barras invertidas no se interpreten. Y recuerda que un script que corre desde cron no tiene teclado: si necesita datos, que vengan por argumentos o por un archivo.
+
+## Códigos de salida
+
+Cada comando termina con un número: **0 significa que salió bien**, y cualquier otro valor, que hubo un problema (cada programa documenta los suyos; `man grep`, por ejemplo). `$?` tiene el código del último comando.
+
+```bash
+grep -q "error" app.log; echo $?   # 0 si encontró, 1 si no, 2 si hubo un error
+comando && echo "salió bien"        # && si el anterior dio 0
+comando || echo "falló"             # || si dio otro valor
+exit 1                              # terminar el script con ese código
+```
+
+Una convención útil para tus scripts: **0** todo bien, **1** falló la tarea, **2** se usó mal. Lo importante es que un script nunca termine con 0 si algo salió mal: quien lo llame (cron, un monitoreo, otro script) solo se entera por ahí.
+
+Los avisos van por **stderr** con `>&2`. Así, quien use el script puede guardar el resultado en un archivo y seguir viendo los errores en pantalla (o mandarlos a otro lado con `2>`).
+
+<EnSimple>
+0 es "todo bien" y cualquier otro número es "algo salió mal". Haz que tus scripts devuelvan el número correcto: es la única forma en que cron, un monitoreo u otro script se enteren de un problema.
+</EnSimple>
+
+## El modo estricto
+
+Por defecto, si un comando falla, bash sigue con el siguiente como si nada. Casi siempre conviene que se detenga:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+```
+
+- `-e`: si un comando falla, el script termina ahí (salvo en condiciones de if, `||` y `&&`, que se espera que puedan fallar).
+- `-u`: usar una variable que no existe es un error (en lugar de tomarla como vacía).
+- `-o pipefail`: una tubería falla si falla cualquiera de sus partes, no solo la última.
+
+Un ejemplo de por qué importa `-u`: con `rm -rf "$destino/"*` y `$destino` vacío por un error de tipeo, sin `-u` el comando se convierte en `rm -rf /*`. Con `set -u`, el script se detiene antes. `-e` tiene excepciones que sorprenden (por ejemplo, dentro de funciones usadas en un if), así que no reemplaza revisar los errores importantes a mano; en la lección 1.7.5 vas a ver cómo complementarlo con `trap`.
+
+## Practicar en la terminal
+
+<Terminal ejercicio={ejArgumentos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="El script terminó con 0 aunque falló un paso">
+    Sin `set -e`, el código final es el del último comando. Usa el modo estricto, o revisa los pasos importantes y termina con `exit 1`.
+  </ErrorComun>
+  <ErrorComun titulo='"unbound variable" con set -u'>
+    Usas una variable que no se definió, a menudo un argumento que no vino. Valida `$#` al principio, o usa un valor por defecto: `"${1:-}"`.
+  </ErrorComun>
+  <ErrorComun titulo="Los errores aparecen mezclados con el resultado">
+    Mándalos a stderr: `echo "error" >&2`.
+  </ErrorComun>
+  <ErrorComun titulo="Pasar los argumentos a otro comando con $*">
+    `$*` junta todo en una cadena y rompe los argumentos con espacios. Usa `"$@"`.
+  </ErrorComun>
+  <ErrorComun titulo="El script se queda esperando cuando corre desde cron">
+    Tiene un read y no hay teclado. Pasa los datos por argumentos o por un archivo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Argumentos: `$1`, `$2`..., `$#` (cantidad), `"$@"` (todos, bien separados), `$0` (el nombre). Valores por defecto: `"${2:-90}"`.
+- Si faltan argumentos: mensaje de uso por stderr y `exit 2`.
+- `read -r -p "..." var` lee una línea; `while read -r linea; do ...; done < archivo` recorre un archivo.
+- Código de salida: 0 bien, otro valor problema. `$?`, `&&`, `||`, `exit N`. Nunca terminar con 0 si algo falló.
+- Avisos por stderr con `>&2`.
+- Modo estricto: `set -euo pipefail` (parar si falla, variables obligatorias, tuberías completas).
+</Resumen>

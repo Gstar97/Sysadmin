@@ -1,0 +1,68 @@
+tipo: terminal
+shell: bash
+titulo: Un script que avisa cómo le fue
+descripcion: >-
+  Vas a escribir revisar-servicio.sh, que recibe el nombre de un servicio y responde si está
+  funcionando, con un código de salida que otros scripts (o un monitoreo) puedan usar.
+estado_inicial:
+  distro: rocky
+  hostname: app01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+pasos:
+  - consigna: >-
+      Crea ~/revisar-servicio.sh con el contenido que está en la pista, y dale permiso de
+      ejecución. Fíjate en las tres salidas posibles: 2 (mal usado), 0 (funciona) y 1 (detenido).
+    verificar:
+      - { archivo: /home/ana/revisar-servicio.sh, contenido_incluye: "exit 2" }
+      - { archivo: /home/ana/revisar-servicio.sh, modo: "0775" }
+    pistas:
+      - "El script: el shebang; si $# es distinto de 1, muestra el uso por stderr y sale con 2; si systemctl is-active --quiet \"$1\", muestra que funciona y sale con 0; si no, avisa por stderr y sale con 1."
+      - "`cat > ~/revisar-servicio.sh <<'FIN'` con el contenido de la solución, y `chmod +x ~/revisar-servicio.sh`."
+    solucion: ["cat > ~/revisar-servicio.sh <<'FIN'\n#!/bin/bash\n# revisar-servicio.sh: dice si un servicio está funcionando.\n# Uso: revisar-servicio.sh SERVICIO   (sale con 0 si funciona, 1 si no, 2 si se usó mal)\nif [ $# -ne 1 ]; then\n  echo \"Uso: $0 SERVICIO\" >&2\n  exit 2\nfi\nservicio=\"$1\"\nif systemctl is-active --quiet \"$servicio\"; then\n  echo \"$servicio: funcionando\"\n  exit 0\nelse\n  echo \"$servicio: DETENIDO\" >&2\n  exit 1\nfi\nFIN", chmod +x ~/revisar-servicio.sh]
+    explicacion: El if lo vas a ver en detalle en la próxima lección; por ahora, fíjate en $#, $1, >&2 y exit.
+  - consigna: Ejecútalo sin argumentos y mira el código de salida.
+    verificar:
+      - { comando_usado: 'revisar-servicio\.sh\s*;\s*echo\s+\$\?|revisar-servicio\.sh\s*$' }
+      - { salida_contiene: "Uso:" }
+    pistas:
+      - "`./revisar-servicio.sh; echo $?`"
+    solucion: [cd ~, "./revisar-servicio.sh; echo $?"]
+    explicacion: "2: se usó mal. Un script que explica cómo se usa ahorra mucho tiempo."
+  - consigna: Pruébalo con crond (que funciona) y con nginx (que no está instalado), mirando el código cada vez.
+    verificar:
+      - { comando_usado: 'revisar-servicio\.sh\s+nginx' }
+      - { salida_contiene: "nginx: DETENIDO" }
+    pistas:
+      - "`./revisar-servicio.sh crond; echo $?` y `./revisar-servicio.sh nginx; echo $?`"
+    solucion: ["./revisar-servicio.sh crond; echo $?", "./revisar-servicio.sh nginx; echo $?"]
+    explicacion: 0 cuando funciona, 1 cuando no. Eso es lo que miran && y ||, if, y los sistemas de monitoreo.
+  - consigna: Úsalo encadenado, para que muestre "hay que revisar" solo si nginx no funciona.
+    verificar:
+      - { comando_usado: 'revisar-servicio\.sh\s+nginx.*\|\|' }
+      - { salida_contiene: hay que revisar }
+    pistas:
+      - "`./revisar-servicio.sh nginx || echo \"hay que revisar\"`"
+    solucion: ['./revisar-servicio.sh nginx || echo "hay que revisar"']
+    explicacion: "|| ejecuta lo de la derecha si lo de la izquierda falló (código distinto de 0); && si salió bien."
+  - consigna: >-
+      Ahora sepáralo: manda la salida normal a un archivo y los errores a otro, para ver que el
+      aviso de DETENIDO va por stderr.
+    verificar:
+      - { archivo: /home/ana/errores.txt, contenido_incluye: "nginx: DETENIDO" }
+    pistas:
+      - "`./revisar-servicio.sh nginx > salida.txt 2> errores.txt` y `cat errores.txt`"
+    solucion: ["./revisar-servicio.sh nginx > salida.txt 2> errores.txt", cat errores.txt]
+    explicacion: Separar resultado y avisos permite, por ejemplo, guardar los resultados y mandar solo los errores por correo.
+  - consigna: >-
+      Por último, un script que lee de la entrada: crea ~/saludo.sh que lea un nombre con read y
+      salude, y pruébalo pasándole "Laura" por una tubería.
+    verificar:
+      - { archivo: /home/ana/saludo.sh, contenido_incluye: read }
+      - { salida_contiene: "Hola, Laura" }
+    pistas:
+      - "Contenido: #!/bin/bash, read -r -p \"Nombre: \" nombre, y echo \"Hola, $nombre\"."
+      - "`printf '#!/bin/bash\\nread -r -p \"Nombre: \" nombre\\necho \"Hola, $nombre\"\\n' > ~/saludo.sh` y `echo Laura | bash ~/saludo.sh`"
+    solucion: ["printf '#!/bin/bash\\nread -r -p \"Nombre: \" nombre\\necho \"Hola, $nombre\"\\n' > ~/saludo.sh", echo Laura | bash ~/saludo.sh]
+    explicacion: read toma una línea de la entrada. -r evita que las barras invertidas se interpreten; -p muestra la pregunta (solo si la entrada viene del teclado).

@@ -1,0 +1,71 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: Ejecutas ./copiar.sh informe.pdf /tmp. Dentro del script, ¿qué vale $#?
+  opciones:
+    - { texto: "2", correcta: true, explicacion: "Dos argumentos: informe.pdf y /tmp." }
+    - { texto: "3", explicacion: "El nombre del script no cuenta (es $0)." }
+    - { texto: "informe.pdf", explicacion: "Eso es $1." }
+    - { texto: "0", explicacion: "Hay dos argumentos." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Qué significa que un comando termine con código de salida 0?
+  opciones:
+    - { texto: "Que salió bien", correcta: true, explicacion: "Cualquier otro valor indica un problema." }
+    - { texto: "Que falló", explicacion: "Es al revés: 0 es éxito." }
+    - { texto: "Que no hizo nada", explicacion: "El código no dice cuánto hizo." }
+    - { texto: "Que no tiene permisos", explicacion: "Eso sería un código distinto de 0." }
+- id: p03
+  tipo: opcion_multiple
+  enunciado: Un script de respaldo falla al copiar, pero cron registra que terminó con 0. ¿Cuál es la causa más probable?
+  opciones:
+    - { texto: "No tiene set -e ni revisa los errores: el código final es el del último comando, que salió bien", correcta: true, explicacion: "Un echo final con 0 tapa el error anterior." }
+    - { texto: "cron siempre registra 0", explicacion: "cron registra lo que devuelve el script." }
+    - { texto: "La copia salió bien", explicacion: "El enunciado dice que falló." }
+    - { texto: "Falta el shebang", explicacion: "No afecta al código." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe la línea que muestra "Falta el archivo" por la salida de errores.
+  aceptadas: ['echo "Falta el archivo" >&2', "echo 'Falta el archivo' >&2", 'echo "Falta el archivo" 1>&2', '>&2 echo "Falta el archivo"', 'printf "Falta el archivo\n" >&2']
+  explicacion: Así se puede separar de la salida normal con 2>.
+- id: p05
+  tipo: completar_comando
+  enunciado: Escribe la línea que pone en limite el segundo argumento, o 90 si no vino.
+  aceptadas: ['limite="${2:-90}"', "limite=${2:-90}", 'limite="${2-90}"']
+  explicacion: ${variable:-valor} da el valor por defecto si la variable está vacía o no existe.
+- id: p06
+  tipo: opcion_multiple
+  enunciado: ¿Qué hace set -u?
+  opciones:
+    - { texto: "Hace que usar una variable que no existe sea un error y detenga el script", correcta: true, explicacion: "Evita, por ejemplo, un rm sobre una ruta incompleta." }
+    - { texto: "Muestra cada comando antes de ejecutarlo", explicacion: "Eso es set -x." }
+    - { texto: "Detiene el script cuando falla un comando", explicacion: "Eso es set -e." }
+    - { texto: "Pone las variables en mayúsculas", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Por qué se usa "$@" y no $* para pasar los argumentos a otro comando?
+  opciones:
+    - { texto: "Porque \"$@\" mantiene cada argumento por separado, incluidos los que tienen espacios", correcta: true, explicacion: "$* los junta en una sola cadena." }
+    - { texto: "Porque $* no existe", explicacion: "Existe, pero junta todo." }
+    - { texto: "Es lo mismo", explicacion: "Con espacios, no." }
+    - { texto: "Porque \"$@\" es más rápido", explicacion: "No es por velocidad." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta secuencia?
+  salida: |
+    $ grep -q "ERROR" /var/log/app.log; echo $?
+    1
+  opciones:
+    - { texto: "grep no encontró ERROR en el archivo", correcta: true, explicacion: "Para grep: 0 encontró, 1 no encontró, 2 error (por ejemplo, archivo que no existe)." }
+    - { texto: "grep falló porque el archivo no existe", explicacion: "Eso sería 2 y un mensaje." }
+    - { texto: "Hay un ERROR en el archivo", explicacion: "Sería 0." }
+    - { texto: "Falta sudo", explicacion: "Daría un mensaje de permiso y 2." }
+- id: p09
+  tipo: opcion_multiple
+  enunciado: Con set -o pipefail, ¿qué código devuelve cat archivo-que-no-existe | sort?
+  opciones:
+    - { texto: "Distinto de 0, porque falló cat", correcta: true, explicacion: "Sin pipefail devolvería 0, el código de sort." }
+    - { texto: "0, porque sort salió bien", explicacion: "Eso pasa sin pipefail." }
+    - { texto: "Siempre 1", explicacion: "Es el código de la parte que falló." }
+    - { texto: "No se ejecuta", explicacion: "Se ejecuta y falla." }
