@@ -1,0 +1,57 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: ¿Cuál es la forma correcta de procesar un archivo línea por línea?
+  opciones:
+    - { texto: "while read -r linea; do ...; done < archivo", correcta: true, explicacion: "Respeta los espacios de cada línea." }
+    - { texto: "for linea in $(cat archivo); do ...; done", explicacion: "Parte en cada espacio, no en cada línea." }
+    - { texto: "for linea in archivo; do ...; done", explicacion: "Eso recorre la palabra archivo una sola vez." }
+    - { texto: "cat archivo | for linea; do ...; done", explicacion: "for no lee la entrada." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  enunciado: "total=0; cat n.txt | while read n; do ((total += n)); done; echo $total muestra 0. ¿Por qué?"
+  opciones:
+    - { texto: "El while corrió aparte por estar en una tubería, y su copia de total se perdió", correcta: true, explicacion: "Con done < n.txt el while corre en el mismo shell." }
+    - { texto: "Los números no se suman con (( ))", explicacion: "Sí se suman." }
+    - { texto: "El archivo está vacío", explicacion: "Con el archivo vacío también daría 0, pero aquí la causa es la tubería." }
+    - { texto: "Falta -r en read", explicacion: "-r no cambia esto." }
+- id: p03
+  tipo: completar_comando
+  enunciado: Escribe un for que ejecute gzip sobre cada archivo .log de /var/log/app (con la variable entre comillas).
+  aceptadas: ['for f in /var/log/app/*.log; do gzip "$f"; done', 'for archivo in /var/log/app/*.log; do gzip "$archivo"; done', 'for log in /var/log/app/*.log; do gzip "$log"; done', 'for x in /var/log/app/*.log; do gzip "$x"; done']
+  explicacion: El comodín arma la lista de archivos antes de empezar.
+- id: p04
+  tipo: opcion_multiple
+  enunciado: ¿Qué hace continue dentro de un bucle?
+  opciones:
+    - { texto: "Termina la vuelta actual y pasa a la siguiente", correcta: true, explicacion: "break, en cambio, sale del bucle." }
+    - { texto: "Sale del bucle", explicacion: "Eso es break." }
+    - { texto: "Repite la vuelta actual", explicacion: "No." }
+    - { texto: "Termina el script", explicacion: "Eso es exit." }
+- id: p05
+  tipo: opcion_multiple
+  enunciado: En una carpeta sin archivos .csv, ¿qué hace for f in *.csv; do echo "$f"; done?
+  opciones:
+    - { texto: "Muestra *.csv literal, una vez", correcta: true, explicacion: "Sin coincidencias, bash deja el patrón. shopt -s nullglob lo evita." }
+    - { texto: "No muestra nada", explicacion: "Eso pasa con nullglob activado." }
+    - { texto: "Da error", explicacion: "No da error." }
+    - { texto: "Recorre todos los archivos", explicacion: "Solo los .csv." }
+- id: p06
+  tipo: completar_comando
+  enunciado: Escribe la primera línea de un bucle que lea empleados.csv separando por comas en las variables usuario, nombre y depto.
+  aceptadas: ["while IFS=, read -r usuario nombre depto; do", "while IFS=',' read -r usuario nombre depto; do", "while IFS=\",\" read -r usuario nombre depto; do"]
+  explicacion: Se cierra con done < empleados.csv (o < <(tail -n +2 empleados.csv) para saltar el encabezado).
+- id: p07
+  tipo: opcion_multiple
+  enunciado: ¿Qué problema tiene until ping -c1 db01; do sleep 5; done en un script nocturno?
+  opciones:
+    - { texto: "Si db01 nunca responde, el script queda esperando para siempre: le falta un límite", correcta: true, explicacion: "Conviene un contador de intentos o un tiempo máximo." }
+    - { texto: "until no existe", explicacion: "Existe." }
+    - { texto: "sleep no funciona en scripts", explicacion: "Funciona." }
+    - { texto: "Ninguno", explicacion: "Sin límite puede colgarse." }
+- id: p08
+  tipo: completar_comando
+  enunciado: Escribe un for que recorra todos los elementos del arreglo servidores, respetando los que tengan espacios.
+  aceptadas: ['for s in "${servidores[@]}"; do', 'for servidor in "${servidores[@]}"; do', 'for x in "${servidores[@]}"; do']
+  explicacion: '"${arreglo[@]}" entre comillas: un elemento por vuelta.'

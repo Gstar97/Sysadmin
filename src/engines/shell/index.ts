@@ -356,6 +356,9 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if ('salida_contiene' in check) {
     return { ok: stripAnsi(sh.lastOutput).includes(check.salida_contiene), label: `la salida muestra "${check.salida_contiene}"` }
   }
+  if ('salida_no_contiene' in check) {
+    return { ok: !stripAnsi(sh.lastOutput).includes(check.salida_no_contiene), label: `la salida no muestra "${check.salida_no_contiene}"` }
+  }
   if ('salida_regex' in check) {
     const re = safeRegex(check.salida_regex, 'm')
     return { ok: !!re && re.test(stripAnsi(sh.lastOutput)), label: 'la salida tiene el formato esperado' }

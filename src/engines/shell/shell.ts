@@ -715,7 +715,16 @@ export class Shell {
       const last = i === cmds.length - 1
       let buffer = ''
       const out = last ? io.out : (s: string) => (buffer += s)
-      code = await this.exec(cmds[i], { stdin: input, out, err: io.err, isTTY: last && io.isTTY })
+      // Cada parte de una tubería corre aparte: lo que cambie (variables, cd) no queda.
+      const saved = cmds.length > 1 ? this.saveState() : undefined
+      try {
+        code = await this.exec(cmds[i], { stdin: input, out, err: io.err, isTTY: last && io.isTTY })
+      } catch (e) {
+        if (!(e instanceof ExitSignal) || !saved) throw e
+        code = e.code
+      } finally {
+        if (saved) this.restoreState(saved)
+      }
       codes.push(code)
       input = new Stdin(buffer)
     }
@@ -1049,6 +1058,8 @@ export class Shell {
   }
 
   integerVars = new Set<string>()
+  /** shopt: nullglob, dotglob, extglob... */
+  shopts = new Set<string>(['extglob'])
 
   /** Ejecuta un comando ya expandido: builtin, función, script o comando del sistema. */
   async invoke(argv: string[], io: IO): Promise<number> {
@@ -1503,6 +1514,7 @@ export class Shell {
           result.push(...matches)
           continue
         }
+        if (this.shopts.has('nullglob')) continue
       }
       result.push(f.text)
     }
@@ -1703,7 +1715,7 @@ export class Shell {
         }
         const re = globToRegex(seg)
         for (const n of names) {
-          if (n.startsWith('.') && !seg.startsWith('.')) continue
+          if (n.startsWith('.') && !seg.startsWith('.') && !this.shopts.has('dotglob')) continue
           if (re.test(n)) next.push(base === '' ? n : base === '/' ? `/${n}` : `${base}/${n}`)
         }
       }
@@ -2183,6 +2195,22 @@ export const BUILTINS: Record<string, Builtin> = {
     return v !== 0 ? 0 : 1
   },
   mapfile: (sh, args, io) => mapfileBuiltin(sh, args, io),
+  shopt: (sh, args, io) => {
+    const known = ['nullglob', 'dotglob', 'extglob', 'globstar', 'failglob', 'nocaseglob', 'lastpipe', 'expand_aliases']
+    const flag = args.find((a) => a === '-s' || a === '-u' || a === '-p' || a === '-q')
+    const names = args.filter((a) => !a.startsWith('-'))
+    for (const n of names) {
+      if (!known.includes(n)) {
+        io.err(`bash: shopt: ${n}: invalid shell option name\n`)
+        return 1
+      }
+    }
+    if (flag === '-s') names.forEach((n) => sh.shopts.add(n))
+    else if (flag === '-u') names.forEach((n) => sh.shopts.delete(n))
+    else if (flag === '-q') return names.every((n) => sh.shopts.has(n)) ? 0 : 1
+    else for (const n of names.length ? names : known) io.out(`${n.padEnd(16)}${sh.shopts.has(n) ? 'on' : 'off'}\n`)
+    return 0
+  },
   getopts: (sh, args, io) => {
     // getopts "ab:c" opt [args...]: una opción por llamada, con OPTIND y OPTARG.
     const [spec = '', name = 'opt', ...rest] = args

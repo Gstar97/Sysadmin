@@ -261,6 +261,7 @@ const singleCheckSchema = z.union([
   z.strictObject({ paquete: z.string(), instalado: z.boolean().default(true) }),
   z.strictObject({ proceso: z.string(), existe: z.boolean().default(true) }),
   z.strictObject({ salida_contiene: z.string() }),
+  z.strictObject({ salida_no_contiene: z.string() }),
   z.strictObject({ salida_regex: z.string() }),
   z.strictObject({ comando_usado: z.string() }),
   /** ufw activo (o no) en Ubuntu. */
