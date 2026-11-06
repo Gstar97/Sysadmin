@@ -1,0 +1,94 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En la arquitectura de la lección, ¿qué hace Unbound y qué hace BIND?
+  opciones:
+    - { texto: "Unbound es el resolvedor que atiende a todos los equipos; BIND es el autoritativo de la zona interna", correcta: true, explicacion: "Unbound le reenvía a BIND las consultas de empresa.internal." }
+    - { texto: "Los dos hacen lo mismo", explicacion: "Tienen roles distintos." }
+    - { texto: "BIND atiende a los equipos y Unbound guarda las zonas", explicacion: "Es al revés en este diseño." }
+    - { texto: "Unbound es el DHCP", explicacion: "Unbound es un resolvedor DNS." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué comando revisa un archivo de zona antes de cargarlo?
+  opciones:
+    - { texto: "named-checkzone empresa.internal /var/named/db.empresa.internal", correcta: true, explicacion: "Dice OK y el serial, o los errores con su línea." }
+    - { texto: "dig empresa.internal", explicacion: "dig consulta; no revisa el archivo." }
+    - { texto: "systemctl status named", explicacion: "Muestra el estado del servicio." }
+    - { texto: "unbound-checkconf", explicacion: "Revisa la configuración de Unbound." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué hay que hacer cada vez que se cambia un archivo de zona?
+  opciones:
+    - { texto: "Subir el serial del SOA, revisarlo y recargar (rndc reload)", correcta: true, explicacion: "Sin recargar no se aplica, y sin subir el serial los secundarios no copian el cambio." }
+    - { texto: "Reinstalar BIND", explicacion: "No hace falta." }
+    - { texto: "Cambiar el TTL", explicacion: "El TTL se cambia solo si hace falta." }
+    - { texto: "Nada: named lo detecta solo", explicacion: "named sigue sirviendo lo que cargó." }
+- id: p04
+  tipo: encontrar_error
+  enunciado: named-checkzone dice "NS 'ns1.empresa.internal.empresa.internal' has no address records". Marca la línea que tiene el error.
+  lenguaje: zona
+  archivo: |
+    $TTL 1h
+    @  IN SOA ns1.empresa.internal. admin.empresa.internal. ( 2026110201 1h 15m 1w 5m )
+       IN NS  ns1.empresa.internal
+    ns1 IN A  192.168.10.54
+  lineas_con_error: [3]
+  explicacion: Al NS le falta el punto final; BIND le agrega la zona y busca un nombre que no existe.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cómo se llama la zona inversa de la red 192.168.10.0/24?
+  opciones:
+    - { texto: "10.168.192.in-addr.arpa", correcta: true, explicacion: "Los octetos de la red al revés, más in-addr.arpa." }
+    - { texto: "192.168.10.in-addr.arpa", explicacion: "Va al revés." }
+    - { texto: "192.168.10.0.reverse", explicacion: "No existe ese formato." }
+    - { texto: "empresa.internal.arpa", explicacion: "La inversa se arma con la red, no con el dominio." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En Rocky, named responde con dig @127.0.0.1 en el propio servidor, pero los clientes de la red reciben "host unreachable" o no reciben respuesta. ¿Qué revisas?
+  opciones:
+    - { texto: "listen-on y allow-query en /etc/named.conf, y que firewalld permita el servicio dns", correcta: true, explicacion: "La configuración de fábrica de Rocky responde solo al propio servidor." }
+    - { texto: "El serial de la zona", explicacion: "El serial no cambia quién puede consultar." }
+    - { texto: "El registro MX", explicacion: "No interviene." }
+    - { texto: "Que los clientes tengan BIND instalado", explicacion: "Los clientes solo necesitan dig para probar." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Editaste la zona, subiste el serial y los clientes siguen recibiendo la IP vieja de intranet. ¿Qué te olvidaste?
+  opciones:
+    - { texto: "Recargar named (sudo rndc reload) para que cargue el archivo nuevo", correcta: true, explicacion: "named sirve lo que cargó al arrancar o recargar." }
+    - { texto: "Reiniciar los clientes", explicacion: "El problema está en el servidor." }
+    - { texto: "Borrar el archivo de zona", explicacion: "No." }
+    - { texto: "Cambiar el puerto", explicacion: "No tiene relación." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no conviene usar empresa.local para la zona interna?
+  opciones:
+    - { texto: "Porque .local está reservado para mDNS y genera conflictos; se recomienda un subdominio propio o .internal", correcta: true, explicacion: "ICANN reservó .internal en 2024 para redes privadas." }
+    - { texto: "Porque .local es un dominio público de otra empresa", explicacion: "No es eso: está reservado para mDNS." }
+    - { texto: "Porque BIND no acepta zonas .local", explicacion: "Las acepta, pero conviven mal con mDNS." }
+    - { texto: "No hay ningún problema", explicacion: "Sí lo hay." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Qué riesgo tiene un resolvedor DNS que responde consultas recursivas a cualquier IP de internet?
+  opciones:
+    - { texto: "Que lo usen para ataques de amplificación contra terceros (resolvedor abierto)", correcta: true, explicacion: "Consultas chicas con origen falso generan respuestas grandes hacia la víctima." }
+    - { texto: "Ninguno: es un servicio público", explicacion: "Los resolvedores públicos tienen protecciones especiales; uno propio abierto es un problema." }
+    - { texto: "Que se borren sus zonas", explicacion: "Responder no borra zonas." }
+    - { texto: "Que se vuelva más rápido", explicacion: "No es un riesgo." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Unbound no responde las consultas de empresa.internal aunque el forward-zone apunta bien a BIND, y en el log aparecen errores de validación DNSSEC. ¿Qué falta?
+  opciones:
+    - { texto: "domain-insecure: \"empresa.internal\", porque la zona interna no está firmada", correcta: true, explicacion: "Unbound valida DNSSEC por defecto y la zona interna no tiene firmas." }
+    - { texto: "Subir el serial en BIND", explicacion: "No tiene que ver con DNSSEC." }
+    - { texto: "Abrir el puerto 80", explicacion: "DNS no usa el 80." }
+    - { texto: "Reemplazar Unbound por BIND", explicacion: "No hace falta." }

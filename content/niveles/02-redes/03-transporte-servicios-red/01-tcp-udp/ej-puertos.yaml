@@ -1,0 +1,51 @@
+tipo: terminal
+shell: bash
+titulo: Abierto, cerrado o filtrado
+descripcion: >-
+  nc -zv intenta el saludo de tres pasos con un puerto y te dice cómo terminó. Pruébalo contra
+  web01 (192.168.10.20), que tiene nginx en el 80 y el 443, y contra db01 (192.168.10.30),
+  protegido por un firewall.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: admin
+  red:
+    interfaces: [{ nombre: enp0s3, ip: 192.168.10.5/24 }]
+  servidores:
+    - ip: 192.168.10.20
+      hostname: web01
+      distro: ubuntu
+      paquetes: { instalados: [nginx] }
+      servicios: { nginx: { activo: true, habilitado: true, puertos: [80, 443] } }
+    - ip: 192.168.10.30
+      hostname: db01
+      servicios: { mariadb: { activo: true, habilitado: true, puertos: [3306] } }
+pasos:
+  - consigna: Prueba el puerto 443 de web01.
+    verificar:
+      - { comando_usado: nc }
+      - { salida_contiene: "succeeded" }
+    pistas: ["nc -zv web01 443"]
+    solucion: [nc -zv web01 443]
+    explicacion: >-
+      Llegó el SYN-ACK: hay un programa escuchando y el saludo se completó.
+  - consigna: Ahora el puerto 8080 de web01, donde no hay nada.
+    verificar:
+      - { comando_usado: nc }
+      - { salida_contiene: "refused" }
+    pistas: ["nc -zv web01 8080"]
+    solucion: [nc -zv web01 8080]
+    explicacion: >-
+      Connection refused: web01 contestó al SYN con un RST ("aquí no hay nadie"). El equipo está
+      y el camino funciona; lo que falta es el servicio en ese puerto.
+  - consigna: Por último, el 3306 (MariaDB) de db01.
+    verificar:
+      - { comando_usado: nc }
+      - { salida_contiene: "No route to host" }
+    pistas: ["nc -zv db01 3306"]
+    solucion: [nc -zv db01 3306]
+    explicacion: >-
+      MariaDB está funcionando, pero el firewall de db01 (firewalld) rechaza la conexión antes
+      de que llegue: es un puerto filtrado. firewalld contesta con un mensaje ICMP de
+      "prohibido", que el cliente muestra como No route to host; otros firewalls descartan en
+      silencio y el cliente ve un timeout.

@@ -1,0 +1,84 @@
+tipo: terminal
+shell: bash
+titulo: Kea en marcha y un cliente que recibe su dirección
+descripcion: >-
+  srv-dhcp (Rocky) tiene dos placas: enp0s3 en la red de administración (192.168.56.10) y
+  enp0s8 en la red de clientes (192.168.10.5). pc1 está en la red de clientes sin IP: pide la
+  suya por DHCP. A pc1 entras por la red de administración (192.168.56.21).
+estado_inicial:
+  distro: rocky
+  hostname: srv-dhcp
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [kea] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.56.10/24 }
+      - { nombre: enp0s8, ip: 192.168.10.5/24 }
+    puerta_enlace: 192.168.10.1
+  servidores:
+    - ip: 192.168.56.21
+      hostname: pc1
+      clave_conocida: si
+      usuarios: [{ nombre: admin, sudo: true, clave_ssh: true }]
+      red:
+        interfaces:
+          - { nombre: enp0s3, ip: 192.168.56.21/24 }
+          - { nombre: enp0s8, dhcp: true, mac: "52:54:00:aa:10:21" }
+        dns: []
+pasos:
+  - consigna: >-
+      Escribe en /etc/kea/kea-dhcp4.conf una configuración que escuche en enp0s8 y preste
+      192.168.10.100 a 192.168.10.199, con puerta de enlace 192.168.10.1 y DNS 192.168.10.53.
+      Después revísala con kea-dhcp4 -t.
+    verificar:
+      - { comando_usado: kea-dhcp4 -t }
+      - { salida_contiene: "Syntax check OK" }
+    pistas:
+      - "Puedes reemplazar todo el archivo con sudo tee /etc/kea/kea-dhcp4.conf y un heredoc."
+      - "No te olvides del id de la subred: en Kea 2.6 es obligatorio."
+    solucion:
+      - |
+        sudo tee /etc/kea/kea-dhcp4.conf > /dev/null <<'EOF'
+        {
+          "Dhcp4": {
+            "interfaces-config": { "interfaces": [ "enp0s8" ] },
+            "valid-lifetime": 3600,
+            "option-data": [ { "name": "domain-name-servers", "data": "192.168.10.53" } ],
+            "subnet4": [ {
+              "id": 1,
+              "subnet": "192.168.10.0/24",
+              "pools": [ { "pool": "192.168.10.100 - 192.168.10.199" } ],
+              "option-data": [ { "name": "routers", "data": "192.168.10.1" } ]
+            } ]
+          }
+        }
+        EOF
+      - sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+    explicacion: Syntax check OK. Revisar antes de arrancar evita dejar la red sin DHCP por una coma.
+  - consigna: Arranca kea-dhcp4, déjalo habilitado y comprueba en qué dirección y puerto escucha.
+    verificar:
+      - { servicio: kea-dhcp4, activo: true, habilitado: true }
+      - { salida_contiene: "192.168.10.5:67" }
+    pistas: ["sudo systemctl enable --now kea-dhcp4 y después sudo ss -ulnp"]
+    solucion: [sudo systemctl enable --now kea-dhcp4, sudo ss -ulnp]
+    explicacion: >-
+      Escucha en UDP 67, en la IP de enp0s8: solo atiende a la red de clientes, como pediste en interfaces-config.
+  - consigna: Entra a pc1 por la red de administración y levanta su conexión de la red de clientes (enp0s8), que pide la dirección por DHCP.
+    verificar:
+      - { en: pc1, verificar: { interfaz: enp0s8, ip_en: 192.168.10.0/24 } }
+    pistas: ["ssh 192.168.56.21 'sudo nmcli connection up enp0s8; ip -br a'"]
+    solucion: ["ssh 192.168.56.21 'sudo nmcli connection up enp0s8; ip -br a; ip route'"]
+    explicacion: >-
+      pc1 recibió la primera dirección libre del rango (192.168.10.100), la ruta por defecto
+      hacia .1 y el DNS .53 (míralo en su /etc/resolv.conf).
+  - consigna: De vuelta en srv-dhcp, mira el préstamo que quedó registrado.
+    verificar:
+      - { comando_usado: kea-leases4 }
+      - { salida_contiene: "52:54:00:aa:10:21" }
+    pistas: ["sudo cat /var/lib/kea/kea-leases4.csv"]
+    solucion: [sudo cat /var/lib/kea/kea-leases4.csv]
+    explicacion: >-
+      Kea guarda cada préstamo (dirección, MAC, duración, vencimiento e id de la subred) en un
+      archivo CSV. También lo ves en el journal: journalctl -u kea-dhcp4 muestra
+      DHCP4_LEASE_ALLOC con la MAC y la dirección.

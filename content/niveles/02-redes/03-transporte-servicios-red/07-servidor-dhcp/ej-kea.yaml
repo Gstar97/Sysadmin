@@ -1,0 +1,54 @@
+tipo: configuracion
+titulo: La configuración de Kea, con errores
+consigna: >-
+  Te pasaron este kea-dhcp4.conf para la red 192.168.10.0/24 y Kea no arranca. Corrígelo: tiene
+  que escuchar en enp0s8, prestar de .100 a .199, dar como puerta de enlace la .1, como DNS la
+  .53, y reservar la .30 para la impresora (MAC 52:54:00:aa:10:30).
+lenguaje: kea
+nombre_archivo: /etc/kea/kea-dhcp4.conf
+archivo_inicial: |
+  {
+    "Dhcp4": {
+      "interfaces-config": { "interfaces": [ "enp0s8" ] },
+      "valid-lifetime": 3600,
+      "subnet4": [
+        {
+          "subnet": "192.168.10.0/24",
+          "pools": [ { "pool": "192.168.10.100 - 192.168.11.199" } ]
+          "option-data": [
+            { "name": "router", "data": "192.168.10.1" },
+            { "name": "domain-name-servers", "data": "192.168.10.53" }
+          ],
+          "reservations": [
+            { "hw-address": "52:54:00:aa:10:30", "ip-address": "192.168.10.30" }
+          ]
+        }
+      ]
+    }
+  }
+reglas:
+  - { tipo: sin_errores, mensaje: "kea-dhcp4 -t no marca errores" }
+  - { tipo: contiene, regex: '"id"\s*:\s*1', mensaje: "La subred tiene su id" }
+  - { tipo: contiene, regex: '"pool"\s*:\s*"192\.168\.10\.100 - 192\.168\.10\.199"', mensaje: "El rango es de .100 a .199" }
+  - { tipo: contiene, regex: '"name"\s*:\s*"routers"', mensaje: "La puerta de enlace va en la opción routers" }
+solucion: |
+  {
+    "Dhcp4": {
+      "interfaces-config": { "interfaces": [ "enp0s8" ] },
+      "valid-lifetime": 3600,
+      "subnet4": [
+        {
+          "id": 1,
+          "subnet": "192.168.10.0/24",
+          "pools": [ { "pool": "192.168.10.100 - 192.168.10.199" } ],
+          "option-data": [
+            { "name": "routers", "data": "192.168.10.1" },
+            { "name": "domain-name-servers", "data": "192.168.10.53" }
+          ],
+          "reservations": [
+            { "hw-address": "52:54:00:aa:10:30", "ip-address": "192.168.10.30" }
+          ]
+        }
+      ]
+    }
+  }

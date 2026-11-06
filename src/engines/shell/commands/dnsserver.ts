@@ -65,9 +65,8 @@ register('dig', {
       else if (a === '-x') name = reverseName(ctx.args[++i] ?? '')
       else if (a === '-t') type = (ctx.args[++i] ?? 'A').toUpperCase()
       else if (a.startsWith('+')) plus.add(a.slice(1).toLowerCase())
-      else if (/^(A|AAAA|MX|NS|SOA|TXT|CNAME|PTR|SRV|CAA|ANY)$/i.test(a) && name !== undefined) type = a.toUpperCase()
+      else if (/^(A|AAAA|MX|NS|SOA|TXT|CNAME|PTR|SRV|CAA|ANY)$/i.test(a) && (name !== undefined || ctx.args.slice(i + 1).some((x) => !x.startsWith('+') && !x.startsWith('@')))) type = a.toUpperCase()
       else if (name === undefined) name = a
-      else if (/^(A|AAAA|MX|NS|SOA|TXT|CNAME|PTR|SRV|CAA|ANY)$/i.test(a)) type = a.toUpperCase()
     }
     if (ctx.args.includes('-x')) type ??= 'PTR'
     name ??= '.'

@@ -1,0 +1,87 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué puerto usa HTTPS?
+  opciones:
+    - { texto: "443", correcta: true, explicacion: "HTTP sin cifrar usa el 80." }
+    - { texto: "80", explicacion: "Es HTTP sin cifrar." }
+    - { texto: "22", explicacion: "Es SSH." }
+    - { texto: "8443", explicacion: "Se usa a veces como alternativo, pero el estándar es 443." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Con qué se reemplaza Telnet para administrar un servidor a distancia?
+  opciones:
+    - { texto: "SSH (puerto 22)", correcta: true, explicacion: "SSH cifra toda la sesión, incluida la contraseña." }
+    - { texto: "FTP", explicacion: "FTP transfiere archivos y también es inseguro." }
+    - { texto: "HTTP", explicacion: "No sirve para una terminal remota." }
+    - { texto: "SNMP", explicacion: "SNMP es para monitoreo." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué servicio usa los puertos 67 y 68 por UDP?
+  opciones:
+    - { texto: "DHCP", correcta: true, explicacion: "El servidor escucha en el 67 y el cliente en el 68." }
+    - { texto: "DNS", explicacion: "DNS usa el 53." }
+    - { texto: "NTP", explicacion: "NTP usa el 123." }
+    - { texto: "SNMP", explicacion: "SNMP usa el 161 y el 162." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué FTP es inseguro?
+  opciones:
+    - { texto: "Porque manda el usuario, la contraseña y los archivos sin cifrar", correcta: true, explicacion: "Cualquiera que capture el tráfico los puede leer." }
+    - { texto: "Porque usa UDP", explicacion: "FTP usa TCP." }
+    - { texto: "Porque es lento", explicacion: "La velocidad no es el problema." }
+    - { texto: "Porque usa el puerto 21, que es inseguro", explicacion: "El número no importa: importa que no cifra." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un desarrollador pide que abras el puerto 3389 hacia internet en un servidor Windows. ¿Qué servicio es y qué riesgo tiene?
+  opciones:
+    - { texto: "Escritorio remoto (RDP); expuesto a internet es un blanco constante de ataques: mejor una VPN o un bastión", correcta: true, explicacion: "RDP abierto a internet es una de las puertas de entrada más usadas para ataques de ransomware." }
+    - { texto: "Una base de datos; no hay riesgo", explicacion: "3389 es RDP." }
+    - { texto: "SSH de Windows", explicacion: "SSH usa el 22 también en Windows." }
+    - { texto: "Es HTTPS alternativo", explicacion: "No: es RDP." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre SFTP y FTPS?
+  opciones:
+    - { texto: "SFTP funciona sobre SSH (puerto 22); FTPS es FTP con TLS", correcta: true, explicacion: "Son protocolos distintos. SFTP es mucho más simple de habilitar y de filtrar." }
+    - { texto: "Son lo mismo con distinto nombre", explicacion: "Son protocolos distintos." }
+    - { texto: "SFTP no cifra y FTPS sí", explicacion: "Los dos cifran." }
+    - { texto: "SFTP usa el puerto 21", explicacion: "Usa el 22." }
+- id: p07
+  tipo: respuesta_multiple
+  enunciado: ¿Cuáles de estos protocolos mandan las contraseñas en texto plano? (Marca todos los correctos.)
+  opciones:
+    - { texto: "Telnet", correcta: true, explicacion: "Toda la sesión va sin cifrar." }
+    - { texto: "FTP", correcta: true, explicacion: "Usuario, contraseña y archivos sin cifrar." }
+    - { texto: "HTTP con un formulario de inicio de sesión", correcta: true, explicacion: "El formulario viaja sin cifrar." }
+    - { texto: "SSH", explicacion: "Cifra todo." }
+    - { texto: "HTTPS", explicacion: "Va cifrado con TLS." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: Auditando un servidor encuentras esto. ¿Qué es lo más preocupante?
+  salida: |
+    $ sudo ss -tlnp
+    LISTEN 0  128   0.0.0.0:22     0.0.0.0:*  users:(("sshd",pid=801,fd=3))
+    LISTEN 0  511   0.0.0.0:443    0.0.0.0:*  users:(("nginx",pid=1204,fd=7))
+    LISTEN 0  64    0.0.0.0:23     0.0.0.0:*  users:(("in.telnetd",pid=1390,fd=4))
+  opciones:
+    - { texto: "Telnet escuchando en todas las direcciones: hay que apagarlo y usar SSH", correcta: true, explicacion: "Cualquiera que se conecte por Telnet manda su contraseña sin cifrar." }
+    - { texto: "nginx en el 443", explicacion: "Es lo esperable en un servidor web." }
+    - { texto: "SSH en el 22", explicacion: "Es lo normal para administrarlo." }
+    - { texto: "Nada", explicacion: "Telnet es un problema." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una aplicación propia quiere escuchar en el puerto 80 sin correr como root. ¿Por qué falla y qué se suele hacer?
+  opciones:
+    - { texto: "Los puertos menores a 1024 solo los puede usar root: se usa un proxy inverso (nginx) en el 80 que reenvía a la aplicación en un puerto alto", correcta: true, explicacion: "También se le puede dar a ese programa el permiso puntual para usar puertos bajos, pero el proxy es lo más común." }
+    - { texto: "El puerto 80 está reservado para Windows", explicacion: "No tiene relación con el sistema." }
+    - { texto: "No falla", explicacion: "En Linux falla con Permission denied." }
+    - { texto: "Hay que usar UDP", explicacion: "El transporte no cambia esa restricción." }

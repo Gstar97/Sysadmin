@@ -1,0 +1,97 @@
+tipo: paquetes
+titulo: La primera vez que alguien pide www.empresa.com
+descripcion: >-
+  La PC le pregunta a su resolvedor, y el resolvedor hace el trabajo pesado: recorre el árbol
+  desde la raíz hasta el servidor que tiene la respuesta.
+nodos:
+  - { id: pc, etiqueta: PC, tipo: pc, x: 0, y: 120 }
+  - { id: res, etiqueta: "Resolvedor 192.168.10.53", tipo: dns, x: 200, y: 120 }
+  - { id: raiz, etiqueta: "Raíz (.)", tipo: dns, x: 420, y: 0 }
+  - { id: tld, etiqueta: "TLD .com", tipo: dns, x: 520, y: 120 }
+  - { id: aut, etiqueta: "Autoritativo de empresa.com", tipo: dns, x: 420, y: 240 }
+enlaces:
+  - { a: pc, b: res }
+  - { a: res, b: raiz }
+  - { a: res, b: tld }
+  - { a: res, b: aut }
+pasos:
+  - desde: pc
+    hacia: res
+    titulo: "1. Consulta recursiva: dame la IP"
+    explicacion: >-
+      La PC le pide al resolvedor de su red (el de /etc/resolv.conf) la dirección de
+      www.empresa.com, con el indicador "recursión deseada": que se encargue de todo y le traiga
+      la respuesta final.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "¿www.empresa.com A? (RD: recursión deseada)" }
+      transporte: { protocolo: UDP, origen: 48211, destino: 53 }
+      red: { origen: 192.168.10.50, destino: 192.168.10.53, ttl: 64, protocolo: UDP }
+  - desde: res
+    hacia: raiz
+    titulo: "2. A la raíz"
+    explicacion: >-
+      El resolvedor no tiene la respuesta en su caché. Empieza por arriba: le pregunta a un
+      servidor raíz. Estas son consultas iterativas: cada servidor contesta lo que sabe, sin
+      salir a buscar.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "¿www.empresa.com A?" }
+      transporte: { protocolo: UDP, origen: 33012, destino: 53 }
+      red: { origen: 200.45.10.7, destino: 198.41.0.4, ttl: 64, protocolo: UDP }
+  - desde: raiz
+    hacia: res
+    titulo: "3. La raíz deriva a .com"
+    explicacion: >-
+      La raíz no conoce empresa.com, pero sabe quién maneja .com: contesta con una referencia
+      ("pregúntale a estos servidores de .com"), es decir, con registros NS.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "Referencia: com. NS a.gtld-servers.net." }
+      transporte: { protocolo: UDP, origen: 53, destino: 33012 }
+      red: { origen: 198.41.0.4, destino: 200.45.10.7, ttl: 54, protocolo: UDP }
+  - desde: res
+    hacia: tld
+    titulo: "4. Al servidor de .com"
+    explicacion: El resolvedor repite la pregunta al servidor de .com.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "¿www.empresa.com A?" }
+      transporte: { protocolo: UDP, origen: 41522, destino: 53 }
+      red: { origen: 200.45.10.7, destino: 192.5.6.30, ttl: 64, protocolo: UDP }
+  - desde: tld
+    hacia: res
+    titulo: "5. .com deriva al autoritativo"
+    explicacion: >-
+      .com tampoco tiene la IP, pero sabe cuáles son los servidores autoritativos de
+      empresa.com (los que la empresa registró al comprar el dominio).
+    capas:
+      aplicacion: { protocolo: DNS, datos: "Referencia: empresa.com. NS ns1.proveedor.net." }
+      transporte: { protocolo: UDP, origen: 53, destino: 41522 }
+      red: { origen: 192.5.6.30, destino: 200.45.10.7, ttl: 52, protocolo: UDP }
+  - desde: res
+    hacia: aut
+    titulo: "6. Al autoritativo"
+    explicacion: El resolvedor le pregunta al servidor que tiene la zona empresa.com.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "¿www.empresa.com A?" }
+      transporte: { protocolo: UDP, origen: 50877, destino: 53 }
+      red: { origen: 200.45.10.7, destino: 203.0.113.53, ttl: 64, protocolo: UDP }
+  - desde: aut
+    hacia: res
+    titulo: "7. La respuesta autoritativa"
+    explicacion: >-
+      El autoritativo contesta con el indicador aa (respuesta autoritativa): www es un alias
+      (CNAME) de empresa.com, que está en 203.0.113.10, y que la respuesta vale por 300
+      segundos (el TTL).
+    capas:
+      aplicacion: { protocolo: DNS, datos: "www.empresa.com CNAME empresa.com · empresa.com A 203.0.113.10 · TTL 300 (aa)" }
+      transporte: { protocolo: UDP, origen: 53, destino: 50877 }
+      red: { origen: 203.0.113.53, destino: 200.45.10.7, ttl: 55, protocolo: UDP }
+  - desde: res
+    hacia: pc
+    titulo: "8. A la PC, y a la caché"
+    explicacion: >-
+      El resolvedor le pasa la respuesta a la PC y la guarda en su caché durante el TTL. Si en
+      los próximos 300 segundos otra PC pregunta lo mismo, contesta al instante sin repetir el
+      recorrido. Para la PC no es autoritativa: viene de la caché de un tercero.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "www.empresa.com CNAME empresa.com · A 203.0.113.10 (sin aa)" }
+      transporte: { protocolo: UDP, origen: 53, destino: 48211 }
+      red: { origen: 192.168.10.53, destino: 192.168.10.50, ttl: 64, protocolo: UDP }

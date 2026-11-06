@@ -495,7 +495,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
       '/var/named/data/.keep': '',
       '/var/named/dynamic/.keep': '',
     },
-    perms: { '/etc/named.conf': { mode: 0o640, group: 'named' }, '/var/named': { mode: 0o770, group: 'named' }, '/var/named/named.localhost': { mode: 0o640, group: 'named' }, '/var/named/named.loopback': { mode: 0o640, group: 'named' } },
+    perms: { '/etc/named.conf': { mode: 0o640, group: 'named' }, '/var/named': { mode: 0o771, group: 'named' }, '/var/named/named.localhost': { mode: 0o640, group: 'named' }, '/var/named/named.loopback': { mode: 0o640, group: 'named' } },
     commands: ['named', 'named-checkconf', 'named-checkzone', 'rndc'],
   },
   unbound: {

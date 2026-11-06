@@ -1,0 +1,40 @@
+tipo: terminal
+shell: bash
+titulo: Qué escucha en este servidor
+descripcion: >-
+  Heredaste srv-viejo, un servidor que nadie documentó. Antes de tocar nada, averigua qué
+  servicios tiene abiertos y apaga el que no debería estar.
+estado_inicial:
+  distro: rocky
+  hostname: srv-viejo
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  paquetes: { instalados: [nginx, mariadb-server] }
+  servicios:
+    nginx: { activo: true, habilitado: true, puertos: [80, 443] }
+    mariadb: { activo: true, habilitado: true, puertos: [3306] }
+    vsftpd: { activo: true, habilitado: true, puertos: [21], descripcion: "Vsftpd ftp daemon" }
+pasos:
+  - consigna: Lista los puertos TCP que escuchan, con el programa de cada uno.
+    verificar:
+      - { comando_usado: ss }
+      - { salida_contiene: "vsftpd" }
+    pistas: ["sudo ss -tlnp (t TCP, l escuchando, n números, p programa)."]
+    solucion: [sudo ss -tlnp]
+    explicacion: >-
+      22 SSH, 80 y 443 nginx, 3306 MariaDB... y 21, vsftpd: un servidor FTP. FTP manda usuario
+      y contraseña sin cifrar. Si nadie lo usa, hay que apagarlo; si alguien lo usa, migrarlo a
+      SFTP (que viene con SSH).
+  - consigna: Ahora mira los puertos UDP.
+    verificar:
+      - { comando_usado: ss }
+      - { salida_contiene: "123" }
+    pistas: ["sudo ss -ulnp"]
+    solucion: [sudo ss -ulnp]
+    explicacion: El 123 es chronyd, el cliente NTP que mantiene la hora (lección 1.5.4).
+  - consigna: Confirmaste que nadie usa FTP. Detén vsftpd y evita que arranque al reiniciar, con un solo comando.
+    verificar:
+      - { servicio: vsftpd, activo: false, habilitado: false }
+    pistas: ["systemctl disable --now hace las dos cosas."]
+    solucion: [sudo systemctl disable --now vsftpd]
+    explicacion: Un servicio menos escuchando es un riesgo menos. Anótalo en la documentación del servidor.

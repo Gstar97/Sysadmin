@@ -1,0 +1,71 @@
+tipo: paquetes
+titulo: Una conexión TCP, de punta a punta
+descripcion: >-
+  La PC abre una conexión HTTPS con el servidor web, le pide algo y cierra. Mira cómo cambian
+  los indicadores (flags) y los puertos en cada mensaje.
+nodos:
+  - { id: pc, etiqueta: "PC 192.168.10.50", tipo: pc, x: 0, y: 60 }
+  - { id: srv, etiqueta: "Web 192.168.10.20", tipo: servidor, x: 420, y: 60 }
+enlaces:
+  - { a: pc, b: srv }
+pasos:
+  - desde: pc
+    hacia: srv
+    titulo: "1. SYN: pedir la conexión"
+    explicacion: >-
+      La PC elige un puerto de origen alto al azar (efímero) y manda un segmento con el
+      indicador SYN al puerto 443 del servidor: "quiero hablar con el servicio del 443". También
+      manda un número de secuencia inicial, desde el que va a contar los bytes que envíe.
+    capas:
+      transporte: { protocolo: TCP, origen: 52814, destino: 443, flags: SYN }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: TCP }
+  - desde: srv
+    hacia: pc
+    titulo: "2. SYN-ACK: el servidor acepta"
+    explicacion: >-
+      Hay un programa escuchando en el 443 (nginx), así que el servidor contesta con SYN y ACK:
+      confirma lo que recibió y manda su propio número de secuencia. Si nada escuchara en ese
+      puerto, contestaría con RST: es el "Connection refused" que ya conoces.
+    capas:
+      transporte: { protocolo: TCP, origen: 443, destino: 52814, flags: "SYN, ACK" }
+      red: { origen: 192.168.10.20, destino: 192.168.10.50, ttl: 64, protocolo: TCP }
+  - desde: pc
+    hacia: srv
+    titulo: "3. ACK: conexión abierta"
+    explicacion: >-
+      La PC confirma. Con estos tres mensajes (el saludo de tres pasos) los dos saben que el otro
+      está, que escucha y desde qué número va a contar. Recién ahora se pueden mandar datos.
+    capas:
+      transporte: { protocolo: TCP, origen: 52814, destino: 443, flags: ACK }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: TCP }
+  - desde: pc
+    hacia: srv
+    titulo: "4. Datos: el pedido"
+    explicacion: >-
+      La PC manda el pedido (cifrado con TLS, por eso no se ve el contenido). Cada segmento lleva
+      su número de secuencia; si alguno se pierde, el servidor no lo confirma y la PC lo vuelve a
+      mandar al rato (retransmisión).
+    capas:
+      aplicacion: { protocolo: TLS, datos: "Pedido HTTPS cifrado" }
+      transporte: { protocolo: TCP, origen: 52814, destino: 443, flags: "PSH, ACK" }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: TCP }
+  - desde: srv
+    hacia: pc
+    titulo: "5. Datos de vuelta y confirmación"
+    explicacion: >-
+      El servidor confirma lo recibido y manda la respuesta. Los puertos están invertidos: el
+      origen es el 443 y el destino el puerto efímero de la PC, que así sabe que es para su
+      navegador.
+    capas:
+      aplicacion: { protocolo: TLS, datos: "Respuesta HTTPS cifrada" }
+      transporte: { protocolo: TCP, origen: 443, destino: 52814, flags: "PSH, ACK" }
+      red: { origen: 192.168.10.20, destino: 192.168.10.50, ttl: 64, protocolo: TCP }
+  - desde: pc
+    hacia: srv
+    titulo: "6. FIN: cerrar"
+    explicacion: >-
+      Cuando termina, cada lado manda FIN y el otro lo confirma. La conexión queda un rato en
+      estado TIME_WAIT del lado que cerró primero, por si llega algún segmento atrasado.
+    capas:
+      transporte: { protocolo: TCP, origen: 52814, destino: 443, flags: "FIN, ACK" }
+      red: { origen: 192.168.10.50, destino: 192.168.10.20, ttl: 64, protocolo: TCP }

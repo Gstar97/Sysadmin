@@ -1,0 +1,97 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué identifica un número de puerto?
+  opciones:
+    - { texto: "El programa, dentro del equipo, al que va el segmento", correcta: true, explicacion: "La IP lleva hasta el equipo; el puerto, hasta el programa." }
+    - { texto: "El equipo dentro de la red", explicacion: "Eso lo hace la IP." }
+    - { texto: "La placa de red", explicacion: "Eso lo hace la MAC." }
+    - { texto: "El cable del switch", explicacion: "No tiene relación." }
+- id: p02
+  tipo: ordenar_pasos
+  enunciado: Ordena los mensajes del saludo de tres pasos de TCP.
+  pasos:
+    - "El cliente manda SYN"
+    - "El servidor contesta SYN-ACK"
+    - "El cliente contesta ACK"
+    - "Empiezan a viajar los datos"
+  explicacion: Recién después del tercer paso los dos lados saben que la conexión está abierta.
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué transporte usa normalmente una consulta DNS?
+  opciones:
+    - { texto: "UDP, al puerto 53", correcta: true, explicacion: "Pregunta y respuesta cortas: no vale la pena abrir una conexión. Para respuestas grandes se usa TCP 53." }
+    - { texto: "TCP, al puerto 80", explicacion: "80 es HTTP." }
+    - { texto: "TCP, al puerto 22", explicacion: "22 es SSH." }
+    - { texto: "ICMP", explicacion: "ICMP es el de ping, no lleva consultas DNS." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un cliente manda SYN al puerto 8080 de un servidor y recibe un RST. ¿Qué ve el usuario?
+  opciones:
+    - { texto: "Connection refused: llegó al servidor, pero nada escucha en ese puerto", correcta: true, explicacion: "El RST es el \"aquí no hay nadie\" del sistema operativo." }
+    - { texto: "Connection timed out", explicacion: "El timeout aparece cuando no contesta nadie." }
+    - { texto: "La página carga normalmente", explicacion: "No hubo conexión." }
+    - { texto: "Name or service not known", explicacion: "Ese error es de resolución de nombres." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor web atiende 500 navegadores a la vez, todos en el puerto 443. ¿Cómo distingue cada conexión?
+  opciones:
+    - { texto: "Por la combinación de IP y puerto de origen de cada cliente (los cuatro datos de la conexión)", correcta: true, explicacion: "Cada navegador usa un puerto efímero distinto, y muchos además tienen otra IP." }
+    - { texto: "Abre un puerto distinto para cada cliente", explicacion: "Todos llegan al 443." }
+    - { texto: "Por la MAC del cliente", explicacion: "La MAC ni siquiera llega al servidor si el cliente está en otra red." }
+    - { texto: "No puede: atiende de a uno", explicacion: "Atiende muchas conexiones a la vez." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué una llamada por voz IP usa UDP y no TCP?
+  opciones:
+    - { texto: "Porque un pedacito de audio retransmitido llega tarde y ya no sirve: es mejor perderlo que esperar", correcta: true, explicacion: "Las retransmisiones de TCP agregarían demoras y cortes." }
+    - { texto: "Porque UDP cifra el audio", explicacion: "UDP no cifra nada." }
+    - { texto: "Porque TCP no permite audio", explicacion: "TCP transporta cualquier dato." }
+    - { texto: "Porque UDP garantiza que llegue todo", explicacion: "Es al revés: UDP no garantiza nada." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: ¿Qué te dice esta salida sobre el servidor?
+  salida: |
+    $ sudo ss -tlnp
+    State   Recv-Q Send-Q  Local Address:Port  Peer Address:Port Process
+    LISTEN  0      128           0.0.0.0:22         0.0.0.0:*     users:(("sshd",pid=801,fd=3))
+    LISTEN  0      511           0.0.0.0:443        0.0.0.0:*     users:(("nginx",pid=1204,fd=7))
+    LISTEN  0      80          127.0.0.1:3306       0.0.0.0:*     users:(("mariadbd",pid=990,fd=21))
+  opciones:
+    - { texto: "SSH y HTTPS aceptan conexiones de afuera; MariaDB solo desde el propio servidor", correcta: true, explicacion: "127.0.0.1 en la dirección local: solo conexiones locales." }
+    - { texto: "MariaDB está apagado", explicacion: "Está escuchando, pero solo en loopback." }
+    - { texto: "Los tres son UDP", explicacion: "ss -t muestra TCP." }
+    - { texto: "nginx solo acepta conexiones locales", explicacion: "Escucha en 0.0.0.0: todas las direcciones." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Los usuarios dicen que el sistema "anda, pero lentísimo", sin errores. Una captura muestra muchas retransmisiones TCP. ¿Qué indica?
+  opciones:
+    - { texto: "Que se pierden paquetes en el camino: TCP los recupera, pero con demoras", correcta: true, explicacion: "Las pérdidas se ven como lentitud. Hay que buscar el enlace o equipo que las causa." }
+    - { texto: "Que el servidor está apagado", explicacion: "Si lo estuviera, no habría respuesta." }
+    - { texto: "Que UDP está bloqueado", explicacion: "Las retransmisiones son de TCP." }
+    - { texto: "Que todo está normal", explicacion: "Muchas retransmisiones no son normales." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En `ss -tan` ves muchas conexiones en estado SYN-SENT hacia el puerto 443 de un proveedor. ¿Qué está pasando?
+  opciones:
+    - { texto: "Tu equipo manda SYN y nadie contesta: algo (un firewall, una ruta) descarta los paquetes", correcta: true, explicacion: "Si el puerto estuviera cerrado habría RST; si estuviera abierto, ESTAB." }
+    - { texto: "Las conexiones están abiertas y funcionando", explicacion: "Eso sería ESTAB." }
+    - { texto: "El servidor contestó con RST", explicacion: "Con RST la conexión se descarta enseguida y no queda en SYN-SENT." }
+    - { texto: "Son conexiones que se están cerrando", explicacion: "Eso sería FIN-WAIT o TIME-WAIT." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Abriste TCP 53 en el firewall del servidor DNS, pero los clientes siguen sin poder resolver nombres. ¿Qué falta?
+  opciones:
+    - { texto: "Abrir UDP 53, que es lo que usan casi todas las consultas", correcta: true, explicacion: "TCP 53 solo se usa para respuestas grandes y transferencias de zona." }
+    - { texto: "Abrir el puerto 80", explicacion: "DNS no usa HTTP." }
+    - { texto: "Nada: con TCP alcanza", explicacion: "Las consultas comunes van por UDP." }
+    - { texto: "Abrir ICMP", explicacion: "No es lo que usa DNS." }

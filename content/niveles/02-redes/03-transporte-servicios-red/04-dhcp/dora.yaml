@@ -1,0 +1,75 @@
+tipo: paquetes
+titulo: DORA, los cuatro mensajes de DHCP
+descripcion: >-
+  Una notebook se conecta a la red de la oficina sin ninguna configuración. No tiene IP, no
+  sabe cuál es la red ni quién es el servidor DHCP. Mira cómo lo consigue todo en cuatro
+  mensajes.
+nodos:
+  - { id: pc, etiqueta: "Notebook (sin IP)", tipo: pc, x: 0, y: 100 }
+  - { id: sw, etiqueta: Switch, tipo: switch, x: 220, y: 100 }
+  - { id: dhcp, etiqueta: "Servidor DHCP 192.168.10.5", tipo: servidor, x: 440, y: 20 }
+  - { id: otro, etiqueta: "Otros equipos", tipo: pc, x: 440, y: 190 }
+enlaces:
+  - { a: pc, b: sw }
+  - { a: sw, b: dhcp }
+  - { a: sw, b: otro }
+pasos:
+  - desde: pc
+    hacia: sw
+    titulo: "1. Discover: ¿hay algún servidor DHCP?"
+    explicacion: >-
+      La notebook no tiene IP, así que usa 0.0.0.0 como origen, y como no sabe quién es el
+      servidor, manda a 255.255.255.255 (broadcast) del puerto 68 (cliente) al 67 (servidor).
+      Adentro va su MAC, para que la reconozcan.
+    capas:
+      aplicacion: { protocolo: DHCP, datos: "DISCOVER · MAC del cliente 52:54:00:aa:10:77" }
+      transporte: { protocolo: UDP, origen: 68, destino: 67 }
+      red: { origen: 0.0.0.0, destino: 255.255.255.255, ttl: 64, protocolo: UDP }
+      enlace: { origen: "52:54:00:aa:10:77", destino: "ff:ff:ff:ff:ff:ff" }
+  - desde: sw
+    hacia: dhcp
+    titulo: El broadcast le llega a todos
+    explicacion: >-
+      El switch inunda el broadcast. Los demás equipos lo descartan; el servidor DHCP, que
+      escucha en el 67, lo procesa y busca una dirección libre en su rango para esa MAC.
+    capas:
+      aplicacion: { protocolo: DHCP, datos: "DISCOVER · MAC del cliente 52:54:00:aa:10:77" }
+      transporte: { protocolo: UDP, origen: 68, destino: 67 }
+      red: { origen: 0.0.0.0, destino: 255.255.255.255, ttl: 64, protocolo: UDP }
+      enlace: { origen: "52:54:00:aa:10:77", destino: "ff:ff:ff:ff:ff:ff" }
+  - desde: dhcp
+    hacia: pc
+    titulo: "2. Offer: te ofrezco esta dirección"
+    explicacion: >-
+      El servidor ofrece 192.168.10.120 con todo lo necesario: máscara, puerta de enlace
+      (opción router), servidores DNS, dominio y tiempo de préstamo. Todavía no está asignada:
+      es una oferta.
+    capas:
+      aplicacion: { protocolo: DHCP, datos: "OFFER 192.168.10.120/24 · router .1 · DNS .53 · préstamo 3600 s" }
+      transporte: { protocolo: UDP, origen: 67, destino: 68 }
+      red: { origen: 192.168.10.5, destino: 192.168.10.120, ttl: 64, protocolo: UDP }
+      enlace: { origen: "52:54:00:aa:10:05", destino: "52:54:00:aa:10:77" }
+  - desde: pc
+    hacia: sw
+    titulo: "3. Request: la quiero"
+    explicacion: >-
+      La notebook acepta la oferta, y lo dice otra vez por broadcast: así, si hubiera varios
+      servidores DHCP que ofrecieron, todos se enteran de cuál eligió y los demás liberan la
+      suya.
+    capas:
+      aplicacion: { protocolo: DHCP, datos: "REQUEST 192.168.10.120 al servidor 192.168.10.5" }
+      transporte: { protocolo: UDP, origen: 68, destino: 67 }
+      red: { origen: 0.0.0.0, destino: 255.255.255.255, ttl: 64, protocolo: UDP }
+      enlace: { origen: "52:54:00:aa:10:77", destino: "ff:ff:ff:ff:ff:ff" }
+  - desde: dhcp
+    hacia: pc
+    titulo: "4. Ack: es tuya"
+    explicacion: >-
+      El servidor confirma y anota el préstamo (MAC, IP y vencimiento). Recién ahora la
+      notebook configura la IP, la ruta por defecto y el DNS. A la mitad del préstamo va a
+      pedirle al mismo servidor que se lo renueve, ya sin broadcast.
+    capas:
+      aplicacion: { protocolo: DHCP, datos: "ACK 192.168.10.120 · préstamo 3600 s" }
+      transporte: { protocolo: UDP, origen: 67, destino: 68 }
+      red: { origen: 192.168.10.5, destino: 192.168.10.120, ttl: 64, protocolo: UDP }
+      enlace: { origen: "52:54:00:aa:10:05", destino: "52:54:00:aa:10:77" }

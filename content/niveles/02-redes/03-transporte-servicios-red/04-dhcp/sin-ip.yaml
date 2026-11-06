@@ -1,0 +1,60 @@
+tipo: troubleshooting
+titulo: Las PC del segundo piso no tienen red
+descripcion: >-
+  Lunes, 9:00. Las 15 PC del segundo piso (Ventas) no navegan ni ven el servidor de archivos.
+  Las del primer piso, que están en otra red, andan bien.
+inicio: n1
+nodos:
+  n1:
+    situacion: Te acercas a una de las PC con Windows del segundo piso.
+    evidencia:
+      - titulo: ipconfig en la PC
+        contenido: |
+          Adaptador de Ethernet Ethernet:
+             Dirección IPv4 de configuración automática: 169.254.88.14
+             Máscara de subred . . . . . . . . . . . . . : 255.255.0.0
+             Puerta de enlace predeterminada . . . . . :
+    opciones:
+      - { texto: "Ponerle a mano una IP de la red de Ventas", ir_a: n_manual, minutos: 5 }
+      - { texto: "La 169.254 dice que no llegó respuesta del DHCP: averiguar por qué", ir_a: n_porque, minutos: 2 }
+  n_manual:
+    situacion: >-
+      Esa PC anda, pero quedan 14, y cuando la próxima reciba por error la misma IP del DHCP
+      vas a tener una IP duplicada. La 169.254 era el síntoma de que el DHCP no le llega a nadie
+      del piso.
+    opciones:
+      - { texto: "Averiguar por qué no llega el DHCP", ir_a: n_porque, minutos: 2 }
+  n_porque:
+    situacion: >-
+      El servidor DHCP está en la red de Servidores; Ventas es otra red, unida por el router.
+      Para que el Discover (un broadcast) cruce el router, este tiene configurado un relay. El
+      viernes a la noche se reemplazó el router del segundo piso por uno nuevo.
+    evidencia:
+      - titulo: Servidor DHCP, últimos mensajes
+        contenido: |
+          (ningún pedido desde la red 192.168.20.0/24 desde el viernes 22:14)
+      - titulo: Configuración de la interfaz de Ventas en el router nuevo
+        contenido: |
+          interface GigabitEthernet0/1
+           description VENTAS
+           ip address 192.168.20.1 255.255.255.0
+    opciones:
+      - { texto: "Falta el relay en la interfaz de Ventas: agregar ip helper-address 192.168.10.5", ir_a: n_fin, minutos: 5 }
+      - texto: Reiniciar el servidor DHCP
+        ir_a: n_reinicio
+        minutos: 8
+  n_reinicio:
+    situacion: >-
+      El servidor vuelve, las PC de otras redes renuevan bien... y las de Ventas siguen con
+      169.254. El servidor nunca recibe sus pedidos: el problema está en el camino.
+    opciones:
+      - { texto: "Revisar el relay del router nuevo", ir_a: n_fin, minutos: 5 }
+  n_fin:
+    final: exito
+    situacion: >-
+      Agregas `ip helper-address 192.168.10.5` en la interfaz de Ventas. En un minuto las PC
+      reciben 192.168.20.x (si no, ipconfig /renew en Windows o nmcli connection up en Linux).
+    resumen: >-
+      Una 169.254 quiere decir "pedí DHCP y nadie contestó". Si le pasa a toda una red, el
+      problema es común a todos: el servidor, o el relay que lleva los broadcast hasta él
+      cuando está en otra red. Al reemplazar un router hay que copiar también sus relays.

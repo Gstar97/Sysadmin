@@ -1,0 +1,122 @@
+---
+id: n2-m3-l3
+titulo: DNS
+minutos: 180
+objetivos:
+  - Explicar la jerarquía del DNS y la diferencia entre la resolución recursiva y la iterativa.
+  - Conocer los registros A, AAAA, CNAME, MX, TXT, NS, SOA, PTR y SRV, y el efecto del TTL y la caché.
+  - Consultar con dig y nslookup e interpretar sus respuestas (status, flags, secciones, servidor).
+glosario: [resolvedor, servidor-autoritativo, registro-dns, ttl-dns, zona-dns]
+verificado: 2026-11
+---
+
+import jerarquia from './jerarquia.svg?raw'
+import resolucion from './resolucion.yaml'
+import registros from './registros.yaml'
+import ejDig from './ej-dig.yaml'
+
+"Es el DNS" es casi un chiste entre administradores, porque cuando algo raro pasa en una red, muy seguido la causa está ahí. El DNS traduce nombres en direcciones, y casi todo lo demás depende de él: la web, el correo, la autenticación de Windows, las conexiones entre servidores. En esta lección entiendes cómo funciona y aprendes a interrogarlo; en la lección 6 vas a montar el tuyo.
+
+<AntesDeEmpezar>
+- Que el DNS traduce nombres en IP y usa el puerto 53 (lección 0.4.5).
+- `/etc/resolv.conf`, `/etc/hosts` y `getent hosts` (lección 1.6.1).
+- UDP y TCP (lección 2.3.1).
+</AntesDeEmpezar>
+
+## Un árbol de nombres
+
+El DNS es como la guía de una ciudad muy grande organizada por barrios. Nadie tiene todos los números: la oficina central sabe qué guía tiene cada barrio, la de cada barrio sabe qué guía tiene cada edificio, y en cada edificio está la lista de sus departamentos. Para encontrar a alguien, se va preguntando de arriba hacia abajo. Donde la comparación no llega: el DNS lo recorre en milisegundos y guarda lo que aprende para no volver a preguntar.
+
+El árbol empieza en la **raíz** (un punto, `.`). Debajo están los **dominios de primer nivel** o TLD (`.com`, `.org`, `.ar`, `.mx`, `.es`). Debajo, los dominios que registran las empresas (`empresa.com`), y debajo los nombres que la empresa crea (`www.empresa.com`, `mail.empresa.com`). Cada parte del árbol que administra alguien se llama **zona**, y los servidores que tienen la información oficial de una zona son sus **servidores autoritativos**.
+
+<Diagrama svg={jerarquia} alt="El árbol del DNS: la raíz arriba; debajo los dominios de primer nivel .org, .com y los de país; debajo de .com, empresa.com y ejemplo.com; y debajo de empresa.com, www.empresa.com. Los servidores raíz saben quién maneja cada TLD, y cada empresa tiene servidores autoritativos para su dominio." pie="Un nombre completo se lee de derecha a izquierda: raíz, com, empresa, www." />
+
+## Quién hace el trabajo: el resolvedor
+
+Hay dos tipos de servidores DNS, y confundirlos es una fuente clásica de problemas:
+
+- **Resolvedor** (o recursivo): recibe las preguntas de los equipos, recorre el árbol por ellos y guarda las respuestas en su **caché**. Es el que figura en `/etc/resolv.conf` de cada equipo: el del router, el de la empresa, o uno público (1.1.1.1, 8.8.8.8, 9.9.9.9).
+- **Autoritativo**: tiene los datos oficiales de una o más zonas y responde solo por ellas. No sale a buscar nada.
+
+La pregunta de la PC al resolvedor es **recursiva** ("tráeme la respuesta final"). Las del resolvedor a cada servidor del árbol son **iterativas** ("dime lo que sepas"): la raíz contesta "pregúntale a .com", .com contesta "pregúntale a los servidores de empresa.com", y estos dan la respuesta. Recórrelo:
+
+<SimuladorPaquetes escenario={resolucion} />
+
+### Caché y TTL
+
+Cada respuesta trae un **TTL** (tiempo de vida) en segundos: cuánto la puede guardar quien la recibe. Con TTL 300, el resolvedor no vuelve a preguntar durante 5 minutos. Es lo que hace al DNS rápido... y lo que explica uno de los malentendidos más comunes: **un cambio en el DNS no se ve enseguida** en todos lados, porque los resolvedores siguen usando la respuesta vieja hasta que vence su TTL. Antes de una migración, se baja el TTL con anticipación (por ejemplo, a 300 segundos un día antes) para que el cambio se propague rápido.
+
+<EnSimple>
+Tu equipo le pregunta todo a un resolvedor. El resolvedor, si no sabe, recorre el árbol desde la raíz hasta el servidor oficial del dominio, y se guarda la respuesta el tiempo que diga el TTL.
+</EnSimple>
+
+## Los registros
+
+Cada zona es una lista de **registros**. Los que vas a usar:
+
+<Emparejar ejercicio={registros} />
+
+Tres detalles que causan problemas:
+
+- Un nombre con **CNAME no puede tener otros registros**. Por eso el dominio "pelado" (`empresa.com`) no puede ser un CNAME: necesita su SOA y sus NS.
+- El **MX** apunta a un nombre, nunca a una IP, y ese nombre necesita su registro A (no un CNAME).
+- La resolución **inversa** (de IP a nombre, registros PTR) vive en zonas especiales: la IP `203.0.113.10` se busca como `10.113.0.203.in-addr.arpa`. Muchos servidores de correo rechazan mensajes de IP sin PTR.
+
+<Pregunta id="p06" />
+
+## Preguntarle al DNS: dig
+
+`dig` es la herramienta de diagnóstico de DNS por excelencia (en Rocky viene en el paquete bind-utils; en Ubuntu, en bind9-dnsutils). Su salida tiene todo lo que necesitas saber:
+
+```text
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 47140
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+;; ANSWER SECTION:
+empresa.com.		300	IN	A	203.0.113.10
+;; SERVER: 192.168.1.1#53(192.168.1.1) (UDP)
+```
+
+- **status**: `NOERROR` (respondió; puede venir vacío si el nombre existe pero no tiene ese tipo), `NXDOMAIN` (el nombre no existe), `SERVFAIL` (el servidor no pudo resolver), `REFUSED` (no te quiere responder).
+- **flags**: `aa` si la respuesta es autoritativa; `rd` (pediste recursión) y `ra` (el servidor la ofrece).
+- **ANSWER**: nombre, TTL, clase, tipo y dato.
+- **SERVER**: quién contestó. Siempre míralo: muchas sorpresas vienen de preguntarle al servidor equivocado.
+
+Las formas que más vas a usar:
+
+```bash
+dig empresa.com                  # registro A, salida completa
+dig empresa.com MX +short        # solo la respuesta
+dig www.empresa.com +noall +answer
+dig @1.1.1.1 empresa.com         # preguntarle a un servidor en particular
+dig -x 203.0.113.10              # resolución inversa (PTR)
+nslookup empresa.com             # la herramienta clásica, también en Windows
+```
+
+<Terminal ejercicio={ejDig} />
+
+<Consejo titulo="dig, nslookup y getent">
+`dig` y `nslookup` le preguntan solo al DNS. `getent hosts` y `ping` usan el mismo camino que los programas: primero `/etc/hosts`, después el DNS. Si dig responde bien y un programa no, mira `/etc/hosts`.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="&quot;Cambié el DNS y no anda&quot;">
+    Probablemente sí anda, pero los resolvedores tienen la respuesta vieja en caché hasta que vence el TTL. Pregúntale directo al autoritativo (dig @servidor-autoritativo) para ver lo que realmente publicaste.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir NXDOMAIN con un problema de red">
+    NXDOMAIN es una respuesta: el servidor dice que el nombre no existe. Si el problema fuera de red, verías "timed out" o "no servers could be reached".
+  </ErrorComun>
+  <ErrorComun titulo="Poner un CNAME en el dominio principal">
+    empresa.com no puede ser un CNAME, porque ya tiene SOA y NS. Algunos proveedores ofrecen registros especiales (ALIAS o aplanado de CNAME) para resolver esto.
+  </ErrorComun>
+  <ErrorComun titulo="Diagnosticar sin mirar quién respondió">
+    La línea SERVER de dig dice a qué servidor le preguntaste. Si es el resolvedor de tu red, estás viendo su caché, no necesariamente lo que publicaste.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El DNS es un árbol: raíz, TLD, dominios, nombres. Cada zona tiene servidores autoritativos con los datos oficiales.
+- Los equipos le preguntan a un resolvedor (consulta recursiva); el resolvedor recorre el árbol (consultas iterativas) y guarda las respuestas en caché durante el TTL.
+- Registros: A, AAAA, CNAME (alias, sin otros registros), MX (correo, apunta a un nombre), TXT, NS, SOA, PTR (inversa, en in-addr.arpa), SRV.
+- dig: status (NOERROR, NXDOMAIN, SERVFAIL, REFUSED), flags (aa = autoritativa), ANSWER con TTL, y SERVER (quién contestó). @servidor para elegir a quién preguntar, +short para la respuesta sola, -x para la inversa.
+- Los cambios tardan lo que dura el TTL en verse en todos lados: bájalo antes de una migración.
+</Resumen>

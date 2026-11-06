@@ -1,0 +1,87 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál es el reemplazo actual de ISC DHCP (dhcpd), que llegó a su fin de vida en 2022?
+  opciones:
+    - { texto: "Kea, también de ISC", correcta: true, explicacion: "Configuración en JSON, préstamos en archivo o base de datos y alta disponibilidad." }
+    - { texto: "BIND", explicacion: "BIND es un servidor DNS." }
+    - { texto: "Unbound", explicacion: "Unbound es un resolvedor DNS." }
+    - { texto: "chrony", explicacion: "chrony sincroniza la hora." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué comando revisa la configuración de Kea antes de arrancarlo?
+  opciones:
+    - { texto: "kea-dhcp4 -t /etc/kea/kea-dhcp4.conf", correcta: true, explicacion: "Responde Syntax check OK o el error con su línea." }
+    - { texto: "named-checkconf", explicacion: "Es para BIND." }
+    - { texto: "systemctl status kea-dhcp4", explicacion: "Muestra el estado, no revisa el archivo." }
+    - { texto: "dig", explicacion: "dig es para DNS." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cómo se llama la opción de Kea que entrega la puerta de enlace?
+  opciones:
+    - { texto: "routers", correcta: true, explicacion: "En plural. Kea rechaza las opciones que no conoce." }
+    - { texto: "gateway", explicacion: "No es un nombre de opción válido." }
+    - { texto: "router", explicacion: "Le falta la s: Kea no la reconoce." }
+    - { texto: "default-route", explicacion: "No existe." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    Kea 2.6 no arranca y el journal dice "subnet configuration failed: missing parameter 'id'". ¿Qué falta?
+  opciones:
+    - { texto: "Un \"id\" numérico único en cada subred de subnet4", correcta: true, explicacion: "Es obligatorio desde Kea 2.6." }
+    - { texto: "El nombre del servidor", explicacion: "No es lo que pide." }
+    - { texto: "Instalar BIND", explicacion: "No tiene relación." }
+    - { texto: "Abrir el puerto 67", explicacion: "Es un error de configuración, no de firewall." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Kea está activo, pero ningún cliente recibe dirección. ss -ulnp no muestra nada en el puerto 67. ¿Qué revisas?
+  opciones:
+    - { texto: "interfaces-config: probablemente está vacío o apunta a otra placa", correcta: true, explicacion: "La configuración de fábrica no escucha en ninguna placa." }
+    - { texto: "El rango", explicacion: "Si el rango estuviera mal, igual escucharía en el 67." }
+    - { texto: "Las reservas", explicacion: "No impiden escuchar." }
+    - { texto: "El DNS", explicacion: "No interviene en que escuche." }
+- id: p06
+  tipo: interpretar_salida
+  enunciado: ¿Qué dice esta línea del archivo de préstamos?
+  salida: |
+    $ sudo cat /var/lib/kea/kea-leases4.csv
+    address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context,pool_id
+    192.168.10.100,52:54:00:aa:10:21,,3600,1793651937,1,0,0,pc1,0,,0
+  opciones:
+    - { texto: "pc1 (MAC 52:54:00:aa:10:21) tiene prestada la 192.168.10.100 por una hora, en la subred de id 1", correcta: true, explicacion: "valid_lifetime 3600 segundos; expire es el vencimiento en formato Unix." }
+    - { texto: "La .100 está reservada para pc1 para siempre", explicacion: "Es un préstamo con vencimiento, no una reserva." }
+    - { texto: "Kea rechazó a pc1", explicacion: "Si lo hubiera rechazado no habría préstamo." }
+    - { texto: "pc1 tiene IP fija", explicacion: "La recibió por DHCP." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde conviene ubicar las reservas, respecto del rango dinámico?
+  opciones:
+    - { texto: "Fuera del rango: así es claro qué direcciones son fijas y cuáles se prestan", correcta: true, explicacion: "Kea permite reservas dentro del rango, pero separadas es más ordenado." }
+    - { texto: "Siempre dentro del rango", explicacion: "Funciona, pero mezcla fijas y dinámicas." }
+    - { texto: "En otra subred", explicacion: "Tienen que estar en la subred del equipo." }
+    - { texto: "No importa", explicacion: "Importa para el orden y para evitar confusiones." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Para un laboratorio con cinco máquinas virtuales quieres DHCP y DNS con caché con la menor configuración posible. ¿Qué usas?
+  opciones:
+    - { texto: "dnsmasq", correcta: true, explicacion: "Hace las dos cosas con un archivo de pocas líneas." }
+    - { texto: "Kea con alta disponibilidad", explicacion: "Es más de lo necesario para cinco máquinas." }
+    - { texto: "BIND con zonas dinámicas", explicacion: "Es mucho más complejo." }
+    - { texto: "Configurar todo a mano en cada máquina", explicacion: "Funciona, pero no es DHCP." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: La impresora tiene una reserva en Kea para la .30, pero después de cambiarle la placa de red recibe una dirección del rango. ¿Por qué?
+  opciones:
+    - { texto: "La reserva es por MAC, y la placa nueva tiene otra MAC: hay que actualizar la reserva", correcta: true, explicacion: "Kea reconoce al equipo por su hw-address." }
+    - { texto: "Las reservas vencen como los préstamos", explicacion: "Una reserva no vence." }
+    - { texto: "Kea no permite reservas de impresoras", explicacion: "No distingue tipos de equipo." }
+    - { texto: "Hay que reiniciar el switch", explicacion: "No tiene relación." }

@@ -457,7 +457,7 @@
   leccion: n0-m4-l5
 - id: tcp
   termino: TCP
-  alias: [UDP, saludo de tres pasos]
+  alias: [Transmission Control Protocol, conexión TCP]
   definicion: Protocolo de transporte que abre una conexión (SYN, SYN-ACK, ACK) y garantiza que los datos lleguen completos y en orden. UDP, en cambio, envía sin conexión ni confirmaciones.
   leccion: n0-m4-l5
 - id: tls
@@ -1260,3 +1260,139 @@
   alias: [dual stack]
   definicion: Equipos y redes que usan IPv4 e IPv6 a la vez. Obliga a configurar firewall, DNS y servicios para las dos versiones.
   leccion: n2-m2-l7
+- id: udp
+  termino: UDP
+  alias: [User Datagram Protocol, datagrama]
+  definicion: Protocolo de transporte sin conexión ni confirmaciones. Es liviano y rápido; lo usan DNS, NTP, la voz y el video, y QUIC (HTTP/3).
+  leccion: n2-m3-l1
+- id: socket
+  termino: Socket
+  alias: [par IP y puerto]
+  definicion: Combinación de una dirección IP y un puerto. Una conexión queda identificada por el socket de origen y el de destino.
+  leccion: n2-m3-l1
+- id: puerto-efimero
+  termino: Puerto efímero
+  alias: [puerto de origen, puerto alto]
+  definicion: Puerto alto que elige al azar el cliente para cada conexión (en Linux, de 32768 a 60999), para que la respuesta vuelva al programa correcto.
+  leccion: n2-m3-l1
+- id: saludo-tres-pasos
+  termino: Saludo de tres pasos
+  alias: [three-way handshake, SYN, SYN-ACK]
+  definicion: Forma en que TCP abre una conexión. El cliente manda SYN, el servidor contesta SYN-ACK y el cliente confirma con ACK.
+  leccion: n2-m3-l1
+- id: retransmision
+  termino: Retransmisión
+  alias: [pérdida de paquetes]
+  definicion: Reenvío que hace TCP de los datos que no le confirmaron a tiempo. Muchas retransmisiones indican pérdidas en la red y se notan como lentitud.
+  leccion: n2-m3-l1
+- id: puertos-conocidos
+  termino: Puertos conocidos
+  alias: [well-known ports, puertos bajos]
+  definicion: Puertos del 0 al 1023, reservados para servicios estándar (22 SSH, 53 DNS, 443 HTTPS). En Linux, solo root puede escuchar en ellos.
+  leccion: n2-m3-l2
+- id: texto-plano
+  termino: Texto plano
+  alias: [sin cifrar, cleartext]
+  definicion: Datos que viajan sin cifrar, legibles para cualquiera que capture el tráfico. Telnet, FTP y HTTP mandan así hasta las contraseñas.
+  leccion: n2-m3-l2
+- id: resolvedor
+  termino: Resolvedor DNS
+  alias: [DNS recursivo, resolver, servidor DNS de la red]
+  definicion: Servidor que recibe las consultas de los equipos, recorre el árbol del DNS por ellos y guarda las respuestas en caché. Es el que figura en /etc/resolv.conf.
+  leccion: n2-m3-l3
+- id: servidor-autoritativo
+  termino: Servidor autoritativo
+  alias: [DNS autoritativo]
+  definicion: Servidor DNS que tiene los datos oficiales de una zona y responde solo por ella, con el indicador aa. No sale a buscar respuestas de otros dominios.
+  leccion: n2-m3-l3
+- id: registro-dns
+  termino: Registro DNS
+  alias: [registro A, registro MX, CNAME, PTR, registro TXT]
+  definicion: Cada dato de una zona DNS. Los más usados son A (IPv4), AAAA (IPv6), CNAME (alias), MX (correo), TXT, NS, SOA, PTR (inversa) y SRV.
+  leccion: n2-m3-l3
+- id: ttl-dns
+  termino: TTL (DNS)
+  alias: [tiempo de vida, caché DNS]
+  definicion: Cantidad de segundos que una respuesta DNS se puede guardar en caché. Explica por qué los cambios tardan en verse en todos lados.
+  leccion: n2-m3-l3
+- id: zona-dns
+  termino: Zona DNS
+  alias: [zona, archivo de zona]
+  definicion: Parte del árbol del DNS que administra alguien (por ejemplo, empresa.com), con sus registros. Sus servidores autoritativos la publican.
+  leccion: n2-m3-l3
+- id: dhcp
+  termino: DHCP
+  alias: [servidor DHCP, Dynamic Host Configuration Protocol]
+  definicion: Protocolo con el que un servidor presta a cada equipo, por un tiempo, su IP, máscara, puerta de enlace y DNS. Usa UDP 67 (servidor) y 68 (cliente).
+  leccion: n2-m3-l4
+- id: dora
+  termino: DORA
+  alias: [Discover, Offer, Request, Ack]
+  definicion: Los cuatro mensajes con los que un equipo consigue su dirección por DHCP. Discover y Request van por broadcast.
+  leccion: n2-m3-l4
+- id: ambito-dhcp
+  termino: Ámbito DHCP
+  alias: [scope, pool, rango DHCP, subnet4]
+  definicion: >-
+    Configuración de una red en el servidor DHCP: el rango de direcciones que se prestan y las opciones que se entregan con ellas.
+  leccion: n2-m3-l4
+- id: reserva-dhcp
+  termino: Reserva DHCP
+  alias: [IP reservada]
+  definicion: Dirección que el servidor DHCP entrega siempre al mismo equipo, reconocido por su MAC. Evita configurar IP fijas a mano.
+  leccion: n2-m3-l4
+- id: prestamo-dhcp
+  termino: Préstamo DHCP
+  alias: [lease, concesión]
+  definicion: Asignación de una dirección por un tiempo. El equipo la renueva a la mitad del plazo; si vence sin renovar, la pierde.
+  leccion: n2-m3-l4
+- id: relay-dhcp
+  termino: Relay de DHCP
+  alias: [ip helper-address, agente de retransmisión]
+  definicion: Función del router que recibe los pedidos DHCP por broadcast en una red de clientes y los reenvía por unicast a un servidor que está en otra red.
+  leccion: n2-m3-l4
+- id: pat
+  termino: PAT
+  alias: [NAT con sobrecarga, traducción de puertos, masquerade]
+  definicion: NAT en el que muchos equipos comparten una sola IP pública y el router los distingue por el puerto, anotando cada conexión en su tabla de traducciones.
+  leccion: n2-m3-l5
+- id: snat
+  termino: NAT de origen
+  alias: [SNAT, enmascaramiento]
+  definicion: Traducción que cambia la IP de origen de los paquetes que salen, normalmente por la IP pública del router.
+  leccion: n2-m3-l5
+- id: redireccion-puertos
+  termino: Redirección de puertos
+  alias: [port forwarding, DNAT, NAT de destino]
+  definicion: Regla de NAT que manda lo que llega a un puerto de la IP pública hacia un equipo y puerto internos. Expone ese servicio a internet.
+  leccion: n2-m3-l5
+- id: bind
+  termino: BIND
+  alias: [named, BIND 9]
+  definicion: Servidor DNS más usado en Linux. Sirve zonas como autoritativo y también puede resolver. El servicio se llama named; se valida con named-checkconf y named-checkzone.
+  leccion: n2-m3-l6
+- id: unbound
+  termino: Unbound
+  alias: [resolvedor Unbound]
+  definicion: Resolvedor DNS con caché, liviano y que valida DNSSEC por defecto. Por defecto escucha y responde solo en el propio equipo.
+  leccion: n2-m3-l6
+- id: serial-soa
+  termino: Serial de la zona
+  alias: [serial SOA, número de serie]
+  definicion: Número del registro SOA que se sube en cada cambio de la zona (por convención, fecha más un número). Los servidores secundarios copian la zona solo si aumentó.
+  leccion: n2-m3-l6
+- id: zona-inversa
+  termino: Zona inversa
+  alias: [in-addr.arpa, resolución inversa]
+  definicion: Zona que traduce IP en nombres con registros PTR. Se nombra con la red al revés más in-addr.arpa (10.168.192.in-addr.arpa para 192.168.10.0/24).
+  leccion: n2-m3-l6
+- id: kea
+  termino: Kea
+  alias: [Kea DHCP, kea-dhcp4]
+  definicion: Servidor DHCP de ISC que reemplazó a ISC DHCP (fin de vida en 2022). Se configura en JSON en /etc/kea/kea-dhcp4.conf y se revisa con kea-dhcp4 -t.
+  leccion: n2-m3-l7
+- id: dnsmasq
+  termino: dnsmasq
+  alias: []
+  definicion: Programa liviano que hace DHCP y DNS con caché con una configuración de pocas líneas. Lo usan routers hogareños, libvirt y laboratorios.
+  leccion: n2-m3-l7

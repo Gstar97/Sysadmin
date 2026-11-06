@@ -1,0 +1,80 @@
+---
+id: n2-m3-l2
+titulo: Puertos y protocolos comunes
+minutos: 90
+objetivos:
+  - Conocer los puertos más usados (22, 25, 53, 67/68, 80, 123, 389, 443, 445, 3389, entre otros) y si usan TCP o UDP.
+  - Diferenciar protocolos seguros e inseguros (Telnet y SSH, FTP y SFTP, HTTP y HTTPS) y saber con qué reemplazar los inseguros.
+glosario: [puertos-conocidos, texto-plano]
+verificado: 2026-11
+---
+
+import puertos from './puertos.svg?raw'
+import puertoProtocolo from './puerto-protocolo.yaml'
+import seguroInseguro from './seguro-inseguro.yaml'
+import ejServicios from './ej-servicios.yaml'
+
+Hay unos treinta puertos que aparecen una y otra vez: en las reglas del firewall, en la salida de `ss`, en los pedidos de "¿me abres el puerto tal?". Saberlos de memoria te ahorra buscar y, sobre todo, te deja leer una configuración o una captura de un vistazo. Esta lección es corta y de memoria, con una idea importante al final: algunos de esos protocolos mandan las contraseñas a la vista de todos.
+
+<AntesDeEmpezar>
+- Puertos conocidos y efímeros, TCP y UDP (lección anterior).
+- `ss -tlnp` para ver qué escucha (lección 1.6.1).
+</AntesDeEmpezar>
+
+## Los que conviene saber de memoria
+
+Los puertos del 0 al 1023 son los **conocidos**: en Linux, solo root puede escuchar en ellos, y por eso los servicios arrancan como root y después bajan de privilegios. Del 1024 al 49151 están los **registrados** (bases de datos, aplicaciones), y del 49152 en adelante, los **dinámicos**, que usan los clientes.
+
+<Diagrama svg={puertos} alt="Puertos agrupados por uso. Acceso y web: 22 SSH y SFTP, 80 HTTP, 443 HTTPS, 3389 RDP, 8080 HTTP alternativo. Infraestructura: 53 DNS, 67 y 68 DHCP, 123 NTP, 161 SNMP, 514 syslog, 389 y 636 LDAP. Correo y archivos: 25 SMTP, 587 SMTP de usuarios, 993 IMAPS, 445 SMB, 2049 NFS. Bases de datos: 3306 MySQL, 5432 PostgreSQL, 1433 SQL Server, 6379 Redis, 27017 MongoDB. Debajo, los inseguros y su reemplazo, y los rangos de puertos." pie="Agrupados por uso es más fácil recordarlos." />
+
+Un truco para memorizarlos: no los aprendas como lista, sino por historias. "Para entrar al servidor uso el 22; si es Windows, el 3389. La web va por el 80 y, cifrada, por el 443. Para resolver el nombre, el 53; para la hora, el 123; para que la PC reciba su IP, el 67 y 68". Después practica:
+
+<Emparejar ejercicio={puertoProtocolo} />
+
+<EnSimple>
+Cada servicio tiene su número de puerta. No hace falta saberlos todos: con unos veinte cubres casi todo lo que vas a ver en el trabajo.
+</EnSimple>
+
+## Inseguros y seguros
+
+Algunos protocolos nacieron cuando las redes eran de confianza y mandan todo **en texto plano**, incluidos el usuario y la contraseña. Usarlos es como mandar las llaves de la oficina en una postal: cualquiera que la tenga en la mano en el camino (alguien en la misma red, un equipo comprometido, el Wi-Fi de un bar) puede leerlas. Donde la comparación no llega: en la red no hace falta "robar" nada; alcanza con copiar el tráfico que pasa, y el dueño nunca se entera.
+
+Hoy cada uno tiene su reemplazo cifrado:
+
+<Emparejar ejercicio={seguroInseguro} />
+
+<Advertencia titulo="Si lo ves en producción">
+Telnet, FTP o HTTP con formularios de inicio de sesión en un servidor de producción son hallazgos que se reportan. Lo correcto es reemplazarlos, no solo "cerrarlos en el firewall": muchas veces el riesgo está dentro de la propia red.
+</Advertencia>
+
+<Pregunta id="p06" />
+
+## Auditar un servidor heredado
+
+Lo primero que haces con un servidor que no conoces es mirar qué escucha. Practícalo:
+
+<Terminal ejercicio={ejServicios} />
+
+Para cada puerto que aparece, la pregunta es: ¿quién lo usa?, ¿tiene que estar abierto hacia afuera o solo en el propio servidor (127.0.0.1)?, ¿es seguro? Lo que no tiene respuesta se apaga.
+
+<ErroresComunes>
+  <ErrorComun titulo="Confundir 25 y 587">
+    El 25 es entre servidores de correo; el 587 es por donde los usuarios mandan su correo (con autenticación y cifrado). Muchos proveedores bloquean el 25 de salida en conexiones hogareñas para frenar el spam.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que SFTP es FTP con algo más">
+    SFTP es un subsistema de SSH y usa el puerto 22; no tiene nada que ver con FTP. FTPS sí es FTP con TLS, y necesita varios puertos.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar bases de datos abiertas a toda la red">
+    3306, 5432 o 27017 escuchando en 0.0.0.0 y sin firewall es una de las causas más comunes de filtraciones. Si solo las usa el servidor de aplicaciones, que escuchen en 127.0.0.1 o se limiten con el firewall.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar que un puerto puede ser TCP y UDP">
+    DNS usa los dos en el 53. Al abrir un servicio, revisa qué transporte necesita.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- 0 a 1023 conocidos, 1024 a 49151 registrados, 49152 a 65535 dinámicos.
+- De memoria: 22 SSH, 25/587 SMTP, 53 DNS, 67/68 DHCP, 80/443 web, 123 NTP, 389/636 LDAP, 445 SMB, 3389 RDP, 3306 MySQL, 5432 PostgreSQL.
+- Inseguros en texto plano y su reemplazo: Telnet → SSH, FTP → SFTP, HTTP → HTTPS, IMAP/POP3 → IMAPS/POP3S, LDAP → LDAPS, SNMP v2c → v3.
+- En un servidor heredado: `sudo ss -tlnp` y `sudo ss -ulnp`, y para cada puerto, ¿quién lo usa, desde dónde y es seguro?
+</Resumen>

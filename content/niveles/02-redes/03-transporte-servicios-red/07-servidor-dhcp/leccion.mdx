@@ -1,0 +1,122 @@
+---
+id: n2-m3-l7
+titulo: Servidor DHCP en Linux
+minutos: 120
+objetivos:
+  - Configurar Kea DHCPv4, el reemplazo de ISC DHCP (que llegó a su fin de vida en 2022).
+  - Crear rangos, opciones y reservas, revisar la configuración y ver los préstamos.
+  - Saber cuándo alcanza con dnsmasq en una red chica.
+glosario: [kea, dnsmasq]
+verificado: 2026-11
+---
+
+import kea from './kea.svg?raw'
+import ejKea from './ej-kea.yaml'
+import ejDhcp from './ej-dhcp.yaml'
+
+Durante veinte años, el servidor DHCP de Linux por excelencia fue ISC DHCP (`dhcpd`). Su propio creador, ISC, lo dio por terminado en 2022 y hoy recomienda **Kea**, su reemplazo moderno: configuración en JSON, préstamos en un archivo o en una base de datos, alta disponibilidad y una API para manejarlo. Rocky 10 ya no trae `dhcpd` y trae Kea; Ubuntu también lo ofrece. Es lo que vas a encontrar en las instalaciones nuevas, y lo que se usa en esta lección.
+
+<AntesDeEmpezar>
+- DORA, ámbitos, opciones, reservas y relay (lección 2.3.4).
+- JSON: llaves, corchetes, comillas dobles y comas (lo viste con YAML en el nivel 1, y JSON es parecido pero más estricto).
+- Servicios con systemctl y logs con journalctl (lecciones 1.3.3 y 1.3.5).
+</AntesDeEmpezar>
+
+## Instalar Kea
+
+<Distros>
+  <Distro nombre="Rocky / Alma Linux 10">
+    `sudo dnf install kea`. El servicio de IPv4 es `kea-dhcp4` y la configuración, `/etc/kea/kea-dhcp4.conf`. Rocky 10 trae Kea 2.6.
+  </Distro>
+  <Distro nombre="Ubuntu 24.04">
+    `sudo apt install kea-dhcp4-server`. El servicio es `kea-dhcp4-server` y la configuración, la misma ruta: `/etc/kea/kea-dhcp4.conf`. Ubuntu 24.04 trae Kea 2.4.
+  </Distro>
+</Distros>
+
+Las dos instalaciones traen un archivo de ejemplo con comentarios, que **no escucha en ninguna placa**: hasta que no configures `interfaces-config`, Kea arranca pero no atiende a nadie. Es a propósito: un servidor DHCP mal configurado en la red equivocada puede dejar sin servicio a toda una oficina.
+
+## La configuración, por partes
+
+<Diagrama svg={kea} alt="Un archivo kea-dhcp4.conf comentado: interfaces-config con la placa enp0s8, valid-lifetime 3600, opciones globales con el DNS, y en subnet4 una subred con id 1, la red 192.168.10.0/24, el rango de .100 a .199, la opción routers con .1 y una reserva de la MAC 52:54:00:aa:10:30 a la IP .30." pie="Interfaces, duración del préstamo, opciones globales y una subred con su id, rango, opciones y reservas." />
+
+Lo que vale la pena recordar:
+
+- **`interfaces-config`**: en qué placas escucha. Solo en la de la red de clientes, nunca "en todas" por las dudas.
+- **`subnet4`**: una entrada por red. Cada una con su **`id`** numérico único (obligatorio desde Kea 2.6: los préstamos se guardan con ese número), su `subnet`, sus `pools` y sus opciones.
+- **`option-data`**: los nombres de las opciones son fijos: `routers` (puerta de enlace), `domain-name-servers`, `domain-name`, `ntp-servers`. Las que pones fuera de `subnet4` valen para todas las subredes.
+- **`reservations`**: por MAC (`hw-address`) o por identificador del cliente. Conviene dejarlas fuera del rango dinámico.
+- Es **JSON estricto**: comas entre elementos, comillas dobles, nada de coma después del último. Kea acepta comentarios con `//` o `#`, pero no perdona una coma faltante.
+
+Corrige una configuración que no arranca:
+
+<EditorConfig ejercicio={ejKea} />
+
+<EnSimple>
+En el archivo de Kea dices en qué placa atender, qué red y qué rango prestar, qué datos entregar con cada dirección (puerta de enlace, DNS) y qué equipos tienen dirección reservada. Antes de arrancar, siempre `kea-dhcp4 -t`.
+</EnSimple>
+
+## Arrancar, probar y mirar los préstamos
+
+```bash
+sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf   # revisar: "Syntax check OK"
+sudo systemctl enable --now kea-dhcp4       # en Ubuntu: kea-dhcp4-server
+sudo ss -ulnp | grep :67                    # ¿escucha en la placa correcta?
+sudo cat /var/lib/kea/kea-leases4.csv       # los préstamos
+journalctl -u kea-dhcp4                     # DHCP4_LEASE_ALLOC por cada préstamo
+```
+
+Y del lado del cliente, para pedir dirección de nuevo:
+
+```bash
+sudo nmcli connection up enp0s8     # Rocky y cualquier sistema con NetworkManager
+sudo netplan apply                  # Ubuntu Server con netplan
+ipconfig /renew                     # Windows
+```
+
+<Terminal ejercicio={ejDhcp} />
+
+<Consejo titulo="El firewall del servidor">
+Abre el servicio en el firewall: `sudo firewall-cmd --permanent --add-service=dhcp` y `sudo firewall-cmd --reload` en Rocky, o `sudo ufw allow 67/udp` en Ubuntu. Según cómo reciba Kea los pedidos de cada placa, algunos pueden llegarle aunque el firewall esté cerrado, y eso confunde al diagnosticar: deja abierto lo que el servicio necesita y no dependas de esa casualidad.
+</Consejo>
+
+<Pregunta id="p06" />
+
+## dnsmasq: lo justo para una red chica
+
+Para un laboratorio, una red de pruebas o una oficina de diez personas, **dnsmasq** hace DHCP y DNS con caché en un solo programa y un archivo de pocas líneas:
+
+```text
+interface=enp0s8
+dhcp-range=192.168.10.100,192.168.10.199,12h
+dhcp-option=option:router,192.168.10.1
+dhcp-host=52:54:00:aa:10:30,192.168.10.30
+```
+
+Lo usan muchos routers hogareños, libvirt (las redes virtuales de KVM) y herramientas de laboratorio. Para una empresa con varias redes, relays, alta disponibilidad o muchos equipos, Kea es la opción.
+
+<ErroresComunes>
+  <ErrorComun titulo="Kea arranca pero nadie recibe dirección">
+    Revisa interfaces-config: si está vacío o con otra placa, Kea no escucha donde están los clientes. Mira con ss -ulnp en qué IP está el puerto 67.
+  </ErrorComun>
+  <ErrorComun titulo="Error de sintaxis por una coma">
+    JSON no admite comas faltantes ni sobrantes. kea-dhcp4 -t te dice la línea; revísalo siempre antes de reiniciar el servicio.
+  </ErrorComun>
+  <ErrorComun titulo="missing parameter 'id'">
+    Desde Kea 2.6 cada subred necesita su id. Si copias una configuración vieja (o de Ubuntu 24.04, que trae Kea 2.4), agrégalo.
+  </ErrorComun>
+  <ErrorComun titulo="Opciones con nombres inventados">
+    Es routers (en plural), no router ni gateway; domain-name-servers, no dns. Kea rechaza las opciones que no conoce.
+  </ErrorComun>
+  <ErrorComun titulo="Dos servidores DHCP en la misma red">
+    Si alguien deja otro DHCP (un router hogareño, un dnsmasq de pruebas), los clientes toman la oferta que llega primero. Antes de habilitar Kea, comprueba que no haya otro.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- ISC DHCP llegó a su fin de vida en 2022; su reemplazo es Kea (Rocky: kea, servicio kea-dhcp4; Ubuntu: kea-dhcp4-server).
+- /etc/kea/kea-dhcp4.conf en JSON: interfaces-config, valid-lifetime, option-data (routers, domain-name-servers, domain-name), subnet4 con id, subnet, pools y reservations.
+- De fábrica no escucha en ninguna placa. Revisar con kea-dhcp4 -t antes de arrancar; comprobar con ss -ulnp.
+- Préstamos en /var/lib/kea/kea-leases4.csv y en journalctl (DHCP4_LEASE_ALLOC).
+- Clientes: nmcli connection up, netplan apply, ipconfig /renew.
+- dnsmasq: DHCP y DNS en pocas líneas para redes chicas y laboratorios.
+</Resumen>

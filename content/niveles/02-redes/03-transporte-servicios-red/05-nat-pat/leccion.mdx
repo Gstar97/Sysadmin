@@ -1,0 +1,97 @@
+---
+id: n2-m3-l5
+titulo: NAT y PAT
+minutos: 120
+objetivos:
+  - Explicar por qué existe NAT y diferenciar NAT de origen, NAT de destino y PAT.
+  - Entender una redirección de puertos y sus riesgos.
+  - Entender CGNAT y por qué a veces no se puede publicar un servicio desde una conexión hogareña o de una sucursal.
+glosario: [pat, snat, redireccion-puertos]
+verificado: 2026-11
+---
+
+import nat from './nat.svg?raw'
+import tiposNat from './tipos-nat.yaml'
+
+Las direcciones privadas (10.x, 172.16.x, 192.168.x) no se enrutan en internet. Sin embargo, desde la PC de tu casa, con una 192.168.1.10, navegas sin problemas. El responsable es **NAT** (traducción de direcciones): el router cambia tu dirección privada por la pública suya al salir, y deshace el cambio cuando vuelve la respuesta. Está en casi todas las redes del mundo, y entenderlo explica muchos "¿por qué desde afuera no se ve?".
+
+<AntesDeEmpezar>
+- Las direcciones privadas y el CGNAT (lección 2.2.1).
+- Puertos efímeros y la conexión identificada por IP y puerto de los dos extremos (lección 2.3.1).
+</AntesDeEmpezar>
+
+## Una sola dirección pública para todos
+
+Piensa en un edificio de oficinas con una única dirección postal. Cada oficina tiene su número interno, pero todo el correo que sale lleva la dirección del edificio. En la portería anotan "el sobre que mandó la oficina 12 a tal empresa": cuando llega la respuesta de esa empresa, saben a qué oficina subirla. Si llega un sobre que nadie esperaba, dirigido solo "al edificio", el portero no sabe a quién dárselo y lo descarta. Donde la comparación no llega: el router no "lee" el contenido; se guía solo por las direcciones y los puertos de cada paquete.
+
+Así funciona **PAT** (traducción de puertos, también llamada NAT con sobrecarga), lo que hace cualquier router de oficina o de casa:
+
+1. Un equipo de adentro abre una conexión: `192.168.1.10:50123` → `142.250.78.14:443`.
+2. El router cambia el origen por su IP pública: `203.0.113.7:50123`. Si ese puerto ya lo usa otra conexión, elige otro.
+3. Anota la traducción en su **tabla de NAT**.
+4. Cuando vuelve la respuesta a `203.0.113.7:50123`, busca la fila y se la entrega a `192.168.1.10:50123`.
+
+<Diagrama svg={nat} alt="Una notebook (192.168.1.10) y una PC (192.168.1.11), las dos con el puerto de origen 50123, se conectan a un servidor de internet (142.250.78.14:443) a través de un router con IP pública 203.0.113.7. En la tabla de traducciones, la notebook sale como 203.0.113.7:50123 y la PC, como el puerto ya estaba usado, como 203.0.113.7:40001." pie="Todo sale con la IP del router; el puerto distingue cada conexión." />
+
+Pruébalo: abre conexiones desde distintos equipos, incluso dos con el mismo puerto de origen, y mira la tabla.
+
+<SimuladorNat />
+
+<EnSimple>
+NAT hace que todos los equipos de tu red salgan a internet con la dirección del router. El router anota quién pidió qué, para devolverle a cada uno su respuesta.
+</EnSimple>
+
+## Lo que entra: la redirección de puertos
+
+La consecuencia del punto 4: **desde internet no se puede iniciar una conexión hacia adentro**. Si alguien se conecta a `203.0.113.7:443` sin que nadie de adentro lo haya pedido, no hay fila en la tabla y el router la descarta. Por eso un servidor en tu red no se ve desde afuera "porque sí".
+
+Para publicar un servicio se configura una **redirección de puertos** (NAT de destino o DNAT): "lo que llegue al puerto 443 de la IP pública, mándalo a 192.168.1.20:443". Es lo que vas a hacer con OPNsense en el módulo 2.6.
+
+<Advertencia titulo="Lo que redirigiste lo ve todo internet">
+Una redirección expone ese servicio a cualquiera, y los equipos que escanean internet lo encuentran en minutos. Antes de abrir algo, pregúntate: ¿tiene que ser público? Para administrar (SSH, RDP, paneles), lo correcto es una VPN, no una redirección. Y lo que publiques, mantenlo actualizado y con autenticación fuerte.
+</Advertencia>
+
+<Pregunta id="p05" />
+
+## CGNAT: cuando ni siquiera eres el dueño de la IP pública
+
+Como las IPv4 se agotaron, muchos proveedores no le dan a cada cliente una IP pública propia: le dan una del rango **100.64.0.0/10** y hacen un NAT más en su propia red (**CGNAT**). Tu router hace NAT, y después el del proveedor hace otro: un **NAT doble**.
+
+Para navegar no cambia nada. Pero para publicar un servicio, una redirección en tu router no alcanza: la conexión desde internet llega al equipo del proveedor, que no tiene ninguna regla para ti, y la descarta. Pasa mucho en sucursales chicas y conexiones hogareñas o móviles. Las salidas:
+
+- Pedir al proveedor una IP pública (a veces es un servicio aparte).
+- Usar IPv6, donde no hay NAT y cada equipo puede tener dirección global (con firewall, claro).
+- Que el servicio se conecte hacia afuera: un túnel o una VPN que el equipo de la sucursal inicia hacia un servidor con IP pública.
+
+¿Cómo saber si tienes CGNAT? Mira la IP de la interfaz WAN de tu router: si empieza con 100.64 a 100.127 (o es privada), y no coincide con la IP pública que muestra cualquier sitio de "cuál es mi IP", estás detrás de un NAT del proveedor.
+
+## Tipos de NAT
+
+<Emparejar ejercicio={tiposNat} />
+
+<Nota titulo="NAT no es un firewall">
+Que no se pueda entrar sin redirección es un efecto secundario útil, pero NAT no fue hecho para seguridad: no filtra lo que sale, no inspecciona nada, y en IPv6 directamente no existe. La protección la da el firewall con estado (módulo 2.6), que además de descartar lo que no se pidió decide qué se permite.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Redirigir el puerto y que igual no ande">
+    Revisa en orden: que el servicio escuche en el servidor (ss -tlnp), que el firewall del servidor lo permita, que la redirección apunte a la IP y puerto correctos, y que no estés detrás de CGNAT. El caso real de este nivel en el módulo 2.6 recorre exactamente eso.
+  </ErrorComun>
+  <ErrorComun titulo="Probar la redirección desde adentro de la red">
+    Muchos routers no permiten usar la IP pública desde adentro (falta "NAT loopback" o hairpin). Prueba desde afuera, por ejemplo con los datos del teléfono.
+  </ErrorComun>
+  <ErrorComun titulo="Abrir RDP o SSH a internet con una redirección">
+    Son blancos permanentes de ataques automáticos. Para administrar desde afuera, VPN.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que con NAT no hace falta firewall">
+    NAT no filtra lo que sale ni protege los servicios que publicas. Hace falta un firewall con reglas explícitas.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- NAT cambia direcciones al pasar por el router. PAT: muchos equipos con una IP pública, distinguidos por puerto, con una tabla de traducciones.
+- Desde internet no se puede iniciar una conexión hacia adentro si no hay una fila en la tabla: hace falta una redirección de puertos (DNAT).
+- Una redirección expone el servicio a todo internet: para administrar, VPN.
+- CGNAT (100.64.0.0/10): el proveedor hace otro NAT; una redirección en tu router no alcanza. Salidas: IP pública, IPv6 o un túnel saliente.
+- NAT no es un firewall.
+</Resumen>

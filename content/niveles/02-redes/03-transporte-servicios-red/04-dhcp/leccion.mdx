@@ -1,0 +1,103 @@
+---
+id: n2-m3-l4
+titulo: DHCP
+minutos: 120
+objetivos:
+  - Explicar el proceso DORA, los ámbitos, las reservas, las opciones y el tiempo de préstamo.
+  - Entender el relay de DHCP y por qué hace falta cuando el servidor está en otra red.
+  - Diagnosticar equipos sin IP o con una dirección APIPA (169.254).
+glosario: [dhcp, dora, ambito-dhcp, reserva-dhcp, prestamo-dhcp, relay-dhcp]
+verificado: 2026-11
+---
+
+import dora from './dora.yaml'
+import relay from './relay.svg?raw'
+import ordenDora from './orden-dora.yaml'
+import sinIp from './sin-ip.yaml'
+
+Configurar a mano la IP, la máscara, la puerta de enlace y el DNS de cada equipo funciona con cinco equipos. Con quinientos, entre notebooks que van y vienen, teléfonos e invitados, es imposible sin errores. **DHCP** lo hace automático: un servidor reparte las direcciones y los datos de la red a cada equipo que se conecta.
+
+<AntesDeEmpezar>
+- Broadcast y por qué los routers no lo reenvían (lección 2.1.4).
+- La dirección APIPA 169.254 (lección 2.2.1).
+- UDP y los puertos 67 y 68 (lecciones 2.3.1 y 2.3.2).
+</AntesDeEmpezar>
+
+## La idea: direcciones prestadas
+
+Piensa en el estacionamiento de un hotel. Cuando llegas, en la entrada te dan una tarjeta con el número de tu lugar y el horario hasta el que vale. Si te quedas más, la renuevas en recepción; si te vas, el lugar queda libre para otro. Nadie tiene un lugar fijo, salvo los que la gerencia reservó (el del gerente, el de las ambulancias). DHCP funciona igual: **presta** direcciones por un tiempo, las **renueva** si el equipo sigue, las **recupera** cuando vencen, y permite **reservar** algunas para equipos concretos. Donde la comparación no llega: en el estacionamiento ves el auto; el servidor DHCP solo conoce la MAC del equipo, que es como lo reconoce.
+
+Lo que configura un administrador en un servidor DHCP:
+
+- **Ámbito** (o subred): la red y el **rango** (pool) de direcciones que se pueden prestar, por ejemplo de `.100` a `.199`. Lo que queda fuera del rango es para IP fijas.
+- **Opciones**: los datos que se entregan junto con la IP. Las imprescindibles son la **puerta de enlace** (opción "router"), los **servidores DNS** y el **dominio** de búsqueda.
+- **Tiempo de préstamo**: cuánto dura cada asignación (horas en una oficina, minutos en un Wi-Fi de invitados).
+- **Reservas**: una IP fija para una MAC concreta. Así una impresora siempre recibe la misma dirección sin configurarla a mano.
+
+<EnSimple>
+DHCP es el servidor que le "presta" a cada equipo su IP, su puerta de enlace y su DNS cuando se conecta. Si un equipo necesita siempre la misma, se le hace una reserva con su MAC.
+</EnSimple>
+
+## DORA, paso a paso
+
+Un equipo recién conectado no tiene IP ni sabe nada de la red. Todo se resuelve en cuatro mensajes, que forman la palabra **DORA**:
+
+<SimuladorPaquetes escenario={dora} />
+
+<Ordenar ejercicio={ordenDora} />
+
+Detalles que te sirven para diagnosticar:
+
+- El Discover sale con origen **0.0.0.0** y destino **255.255.255.255** (broadcast): el equipo todavía no tiene dirección.
+- El servidor escucha en **UDP 67** y el cliente en **UDP 68**.
+- A la **mitad del préstamo**, el equipo intenta renovar directamente con el servidor que se lo dio. Si no lo consigue, a los siete octavos lo intenta por broadcast con cualquier servidor. Si vence sin renovar, se queda sin IP.
+
+## Cuando el servidor está en otra red: el relay
+
+El Discover es un broadcast, y los routers no reenvían broadcast. Entonces, si el servidor DHCP está en la red de servidores y los clientes en la de Ventas, el pedido nunca le llega. La solución es el **relay de DHCP**: el router (o switch de capa 3) escucha los Discover en la red de clientes y se los reenvía al servidor, por unicast, avisándole de qué red vienen. En Cisco se configura con `ip helper-address` en la interfaz de cada red de clientes.
+
+<Diagrama svg={relay} alt="Una PC nueva en la red de Ventas (192.168.20.0/24) manda un Discover por broadcast; el router, con ip helper-address 192.168.10.5, lo reenvía por unicast al servidor DHCP en la red de Servidores (192.168.10.0/24); el servidor responde con una oferta para la red de Ventas y el router se la entrega a la PC." pie="Un relay en cada red de clientes, y un único servidor DHCP para toda la empresa." />
+
+<Nota titulo="Para más adelante">
+En el módulo 2.4 vas a separar la red con VLAN: cada VLAN es una red distinta, así que cada una necesita su relay apuntando al servidor DHCP.
+</Nota>
+
+## Un equipo sin IP: cómo diagnosticarlo
+
+Si un equipo no recibe respuesta del DHCP:
+
+- **Windows** (y macOS) se pone una dirección **169.254.x.x** (APIPA) y sigue sin poder salir de la red.
+- **Linux** con NetworkManager normalmente se queda **sin IPv4** y avisa que no pudo activar la conexión.
+
+Las preguntas, en orden: ¿le pasa a un equipo o a toda la red? Si es uno, revisa su cable, su Wi-Fi o su puerto (capas 1 y 2). Si son todos los de una red, el problema es común: el servidor DHCP, su rango agotado o el relay. En Windows, `ipconfig /release` y `ipconfig /renew` fuerzan un pedido nuevo; en Linux, `nmcli connection up` o, con netplan, `netplan apply`.
+
+<Troubleshooting escenario={sinIp} />
+
+<Pregunta id="p07" />
+
+<Advertencia titulo="El servidor DHCP intruso">
+Cualquier equipo puede contestar un Discover. Si alguien conecta a la red un router hogareño (por ejemplo, para "tener más Wi-Fi"), su servidor DHCP empieza a repartir direcciones de otra red y puerta de enlace propia: los equipos que le hacen caso quedan aislados. Se detecta porque reciben IP de un rango raro (192.168.0.x o 192.168.1.x); los switches administrables lo evitan con DHCP snooping.
+</Advertencia>
+
+<ErroresComunes>
+  <ErrorComun titulo="Configurar IP fijas dentro del rango del DHCP">
+    El servidor no sabe que esa IP ya la tiene alguien y se la va a prestar a otro: IP duplicada. Deja las fijas fuera del rango, o mejor, usa reservas.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar la opción de puerta de enlace">
+    Los equipos reciben IP y se ven entre sí, pero no salen de la red. Revisa las opciones del ámbito: router, DNS y dominio.
+  </ErrorComun>
+  <ErrorComun titulo="Un rango demasiado chico">
+    Con préstamos largos y muchos equipos que van y vienen (Wi-Fi), el rango se agota y los nuevos no reciben nada. Revisa cuántos préstamos activos hay y el tiempo de préstamo.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar un router y olvidarse del relay">
+    Si el servidor DHCP está en otra red, cada interfaz de clientes necesita su relay. Sin él, toda esa red queda con 169.254.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- DHCP presta direcciones por un tiempo y entrega opciones: puerta de enlace, DNS y dominio. Ámbito = red + rango; reservas = IP fija para una MAC.
+- DORA: Discover (broadcast desde 0.0.0.0), Offer, Request (broadcast), Ack. Servidor UDP 67, cliente UDP 68.
+- Renovación a la mitad del préstamo; si vence sin renovar, el equipo queda sin IP.
+- Los routers no pasan broadcast: si el servidor está en otra red, hace falta un relay (ip helper-address) en cada red de clientes.
+- 169.254 (Windows) o sin IPv4 (Linux) = no llegó respuesta del DHCP. Si es toda una red: servidor, rango o relay. Ojo con los servidores DHCP intrusos.
+</Resumen>

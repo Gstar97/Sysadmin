@@ -1,0 +1,91 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué registro DNS guarda la dirección IPv4 de un nombre?
+  opciones:
+    - { texto: "A", correcta: true, explicacion: "AAAA es el de IPv6." }
+    - { texto: "MX", explicacion: "MX indica el servidor de correo." }
+    - { texto: "PTR", explicacion: "PTR es para la resolución inversa." }
+    - { texto: "NS", explicacion: "NS indica los servidores autoritativos." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué significa NXDOMAIN en la respuesta de dig?
+  opciones:
+    - { texto: "Que el nombre consultado no existe", correcta: true, explicacion: "El servidor respondió: el nombre no está." }
+    - { texto: "Que no hay conexión con el servidor DNS", explicacion: "Eso se ve como timed out o no servers could be reached." }
+    - { texto: "Que la respuesta es autoritativa", explicacion: "Eso lo indica el flag aa." }
+    - { texto: "Que el servidor rechazó la consulta", explicacion: "Eso es REFUSED." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué servidor DNS recorre el árbol desde la raíz para responderle a tu PC?
+  opciones:
+    - { texto: "El resolvedor (recursivo) que figura en /etc/resolv.conf", correcta: true, explicacion: "La PC le hace una consulta recursiva y él hace las iterativas." }
+    - { texto: "El servidor raíz", explicacion: "La raíz solo dice quién maneja cada TLD." }
+    - { texto: "El servidor autoritativo del dominio", explicacion: "El autoritativo solo responde por su zona." }
+    - { texto: "El router, siempre", explicacion: "A veces el router hace de resolvedor, pero el rol es el de resolvedor." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Cambiaste la IP de www.empresa.com hace 10 minutos y algunos usuarios siguen llegando al servidor viejo. El registro tenía TTL 86400. ¿Qué pasa?
+  opciones:
+    - { texto: "Sus resolvedores tienen la respuesta vieja en caché y la van a usar hasta un día después de haberla guardado", correcta: true, explicacion: "86400 segundos son 24 horas. Antes de una migración se baja el TTL con anticipación." }
+    - { texto: "El cambio no se guardó", explicacion: "Para algunos usuarios sí anda: se guardó." }
+    - { texto: "Hay que reiniciar las PC", explicacion: "La caché que importa es la del resolvedor." }
+    - { texto: "El DNS no permite cambios de IP", explicacion: "Los permite; tarda lo que dice el TTL." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En la salida de dig, ¿qué indica el flag aa?
+  opciones:
+    - { texto: "Que la respuesta viene de un servidor autoritativo de esa zona", correcta: true, explicacion: "Sin aa, la respuesta viene de la caché de un resolvedor." }
+    - { texto: "Que la respuesta está cifrada", explicacion: "DNS común no se cifra." }
+    - { texto: "Que hubo un error", explicacion: "Los errores aparecen en status." }
+    - { texto: "Que se usó IPv6", explicacion: "No tiene relación." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué el dominio principal empresa.com no puede ser un CNAME?
+  opciones:
+    - { texto: "Porque un nombre con CNAME no puede tener otros registros, y el dominio principal necesita su SOA y sus NS", correcta: true, explicacion: "www sí puede ser un CNAME." }
+    - { texto: "Porque los CNAME solo funcionan con IPv6", explicacion: "Funcionan con cualquier tipo." }
+    - { texto: "Porque es más lento", explicacion: "No es una cuestión de velocidad." }
+    - { texto: "Sí puede", explicacion: "Rompería la zona." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: ¿Qué dice esta respuesta?
+  salida: |
+    $ dig empresa.com MX +noall +answer
+    empresa.com.		3600	IN	MX	10 mail1.empresa.com.
+    empresa.com.		3600	IN	MX	20 mail2.empresa.com.
+  opciones:
+    - { texto: "El correo va a mail1 (prioridad 10) y, si no responde, a mail2 (prioridad 20)", correcta: true, explicacion: "El número más bajo es el preferido." }
+    - { texto: "El correo se reparte mitad y mitad", explicacion: "Con prioridades distintas, se usa primero el de menor número." }
+    - { texto: "mail2 es el preferido porque tiene un número más alto", explicacion: "Es al revés." }
+    - { texto: "Las respuestas vencen en 10 y 20 segundos", explicacion: "El TTL es 3600; 10 y 20 son las prioridades." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: dig www.empresa.com responde bien, pero ping www.empresa.com va a otra IP. ¿Qué revisas?
+  opciones:
+    - { texto: "/etc/hosts, que los programas consultan antes que el DNS", correcta: true, explicacion: "getent hosts www.empresa.com muestra lo que usan los programas." }
+    - { texto: "El TTL", explicacion: "dig y ping preguntan al mismo resolvedor; la diferencia es /etc/hosts." }
+    - { texto: "El registro MX", explicacion: "No interviene en ping." }
+    - { texto: "El firewall", explicacion: "El firewall no cambia las direcciones." }
+- id: p09
+  tipo: completar_comando
+  enunciado: Escribe el comando para preguntarle el registro A de empresa.com directamente al servidor 1.1.1.1.
+  aceptadas: [dig @1.1.1.1 empresa.com, dig empresa.com @1.1.1.1, dig @1.1.1.1 empresa.com A, nslookup empresa.com 1.1.1.1]
+  explicacion: Con @servidor eliges a quién preguntarle; sirve para saber si el problema es de tu resolvedor.
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El correo que manda tu servidor (IP 203.0.113.25) es rechazado por otros servidores con el mensaje "no PTR record". ¿Qué falta?
+  opciones:
+    - { texto: "El registro PTR de 203.0.113.25 (resolución inversa), que suele administrar el proveedor de la IP", correcta: true, explicacion: "Se busca como 25.113.0.203.in-addr.arpa; muchos servidores de correo lo exigen." }
+    - { texto: "Un registro MX para la IP", explicacion: "El MX dice dónde recibir correo, no identifica al que lo manda." }
+    - { texto: "Un CNAME", explicacion: "No tiene relación." }
+    - { texto: "Abrir el puerto 53", explicacion: "El problema es un registro que no existe." }

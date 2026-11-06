@@ -1,0 +1,44 @@
+tipo: configuracion
+titulo: El archivo de zona de empresa.internal
+consigna: >-
+  Un compañero dejó a medio hacer la zona de empresa.internal y named se niega a cargarla. El
+  editor te marca los errores como lo haría named-checkzone. Corrígelos: ns1 está en
+  192.168.10.54, el correo va a mail (192.168.10.25) y www es un alias de intranet
+  (192.168.10.80). Recuerda subir el serial: es un cambio en la zona.
+lenguaje: zona
+nombre_archivo: /var/named/db.empresa.internal
+archivo_inicial: |
+  $TTL 1h
+  @   IN  SOA ns1.empresa.internal. admin.empresa.internal. (
+          2026110201 ; serial (fecha + número de cambio)
+          1h         ; refresh
+          15m        ; retry
+          1w         ; expire
+          5m )       ; TTL de las respuestas negativas
+      IN  NS  ns1.empresa.internal
+      IN  MX  10 mail
+  ns1       IN  A     192.168.10.54
+  mail      IN  AA    192.168.10.25
+  intranet  IN  A     192.168.10.80
+  www       IN  CNAME intranet
+  www       IN  A     192.168.10.80
+reglas:
+  - { tipo: sin_errores, mensaje: "named-checkzone no marca errores" }
+  - { tipo: contiene, regex: "NS\\s+ns1\\.empresa\\.internal\\.\\s*$", mensaje: "El NS termina en punto (nombre completo)" }
+  - { tipo: contiene, regex: "^www\\s+IN\\s+CNAME\\s+intranet", mensaje: "www sigue siendo un alias de intranet" }
+  - { tipo: no_contiene, regex: "^www\\s+IN\\s+A\\b", mensaje: "www no tiene otros registros además del CNAME" }
+  - { tipo: contiene, regex: "^mail\\s+IN\\s+A\\s+192\\.168\\.10\\.25", mensaje: "mail tiene su registro A" }
+solucion: |
+  $TTL 1h
+  @   IN  SOA ns1.empresa.internal. admin.empresa.internal. (
+          2026110202 ; serial (fecha + número de cambio)
+          1h         ; refresh
+          15m        ; retry
+          1w         ; expire
+          5m )       ; TTL de las respuestas negativas
+      IN  NS  ns1.empresa.internal.
+      IN  MX  10 mail
+  ns1       IN  A     192.168.10.54
+  mail      IN  A     192.168.10.25
+  intranet  IN  A     192.168.10.80
+  www       IN  CNAME intranet

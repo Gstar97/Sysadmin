@@ -375,11 +375,14 @@ function recurse(server: System, qname: string, type: string, via: string[], dep
   }
   if (!server.internet || !server.gateway || !server.isReachable(server.gateway)) return { status: 'SERVFAIL', answer: [], authority: [] }
   const answer = externalLookup(server, qname, type)
-  if (!answer.length && type === 'A') {
+  if (!answer.length && type !== 'CNAME') {
     const cn = externalLookup(server, qname, 'CNAME')
-    if (cn.length) return { status: 'NOERROR', answer: [...cn, ...externalLookup(server, cn[0].data, 'A')], authority: [] }
+    if (cn.length) return { status: 'NOERROR', answer: [...cn, ...externalLookup(server, cn[0].data, type)], authority: [] }
   }
-  return { status: answer.length ? 'NOERROR' : 'NXDOMAIN', answer, authority: [] }
+  // Un nombre que existe pero no tiene ese tipo de registro responde vacío (NOERROR), no NXDOMAIN.
+  const n = qname.replace(/\.$/, '')
+  const exists = [server, ...server.lab].some((s) => Object.keys(s.dnsRecords).some((k) => k === n || k.endsWith(` ${n}`)))
+  return { status: answer.length || exists ? 'NOERROR' : 'NXDOMAIN', answer, authority: [] }
 }
 
 /** Una consulta DNS desde "client" al servidor "serverIp". */

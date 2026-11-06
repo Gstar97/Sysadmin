@@ -1,0 +1,107 @@
+---
+id: n2-m3-l1
+titulo: TCP y UDP
+minutos: 150
+objetivos:
+  - Explicar qué son los puertos y los sockets, y la diferencia entre TCP y UDP.
+  - Describir el saludo de tres pasos, el cierre de una conexión y las retransmisiones.
+  - Saber qué transporte usa cada aplicación y por qué, e interpretar si un puerto está abierto, cerrado o filtrado.
+glosario: [udp, socket, puerto-efimero, saludo-tres-pasos, retransmision]
+verificado: 2026-11
+---
+
+import tcpUdp from './tcp-udp.svg?raw'
+import handshake from './handshake.yaml'
+import appTransporte from './app-transporte.yaml'
+import ejPuertos from './ej-puertos.yaml'
+
+Con IP, un paquete llega al equipo correcto. Pero en ese equipo hay muchos programas a la vez: el servidor web, SSH, la base de datos. ¿A cuál le toca cada paquete? Eso lo resuelve la **capa de transporte**, con dos protocolos que vas a ver en cada diagnóstico: **TCP**, confiable y ordenado, y **UDP**, rápido y sin ceremonia.
+
+<AntesDeEmpezar>
+- La capa 4 y el segmento como unidad de datos (lección 2.1.2).
+- Qué es un puerto y cuáles son los más comunes (lección 1.6.1).
+- La diferencia entre Connection refused y timed out (lección 1.6.1).
+</AntesDeEmpezar>
+
+## Puertos y sockets
+
+La IP lleva el paquete hasta el edificio; el **puerto** dice a qué departamento va. Es un número de 0 a 65535 que identifica a un programa dentro del equipo. Los servidores escuchan en **puertos conocidos** (443 para HTTPS, 22 para SSH); el cliente usa un **puerto efímero**, uno alto elegido al azar (en Linux, entre 32768 y 60999), solo para esa conversación.
+
+La combinación de IP y puerto se llama **socket**. Una conexión queda identificada por cuatro datos: IP y puerto de origen, IP y puerto de destino. Por eso un servidor web atiende a mil navegadores en el mismo puerto 443 sin confundirse: cada conexión tiene un puerto de origen distinto.
+
+## TCP: confiable y en orden
+
+TCP es como una llamada telefónica: antes de hablar, se establece la comunicación ("¿hola?", "hola, te escucho", "bien, empiezo"); mientras se habla, se confirma que el otro escucha; y al final cada uno se despide. Donde la comparación no llega: en una llamada lo que se pierde, se pierde; TCP, en cambio, cuenta cada byte y **vuelve a mandar** lo que no le confirmaron.
+
+Lo que TCP garantiza:
+
+- **Conexión**: antes de mandar datos, el **saludo de tres pasos**: SYN, SYN-ACK, ACK.
+- **Confiabilidad**: cada byte lleva un número de secuencia; lo que no se confirma a tiempo se **retransmite**.
+- **Orden**: si los segmentos llegan desordenados, se reordenan antes de entregarlos al programa.
+- **Control de flujo y de congestión**: TCP ajusta cuánto manda según lo que el otro puede recibir y según cuánto se pierde en el camino.
+
+UDP es como mandar una postal: la escribes y la tiras al buzón. No avisa que va, no confirma que llegó, no reordena. A cambio, es liviano: un DNS que pregunta por UDP tiene la respuesta en un ida y vuelta, en lugar de los tres pasos del saludo más la pregunta.
+
+<Diagrama svg={tcpUdp} alt="A la izquierda, una conexión TCP entre un cliente y un servidor en el puerto 443: SYN, SYN-ACK y ACK para abrir, datos con confirmaciones, y FIN para cerrar. A la derecha, UDP entre un cliente y un servidor DNS en el puerto 53: una consulta y una respuesta, sin conexión previa ni confirmaciones." pie="TCP abre una conexión y confirma todo; UDP manda y listo." />
+
+## El saludo, paso a paso
+
+Mira una conexión completa: los indicadores que cambian (SYN, ACK, FIN) y cómo se invierten los puertos al contestar.
+
+<SimuladorPaquetes escenario={handshake} />
+
+Dos cosas que te ayudan a diagnosticar:
+
+- Si al SYN le contesta un **RST**, nada escucha en ese puerto: el cliente muestra **Connection refused**.
+- Si al SYN no le contesta nadie, TCP reintenta unas veces y se rinde: **Connection timed out**. Pasa cuando no hay camino o cuando un firewall descarta en silencio.
+
+<EnSimple>
+TCP primero saluda y después habla, confirmando todo. UDP habla sin saludar. Si un puerto contesta el saludo, está abierto; si contesta "aquí no hay nadie", está cerrado; si no contesta nada, algo en el medio lo está bloqueando.
+</EnSimple>
+
+<Terminal ejercicio={ejPuertos} />
+
+## Retransmisiones: cuando se pierden paquetes
+
+En una red sana se pierde muy poco. Cuando se pierde mucho (un enlace saturado, un Wi-Fi malo, un cable dañado, el desacuerdo de dúplex de la lección 2.1.3), TCP retransmite: los datos llegan igual, pero tarde. El usuario no ve errores: ve **lentitud**. Por eso "anda lento" muchas veces es un problema de pérdidas, y en el módulo 2.7 vas a aprender a verlas en una captura de tráfico.
+
+`ss` muestra las conexiones y su estado. Los que más vas a ver: **LISTEN** (un servicio esperando), **ESTAB** (conexión abierta), **TIME-WAIT** (recién cerrada, esperando por si llega algo atrasado) y **SYN-SENT** (se mandó el SYN y no contestan: típico de un firewall que descarta).
+
+```bash
+ss -tln     # puertos TCP que escuchan, en números
+ss -uln     # lo mismo para UDP
+ss -tan     # todas las conexiones TCP con su estado
+```
+
+## Qué usa cada aplicación
+
+<Emparejar ejercicio={appTransporte} />
+
+<Pregunta id="p06" />
+
+<Nota titulo="Para más adelante: QUIC">
+HTTP/3 corre sobre QUIC, un protocolo que va sobre UDP pero agrega confiabilidad, orden y cifrado por su cuenta. Lo usan los navegadores y los grandes sitios para conectar más rápido. Para un firewall eso significa que "web" ya no es solo TCP 443: también es UDP 443.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Abrir solo TCP para un servicio que usa UDP">
+    DNS usa sobre todo UDP 53 (y TCP 53 para respuestas grandes), NTP usa UDP 123, la VPN WireGuard usa UDP. Si abres solo TCP, el servicio no anda.
+  </ErrorComun>
+  <ErrorComun titulo="Usar ping para decidir si un servicio funciona">
+    Ping usa ICMP, no TCP ni UDP. Un equipo puede responder ping y tener el puerto cerrado, o al revés. Para un servicio, prueba su puerto (nc -zv, curl).
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que UDP &quot;no anda&quot; porque nc no dice nada">
+    Con UDP no hay saludo: muchas veces no hay forma de saber si llegó. Para probar un DNS, haz una consulta real con dig.
+  </ErrorComun>
+  <ErrorComun titulo="Culpar al servidor por una red que pierde paquetes">
+    Si todo anda pero lento, mide pérdidas y retransmisiones antes de tocar el servicio. TCP tapa las pérdidas con demoras.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Puerto: identifica al programa dentro del equipo. Servidores en puertos conocidos; clientes en puertos efímeros altos. Socket = IP + puerto; una conexión = dos sockets.
+- TCP: saludo de tres pasos (SYN, SYN-ACK, ACK), números de secuencia, confirmaciones, retransmisiones, orden y cierre con FIN.
+- UDP: sin conexión ni confirmaciones; liviano. DNS, NTP, voz, video, QUIC.
+- Al SYN: SYN-ACK = abierto; RST = cerrado (refused); nada = filtrado o sin camino (timed out).
+- Las pérdidas se notan como lentitud, no como errores. `ss -tln`, `ss -uln` y `ss -tan` muestran puertos y conexiones.
+</Resumen>
