@@ -1,0 +1,188 @@
+tipo: terminal
+shell: bash
+titulo: DNS y DHCP para la red del laboratorio
+descripcion: >-
+  La red de clientes es 192.168.10.0/24. ns1 (192.168.10.54, Ubuntu) ya tiene BIND con la zona
+  empresa.internal. Vas a agregarle la zona inversa, montar en infra01 (192.168.10.53, Rocky)
+  un resolvedor Unbound y un servidor Kea, y comprobar todo desde pc1, que pide su dirección
+  por DHCP. infra01 y pc1 tienen además una placa en la red de administración (192.168.56.0/24),
+  que es por donde entras a pc1.
+estado_inicial:
+  distro: rocky
+  hostname: infra01
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [unbound, kea, bind-utils] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.53/24 }
+      - { nombre: enp0s8, ip: 192.168.56.10/24 }
+    puerta_enlace: 192.168.10.1
+    dns: [127.0.0.1]
+  servidores:
+    - ip: 192.168.10.54
+      hostname: ns1
+      distro: ubuntu
+      clave_conocida: si
+      usuarios: [{ nombre: admin, sudo: true, clave_ssh: true }]
+      paquetes: { instalados: [bind9] }
+      red: { interfaces: [{ nombre: enp0s3, ip: 192.168.10.54/24 }], puerta_enlace: 192.168.10.1, dns: [127.0.0.1] }
+      archivos:
+        /etc/bind/named.conf.local:
+          contenido: |
+            zone "empresa.internal" {
+                type primary;
+                file "/etc/bind/db.empresa.internal";
+            };
+        /etc/bind/db.empresa.internal:
+          contenido: |
+            $TTL 1h
+            @   IN  SOA ns1.empresa.internal. admin.empresa.internal. ( 2026110601 1h 15m 1w 5m )
+                IN  NS  ns1.empresa.internal.
+            ns1       IN  A     192.168.10.54
+            infra01   IN  A     192.168.10.53
+            intranet  IN  A     192.168.10.80
+            www       IN  CNAME intranet
+            impresora IN  A     192.168.10.30
+    - ip: 192.168.56.21
+      hostname: pc1
+      clave_conocida: si
+      usuarios: [{ nombre: admin, sudo: true, clave_ssh: true }]
+      paquetes: { instalados: [bind-utils] }
+      red:
+        interfaces:
+          - { nombre: enp0s3, ip: 192.168.56.21/24 }
+          - { nombre: enp0s8, dhcp: true, mac: "52:54:00:aa:10:61" }
+        dns: []
+pasos:
+  - consigna: >-
+      Entra a ns1 (ssh 192.168.10.54) y crea la zona inversa de 192.168.10.0/24 en /etc/bind/db.192.168.10, con
+      PTR para ns1 (.54), infra01 (.53), intranet (.80) e impresora (.30). Declárala en
+      /etc/bind/named.conf.local, revisa todo con named-checkconf -z y recarga BIND.
+    verificar:
+      - { en: ns1, verificar: { resuelve: 80.10.168.192.in-addr.arpa, tipo: PTR, servidor: 127.0.0.1, responde: intranet.empresa.internal } }
+    pistas:
+      - "ssh 192.168.10.54 te deja en una terminal de ns1 (por IP: infra01 todavía no tiene DNS); exit vuelve a infra01."
+      - 'La zona se llama "10.168.192.in-addr.arpa" y cada registro es: 80 IN PTR intranet.empresa.internal. (con punto final).'
+      - "Después: sudo named-checkconf -z, sudo rndc reload y dig @127.0.0.1 -x 192.168.10.80."
+    solucion:
+      - ssh 192.168.10.54
+      - |
+        sudo tee /etc/bind/db.192.168.10 > /dev/null <<'EOF'
+        $TTL 1h
+        @   IN  SOA ns1.empresa.internal. admin.empresa.internal. ( 2026110601 1h 15m 1w 5m )
+            IN  NS  ns1.empresa.internal.
+        54  IN  PTR ns1.empresa.internal.
+        53  IN  PTR infra01.empresa.internal.
+        80  IN  PTR intranet.empresa.internal.
+        30  IN  PTR impresora.empresa.internal.
+        EOF
+      - |
+        sudo tee -a /etc/bind/named.conf.local > /dev/null <<'EOF'
+        zone "10.168.192.in-addr.arpa" {
+            type primary;
+            file "/etc/bind/db.192.168.10";
+        };
+        EOF
+      - sudo named-checkconf -z
+      - sudo rndc reload
+      - dig @127.0.0.1 -x 192.168.10.80 +short
+      - exit
+    explicacion: ns1 ya responde la directa y la inversa. Ahora falta el resolvedor que van a usar los equipos.
+  - consigna: >-
+      De vuelta en infra01, configura Unbound en /etc/unbound/conf.d/lan.conf: que escuche en
+      todas las interfaces, responda a 192.168.10.0/24, trate empresa.internal como zona sin
+      DNSSEC y reenvíe a ns1 (192.168.10.54) tanto empresa.internal como la zona inversa.
+      Revisa la configuración, arranca y habilita unbound y abre DNS en firewalld.
+    verificar:
+      - { servicio: unbound, activo: true, habilitado: true }
+      - { firewall_permite: 53/udp }
+      - { resuelve: www.empresa.internal, servidor: 127.0.0.1, responde: "192.168.10.80" }
+      - { resuelve: rockylinux.org, servidor: 127.0.0.1 }
+    pistas:
+      - "Mira el ejemplo de la lección 2.3.6: server con interface, access-control y domain-insecure, y dos forward-zone."
+      - "sudo unbound-checkconf, sudo systemctl enable --now unbound, sudo firewall-cmd --permanent --add-service=dns y --reload."
+    solucion:
+      - |
+        sudo tee /etc/unbound/conf.d/lan.conf > /dev/null <<'EOF'
+        server:
+            interface: 0.0.0.0
+            access-control: 192.168.10.0/24 allow
+            domain-insecure: "empresa.internal"
+        forward-zone:
+            name: "empresa.internal"
+            forward-addr: 192.168.10.54
+        forward-zone:
+            name: "10.168.192.in-addr.arpa"
+            forward-addr: 192.168.10.54
+        EOF
+      - sudo unbound-checkconf
+      - sudo systemctl enable --now unbound
+      - sudo firewall-cmd --permanent --add-service=dns
+      - sudo firewall-cmd --reload
+      - dig @127.0.0.1 www.empresa.internal +short
+    explicacion: >-
+      Unbound contesta lo interno preguntándole a ns1 y lo externo recorriendo internet, y
+      guarda todo en caché. La segunda consulta igual es instantánea.
+  - consigna: >-
+      Configura Kea en infra01 para la red de clientes: escucha en enp0s3, rango .100 a .199,
+      puerta de enlace .1, DNS 192.168.10.53, dominio empresa.internal y una reserva de
+      192.168.10.61 para pc1 (MAC 52:54:00:aa:10:61). Revisa, arranca y habilita kea-dhcp4,
+      y abre DHCP en firewalld.
+    verificar:
+      - { servicio: kea-dhcp4, activo: true, habilitado: true }
+      - { firewall_permite: 67/udp }
+    pistas:
+      - "Reemplaza /etc/kea/kea-dhcp4.conf con sudo tee y un heredoc. No te olvides del id de la subred ni de las comas."
+      - "sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf antes de arrancar."
+    solucion:
+      - |
+        sudo tee /etc/kea/kea-dhcp4.conf > /dev/null <<'EOF'
+        {
+          "Dhcp4": {
+            "interfaces-config": { "interfaces": [ "enp0s3" ] },
+            "valid-lifetime": 3600,
+            "option-data": [
+              { "name": "domain-name-servers", "data": "192.168.10.53" },
+              { "name": "domain-name", "data": "empresa.internal" }
+            ],
+            "subnet4": [ {
+              "id": 10,
+              "subnet": "192.168.10.0/24",
+              "pools": [ { "pool": "192.168.10.100 - 192.168.10.199" } ],
+              "option-data": [ { "name": "routers", "data": "192.168.10.1" } ],
+              "reservations": [ { "hw-address": "52:54:00:aa:10:61", "ip-address": "192.168.10.61", "hostname": "pc1" } ]
+            } ]
+          }
+        }
+        EOF
+      - sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+      - sudo systemctl enable --now kea-dhcp4
+      - sudo firewall-cmd --permanent --add-service=dhcp
+      - sudo firewall-cmd --reload
+    explicacion: >-
+      Como id se usó 10, el tercer octeto de la red: una convención cómoda para no repetirlos.
+  - consigna: >-
+      Entra a pc1 por la red de administración (192.168.56.21), levanta su conexión enp0s8 para
+      que pida dirección y comprueba que recibió la reserva y que resuelve nombres internos,
+      inversos y externos.
+    verificar:
+      - { en: pc1, verificar: { interfaz: enp0s8, ip_en: 192.168.10.61/32 } }
+      - { en: pc1, verificar: { resuelve: www.empresa.internal, responde: "192.168.10.80" } }
+      - { en: pc1, verificar: { resuelve: 80.10.168.192.in-addr.arpa, tipo: PTR, responde: intranet.empresa.internal } }
+    pistas:
+      - "ssh 192.168.56.21, y adentro sudo nmcli connection up enp0s8, ip -br a, cat /etc/resolv.conf."
+      - "Después: dig www.empresa.internal +short, dig -x 192.168.10.80 +short y dig rockylinux.org +short."
+    solucion:
+      - ssh 192.168.56.21
+      - sudo nmcli connection up enp0s8
+      - ip -br a
+      - cat /etc/resolv.conf
+      - dig www.empresa.internal +short
+      - dig -x 192.168.10.80 +short
+      - dig rockylinux.org +short
+      - exit
+    explicacion: >-
+      pc1 recibió su reserva (.61), el DNS .53 y el dominio de búsqueda, y con eso resuelve todo
+      a través de Unbound. Así queda la red: Kea reparte direcciones y le dice a cada equipo que
+      use a Unbound, y Unbound pregunta a BIND lo interno y a internet lo demás.

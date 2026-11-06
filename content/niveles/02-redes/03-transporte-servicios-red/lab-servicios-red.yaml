@@ -1,0 +1,106 @@
+tipo: pasos
+titulo: DNS y DHCP en tus máquinas virtuales
+descripcion: >-
+  En la red interna "labred": ubuntu01 va a ser el autoritativo (BIND, 192.168.10.54), rocky01
+  el resolvedor y servidor DHCP (Unbound y Kea, 192.168.10.53), y un clon de rocky01 hará de
+  cliente.
+pasos:
+  - titulo: Instantáneas y direcciones nuevas en labred
+    detalle: >-
+      Toma una instantánea de rocky01 y ubuntu01 (antes-de-dns-dhcp). Cambia sus direcciones en
+      la red interna: en el laboratorio 2.2 les pusiste las de la subred de Servidores; ahora
+      la red de labred va a ser 192.168.10.0/24.
+    variantes:
+      - nombre: rocky01
+        detalle: Con nmcli, como en el laboratorio anterior.
+        comandos:
+          - sudo nmcli connection modify enp0s8 ipv4.addresses 192.168.10.53/24 ipv4.method manual
+          - sudo nmcli connection up enp0s8
+      - nombre: ubuntu01
+        detalle: Edita /etc/netplan/60-labred.yaml y cambia la dirección IPv4 por 192.168.10.54/24.
+        comandos:
+          - sudo nano /etc/netplan/60-labred.yaml
+          - sudo netplan try
+    comprobar: rocky01 tiene 192.168.10.53 y ubuntu01 192.168.10.54 en la placa de labred, y se responden ping.
+  - titulo: BIND en ubuntu01
+    detalle: >-
+      Instala bind9 y crea las zonas directa e inversa como en la lección 2.3.6 y en la parte 1
+      de este laboratorio (en Ubuntu, las zonas en /etc/bind/ y la declaración en
+      named.conf.local). Usa los nombres ns1 (.54), infra01 (.53) e intranet (.80).
+    comandos:
+      - sudo apt install -y bind9 bind9-utils
+      - sudo nano /etc/bind/db.empresa.internal
+      - sudo nano /etc/bind/db.192.168.10
+      - sudo nano /etc/bind/named.conf.local
+      - sudo named-checkconf -z
+      - sudo rndc reload
+    comprobar: named-checkconf -z muestra las dos zonas con su serial, y dig @127.0.0.1 -x 192.168.10.80 +short responde intranet.empresa.internal.
+  - titulo: Que ubuntu01 no resuelva para otros
+    detalle: >-
+      BIND en Ubuntu viene con recursión para las redes locales. Como es solo autoritativo, en
+      /etc/bind/named.conf.options agrega dentro de options las líneas recursion no; y
+      allow-query { 192.168.10.0/24; localhost; };. Después valida y reinicia.
+    comandos:
+      - sudo nano /etc/bind/named.conf.options
+      - sudo named-checkconf
+      - sudo systemctl restart named
+    comprobar: dig @192.168.10.54 rockylinux.org desde rocky01 responde status REFUSED (no resuelve para otros), y dig @192.168.10.54 www.empresa.internal sigue respondiendo con aa.
+  - titulo: Unbound en rocky01
+    detalle: >-
+      Instala Unbound, crea /etc/unbound/conf.d/lan.conf como en la parte 1 y ábrelo en el
+      firewall.
+    comandos:
+      - sudo dnf install -y unbound bind-utils
+      - sudo nano /etc/unbound/conf.d/lan.conf
+      - sudo unbound-checkconf
+      - sudo systemctl enable --now unbound
+      - sudo firewall-cmd --permanent --add-service=dns && sudo firewall-cmd --reload
+    comprobar: En rocky01, dig @127.0.0.1 www.empresa.internal +short y dig @127.0.0.1 rockylinux.org +short responden los dos.
+  - titulo: Kea en rocky01
+    detalle: >-
+      Instala Kea y escribe su configuración para labred (rango .100 a .199, puerta de enlace
+      .1, DNS .53, dominio empresa.internal). La reserva la agregas en el paso siguiente, cuando
+      sepas la MAC del cliente. Usa el nombre real de la placa de labred en interfaces-config.
+    comandos:
+      - sudo dnf install -y kea
+      - sudo nano /etc/kea/kea-dhcp4.conf
+      - sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+      - sudo systemctl enable --now kea-dhcp4
+      - sudo firewall-cmd --permanent --add-service=dhcp && sudo firewall-cmd --reload
+    comprobar: kea-dhcp4 -t dice Syntax check OK, el servicio está activo y sudo ss -ulnp muestra el puerto 67 en 192.168.10.53.
+  - titulo: Un cliente
+    detalle: >-
+      Apaga rocky01 un momento y haz un clon enlazado (cliente01). En el clon, deja solo la placa
+      de labred y genera una MAC nueva (el hipervisor lo ofrece al clonar). Vuelve a encender
+      rocky01. En cliente01, pon esa conexión en DHCP y levántala.
+    comandos:
+      - sudo hostnamectl set-hostname cliente01
+      - sudo nmcli connection modify enp0s8 ipv4.method auto ipv4.addresses "" ipv4.gateway ""
+      - sudo nmcli connection up enp0s8
+      - ip -br a
+      - cat /etc/resolv.conf
+    comprobar: cliente01 recibió una dirección entre .100 y .199, y /etc/resolv.conf tiene nameserver 192.168.10.53 y search empresa.internal.
+  - titulo: Una reserva para el cliente
+    detalle: >-
+      Anota la MAC de cliente01 (ip -br link). En rocky01, agrega una reserva para esa MAC con la
+      dirección 192.168.10.61 dentro de la subred, revisa, reinicia Kea y vuelve a pedir la
+      dirección desde cliente01.
+    comandos:
+      - sudo nano /etc/kea/kea-dhcp4.conf
+      - sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf && sudo systemctl restart kea-dhcp4
+    comprobar: Después de sudo nmcli connection up enp0s8 en cliente01, su dirección es 192.168.10.61.
+  - titulo: La prueba completa
+    detalle: Desde cliente01, que solo conoce a rocky01 como DNS.
+    comandos:
+      - dig www.empresa.internal +short
+      - dig -x 192.168.10.80 +short
+      - dig rockylinux.org +short
+      - ping -c 2 intranet
+    comprobar: Las tres consultas responden, y ping intranet usa el dominio de búsqueda para llegar a intranet.empresa.internal (aunque no haya nadie en .80, el nombre se resuelve).
+  - titulo: Mira los registros
+    detalle: En rocky01, los préstamos que entregó Kea; en ubuntu01, las cargas de zona de BIND.
+    comandos:
+      - sudo cat /var/lib/kea/kea-leases4.csv
+      - journalctl -u kea-dhcp4 --since today | grep LEASE
+      - journalctl -u named --since today | grep loaded
+    comprobar: Ves el préstamo de cliente01 en los dos lugares de rocky01 y las zonas cargadas en ubuntu01.

@@ -560,7 +560,7 @@ export function learnNeighbor(from: System, ip: string) {
   from.neigh.set(ip, { mac: '', dev: iface.name, state: 'FAILED' })
 }
 
-export const FW_SERVICES: Record<string, string> = { ssh: '22/tcp', http: '80/tcp', https: '443/tcp', 'dhcpv6-client': '546/udp', cockpit: '9090/tcp', dns: '53/udp', mysql: '3306/tcp', postgresql: '5432/tcp', samba: '445/tcp', nfs: '2049/tcp', ntp: '123/udp', smtp: '25/tcp', ftp: '21/tcp' }
+export const FW_SERVICES: Record<string, string> = { dhcp: '67/udp', ssh: '22/tcp', http: '80/tcp', https: '443/tcp', 'dhcpv6-client': '546/udp', cockpit: '9090/tcp', dns: '53/udp', mysql: '3306/tcp', postgresql: '5432/tcp', samba: '445/tcp', nfs: '2049/tcp', ntp: '123/udp', smtp: '25/tcp', ftp: '21/tcp' }
 
 const UFW_APPS: Record<string, string[]> = { openssh: ['22/tcp'], 'nginx full': ['80/tcp', '443/tcp'], 'nginx http': ['80/tcp'], 'nginx https': ['443/tcp'], 'apache full': ['80/tcp', '443/tcp'], apache: ['80/tcp'] }
 

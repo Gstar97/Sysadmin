@@ -1,0 +1,119 @@
+tipo: troubleshooting
+titulo: Hay internet, pero no abre ninguna página
+descripcion: >-
+  Incidente simulado en una oficina de 40 personas. El DNS de la red lo resuelve infra01, con
+  Unbound. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Jueves, 10:05. Empiezan a llegar mensajes: "no anda internet". Pero el sistema de
+      facturación en la nube, que alguien tiene abierto desde temprano, sigue funcionando, y
+      las videollamadas que ya estaban en curso no se cortaron.
+    opciones:
+      - { texto: "Separar capas: probar con una IP y con un nombre desde una PC", ir_a: n_capas, minutos: 3 }
+      - texto: Reiniciar el router de internet
+        ir_a: n_router
+        minutos: 10
+      - texto: Llamar al proveedor de internet
+        ir_a: n_proveedor
+        minutos: 20
+  n_router:
+    situacion: >-
+      Diez minutos sin internet para todos, incluidas las videollamadas que sí andaban. Al
+      volver, sigue igual: no abre ninguna página nueva.
+    opciones:
+      - { texto: "Probar con una IP y con un nombre desde una PC", ir_a: n_capas, minutos: 3 }
+  n_proveedor:
+    situacion: >-
+      Veinte minutos en espera. El proveedor hace pruebas y dice que tu enlace está perfecto y
+      que tu IP pública responde. No es la conexión.
+    opciones:
+      - { texto: "Probar con una IP y con un nombre desde una PC", ir_a: n_capas, minutos: 3 }
+  n_capas:
+    situacion: Desde una PC de la oficina pruebas lo más simple posible.
+    evidencia:
+      - titulo: En una PC con Linux
+        contenido: |
+          $ ping -c 2 1.1.1.1
+          64 bytes from 1.1.1.1: icmp_seq=1 ttl=57 time=11.2 ms
+          64 bytes from 1.1.1.1: icmp_seq=2 ttl=57 time=10.9 ms
+          $ ping -c 2 google.com
+          ping: google.com: Temporary failure in name resolution
+          $ cat /etc/resolv.conf
+          search empresa.internal
+          nameserver 192.168.10.53
+    opciones:
+      - { texto: "Hasta la capa 3 anda: el problema es la resolución de nombres. Preguntar directo al resolvedor", ir_a: n_dig, minutos: 2 }
+      - texto: Cambiar en todas las PC el DNS a 1.1.1.1 para salir del paso
+        ir_a: n_parche
+        minutos: 30
+  n_parche:
+    situacion: >-
+      Media hora cambiando PC, y las que cambiaste navegan... pero ya no resuelven los nombres
+      internos (intranet, impresora, el servidor de archivos): 1.1.1.1 no conoce
+      empresa.internal. Y el DHCP les va a volver a poner el .53 en la próxima renovación.
+    opciones:
+      - { texto: "Volver atrás e investigar el resolvedor", ir_a: n_dig, minutos: 10 }
+  n_dig:
+    situacion: Le preguntas directamente a infra01 y, para comparar, a un resolvedor público.
+    evidencia:
+      - titulo: dig desde la PC
+        contenido: |
+          $ dig @192.168.10.53 google.com
+          ;; communications error to 192.168.10.53#53: connection refused
+          ;; communications error to 192.168.10.53#53: connection refused
+          ;; no servers could be reached
+          $ dig @1.1.1.1 google.com +short
+          142.250.78.14
+    opciones:
+      - { texto: "\"connection refused\": infra01 responde, pero nada escucha en el 53. Entrar a infra01 y ver Unbound", ir_a: n_unbound, minutos: 3 }
+      - texto: Es el firewall de infra01
+        ir_a: n_firewall
+        minutos: 8
+  n_firewall:
+    situacion: >-
+      Revisas firewalld en infra01: el servicio dns está permitido, igual que ayer. Además,
+      firewalld rechazando daría "host unreachable", no "connection refused". Refused quiere
+      decir que el paquete llegó y no había nadie escuchando.
+    opciones:
+      - { texto: "Ver el estado de Unbound", ir_a: n_unbound, minutos: 3 }
+  n_unbound:
+    situacion: >-
+      Entras a infra01 por SSH (con la IP: el nombre no resuelve).
+    evidencia:
+      - titulo: systemctl status unbound
+        contenido: |
+          × unbound.service - Unbound recursive Domain Name Server
+               Active: failed (Result: exit-code) since Thu 2026-11-05 09:58:31 -03; 7min ago
+          Nov 05 09:58:31 infra01 unbound[2210]: /etc/unbound/conf.d/lan.conf:9: error: unknown keyword 'forward-adr'
+          Nov 05 09:58:31 infra01 unbound[2210]: read /etc/unbound/unbound.conf failed: 1 errors in configuration file
+      - titulo: Último cambio, según el registro de cambios del equipo
+        contenido: |
+          09:57 - Martín: agrego reenvío para la zona nueva sucursal.empresa.internal. Reinicio unbound.
+    opciones:
+      - { texto: "Corregir forward-adr por forward-addr, validar con unbound-checkconf y arrancar", ir_a: n_fin, minutos: 4 }
+      - texto: Volver a la configuración de ayer desde la copia de seguridad, sin mirar qué cambió
+        ir_a: n_backup
+        minutos: 12
+  n_backup:
+    situacion: >-
+      Restauras el archivo de ayer y Unbound arranca. La oficina navega, pero la zona de la
+      sucursal (el cambio de Martín, que hacía falta) desapareció, y él lo va a volver a hacer
+      mañana con el mismo error. Arreglar la línea mala era más rápido y no perdía nada.
+    opciones:
+      - { texto: "Reaplicar el cambio de Martín, corregido y validado", ir_a: n_fin, minutos: 6 }
+  n_fin:
+    final: exito
+    situacion: >-
+      Corriges la palabra, unbound-checkconf dice "no errors", arrancas el servicio y en
+      segundos las PC vuelven a abrir páginas. Con Martín acuerdan que todo cambio de DNS se
+      valida antes de reiniciar.
+    resumen: >-
+      "Hay internet pero no abre ninguna página" casi siempre es el DNS: lo que ya estaba
+      conectado sigue andando (las conexiones abiertas no necesitan resolver nombres) y lo
+      nuevo falla. El método: ping a una IP (la red anda) contra ping a un nombre (falla la
+      resolución), dig directo al resolvedor (connection refused: el servicio no escucha) y el
+      estado y el log del servicio. La causa fue un cambio sin validar: unbound-checkconf (o
+      named-checkconf, kea-dhcp4 -t) antes de reiniciar lo hubiera evitado. Y para que un error
+      así no deje a todos sin DNS: dos resolvedores en el DHCP, en servidores distintos.

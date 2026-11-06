@@ -1,7 +1,7 @@
 ############################################################################################
 #                                                                                          #
 #          ARQUITECTURA TÉCNICA DE LA PLATAFORMA                                           #
-#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 4b                      #
+#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 5a                      #
 #                                                                                          #
 ############################################################################################
 
@@ -104,7 +104,7 @@ versiones estables vigentes en ese momento.
     no queda como archivos simples en el repositorio y los simuladores a medida son
     difíciles de integrar.
   - Linux real dentro del navegador (emuladores x86 en WebAssembly): se evaluó para la
-    terminal. Exige descargar decenas de MB, es lento en celulares y no permite guiar ni
+    terminal. Exige descargar decenas de MB, es lento en teléfonos y no permite guiar ni
     validar ejercicios paso a paso. Queda como posible componente opcional a futuro; la
     práctica con sistemas reales se hace en los laboratorios con máquinas virtuales.
 
@@ -367,7 +367,8 @@ reordenar carpetas no rompe el progreso guardado de nadie.
     <Ordenar ejercicio={ej} />  <Emparejar ejercicio={ej} />
     <Troubleshooting escenario={ej} />
     <EditorConfig ejercicio={ej} />  lenguaje (nginx, compose, ansible, yaml, sshd,
-                                     fstab, sudoers, systemd, texto), archivo inicial,
+                                     fstab, sudoers, systemd, zona, named, kea, texto),
+                                     archivo inicial,
                                      solución y reglas: sin_errores, contiene,
                                      no_contiene, directiva (nginx por contexto, sshd por
                                      nombre, systemd por sección: contexto "Service" y
@@ -383,6 +384,11 @@ reordenar carpetas no rompe el progreso guardado de nadie.
                                      solución como teclas ("Go# texto<Esc>:wq<CR>")
     <CalculadoraPermisos />          rwx, octal y simbólico, bits especiales y umask,
                                      con modo de práctica
+    <CalculadoraPoe modo="calculadora" | "practica" />   presupuesto PoE de un switch
+    <SimuladorSwitch />              tabla MAC de un switch, con predicción
+    <ClasificadorIp />               ¿qué tipo de dirección es?
+    <DisenadorVlsm red="..." areas={[{ nombre, hosts }]} />   sin props: casos al azar
+    <SimuladorNat />                 tabla de traducciones, redirección y CGNAT
 
   La propiedad que recibe los datos es fija para cada componente: ejercicio, salvo
   escenario (Troubleshooting y SimuladorPaquetes) y datos (DiagramaInteractivo). El
@@ -574,9 +580,44 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       varios -e, tr -c, diff -r, tar (c/t/x, z, -C, --exclude, con fallas reales),
       gzip/gunzip/zcat, mktemp, seq, bc, cmp, paste, timeout, flock, chpasswd y openssl
       rand.
+  - Nivel 2, parte 1 (módulos 2.1 a 2.3):
+    · Red del servidor (commands/net.ts): ip con -4/-6 y -br, IPv6 en las interfaces
+      (enlace local fe80 que se arma de la MAC en Ubuntu y estable al azar en Rocky,
+      direcciones agregadas con ip -6 addr add), ping a IPv6 (con %placa para las de
+      enlace local), tabla de vecinos real en ip neigh (ARP y NDP, REACHABLE, STALE y
+      FAILED, flush y del), velocidad y dúplex por placa (ethtool), MTU, ipcalc con el
+      formato de cada familia, arping (con -D) y nmcli con ipv4.method auto e
+      ipv6.addresses.
+    · IP duplicadas (hosts.ts): si dos servidores del ejercicio tienen la misma IP, cada
+      resolución ARP la puede contestar uno distinto, y ssh, curl y ping van al que
+      contestó: la falla es intermitente, como en la vida real. arping muestra las dos MAC.
+    · DNS del laboratorio (dns.ts y commands/dnsserver.ts): BIND lee named.conf con sus
+      include (Rocky y Ubuntu, con la configuración de fábrica de cada uno), carga las
+      zonas con el usuario del servicio y sirve lo que cargó al arrancar o con rndc
+      reload (si una recarga falla, sigue con la zona anterior). Respeta listen-on,
+      allow-query, recursion, allow-recursion, acl y forwarders. Unbound lee
+      unbound.conf y conf.d con interface, access-control, local-zone, local-data y
+      forward-zone. dig, nslookup y host le preguntan al servidor del laboratorio que
+      corresponda (con aa, NXDOMAIN, REFUSED, CNAME seguidos, inversa con -x) o a un
+      resolvedor "de internet"; el firewall y lo que escucha en el 53 deciden entre
+      timed out, connection refused y host unreachable. La resolución del sistema (ping,
+      ssh, curl) usa /etc/resolv.conf y esos mismos servidores. named-checkconf (-z),
+      named-checkzone, rndc, unbound-checkconf, y ss muestra en qué dirección escucha
+      cada uno.
+    · DHCP (commands/dnsserver.ts): Kea con la configuración de fábrica (no escucha en
+      ninguna placa), kea-dhcp4 -t, el servicio (kea-dhcp4 en Rocky con Kea 2.6, donde
+      el id de la subred es obligatorio; kea-dhcp4-server en Ubuntu con Kea 2.4). Una
+      interfaz con dhcp: true recibe la reserva o la primera libre del rango, la puerta
+      de enlace, el DNS y el dominio al levantar la conexión (o al empezar, si Kea ya
+      funciona); el préstamo queda en kea-leases4.csv y en el journal. Sin servidor, la
+      conexión falla como en NetworkManager.
+    · Paquetes nuevos: bind (y bind9 en Ubuntu), unbound, kea (kea-dhcp4-server),
+      dnsmasq, ipcalc, iputils (arping) y ethtool, con sus archivos y permisos reales.
+    · Verificaciones nuevas: { resuelve: nombre, tipo, servidor, responde, estado } y
+      { interfaz: placa, ip_en: red, ipv6: dirección, activa }.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
-  - En el celular aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
+  - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
 
 6.2 Subnetting
   - Calculadora IPv4 (red, broadcast, rango, máscara, wildcard, tipo de dirección, vista
@@ -585,6 +626,8 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
   - Generador de ejercicios al azar por tipo y dificultad (red, broadcast, rango, cantidad
     de hosts, máscara necesaria, VLSM, sumarización, wildcard, IPv6), modo contrarreloj y
     estadísticas. Se prueba contra una implementación de referencia con miles de casos.
+
+  - Nivel 2: los ejercicios de IPv6 parten las direcciones largas en pantallas chicas.
 
 6.3 Motor de red, constructor de topologías y simulador de paquetes
   - Equipos: PC, servidor, switch de capa 2 y 3, y router, cada uno con sus interfaces
@@ -601,6 +644,8 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     y el simulador de paquetes la anima capa por capa (qué encabezados se agregan y
     quitan en cada equipo).
   - Interfaz: arrastrar equipos y cables, configurar con formularios o con la consola.
+  - El simulador de paquetes muestra también mensajes ARP (solicitud, respuesta y ARP
+    gratuito), que van dentro de la trama sin encabezado IP (Etapa 5a).
 
 6.4 Diagramas interactivos
   - SVG con zonas clicables definidas en YAML; al tocar una parte se abre su explicación.
@@ -629,6 +674,14 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     opciones mal escritas con sugerencia, opciones en la sección equivocada, varios
     ExecStart, rutas sin /, tiempos y fechas de OnCalendar, WantedBy sin .target). En
     la terminal, visudo, crontab -e y systemctl edit validan o procesan antes de guardar.
+    Nivel 2: archivos de zona de BIND (como named-checkzone: $TTL, $ORIGIN, @, nombres
+    relativos y el punto final, paréntesis del SOA, tipos de registro, NS sin dirección,
+    CNAME con otros datos, MX hacia un CNAME), named.conf (como named-checkconf: punto y
+    coma faltante, llaves, opciones mal escritas con sugerencia, zonas sin type o sin
+    file) y kea-dhcp4.conf (JSON con comentarios, id de la subred, pools fuera de la
+    subred, opciones inexistentes, puerta de enlace de otra red o dentro del rango,
+    reservas). El nombre de la zona sale del nombre del archivo (db.empresa.internal,
+    db.192.168.10 para la inversa).
   - Se suman con el nivel que los usa: manifiestos de Kubernetes, inventarios de Ansible,
     smb.conf, zonas DNS, nftables, WireGuard, cloud-init y HCL.
   - Cada ejercicio agrega sus propias reglas (por ejemplo, "debe escuchar en 443 con
@@ -645,6 +698,13 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     (con red y broadcast) y pasos guiados (ver 5.5).
   - Hechos en la Etapa 4a (Nivel 1): simulador de vim (modos, movimientos, edición,
     deshacer, búsqueda, reemplazo y comandos de :) y calculadora de permisos.
+  - Hechos en la Etapa 5a (Nivel 2), con su motor en src/engines/redes: calculadora de
+    PoE (normas af, at y bt, presupuesto por clase y práctica de "¿alcanza?"),
+    simulador de la tabla MAC de un switch (aprender, reenviar, inundar, descartar y
+    vencer, con predicción antes de cada envío), clasificador de direcciones IPv4 (con
+    las trampas de 172.x y 100.x), diseñador VLSM (revisa alineación, tamaño,
+    solapamientos y espacio, con caso fijo o al azar y una solución de referencia) y
+    tabla NAT/PAT (puertos que se cambian, redirección y CGNAT).
   - Pendientes, con el nivel que los usa: simuladores de RAID, STP, quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; visor de capturas de
@@ -653,7 +713,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 
 
 ============================================================================================
-7. EVALUACIONES, DIAGNÓSTICO Y SALTEO (REGLAS EXACTAS)
+7. EVALUACIONES, DIAGNÓSTICO Y SUFICIENCIA (REGLAS EXACTAS)
 ============================================================================================
 
 7.1 Mini test de lección
@@ -757,7 +817,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     explica. Dentro de las lecciones, los términos muestran su definición al tocarlos.
   - Notas personales por lección, con una vista de todas las notas.
   - Tema claro y oscuro (sigue la preferencia del sistema y se puede cambiar a mano).
-  - Diseño pensado primero para celular.
+  - Diseño pensado primero para teléfonos.
   - Insignia y certificado por nivel, para descargar como PDF desde el navegador.
   - Modo simulacro de certificaciones (nivel 9).
 
@@ -773,7 +833,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     exámenes y diagnóstico, reglas de avance completas (lección, examen, suficiencia,
     laboratorio, caso real, insignia) y los ejercicios de la galería.
   - Validación de contenido (sección 5.6) en cada compilación.
-  - Pruebas de punta a punta con Playwright, en escritorio y en celular, sobre el
+  - Pruebas de punta a punta con Playwright, en escritorio y en teléfono, sobre el
     contenido de tests/fixtures/content: recorrer el mapa y una lección, resolver un
     ejercicio de terminal, responder una pregunta, empezar el mini test, notas que
     persisten al recargar, buscador, glosario, caso real, examen, modo oscuro y la
@@ -836,7 +896,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
 ============================================================================================
 
   Etapa 2 - Base de la plataforma (HECHA)
-    - Aplicación, navegación, temas, diseño para celular.
+    - Aplicación, navegación, temas, diseño para teléfonos.
     - Carga y validación de contenido, índice de búsqueda y glosario.
     - Motor de evaluaciones con los seis tipos de pregunta, mini tests, exámenes de
       módulo, suficiencia, diagnóstico y recomendaciones.
@@ -872,8 +932,18 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       terminal que el validador resuelve en el simulador. El simulador creció con lo
       descripto en 6.1 (Nivel 1, parte 2).
 
-  Etapa 5 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
-  El nivel de Redes también se puede entregar en dos partes.
+  Etapa 5 - Nivel 2, Redes (en dos partes)
+    - 5a (HECHA, en revisión): módulos 2.1 Fundamentos de redes, 2.2 IPv4, subnetting e
+      IPv6 y 2.3 Transporte y servicios de red. 19 lecciones, cada módulo con
+      laboratorio (en la plataforma y en máquinas virtuales), examen y caso real; 185
+      preguntas, 114 tarjetas, 79 términos de glosario nuevos, 14 ejercicios de
+      terminal, 2 de editor de configuración y 6 escenarios de paquetes. La terminal
+      sumó lo descripto en 6.1 (Nivel 2, parte 1) y hay cinco interactivos nuevos (6.9).
+    - 5b (pendiente): módulos 2.4 Switching, 2.5 Routing, 2.6 Firewalls, VPN y Wi-Fi
+      empresarial y 2.7 Diagnóstico y análisis de tráfico, y el proyecto "Red de una
+      empresa con dos sedes".
+
+  Etapa 6 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
 
 
 ============================================================================================

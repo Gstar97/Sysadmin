@@ -1,0 +1,43 @@
+---
+titulo: DNS y DHCP para la red del laboratorio
+horas: 4
+verificacion:
+  - Agregué la zona inversa a BIND y dig -x devuelve los nombres.
+  - Configuré Unbound para que reenvíe la zona interna a BIND y resuelva lo externo, solo para la red interna.
+  - Configuré Kea con rango, opciones y una reserva, y revisé con kea-dhcp4 -t antes de arrancar.
+  - Un cliente recibió su reserva, el DNS y el dominio de búsqueda, y resuelve nombres internos, inversos y externos.
+  - En mis máquinas virtuales armé lo mismo, con BIND solo como autoritativo (sin recursión).
+  - Revisé los préstamos de Kea y la carga de zonas en los registros.
+---
+
+import infra from './lab-infra.yaml'
+import pasos from './lab-servicios-red.yaml'
+
+## Objetivo
+
+Dejar funcionando la infraestructura mínima de cualquier red: un servidor que reparte direcciones, un resolvedor para todos y un autoritativo para los nombres internos, conectados entre sí como en la lección 2.3.6.
+
+## Qué necesitas
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01, ubuntu01, espacio para un clon enlazado de rocky01 y unas tres horas.
+
+## Parte 1: en la plataforma
+
+Cuatro pasos encadenados en tres servidores. Si algo no anda, diagnostica antes de seguir: `ss -ulnp`, `journalctl -u` del servicio y `dig @servidor` son tus herramientas.
+
+<Terminal ejercicio={infra} />
+
+## Parte 2: tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Kea va a repartir direcciones en la red interna del hipervisor. No lo configures nunca en la placa conectada a la red de tu casa o de tu trabajo: competirías con el DHCP de verdad y dejarías equipos ajenos sin conexión.
+</Advertencia>
+
+## Para pensar
+
+1. Si ubuntu01 se apaga, ¿qué deja de funcionar para cliente01 y qué sigue andando? ¿Y si se apaga rocky01?
+2. ¿Por qué conviene que BIND no resuelva para otros (recursion no) si ya tienes Unbound?
+3. Agrega un equipo nuevo a la zona directa. ¿Qué tres cosas tienes que hacer para que cliente01 lo resuelva enseguida, y por qué quizás tarde un poco igual?
