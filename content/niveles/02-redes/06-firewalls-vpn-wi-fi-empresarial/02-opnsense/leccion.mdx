@@ -1,0 +1,101 @@
+---
+id: n2-m6-l2
+titulo: Firewall perimetral con OPNsense
+minutos: 180
+objetivos:
+  - Instalar OPNsense (o pfSense CE) con interfaces WAN, LAN y DMZ.
+  - Crear alias, reglas por interfaz, NAT de salida y redirección de puertos.
+  - Verificar con el registro en vivo y la tabla de estados.
+glosario: [opnsense, alias-firewall, anti-lockout]
+verificado: 2026-11
+---
+
+import lab from './laboratorio-vm.svg?raw'
+import orden from './puesta-en-marcha.yaml'
+import pantallas from './pantallas.yaml'
+
+**OPNsense** es un firewall de código abierto basado en FreeBSD, con interfaz web. Se instala en un equipo con dos o más tarjetas de red (o en una máquina virtual) y hace de firewall con estado, router, NAT, DHCP, DNS, VPN y más. Es muy usado en pymes, en sucursales y en laboratorios; su pariente **pfSense** (de donde nació en 2015) funciona casi igual. Lo que aprendas aquí se traslada a firewalls comerciales como FortiGate, Palo Alto o Sophos: cambian los menús, no las ideas.
+
+<AntesDeEmpezar>
+- Zonas, DMZ, reglas de arriba hacia abajo y denegación por defecto (lección anterior).
+- NAT de salida y redirección de puertos (lección 2.3.5).
+- Máquinas virtuales y redes internas del hipervisor (nivel 1 y laboratorio 2.2).
+</AntesDeEmpezar>
+
+## El laboratorio
+
+La versión actual es la **26.7** (julio de 2026); OPNsense saca dos versiones grandes por año, en enero y en julio, y actualizaciones pequeñas cada pocas semanas. Vas a armar esto en el laboratorio del módulo; aquí va la idea completa:
+
+<Diagrama svg={lab} alt="fw01 con OPNsense 26.7 en una máquina virtual de 2 vCPU, 2 GiB de memoria y 20 GiB de disco, con tres adaptadores: WAN por DHCP hacia la casa o internet (adaptador NAT o puente), LAN 192.168.10.1/24 en la red interna labred (donde están rocky01 y ubuntu01, con gateway y DNS 192.168.10.1) y DMZ 172.16.0.1/24 en la red interna labdmz (con web01, un clon de ubuntu01, en 172.16.0.10). La administración web se entra desde la LAN en https://192.168.10.1 y nunca se publica en la WAN." pie="Tres redes, tres interfaces: cada una es una zona." />
+
+1. **Instalar**: se descarga la imagen DVD (ISO) desde opnsense.org, se crea la máquina virtual con tres adaptadores y se instala con el usuario `installer` (contraseña `opnsense`). Después del reinicio, se entra a la consola como `root`.
+2. **Asignar interfaces** (opción 1 del menú de consola): qué tarjeta es WAN, cuál LAN y cuál OPT1 (la futura DMZ). Con la opción 2 se pone la IP de la LAN.
+3. **Interfaz web**: desde una máquina de la LAN, `https://192.168.10.1`. El asistente pide nombre, DNS, zona horaria, la WAN y la contraseña nueva de root.
+
+<Ordenar ejercicio={orden} />
+
+## Lo que viene de fábrica
+
+- En la **LAN**: una regla *anti-lockout* (para que nunca te quedes sin acceso a la administración desde la LAN) y una regla "Default allow LAN to any": todo lo que sale de la LAN pasa.
+- En la **WAN**: ninguna regla, así que todo lo que entra se bloquea. Y dos casillas activas, *Block private networks* y *Block bogon networks*, que descartan lo que llega a la WAN desde direcciones privadas o que no deberían existir en internet. En un laboratorio donde la WAN está en la red de tu casa (privada), hay que desactivar la primera para poder probar desde allí.
+- En las interfaces **OPT** (como la DMZ): ninguna regla. Todo lo que sale de la DMZ se bloquea hasta que lo permitas.
+- **NAT de salida** automático: todo lo interno sale con la IP de la WAN.
+
+## Alias y reglas
+
+Un **alias** es un nombre para un grupo de redes, equipos o puertos: `SERVIDORES_WEB`, `PUERTOS_WEB` (80, 443), `ADMINS`. Las reglas quedan legibles y, si cambia una IP, se cambia en un solo lugar.
+
+Las reglas se escriben en **Firewall, Rules** y la interfaz por la que **entra** el tráfico. Una política típica para la DMZ:
+
+| # | Acción | Origen | Destino | Puerto | Para qué |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Bloquear | DMZ net | LAN net | cualquiera | La DMZ nunca entra a la LAN |
+| 2 | Permitir | DMZ net | This Firewall | 53 (UDP) | DNS del firewall |
+| 3 | Permitir | DMZ net | cualquiera | 80, 443 | Actualizaciones |
+
+Y para publicar la web, en **Firewall, NAT, Port Forward** (en las versiones nuevas, *Destination NAT*): WAN, TCP, destino *WAN address* puerto 443, redirigir a 172.16.0.10 puerto 443. OPNsense ofrece crear la regla de WAN asociada automáticamente, con destino ya traducido (la IP de la DMZ), como viste en la lección anterior.
+
+<Emparejar ejercicio={pantallas} />
+
+<Pregunta id="p05" />
+
+## Comprobar
+
+- **Firewall, Log Files, Live View**: cada paquete permitido o bloqueado, con la regla que lo decidió (para que aparezca, la regla tiene que tener activado el registro, *Log*). La regla de bloqueo por defecto ya registra.
+- **Firewall, Diagnostics, States**: la tabla de estados. Si una conexión aparece aquí, el firewall la dejó pasar.
+- **Interfaces, Diagnostics, Packet Capture**: una captura como tcpdump, desde la interfaz web (módulo 2.7).
+
+<EnSimple>
+OPNsense es un firewall que se maneja por la web. Cada tarjeta es una zona. En cada zona escribes qué puede hacer lo que entra por ahí, usando alias para que las reglas se lean fácil. Y el registro en vivo te dice qué pasó con cada paquete y por qué regla.
+</EnSimple>
+
+<Consejo titulo="Copias de la configuración">
+Toda la configuración de OPNsense es un único archivo XML. **System, Configuration, Backups** lo descarga; guárdalo después de cada cambio importante. Si el disco muere, se reinstala, se sube el archivo y el firewall vuelve a ser exactamente el mismo. OPNsense también guarda un historial de las últimas versiones para volver atrás.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Bloquearte a ti mismo">
+    Una regla de bloqueo en la LAN puede dejarte sin interfaz web si borraste la anti-lockout. Si pasa, desde la consola: opción 8 (shell) y pfctl -d desactiva el filtrado un momento para arreglarlo.
+  </ErrorComun>
+  <ErrorComun titulo="Publicar la administración en la WAN">
+    Nunca. Si hace falta administrar de afuera, por una VPN (lección 5).
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar que la DMZ empieza bloqueada">
+    Una interfaz OPT nueva no tiene reglas: los servidores de la DMZ no tienen ni DNS ni actualizaciones hasta que las permitas.
+  </ErrorComun>
+  <ErrorComun titulo="No desactivar Block private networks en el laboratorio">
+    Si la WAN está en la red de tu casa, todo lo que pruebes desde allí se descarta antes de llegar a tus reglas. En una WAN real con IP pública, déjala activada.
+  </ErrorComun>
+  <ErrorComun titulo="Reglas sin registro">
+    Sin Log, el Live View no muestra qué regla dejó pasar algo. Actívalo, al menos mientras pruebas.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- OPNsense (y pfSense) es un firewall con estado de código abierto con interfaz web; la versión actual es 26.7 (dos por año).
+- Se instala con una tarjeta por zona (WAN, LAN, DMZ) y se administra desde la LAN, nunca desde la WAN.
+- De fábrica: anti-lockout y "permitir todo" en la LAN; nada en la WAN ni en las OPT; NAT de salida automático; Block private/bogon networks en la WAN.
+- Alias para grupos de redes, equipos y puertos. Reglas en la interfaz de entrada, de lo específico a lo general.
+- Redirección de puertos (Port Forward o Destination NAT) con su regla de WAN hacia la IP interna.
+- Live View y States para comprobar; copia del XML de configuración después de cada cambio.
+</Resumen>

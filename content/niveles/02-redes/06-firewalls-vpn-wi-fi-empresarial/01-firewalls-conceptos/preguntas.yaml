@@ -1,0 +1,83 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace un firewall con un paquete que no coincide con ninguna regla?
+  opciones:
+    - { texto: "Lo bloquea: denegación por defecto", correcta: true, explicacion: "Lo que no está permitido explícitamente, no pasa." }
+    - { texto: "Lo deja pasar", explicacion: "Sería permitir por defecto, que es inseguro." }
+    - { texto: "Le pregunta al administrador", explicacion: "No." }
+    - { texto: "Lo manda a la DMZ", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué ventaja tiene un firewall con estado sobre uno sin estado?
+  opciones:
+    - { texto: "Recuerda las conexiones permitidas y deja volver sus respuestas sin reglas extra", correcta: true, explicacion: "Usa una tabla de estados." }
+    - { texto: "Es más rápido siempre", explicacion: "No necesariamente." }
+    - { texto: "No necesita reglas", explicacion: "Necesita reglas para la ida." }
+    - { texto: "Cifra el tráfico", explicacion: "Eso es una VPN." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve una DMZ?
+  opciones:
+    - { texto: "Para poner en una red aparte los servidores accesibles desde internet, de modo que si caen no comprometan la LAN", correcta: true, explicacion: "La DMZ no inicia conexiones hacia la LAN." }
+    - { texto: "Para que la LAN tenga más velocidad", explicacion: "No." }
+    - { texto: "Para los invitados del Wi-Fi", explicacion: "Eso suele ser otra VLAN, no la DMZ." }
+    - { texto: "Para guardar copias de seguridad", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "En la interfaz LAN hay, en este orden: 1) Permitir LAN a cualquier destino; 2) Bloquear LAN a la DMZ puerto 22. ¿Qué pasa con un SSH de la LAN a la DMZ?"
+  opciones:
+    - { texto: "Pasa: la regla 1 coincide primero y la 2 nunca se mira", correcta: true, explicacion: "Las excepciones van arriba." }
+    - { texto: "Se bloquea por la regla 2", explicacion: "No llega a evaluarse." }
+    - { texto: "Se bloquea por la denegación por defecto", explicacion: "Ya coincidió la 1." }
+    - { texto: "Depende del estado", explicacion: "Es una conexión nueva." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Publicas un servidor web de la DMZ (172.16.0.10) con una redirección del puerto 443 de la IP pública. ¿A qué destino tiene que apuntar la regla de WAN?
+  opciones:
+    - { texto: "A 172.16.0.10 puerto 443: la redirección se aplica antes de las reglas", correcta: true, explicacion: "La regla ve el destino ya traducido." }
+    - { texto: "A la IP pública puerto 443", explicacion: "Para cuando se evalúa la regla, el destino ya cambió." }
+    - { texto: "A la LAN", explicacion: "El servidor está en la DMZ." }
+    - { texto: "No hace falta regla", explicacion: "Con denegación por defecto, sí hace falta." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC de la LAN abre una página web en internet. ¿Hace falta una regla en la interfaz WAN para que vuelva la respuesta?
+  opciones:
+    - { texto: "No: el firewall con estado reconoce la respuesta en su tabla de estados", correcta: true, explicacion: "Solo hace falta la regla de la ida (en la LAN)." }
+    - { texto: "Sí, una que permita de internet a la LAN", explicacion: "Sería un agujero." }
+    - { texto: "Sí, una por cada página", explicacion: "No." }
+    - { texto: "Solo si es HTTPS", explicacion: "No depende de eso." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué agrega un firewall de nueva generación (NGFW)?
+  opciones:
+    - { texto: "Reconoce aplicaciones y usuarios, y puede inspeccionar el contenido (IPS, filtrado web)", correcta: true, explicacion: "Va más allá de IP y puerto." }
+    - { texto: "Funciona sin reglas", explicacion: "Tiene reglas, más detalladas." }
+    - { texto: "Reemplaza al router", explicacion: "Puede enrutar, pero no es su punto." }
+    - { texto: "Solo funciona con IPv6", explicacion: "No." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El servidor web de la DMZ necesita consultar la base de datos de la LAN. ¿Cuál es la mejor opción?
+  opciones:
+    - { texto: "Mover la base de datos a la DMZ o a una zona propia, y permitir solo ese puerto entre la web y esa zona", correcta: true, explicacion: "Así la DMZ sigue sin tocar la LAN." }
+    - { texto: "Permitir la DMZ a toda la LAN", explicacion: "Si atacan la web, el atacante llega a toda la LAN." }
+    - { texto: "Poner la web en la LAN", explicacion: "Quedaría expuesta toda la LAN." }
+    - { texto: "Apagar el firewall entre DMZ y LAN", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El firewall de red permite el puerto 8443 hacia un servidor, pero desde la LAN igual no conecta. ¿Qué revisas a continuación?
+  opciones:
+    - { texto: "El firewall del propio servidor (firewalld, ufw) y que el servicio escuche en ese puerto", correcta: true, explicacion: "Son dos firewalls distintos, y el servicio tiene que estar escuchando." }
+    - { texto: "La tabla de estados", explicacion: "No es lo primero." }
+    - { texto: "El DNS de internet", explicacion: "No interviene." }
+    - { texto: "La DMZ", explicacion: "No interviene si el tráfico es dentro de la LAN." }

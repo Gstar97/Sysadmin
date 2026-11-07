@@ -1,0 +1,60 @@
+tipo: configuracion
+titulo: Un Linux como firewall de la oficina
+consigna: >-
+  gw01 (Rocky Linux) une la LAN (enp0s8, 192.168.10.0/24) con internet (enp0s3). Un compañero
+  dejó /etc/sysconfig/nftables.conf a medio hacer y con errores. Corrígelo para que: gw01 solo
+  acepte SSH desde la LAN; deje volver las respuestas en input y en forward; deje salir a la LAN
+  hacia internet (forward de enp0s8 a enp0s3); y que la LAN salga con la IP de gw01
+  (masquerade en enp0s3). Todo lo demás, bloqueado.
+lenguaje: nftables
+nombre_archivo: /etc/sysconfig/nftables.conf
+archivo_inicial: |
+  #!/usr/sbin/nft -f
+  flush ruleset
+
+  table inet filtro {
+    chain input {
+      type filter hook input priority filter policy drop
+      iifname "lo" accept
+      tcp dport 22 accept
+    }
+
+    chain forward {
+      type filter hook forward priority filter; policy drop;
+      iifname "enp0s8" oifname "enp0s3" accept
+      masquerade
+    }
+  }
+reglas:
+  - { tipo: sin_errores, mensaje: "nft -c no encuentra errores" }
+  - { tipo: contiene, regex: "hook input priority filter; policy drop;", mensaje: "input tiene política drop (con sus punto y coma)" }
+  - { tipo: contiene, regex: "ip saddr 192\\.168\\.10\\.0/24 tcp dport (22|ssh) accept|iifname \"enp0s8\" tcp dport (22|ssh) accept", mensaje: "SSH solo desde la LAN" }
+  - { tipo: no_contiene, regex: "^\\s*tcp dport 22 accept\\s*$", mensaje: "No queda el SSH abierto para cualquiera" }
+  - { tipo: contiene, regex: "(?:[\\s\\S]*ct state (established,related|\\{ ?established, ?related ?\\}) accept){2}", mensaje: "Las respuestas vuelven, en input y en forward" }
+  - { tipo: contiene, regex: "type nat hook postrouting priority srcnat; policy accept;", mensaje: "Hay una cadena nat en postrouting" }
+  - { tipo: contiene, regex: "oifname \"enp0s3\"( ip saddr 192\\.168\\.10\\.0/24)? masquerade", mensaje: "La LAN sale con masquerade por enp0s3" }
+solucion: |
+  #!/usr/sbin/nft -f
+  flush ruleset
+
+  table inet filtro {
+    chain input {
+      type filter hook input priority filter; policy drop;
+      ct state established,related accept
+      iifname "lo" accept
+      ip saddr 192.168.10.0/24 tcp dport 22 accept
+    }
+
+    chain forward {
+      type filter hook forward priority filter; policy drop;
+      ct state established,related accept
+      iifname "enp0s8" oifname "enp0s3" accept
+    }
+  }
+
+  table ip nat {
+    chain postrouting {
+      type nat hook postrouting priority srcnat; policy accept;
+      oifname "enp0s3" masquerade
+    }
+  }

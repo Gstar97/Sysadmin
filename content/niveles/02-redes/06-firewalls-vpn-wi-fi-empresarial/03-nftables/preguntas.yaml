@@ -1,0 +1,79 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué relación tienen firewalld y ufw con nftables?
+  opciones:
+    - { texto: "Son herramientas más simples que, por debajo, escriben reglas de nftables", correcta: true, explicacion: "El filtrado lo hace netfilter en el núcleo." }
+    - { texto: "Son firewalls distintos que no tienen nada que ver", explicacion: "Usan el mismo mecanismo del núcleo." }
+    - { texto: "Reemplazan a nftables", explicacion: "Lo usan." }
+    - { texto: "Solo funcionan en Windows", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En un servidor web (no un router), ¿qué cadena importa más?
+  opciones:
+    - { texto: "input: lo que llega para el propio equipo", correcta: true, explicacion: "forward es para lo que lo atraviesa." }
+    - { texto: "forward", explicacion: "Un servidor que no enruta casi no tiene tráfico en forward." }
+    - { texto: "postrouting", explicacion: "Es para NAT de salida." }
+    - { texto: "prerouting", explicacion: "Es para NAT de destino." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Cargaste una cadena input con policy drop que permite SSH, pero ahora el servidor no puede resolver nombres ni actualizarse. ¿Qué falta?
+  opciones:
+    - { texto: "ct state established,related accept: sin eso, las respuestas no vuelven", correcta: true, explicacion: "Es lo que lo hace un firewall con estado." }
+    - { texto: "Permitir el puerto 53 de entrada", explicacion: "Abriría el puerto para todos; lo que falta es dejar volver respuestas." }
+    - { texto: "Cambiar a policy accept", explicacion: "Perderías la protección." }
+    - { texto: "Reiniciar el servidor", explicacion: "No cambia nada." }
+- id: p04
+  tipo: completar_comando
+  enunciado: Escribe el comando que revisa /etc/nftables.conf sin aplicarlo.
+  aceptadas: [nft -c -f /etc/nftables.conf, sudo nft -c -f /etc/nftables.conf, nft -cf /etc/nftables.conf, sudo nft -cf /etc/nftables.conf]
+  explicacion: -c (check) analiza el archivo y avisa los errores sin cargar nada.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "¿Dónde va masquerade?"
+  opciones:
+    - { texto: "En una cadena type nat hook postrouting", correcta: true, explicacion: "Cambia el origen justo antes de salir." }
+    - { texto: "En la cadena input", explicacion: "Ahí no hay NAT." }
+    - { texto: "En la cadena forward de filtro", explicacion: "Da error: el NAT va en una cadena nat." }
+    - { texto: "En prerouting", explicacion: "Ahí va el dnat." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Publicaste un servidor interno con dnat en prerouting, pero desde afuera no conecta. La cadena forward tiene policy drop. ¿Qué falta?
+  opciones:
+    - { texto: "Una regla en forward que permita ese tráfico hacia el servidor interno", correcta: true, explicacion: "El dnat traduce; forward decide si pasa." }
+    - { texto: "Otro dnat", explicacion: "El destino ya se tradujo." }
+    - { texto: "Un masquerade en input", explicacion: "No." }
+    - { texto: "Nada: dnat ya lo deja pasar", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un Rocky Linux actual, ejecutas iptables -V y dice "iptables v1.8.x (nf_tables)". ¿Qué quiere decir?
+  opciones:
+    - { texto: "Que es iptables-nft: acepta la sintaxis vieja pero escribe reglas de nftables", correcta: true, explicacion: "Es la capa de compatibilidad." }
+    - { texto: "Que nftables no está instalado", explicacion: "Lo usa por debajo." }
+    - { texto: "Que hay dos firewalls activos", explicacion: "No necesariamente." }
+    - { texto: "Que es una versión vieja de iptables", explicacion: "Es la variante sobre nftables." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Vas a aplicar por SSH un conjunto de reglas nuevas con policy drop en un servidor remoto. ¿Qué precaución tomas?
+  opciones:
+    - { texto: "Revisar con nft -c y programar antes un deshacer automático (por ejemplo, un at con nft flush ruleset en 5 minutos)", correcta: true, explicacion: "Si te quedas afuera, a los 5 minutos vuelves a entrar." }
+    - { texto: "Aplicarlas y ver qué pasa", explicacion: "Si falta el SSH, perdiste el acceso." }
+    - { texto: "Desactivar el SSH antes", explicacion: "Te quedarías sin acceso igual." }
+    - { texto: "Ninguna: nft no corta conexiones", explicacion: "Las reglas aplican enseguida." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ventaja tiene la familia inet?
+  opciones:
+    - { texto: "Una misma tabla filtra IPv4 e IPv6, sin duplicar reglas", correcta: true, explicacion: "Con ip e ip6 habría que escribirlas dos veces." }
+    - { texto: "Es más rápida que ip", explicacion: "No es esa la razón." }
+    - { texto: "Hace NAT sola", explicacion: "No." }
+    - { texto: "Solo funciona para internet", explicacion: "No." }

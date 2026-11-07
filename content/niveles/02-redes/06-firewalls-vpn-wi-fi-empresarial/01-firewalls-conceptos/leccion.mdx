@@ -1,0 +1,91 @@
+---
+id: n2-m6-l1
+titulo: Firewalls, conceptos
+minutos: 120
+objetivos:
+  - Diferenciar firewall sin estado, con estado y de nueva generación.
+  - Diseñar políticas con denegación por defecto, zonas y DMZ.
+  - Leer un conjunto de reglas y predecir si un paquete pasa.
+glosario: [firewall, firewall-con-estado, denegacion-por-defecto, dmz, ngfw]
+verificado: 2026-11
+---
+
+import zonas from './zonas.svg?raw'
+import tipos from './tipos.yaml'
+
+Un router decide **por dónde** va un paquete. Un **firewall** decide **si** puede pasar. En una empresa, todo lo que entra desde internet, todo lo que sale y mucho de lo que va de un área a otra pasa por uno, y sus reglas son la política de seguridad de la red escrita en forma de lista. En esta lección vas a ver cómo piensa un firewall; en las siguientes, cómo se configura en OPNsense, en Linux y en equipos Cisco.
+
+<AntesDeEmpezar>
+- Protocolos, puertos y el saludo de tres pasos de TCP (lecciones 2.3.1 y 2.3.2).
+- NAT y redirección de puertos (lección 2.3.5).
+- Enrutamiento entre VLAN: el punto por donde pasa el tráfico entre áreas (lección 2.4.4).
+</AntesDeEmpezar>
+
+## Qué mira un firewall
+
+Piensa en la recepción de un edificio de oficinas. El de seguridad tiene una lista: quién puede entrar, a qué piso y a qué hora. A cada persona le pregunta de dónde viene y a dónde va, recorre la lista de arriba hacia abajo y hace lo que dice la primera línea que corresponde. Si no está en la lista, no entra. Y anota a quién dejó subir, para que pueda bajar y salir sin volver a preguntarle. Donde la comparación no llega: el firewall no reconoce caras; solo ve direcciones, protocolos y puertos (y, en los más avanzados, qué aplicación es).
+
+<Emparejar ejercicio={tipos} />
+
+**Con estado** es la clave. Cuando una PC abre una página web, la respuesta del servidor viene de afuera hacia adentro. Un firewall sin estado necesitaría una regla para dejar entrar esas respuestas, y esa regla sería un agujero. Uno con estado guarda cada conexión permitida en su **tabla de estados** y deja pasar solo las respuestas que corresponden a algo que salió.
+
+<EnSimple>
+Un firewall revisa cada paquete contra una lista de reglas, de arriba hacia abajo, y aplica la primera que coincide. Si ninguna coincide, lo bloquea. Y si deja salir una conexión, deja volver sus respuestas sin preguntar de nuevo.
+</EnSimple>
+
+## Cómo se diseña una política
+
+Tres principios que se usan en todos lados:
+
+1. **Denegación por defecto**: todo lo que no está permitido explícitamente, se bloquea. Es más seguro escribir la lista de lo que sí (unas pocas reglas) que la de lo que no (infinita).
+2. **Mínimo privilegio**: cada regla permite solo lo necesario. "La LAN sale por HTTPS a internet" es mejor que "la LAN sale a todo", aunque en muchas empresas se empieza por la segunda.
+3. **Zonas**: se agrupan las redes por nivel de confianza y se escriben reglas entre zonas, no entre equipos sueltos.
+
+<Diagrama svg={zonas} alt="Cuatro zonas alrededor del firewall: internet (WAN, confianza ninguna, no se inicia nada hacia adentro); la LAN de empleados (confianza alta, sale a internet y a la DMZ solo a lo que necesita); la DMZ de servidores públicos (confianza media, recibe de internet solo su servicio y nunca inicia conexiones hacia la LAN). El firewall en el medio, con reglas por interfaz, tabla de estados y denegación por defecto. Si un servidor de la DMZ es atacado, el atacante queda en la DMZ y la LAN sigue protegida." pie="La DMZ es una red aparte para lo que se publica en internet." />
+
+La **DMZ** (zona desmilitarizada) es una red separada para los servidores que tienen que ser accesibles desde internet: la web pública, el correo, una VPN. La idea es simple: si alguien logra entrar a uno de ellos, queda encerrado en la DMZ, porque el firewall no deja que la DMZ inicie conexiones hacia la LAN.
+
+## Cómo se leen las reglas
+
+En firewalls como OPNsense o pfSense, las reglas se escriben **en la interfaz por la que entra el tráfico**: las reglas de la interfaz LAN deciden qué puede hacer lo que viene de la LAN; las de WAN, qué puede entrar desde internet. Dentro de cada interfaz:
+
+- Se evalúan **de arriba hacia abajo**, y **gana la primera que coincide**. Las de más abajo ni se miran.
+- Por eso, las excepciones van **arriba** y las reglas generales **abajo**.
+- Al final de todo hay una regla invisible: bloquear todo lo demás.
+- La redirección de puertos (NAT de destino) se aplica **antes**: la regla tiene que mirar el destino ya traducido (la IP interna del servidor), no la IP pública.
+
+Practica con un firewall de oficina con LAN, DMZ y WAN:
+
+<SimuladorFirewall />
+
+<Pregunta id="p06" />
+
+<Nota titulo="Firewall de red y firewall del servidor">
+No es uno o el otro: van los dos. El firewall de red protege entre zonas; el del servidor (firewalld, ufw, el de Windows) protege incluso de un equipo de la misma red. Si un puerto "está abierto en el firewall" pero no conecta, revisa también el del servidor (es el caso real de este módulo).
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Una regla amplia arriba de una excepción">
+    "Permitir LAN a todo" arriba de "bloquear SSH a la DMZ" hace que el bloqueo nunca se aplique. Las excepciones van primero.
+  </ErrorComun>
+  <ErrorComun titulo="Permitir todo y bloquear lo malo">
+    Una lista de lo prohibido nunca está completa. Empieza bloqueando todo y permite lo necesario.
+  </ErrorComun>
+  <ErrorComun titulo="Escribir la regla de una redirección con la IP pública">
+    El NAT de destino se aplica antes de las reglas: la regla tiene que permitir hacia la IP interna del servidor.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar que la DMZ entre a la LAN &quot;solo para la base de datos&quot;">
+    Cada excepción de la DMZ hacia la LAN es un camino para un atacante. Si la web necesita una base de datos, mejor que esa base esté también en la DMZ o en otra zona aparte.
+  </ErrorComun>
+  <ErrorComun titulo="Escribir reglas para las respuestas">
+    En un firewall con estado, las respuestas pasan solas. Una regla de "permitir de internet hacia la LAN puertos altos" abre un agujero enorme.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un firewall decide si un paquete pasa según sus reglas: origen, destino, protocolo y puerto (y en los NGFW, aplicación y usuario).
+- Sin estado: cada paquete por separado. Con estado: recuerda las conexiones y deja volver las respuestas. NGFW: además, aplicaciones e inspección.
+- Principios: denegación por defecto, mínimo privilegio y zonas (LAN, DMZ, WAN). La DMZ nunca inicia conexiones hacia la LAN.
+- En OPNsense/pfSense las reglas van en la interfaz de entrada, de arriba hacia abajo, gana la primera que coincide; al final, se bloquea todo.
+- La redirección de puertos se aplica antes de las reglas. Y el firewall de red no reemplaza al del servidor.
+</Resumen>

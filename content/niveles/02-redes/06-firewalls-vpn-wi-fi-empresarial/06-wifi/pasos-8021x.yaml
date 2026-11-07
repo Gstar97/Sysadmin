@@ -1,0 +1,14 @@
+tipo: ordenar
+consigna: Ordena lo que pasa cuando una portátil se conecta a una red WPA3-Enterprise.
+pasos:
+  - La portátil se asocia al punto de acceso, que todavía no le deja pasar tráfico
+  - El punto de acceso le pide identificarse y pasa sus mensajes al servidor RADIUS
+  - Se arma un túnel TLS entre la portátil y RADIUS, y la portátil revisa el certificado del servidor
+  - La portátil manda su usuario y contraseña (o su certificado) por ese túnel
+  - RADIUS consulta el directorio y responde aceptado, con la VLAN que le corresponde
+  - El punto de acceso abre el puerto, con claves de cifrado propias para esa portátil
+  - La portátil pide su IP por DHCP en la VLAN asignada
+explicacion: >-
+  El punto de acceso nunca ve la contraseña: solo pasa mensajes. Por eso se pueden agregar
+  puntos de acceso sin cargar en ellos ninguna credencial, y si un usuario se va, alcanza con
+  desactivar su cuenta en el directorio.

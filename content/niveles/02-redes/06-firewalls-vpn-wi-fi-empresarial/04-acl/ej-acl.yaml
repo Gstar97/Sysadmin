@@ -1,0 +1,78 @@
+tipo: terminal
+shell: ios
+titulo: Una ACL con tres errores
+descripcion: >-
+  R1 une la LAN (Gi0/0, 192.168.1.0/24) con la DMZ (Gi0/1, 172.16.0.0/24), donde está el
+  servidor web 172.16.0.10. La política es: la web (TCP 443) para toda la LAN; SSH al servidor
+  solo desde la PC de sistemas (192.168.1.50); nada más hacia la DMZ. Un compañero escribió la
+  ACL DMZ-OUT, pero desde que la aplicó nadie llega a la DMZ. Estás en la consola de R1.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: R1
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.1/24 }
+          - { nombre: Gi0/1, ip: 172.16.0.1/24, acl_entrada: DMZ-OUT }
+        acls:
+          - nombre: DMZ-OUT
+            tipo: extendida
+            reglas:
+              - deny tcp 192.168.1.0 0.0.0.255 host 172.16.0.10 eq 22
+              - permit tcp host 192.168.1.50 host 172.16.0.10 eq 22
+      - { id: SW1, tipo: switch }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.10/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: SIS, nombre: PC-Sistemas, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.50/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: WEB, tipo: servidor, interfaces: [{ nombre: eth0, ip: 172.16.0.10/24 }], puerta_enlace: 172.16.0.1 }
+    enlaces:
+      - { a: "PC1:eth0", b: "SW1:Fa0/1" }
+      - { a: "SIS:eth0", b: "SW1:Fa0/2" }
+      - { a: "R1:Gi0/0", b: "SW1:Gi0/1" }
+      - { a: "R1:Gi0/1", b: "WEB:eth0" }
+pasos:
+  - consigna: Mira la ACL y dónde está aplicada.
+    verificar:
+      - { comando_usado: show access-lists }
+      - { comando_usado: show ip interface }
+    pistas: ["enable, show access-lists y show ip interface gi0/1."]
+    solucion: [enable, show access-lists, show ip interface gi0/1]
+    explicacion: >-
+      Está aplicada en Gi0/1 de entrada ("Inbound access list is DMZ-OUT"): filtra lo que viene
+      DESDE la DMZ, o sea, las respuestas del servidor. Ninguna línea coincide con ellas y caen
+      en el deny implícito. Primer error: el sentido.
+  - consigna: Aplícala hacia la DMZ, de salida en Gi0/1 (y quítala de entrada).
+    verificar:
+      - { equipo: R1, config_contiene: "ip access-group DMZ-OUT out" }
+      - { ping: { desde: SIS, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
+    pistas: ["interface gi0/1, no ip access-group DMZ-OUT in e ip access-group DMZ-OUT out."]
+    solucion: [configure terminal, interface gi0/1, no ip access-group DMZ-OUT in, ip access-group DMZ-OUT out]
+    explicacion: >-
+      Ahora filtra lo que va hacia la DMZ. Pero la PC de sistemas sigue sin poder entrar por SSH:
+      su paquete coincide primero con la línea 10 (deny para toda la LAN) y la 20 nunca se mira.
+      Segundo error: el orden.
+  - consigna: Haz que la excepción de la PC de sistemas quede antes del bloqueo general, usando números de secuencia.
+    verificar:
+      - { ping: { desde: SIS, hacia: WEB, proto: tcp, puerto: 22 } }
+      - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
+    pistas:
+      - "ip access-list extended DMZ-OUT, y dentro: 5 permit tcp host 192.168.1.50 host 172.16.0.10 eq 22."
+      - "Después borra la línea vieja con no 20."
+    solucion: [ip access-list extended DMZ-OUT, 5 permit tcp host 192.168.1.50 host 172.16.0.10 eq 22, no 20]
+    explicacion: Con la línea 5 arriba, la excepción gana para la PC de sistemas y el resto de la LAN sigue bloqueado para SSH.
+  - consigna: Falta lo más importante, la web para toda la LAN. Agrégala al final de la ACL.
+    verificar:
+      - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 443 } }
+      - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
+      - { ping: { desde: PC1, hacia: WEB, resultado: falla } }
+    pistas: ["Dentro de la ACL: permit tcp 192.168.1.0 0.0.0.255 host 172.16.0.10 eq 443."]
+    solucion: [permit tcp 192.168.1.0 0.0.0.255 host 172.16.0.10 eq 443, end, show access-lists DMZ-OUT]
+    explicacion: >-
+      Tercer error: sin esa línea, la web caía en el deny implícito, que bloquea todo lo que no
+      está permitido. El ping también se bloquea (no está en la política), y los contadores de
+      show access-lists muestran qué línea se usó cada vez.
+  - consigna: Guarda la configuración.
+    verificar:
+      - { equipo: R1, guardado: true }
+    pistas: ["copy running-config startup-config."]
+    solucion: [copy running-config startup-config]

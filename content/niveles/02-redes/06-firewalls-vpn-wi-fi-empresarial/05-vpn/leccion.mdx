@@ -1,0 +1,120 @@
+---
+id: n2-m6-l5
+titulo: VPN
+minutos: 180
+objetivos:
+  - Diferenciar VPN sitio a sitio y de acceso remoto, y túnel completo o dividido.
+  - Comparar IPsec con IKEv2, WireGuard y OpenVPN.
+  - Configurar WireGuard entre dos sedes y para un cliente remoto.
+glosario: [vpn, tunel-dividido, wireguard, ipsec]
+verificado: 2026-11
+---
+
+import tipos from './tipos-vpn.svg?raw'
+import tiposDatos from './tipos-vpn-datos.yaml'
+import ejWg from './ej-wireguard.yaml'
+
+Una **VPN** (red privada virtual) une dos puntos a través de internet como si hubiera un cable directo entre ellos, con todo el tráfico cifrado en el medio. Es como mandar documentos en una valija cerrada con llave dentro de un camión de una empresa de mensajería: el camión va por la ruta de todos, pero nadie en el camino puede ver ni cambiar lo que va adentro, y solo el destinatario tiene la llave. Donde la comparación no llega: además de cerrar la valija, la VPN prueba en cada paquete que viene de quien dice venir.
+
+<AntesDeEmpezar>
+- Rutas estáticas y la ruta de vuelta (lección 2.5.2): una VPN es, para los routers, una interfaz más con rutas.
+- NAT y por qué un equipo detrás de NAT no puede recibir conexiones (lección 2.3.5).
+- Claves públicas y privadas, como en SSH (lección 1.6.3).
+</AntesDeEmpezar>
+
+## Para qué y de qué tipo
+
+<DiagramaInteractivo datos={tiposDatos} svg={tipos} alt="Arriba a la izquierda, una VPN sitio a sitio: la central (192.168.10.0/24) y la sucursal (10.2.0.0/24) unidas por un túnel entre sus firewalls a través de internet. Arriba a la derecha, acceso remoto: una portátil en un café con una aplicación de VPN, unida por un túnel al servidor VPN del firewall de la central. Abajo, túnel completo (todo el tráfico del cliente va por la VPN, también internet; la empresa filtra todo pero es más lento) y túnel dividido (por la VPN solo lo de la empresa e internet sale directo; más rápido, pero lo de internet no pasa por los controles)." />
+
+Lo importante, sin importar el producto:
+
+- La VPN tiene sus **propias direcciones** (la red del túnel, por ejemplo 10.99.0.0/24) y los equipos necesitan **rutas** hacia las redes del otro lado. Sin eso, el túnel está "arriba" y no pasa nada por él.
+- Las **dos puntas** tienen que coincidir en todo: claves, redes, puertos. Un error de un lado no se nota en el otro: el túnel simplemente no sube.
+- Si una punta está detrás de NAT (como casi cualquier sucursal o un usuario en su casa), esa punta tiene que **iniciar** la conexión y mantenerla viva.
+
+## Tres tecnologías
+
+| | IPsec con IKEv2 | WireGuard | OpenVPN |
+| --- | --- | --- | --- |
+| Qué es | El estándar de toda la vida, en todos los firewalls y routers | Moderno, simple y muy rápido; está dentro del núcleo de Linux | Basado en TLS, muy flexible |
+| Puertos | UDP 500 y 4500 (más el protocolo ESP) | Un puerto UDP (51820 de fábrica) | UDP o TCP 1194 (o 443) |
+| Configuración | Muchas opciones que tienen que coincidir (fases, cifrados) | Un archivo corto con claves y redes | Certificados y un archivo de configuración |
+| Dónde brilla | Sitio a sitio entre fabricantes distintos; clientes nativos de Windows, macOS, iOS | Sitio a sitio y acceso remoto entre equipos que controlas; Linux | Acceso remoto cuando hay redes que solo dejan salir HTTPS |
+
+En una red nueva con equipos propios, **WireGuard** es la opción más simple. Para unirte a la VPN de un proveedor o de otra empresa, casi siempre va a ser **IPsec**. Y muchos servicios de acceso remoto actuales (Tailscale, NetBird y similares) son WireGuard con una capa de administración encima.
+
+<EnSimple>
+Una VPN es un túnel cifrado por internet. Une dos redes (sitio a sitio) o un equipo con la red de la empresa (acceso remoto). Cada punta necesita sus claves, la red del túnel y las rutas hacia lo que hay del otro lado.
+</EnSimple>
+
+<Pregunta id="p05" />
+
+## WireGuard paso a paso
+
+Cada equipo tiene un **par de claves**, como en SSH: la privada no sale nunca del equipo y la pública se le da al otro. Cada punta conoce a la otra como un **peer**, con su clave pública y la lista de direcciones que pueden llegar por ese peer (**AllowedIPs**).
+
+```bash
+sudo dnf install wireguard-tools      # en Ubuntu: sudo apt install wireguard
+wg genkey | tee privada | wg pubkey > publica
+```
+
+El archivo de la central (`/etc/wireguard/wg0.conf`):
+
+```ini
+[Interface]
+PrivateKey = (la privada de la central)
+Address = 10.99.0.1/24
+ListenPort = 51820
+
+[Peer]
+# gw-norte, la sucursal
+PublicKey = (la pública de gw-norte)
+AllowedIPs = 10.99.0.2/32, 10.2.0.0/24
+
+[Peer]
+# La portátil de Laura
+PublicKey = (la pública de la portátil)
+AllowedIPs = 10.99.0.10/32
+```
+
+**AllowedIPs** tiene dos funciones a la vez: lo que sale hacia esas redes va por ese peer (como una ruta), y lo que llega de ese peer solo se acepta si viene de esas redes. Por eso cada dirección tiene que estar en un solo peer.
+
+```bash
+sudo wg-quick up wg0                    # levantar (crea la interfaz y las rutas de AllowedIPs)
+sudo wg show                            # peers, último saludo (latest handshake) y tráfico
+sudo systemctl enable --now wg-quick@wg0
+```
+
+Y en la central: abrir el puerto UDP 51820 en el firewall, activar `ip_forward` y, si las PC de la LAN tienen que llegar a la sucursal, que la ruta hacia 10.2.0.0/24 apunte al equipo de la VPN (o que la VPN esté en el mismo firewall que es la puerta de enlace, como viste en el caso del módulo 2.5).
+
+<EditorConfig ejercicio={ejWg} />
+
+<Consejo titulo="Para el cliente remoto">
+La aplicación oficial de WireGuard (Windows, macOS, Android, iOS) importa el mismo archivo o un código QR generado con qrencode. Para el cliente, el [Peer] es la central con su Endpoint, y su AllowedIPs decide el tipo de túnel: 0.0.0.0/0 es túnel completo; solo las redes de la empresa, túnel dividido.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Poner en [Peer] tu propia clave">
+    En [Peer] va la clave pública del otro extremo. El síntoma: wg show nunca muestra "latest handshake".
+  </ErrorComun>
+  <ErrorComun titulo="AllowedIPs sin la red de destino">
+    El túnel sube, pero el tráfico a la LAN del otro lado no entra al túnel (ni es aceptado al llegar). Agrega las redes de cada lado.
+  </ErrorComun>
+  <ErrorComun titulo="La punta detrás de NAT sin PersistentKeepalive">
+    Mientras no haya tráfico, el NAT olvida la conexión y la central ya no puede llegar. PersistentKeepalive = 25 en la punta que está detrás.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar el firewall y las rutas del otro lado">
+    El puerto UDP abierto en la central, ip_forward, y que los equipos de cada LAN sepan que la otra red va por el equipo de la VPN.
+  </ErrorComun>
+  <ErrorComun titulo="Compartir claves privadas o reusar una configuración">
+    Cada equipo tiene su propio par de claves. Si un archivo con una clave privada se filtra, se borra ese peer y se generan claves nuevas.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- VPN: túnel cifrado por internet. Sitio a sitio (dos redes, lo arman los firewalls) o acceso remoto (un equipo con la red de la empresa).
+- Túnel completo (todo por la VPN) o dividido (solo lo de la empresa).
+- IPsec/IKEv2: el estándar entre fabricantes (UDP 500/4500). WireGuard: simple y rápido (un puerto UDP). OpenVPN: TLS, flexible.
+- WireGuard: par de claves por equipo; [Interface] con PrivateKey, Address y ListenPort; [Peer] con PublicKey, AllowedIPs, Endpoint y PersistentKeepalive detrás de NAT.
+- wg-quick up wg0, wg show (latest handshake) y el servicio wg-quick@wg0. Además: firewall, ip_forward y rutas.
+</Resumen>

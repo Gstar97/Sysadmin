@@ -1,0 +1,79 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué mira una ACL estándar?
+  opciones:
+    - { texto: "Solo la IP de origen", correcta: true, explicacion: "Las extendidas miran además destino, protocolo y puertos." }
+    - { texto: "Origen, destino y puerto", explicacion: "Eso es una extendida." }
+    - { texto: "Solo el puerto", explicacion: "No." }
+    - { texto: "La MAC", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una ACL tiene solo la línea "deny tcp any any eq 23". ¿Qué deja pasar?
+  opciones:
+    - { texto: "Nada: el deny implícito del final bloquea todo lo demás", correcta: true, explicacion: "Hace falta un permit ip any any al final." }
+    - { texto: "Todo menos Telnet", explicacion: "Eso sería con permit ip any any al final." }
+    - { texto: "Solo Telnet", explicacion: "Telnet está bloqueado." }
+    - { texto: "Todo", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "¿Qué abarca 10.20.0.0 0.0.255.255 en una ACL?"
+  opciones:
+    - { texto: "La red 10.20.0.0/16", correcta: true, explicacion: "Los 0 del wildcard son los bits que tienen que coincidir." }
+    - { texto: "Solo el equipo 10.20.0.0", explicacion: "Eso sería host 10.20.0.0." }
+    - { texto: "La red 10.0.0.0/8", explicacion: "No." }
+    - { texto: "Es inválido", explicacion: "Es correcto." }
+- id: p04
+  tipo: completar_comando
+  enunciado: En la interfaz, escribe el comando que aplica la ACL WEB-IN a lo que entra por ella.
+  aceptadas: [ip access-group WEB-IN in]
+  explicacion: in o out, siempre mirado desde el router.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Quieres que solo la PC 192.168.1.50 entre por SSH al router. ¿Qué tipo de ACL usas y dónde?
+  opciones:
+    - { texto: "Una estándar que permita 192.168.1.50, aplicada con access-class en line vty", correcta: true, explicacion: "Filtra quién puede abrir sesión en el equipo." }
+    - { texto: "Una extendida en todas las interfaces de salida", explicacion: "Lo que sale no tiene que ver con quién administra." }
+    - { texto: "Ninguna: alcanza con la contraseña", explicacion: "Limitar el origen es una capa más." }
+    - { texto: "Una estándar en la interfaz de la WAN, de salida", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Aplicaste en la interfaz que va al servidor una ACL de entrada que permite tcp de la LAN hacia el servidor puerto 443. Nadie llega a la web. ¿Por qué?
+  opciones:
+    - { texto: "De entrada en esa interfaz, la ACL ve lo que viene del servidor (las respuestas), que no coincide y cae en el deny implícito", correcta: true, explicacion: "Hay que aplicarla de salida en esa interfaz, o de entrada en la de la LAN." }
+    - { texto: "Porque falta el puerto 80", explicacion: "La política es solo 443." }
+    - { texto: "Porque las ACL no filtran TCP", explicacion: "Las extendidas sí." }
+    - { texto: "Porque falta guardar", explicacion: "Se aplican al instante." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "En una ACL con nombre, ¿cómo pones una línea nueva entre la 10 y la 20?"
+  opciones:
+    - { texto: "Escribiéndola con un número de secuencia intermedio, por ejemplo 15 permit ...", correcta: true, explicacion: "La ACL se reordena por secuencia." }
+    - { texto: "Borrando toda la ACL y escribiéndola de nuevo", explicacion: "Funciona, pero no hace falta." }
+    - { texto: "No se puede", explicacion: "Con nombre, sí." }
+    - { texto: "Con insert 15", explicacion: "No existe ese comando." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: show access-lists muestra "30 deny ip any any log (1520 matches)" y las líneas permit tienen 0. ¿Qué te dice?
+  opciones:
+    - { texto: "Que todo el tráfico está cayendo en el bloqueo final: las permit no coinciden (dirección, puerto o sentido mal)", correcta: true, explicacion: "Los contadores dicen qué línea se usa de verdad." }
+    - { texto: "Que la ACL funciona bien", explicacion: "Nadie pasa." }
+    - { texto: "Que hay un ataque", explicacion: "Puede ser simplemente una ACL mal escrita." }
+    - { texto: "Que el router está caído", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Pones una ACL de entrada en la interfaz que une dos routers con OSPF, permitiendo solo tráfico TCP. ¿Qué pasa?
+  opciones:
+    - { texto: "Se cortan los saludos de OSPF (no son TCP) y se cae la vecindad", correcta: true, explicacion: "Hay que agregar permit ospf any any." }
+    - { texto: "Nada: OSPF no pasa por las ACL", explicacion: "Los saludos que entran se filtran." }
+    - { texto: "OSPF se pasa a TCP", explicacion: "No." }
+    - { texto: "Se duplican las rutas", explicacion: "No." }

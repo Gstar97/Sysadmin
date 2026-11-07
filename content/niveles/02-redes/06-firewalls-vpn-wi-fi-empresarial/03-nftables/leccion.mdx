@@ -1,0 +1,124 @@
+---
+id: n2-m6-l3
+titulo: nftables en Linux
+minutos: 150
+objetivos:
+  - Escribir reglas con nftables (tablas, cadenas, hooks y sets).
+  - Convertir un router Linux en firewall con NAT.
+  - Entender la relación con iptables, firewalld y ufw.
+glosario: [nftables, hook-netfilter, masquerade]
+verificado: 2026-11
+---
+
+import hooks from './hooks.svg?raw'
+import ejNft from './ej-nft.yaml'
+
+El filtrado de paquetes de Linux vive en el núcleo y se llama **netfilter**. Lo que cambia es la herramienta para escribir las reglas. Hoy es **nftables** (el comando `nft`), que reemplazó a iptables. firewalld (Rocky, RHEL) y ufw (Ubuntu), que ya usaste en el nivel 1, son capas más simples que por debajo escriben reglas de nftables. Saber nftables directamente sirve para dos cosas: entender qué hacen esas herramientas y armar un firewall o router Linux a medida, como los que hay dentro de muchos equipos de red.
+
+<AntesDeEmpezar>
+- firewalld y ufw (lección 1.6.5).
+- Un Linux como router: ip_forward (lección 2.5.2).
+- Firewall con estado y denegación por defecto (lección 1 de este módulo).
+</AntesDeEmpezar>
+
+## Los hooks: por dónde pasa un paquete
+
+Piensa en una oficina de correo con varios puestos de control: el de la entrada, donde se ve todo lo que llega; uno para lo que es para la propia oficina; otro para lo que solo está de paso hacia otra ciudad; y el de la salida. En cada puesto puedes poner un control distinto. Donde la comparación no llega: el núcleo pasa cada paquete por esos puestos en microsegundos y en un orden fijo; no hay atajos.
+
+<Diagrama svg={hooks} alt="Un paquete entra por una tarjeta y pasa por prerouting (donde va el dnat); después la decisión de ruta pregunta si es para este equipo. Si lo es, va a input y al programa local (sshd, nginx). Si solo lo atraviesa, va a forward y después a postrouting (donde va el masquerade) y sale. Lo que genera el propio equipo sale por output y también pasa por postrouting. En un servidor importa input; en un router o firewall Linux, además forward y los NAT de prerouting y postrouting." pie="Cada cadena de nftables se engancha en uno de estos puntos." />
+
+## Tablas, cadenas y reglas
+
+```text
+table inet filtro {                       # familia inet: IPv4 e IPv6 juntas
+  set admins {
+    type ipv4_addr
+    elements = { 192.168.10.50, 192.168.10.51 }
+  }
+
+  chain input {
+    type filter hook input priority filter; policy drop;
+    ct state established,related accept   # las respuestas de lo que abrió el equipo
+    ct state invalid drop
+    iifname "lo" accept                   # el equipo hablando consigo mismo
+    ip saddr @admins tcp dport 22 accept  # SSH solo para los admins
+    tcp dport { 80, 443 } accept          # la web, para todos
+    icmp type echo-request limit rate 5/second accept
+  }
+}
+```
+
+- Una **tabla** agrupa cadenas de una familia: `ip` (IPv4), `ip6`, `inet` (las dos), y otras más especiales.
+- Una **cadena base** se engancha a un hook con `type filter hook input priority filter; policy drop;`. La **política** es lo que pasa con lo que no coincide con ninguna regla: `drop` es denegación por defecto.
+- Las **reglas** se evalúan de arriba hacia abajo y la primera con veredicto (`accept`, `drop`, `reject`) termina la evaluación en esa cadena.
+- `ct state established,related accept` es lo que hace al firewall **con estado**: sin esa línea, con política drop, las respuestas no vuelven.
+- Un **set** es una lista con nombre (como los alias de OPNsense) que se usa con `@nombre`.
+
+Los comandos de todos los días:
+
+```bash
+sudo nft -c -f /etc/sysconfig/nftables.conf   # revisar el archivo sin aplicarlo
+sudo nft -f /etc/sysconfig/nftables.conf      # aplicarlo (reemplaza todo, por el flush ruleset)
+sudo nft list ruleset                         # lo que está cargado ahora
+sudo systemctl enable --now nftables          # cargarlo en cada arranque
+```
+
+En Rocky el archivo que carga el servicio es `/etc/sysconfig/nftables.conf`; en Ubuntu y Debian, `/etc/nftables.conf`. Y si usas nftables a mano, desactiva firewalld (o ufw): dos herramientas escribiendo reglas a la vez terminan pisándose.
+
+<EnSimple>
+En nftables escribes una cadena por cada punto que quieres controlar (input para lo que llega al equipo, forward para lo que lo atraviesa), con una política que bloquea todo, una línea que deja volver las respuestas y una línea por cada cosa que sí quieres permitir.
+</EnSimple>
+
+<Pregunta id="p05" />
+
+## Un router Linux con NAT
+
+Para que un Linux con dos tarjetas haga de firewall de una oficina, hacen falta tres cosas: el reenvío (`net.ipv4.ip_forward = 1`), una cadena **forward** que diga qué puede atravesarlo, y **NAT de salida** para que la LAN salga con la IP del equipo:
+
+```text
+table ip nat {
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    oifname "enp0s3" masquerade                    # todo lo que sale a internet, con mi IP
+  }
+  chain prerouting {
+    type nat hook prerouting priority dstnat; policy accept;
+    iifname "enp0s3" tcp dport 443 dnat to 192.168.10.80   # publicar un servidor interno
+  }
+}
+```
+
+**masquerade** es NAT de origen con la IP que tenga la interfaz en ese momento (ideal si la WAN la recibe por DHCP). Si la IP pública es fija, `snat to 203.0.113.10` hace lo mismo un poco más eficiente. Y si publicas un servidor con `dnat`, recuerda permitirlo también en **forward**.
+
+<EditorConfig ejercicio={ejNft} />
+
+## Y iptables
+
+iptables fue la herramienta durante veinte años, y vas a encontrar scripts y documentación con su sintaxis (`iptables -A INPUT -p tcp --dport 22 -j ACCEPT`). En las distribuciones actuales, el comando `iptables` es en realidad **iptables-nft**: acepta la sintaxis vieja y escribe reglas de nftables por debajo (`iptables -V` dice "nf_tables"). Para traducir reglas viejas existe `iptables-translate`. Para escribir reglas nuevas, nftables.
+
+<ErroresComunes>
+  <ErrorComun titulo="Cargar policy drop en input sin permitir SSH, por SSH">
+    Te quedas afuera en el instante. Prueba primero con nft -c, y si estás conectado a distancia, programa un "seguro" (por ejemplo, un at que haga nft flush ruleset en 5 minutos) antes de aplicar.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar ct state established,related">
+    Con política drop, el equipo no recibe ni las respuestas del DNS ni de las actualizaciones. Es la primera línea de cada cadena.
+  </ErrorComun>
+  <ErrorComun titulo="masquerade en la cadena de filtro">
+    El NAT va en una cadena type nat hook postrouting; en una de filtro, nft -c da error.
+  </ErrorComun>
+  <ErrorComun titulo="Publicar con dnat y no permitir en forward">
+    El destino se traduce, pero el paquete muere en forward por la política drop. Hacen falta las dos cosas.
+  </ErrorComun>
+  <ErrorComun titulo="Mezclar firewalld y reglas a mano">
+    firewalld regenera sus tablas y puede borrar o contradecir las tuyas. Usa una sola herramienta por equipo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- netfilter filtra en el núcleo; nftables (nft) es la herramienta actual. firewalld y ufw escriben nftables por debajo; iptables hoy es iptables-nft.
+- Hooks: prerouting, input, forward, output, postrouting. Servidor: input. Router/firewall: además forward y el NAT.
+- Tabla (familia inet para IPv4 e IPv6), cadena base con type, hook, priority y policy, reglas de arriba hacia abajo, sets con @nombre.
+- Siempre: ct state established,related accept, iifname "lo" accept, y SSH permitido antes de aplicar policy drop.
+- NAT: masquerade (o snat) en nat/postrouting; dnat en nat/prerouting, más su permiso en forward.
+- nft -c -f para revisar, nft -f para aplicar, nft list ruleset para ver, y el servicio nftables para que quede.
+</Resumen>

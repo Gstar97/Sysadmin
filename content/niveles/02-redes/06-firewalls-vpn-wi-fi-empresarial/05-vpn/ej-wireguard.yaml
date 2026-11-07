@@ -1,0 +1,39 @@
+tipo: configuracion
+titulo: El túnel de la sucursal
+consigna: >-
+  gw-norte (Linux, detrás del NAT del proveedor de la sucursal, sin IP pública) tiene que armar
+  un túnel WireGuard con la central (vpn.empresa.com, puerto 51820). La red del túnel es
+  10.99.0.0/24: la central es 10.99.0.1 y gw-norte 10.99.0.2. Por el túnel tiene que llegar a
+  la LAN de la central, 192.168.10.0/24. La clave pública de la central es
+  REk0nfHw0RfgWf/svwuhlK1hV0N2/TgQdI5c92e7gyA=
+  Corrige /etc/wireguard/wg0.conf.
+lenguaje: wireguard
+nombre_archivo: /etc/wireguard/wg0.conf
+archivo_inicial: |
+  [Interface]
+  PrivateKey = ZWq9mZ9rlPfp/DdzUl2JrH5++AHnst2zyg/WxfOCPG8=
+  Address = 10.99.0.2/24
+
+  [Peer]
+  # La central
+  PublicKey = ZWq9mZ9rlPfp/DdzUl2JrH5++AHnst2zyg/WxfOCPG8=
+  Endpoint = vpn.empresa.com
+  AllowedIPs = 10.99.0.0/24
+reglas:
+  - { tipo: sin_errores, mensaje: "wg-quick no encuentra errores" }
+  - { tipo: contiene, regex: "^PublicKey = REk0nfHw0RfgWf/svwuhlK1hV0N2/TgQdI5c92e7gyA=\\s*$", mensaje: "En [Peer] va la clave pública de la central" }
+  - { tipo: contiene, regex: "^Endpoint = vpn\\.empresa\\.com:51820\\s*$", mensaje: "El Endpoint tiene el puerto" }
+  - { tipo: contiene, regex: "^AllowedIPs = .*192\\.168\\.10\\.0/24", mensaje: "La LAN de la central va por el túnel" }
+  - { tipo: contiene, regex: "^PersistentKeepalive = 25\\s*$", mensaje: "Mantiene vivo el túnel detrás del NAT" }
+  - { tipo: no_contiene, regex: "AllowedIPs = .*0\\.0\\.0\\.0/0", mensaje: "Es un túnel dividido: internet no va por la central" }
+solucion: |
+  [Interface]
+  PrivateKey = ZWq9mZ9rlPfp/DdzUl2JrH5++AHnst2zyg/WxfOCPG8=
+  Address = 10.99.0.2/24
+
+  [Peer]
+  # La central
+  PublicKey = REk0nfHw0RfgWf/svwuhlK1hV0N2/TgQdI5c92e7gyA=
+  Endpoint = vpn.empresa.com:51820
+  AllowedIPs = 10.99.0.0/24, 192.168.10.0/24
+  PersistentKeepalive = 25

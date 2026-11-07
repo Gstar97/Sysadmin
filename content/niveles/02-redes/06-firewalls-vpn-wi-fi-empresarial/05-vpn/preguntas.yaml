@@ -1,0 +1,79 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué une una VPN sitio a sitio?
+  opciones:
+    - { texto: "Dos redes completas, a través de internet, por un túnel entre sus firewalls o routers", correcta: true, explicacion: "Los equipos de cada sede no necesitan saber que existe." }
+    - { texto: "Un usuario con la red de la empresa", explicacion: "Eso es acceso remoto." }
+    - { texto: "Dos VLAN del mismo switch", explicacion: "Eso se hace con un router." }
+    - { texto: "Un servidor con internet", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En un túnel dividido, ¿por dónde sale la navegación por internet del usuario?
+  opciones:
+    - { texto: "Directo por su propia conexión: por la VPN va solo lo de la empresa", correcta: true, explicacion: "En un túnel completo, iría por la central." }
+    - { texto: "Por la central", explicacion: "Eso es túnel completo." }
+    - { texto: "No sale", explicacion: "Sale directo." }
+    - { texto: "Por otro túnel", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tienes que conectar tu red con la de un proveedor que usa un firewall de otra marca. ¿Qué VPN es lo más probable?
+  opciones:
+    - { texto: "IPsec con IKEv2: es el estándar que entienden todos los fabricantes", correcta: true, explicacion: "Hay que acordar los parámetros con el otro lado." }
+    - { texto: "WireGuard, siempre", explicacion: "No todos los equipos comerciales lo soportan." }
+    - { texto: "Ninguna: no se puede entre marcas", explicacion: "Con IPsec, sí." }
+    - { texto: "Telnet", explicacion: "No es una VPN." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En WireGuard, ¿qué hace AllowedIPs en un [Peer]?
+  opciones:
+    - { texto: "Dice qué direcciones van por ese peer al salir y cuáles se aceptan de él al llegar", correcta: true, explicacion: "Funciona como ruta y como filtro a la vez." }
+    - { texto: "Lista los usuarios permitidos", explicacion: "No hay usuarios en WireGuard." }
+    - { texto: "Define el puerto", explicacion: "Eso es ListenPort." }
+    - { texto: "Es la IP pública del peer", explicacion: "Eso es Endpoint." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El túnel WireGuard entre la central y la sucursal funciona un rato y después la central deja de llegar a la sucursal, que está detrás de NAT. ¿Qué falta?
+  opciones:
+    - { texto: "PersistentKeepalive = 25 en la sucursal, para que el NAT no olvide la conexión", correcta: true, explicacion: "Sin tráfico, el NAT borra la entrada." }
+    - { texto: "Cambiar el puerto", explicacion: "No es el problema." }
+    - { texto: "Poner 0.0.0.0/0 en AllowedIPs", explicacion: "Cambiaría el tipo de túnel, no el problema." }
+    - { texto: "Reiniciar el servidor cada hora", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: wg show en la central no muestra "latest handshake" para la sucursal. ¿Qué revisas primero?
+  opciones:
+    - { texto: "Las claves (que cada lado tenga la pública del otro), el Endpoint con su puerto y el puerto UDP abierto en el firewall", correcta: true, explicacion: "Sin saludo, el túnel nunca subió." }
+    - { texto: "Las rutas de la LAN", explicacion: "Primero tiene que haber saludo." }
+    - { texto: "El DNS de las PC", explicacion: "No." }
+    - { texto: "La velocidad de internet", explicacion: "No." }
+- id: p07
+  tipo: completar_comando
+  enunciado: Escribe el comando que levanta la interfaz WireGuard wg0 con su archivo de configuración.
+  aceptadas: [wg-quick up wg0, sudo wg-quick up wg0]
+  explicacion: Crea la interfaz, le pone la Address y agrega las rutas de AllowedIPs.
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El túnel sube (hay handshake) y la central llega a 10.99.0.2, pero las PC de la LAN de la central no llegan a la LAN de la sucursal. El túnel termina en un servidor que no es la puerta de enlace. ¿Qué falta?
+  opciones:
+    - { texto: "Que las PC (o su puerta de enlace) tengan ruta hacia 10.2.0.0/24 por el servidor de la VPN, e ip_forward en ese servidor", correcta: true, explicacion: "Es la ruta de vuelta del módulo 2.5." }
+    - { texto: "Otro túnel", explicacion: "El túnel funciona." }
+    - { texto: "Cambiar las claves", explicacion: "Hay handshake: las claves están bien." }
+    - { texto: "Abrir más puertos", explicacion: "No es un tema de puertos." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ventaja tiene un túnel completo para la empresa?
+  opciones:
+    - { texto: "Todo el tráfico del equipo pasa por los controles de la empresa (filtrado y registro)", correcta: true, explicacion: "A cambio, más carga en la central." }
+    - { texto: "Es más rápido para navegar", explicacion: "Suele ser más lento." }
+    - { texto: "No necesita claves", explicacion: "Necesita las mismas." }
+    - { texto: "No necesita firewall", explicacion: "No." }

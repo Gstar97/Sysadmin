@@ -1,0 +1,99 @@
+---
+id: n2-m6-l4
+titulo: ACL en equipos de red
+minutos: 120
+objetivos:
+  - Escribir ACL estándar y extendidas en Cisco IOS usando wildcards.
+  - Ubicarlas en la interfaz y el sentido correctos.
+  - Recordar la denegación implícita al final y leer los contadores para diagnosticar.
+glosario: [acl-red, acl-estandar, acl-extendida, deny-implicito]
+verificado: 2026-11
+---
+
+import sentido from './sentido.svg?raw'
+import ejAcl from './ej-acl.yaml'
+
+Un router o un switch de capa 3 también puede filtrar: con **listas de acceso** (ACL). Son más simples que un firewall (no tienen estado, como viste en la lección 1), pero están en todos los equipos y se usan muchísimo: para separar VLAN en el núcleo de la red, para limitar desde dónde se administra un equipo, para marcar tráfico. En esta lección vas a escribirlas en Cisco IOS; en otros fabricantes la idea es la misma.
+
+<AntesDeEmpezar>
+- Máscaras wildcard (lección 2.2.6).
+- Enrutamiento entre VLAN: el router como punto de paso entre áreas (lección 2.4.4).
+- Reglas de arriba hacia abajo y denegación por defecto (lección 1 de este módulo).
+</AntesDeEmpezar>
+
+## Estándar y extendidas
+
+- Las **estándar** (números 1 a 99, o con nombre) solo miran la **IP de origen**. Sirven para cosas simples: "solo esta red puede administrar el router".
+- Las **extendidas** (100 a 199, o con nombre) miran **protocolo, origen, destino y puertos**. Son las que se usan para filtrar tráfico.
+
+```text
+ip access-list extended DMZ-OUT
+ remark Solo la web para la LAN, SSH solo para sistemas
+ permit tcp host 192.168.1.50 host 172.16.0.10 eq 22
+ permit tcp 192.168.1.0 0.0.0.255 host 172.16.0.10 eq 443
+ deny   ip any any log
+!
+interface GigabitEthernet0/1
+ ip access-group DMZ-OUT out
+```
+
+Las direcciones se escriben con **wildcard** (la máscara al revés): `192.168.1.0 0.0.0.255` es toda la red /24. Dos atajos: `host 192.168.1.50` (equivale a wildcard 0.0.0.0) y `any` (cualquier dirección). Los puertos, con `eq`, `gt`, `lt` o `range`.
+
+Las ACL con **nombre** son más cómodas: se entiende para qué están y se pueden editar línea por línea con números de secuencia (`15 permit ...` inserta entre la 10 y la 20; `no 20` borra una).
+
+<EnSimple>
+Una ACL es una lista de permitir y bloquear que el router revisa de arriba hacia abajo. La estándar mira solo de dónde viene el paquete; la extendida, también a dónde va y a qué puerto. Lo que no está en la lista, se bloquea.
+</EnSimple>
+
+## Dónde aplicarla
+
+Una ACL no hace nada hasta que se aplica a una interfaz, en un sentido: `ip access-group NOMBRE in` o `out`. Es como un control de entrada o de salida de un edificio: el mismo guardia, con la misma lista, hace cosas muy distintas si lo pones a controlar a los que entran o a los que salen. Donde la comparación no llega: "entrar" y "salir" se miran siempre desde el router, no desde la red.
+
+<Diagrama svg={sentido} alt="La LAN (192.168.1.0/24) conectada a Gi0/0 de R1 y la DMZ (web 172.16.0.10) a Gi0/1. Lo que va de la LAN a la DMZ entra a R1 por Gi0/0 (in en Gi0/0) y sale por Gi0/1 (out en Gi0/1). Para filtrarlo sirve cualquiera: in en Gi0/0 descarta apenas entra pero afecta todo lo que sale de la LAN; out en Gi0/1 afecta solo lo que va a la DMZ. Una ACL por interfaz, por sentido y por protocolo. La estándar va cerca del destino y la extendida cerca del origen. Al final de toda ACL hay un deny ip any any invisible." pie="El error más común con ACL es el sentido, no la sintaxis." />
+
+Dos reglas de ubicación clásicas:
+
+- **Extendidas, cerca del origen**: así el tráfico prohibido se descarta antes de recorrer la red.
+- **Estándar, cerca del destino**: como solo miran el origen, si las pones cerca de él bloquean ese origen para todos los destinos.
+
+Y como las ACL **no tienen estado**, si filtras en los dos sentidos tienes que pensar en las respuestas: una ACL de entrada en la interfaz de la DMZ ve las respuestas del servidor, no las preguntas. Para TCP existe la palabra `established`, que deja pasar los segmentos de conexiones ya abiertas (los que llevan ACK).
+
+## La denegación implícita
+
+Al final de toda ACL hay una línea que no se ve: `deny ip any any`. Por eso una ACL que solo tiene líneas `deny` bloquea **todo**: lo que no se nombró también cae al final. Si tu intención es bloquear algunas cosas y dejar pasar el resto, la última línea tiene que ser `permit ip any any`.
+
+`show access-lists` muestra cada línea con sus **contadores** ("12 matches"): la mejor forma de saber qué línea está usando el tráfico. Y para ver qué ACL tiene una interfaz, `show ip interface Gi0/1`.
+
+<Terminal ejercicio={ejAcl} />
+
+<Pregunta id="p06" />
+
+<Nota titulo="Lo mismo para administrar">
+Una ACL estándar aplicada a las líneas vty limita desde dónde se puede entrar por SSH al equipo: `access-list 10 permit 192.168.1.50` y, en `line vty 0 4`, `access-class 10 in`. Es de lo primero que se configura en un equipo de red.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Aplicarla en el sentido equivocado">
+    Una ACL de entrada en la interfaz del servidor filtra lo que viene del servidor (las respuestas). Dibuja el recorrido y mira desde el router.
+  </ErrorComun>
+  <ErrorComun titulo="La excepción debajo del bloqueo general">
+    Si "deny toda la LAN puerto 22" está antes de "permit la PC de sistemas puerto 22", la excepción nunca se usa. Las excepciones, arriba (con números de secuencia).
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar el deny implícito">
+    Una ACL con solo deny bloquea todo. Si quieres dejar pasar lo demás, termina con permit ip any any.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir wildcard con máscara">
+    192.168.1.0 255.255.255.0 en una ACL no es la red /24: con wildcard, los bits en 1 son los que no importan. Lo correcto es 0.0.0.255.
+  </ErrorComun>
+  <ErrorComun titulo="Bloquear el protocolo de enrutamiento">
+    Una ACL de entrada que no permite OSPF en la interfaz entre routers corta los saludos y se caen los vecinos. Si filtras ahí, agrega permit ospf any any.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- ACL estándar (1-99 o con nombre): solo origen. Extendida (100-199 o con nombre): protocolo, origen, destino y puertos.
+- Direcciones con wildcard (red 0.0.0.255), host A y any; puertos con eq, gt, lt y range; established para respuestas TCP.
+- Se evalúan de arriba hacia abajo; al final, deny ip any any implícito. Con nombre: se editan con números de secuencia.
+- Se aplican con ip access-group NOMBRE in|out; in y out se miran desde el router. Extendidas cerca del origen, estándar cerca del destino.
+- show access-lists (con contadores) y show ip interface para diagnosticar.
+</Resumen>

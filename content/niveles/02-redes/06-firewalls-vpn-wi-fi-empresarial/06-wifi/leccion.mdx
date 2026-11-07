@@ -1,0 +1,101 @@
+---
+id: n2-m6-l6
+titulo: Wi-Fi empresarial
+minutos: 150
+objetivos:
+  - Conocer los estándares (Wi-Fi 5, 6, 6E y 7), las bandas y los canales, y planificar evitando interferencias.
+  - Diferenciar WPA2/WPA3 Personal y Enterprise, y entender 802.1X con RADIUS.
+  - Asociar redes inalámbricas (SSID) a VLAN y entender controladoras y roaming.
+glosario: [ssid, wpa3, ieee-8021x, radius, roaming]
+verificado: 2026-11
+---
+
+import dot1x from './dot1x.svg?raw'
+import pasos from './pasos-8021x.yaml'
+
+En una casa, el Wi-Fi es un aparato con una clave pegada abajo. En una empresa son decenas de **puntos de acceso** (AP) que tienen que cubrir todo sin molestarse entre sí, separar a empleados de invitados, dejar entrar a cada persona con su usuario y sacarla cuando se va. Es una red más, con VLAN, firewall y DHCP, pero que viaja por el aire, donde todos comparten el mismo medio.
+
+<AntesDeEmpezar>
+- VLAN y troncales (lecciones 2.4.2 y 2.4.3): cada red inalámbrica termina en una VLAN.
+- PoE: los AP se alimentan por el cable (lección 2.1.3).
+- El directorio de usuarios (lo vas a ver a fondo en el nivel de Windows Server).
+</AntesDeEmpezar>
+
+## Estándares y bandas
+
+| Nombre | Estándar | Bandas | Lo nuevo |
+| --- | --- | --- | --- |
+| Wi-Fi 5 | 802.11ac | 5 GHz | Canales anchos (80 MHz), varias antenas |
+| Wi-Fi 6 | 802.11ax | 2,4 y 5 GHz | Mucho mejor con muchos equipos a la vez (OFDMA) |
+| Wi-Fi 6E | 802.11ax | además 6 GHz | Una banda nueva y limpia (según lo habilite cada país) |
+| Wi-Fi 7 | 802.11be | 2,4, 5 y 6 GHz | Canales de 320 MHz y uso de varias bandas a la vez (MLO) |
+
+- **2,4 GHz** llega más lejos y atraviesa mejor las paredes, pero tiene solo **tres canales que no se pisan** (1, 6 y 11) y mucha interferencia (vecinos, Bluetooth, microondas).
+- **5 GHz** tiene muchos más canales y más velocidad, con menos alcance. Algunos canales son **DFS**: se comparten con radares y el AP tiene que dejarlos si detecta uno.
+- **6 GHz** (6E y 7) es la más limpia y rápida, con el menor alcance, y exige WPA3.
+
+## Planificar canales
+
+Un AP en el mismo canal que su vecino no "choca": se turnan para hablar, y los dos van más lentos. Un AP en un canal que **se pisa** con el del vecino (el 1 con el 3, por ejemplo) es peor: cada uno es ruido para el otro. La regla: vecinos en canales que no se pisen, y la potencia ajustada para que cada AP cubra su zona y no la del de al lado. Pruébalo:
+
+<PlanificadorWifi />
+
+En la práctica, antes de instalar se hace un **relevamiento** (un recorrido midiendo la señal, con herramientas como Ekahau o la propia aplicación del fabricante) y los AP modernos ajustan canal y potencia solos, coordinados por la controladora. Entender qué hacen te permite saber cuándo están eligiendo mal.
+
+<Pregunta id="p04" />
+
+## Seguridad: Personal y Enterprise
+
+- **WPA2/WPA3-Personal**: una clave compartida para todos. Sirve en una casa o para la red de invitados. Su problema en una empresa: si alguien se va, hay que cambiar la clave en todos los equipos. WPA3-Personal (SAE) protege mejor que WPA2 contra quien intenta adivinar la clave.
+- **WPA2/WPA3-Enterprise**: cada persona entra con **sus** credenciales (usuario y contraseña del dominio, o un certificado), usando **802.1X** y un servidor **RADIUS** (FreeRADIUS en Linux, NPS en Windows Server) que consulta el directorio.
+
+<Diagrama svg={dot1x} alt="Tres actores: la portátil (suplicante), el punto de acceso (autenticador, que no sabe las contraseñas) y el servidor RADIUS (FreeRADIUS o NPS, que consulta el directorio). 1, la portátil pide entrar con EAP; 2, el AP pasa el pedido a RADIUS; 3, RADIUS responde aceptado, usuario de Ventas, VLAN 20; 4, la portátil recibe claves propias y queda en la VLAN 20. Métodos: PEAP-MSCHAPv2, con usuario y contraseña del dominio dentro de un túnel TLS, donde el equipo tiene que validar el certificado del servidor; y EAP-TLS, con un certificado por equipo o usuario, el más seguro. Si alguien se va, se desactiva su cuenta." pie="El punto de acceso solo pasa mensajes: quien decide es RADIUS." />
+
+<Ordenar ejercicio={pasos} />
+
+<EnSimple>
+En una empresa, cada persona entra al Wi-Fi con su propio usuario, no con una clave compartida. El punto de acceso le pregunta a un servidor (RADIUS) si esa persona puede entrar y a qué red mandarla.
+</EnSimple>
+
+## SSID, VLAN y controladoras
+
+Cada **SSID** (el nombre de la red que ves en el teléfono) se asocia a una **VLAN**. Un mismo AP emite varios SSID y los manda por un **troncal** hasta el switch:
+
+| SSID | Seguridad | VLAN | Qué puede hacer |
+| --- | --- | --- | --- |
+| EMPRESA | WPA3-Enterprise | 20 (o la que diga RADIUS) | Lo mismo que un equipo con cable de su área |
+| INVITADOS | WPA3-Personal (o portal cautivo) | 30 | Solo internet; aislados entre sí |
+| IOT | WPA2-Personal | 40 | Solo lo que necesitan (impresoras, pantallas) |
+
+Pocos SSID es mejor: cada uno agrega anuncios por el aire que restan capacidad. Con RADIUS, un solo SSID corporativo puede mandar a cada usuario a la VLAN de su área (**VLAN dinámica**).
+
+En una empresa los AP no se configuran de a uno: los maneja una **controladora** (un equipo, una máquina virtual o un servicio en la nube, según el fabricante: UniFi, Aruba, Meraki, Omada, Ruckus...) que define los SSID, los canales y la seguridad para todos. Y se encarga del **roaming**: que un teléfono en una videollamada pase de un AP a otro mientras su dueño camina, sin cortarse (los estándares 802.11k, v y r ayudan a que el cambio sea rápido).
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar canales que se pisan en 2,4 GHz">
+    Poner los AP en 1, 3, 5... los hace ruido entre sí. Solo 1, 6 y 11, alternados.
+  </ErrorComun>
+  <ErrorComun titulo="Canales de 80 MHz en una oficina con muchos AP">
+    Cada AP va más rápido solo, pero quedan pocos canales y los vecinos chocan. En oficinas densas, 20 o 40 MHz.
+  </ErrorComun>
+  <ErrorComun titulo="Una clave compartida para toda la empresa">
+    Termina en un papel pegado en la pared y nadie la cambia cuando alguien se va. Para empleados, Enterprise con RADIUS.
+  </ErrorComun>
+  <ErrorComun titulo="No validar el certificado del servidor RADIUS">
+    Con PEAP, si el equipo no verifica el certificado, un AP falso puede recibir las credenciales. Configura los clientes para que validen el certificado y el nombre del servidor.
+  </ErrorComun>
+  <ErrorComun titulo="Invitados en la misma VLAN que los empleados">
+    Un teléfono de un visitante queda al lado del servidor de archivos. Los invitados, en su VLAN, solo con salida a internet.
+  </ErrorComun>
+  <ErrorComun titulo="Potencia al máximo en todos los AP">
+    Los equipos se quedan pegados a un AP lejano y los vecinos se pisan. Menos potencia y más AP cubren mejor.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Wi-Fi 5 (ac, 5 GHz), 6 (ax, 2,4 y 5), 6E (agrega 6 GHz) y 7 (be, 320 MHz y MLO).
+- 2,4 GHz: más alcance, solo 1, 6 y 11 sin pisarse. 5 GHz: más canales (algunos DFS). 6 GHz: la más limpia, exige WPA3.
+- Vecinos en canales que no se pisen, anchos moderados y potencia ajustada; mismo canal es menos malo que canales que se pisan.
+- Personal (clave compartida) para invitados; Enterprise (802.1X con RADIUS: FreeRADIUS o NPS) para empleados. PEAP con validación de certificado o EAP-TLS.
+- Cada SSID va a una VLAN por un troncal; RADIUS puede asignar la VLAN. Controladora para administrar todo y roaming (802.11k/v/r).
+</Resumen>
