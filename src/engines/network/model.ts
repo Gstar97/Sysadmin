@@ -5,6 +5,7 @@
 import { broadcastOf, formatIpv4, networkOf, parseCidr, parseIpv4, prefixToMask, sameSubnet } from './ip'
 import type { DeviceSpec, DeviceType, TopologySpec } from './schema'
 import { channelCompatible, computeStp, stpForwarding, type StpResult } from './stp'
+import { addEntry, evaluateAcl, formatEntry, newAcl, parseAclLine, type Acl, type AclPacket } from './acl'
 
 export interface IpAddr {
   ip: number
@@ -39,6 +40,9 @@ export interface Port {
   channel?: { group: number; mode: string }
   /** HSRP: grupos de redundancia de puerta de enlace en esta interfaz. */
   standby?: { group: number; ip?: number; priority: number; preempt: boolean }[]
+  /** Listas de acceso aplicadas (ip access-group). */
+  aclIn?: string
+  aclOut?: string
 }
 
 export interface StaticRoute {
@@ -79,6 +83,8 @@ export interface Device {
   arp: Map<number, string>
   /** Direcciones a las que se reenvían los DHCP (ip helper-address), por interfaz. */
   helpers: Map<string, number[]>
+  /** Listas de acceso por nombre (o número). */
+  acls: Map<string, Acl>
   /** Configuración de administración (la usa la consola IOS). */
   mgmt: {
     enableSecret?: string
@@ -273,6 +279,7 @@ export class Network {
       blocked: spec.bloqueado,
       arp: new Map(),
       helpers: new Map(),
+      acls: new Map(),
       mgmt: {
         passwordEncryption: false,
         domainLookup: true,
@@ -299,6 +306,8 @@ export class Network {
       if (i.bpduguard) p.bpduGuard = true
       if (i.canal) p.channel = { group: i.canal.grupo, mode: i.canal.modo }
       if (i.hsrp) p.standby = [{ group: i.hsrp.grupo, ip: parseIpv4(i.hsrp.ip), priority: i.hsrp.prioridad, preempt: i.hsrp.preempt }]
+      if (i.acl_entrada) p.aclIn = i.acl_entrada
+      if (i.acl_salida) p.aclOut = i.acl_salida
       for (const s of i.subinterfaces) {
         const subName = normalizeIfName(s.nombre, spec.tipo) ?? s.nombre
         d.ports.push({ ...newPort(subName, 'subif', false, false), parent: name, encapVlan: s.vlan, ip: cidr(s.ip) })
@@ -310,6 +319,16 @@ export class Network {
         existing.ip = cidr(s.ip)
         existing.shutdown = false
       } else d.ports.push({ ...newPort(`Vlan${s.vlan}`, 'svi', false, false), vlan: s.vlan, ip: cidr(s.ip) })
+    }
+    for (const a of spec.acls) {
+      const kind = a.tipo === 'estandar' ? 'standard' : 'extended'
+      const acl = newAcl(a.nombre, kind)
+      for (const line of a.reglas) {
+        const e = parseAclLine(kind, line)
+        if ('error' in e) throw new Error(`ACL ${a.nombre}: "${line}": ${e.error}`)
+        addEntry(acl, e)
+      }
+      d.acls.set(a.nombre, acl)
     }
     if (spec.ospf) {
       d.ospf = {
@@ -765,11 +784,30 @@ export class Network {
     return p?.ip?.ip
   }
 
-  private walk(start: Device, dst: number, srcHint?: number): { ok: true; hops: Hop[]; dest: Device; source: number } | { ok: false; hops: Hop[]; reason: string; failedAt: string; source?: number; unreachable?: boolean } {
+  /** Una ACL aplicada en ese sentido de la interfaz bloquea el paquete: devuelve el motivo, o undefined si pasa. */
+  private aclBlocks(dev: Device, port: Port | undefined, dir: 'in' | 'out', pkt: AclPacket): string | undefined {
+    const name = port ? (dir === 'in' ? port.aclIn : port.aclOut) : undefined
+    if (!port || !name) return undefined
+    const acl = dev.acls.get(name)
+    // Una ACL aplicada que no existe deja pasar todo (como en IOS).
+    if (!acl) return undefined
+    const e = evaluateAcl(acl, pkt)
+    if (e?.action === 'permit') return undefined
+    const why = e ? `la línea ${e.seq} (${formatEntry(acl.kind, e)})` : 'el deny implícito del final (ninguna línea coincidió)'
+    return `${dev.hostname} descartó el paquete al ${dir === 'in' ? 'entrar' : 'salir'} por ${shortIfName(port.name)}: la lista de acceso ${name} lo bloquea por ${why}`
+  }
+
+  private walk(start: Device, dst: number, srcHint?: number, pkt?: Omit<AclPacket, 'src' | 'dst'>): { ok: true; hops: Hop[]; dest: Device; source: number } | { ok: false; hops: Hop[]; reason: string; failedAt: string; source?: number; unreachable?: boolean; acl?: boolean } {
     const hops: Hop[] = []
     let dev = start
     let source = srcHint
+    let inPort: Port | undefined
+    const packet = (): AclPacket => ({ src: source ?? 0, dst, proto: 'icmp', icmpType: 'echo', ...pkt })
     for (let ttl = 0; ttl < 32; ttl++) {
+      if (dev !== start && isRouting(dev)) {
+        const blocked = this.aclBlocks(dev, inPort, 'in', packet())
+        if (blocked) return { ok: false, hops, reason: blocked, failedAt: dev.id, source, acl: true }
+      }
       if (this.ownsIp(dev, dst)) {
         if (dev.blocked && dev !== start) return { ok: false, hops, reason: `${dev.hostname} recibió el paquete pero no responde: tiene un firewall que bloquea ICMP`, failedAt: dev.id, source }
         return { ok: true, hops, dest: dev, source: source ?? dst }
@@ -788,9 +826,15 @@ export class Network {
         const what = r.nextHop === dst ? `el destino ${formatIpv4(dst)}` : `el siguiente salto ${formatIpv4(r.nextHop)}`
         return { ok: false, hops, reason: `desde ${where} nadie respondió al ARP por ${what}.${hint}`, failedAt: dev.id, source }
       }
+      // El tráfico que genera el propio router no pasa por las ACL de salida.
+      if (dev !== start) {
+        const blocked = this.aclBlocks(dev, r.port, 'out', packet())
+        if (blocked) return { ok: false, hops, reason: blocked, failedAt: dev.id, source, acl: true }
+      }
       dev.arp.set(r.nextHop, next.dev.id)
       hops.push({ from: dev.id, fromPort: r.port.name, to: next.dev.id, toPort: next.port.name, via: next.trail.slice(1, -1), vlan: r.port.kind === 'svi' ? r.port.vlan : r.port.encapVlan })
       dev = next.dev
+      inPort = next.port
     }
     return { ok: false, hops, reason: 'el paquete quedó dando vueltas entre routers hasta agotar el TTL (bucle de enrutamiento)', failedAt: dev.id, source }
   }
@@ -803,9 +847,33 @@ export class Network {
     const fwd = this.walk(src, dst)
     if (!fwd.ok) return { ok: false, source: fwd.source, target: dst, forward: fwd.hops, back: [], reason: fwd.reason, failedAt: fwd.failedAt, unreachable: fwd.unreachable }
     if (fwd.dest === src) return { ok: true, source: dst, target: dst, forward: [], back: [] }
-    const back = this.walk(fwd.dest, fwd.source)
+    const back = this.walk(fwd.dest, fwd.source, dst, { proto: 'icmp', icmpType: 'echo-reply' })
     if (!back.ok) return { ok: false, source: fwd.source, target: dst, forward: fwd.hops, back: back.hops, reason: `la ida llega, pero la respuesta no vuelve: ${back.reason}`, failedAt: back.failedAt }
     return { ok: true, source: fwd.source, target: dst, forward: fwd.hops, back: back.hops }
+  }
+
+  /**
+   * Una conexión TCP o UDP a un puerto: el primer paquete de ida y su respuesta tienen que pasar
+   * las rutas y las ACL. La respuesta TCP lleva ACK (coincide con "established").
+   */
+  connectPort(from: string, to: string, proto: 'tcp' | 'udp', port: number): PingResult {
+    const src = this.device(from)
+    if (!src) return { ok: false, forward: [], back: [], reason: `no existe el equipo ${from}` }
+    const dst = this.resolveTarget(to)
+    if (dst === undefined) return { ok: false, forward: [], back: [], reason: `no se puede resolver ${to}` }
+    const eph = 49152 + (dst % 1000)
+    const fwd = this.walk(src, dst, undefined, { proto, srcPort: eph, dstPort: port, icmpType: undefined })
+    if (!fwd.ok) return { ok: false, source: fwd.source, target: dst, forward: fwd.hops, back: [], reason: fwd.reason, failedAt: fwd.failedAt, unreachable: fwd.unreachable }
+    if (fwd.dest === src) return { ok: true, source: dst, target: dst, forward: [], back: [] }
+    if (fwd.dest.blocked) return { ok: false, source: fwd.source, target: dst, forward: fwd.hops, back: [], reason: `${fwd.dest.hostname} recibió la conexión pero su firewall la bloquea`, failedAt: fwd.dest.id }
+    const back = this.walk(fwd.dest, fwd.source, dst, { proto, srcPort: port, dstPort: eph, established: proto === 'tcp', icmpType: undefined })
+    if (!back.ok) return { ok: false, source: fwd.source, target: dst, forward: fwd.hops, back: back.hops, reason: `la ida llega, pero la respuesta no vuelve: ${back.reason}`, failedAt: back.failedAt }
+    return { ok: true, source: fwd.source, target: dst, forward: fwd.hops, back: back.hops }
+  }
+
+  /** Ping o conexión, según el objetivo. */
+  probe(o: { desde: string; hacia: string; proto?: 'icmp' | 'tcp' | 'udp'; puerto?: number }): PingResult {
+    return o.proto && o.proto !== 'icmp' ? this.connectPort(o.desde, o.hacia, o.proto, o.puerto ?? 80) : this.ping(o.desde, o.hacia)
   }
 }
 

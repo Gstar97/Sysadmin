@@ -20,9 +20,10 @@ export interface CheckResult {
 
 /** Evalúa un objetivo de conectividad ("PC1 llega a SRV"). */
 export function checkObjective(net: Network, o: ObjectiveSpec): CheckResult & { reason?: string } {
-  const r = net.ping(o.desde, o.hacia)
+  const r = net.probe(o)
   const expected = o.resultado === 'ok'
-  const label = o.descripcion ?? `${o.desde} ${expected ? 'llega' : 'no llega'} a ${o.hacia}`
+  const what = o.proto && o.proto !== 'icmp' ? `${o.hacia} (${o.proto.toUpperCase()} ${o.puerto ?? 80})` : o.hacia
+  const label = o.descripcion ?? `${o.desde} ${expected ? 'llega' : 'no llega'} a ${what}`
   return { ok: r.ok === expected, label, reason: r.ok ? undefined : r.reason }
 }
 

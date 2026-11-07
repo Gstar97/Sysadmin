@@ -49,6 +49,8 @@ const AddressClassifierView = lazy(() => import('@/interactive/redes/AddressClas
 const VlsmDesignerView = lazy(() => import('@/interactive/redes/VlsmDesigner').then((m) => ({ default: m.VlsmDesigner })))
 const StpSimView = lazy(() => import('@/interactive/redes/StpSim').then((m) => ({ default: m.StpSim })))
 const ConvergenceSimView = lazy(() => import('@/interactive/redes/ConvergenceSim').then((m) => ({ default: m.ConvergenceSim })))
+const FirewallSimView = lazy(() => import('@/interactive/redes/FirewallSim').then((m) => ({ default: m.FirewallSim })))
+const WifiPlannerView = lazy(() => import('@/interactive/redes/WifiPlanner').then((m) => ({ default: m.WifiPlanner })))
 const RouteDecisionView = lazy(() => import('@/interactive/redes/RouteDecision').then((m) => ({ default: m.RouteDecision })))
 const NatSimView = lazy(() => import('@/interactive/redes/NatSim').then((m) => ({ default: m.NatSim })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
@@ -379,6 +381,22 @@ export function SimuladorConvergencia() {
   )
 }
 
+export function SimuladorFirewall() {
+  return (
+    <Island>
+      <FirewallSimView />
+    </Island>
+  )
+}
+
+export function PlanificadorWifi() {
+  return (
+    <Island>
+      <WifiPlannerView />
+    </Island>
+  )
+}
+
 export function EjercicioRutas() {
   return (
     <Island>
@@ -583,6 +601,8 @@ export const mdxComponents = {
   SimuladorStp,
   EjercicioRutas,
   SimuladorConvergencia,
+  SimuladorFirewall,
+  PlanificadorWifi,
   ErroresComunes,
   ErrorComun,
   Resumen,

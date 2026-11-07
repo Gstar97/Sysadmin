@@ -2,13 +2,14 @@
 import { classfulPrefix, formatIpv4, maskToPrefix, networkOf, parseIpv4, prefixToMask, sameSubnet, wildcardToPrefix } from './ip'
 import { defaultVlanName, isRouting, isSwitch, Network, newPort, normalizeIfName, shortIfName, type Device, type Port, type Route } from './model'
 import { bridgeId, computeStp } from './stp'
+import { aclKindForNumber, addEntry, formatEntry, newAcl, parseAclLine, showAcl } from './acl'
 
 export interface IosChunk {
   text: string
   stream: 'out' | 'err'
 }
 
-export type IosMode = 'user' | 'priv' | 'config' | 'if' | 'if-range' | 'subif' | 'vlan' | 'router' | 'line'
+export type IosMode = 'user' | 'priv' | 'config' | 'if' | 'if-range' | 'subif' | 'vlan' | 'router' | 'line' | 'acl-std' | 'acl-ext'
 
 type ArgType = 'ip' | 'mask' | 'num' | 'word' | 'if' | 'rest'
 type El = { kw: string } | { arg: ArgType }
@@ -36,6 +37,14 @@ class Invalid extends Error {
 }
 
 const KW_HELP: Record<string, string> = {
+  'access-list': 'Add an access list entry',
+  'access-lists': 'List access lists',
+  'access-group': 'Specify access control for packets',
+  standard: 'Standard Access List',
+  extended: 'Extended Access List',
+  permit: 'Specify packets to forward',
+  deny: 'Specify packets to reject',
+  remark: 'Access list entry comment',
   enable: 'Turn on privileged commands',
   disable: 'Turn off privileged commands',
   exit: 'Exit from the EXEC',
@@ -350,6 +359,8 @@ export function runningConfig(d: Device): string {
     if (p.ip) L.push(` ip address ${formatIpv4(p.ip.ip)} ${formatIpv4(prefixToMask(p.ip.prefix))}`)
     else if (!(p.kind === 'phys' && isSwitch(d) && p.switchport)) L.push(' no ip address')
     for (const h of d.helpers.get(p.name) ?? []) L.push(` ip helper-address ${formatIpv4(h)}`)
+    if (p.aclIn) L.push(` ip access-group ${p.aclIn} in`)
+    if (p.aclOut) L.push(` ip access-group ${p.aclOut} out`)
     for (const g of p.standby ?? []) {
       if (g.ip !== undefined) L.push(` standby ${g.group} ip ${formatIpv4(g.ip)}`)
       if (g.priority !== 100) L.push(` standby ${g.group} priority ${g.priority}`)
@@ -374,6 +385,17 @@ export function runningConfig(d: Device): string {
   if (d.type === 'router' || d.type === 'switch_l3') L.push('ip classless')
   for (const r of d.routes) L.push(`ip route ${formatIpv4(r.net)} ${formatIpv4(prefixToMask(r.prefix))} ${r.exitIf ?? formatIpv4(r.via!)}${r.distance !== 1 ? ` ${r.distance}` : ''}`)
   if (d.gateway !== undefined && isSwitch(d)) L.push(`ip default-gateway ${formatIpv4(d.gateway)}`)
+  for (const acl of d.acls.values()) {
+    if (/^\d+$/.test(acl.name)) {
+      L.push('!')
+      for (const r of acl.remarks) L.push(`access-list ${acl.name} remark ${r}`)
+      for (const e of acl.entries) L.push(`access-list ${acl.name} ${formatEntry(acl.kind, e)}`)
+    } else {
+      L.push('!', `ip access-list ${acl.kind} ${acl.name}`)
+      for (const r of acl.remarks) L.push(` remark ${r}`)
+      for (const e of acl.entries) L.push(` ${formatEntry(acl.kind, e)}`)
+    }
+  }
   L.push('!', 'ip flow-export version 9', '!')
   if (m.banner !== undefined) L.push(`banner motd ^C${m.banner}^C`, '!')
   const lineBlock = (name: string, cfg: Device['mgmt']['lines']['con']) => {
@@ -416,7 +438,7 @@ function orderedPorts(d: Device): Port[] {
 
 /** Copia profunda de la parte configurable de un equipo (para startup-config y reload). */
 function snapshot(d: Device) {
-  return structuredClone({ hostname: d.hostname, ports: d.ports, gateway: d.gateway, routes: d.routes, ipRouting: d.ipRouting, ospf: d.ospf, mgmt: { ...d.mgmt, startup: undefined }, helpers: d.helpers, stpPriority: d.stpPriority })
+  return structuredClone({ hostname: d.hostname, ports: d.ports, gateway: d.gateway, routes: d.routes, ipRouting: d.ipRouting, ospf: d.ospf, mgmt: { ...d.mgmt, startup: undefined }, helpers: d.helpers, stpPriority: d.stpPriority, acls: d.acls })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -484,6 +506,8 @@ export class IosSession {
       vlan: '(config-vlan)#',
       router: '(config-router)#',
       line: '(config-line)#',
+      'acl-std': '(config-std-nacl)#',
+      'acl-ext': '(config-ext-nacl)#',
     }
     return h + suffix[this.mode]
   }
@@ -728,7 +752,55 @@ export class IosSession {
         return [...this.routerCommands(), ...this.configEntryCommands(), ...this.common()]
       case 'line':
         return [...this.lineCommands(), ...this.configEntryCommands(), ...this.common()]
+      case 'acl-std':
+      case 'acl-ext':
+        return [...this.aclCommands(), ...this.configEntryCommands(), ...this.common()]
     }
+  }
+
+  /** Nombre de la ACL que se está editando (ip access-list ...). */
+  private aclCtx = ''
+
+  /** Agrega una línea a una ACL; si no es válida, responde como IOS. */
+  private aclAdd(name: string, kind: 'standard' | 'extended', text: string, seq?: number): string | void {
+    const e = parseAclLine(kind, text)
+    if ('error' in e) throw new Invalid(seq !== undefined ? e.at + 1 : e.at + (this.mode === 'config' ? 2 : 0))
+    let acl = this.dev.acls.get(name)
+    if (!acl) {
+      acl = newAcl(name, kind)
+      this.dev.acls.set(name, acl)
+    }
+    if (acl.kind !== kind) return `% ${name} is ${acl.kind === 'standard' ? 'a standard' : 'an extended'} access list\n`
+    addEntry(acl, e, seq)
+  }
+
+  private aclCommands(): Command[] {
+    const kind = () => (this.mode === 'acl-std' ? 'standard' : 'extended')
+    return [
+      { pattern: 'permit <rest>', run: (a) => this.aclAdd(this.aclCtx, kind(), `permit ${a[0]}`) },
+      { pattern: 'deny <rest>', run: (a) => this.aclAdd(this.aclCtx, kind(), `deny ${a[0]}`) },
+      { pattern: '<num> permit <rest>', run: (a) => this.aclAdd(this.aclCtx, kind(), `permit ${a[1]}`, Number(a[0])) },
+      { pattern: '<num> deny <rest>', run: (a) => this.aclAdd(this.aclCtx, kind(), `deny ${a[1]}`, Number(a[0])) },
+      { pattern: 'remark <rest>', run: (a) => void this.dev.acls.get(this.aclCtx)?.remarks.push(a[0]) },
+      {
+        pattern: 'no <num>',
+        run: (a) => {
+          const acl = this.dev.acls.get(this.aclCtx)
+          if (acl) acl.entries = acl.entries.filter((e) => e.seq !== Number(a[0]))
+        },
+      },
+      {
+        pattern: 'no <rest>',
+        run: (a) => {
+          const acl = this.dev.acls.get(this.aclCtx)
+          if (!acl) return
+          const e = parseAclLine(acl.kind, a[0])
+          if ('error' in e) throw new Invalid(1)
+          const text = formatEntry(acl.kind, { ...e, seq: 0, matches: 0 })
+          acl.entries = acl.entries.filter((x) => formatEntry(acl.kind, x) !== text)
+        },
+      },
+    ]
   }
 
   /** exit, end y do (en todos los modos de configuración). */
@@ -756,7 +828,7 @@ export class IosSession {
 
   /** Comandos de modo configuración que también se pueden usar desde submodos (cambian de submodo). */
   private configEntryCommands(): Command[] {
-    return this.configCommands().filter((c) => /^(interface|vlan|router|line|no interface|no vlan|no router)/.test(c.pattern))
+    return this.configCommands().filter((c) => /^(interface|vlan|router|line|no interface|no vlan|no router|ip access-list|access-list)/.test(c.pattern))
   }
 
   private execCommands(priv: boolean): Command[] {
@@ -831,7 +903,7 @@ export class IosSession {
     out += 'Proceed with reload? [confirm]\n%SYS-5-RELOAD: Reload requested by console. Reload Reason: Reload Command.\n\n'
     const saved = this.saved.get(this.dev.id)
     const snap = structuredClone(saved?.snap ?? factorySnapshot(this.dev))
-    Object.assign(this.dev, { hostname: snap.hostname, ports: snap.ports, gateway: snap.gateway, routes: snap.routes, ipRouting: snap.ipRouting, ospf: snap.ospf, helpers: snap.helpers, stpPriority: snap.stpPriority ?? new Map() })
+    Object.assign(this.dev, { hostname: snap.hostname, ports: snap.ports, gateway: snap.gateway, routes: snap.routes, ipRouting: snap.ipRouting, ospf: snap.ospf, helpers: snap.helpers, stpPriority: snap.stpPriority ?? new Map(), acls: snap.acls ?? new Map() })
     this.dev.mgmt = { ...snap.mgmt, startup: undefined }
     this.dev.arp.clear()
     this.mode = 'user'
@@ -846,6 +918,19 @@ export class IosSession {
   private showCommands(priv: boolean): Command[] {
     const cmds: Command[] = [
       { pattern: 'show ip interface brief', run: () => this.showIpIntBrief() },
+      { pattern: 'show access-lists', run: () => [...this.dev.acls.values()].map(showAcl).join('') },
+      { pattern: 'show ip access-lists', run: () => [...this.dev.acls.values()].map(showAcl).join('') },
+      { pattern: 'show access-lists <word>', run: (a) => (this.dev.acls.has(a[0]) ? showAcl(this.dev.acls.get(a[0])!) : '') },
+      { pattern: 'show ip access-lists <word>', run: (a) => (this.dev.acls.has(a[0]) ? showAcl(this.dev.acls.get(a[0])!) : '') },
+      {
+        pattern: 'show ip interface <if>',
+        run: (a) => {
+          const p = this.net.port(this.dev, a[0])
+          if (!p) throw new Invalid(3)
+          const st = this.net.isUp(this.dev, p)
+          return `${p.name} is ${p.shutdown ? 'administratively down' : st ? 'up' : 'down'}, line protocol is ${st ? 'up' : 'down'}\n${p.ip ? `  Internet address is ${formatIpv4(p.ip.ip)}/${p.ip.prefix}\n` : '  Internet protocol processing disabled\n'}  Outgoing access list is ${p.aclOut ?? 'not set'}\n  Inbound  access list is ${p.aclIn ?? 'not set'}\n`
+        },
+      },
       { pattern: 'show ip route', run: () => this.showIpRoute() },
       {
         pattern: 'show ip route <word>',
@@ -1215,6 +1300,51 @@ export class IosSession {
         },
       },
       { pattern: 'interface <if>', run: (a) => this.enterInterface(a[0], 1) },
+      {
+        pattern: 'access-list <num> remark <rest>',
+        when: l3,
+        run: (a) => {
+          const kind = aclKindForNumber(Number(a[0]))
+          if (!kind) throw new Invalid(1)
+          const acl = d().acls.get(a[0]) ?? newAcl(a[0], kind)
+          d().acls.set(a[0], acl)
+          acl.remarks.push(a[1])
+        },
+      },
+      {
+        pattern: 'access-list <num> <rest>',
+        when: l3,
+        run: (a) => {
+          const kind = aclKindForNumber(Number(a[0]))
+          if (!kind) throw new Invalid(1)
+          return this.aclAdd(a[0], kind, a[1])
+        },
+      },
+      { pattern: 'no access-list <num>', when: l3, run: (a) => void d().acls.delete(a[0]) },
+      {
+        pattern: 'ip access-list standard <word>',
+        when: l3,
+        run: (a) => {
+          const acl = d().acls.get(a[0])
+          if (acl && acl.kind !== 'standard') return `% ${a[0]} is an extended access list\n`
+          if (!acl) d().acls.set(a[0], newAcl(a[0], 'standard'))
+          this.aclCtx = a[0]
+          this.mode = 'acl-std'
+        },
+      },
+      {
+        pattern: 'ip access-list extended <word>',
+        when: l3,
+        run: (a) => {
+          const acl = d().acls.get(a[0])
+          if (acl && acl.kind !== 'extended') return `% ${a[0]} is a standard access list\n`
+          if (!acl) d().acls.set(a[0], newAcl(a[0], 'extended'))
+          this.aclCtx = a[0]
+          this.mode = 'acl-ext'
+        },
+      },
+      { pattern: 'no ip access-list standard <word>', when: l3, run: (a) => void d().acls.delete(a[0]) },
+      { pattern: 'no ip access-list extended <word>', when: l3, run: (a) => void d().acls.delete(a[0]) },
       { pattern: 'interface range <rest>', run: (a) => this.enterRange(a[0]) },
       {
         pattern: 'no interface <if>',
@@ -1521,6 +1651,12 @@ export class IosSession {
     const canIp = () => this.ports.every((p) => !(p.kind === 'phys' && isSwitch(this.dev) && (this.dev.type === 'switch' || p.switchport)))
     return [
       { pattern: 'ip address <ip> <mask>', when: canIp, run: (a) => this.setIp(a[0], a[1]) },
+      { pattern: 'ip access-group <word> in', when: canIp, run: (a) => each((p) => void (p.aclIn = a[0]))() },
+      { pattern: 'ip access-group <word> out', when: canIp, run: (a) => each((p) => void (p.aclOut = a[0]))() },
+      { pattern: 'no ip access-group <word> in', when: canIp, run: each((p) => void (p.aclIn = undefined)) },
+      { pattern: 'no ip access-group <word> out', when: canIp, run: each((p) => void (p.aclOut = undefined)) },
+      { pattern: 'no ip access-group in', when: canIp, run: each((p) => void (p.aclIn = undefined)) },
+      { pattern: 'no ip access-group out', when: canIp, run: each((p) => void (p.aclOut = undefined)) },
       { pattern: 'no ip address', when: canIp, run: each((p) => void (p.ip = undefined)) },
       { pattern: 'shutdown', run: each((p) => void (p.shutdown = true)) },
       {
@@ -1812,7 +1948,7 @@ export class IosSession {
 }
 
 function factorySnapshot(d: Device) {
-  const copy = structuredClone({ hostname: d.type === 'router' ? 'Router' : 'Switch', ports: d.ports.filter((p) => p.kind === 'phys').map((p) => ({ ...newPort(p.name, 'phys', isSwitch(d), d.type === 'router') })), gateway: undefined, routes: [], ipRouting: d.type === 'router', ospf: undefined, mgmt: { passwordEncryption: false, domainLookup: true, users: new Map<string, string>(), lines: { con: { login: 'none' as const }, vty: { login: 'none' as const } }, startup: undefined }, helpers: new Map<string, number[]>(), stpPriority: new Map<number, number>() })
+  const copy = structuredClone({ hostname: d.type === 'router' ? 'Router' : 'Switch', ports: d.ports.filter((p) => p.kind === 'phys').map((p) => ({ ...newPort(p.name, 'phys', isSwitch(d), d.type === 'router') })), gateway: undefined, routes: [], ipRouting: d.type === 'router', ospf: undefined, mgmt: { passwordEncryption: false, domainLookup: true, users: new Map<string, string>(), lines: { con: { login: 'none' as const }, vty: { login: 'none' as const } }, startup: undefined }, helpers: new Map<string, number[]>(), stpPriority: new Map<number, number>(), acls: new Map() })
   if (isSwitch(d)) copy.ports.push({ ...newPort('Vlan1', 'svi', false, true), vlan: 1 })
   return copy as ReturnType<typeof snapshot>
 }

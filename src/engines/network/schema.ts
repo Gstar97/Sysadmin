@@ -20,6 +20,9 @@ export const interfaceSpecSchema = z.strictObject({
   canal: z.strictObject({ grupo: z.number().int().min(1).max(48), modo: z.enum(['active', 'passive', 'on', 'desirable', 'auto']) }).optional(),
   /** HSRP: standby GRUPO ip IP, con prioridad y preempt. */
   hsrp: z.strictObject({ grupo: z.number().int().min(0).max(255), ip: ipv4, prioridad: z.number().int().min(0).max(255).default(100), preempt: z.boolean().default(false) }).optional(),
+  /** ip access-group NOMBRE in / out. */
+  acl_entrada: z.string().optional(),
+  acl_salida: z.string().optional(),
   subinterfaces: z
     .array(z.strictObject({ nombre: z.string(), vlan: z.number().int().min(1).max(4094), ip: cidr }))
     .default([]),
@@ -48,6 +51,8 @@ export const deviceSpecSchema = z.strictObject({
     })
     .optional(),
   bloqueado: z.boolean().default(false),
+  /** Listas de acceso: cada regla con la sintaxis de IOS sin número ("permit tcp any host 10.0.0.1 eq 443"). */
+  acls: z.array(z.strictObject({ nombre: z.string(), tipo: z.enum(['estandar', 'extendida']), reglas: z.array(z.string()) })).default([]),
 })
 
 export const linkSpecSchema = z.strictObject({
@@ -59,6 +64,9 @@ export const objectiveSpecSchema = z.strictObject({
   desde: z.string(),
   hacia: z.string(),
   resultado: z.enum(['ok', 'falla']).default('ok'),
+  /** Sin protocolo, es un ping. Con tcp o udp, una conexión a ese puerto (pasa por las ACL). */
+  proto: z.enum(['icmp', 'tcp', 'udp']).optional(),
+  puerto: z.number().int().min(1).max(65535).optional(),
   descripcion: z.string().optional(),
 })
 

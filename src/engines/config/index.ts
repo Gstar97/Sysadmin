@@ -11,6 +11,8 @@ import { validateKea } from './kea'
 import { validateNamed } from './named'
 import { validateZone } from './zone'
 import { validateFrr } from './frr'
+import { validateNftables } from './nftables'
+import { validateWireguard } from './wireguard'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -39,6 +41,10 @@ export function validateConfig(lang: ConfigLanguage, text: string, fileName?: st
       return validateKea(text)
     case 'frr':
       return validateFrr(text)
+    case 'nftables':
+      return validateNftables(text)
+    case 'wireguard':
+      return validateWireguard(text)
     case 'nginx':
       return validateNginx(text)
     case 'compose':

@@ -34,6 +34,8 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   named: '/etc/named.conf',
   kea: '/etc/kea/kea-dhcp4.conf',
   frr: '/etc/frr/frr.conf',
+  nftables: '/etc/nftables.conf',
+  wireguard: '/etc/wireguard/wg0.conf',
   texto: 'archivo.txt',
 }
 
@@ -53,7 +55,10 @@ function languageFor(lang: ConfigLanguage): Extension {
     case 'zona':
     case 'named':
     case 'frr':
+    case 'nftables':
       return StreamLanguage.define(shell)
+    case 'wireguard':
+      return StreamLanguage.define(properties)
     case 'kea':
       return StreamLanguage.define(javascript)
     case 'texto':
