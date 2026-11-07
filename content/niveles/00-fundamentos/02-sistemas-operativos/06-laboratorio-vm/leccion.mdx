@@ -19,7 +19,7 @@ Desde ahora, la práctica de la carrera pasa a tu propio laboratorio: servidores
 
 ## Qué es una máquina virtual
 
-Una **<Termino id="maquina-virtual">máquina virtual</Termino>** (VM) es una computadora completa simulada por software: tiene su propio procesador virtual, su memoria, su disco, su tarjeta de red y su firmware, y adentro se instala un sistema operativo como en cualquier computadora. El programa que crea y ejecuta las VMs es el **<Termino id="hipervisor">hipervisor</Termino>**.
+Una **<Termino id="maquina-virtual">máquina virtual</Termino>** (VM) es una computadora completa simulada por software: tiene su propio procesador virtual, su memoria, su disco, su placa de red y su firmware, y adentro se instala un sistema operativo como en cualquier computadora. El programa que crea y ejecuta las VMs es el **<Termino id="hipervisor">hipervisor</Termino>**.
 
 No es una simulación lenta: gracias a las extensiones de virtualización del procesador (Intel VT-x, AMD-V), el código de la VM corre directamente en la CPU real, y el hipervisor solo interviene en lo que la VM no puede hacer sola (como acceder al hardware). Por eso una VM rinde casi como un equipo físico.
 
@@ -48,7 +48,7 @@ Al crear una VM se le asignan recursos de tu equipo:
 - **Memoria**: la VM la toma de tu RAM mientras está encendida. Deja siempre al menos 4 GB para tu propio sistema. Un Linux de servidor funciona con 2 GB; Windows Server con interfaz gráfica, mejor con 4 GB.
 - **Disco**: un archivo grande en tu disco (`.vdi` en VirtualBox, `.vmdk` en VMware, `.vhdx` en Hyper-V, `.qcow2` en KVM). Si es **dinámico**, ocupa solo lo que la VM realmente escribe y crece a medida que hace falta.
 - **Firmware**: BIOS o UEFI, como viste en el módulo anterior. Para sistemas actuales, UEFI.
-- **Tarjeta de red**: conectada a una red virtual según el modo que elijas.
+- **Placa de red**: conectada a una red virtual según el modo que elijas.
 
 ## Los modos de red
 
@@ -60,7 +60,7 @@ La pregunta más común en un laboratorio es "¿por qué no llego a mi VM?" o "�
 - **Puente** (*bridged*): la VM se conecta directamente a tu red física y recibe una IP de tu router, como cualquier otro equipo de la casa. Todos la ven. En Wi-Fi y en redes de oficina a veces no funciona, porque el punto de acceso o la red bloquean equipos que no conocen.
 - **Solo anfitrión** (*host-only*): una red privada entre tu PC y tus VMs, sin salida a internet. Ideal para conectarte por SSH y para que las VMs se comuniquen entre sí.
 
-La combinación recomendada para el laboratorio: **dos tarjetas de red**, una en NAT (para internet) y otra en solo anfitrión (para conectarte desde tu PC). Funciona igual en cualquier red.
+La combinación recomendada para el laboratorio: **dos placas de red**, una en NAT (para internet) y otra en solo anfitrión (para conectarte desde tu PC). Funciona igual en cualquier red.
 
 <Emparejar ejercicio={modosRed} />
 
@@ -90,7 +90,7 @@ Y antes de terminar, los tres problemas que más aparecen al armar un laboratori
     La virtualización del procesador está desactivada en el firmware. Reinicia, entra a la configuración del firmware y activa **Intel Virtualization Technology** o **SVM Mode**. Si ya está activada y el error sigue en Windows, otra función puede estar usando la virtualización (Hyper-V, WSL2, la integridad de memoria): usa Hyper-V o desactívalas.
   </ErrorComun>
   <ErrorComun titulo="La VM no tiene internet">
-    Revisa el modo de la tarjeta de red: en solo anfitrión no hay salida a internet; en NAT sí. En modo puente sobre Wi-Fi, el punto de acceso puede estar bloqueando la VM: prueba con NAT. Dentro de la VM, `ip -br address` muestra si la tarjeta recibió una IP.
+    Revisa el modo de la placa de red: en solo anfitrión no hay salida a internet; en NAT sí. En modo puente sobre Wi-Fi, el punto de acceso puede estar bloqueando la VM: prueba con NAT. Dentro de la VM, `ip -br address` muestra si la placa recibió una IP.
   </ErrorComun>
   <ErrorComun titulo="Tu PC se pone lenta al encender la VM">
     Le asignaste demasiada memoria o demasiadas CPU. Tu sistema necesita su parte: con 8 GB de RAM, no le des más de 4 GB a las VMs en total. Apaga las VMs que no estés usando.

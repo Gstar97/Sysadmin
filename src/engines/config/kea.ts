@@ -135,7 +135,7 @@ export function parseKea(text: string, file = '/etc/kea/kea-dhcp4.conf', opts: {
   for (const k of Object.keys(d)) if (!known.includes(k)) err(keyLine(clean, k), `${file}: got unexpected keyword "${k}" in Dhcp4 map.`, `"${k}" no es una opción de Kea DHCPv4. Revisa cómo está escrito (Kea usa minúsculas con guiones, por ejemplo "valid-lifetime").`)
   const ifc = d['interfaces-config'] as { interfaces?: unknown } | undefined
   const interfaces = Array.isArray(ifc?.interfaces) ? (ifc!.interfaces as unknown[]).map(String) : []
-  if (!interfaces.length) warn(keyLine(clean, 'interfaces-config'), 'interfaces-config: no interfaces specified', 'No hay interfaces en "interfaces-config": Kea arranca pero no escucha en ninguna tarjeta de red y nadie recibe dirección. Pon la interfaz de la red de clientes, por ejemplo ["enp0s3"].')
+  if (!interfaces.length) warn(keyLine(clean, 'interfaces-config'), 'interfaces-config: no interfaces specified', 'No hay interfaces en "interfaces-config": Kea arranca pero no escucha en ninguna placa de red y nadie recibe dirección. Pon la interfaz de la red de clientes, por ejemplo ["enp0s3"].')
   const readOptions = (arr: unknown, at: number): Record<string, string> => {
     const out: Record<string, string> = {}
     if (!Array.isArray(arr)) return out

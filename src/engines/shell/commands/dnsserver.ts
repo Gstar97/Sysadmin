@@ -399,7 +399,7 @@ function numIp(n: number) {
   return [24, 16, 8, 0].map((sh) => Math.floor(n / 2 ** sh) % 256).join('.')
 }
 
-/** Un servidor Kea del laboratorio que escucha en una tarjeta con IP dentro de alguna de sus subredes. */
+/** Un servidor Kea del laboratorio que escucha en una placa con IP dentro de alguna de sus subredes. */
 export function dhcpOffer(client: System, mac: string): { server: System; ip: string; prefix: number; gateway?: string; dns: string[]; domain?: string; lease: number } | undefined {
   for (const srv of [client, ...client.lab]) {
     if (srv === client) continue

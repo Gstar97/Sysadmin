@@ -18,7 +18,7 @@ import noArranca from './no-arranca.yaml'
 "No arranca" puede significar cosas muy distintas: que no enciende ni una luz, que la pantalla queda negra, que aparece un mensaje de error del firmware o que el sistema operativo empieza a cargar y se detiene. Cada caso tiene causas y soluciones distintas. Si conoces las etapas del arranque, el último mensaje en pantalla te dice dónde buscar.
 
 <AntesDeEmpezar>
-- La **tarjeta madre** tiene un chip con un programa propio, que funciona aunque el disco esté vacío.
+- La **placa madre** tiene un chip con un programa propio, que funciona aunque el disco esté vacío.
 - La **RAM** se vacía al apagar: cada vez que el equipo arranca, hay que volver a cargar todo desde el disco.
 - Un disco se puede dividir en partes llamadas **particiones** (lo viste en la lección de almacenamiento).
 </AntesDeEmpezar>
@@ -29,7 +29,7 @@ El arranque funciona como una carrera de postas: cada corredor hace su tramo y l
 
 <Diagrama svg={etapas} alt="Las seis etapas del arranque: encendido, POST, búsqueda del dispositivo de arranque, cargador, kernel y servicios, con el síntoma típico de una falla en cada una" pie="Las tres primeras etapas son del firmware; las tres últimas, del sistema operativo." />
 
-1. **Encendido**: la fuente estabiliza sus tensiones y le avisa a la tarjeta. El procesador empieza a ejecutar el **<Termino id="firmware">firmware</Termino>**, el programa guardado en el chip de la tarjeta madre.
+1. **Encendido**: la fuente estabiliza sus tensiones y le avisa a la placa. El procesador empieza a ejecutar el **<Termino id="firmware">firmware</Termino>**, el programa guardado en el chip de la placa madre.
 2. **<Termino id="post">POST</Termino>** (*Power-On Self-Test*): el firmware prueba e inicializa la memoria, el procesador, el video y los demás dispositivos. Si algo grave falla, avisa con pitidos o con luces de diagnóstico, porque todavía no hay video. En un servidor el POST puede tardar varios minutos (prueba mucha memoria e inicia controladoras de discos y de red): es normal.
 3. **Búsqueda del dispositivo de arranque**: el firmware recorre el **orden de arranque** (disco, USB, red) hasta encontrar algo que pueda arrancar.
 4. **<Termino id="cargador-arranque">Cargador de arranque</Termino>**: un programa pequeño que sabe cargar el sistema operativo. En Linux es **GRUB**; en Windows, el **Windows Boot Manager**. Si hay varios sistemas instalados, aquí aparece el menú para elegir.
@@ -106,7 +106,7 @@ Es como la entrada a un edificio con guardia: solo pasa quien tiene una credenci
 
 Los equipos traen de fábrica las claves de Microsoft. Windows arranca porque su cargador está firmado por Microsoft. Las distribuciones Linux usan un truco: un cargador pequeño llamado **shim**, firmado por Microsoft, que a su vez verifica GRUB y el kernel con las claves de la distribución. Por eso Rocky, AlmaLinux y Ubuntu arrancan con Secure Boot activo sin hacer nada.
 
-Lo que sí requiere un paso extra son los **módulos del kernel que no vienen firmados por la distribución**, como algunos controladores de tarjetas de video o los de VirtualBox en un Linux anfitrión. Para cargarlos hay que firmarlos y registrar la clave en el firmware (se llama MOK, *Machine Owner Key*), o desactivar Secure Boot.
+Lo que sí requiere un paso extra son los **módulos del kernel que no vienen firmados por la distribución**, como algunos controladores de placas de video o los de VirtualBox en un Linux anfitrión. Para cargarlos hay que firmarlos y registrar la clave en el firmware (se llama MOK, *Machine Owner Key*), o desactivar Secure Boot.
 
 <Importante>
 Los certificados de Secure Boot de Microsoft emitidos en 2011 vencieron entre junio y octubre de 2026 y se reemplazan por los de 2023. Los equipos siguen arrancando, pero sin los certificados nuevos no pueden recibir actualizaciones de seguridad del arranque ni arrancar cargadores firmados solo con las claves nuevas. Windows Update instala los certificados 2023 en la mayoría de los equipos; en servidores hay que revisar además las actualizaciones de firmware del fabricante.
@@ -133,7 +133,7 @@ Ahora un caso real: una PC que no termina de arrancar. Usa lo que sabes de las e
     Es shim avisando que Secure Boot rechazó un cargador o un kernel sin firma válida, por ejemplo un USB armado con una herramienta vieja o un kernel compilado a mano. Usa la imagen oficial de la distribución; si el componente es legítimo, regístralo con MOK. Desactivar Secure Boot es el último recurso, no el primero.
   </ErrorComun>
   <ErrorComun titulo="El equipo pierde la fecha y la configuración del firmware cada vez que se desenchufa">
-    La pila de la tarjeta se agotó. Además de la hora, se pierde la configuración: modo de arranque, orden de arranque, virtualización activada. Es una causa clásica de "ayer arrancaba y hoy no": se cambia la pila y se vuelve a configurar el firmware.
+    La pila de la placa se agotó. Además de la hora, se pierde la configuración: modo de arranque, orden de arranque, virtualización activada. Es una causa clásica de "ayer arrancaba y hoy no": se cambia la pila y se vuelve a configurar el firmware.
   </ErrorComun>
   <ErrorComun titulo="El servidor queda varios minutos con la pantalla negra o con el logo">
     En servidores es normal: el POST prueba toda la memoria e inicializa controladoras de discos y de red. Antes de forzar un reinicio, mira el progreso desde la consola del BMC, que suele mostrar en qué paso está.

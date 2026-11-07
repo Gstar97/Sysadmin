@@ -25,7 +25,7 @@ El filtrado de paquetes de Linux vive en el núcleo y se llama **netfilter**. Lo
 
 Piensa en una oficina de correo con varios puestos de control: el de la entrada, donde se ve todo lo que llega; uno para lo que es para la propia oficina; otro para lo que solo está de paso hacia otra ciudad; y el de la salida. En cada puesto puedes poner un control distinto. Donde la comparación no llega: el núcleo pasa cada paquete por esos puestos en microsegundos y en un orden fijo; no hay atajos.
 
-<Diagrama svg={hooks} alt="Un paquete entra por una tarjeta y pasa por prerouting (donde va el dnat); después la decisión de ruta pregunta si es para este equipo. Si lo es, va a input y al programa local (sshd, nginx). Si solo lo atraviesa, va a forward y después a postrouting (donde va el masquerade) y sale. Lo que genera el propio equipo sale por output y también pasa por postrouting. En un servidor importa input; en un router o firewall Linux, además forward y los NAT de prerouting y postrouting." pie="Cada cadena de nftables se engancha en uno de estos puntos." />
+<Diagrama svg={hooks} alt="Un paquete entra por una placa y pasa por prerouting (donde va el dnat); después la decisión de ruta pregunta si es para este equipo. Si lo es, va a input y al programa local (sshd, nginx). Si solo lo atraviesa, va a forward y después a postrouting (donde va el masquerade) y sale. Lo que genera el propio equipo sale por output y también pasa por postrouting. En un servidor importa input; en un router o firewall Linux, además forward y los NAT de prerouting y postrouting." pie="Cada cadena de nftables se engancha en uno de estos puntos." />
 
 ## Tablas, cadenas y reglas
 
@@ -73,7 +73,7 @@ En nftables escribes una cadena por cada punto que quieres controlar (input para
 
 ## Un router Linux con NAT
 
-Para que un Linux con dos tarjetas haga de firewall de una oficina, hacen falta tres cosas: el reenvío (`net.ipv4.ip_forward = 1`), una cadena **forward** que diga qué puede atravesarlo, y **NAT de salida** para que la LAN salga con la IP del equipo:
+Para que un Linux con dos placas haga de firewall de una oficina, hacen falta tres cosas: el reenvío (`net.ipv4.ip_forward = 1`), una cadena **forward** que diga qué puede atravesarlo, y **NAT de salida** para que la LAN salga con la IP del equipo:
 
 ```text
 table ip nat {

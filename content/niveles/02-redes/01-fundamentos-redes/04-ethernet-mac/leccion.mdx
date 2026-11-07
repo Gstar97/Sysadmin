@@ -24,15 +24,15 @@ Ethernet es la tecnología de casi todas las redes cableadas, y el Wi-Fi funcion
 
 Una trama es un sobre con una forma fija. Adelante va un **preámbulo** que "despierta" al receptor; después, la **MAC de destino** (va primero para que el switch pueda decidir apenas la lee), la **MAC de origen**, un campo **tipo** que dice qué viene adentro (IPv4, IPv6 o ARP), los **datos** (el paquete IP) y al final una suma de control (**FCS**). Si la suma no coincide, la trama llegó dañada y se descarta sin avisar a nadie: TCP, más arriba, se ocupa de pedirla de nuevo.
 
-<Diagrama svg={trama} alt="Una trama Ethernet II: preámbulo (8 bytes), MAC de destino (6), MAC de origen (6), tipo (2; 0800 IPv4, 86DD IPv6, 0806 ARP), datos de 46 a 1500 bytes y FCS (4). Debajo, una dirección MAC 08:00:27:4a:91:0e dividida en el OUI del fabricante (08:00:27, VirtualBox) y el número de la tarjeta; los bits especiales del primer byte indican multicast y administración local." pie="La MAC de destino va primero; los datos son el paquete IP, de hasta 1500 bytes (la MTU)." />
+<Diagrama svg={trama} alt="Una trama Ethernet II: preámbulo (8 bytes), MAC de destino (6), MAC de origen (6), tipo (2; 0800 IPv4, 86DD IPv6, 0806 ARP), datos de 46 a 1500 bytes y FCS (4). Debajo, una dirección MAC 08:00:27:4a:91:0e dividida en el OUI del fabricante (08:00:27, VirtualBox) y el número de la placa; los bits especiales del primer byte indican multicast y administración local." pie="La MAC de destino va primero; los datos son el paquete IP, de hasta 1500 bytes (la MTU)." />
 
 El tamaño máximo de los datos es **1500 bytes**: es la **MTU** de Ethernet. Un paquete más grande hay que partirlo. Vas a ver la MTU en `ip link` (`mtu 1500`) y va a reaparecer en el módulo 2.7, cuando una VPN agrega encabezados y lo que antes entraba deja de entrar.
 
 ## La dirección MAC
 
-Cada tarjeta de red trae grabada de fábrica una dirección de 48 bits (6 bytes), escrita en hexadecimal: `08:00:27:4a:91:0e`. Funciona como el número de serie de un electrodoméstico: los primeros tres bytes son el **OUI**, que identifica al fabricante (lo asigna el IEEE), y los otros tres los asigna el fabricante a cada tarjeta.
+Cada placa de red trae grabada de fábrica una dirección de 48 bits (6 bytes), escrita en hexadecimal: `08:00:27:4a:91:0e`. Funciona como el número de serie de un electrodoméstico: los primeros tres bytes son el **OUI**, que identifica al fabricante (lo asigna el IEEE), y los otros tres los asigna el fabricante a cada placa.
 
-Donde la comparación no llega: una MAC se puede cambiar por software (las máquinas virtuales inventan la suya, y los teléfonos usan una al azar en cada red Wi-Fi para que no los sigan). Por eso la MAC identifica una tarjeta en la red local, pero no sirve como prueba de identidad.
+Donde la comparación no llega: una MAC se puede cambiar por software (las máquinas virtuales inventan la suya, y los teléfonos usan una al azar en cada red Wi-Fi para que no los sigan). Por eso la MAC identifica una placa en la red local, pero no sirve como prueba de identidad.
 
 Tres tipos de destino:
 
@@ -45,7 +45,7 @@ Algunos OUI que vas a ver seguido: `08:00:27` (VirtualBox), `52:54:00` (máquina
 <Terminal ejercicio={ejMac} />
 
 <EnSimple>
-La MAC es la dirección física de la tarjeta de red: viene de fábrica y sirve para encontrar a un equipo dentro de la misma red local. Los primeros tres pares de dígitos dicen quién fabricó la tarjeta.
+La MAC es la dirección física de la placa de red: viene de fábrica y sirve para encontrar a un equipo dentro de la misma red local. Los primeros tres pares de dígitos dicen quién fabricó la placa.
 </EnSimple>
 
 ## Cómo aprende un switch
@@ -94,7 +94,7 @@ Si dos switches se conectan con dos cables, un broadcast da vueltas para siempre
     Inundar un destino desconocido es normal: pasa con cada equipo nuevo y después de que una entrada vence. Es raro solo si pasa todo el tiempo (la tabla se llenó o hay un bucle).
   </ErrorComun>
   <ErrorComun titulo="Confundir la MAC con la IP">
-    La MAC es de la tarjeta y sirve dentro de la red local; la IP se configura y sirve para llegar a otras redes. Un mismo equipo cambia de IP al mudarse de red, pero su MAC no.
+    La MAC es de la placa y sirve dentro de la red local; la IP se configura y sirve para llegar a otras redes. Un mismo equipo cambia de IP al mudarse de red, pero su MAC no.
   </ErrorComun>
 </ErroresComunes>
 
@@ -103,5 +103,5 @@ Si dos switches se conectan con dos cables, un broadcast da vueltas para siempre
 - MAC: 48 bits en hexadecimal; los primeros 3 bytes son el OUI (fabricante). Unicast, broadcast (`ff:ff:ff:ff:ff:ff`) o multicast. Se puede cambiar por software.
 - El switch aprende la MAC de origen y el puerto; según el destino, reenvía por un puerto, inunda por todos menos el de entrada, o descarta. Las entradas viejas se borran (300 s).
 - Dominio de colisión: lo divide el switch (uno por puerto). Dominio de broadcast: solo lo divide un router o VLAN.
-- `ip -br link` (Linux) muestra las tarjetas y sus MAC.
+- `ip -br link` (Linux) muestra las placas y sus MAC.
 </Resumen>

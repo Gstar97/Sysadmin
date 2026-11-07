@@ -138,7 +138,7 @@ que escribir lecciones sea natural.
   │                   ├── leccion.mdx      la lección
   │                   ├── preguntas.yaml   banco de preguntas
   │                   ├── tarjetas.yaml    tarjetas de repaso
-  │                   ├── tarjeta-madre.svg  diagramas propios de la lección
+  │                   ├── placa-madre.svg  diagramas propios de la lección
   │                   └── *.yaml           ejercicios de los interactivos
   ├── src/
   │   ├── app/                         rutas, páginas, diseño general y componentes MDX
@@ -174,19 +174,19 @@ reordenar carpetas no rompe el progreso guardado de nadie.
   titulo: Las piezas de una computadora y cómo se conectan
   minutos: 90
   objetivos:
-    - Identificar CPU, RAM, almacenamiento, tarjeta madre, fuente y tarjetas de expansión.
+    - Identificar CPU, RAM, almacenamiento, placa madre, fuente y placas de expansión.
     - Explicar cómo viajan los datos entre componentes (buses, chipset, PCIe).
-  glosario: [cpu, ram, tarjeta-madre, pcie, chipset]
+  glosario: [cpu, ram, placa-madre, pcie, chipset]
   verificado: 2026-10          # fecha en que se verificaron versiones y datos de actualidad
   ---
 
-  import tarjeta from './tarjeta-madre.svg?raw'
-  import puntos from './tarjeta-madre-puntos.yaml'
+  import placa from './placa-madre.svg?raw'
+  import puntos from './placa-madre-puntos.yaml'
 
   ## Qué hay adentro del gabinete
   Texto en Markdown...
 
-  <DiagramaInteractivo svg={tarjeta} datos={puntos} alt="Tarjeta madre con sus partes" />
+  <DiagramaInteractivo svg={placa} datos={puntos} alt="Placa madre con sus partes" />
 
   Más explicación, con <Termino id="pcie">PCIe</Termino> enlazado al glosario...
 
@@ -543,7 +543,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     · Rendimiento (perf.ts): un único modelo de CPU, memoria, disco y carga para que
       top, uptime, free, vmstat, iostat, mpstat, sar (con historial) e iotop cuenten la
       misma historia; nice, renice e ionice cambian el resultado. /proc (meminfo,
-      loadavg, una carpeta por proceso) y /sys (tarjetas de red, discos, módulos) se
+      loadavg, una carpeta por proceso) y /sys (placas de red, discos, módulos) se
       regeneran antes de cada comando.
     · Kernel y hora (kernel.ts): sysctl (también escribiendo en /proc/sys), módulos
       (lsmod, modinfo, modprobe con blacklist e install /bin/false), timedatectl con zona
@@ -583,9 +583,9 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
   - Nivel 2, parte 1 (módulos 2.1 a 2.3):
     · Red del servidor (commands/net.ts): ip con -4/-6 y -br, IPv6 en las interfaces
       (enlace local fe80 que se arma de la MAC en Ubuntu y estable al azar en Rocky,
-      direcciones agregadas con ip -6 addr add), ping a IPv6 (con %tarjeta para las de
+      direcciones agregadas con ip -6 addr add), ping a IPv6 (con %placa para las de
       enlace local), tabla de vecinos real en ip neigh (ARP y NDP, REACHABLE, STALE y
-      FAILED, flush y del), velocidad y dúplex por tarjeta (ethtool), MTU, ipcalc con el
+      FAILED, flush y del), velocidad y dúplex por placa (ethtool), MTU, ipcalc con el
       formato de cada familia, arping (con -D) y nmcli con ipv4.method auto e
       ipv6.addresses.
     · IP duplicadas (hosts.ts): si dos servidores del ejercicio tienen la misma IP, cada
@@ -605,7 +605,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       named-checkzone, rndc, unbound-checkconf, y ss muestra en qué dirección escucha
       cada uno.
     · DHCP (commands/dnsserver.ts): Kea con la configuración de fábrica (no escucha en
-      ninguna tarjeta), kea-dhcp4 -t, el servicio (kea-dhcp4 en Rocky con Kea 2.6, donde
+      ninguna placa), kea-dhcp4 -t, el servicio (kea-dhcp4 en Rocky con Kea 2.6, donde
       el id de la subred es obligatorio; kea-dhcp4-server en Ubuntu con Kea 2.4). Una
       interfaz con dhcp: true recibe la reserva o la primera libre del rango, la puerta
       de enlace, el DNS y el dominio al levantar la conexión (o al empezar, si Kea ya
@@ -614,7 +614,7 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     · Paquetes nuevos: bind (y bind9 en Ubuntu), unbound, kea (kea-dhcp4-server),
       dnsmasq, ipcalc, iputils (arping) y ethtool, con sus archivos y permisos reales.
     · Verificaciones nuevas: { resuelve: nombre, tipo, servidor, responde, estado } y
-      { interfaz: tarjeta, ip_en: red, ipv6: dirección, activa }.
+      { interfaz: placa, ip_en: red, ipv6: dirección, activa }.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
