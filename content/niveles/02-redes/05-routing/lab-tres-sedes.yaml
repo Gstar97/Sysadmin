@@ -1,0 +1,138 @@
+tipo: terminal
+shell: ios
+titulo: Tres sedes, primero a mano y después con OSPF
+descripcion: >-
+  La central (R1, LAN 192.168.1.0/24), la sucursal Norte (R2, LAN 10.2.0.0/24) y la sucursal
+  Sur (R3, LAN 10.3.0.0/24) están unidas en triángulo: R1-R2 por 10.0.12.0/30, R1-R3 por
+  10.0.13.0/30 y R2-R3 por 10.0.23.0/30 (en cada enlace, el router de número menor tiene la .1).
+  Las interfaces ya tienen sus IP; no hay ninguna ruta. Empiezas en la consola de R1; para
+  pasar a otro router, usa el selector de equipo.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: R1
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.1/24 }
+          - { nombre: Gi0/1, ip: 10.0.12.1/30 }
+          - { nombre: Gi0/2, ip: 10.0.13.1/30 }
+      - id: R2
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 10.2.0.1/24 }
+          - { nombre: Gi0/1, ip: 10.0.12.2/30 }
+          - { nombre: Gi0/2, ip: 10.0.23.1/30 }
+      - id: R3
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 10.3.0.1/24 }
+          - { nombre: Gi0/1, ip: 10.0.13.2/30 }
+          - { nombre: Gi0/2, ip: 10.0.23.2/30 }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.10/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: PC2, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.2.0.10/24 }], puerta_enlace: 10.2.0.1 }
+      - { id: PC3, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.3.0.10/24 }], puerta_enlace: 10.3.0.1 }
+    enlaces:
+      - { a: "R1:Gi0/1", b: "R2:Gi0/1" }
+      - { a: "R1:Gi0/2", b: "R3:Gi0/1" }
+      - { a: "R2:Gi0/2", b: "R3:Gi0/2" }
+      - { a: "PC1:eth0", b: "R1:Gi0/0" }
+      - { a: "PC2:eth0", b: "R2:Gi0/0" }
+      - { a: "PC3:eth0", b: "R3:Gi0/0" }
+pasos:
+  - consigna: "Parte A, rutas estáticas. En R1, agrega las rutas a las LAN de las dos sucursales, cada una por su enlace directo."
+    verificar:
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
+      - { equipo: R1, ruta: 10.3.0.0/24, via: 10.0.13.2 }
+    pistas: ["ip route 10.2.0.0 255.255.255.0 10.0.12.2 e ip route 10.3.0.0 255.255.255.0 10.0.13.2."]
+    solucion: [enable, configure terminal, ip route 10.2.0.0 255.255.255.0 10.0.12.2, ip route 10.3.0.0 255.255.255.0 10.0.13.2, end]
+  - consigna: "En R2 y en R3, pon una ruta por defecto hacia R1. Las tres LAN se tienen que ver entre sí."
+    verificar:
+      - { ping: { desde: PC1, hacia: PC2 } }
+      - { ping: { desde: PC1, hacia: PC3 } }
+      - { ping: { desde: PC2, hacia: PC3 } }
+    pistas:
+      - "En R2: ip route 0.0.0.0 0.0.0.0 10.0.12.1. En R3: ip route 0.0.0.0 0.0.0.0 10.0.13.1."
+    solucion:
+      - "@consola R2"
+      - enable
+      - configure terminal
+      - ip route 0.0.0.0 0.0.0.0 10.0.12.1
+      - end
+      - "@consola R3"
+      - enable
+      - configure terminal
+      - ip route 0.0.0.0 0.0.0.0 10.0.13.1
+      - end
+    explicacion: >-
+      Funciona, pero mira el tráfico entre las sucursales: Norte manda todo a R1 y R1 lo pasa a
+      Sur. El enlace directo R2-R3 no se usa, y si se cae el enlace R1-R2, la sucursal Norte
+      queda aislada aunque tenga otro camino.
+  - consigna: Desde R2, haz un traceroute a la PC de la sucursal Sur para confirmar por dónde va.
+    verificar:
+      - { comando_usado: traceroute 10.3.0.10 }
+      - { salida_contiene: "10.0.12.1" }
+    pistas: ["Ve a R2 y escribe traceroute 10.3.0.10."]
+    solucion: ["@consola R2", traceroute 10.3.0.10]
+    explicacion: El primer salto es 10.0.12.1 (R1). Con rutas estáticas, el camino es el que escribiste, aunque haya uno mejor.
+  - consigna: >-
+      Parte B, migrar a OSPF. En los tres routers: OSPF proceso 1 en área 0 con router-id 1.1.1.1,
+      2.2.2.2 y 3.3.3.3, en todas sus interfaces, con la LAN como pasiva. Después, borra las
+      rutas estáticas.
+    verificar:
+      - { equipo: R1, ruta: 10.2.0.0/24, origen: ospf }
+      - { equipo: R2, ruta: 10.3.0.0/24, via: 10.0.23.2, origen: ospf }
+      - { equipo: R3, ruta: 192.168.1.0/24, origen: ospf }
+      - { equipo: R2, ruta: 0.0.0.0/0, origen: estatica, existe: false }
+    pistas:
+      - "En cada router: router ospf 1, router-id N.N.N.N, network 10.0.0.0 0.255.255.255 area 0 (toma todos los 10.x), la LAN si no es 10.x (en R1, network 192.168.1.0 0.0.0.255 area 0) y passive-interface gi0/0."
+      - "Para borrar una estática: no seguido del mismo comando (no ip route 0.0.0.0 0.0.0.0 10.0.12.1)."
+    solucion:
+      - configure terminal
+      - router ospf 1
+      - router-id 2.2.2.2
+      - network 10.0.0.0 0.255.255.255 area 0
+      - passive-interface gi0/0
+      - exit
+      - no ip route 0.0.0.0 0.0.0.0 10.0.12.1
+      - end
+      - "@consola R3"
+      - configure terminal
+      - router ospf 1
+      - router-id 3.3.3.3
+      - network 10.0.0.0 0.255.255.255 area 0
+      - passive-interface gi0/0
+      - exit
+      - no ip route 0.0.0.0 0.0.0.0 10.0.13.1
+      - end
+      - "@consola R1"
+      - configure terminal
+      - router ospf 1
+      - router-id 1.1.1.1
+      - network 10.0.0.0 0.255.255.255 area 0
+      - network 192.168.1.0 0.0.0.255 area 0
+      - passive-interface gi0/0
+      - exit
+      - no ip route 10.2.0.0 255.255.255.0 10.0.12.2
+      - no ip route 10.3.0.0 255.255.255.0 10.0.13.2
+      - end
+    explicacion: >-
+      Ahora R2 llega a Sur por el enlace directo (10.0.23.2): OSPF eligió el camino de menor
+      costo. Y nadie escribió una ruta por cada red.
+  - consigna: Corta el enlace R1-R2 (apaga Gi0/1 en R1) y comprueba que la central sigue llegando a la sucursal Norte.
+    verificar:
+      - { ping: { desde: PC1, hacia: PC2 } }
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.13.2 }
+    pistas: ["En R1: configure terminal, interface gi0/1, shutdown. Después, do show ip route ospf."]
+    solucion: [configure terminal, interface gi0/1, shutdown, do show ip route ospf]
+    explicacion: >-
+      En segundos, R1 pierde el vecino R2 por Gi0/1 y recalcula: ahora llega a Norte pasando por
+      Sur (via 10.0.13.2). Con las estáticas de la parte A, Norte habría quedado aislada.
+  - consigna: Vuelve a levantar el enlace y guarda la configuración de los tres routers.
+    verificar:
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
+      - { equipo: R1, guardado: true }
+      - { equipo: R2, guardado: true }
+      - { equipo: R3, guardado: true }
+    pistas: ["no shutdown en Gi0/1 de R1; después copy running-config startup-config en cada router."]
+    solucion: [no shutdown, end, copy running-config startup-config, "@consola R2", copy running-config startup-config, "@consola R3", copy running-config startup-config]

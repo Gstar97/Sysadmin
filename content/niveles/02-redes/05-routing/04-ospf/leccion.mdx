@@ -1,0 +1,127 @@
+---
+id: n2-m5-l4
+titulo: OSPF básico
+minutos: 210
+objetivos:
+  - Explicar router ID, vecinos, adyacencias, áreas, DR/BDR y costo.
+  - Configurar OSPF de área única en Cisco IOS y en Linux con FRRouting.
+  - Verificar vecinos y rutas aprendidas, y repartir la ruta por defecto.
+glosario: [ospf, router-id, adyacencia, area-ospf, dr-bdr, interfaz-pasiva, frrouting]
+verificado: 2026-11
+---
+
+import ospf from './ospf.svg?raw'
+import ejOspf from './ej-ospf.yaml'
+import ejFrr from './ej-frr.yaml'
+
+**OSPF** (Open Shortest Path First) es el protocolo de estado de enlace que vas a encontrar en casi cualquier empresa con más de un router. Es un estándar abierto (versión 2 para IPv4, versión 3 para IPv6), así que funciona entre Cisco, Juniper, MikroTik, firewalls y servidores Linux. En esta lección vas a ver lo necesario para tener OSPF de un área funcionando y saber leer qué está pasando.
+
+<AntesDeEmpezar>
+- Estado de enlace: cada router arma el mapa completo y calcula con Dijkstra (lección anterior).
+- Máscaras wildcard, la máscara "al revés" de IOS (lección 2.2.6).
+- Rutas estáticas y la ruta por defecto (lección 2).
+</AntesDeEmpezar>
+
+## Las piezas de OSPF
+
+- **Router ID**: el nombre de cada router dentro de OSPF, con forma de IPv4 (1.1.1.1). Si no lo fijas, se elige solo (la IP de loopback más alta o, si no hay, la IP más alta de una interfaz activa), y puede cambiar si cambian las direcciones. Fíjalo siempre.
+- **Saludos (hello)**: cada 10 segundos, por cada interfaz con OSPF, un router manda un saludo a la dirección multicast 224.0.0.5. Si un vecino pasa 40 segundos sin saludar (el *dead interval*), se lo da por caído.
+- **Vecinos y adyacencias**: dos routers que se oyen se hacen vecinos; si además intercambian sus mapas completos, forman una **adyacencia** y llegan al estado **FULL**.
+- **Áreas**: OSPF puede dividir una red grande en áreas para que el mapa de cada router no sea enorme. Todas se conectan al **área 0** (el *backbone*). En una empresa mediana, una sola área 0 alcanza.
+- **Costo**: la métrica de OSPF. Cada interfaz tiene un costo, y el de un camino es la suma. Se calcula como un ancho de banda de referencia dividido por el de la interfaz.
+
+<Diagrama svg={ospf} alt="Primero, los estados de una adyacencia: Down, Init (oyó un saludo), 2-Way (se oyen los dos), ExStart y Exchange (intercambian lo que conoce cada uno), Loading (piden lo que falta) y Full (mismo mapa). Para pasar de Init hacen falta misma subred, misma área, mismos tiempos de saludo (10 s y 40 s), misma autenticación y MTU, y router ID distintos. Segundo, un segmento con switch y cuatro routers: R1 es DR, R2 es BDR, R3 y R4 son DROTHER. Todos le cuentan los cambios al DR, que los reparte; gana la prioridad de interfaz más alta (1 de fábrica, 0 es nunca) y si empatan el router ID más alto; el BDR reemplaza al DR; entre dos DROTHER el estado queda en 2-WAY y es normal; en un enlace punto a punto no hay DR. Abajo: costo igual a referencia (100 Mb/s de fábrica) dividido por el ancho de banda, así que FastEthernet, Gigabit y 10 Gigabit cuestan 1." pie="Un vecino que no pasa de INIT o EXSTART casi siempre tiene algo distinto del otro lado." />
+
+### El detalle del costo
+
+Con la referencia de fábrica (100 Mb/s), un enlace de 100 Mb/s y uno de 10 Gb/s cuestan lo mismo: 1. OSPF no puede distinguirlos. Por eso, en cualquier red actual, se sube la referencia en **todos** los routers (si no, cada uno calcula distinto):
+
+```text
+router ospf 1
+ auto-cost reference-bandwidth 100000     ! 100 Gb/s: 1 Gb/s = 100, 10 Gb/s = 10
+```
+
+También se puede fijar el costo de una interfaz a mano con `ip ospf cost 50`, por ejemplo para que un enlace de respaldo se use solo si cae el principal.
+
+<EnSimple>
+Cada router de OSPF tiene un nombre (router ID), saluda a sus vecinos cada 10 segundos y comparte con ellos todo lo que sabe hasta que los dos tienen el mismo mapa (FULL). Después, cada uno calcula el camino más barato sumando los costos de los enlaces.
+</EnSimple>
+
+## OSPF en Cisco IOS
+
+```text
+router ospf 1                               ! 1 es el número de proceso, local
+ router-id 1.1.1.1
+ network 192.168.1.0 0.0.0.255 area 0       ! red + wildcard: qué interfaces entran
+ network 10.0.12.0 0.0.0.3 area 0
+ passive-interface GigabitEthernet0/0       ! la LAN: se anuncia, pero sin saludos
+ default-information originate              ! reparte la ruta por defecto
+```
+
+El comando `network` no "anuncia una red": dice **qué interfaces** participan. Toda interfaz cuya IP caiga dentro de esa red y wildcard entra a OSPF en esa área, y se anuncia su red. La alternativa más clara, en la interfaz misma, es `ip ospf 1 area 0`.
+
+Para verificar:
+
+```text
+show ip ospf neighbor          ! vecinos y su estado (FULL)
+show ip route ospf             ! las rutas O aprendidas
+show ip ospf interface brief   ! qué interfaces están en OSPF, su costo y su rol
+show ip protocols              ! router ID, redes, interfaces pasivas
+```
+
+<Terminal ejercicio={ejOspf} />
+
+<Pregunta id="p06" />
+
+## OSPF en Linux con FRRouting
+
+**FRRouting** (FRR) es el conjunto de protocolos de enrutamiento de código abierto que usan Linux, muchos firewalls y equipos de centro de datos. Tiene OSPF, BGP, IS-IS y más, y se maneja con **vtysh**, una consola con comandos muy parecidos a los de IOS.
+
+```bash
+sudo dnf install frr                    # Rocky / RHEL (en Ubuntu: sudo apt install frr)
+sudo sed -i 's/^ospfd=no/ospfd=yes/' /etc/frr/daemons
+sudo systemctl enable --now frr
+sudo sysctl -w net.ipv4.ip_forward=1    # y en /etc/sysctl.d/ para que quede
+sudo firewall-cmd --permanent --add-protocol=ospf && sudo firewall-cmd --reload
+sudo vtysh                              # la consola, al estilo IOS
+```
+
+La configuración vive en `/etc/frr/frr.conf`. Se puede editar a mano (y reiniciar frr) o escribir en vtysh con `configure terminal` y guardar con `write memory`. Dos diferencias con IOS que confunden al principio: en FRR, `network` usa **prefijo** (`network 10.0.12.0/30 area 0`), no wildcard; y el router ID se escribe `ospf router-id`.
+
+<EditorConfig ejercicio={ejFrr} />
+
+Dentro de vtysh, se verifica igual que en IOS: `show ip ospf neighbor`, `show ip route ospf`. Y fuera, `ip route` muestra las rutas que instaló FRR con `proto ospf`.
+
+<Consejo titulo="Cuando un vecino no aparece">
+Revisa, en este orden: que las dos interfaces estén en la misma subred y la misma área; que ninguna sea pasiva; que el firewall (en Linux) deje pasar el protocolo 89; que los tiempos de saludo coincidan; que los router ID sean distintos; y, si se queda en EXSTART, que el MTU sea igual en los dos lados.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="La wildcard equivocada">
+    network 10.0.12.0 0.0.0.255 area 0 incluye mucho más que el enlace /30. Funciona, pero puede meter interfaces que no querías. Usa la wildcard exacta o ip ospf area en la interfaz.
+  </ErrorComun>
+  <ErrorComun titulo="La interfaz hacia otro router como pasiva">
+    Se anuncia la red, pero no hay saludos: el vecino nunca aparece. Pasivas solo las LAN sin routers.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar la referencia de 100 Mb/s">
+    1 Gb/s y 10 Gb/s cuestan lo mismo y OSPF puede elegir el camino lento. Sube auto-cost reference-bandwidth, igual en todos los routers.
+  </ErrorComun>
+  <ErrorComun titulo="Router ID repetido">
+    Dos routers con el mismo ID no forman adyacencia (y el log lo dice: "duplicate router-id"). Pasa mucho al clonar máquinas virtuales con FRR.
+  </ErrorComun>
+  <ErrorComun titulo="Linux con FRR que aprende rutas pero no enruta">
+    FRR instala las rutas, pero si net.ipv4.ip_forward está en 0, el kernel no reenvía. Y firewalld puede bloquear el protocolo 89.
+  </ErrorComun>
+  <ErrorComun titulo="Usar la sintaxis de IOS en FRR">
+    network 10.0.12.0 0.0.0.3 area 0 da "% Unknown command" en FRR: allí va con prefijo, network 10.0.12.0/30 area 0.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- OSPF es estado de enlace y estándar abierto. Router ID con forma de IPv4 (fíjalo), saludos cada 10 s a 224.0.0.5, vecino caído a los 40 s.
+- Adyacencia: Down, Init, 2-Way, ExStart, Exchange, Loading, Full. Para formarla: misma subred, área, tiempos, autenticación y MTU, e IDs distintos.
+- En segmentos con switch se eligen DR y BDR (prioridad más alta, después router ID). En punto a punto, no.
+- Costo = referencia ÷ ancho de banda; sube la referencia (auto-cost reference-bandwidth) en todos los routers.
+- IOS: router ospf 1, router-id, network RED WILDCARD area 0, passive-interface, default-information originate. Verificar con show ip ospf neighbor y show ip route ospf.
+- Linux: FRRouting con ospfd=yes en /etc/frr/daemons, frr.conf (network con prefijo, ospf router-id), vtysh, ip_forward y el protocolo 89 en el firewall.
+</Resumen>

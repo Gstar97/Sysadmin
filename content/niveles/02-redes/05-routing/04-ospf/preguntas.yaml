@@ -1,0 +1,88 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es el router ID de OSPF?
+  opciones:
+    - { texto: "El identificador de cada router dentro de OSPF, con forma de IPv4", correcta: true, explicacion: "Conviene fijarlo a mano." }
+    - { texto: "La IP de la LAN", explicacion: "No tiene por qué ser una IP configurada." }
+    - { texto: "El número de proceso", explicacion: "Ese es local y no viaja." }
+    - { texto: "El número de área", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿En qué estado están dos routers OSPF que ya tienen el mismo mapa?
+  opciones:
+    - { texto: "FULL", correcta: true, explicacion: "Adyacencia completa." }
+    - { texto: "2-WAY", explicacion: "Se oyen, pero no intercambiaron mapas (normal entre dos DROTHER)." }
+    - { texto: "INIT", explicacion: "Solo uno oyó al otro." }
+    - { texto: "UP", explicacion: "No es un estado de OSPF." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "En IOS, ¿qué hace network 10.0.12.0 0.0.0.3 area 0 dentro de router ospf 1?"
+  opciones:
+    - { texto: "Activa OSPF en las interfaces cuya IP cae en 10.0.12.0/30 y las pone en el área 0", correcta: true, explicacion: "Dice qué interfaces participan." }
+    - { texto: "Anuncia la red 10.0.12.0 aunque no esté en ninguna interfaz", explicacion: "Sin interfaz en esa red, no anuncia nada." }
+    - { texto: "Crea una ruta estática", explicacion: "No." }
+    - { texto: "Bloquea esa red", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve passive-interface en la interfaz de una LAN de usuarios?
+  opciones:
+    - { texto: "La red se sigue anunciando, pero no se mandan saludos ni se forman vecinos por ahí", correcta: true, explicacion: "Nadie en la LAN puede hacerse pasar por router." }
+    - { texto: "Saca la red de OSPF", explicacion: "La red se sigue anunciando." }
+    - { texto: "Apaga la interfaz", explicacion: "La interfaz sigue funcionando." }
+    - { texto: "La hace DR", explicacion: "No." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con la referencia de fábrica (100 Mb/s), ¿cuánto cuesta en OSPF un enlace de 10 Gb/s?
+  opciones:
+    - { texto: "1, igual que uno de 100 Mb/s: por eso se sube la referencia", correcta: true, explicacion: "El costo mínimo es 1." }
+    - { texto: "0,01", explicacion: "El costo es entero y mínimo 1." }
+    - { texto: "10", explicacion: "Sería con otra referencia." }
+    - { texto: "100", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: R1 y R2 están conectados, con OSPF configurado, pero show ip ospf neighbor está vacío en los dos. R1 tiene la interfaz en el área 0 y R2 en el área 1. ¿Qué pasa?
+  opciones:
+    - { texto: "No forman vecindad: el área tiene que coincidir en los dos extremos del enlace", correcta: true, explicacion: "Es una de las condiciones del saludo." }
+    - { texto: "Forman vecindad, pero sin rutas", explicacion: "No llegan a ser vecinos." }
+    - { texto: "R1 pasa a ser DR", explicacion: "No hay vecindad." }
+    - { texto: "Se arregla solo en 40 segundos", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un segmento con switch y cuatro routers, dos de ellos (ninguno es DR ni BDR) se ven entre sí en estado 2-WAY. ¿Es un problema?
+  opciones:
+    - { texto: "No: entre dos DROTHER es normal; cada uno forma FULL solo con el DR y el BDR", correcta: true, explicacion: "Así se evita que todos hablen con todos." }
+    - { texto: "Sí: tendrían que estar en FULL", explicacion: "Es el comportamiento esperado." }
+    - { texto: "Sí: falta un router ID", explicacion: "No." }
+    - { texto: "Sí: hay que reiniciar OSPF", explicacion: "No." }
+- id: p08
+  tipo: completar_comando
+  enunciado: En router ospf 1, escribe el comando que reparte la ruta por defecto del router a los demás.
+  aceptadas: [default-information originate]
+  explicacion: El router tiene que tener una ruta por defecto (o usar always).
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En FRRouting, ¿cómo se escribe la red del enlace 10.0.12.0/30 en el área 0?
+  opciones:
+    - { texto: "network 10.0.12.0/30 area 0", correcta: true, explicacion: "FRR usa prefijo." }
+    - { texto: "network 10.0.12.0 0.0.0.3 area 0", explicacion: "Es la sintaxis de IOS; FRR responde Unknown command." }
+    - { texto: "network 10.0.12.0 255.255.255.252 area 0", explicacion: "Ni IOS ni FRR usan la máscara ahí." }
+    - { texto: "ip ospf network 10.0.12.0/30", explicacion: "No existe." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un Linux con FRR tiene sus vecinos OSPF en FULL y las rutas en ip route, pero los equipos de la LAN no llegan a las otras sedes a través de él. ¿Qué revisas?
+  opciones:
+    - { texto: "net.ipv4.ip_forward y el firewall del Linux para el tráfico que lo atraviesa", correcta: true, explicacion: "FRR arma la tabla; el kernel tiene que reenviar." }
+    - { texto: "El router ID", explicacion: "Los vecinos ya están en FULL." }
+    - { texto: "El DR", explicacion: "No interviene en esto." }
+    - { texto: "El archivo /etc/frr/daemons", explicacion: "Si ospfd no corriera, no habría vecinos." }

@@ -1,0 +1,98 @@
+---
+id: n2-m5-l3
+titulo: Routing dinámico, conceptos
+minutos: 90
+objetivos:
+  - Diferenciar los protocolos de vector distancia y de estado de enlace.
+  - Diferenciar IGP y EGP, y saber qué protocolo se usa en cada caso.
+  - Entender qué es BGP y por qué sostiene internet, sin entrar en su configuración.
+glosario: [routing-dinamico, vector-distancia, estado-de-enlace, convergencia, igp, bgp, sistema-autonomo]
+verificado: 2026-11
+---
+
+import sa from './sistemas-autonomos.svg?raw'
+import clasificar from './clasificar.yaml'
+
+Con tres routers, escribir las rutas a mano es fácil. Con treinta, cada red nueva obliga a tocar treinta equipos, y si se corta un enlace nadie corrige las rutas: el tráfico se pierde hasta que alguien se entera. Un **protocolo de enrutamiento dinámico** hace que los routers se cuenten entre ellos qué redes conocen, armen sus tablas solos y las corrijan cuando algo cambia.
+
+<AntesDeEmpezar>
+- Tabla de rutas, métrica y distancia administrativa (lección 1).
+- Rutas estáticas y sus límites: no se dan cuenta de una falla más allá de la interfaz (lección 2).
+</AntesDeEmpezar>
+
+## Dos maneras de enterarse
+
+Hay dos familias, y la diferencia es qué saben los routers.
+
+**Vector distancia.** Cada router conoce solo lo que le cuentan sus vecinos: "a la red X llego con costo 3". Toma lo mejor de lo que oye, le suma el costo hasta ese vecino, y se lo cuenta a los suyos. Es como preguntar en la calle por una dirección: nadie tiene el mapa, pero cada uno sabe para qué lado queda y más o menos a cuántas calles. Donde la comparación no llega: si alguien da una indicación vieja (una calle que ya cerraron), la equivocación se repite de boca en boca hasta que la corrige el siguiente aviso, y eso puede tardar.
+
+**Estado de enlace.** Cada router le cuenta a **todos** cómo son sus enlaces ("estoy unido a R2 con costo 1 y a R5 con costo 10"). Con todos esos avisos, cada uno arma el **mapa completo** de la red y calcula él mismo el camino más corto (con el algoritmo de Dijkstra). Es como tener todos el mismo mapa con GPS: si cierra una calle, el aviso llega a todos y cada uno recalcula su ruta en el acto.
+
+| | Vector distancia | Estado de enlace |
+| --- | --- | --- |
+| Qué sabe cada router | Destino, costo y por qué vecino | El mapa completo |
+| Ante un cambio | La noticia avanza de vecino en vecino | El aviso se inunda a todos y cada uno recalcula |
+| Velocidad | Lenta (RIP: actualizaciones cada 30 segundos) | Rápida (segundos o menos) |
+| Recursos | Pocos | Más memoria y CPU (cada uno tiene el mapa) |
+| Ejemplos | RIP, EIGRP (avanzado) | OSPF, IS-IS |
+
+Pruébalo: corta un enlace y avanza paso a paso. Mira qué routers tienen la tabla desactualizada en cada momento, y compara los dos modos.
+
+<SimuladorConvergencia />
+
+Se llama **convergencia** al momento en que todos los routers ya tienen la tabla correcta después de un cambio. Mientras no converge, algunos paquetes se pierden o dan vueltas. Por eso importa la velocidad: con RIP puede tardar minutos; con OSPF bien configurado, menos de un segundo a pocos segundos.
+
+<EnSimple>
+En vector distancia, cada router repite lo que le contaron sus vecinos. En estado de enlace, todos tienen el mapa entero y calculan solos. El segundo se entera más rápido de los cambios.
+</EnSimple>
+
+<Pregunta id="p04" />
+
+## Adentro y afuera: IGP y EGP
+
+Internet no es una red: es una red de **sistemas autónomos** (AS), cada uno una organización con su propia política de enrutamiento: un proveedor de internet, una universidad, una nube, una empresa grande. Cada AS tiene un número (ASN) asignado por los registros regionales (LACNIC en Latinoamérica, ARIN, RIPE...).
+
+<Diagrama svg={sa} alt="Tres nubes: tu empresa (un sistema autónomo), un proveedor de internet (AS 64500 de ejemplo) y otro proveedor (AS 64510 de ejemplo). Adentro de cada una, varios routers con OSPF o IS-IS. Entre ellas, enlaces punteados con BGP. Abajo: un IGP (OSPF, IS-IS, EIGRP, RIP) busca el camino más corto dentro de una organización; un EGP (BGP) intercambia rutas entre organizaciones según acuerdos y políticas." pie="Los números de AS del diagrama son de los reservados para documentación." />
+
+- **IGP** (protocolo de gateway interior): para adentro de un AS. Busca el camino más corto. OSPF, IS-IS, EIGRP, RIP.
+- **EGP** (protocolo de gateway exterior): entre sistemas autónomos. Hoy hay uno solo en uso: **BGP** (versión 4).
+
+<Emparejar ejercicio={clasificar} />
+
+## BGP en dos minutos
+
+BGP no busca el camino "más corto": busca el que conviene según **políticas**. Un proveedor prefiere mandar el tráfico por un cliente que le paga antes que por otro proveedor al que le paga él; una empresa puede preferir un enlace y dejar el otro de respaldo. Cada ruta de BGP lleva la lista de AS por los que pasa (AS_PATH), lo que sirve para elegir y también para evitar bucles: un router descarta una ruta que ya pasó por su propio AS.
+
+Lo que te interesa como sysadmin:
+
+- Una empresa con **un solo proveedor** no necesita BGP: una ruta por defecto alcanza.
+- Con **dos proveedores** y direcciones públicas propias (con su ASN), se usa BGP para anunciar tus redes por los dos y que, si uno se cae, el mundo siga llegando por el otro.
+- Dentro de los centros de datos grandes y en Kubernetes (Calico, MetalLB), BGP también se usa para anunciar direcciones entre servidores y switches. Lo vas a ver en el nivel de contenedores.
+- Cuando "se cae internet" en medio mundo, muchas veces es BGP: un proveedor anuncia por error rutas que no son suyas y se lleva el tráfico de otros. Por eso existe **RPKI**, que firma qué AS puede anunciar qué direcciones, y que los proveedores grandes ya validan.
+
+<Nota titulo="Para más adelante">
+Configurar BGP (vecinos, filtros de prefijos, comunidades, RPKI) es tema de redes avanzadas. Por ahora alcanza con saber qué es, cuándo hace falta y que un error en BGP tiene efectos fuera de tu red.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar RIP en una red nueva">
+    Converge lento, cuenta solo saltos (un enlace lento vale lo mismo que uno rápido) y no pasa de 15. Para una red nueva, OSPF.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que BGP es &quot;OSPF para redes grandes&quot;">
+    No busca el camino más corto sino el que dictan las políticas. Y no se usa adentro de una empresa común, sino hacia afuera.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que con un protocolo dinámico ya no hacen falta estáticas">
+    La ruta por defecto hacia internet suele ser estática (y se reparte por OSPF), y las flotantes siguen siendo útiles como respaldo.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir convergencia con velocidad del enlace">
+    La convergencia es cuánto tardan los routers en ponerse de acuerdo después de un cambio, no cuántos megabits pasan por el cable.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un protocolo dinámico hace que los routers compartan rutas, armen sus tablas solos y las corrijan ante cambios.
+- Vector distancia (RIP, EIGRP): cada router repite lo que le cuentan sus vecinos; las noticias avanzan de a un vecino. Estado de enlace (OSPF, IS-IS): todos tienen el mapa completo y calculan con Dijkstra; convergen más rápido.
+- Convergencia: el momento en que todas las tablas están al día después de un cambio.
+- IGP para adentro de un sistema autónomo (OSPF es el habitual en empresas); EGP entre sistemas autónomos: BGP, que sostiene internet y elige rutas por políticas.
+- Con un solo proveedor no hace falta BGP; con dos y direcciones propias, sí.
+</Resumen>

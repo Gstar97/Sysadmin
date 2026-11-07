@@ -1,0 +1,59 @@
+tipo: configuracion
+titulo: OSPF en un Linux con FRRouting
+consigna: >-
+  gw-norte es un Linux (Rocky 10) que hace de router de la sucursal Norte. Tiene enp0s3 hacia la
+  central (10.0.12.2/30) y enp0s8 hacia la LAN de la sucursal (10.2.0.1/24). Un compañero
+  empezó /etc/frr/frr.conf y lo dejó con errores. Corrígelo para que gw-norte forme vecindad
+  OSPF con la central por enp0s3 en el área 0, anuncie la LAN y no mande saludos de OSPF hacia
+  la LAN (donde solo hay PC). Usa 2.2.2.2 como router-id.
+lenguaje: frr
+nombre_archivo: /etc/frr/frr.conf
+archivo_inicial: |
+  frr version 10.4.1
+  frr defaults traditional
+  hostname gw-norte
+  log syslog informational
+  service integrated-vtysh-config
+  !
+  interface enp0s3
+   ip address 10.0.12.2/30
+  exit
+  !
+  interface enp0s8
+   ip address 10.2.0.1/24
+  exit
+  !
+  router ospf
+   network 10.0.12.0 0.0.0.3 area 0
+   network 10.2.0.0/24 area 0
+  exit
+  !
+reglas:
+  - { tipo: sin_errores, mensaje: "frr.conf no tiene errores" }
+  - { tipo: contiene, regex: "^\\s*ospf router-id 2\\.2\\.2\\.2\\s*$", mensaje: "El router-id es 2.2.2.2" }
+  - { tipo: contiene, regex: "^\\s*network 10\\.0\\.12\\.0/30 area (0|0\\.0\\.0\\.0)\\s*$", mensaje: "El enlace con la central (10.0.12.0/30) está en el área 0" }
+  - { tipo: contiene, regex: "^\\s*network 10\\.2\\.0\\.0/24 area (0|0\\.0\\.0\\.0)\\s*$", mensaje: "La LAN de la sucursal se anuncia en el área 0" }
+  - { tipo: contiene, regex: "^\\s*passive-interface enp0s8\\s*$|^\\s*ip ospf passive\\s*$", mensaje: "enp0s8 (la LAN) es pasiva: se anuncia, pero no manda saludos" }
+  - { tipo: no_contiene, regex: "^\\s*passive-interface enp0s3\\s*$", mensaje: "enp0s3 no es pasiva (si no, no hay vecindad con la central)" }
+solucion: |
+  frr version 10.4.1
+  frr defaults traditional
+  hostname gw-norte
+  log syslog informational
+  service integrated-vtysh-config
+  !
+  interface enp0s3
+   ip address 10.0.12.2/30
+  exit
+  !
+  interface enp0s8
+   ip address 10.2.0.1/24
+  exit
+  !
+  router ospf
+   ospf router-id 2.2.2.2
+   network 10.0.12.0/30 area 0
+   network 10.2.0.0/24 area 0
+   passive-interface enp0s8
+  exit
+  !

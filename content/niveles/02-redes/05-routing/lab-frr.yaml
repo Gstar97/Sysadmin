@@ -1,0 +1,96 @@
+tipo: pasos
+titulo: OSPF entre dos Linux con FRRouting
+descripcion: >-
+  rocky01 (192.168.10.53) y ubuntu01 (192.168.10.54) ya están en la red interna "labred" desde
+  el laboratorio 2.3. Cada uno va a simular la LAN de una sucursal con una interfaz virtual, y
+  van a aprender la red del otro por OSPF.
+pasos:
+  - titulo: Instantáneas y una LAN de mentira en cada uno
+    detalle: >-
+      Toma una instantánea de las dos máquinas (antes-de-frr). Después, crea en cada una una
+      interfaz "dummy": una interfaz virtual que no va a ningún cable, perfecta para simular una
+      LAN. En rocky01 va a ser la sucursal Sur (10.3.0.1/24) y en ubuntu01 la Norte (10.2.0.1/24).
+    variantes:
+      - nombre: rocky01
+        detalle: Con NetworkManager queda permanente.
+        comandos:
+          - sudo nmcli connection add type dummy ifname lan-sur con-name lan-sur ipv4.method manual ipv4.addresses 10.3.0.1/24
+          - ip -br addr show lan-sur
+      - nombre: ubuntu01
+        detalle: Con ip queda hasta el próximo reinicio, suficiente para el laboratorio.
+        comandos:
+          - sudo ip link add lan-norte type dummy
+          - sudo ip addr add 10.2.0.1/24 dev lan-norte
+          - sudo ip link set lan-norte up
+    comprobar: ip -br addr muestra lan-sur (10.3.0.1/24) en rocky01 y lan-norte (10.2.0.1/24) en ubuntu01, en estado UNKNOWN o UP.
+  - titulo: Instalar FRRouting y activar OSPF
+    detalle: >-
+      Instala FRR en las dos máquinas. En /etc/frr/daemons, cambia ospfd=no por ospfd=yes y
+      reinicia el servicio.
+    variantes:
+      - nombre: rocky01
+        detalle: El paquete está en AppStream.
+        comandos:
+          - sudo dnf install -y frr
+          - sudo sed -i 's/^ospfd=no/ospfd=yes/' /etc/frr/daemons
+          - sudo systemctl enable --now frr
+          - sudo firewall-cmd --permanent --add-protocol=ospf
+          - sudo firewall-cmd --reload
+      - nombre: ubuntu01
+        detalle: Si activaste ufw en algún laboratorio anterior, permite la red del laboratorio (sudo ufw allow from 192.168.10.0/24).
+        comandos:
+          - sudo apt install -y frr
+          - sudo sed -i 's/^ospfd=no/ospfd=yes/' /etc/frr/daemons
+          - sudo systemctl restart frr
+    comprobar: systemctl status frr muestra el servicio activo, y en su lista de procesos aparecen zebra y ospfd.
+  - titulo: Permitir el reenvío
+    detalle: >-
+      Para que cada máquina pueda pasar tráfico entre sus interfaces (como un router de verdad),
+      activa net.ipv4.ip_forward de forma permanente en las dos.
+    comandos:
+      - echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/90-router.conf
+      - sudo sysctl --system
+    comprobar: sysctl net.ipv4.ip_forward responde 1 en las dos.
+  - titulo: Configurar OSPF con vtysh
+    detalle: >-
+      Entra a vtysh y configura OSPF como en IOS, pero con prefijos. En ubuntu01, usa router-id
+      2.2.2.2 y la red 10.2.0.0/24; en rocky01, 3.3.3.3 y 10.3.0.0/24. La red del laboratorio
+      (192.168.10.0/24) va en las dos. La interfaz dummy es pasiva (no hay routers ahí).
+    archivo:
+      ruta: comandos para vtysh en ubuntu01 (en rocky01 cambian el router-id, la red y la interfaz)
+      contenido: |
+        configure terminal
+        router ospf
+         ospf router-id 2.2.2.2
+         network 192.168.10.0/24 area 0
+         network 10.2.0.0/24 area 0
+         passive-interface lan-norte
+        exit
+        exit
+        write memory
+    comandos:
+      - sudo vtysh
+    comprobar: write memory responde "Configuration saved to /etc/frr/frr.conf" (o similar) y el archivo tiene el bloque router ospf.
+  - titulo: Verificar vecinos y rutas
+    detalle: >-
+      A los pocos segundos, cada una tiene que ver a la otra como vecina en estado Full y haber
+      aprendido la red de la otra sucursal.
+    comandos:
+      - sudo vtysh -c "show ip ospf neighbor"
+      - sudo vtysh -c "show ip route ospf"
+      - ip route
+      - ping -c 3 10.2.0.1
+    comprobar: En rocky01, ip route muestra "10.2.0.0/24 nhid ... via 192.168.10.54 dev enp0s8 proto ospf" y el ping a 10.2.0.1 responde (en ubuntu01, lo mismo con 10.3.0.0/24).
+    si_falla: >-
+      Si el vecino no aparece: revisa que las dos estén en 192.168.10.0/24 por la misma red
+      interna, el firewall (protocolo 89) y que los router-id sean distintos (si clonaste una
+      máquina, revisa también que no tengan la misma MAC). sudo vtysh -c "show ip ospf interface"
+      te dice si OSPF está activo en la interfaz correcta.
+  - titulo: Romper y mirar
+    detalle: >-
+      En ubuntu01, apaga la interfaz de la sucursal y mira cómo desaparece la ruta en rocky01.
+      Después, vuelve a levantarla.
+    comandos:
+      - sudo ip link set lan-norte down
+      - sudo ip link set lan-norte up
+    comprobar: Con lan-norte apagada, la ruta 10.2.0.0/24 ya no está en rocky01 (ip route); al levantarla, vuelve en segundos.

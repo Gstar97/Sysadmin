@@ -1,0 +1,107 @@
+tipo: troubleshooting
+titulo: La sucursal anda, salvo la red nueva
+descripcion: >-
+  La central (R1) llega a las sucursales Norte (R2) y Sur (R3) por OSPF. Ayer, en la sucursal
+  Norte, se habilitó la red nueva de Ventas: 10.2.10.0/24. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Martes, 9:15. Desde la central se llega bien a las PC de la sucursal Norte (10.2.0.0/24),
+      pero a ninguna de la red nueva de Ventas (10.2.10.0/24). En la sucursal, las PC de Ventas
+      navegan e imprimen sin problema.
+    opciones:
+      - { texto: "Ver por dónde va el tráfico: traceroute desde la central a una PC de Ventas", ir_a: n_trace, minutos: 3 }
+      - texto: Reiniciar R2, el router de la sucursal
+        ir_a: n_reinicio
+        minutos: 10
+      - texto: Revisar el firewall de las PC de Ventas
+        ir_a: n_firewall
+        minutos: 15
+  n_reinicio:
+    situacion: >-
+      Diez minutos sin red en toda la sucursal Norte. Al volver, todo sigue igual: Ventas sigue
+      sin responder desde la central.
+    opciones:
+      - { texto: "Hacer un traceroute desde la central", ir_a: n_trace, minutos: 3 }
+  n_firewall:
+    situacion: >-
+      Las PC de Ventas tienen el mismo firewall que las del resto de la sucursal, que sí
+      responden. Y desde otra PC de Ventas, el ping a su compañera funciona.
+    opciones:
+      - { texto: "Hacer un traceroute desde la central", ir_a: n_trace, minutos: 3 }
+  n_trace:
+    situacion: Desde un servidor de la central (192.168.1.20).
+    evidencia:
+      - titulo: traceroute
+        contenido: |
+          $ traceroute -n 10.2.10.25
+          traceroute to 10.2.10.25 (10.2.10.25), 30 hops max, 60 byte packets
+           1  192.168.1.1  0.412 ms  0.388 ms  0.371 ms
+           2  10.0.13.2  2.109 ms  2.087 ms  2.065 ms
+           3  * * *
+           4  * * *
+          $ traceroute -n 10.2.0.10
+           1  192.168.1.1  0.405 ms  0.391 ms  0.377 ms
+           2  10.0.12.2  1.872 ms  1.851 ms  1.833 ms
+           3  10.2.0.10  2.315 ms  2.298 ms  2.281 ms
+    opciones:
+      - { texto: "El tráfico a Ventas sale de R1 hacia 10.0.13.2, que es R3 (la sucursal Sur). Mirar la tabla de R1 para esa red", ir_a: n_tabla, minutos: 3 }
+      - texto: El problema está en R3; entrar a R3
+        ir_a: n_r3
+        minutos: 8
+  n_r3:
+    situacion: >-
+      R3 no tiene nada que ver con la sucursal Norte: recibe paquetes para 10.2.10.0/24 que no
+      sabe a dónde mandar (los manda por su ruta por defecto, de vuelta a R1, y se pierden). La
+      pregunta es por qué R1 se los manda a R3.
+    opciones:
+      - { texto: "Mirar la tabla de R1", ir_a: n_tabla, minutos: 3 }
+  n_tabla:
+    situacion: En R1.
+    evidencia:
+      - titulo: R1
+        contenido: |
+          R1# show ip route 10.2.10.25
+          Routing entry for 10.2.10.0/24
+            Known via "static", distance 1, metric 0
+            Routing Descriptor Blocks:
+            * 10.0.13.2
+                Route metric is 0, traffic share count is 1
+          R1# show running-config | include ip route
+          ip route 0.0.0.0 0.0.0.0 203.0.113.1
+          ip route 10.2.10.0 255.255.255.0 10.0.13.2
+          R1# show ip ospf database | include 10.2.10
+          10.2.10.0       2.2.2.2         412         0x80000003 0x00A1B2
+    opciones:
+      - { texto: "Una estática vieja para 10.2.10.0/24 le gana a la ruta de OSPF (distancia 1 contra 110). Averiguar de dónde salió y borrarla", ir_a: n_historia, minutos: 4 }
+      - texto: Bajarle la distancia a OSPF para que gane
+        ir_a: n_distancia
+        minutos: 6
+  n_distancia:
+    situacion: >-
+      Con distance 1 en OSPF, ahora OSPF y las estáticas empatan y el comportamiento depende de
+      detalles poco obvios. Además cambia cómo se eligen todas las rutas del router, no solo
+      esta. Arreglaste el síntoma tocando algo global. Vuelves la distancia a 110.
+    opciones:
+      - { texto: "Buscar por qué existe esa estática", ir_a: n_historia, minutos: 4 }
+  n_historia:
+    situacion: >-
+      En la documentación de cambios aparece: hace dos años, 10.2.10.0/24 era una red de prueba
+      en la sucursal Sur, y alguien la agregó a mano en R1. La red de prueba se borró, la
+      estática no. Ayer, la sucursal Norte usó el mismo rango para Ventas, sin saberlo.
+    opciones:
+      - { texto: "Borrar la estática (no ip route 10.2.10.0 255.255.255.0 10.0.13.2), comprobar y documentar", ir_a: n_fin, minutos: 3 }
+  n_fin:
+    final: exito
+    situacion: >-
+      Sin la estática, entra la ruta de OSPF: show ip route 10.2.10.25 dice "Known via ospf 1"
+      por 10.0.12.2, y el traceroute llega en tres saltos. Ventas responde desde la central.
+    resumen: >-
+      "Llego a todo menos a una red" apunta a la tabla de rutas para esa red en particular. El
+      traceroute mostró el desvío (el segundo salto era el router equivocado) y show ip route
+      con la IP dijo por qué: una ruta estática olvidada con distancia 1 le ganaba a la de OSPF
+      (110) para la misma red y prefijo. Las estáticas no se borran solas cuando una red
+      desaparece: hay que llevar inventario de las rutas y de los rangos asignados (un IPAM, o
+      aunque sea una planilla compartida) para no reutilizar un rango que todavía tiene rutas
+      dando vueltas.

@@ -17,6 +17,7 @@ import './commands/scriptutil'
 import './commands/dnsserver'
 import './commands/netdiag'
 import { dhcpConfigure } from './commands/dnsserver'
+import { reaches } from './commands/net'
 import { commandPackage, OTHER_FAMILY } from './packages'
 import { bashStateSchema, type BashCheck, type BashState, type BashStateInput } from './schema'
 import { hostKey, inbound, inSubnet, knownLine, makeKey } from './hosts'
@@ -161,6 +162,16 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
 }
 
 function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string }>): CheckResult {
+  if ('alcanza' in check) {
+    const ok = reaches(sys, check.alcanza) === (check.resultado === 'ok')
+    return { ok, label: check.resultado === 'ok' ? `${sys.hostname} llega a ${check.alcanza}` : `${sys.hostname} no llega a ${check.alcanza}` }
+  }
+  if ('ruta' in check) {
+    const r = sys.routes.find((x) => x.net === check.ruta)
+    let ok = !!r && (!check.via || r.via === check.via)
+    if (ok && check.persistente !== undefined) ok = r!.nm === check.persistente
+    return { ok, label: `la tabla de rutas tiene ${check.ruta}${check.via ? ` por ${check.via}` : ''}${check.persistente ? ' (guardada en la conexión)' : ''}` }
+  }
   if ('resuelve' in check) {
     const servers = check.servidor ? [check.servidor] : nameservers(sys)
     let r: DnsAnswer | undefined

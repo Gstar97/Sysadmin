@@ -254,6 +254,10 @@ export class System {
   catalog: Record<string, PackageInfo>
   interfaces: NetIface[] = []
   gateway?: string
+  /** Rutas estáticas (ip route add o NetworkManager). nm: guardada en la conexión, sobrevive a un reinicio. */
+  routes: { net: string; via: string; dev: string; nm: boolean }[] = []
+  /** Redes de otras sedes, alcanzables solo por un router determinado. */
+  remoteNets: { net: string; via: string }[] = []
   dns: string[] = []
   reachable = new Set<string>()
   /** Los otros servidores de la red del ejercicio (para ssh y scp). */
@@ -296,7 +300,7 @@ export class System {
   /** Paquetes instalados con una actualización pendiente. */
   upgradable = new Set<string>()
   /** Cambios de red pendientes de nmcli (se aplican con "nmcli connection up"). */
-  nmPending = new Map<string, { address?: string; gateway?: string; dns?: string[]; method?: string; ipv6?: string[] }>()
+  nmPending = new Map<string, { address?: string; gateway?: string; dns?: string[]; method?: string; ipv6?: string[]; routes?: { net: string; via: string }[]; addRoutes?: boolean }>()
   bootTime: number
   private nextPid = 800
 
@@ -463,6 +467,12 @@ export class System {
       mtu: i.mtu,
     }))
     this.gateway = state.red.puerta_enlace
+    for (const r of state.red.rutas) {
+      const dev = this.interfaces.find((i) => i.ip && sameNet(r.via, i.ip))?.name ?? this.interfaces[0]?.name ?? 'eth0'
+      this.routes.push({ net: r.red, via: r.via, dev, nm: true })
+      this.reachable.add(r.via)
+    }
+    this.remoteNets = state.red.redes_remotas.map((r) => ({ net: r.red, via: r.via }))
     this.dns = state.red.dns
     this.initialDns = [...state.red.dns]
     this.dnsDown = state.red.dns_caidos

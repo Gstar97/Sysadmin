@@ -201,6 +201,13 @@ const stateShape = {
       sitios_web: z.record(z.string(), z.string()).default({}),
       /** Resolvedores (que no son del laboratorio) que no responden. */
       dns_caidos: z.array(z.string()).default([]),
+      /** Rutas estáticas configuradas al arrancar (además de la ruta por defecto). */
+      rutas: z.array(z.strictObject({ red: z.string(), via: z.string() })).default([]),
+      /**
+       * Redes de otras sedes: sus equipos responden solo si el tráfico sale por ese router
+       * (si sale por la puerta de enlace por defecto, se pierde).
+       */
+      redes_remotas: z.array(z.strictObject({ red: z.string(), via: z.string() })).default([]),
     })
     .default({
       interfaces: [{ nombre: 'enp0s3', ip: '192.168.1.10/24', estado: 'UP', ipv6: [], dhcp: false, velocidad: 1000, duplex: 'full', autonegociacion: true, mtu: 1500 }],
@@ -211,6 +218,8 @@ const stateShape = {
       registros_dns: {},
       sitios_web: {},
       dns_caidos: [],
+      rutas: [],
+      redes_remotas: [],
     }),
   /** Intentos fallidos de inicio de sesión registrados por pam_faillock, por usuario. */
   faillock: z.record(z.string(), z.number().int().min(0)).default({}),
@@ -315,6 +324,10 @@ const singleCheckSchema = z.union([
     responde: z.string().optional(),
     estado: z.enum(['NOERROR', 'NXDOMAIN', 'REFUSED', 'SERVFAIL', 'sin_respuesta']).default('NOERROR'),
   }),
+  /** Desde este servidor se llega (o no) a esa IP, siguiendo su tabla de rutas. */
+  z.strictObject({ alcanza: z.string(), resultado: z.enum(['ok', 'falla']).default('ok') }),
+  /** La tabla de rutas tiene esa red (por ese siguiente salto, y guardada en NetworkManager si persistente). */
+  z.strictObject({ ruta: z.string(), via: z.string().optional(), persistente: z.boolean().optional() }),
   /** La interfaz tiene una IPv4 dentro de esa red (por ejemplo, recibida por DHCP). */
   z.strictObject({ interfaz: z.string(), ip_en: z.string().optional(), ipv6: z.string().optional(), activa: z.boolean().optional() }),
 ])

@@ -1,0 +1,88 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué sabe un router sobre el camino de un paquete?
+  opciones:
+    - { texto: "Solo el siguiente salto: por qué interfaz sacarlo y a qué vecino dárselo", correcta: true, explicacion: "Cada router decide su tramo." }
+    - { texto: "El camino completo hasta el destino", explicacion: "Eso no lo sabe ningún router." }
+    - { texto: "Nada: lo manda a todos", explicacion: "Eso hace un switch con lo que no conoce, no un router." }
+    - { texto: "Solo la MAC del destino final", explicacion: "La MAC del destino final solo se conoce en la última red." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En show ip route, ¿qué es una ruta con código C?
+  opciones:
+    - { texto: "Una red conectada directamente a una interfaz encendida del router", correcta: true, explicacion: "Aparece sola al configurar la IP." }
+    - { texto: "Una ruta configurada por un administrador", explicacion: "Esa es S." }
+    - { texto: "Una ruta de Cisco", explicacion: "No: C es connected." }
+    - { texto: "Una ruta por defecto", explicacion: "Esa lleva asterisco (S*, O*E2)." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "La tabla tiene 10.0.0.0/8, 10.1.0.0/16 y 10.1.1.0/24, además de una ruta por defecto. ¿Qué ruta usa un paquete para 10.1.2.3?"
+  opciones:
+    - { texto: "10.1.0.0/16: es la más específica que lo contiene", correcta: true, explicacion: "10.1.1.0/24 no contiene a 10.1.2.3." }
+    - { texto: "10.1.1.0/24", explicacion: "Esa red va de 10.1.1.0 a 10.1.1.255: no incluye 10.1.2.3." }
+    - { texto: "10.0.0.0/8", explicacion: "La contiene, pero hay una más específica." }
+    - { texto: "La ruta por defecto", explicacion: "Es la última opción." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "Para 192.168.50.0/24 el router tiene una estática (distancia 1) y una de OSPF (110). ¿Cuál entra a la tabla?"
+  opciones:
+    - { texto: "La estática: menor distancia administrativa", correcta: true, explicacion: "Mismo prefijo, decide la distancia." }
+    - { texto: "La de OSPF, porque es dinámica", explicacion: "Lo dinámico no gana por sí mismo." }
+    - { texto: "Las dos, y se reparten", explicacion: "Con distinta distancia, entra una sola." }
+    - { texto: "La que tenga menor métrica", explicacion: "La métrica solo compara rutas del mismo protocolo." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "Hay una estática 10.20.0.0/16 (distancia 1) y una de OSPF 10.20.5.0/24 (distancia 110). ¿Por dónde sale un paquete para 10.20.5.9?"
+  opciones:
+    - { texto: "Por la de OSPF: el prefijo más largo gana antes de mirar la distancia", correcta: true, explicacion: "La distancia solo desempata rutas a la misma red y prefijo." }
+    - { texto: "Por la estática: tiene menor distancia", explicacion: "Es el error más común." }
+    - { texto: "Se descarta por conflicto", explicacion: "No hay conflicto." }
+    - { texto: "Por la ruta por defecto", explicacion: "Hay rutas más específicas." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El router aprende 172.16.5.0/24 por OSPF con costo 30 y por RIP con 2 saltos. ¿Cuál instala?
+  opciones:
+    - { texto: "La de OSPF: distancia 110 contra 120 de RIP", correcta: true, explicacion: "Las métricas de protocolos distintos no se comparan." }
+    - { texto: "La de RIP: 2 es menor que 30", explicacion: "Saltos y costo de OSPF no se miden igual." }
+    - { texto: "Las dos", explicacion: "Tienen distinta distancia." }
+    - { texto: "Ninguna", explicacion: "Instala una." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace un router con un paquete cuyo destino no coincide con ninguna ruta, y no tiene ruta por defecto?
+  opciones:
+    - { texto: "Lo descarta y avisa al origen con ICMP destino inalcanzable", correcta: true, explicacion: "Un router no reenvía lo que no sabe dónde va." }
+    - { texto: "Lo manda por todas las interfaces", explicacion: "Eso no lo hace un router." }
+    - { texto: "Lo guarda hasta aprender una ruta", explicacion: "No guarda paquetes." }
+    - { texto: "Se lo devuelve al origen", explicacion: "Devuelve un aviso, no el paquete." }
+- id: p08
+  tipo: completar_comando
+  enunciado: En un servidor Linux, escribe el comando que muestra qué ruta usaría el sistema para llegar a 10.2.10.25.
+  aceptadas: [ip route get 10.2.10.25, ip r get 10.2.10.25, ip ro get 10.2.10.25]
+  explicacion: Muestra el siguiente salto, la interfaz y la IP de origen que usaría.
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En R1, show ip route 8.8.8.8 responde "% Network not in table", pero R1 tiene un Gateway of last resort. ¿Qué pasa con un paquete para 8.8.8.8?
+  opciones:
+    - { texto: "Sale por la ruta por defecto: ese comando no la muestra", correcta: true, explicacion: "Solo muestra redes específicas que contengan a la IP." }
+    - { texto: "Se descarta", explicacion: "La ruta por defecto lo atiende." }
+    - { texto: "Va al primer vecino OSPF", explicacion: "No." }
+    - { texto: "Depende de la métrica", explicacion: "No interviene." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Qué pasa con una ruta conectada cuando se apaga la interfaz?
+  opciones:
+    - { texto: "Desaparece de la tabla, y con ella las rutas que usaban un siguiente salto de esa red", correcta: true, explicacion: "Solo están las redes de interfaces encendidas." }
+    - { texto: "Se queda, marcada como caída", explicacion: "IOS la saca." }
+    - { texto: "Se convierte en estática", explicacion: "No." }
+    - { texto: "Nada", explicacion: "Desaparece." }

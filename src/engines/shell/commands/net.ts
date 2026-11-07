@@ -42,10 +42,23 @@ function route(ctx: CommandContext, ip: string): { ok: boolean; reason?: 'no_rou
   const up = sys.interfaces.filter((i) => i.up && i.ip)
   const direct = up.find((i) => inSubnet(ip, i.ip!))
   if (direct) return { ok: true, src: direct.ip!.split('/')[0] }
+  const r = staticRoute(sys, ip)
+  if (r) {
+    const dev = up.find((i) => i.name === r.dev && inSubnet(r.via, i.ip!))
+    if (dev) return { ok: true, via: r.via, src: dev.ip!.split('/')[0] }
+  }
   if (!sys.gateway) return { ok: false, reason: 'no_route' }
   const gwIf = up.find((i) => inSubnet(sys.gateway!, i.ip!))
   if (!gwIf) return { ok: false, reason: 'no_route' }
   return { ok: true, via: sys.gateway, src: gwIf.ip!.split('/')[0] }
+}
+
+/** La ruta estática más específica hacia esa IP (las rutas cuyo siguiente salto no está en una red conectada no cuentan). */
+function staticRoute(sys: System, ip: string) {
+  const up = sys.interfaces.filter((i) => i.up && i.ip)
+  return sys.routes
+    .filter((r) => inSubnet(ip, r.net) && up.some((i) => i.name === r.dev && inSubnet(r.via, i.ip!)))
+    .sort((a, b) => Number(b.net.split('/')[1]) - Number(a.net.split('/')[1]))[0]
 }
 
 function canReach(ctx: CommandContext, ip: string): boolean {
@@ -53,7 +66,39 @@ function canReach(ctx: CommandContext, ip: string): boolean {
   if (!r.ok) return false
   if (ctx.sys.ownIps().includes(ip) || ip.startsWith('127.')) return true
   if (r.via && !ctx.sys.isReachable(r.via)) return false
+  // Una red de otra sede solo responde si el paquete sale por el router que lleva hasta ella.
+  const remote = ctx.sys.remoteNets.find((n) => inSubnet(ip, n.net))
+  if (remote) return r.via === remote.via
   return ctx.sys.isReachable(ip)
+}
+
+/** Para las verificaciones: si desde ese servidor se llega a la IP siguiendo su tabla de rutas. */
+export function reaches(sys: System, ip: string): boolean {
+  return canReach({ sys } as CommandContext, ip)
+}
+
+/** Lo que dice "ip route": la ruta por defecto, las estáticas y las conectadas. */
+function routeLines(sys: System): string {
+  let out = ''
+  for (const i of sys.interfaces.filter((x) => x.up && x.ip)) {
+    if (sys.gateway && inSubnet(sys.gateway, i.ip!)) out += `default via ${sys.gateway} dev ${i.name} proto ${i.dhcp ? 'dhcp' : 'static'} metric 100 \n`
+  }
+  for (const r of sys.routes) {
+    if (!sys.interfaces.some((i) => i.name === r.dev && i.up)) continue
+    out += r.nm ? `${r.net} via ${r.via} dev ${r.dev} proto static metric 100 \n` : `${r.net} via ${r.via} dev ${r.dev} \n`
+  }
+  for (const i of sys.interfaces.filter((x) => x.up && x.ip)) out += `${networkOf(i.ip!)} dev ${i.name} proto kernel scope link src ${i.ip!.split('/')[0]} metric 100 \n`
+  return out
+}
+
+/** "10.2.0.0/24" o "10.2.0.5" (como /32). Devuelve la red normalizada, o un error si sobran bits de host. */
+function parsePrefix(text: string): { net: string } | { error: string } {
+  const [ip, p] = text.includes('/') ? text.split('/') : [text, '32']
+  const prefix = Number(p)
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip) || ip.split('.').some((o) => Number(o) > 255) || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) return { error: `Error: any valid prefix is expected rather than "${text}".\n` }
+  const net = networkOf(`${ip}/${prefix}`)
+  if (net.split('/')[0] !== ip) return { error: 'Error: Invalid prefix for given prefix length.\n' }
+  return { net }
 }
 
 /** Dirección IPv6 de enlace local: en Ubuntu sale de la MAC (EUI-64); en Rocky es aleatoria y estable. */
@@ -223,6 +268,61 @@ register('ip', {
       return 0
     }
     if (objName === 'route') {
+      if (cmd === 'get') {
+        const ip = args[2]
+        if (!ip) {
+          ctx.err('Command line is not complete. Try option "help"\n')
+          return 1
+        }
+        const r = route(ctx, ip)
+        if (!r.ok) {
+          ctx.err('RTNETLINK answers: Network is unreachable\n')
+          return 2
+        }
+        const dev = sys.interfaces.find((i) => i.up && i.ip && inSubnet(r.via ?? ip, i.ip))?.name ?? 'lo'
+        ctx.out(`${ip} ${r.via ? `via ${r.via} ` : ''}dev ${dev} src ${r.src} uid ${ctx.sh.user === 'root' ? 0 : 1000} \n    cache \n`)
+        return 0
+      }
+      if ((cmd === 'add' || cmd === 'del' || cmd === 'replace' || cmd === 'delete') && args[2] && args[2] !== 'default') {
+        if (needRoot()) return 2
+        const pr = parsePrefix(args[2])
+        if ('error' in pr) {
+          ctx.err(pr.error)
+          return 1
+        }
+        const existing = sys.routes.findIndex((r) => r.net === pr.net)
+        if (cmd === 'del' || cmd === 'delete') {
+          if (existing < 0) {
+            ctx.err('RTNETLINK answers: No such process\n')
+            return 2
+          }
+          sys.routes.splice(existing, 1)
+          return 0
+        }
+        const vi = args.indexOf('via')
+        const via = vi >= 0 ? args[vi + 1] : undefined
+        if (!via) {
+          ctx.err('Error: either "to" is duplicate, or "via" is a garbage.\n')
+          return 1
+        }
+        const dev = sys.interfaces.find((i) => i.up && i.ip && inSubnet(via, i.ip) && (!devArg() || i.name === devArg()))
+        if (devArg() && !sys.interfaces.some((i) => i.name === devArg())) {
+          ctx.err(`Cannot find device "${devArg()}"\n`)
+          return 1
+        }
+        if (!dev) {
+          ctx.err('Error: Nexthop has invalid gateway.\n')
+          return 2
+        }
+        if (existing >= 0 && cmd === 'add') {
+          ctx.err('RTNETLINK answers: File exists\n')
+          return 2
+        }
+        if (existing >= 0) sys.routes.splice(existing, 1)
+        sys.routes.push({ net: pr.net, via, dev: dev.name, nm: false })
+        sys.reachable.add(via)
+        return 0
+      }
       if (cmd === 'add' || cmd === 'del' || cmd === 'replace' || cmd === 'delete') {
         if (needRoot()) return 2
         if (args[2] === 'default') {
@@ -249,10 +349,7 @@ register('ip', {
         ctx.out('::1 dev lo proto kernel metric 256 pref medium\n')
         return 0
       }
-      for (const i of sys.interfaces.filter((x) => x.up && x.ip)) {
-        if (sys.gateway && inSubnet(sys.gateway, i.ip!)) ctx.out(`default via ${sys.gateway} dev ${i.name} proto ${i.dhcp ? 'dhcp' : 'static'} metric 100 \n`)
-      }
-      for (const i of sys.interfaces.filter((x) => x.up && x.ip)) ctx.out(`${networkOf(i.ip!)} dev ${i.name} proto kernel scope link src ${i.ip!.split('/')[0]} metric 100 \n`)
+      ctx.out(routeLines(sys))
       return 0
     }
     if (objName === 'neigh') {
@@ -345,7 +442,9 @@ register(['ping', 'ping6'], {
       if (ok) {
         const t = +(base + Math.random() * base * 0.2).toFixed(base < 1 ? 3 : 1)
         times.push(t)
-        if (!a.flags.has('q')) ctx.out(`64 bytes from ${ip}: icmp_seq=${i} ttl=${r.via ? 116 : 64} time=${t} ms\n`)
+        // Un equipo de otra sede está a dos routers (ttl 64 - 2); internet, a muchos más.
+        const ttl = !r.via ? 64 : ctx.sys.remoteNets.some((n) => inSubnet(ip, n.net)) ? 62 : 116
+        if (!a.flags.has('q')) ctx.out(`64 bytes from ${ip}: icmp_seq=${i} ttl=${ttl} time=${t} ms\n`)
       } else if (!r.via && !a.flags.has('q')) {
         ctx.out(`From ${r.src} icmp_seq=${i} Destination Host Unreachable\n`)
       }
@@ -736,7 +835,7 @@ register('nmcli', {
             ctx.err(`Error: ${name} - no such connection profile.\n`)
             return 10
           }
-          ctx.out(`connection.id:                          ${i.name}\nconnection.interface-name:              ${i.name}\nipv4.method:                            ${i.dhcp ? 'auto' : 'manual'}\nipv4.addresses:                         ${i.ip ?? '--'}\nipv4.gateway:                           ${sys.gateway ?? '--'}\nipv4.dns:                               ${sys.dns.join(',') || '--'}\n`)
+          ctx.out(`connection.id:                          ${i.name}\nconnection.interface-name:              ${i.name}\nipv4.method:                            ${i.dhcp ? 'auto' : 'manual'}\nipv4.addresses:                         ${i.ip ?? '--'}\nipv4.gateway:                           ${sys.gateway ?? '--'}\nipv4.routes:                            ${sys.routes.filter((r) => r.dev === i.name && r.nm).map((r) => `{ ip = ${r.net}, nh = ${r.via} }`).join('; ') || '--'}\nipv4.dns:                               ${sys.dns.join(',') || '--'}\n`)
           return 0
         }
         ctx.out('NAME    UUID                                  TYPE      DEVICE \n')
@@ -760,6 +859,20 @@ register('nmcli', {
           if (key === 'ipv4.addresses') pending.address = val
           else if (key === 'ipv4.gateway') pending.gateway = val
           else if (key === 'ipv4.dns') pending.dns = val.split(/[ ,]+/).filter(Boolean)
+          else if (key === 'ipv4.routes') {
+            const list: { net: string; via: string }[] = []
+            for (const part of val.split(',').map((x) => x.trim()).filter(Boolean)) {
+              const [netText, via] = part.split(/\s+/)
+              const pr = parsePrefix(netText ?? '')
+              if ('error' in pr || !via) {
+                ctx.err(`Error: failed to modify ipv4.routes: invalid route: ${part}.\n`)
+                return 2
+              }
+              list.push({ net: pr.net, via })
+            }
+            pending.routes = list
+            pending.addRoutes = props[i].startsWith('+')
+          }
           else if (key === 'ipv4.method') {
             if (!['auto', 'manual', 'disabled', 'link-local', 'shared'].includes(val)) {
               ctx.err(`Error: failed to modify ipv4.method: '${val}' not among [auto, link-local, manual, shared, disabled].\n`)
@@ -792,6 +905,14 @@ register('nmcli', {
           return 0
         }
         if (p?.address) iface.ip = p.address
+        if (p?.routes) {
+          sys.routes = sys.routes.filter((r) => !(r.dev === iface.name && r.nm && !p.addRoutes))
+          for (const r of p.routes) {
+            sys.routes = sys.routes.filter((x) => x.net !== r.net)
+            sys.routes.push({ net: r.net, via: r.via, dev: iface.name, nm: true })
+            sys.reachable.add(r.via)
+          }
+        }
         if (p?.gateway) {
           sys.gateway = p.gateway
           sys.reachable.add(p.gateway)
@@ -838,11 +959,16 @@ register('traceroute', {
     let hop = 1
     if (r.via) {
       const gwOk = ctx.sys.isReachable(r.via)
-      ctx.out(` ${hop++}  ${gwOk ? `_gateway (${r.via})  0.512 ms  0.487 ms  0.455 ms` : '* * *'}\n`)
+      ctx.out(` ${hop++}  ${gwOk ? `${r.via === ctx.sys.gateway ? '_gateway' : r.via} (${r.via})  0.512 ms  0.487 ms  0.455 ms` : '* * *'}\n`)
       if (!gwOk) {
         for (; hop <= 4; hop++) ctx.out(` ${hop}  * * *\n`)
         return 0
       }
+    }
+    const remote = ctx.sys.remoteNets.find((n) => inSubnet(ip, n.net))
+    if (remote && canReach(ctx, ip)) {
+      const gw = networkOf(remote.net).split('/')[0].replace(/\d+$/, (x) => String(Number(x) + 1))
+      ctx.out(` ${hop++}  ${gw} (${gw})  6.204 ms  6.117 ms  6.088 ms\n`)
     }
     if (canReach(ctx, ip)) ctx.out(` ${hop}  ${host} (${ip})  ${r.via ? '12.307' : '0.601'} ms  ${r.via ? '12.118' : '0.584'} ms  ${r.via ? '12.054' : '0.570'} ms\n`)
     else for (let i = 0; i < 3; i++) ctx.out(` ${hop++}  * * *\n`)

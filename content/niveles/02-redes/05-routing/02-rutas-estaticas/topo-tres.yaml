@@ -1,0 +1,41 @@
+tipo: topologia
+titulo: Tres routers en fila
+consigna: >-
+  La oficina A (192.168.1.0/24) y la oficina C (192.168.3.0/24) están unidas a través de R2.
+  Cada router conoce solo sus redes conectadas. Agrega las rutas estáticas que hagan falta, con
+  el formulario de cada router o con su consola (ip route), para que A y C se comuniquen. Pista:
+  piensa en la ida y en la vuelta, y en quién necesita qué.
+editable: { equipos: false, enlaces: false, configuracion: true }
+dispositivos:
+  - { id: PCA, nombre: PC-A, tipo: pc, x: 40, y: 220, interfaces: [{ nombre: eth0, ip: 192.168.1.10/24 }], puerta_enlace: 192.168.1.1 }
+  - id: R1
+    tipo: router
+    x: 160
+    y: 80
+    interfaces:
+      - { nombre: Gi0/0, ip: 192.168.1.1/24 }
+      - { nombre: Gi0/1, ip: 10.0.12.1/30 }
+  - id: R2
+    tipo: router
+    x: 340
+    y: 80
+    interfaces:
+      - { nombre: Gi0/1, ip: 10.0.12.2/30 }
+      - { nombre: Gi0/2, ip: 10.0.23.1/30 }
+  - id: R3
+    tipo: router
+    x: 520
+    y: 80
+    interfaces:
+      - { nombre: Gi0/2, ip: 10.0.23.2/30 }
+      - { nombre: Gi0/0, ip: 192.168.3.1/24 }
+  - { id: PCC, nombre: PC-C, tipo: pc, x: 640, y: 220, interfaces: [{ nombre: eth0, ip: 192.168.3.10/24 }], puerta_enlace: 192.168.3.1 }
+enlaces:
+  - { a: "PCA:eth0", b: "R1:Gi0/0" }
+  - { a: "R1:Gi0/1", b: "R2:Gi0/1" }
+  - { a: "R2:Gi0/2", b: "R3:Gi0/2" }
+  - { a: "R3:Gi0/0", b: "PCC:eth0" }
+objetivos:
+  - { desde: PCA, hacia: 10.0.12.2, descripcion: PC-A llega a R2 }
+  - { desde: PCA, hacia: PCC, descripcion: PC-A y PC-C se comunican }
+  - { desde: PCC, hacia: PCA, descripcion: PC-C y PC-A se comunican (al revés) }

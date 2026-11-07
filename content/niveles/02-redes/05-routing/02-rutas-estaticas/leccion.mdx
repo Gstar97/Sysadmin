@@ -1,0 +1,141 @@
+---
+id: n2-m5-l2
+titulo: Rutas estáticas
+minutos: 150
+objetivos:
+  - Configurar rutas estáticas y la ruta por defecto en Cisco IOS y en Linux.
+  - Convertir un Linux en router (ip_forward) y hacer permanentes sus rutas.
+  - Usar rutas flotantes como respaldo y no olvidar nunca la ruta de vuelta.
+glosario: [ruta-estatica, ruta-flotante, ip-forward, ruta-de-vuelta]
+verificado: 2026-11
+---
+
+import idaVuelta from './ida-vuelta.svg?raw'
+import ejFlotante from './ej-flotante.yaml'
+import ejLinux from './ej-linux.yaml'
+import topoTres from './topo-tres.yaml'
+
+Una ruta estática es la forma más simple de enseñarle a un router una red que no tiene conectada: se la escribes tú. En redes pequeñas, en sucursales con un solo camino y para la ruta por defecto hacia internet, es lo más usado. Y entenderlas bien es la base para todo lo demás: un protocolo dinámico no hace otra cosa que escribir estas mismas rutas automáticamente.
+
+<AntesDeEmpezar>
+- Cómo decide un router: prefijo más largo y distancia administrativa (lección anterior).
+- Máscaras en formato decimal y CIDR (lección 2.2.2).
+- nmcli y netplan para configurar la red en Linux (nivel 1).
+</AntesDeEmpezar>
+
+## Configurar una ruta estática
+
+En IOS se indica la red, la máscara y a quién entregarle el paquete (el **siguiente salto**, que tiene que estar en una red conectada):
+
+```text
+ip route 10.2.0.0 255.255.255.0 10.0.12.2         ! red de la sucursal, por R2
+ip route 0.0.0.0 0.0.0.0 203.0.113.1              ! ruta por defecto, hacia el proveedor
+show ip route static
+```
+
+También se puede indicar la interfaz de salida en lugar del siguiente salto (`ip route 10.2.0.0 255.255.255.0 GigabitEthernet0/1`). Solo conviene en enlaces punto a punto; en Ethernet, el router no sabe a quién mandarle la trama y tiene que hacer ARP por cada destino. Lo normal es usar el siguiente salto.
+
+<Topologia ejercicio={topoTres} />
+
+## La ruta de vuelta
+
+El error más común con rutas estáticas no es de sintaxis: es olvidarse de la vuelta. Es como mandar una carta a otra ciudad: el correo sabe llevarla, pero si en la ciudad de destino nadie sabe dónde queda tu barrio, la respuesta nunca vuelve. Donde la comparación no llega: la red no te avisa que la respuesta se perdió; para ti, simplemente "no responde".
+
+<Diagrama svg={idaVuelta} alt="PC-A (192.168.1.10) conectada a R1 (central), unido por 10.0.12.0/30 a R2 (sucursal), que tiene a PC-B (10.2.0.10). La ida funciona porque R1 tiene ip route 10.2.0.0 255.255.255.0 10.0.12.2. La vuelta falla porque R2 no sabe llegar a 192.168.1.0/24: PC-B responde, pero R2 descarta la respuesta. El síntoma es que la sucursal parece no responder aunque los paquetes llegan; el arreglo es una ruta en R2 hacia 192.168.1.0/24 por 10.0.12.1, o una ruta por defecto hacia R1." pie="Cada router decide con su propia tabla: la vuelta se configura aparte." />
+
+Por eso, cada vez que agregas una ruta, la pregunta siguiente es: "¿y del otro lado, saben volver?". En una sucursal con un solo camino, lo más simple es una ruta por defecto hacia la central.
+
+<EnSimple>
+Que tú sepas llegar a alguien no quiere decir que él sepa volver hasta ti. Cada router necesita su ruta para la ida o para la vuelta, según el lado en que esté.
+</EnSimple>
+
+## Rutas flotantes: un respaldo que espera
+
+Una **ruta flotante** es una estática con una distancia administrativa más alta que la principal. Mientras la principal existe, la flotante no entra a la tabla; si la principal desaparece (porque se cae su interfaz o se pierde la ruta dinámica), entra la flotante. Se escribe con un número al final:
+
+```text
+ip route 10.2.0.0 255.255.255.0 10.0.12.2        ! principal, por la fibra (distancia 1)
+ip route 10.2.0.0 255.255.255.0 10.0.21.2 5      ! respaldo, por el enlace celular
+```
+
+Para respaldar una ruta aprendida por OSPF (distancia 110), la flotante tiene que tener más de 110: por ejemplo, 200.
+
+<Terminal ejercicio={ejFlotante} />
+
+<Nota titulo="Cuando el enlace no se cae del todo">
+Una ruta estática desaparece solo si se cae la interfaz. Si la fibra sigue "encendida" pero el proveedor tiene un problema más adelante, la ruta principal se queda y el tráfico se pierde. Para eso existen IP SLA y track en IOS (el router hace ping a un destino y retira la ruta si deja de responder), o un protocolo dinámico. Es para más adelante.
+</Nota>
+
+<Pregunta id="p06" />
+
+## Rutas estáticas en Linux
+
+Un servidor Linux también tiene tabla de rutas. Normalmente alcanza con la puerta de enlace por defecto, pero si una red está detrás de otro router (una VPN, otra sede), necesita una ruta propia.
+
+```bash
+ip route                                            # la tabla
+ip route get 10.2.0.50                              # qué ruta usaría para esa IP
+sudo ip route add 10.2.0.0/24 via 192.168.10.2      # agregar (se pierde al reiniciar)
+sudo ip route del 10.2.0.0/24
+```
+
+Para que sobreviva a un reinicio, la ruta va en la configuración de red:
+
+- **NetworkManager** (Rocky, RHEL, Fedora): `nmcli connection modify enp0s3 +ipv4.routes "10.2.0.0/24 192.168.10.2"` y `nmcli connection up enp0s3`.
+- **netplan** (Ubuntu): un bloque `routes` en el archivo de la interfaz:
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    enp0s3:
+      addresses: [192.168.10.20/24]
+      routes:
+        - to: default
+          via: 192.168.10.1
+        - to: 10.2.0.0/24
+          via: 192.168.10.2
+```
+
+<Terminal ejercicio={ejLinux} />
+
+### Un Linux como router
+
+Un Linux con dos interfaces puede unir dos redes, pero por defecto **no reenvía** paquetes entre ellas: los que no son para él, los descarta. Se activa con el parámetro del kernel `net.ipv4.ip_forward`:
+
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1                                     # ahora
+echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/90-router.conf  # permanente
+sudo sysctl --system
+```
+
+Con eso y las rutas, el Linux enruta igual que un router. Así funcionan OPNsense, los routers domésticos y la mayoría de los firewalls: por dentro son un sistema operativo con el reenvío activado. En la lección 4 le vas a agregar OSPF con FRRouting.
+
+<ErroresComunes>
+  <ErrorComun titulo="Olvidar la ruta de vuelta">
+    La ida funciona, la respuesta se pierde y parece que el otro lado no responde. Después de cada ruta, revisa que el otro lado sepa volver.
+  </ErrorComun>
+  <ErrorComun titulo="Un siguiente salto que no está en una red conectada">
+    IOS acepta la ruta, pero no la instala: no aparece en show ip route. En Linux, ip route add responde "Nexthop has invalid gateway".
+  </ErrorComun>
+  <ErrorComun titulo="Escribir la red con bits de host">
+    ip route 10.2.0.5 255.255.255.0 ... no es una red. IOS responde "%Inconsistent address and mask" y Linux "Invalid prefix for given prefix length". Escribe siempre la dirección de red.
+  </ErrorComun>
+  <ErrorComun titulo="Una flotante con la distancia equivocada">
+    Si la flotante tiene distancia 1 (o menos que la principal), se usa siempre. Para respaldar OSPF, más de 110.
+  </ErrorComun>
+  <ErrorComun titulo="La ruta solo en memoria en Linux">
+    ip route add se pierde en el próximo reinicio. Ponla en NetworkManager o netplan.
+  </ErrorComun>
+  <ErrorComun titulo="Linux con dos interfaces que no reenvía">
+    Sin net.ipv4.ip_forward = 1, los paquetes de otros se descartan. Y revisa el firewall: firewalld y nftables pueden bloquear el tráfico que lo atraviesa.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- IOS: ip route RED MÁSCARA SIGUIENTE-SALTO; ruta por defecto con 0.0.0.0 0.0.0.0. El siguiente salto tiene que estar en una red conectada.
+- Siempre la ruta de vuelta: cada router decide con su tabla. En sucursales con un solo camino, una ruta por defecto hacia la central.
+- Ruta flotante: la misma red con una distancia mayor (ip route ... 5); entra solo si desaparece la principal. Para respaldar OSPF, más de 110.
+- Linux: ip route add/del/get para probar; permanente con nmcli +ipv4.routes o con routes en netplan.
+- Un Linux enruta con net.ipv4.ip_forward = 1 (en /etc/sysctl.d/ para que sea permanente).
+</Resumen>

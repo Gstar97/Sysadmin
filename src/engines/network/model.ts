@@ -266,7 +266,7 @@ export class Network {
       vlans: new Map(sw ? [[1, 'default'], ...RESERVED_VLANS] : []),
       routes: spec.rutas.map((r) => {
         const c = cidr(r.destino)
-        return { net: networkOf(c.ip, c.prefix), prefix: c.prefix, via: parseIpv4(r.via), distance: 1 }
+        return { net: networkOf(c.ip, c.prefix), prefix: c.prefix, via: parseIpv4(r.via), distance: r.distancia }
       }),
       ipRouting: spec.tipo === 'router' || (spec.tipo === 'switch_l3' && spec.enrutamiento === true) || (spec.tipo === 'servidor' && spec.enrutamiento === true),
       stpPriority: new Map(spec.stp_prioridad !== undefined ? [[0, spec.stp_prioridad]] : []),
@@ -700,12 +700,16 @@ export class Network {
     for (const r of d.routes) {
       const key = (x: Route) => x.net === r.net && x.prefix === r.prefix
       if (routes.some((x) => key(x) && x.distance <= r.distance)) continue
+      // Una ruta flotante (distancia mayor) queda fuera de la tabla mientras exista la principal.
+      const worse = routes.findIndex((x) => key(x) && x.distance > r.distance)
+      const before = routes.length
       if (r.exitIf) {
         const p = this.port(d, r.exitIf)
         if (p && this.isUp(d, p)) routes.push({ code: r.prefix === 0 ? 'S*' : 'S', net: r.net, prefix: r.prefix, port: p.name, nextHop: r.via, distance: r.distance, metric: 0 })
       } else if (r.via !== undefined && routes.some((x) => x.code === 'C' && sameSubnet(r.via!, x.net, x.prefix))) {
         routes.push({ code: r.prefix === 0 ? 'S*' : 'S', net: r.net, prefix: r.prefix, nextHop: r.via, distance: r.distance, metric: 0 })
       }
+      if (worse >= 0 && routes.length > before) routes.splice(worse, 1)
     }
     for (const o of this.ospfRoutes(d)) {
       const same = routes.find((x) => x.net === o.net && x.prefix === o.prefix)

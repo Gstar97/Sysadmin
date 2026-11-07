@@ -200,7 +200,7 @@ const configRuleSchema = z.discriminatedUnion('tipo', [
   }),
 ])
 
-export const configLanguages = ['nginx', 'compose', 'ansible', 'yaml', 'sshd', 'fstab', 'sudoers', 'systemd', 'zona', 'named', 'kea', 'texto'] as const
+export const configLanguages = ['nginx', 'compose', 'ansible', 'yaml', 'sshd', 'fstab', 'sudoers', 'systemd', 'zona', 'named', 'kea', 'frr', 'texto'] as const
 
 export const configExerciseSchema = z.strictObject({
   tipo: z.literal('configuracion'),

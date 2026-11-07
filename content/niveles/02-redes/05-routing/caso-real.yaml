@@ -1,0 +1,121 @@
+tipo: troubleshooting
+titulo: Al servidor nuevo le llega todo, pero no contesta
+descripcion: >-
+  Incidente simulado. La central (192.168.10.0/24) sale a internet por el firewall
+  (192.168.10.1). La sucursal Norte (10.2.0.0/24) se conecta por una VPN que termina en otro
+  router de la central (192.168.10.2). Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 10:00. Se estrenó app02, un servidor nuevo con la aplicación de pedidos
+      (Rocky Linux, 192.168.10.30). En la central funciona perfecto. Desde la sucursal Norte,
+      nadie puede entrar: el navegador se queda esperando. A app01, el servidor viejo, la
+      sucursal entra sin problema.
+    opciones:
+      - { texto: "Ver desde una PC de la sucursal hasta dónde llega: ping y traceroute a app02", ir_a: n_trace, minutos: 3 }
+      - texto: Reiniciar la VPN
+        ir_a: n_vpn
+        minutos: 15
+      - texto: Revisar el firewall de app02
+        ir_a: n_fw
+        minutos: 8
+  n_vpn:
+    situacion: >-
+      Quince minutos sin VPN para toda la sucursal. Al volver, app01 sigue funcionando y app02
+      sigue sin responder. La VPN no era: si lo fuera, tampoco andaría app01.
+    opciones:
+      - { texto: "Hacer ping y traceroute desde la sucursal", ir_a: n_trace, minutos: 3 }
+  n_fw:
+    situacion: >-
+      firewalld en app02 permite http y https, igual que en app01, y desde la central la
+      aplicación anda. Si fuera el firewall de app02, la central tampoco entraría.
+    opciones:
+      - { texto: "Hacer ping y traceroute desde la sucursal", ir_a: n_trace, minutos: 3 }
+  n_trace:
+    situacion: Desde una PC de la sucursal (10.2.0.50).
+    evidencia:
+      - titulo: PC de la sucursal
+        contenido: |
+          $ ping -c 3 192.168.10.30
+          3 packets transmitted, 0 received, 100% packet loss
+          $ traceroute -n 192.168.10.30
+           1  10.2.0.1  0.611 ms  0.590 ms  0.574 ms
+           2  172.31.0.1  18.204 ms  18.177 ms  18.150 ms
+           3  * * *
+           4  * * *
+          $ traceroute -n 192.168.10.20
+           1  10.2.0.1  0.598 ms  0.581 ms  0.566 ms
+           2  172.31.0.1  18.311 ms  18.286 ms  18.262 ms
+           3  192.168.10.20  18.902 ms  18.877 ms  18.851 ms
+    opciones:
+      - { texto: "Llega hasta el router de la VPN en la central (172.31.0.1 es su lado del túnel). Mirar en app02 si le llegan los paquetes", ir_a: n_tcpdump, minutos: 4 }
+      - texto: El router de la VPN de la central no sabe llegar a app02
+        ir_a: n_router_vpn
+        minutos: 6
+  n_router_vpn:
+    situacion: >-
+      El router de la VPN tiene 192.168.10.0/24 como red conectada: sabe llegar a toda la
+      central, y por eso app01 (en la misma red) responde. Los paquetes para app02 salen de él
+      sin problema. Falta saber qué pasa con la respuesta.
+    opciones:
+      - { texto: "Mirar en app02 con tcpdump", ir_a: n_tcpdump, minutos: 4 }
+  n_tcpdump:
+    situacion: En app02, mientras la PC de la sucursal hace ping.
+    evidencia:
+      - titulo: app02
+        contenido: |
+          $ sudo tcpdump -ni enp0s3 icmp
+          10:21:07.104 IP 10.2.0.50 > 192.168.10.30: ICMP echo request, id 4, seq 1, length 64
+          10:21:07.104 IP 192.168.10.30 > 10.2.0.50: ICMP echo reply, id 4, seq 1, length 64
+          $ ip route get 10.2.0.50
+          10.2.0.50 via 192.168.10.1 dev enp0s3 src 192.168.10.30 uid 1000
+          $ ip route
+          default via 192.168.10.1 dev enp0s3 proto static metric 100
+          192.168.10.0/24 dev enp0s3 proto kernel scope link src 192.168.10.30 metric 100
+      - titulo: app01, para comparar
+        contenido: |
+          $ ip route
+          default via 192.168.10.1 dev enp0s3 proto static metric 100
+          10.2.0.0/24 via 192.168.10.2 dev enp0s3 proto static metric 100
+          192.168.10.0/24 dev enp0s3 proto kernel scope link src 192.168.10.20 metric 100
+    opciones:
+      - { texto: "Las preguntas llegan y app02 contesta, pero manda las respuestas al firewall (ruta por defecto). Falta la ruta de vuelta: agregarla en NetworkManager", ir_a: n_fin, minutos: 4 }
+      - texto: Agregarla con ip route add y listo
+        ir_a: n_temporal
+        minutos: 1
+      - texto: Agregar en el firewall una ruta hacia la sucursal por 192.168.10.2, así sirve para todos los servidores
+        ir_a: n_asimetrica
+        minutos: 10
+  n_temporal:
+    situacion: >-
+      Funciona enseguida. Tres semanas después, en la ventana de actualizaciones, app02 se
+      reinicia y la sucursal vuelve a quedarse sin la aplicación: ip route add no sobrevive a
+      un reinicio.
+    opciones:
+      - { texto: "Hacerla permanente con nmcli", ir_a: n_fin, minutos: 4 }
+  n_asimetrica:
+    situacion: >-
+      Ahora el ping anda, pero la aplicación sigue sin abrir. Las respuestas van de app02 al
+      firewall y del firewall al router de la VPN; las preguntas llegan directo del router de la
+      VPN a app02. El firewall ve respuestas de conexiones TCP que nunca vio empezar, y las
+      descarta: es una ruta asimétrica. En el registro del firewall aparecen bloqueos de
+      paquetes "fuera de estado".
+    opciones:
+      - { texto: "Sacar esa ruta del firewall y poner la ruta en app02", ir_a: n_fin, minutos: 6 }
+  n_fin:
+    final: exito
+    situacion: >-
+      En app02: sudo nmcli connection modify enp0s3 +ipv4.routes "10.2.0.0/24 192.168.10.2" y
+      sudo nmcli connection up enp0s3. La sucursal entra a la aplicación. Agregas la ruta a la
+      plantilla de instalación de servidores para que no vuelva a pasar.
+    resumen: >-
+      Que "a la sucursal no le contesta" mientras la central anda apunta a la ruta de vuelta: el
+      traceroute llegó hasta el router de la VPN, tcpdump en app02 mostró que las preguntas
+      llegaban y las respuestas salían, e ip route get mostró por dónde: hacia la puerta de
+      enlace por defecto, que no es por donde está la sucursal. Comparar con un servidor que
+      funciona (app01) dio la respuesta: le faltaba la ruta estática. La solución de fondo es de
+      diseño: cuando la VPN termina en un router que no es la puerta de enlace, cada servidor
+      necesita su ruta (en la plantilla, o repartida por DHCP con la opción 121 de rutas
+      estáticas). Si la VPN termina en el mismo firewall que es la puerta de enlace, no hace
+      falta ninguna ruta extra y no hay asimetrías.

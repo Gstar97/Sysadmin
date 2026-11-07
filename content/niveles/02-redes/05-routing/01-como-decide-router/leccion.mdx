@@ -1,0 +1,102 @@
+---
+id: n2-m5-l1
+titulo: Cómo decide un router
+minutos: 150
+objetivos:
+  - Leer una tabla de rutas e identificar rutas conectadas, estáticas y dinámicas.
+  - Aplicar la coincidencia más específica para saber por dónde sale un paquete.
+  - Usar la distancia administrativa y la métrica para saber qué ruta entra a la tabla.
+glosario: [tabla-de-rutas, prefijo-mas-largo, distancia-administrativa, metrica, ruta-por-defecto]
+verificado: 2026-11
+---
+
+import decision from './decision.svg?raw'
+import ejTabla from './ej-tabla.yaml'
+
+Hasta ahora, el router era "el que une redes". En este módulo vas a ver cómo lo hace. Cada paquete que entra, el router mira la IP de destino, busca en su **tabla de rutas** y decide por qué interfaz sacarlo y a quién entregárselo. Lo hace millones de veces por segundo, siempre con las mismas reglas. Si sabes esas reglas, puedes predecir el recorrido de cualquier paquete leyendo las tablas, que es justamente lo que hace falta para diagnosticar.
+
+<AntesDeEmpezar>
+- Redes, máscaras y prefijos: qué IP cae dentro de qué red (lecciones 2.2.2 y 2.2.3).
+- La puerta de enlace de un equipo (lección 2.2.2).
+- Enrutamiento entre VLAN: un router con una interfaz por red (lección 2.4.4).
+</AntesDeEmpezar>
+
+## La tabla de rutas
+
+Piensa en los carteles de una autopista. En cada cruce, el conductor no conoce el camino entero: solo mira los carteles ("Centro: salida 3", "Aeropuerto: seguir derecho", "Todas las demás direcciones: salida 5") y toma la salida que corresponde. En el próximo cruce, otro cartel. Un router hace lo mismo: no conoce el recorrido completo de un paquete, solo el **siguiente salto**. Donde la comparación no llega: el router no razona ni pregunta; si su tabla está mal, manda el paquete al lugar equivocado sin dudar.
+
+Cada línea de la tabla dice: "para esta red, sal por esta interfaz hacia este vecino". Las rutas llegan de tres lugares:
+
+- **Conectadas** (C): las redes de sus propias interfaces encendidas. Aparecen solas al configurar una IP. Junto a cada una, una ruta **L** (local) con la IP propia del router, en /32.
+- **Estáticas** (S): las que escribe un administrador a mano (próxima lección).
+- **Dinámicas** (O de OSPF, D de EIGRP, B de BGP...): las que el router aprende hablando con otros routers.
+
+La **ruta por defecto** (0.0.0.0/0, que aparece como S* u O*E2) es la de "todas las demás direcciones": coincide con cualquier destino. En IOS se ve como *Gateway of last resort*.
+
+<Diagrama svg={decision} alt="Dos momentos. Primero, qué ruta entra a la tabla: si varias fuentes ofrecen la misma red con el mismo prefijo (por ejemplo, 172.16.5.0/24 por estática, OSPF y RIP), gana la menor distancia administrativa y, si es el mismo protocolo, la menor métrica; esto pasa antes de que llegue ningún paquete. Segundo, por dónde sale un paquete: para 10.20.5.140 coinciden 0.0.0.0/0, 10.20.0.0/16, 10.20.5.0/24 y 10.20.5.128/25; gana el prefijo más largo, /25; la distancia y la métrica no se comparan; si nada coincide, se descarta. Abajo, una línea de show ip route desarmada: código O, red y prefijo 10.20.5.0/24, [110/3] distancia y métrica, via 10.0.13.2 siguiente salto, tiempo, e interfaz de salida GigabitEthernet0/2." pie="Distancia y métrica eligen qué rutas entran a la tabla; el prefijo más largo elige cuál se usa para cada paquete." />
+
+## Regla 1: gana la más específica
+
+Cuando llega un paquete, el router busca **todas** las rutas que contienen la IP de destino y elige la de **prefijo más largo**: la red más pequeña, la más específica. Un /25 le gana a un /24, que le gana a un /16, que le gana a la ruta por defecto (/0).
+
+Con el ejemplo del diagrama: un paquete para 10.20.5.140 coincide con cuatro rutas, y sale por la /25. Uno para 10.20.5.20 no cae en la /25 (que va de .128 a .255), así que sale por la /24. Uno para 10.20.99.1 solo cae en la /16 y en la por defecto: gana la /16. Y si no hay ninguna que coincida, ni siquiera una por defecto, el router **descarta** el paquete y le avisa al origen con un mensaje ICMP "destino inalcanzable".
+
+<EnSimple>
+El router busca en su tabla todas las redes que incluyen la dirección de destino y se queda con la más pequeña. La ruta por defecto incluye a todas, por eso es la última opción.
+</EnSimple>
+
+## Regla 2: qué ruta entra a la tabla
+
+Antes de eso hay otra pregunta. A veces el router conoce **la misma red** (mismo prefijo) por dos fuentes: una estática y OSPF, por ejemplo. No puede tener las dos activas; tiene que elegir cuál instala.
+
+- Primero compara la **distancia administrativa** (AD): cuánto confía en cada fuente. Menor es mejor.
+- Si las dos vienen del mismo protocolo, compara la **métrica**: el costo del camino según ese protocolo (en OSPF, la suma de costos de los enlaces; en RIP, la cantidad de saltos). Menor es mejor.
+
+| Fuente | Distancia en Cisco |
+| --- | --- |
+| Conectada | 0 |
+| Estática | 1 |
+| BGP externo | 20 |
+| EIGRP | 90 |
+| OSPF | 110 |
+| RIP | 120 |
+| BGP interno | 200 |
+
+Las métricas de protocolos distintos **no** se comparan entre sí: un costo de OSPF y una cantidad de saltos de RIP no se miden en la misma unidad. Por eso existe la distancia administrativa. Otros fabricantes usan valores parecidos, con otros nombres (en Juniper, "preference"; en Linux, la métrica de la ruta cumple ese papel).
+
+<EjercicioRutas />
+
+<Pregunta id="p06" />
+
+## Ver la tabla en un router
+
+<Terminal ejercicio={ejTabla} />
+
+En Linux, la tabla se ve con `ip route` y `ip route get 10.2.10.25` te dice qué ruta usaría para esa IP. En Windows, `route print` o `Get-NetRoute`.
+
+<Consejo titulo="Cada router decide solo">
+Que R1 sepa llegar a la sucursal no dice nada de si la sucursal sabe volver. Cada router tiene su propia tabla, y la respuesta hace el camino inverso consultando otras tablas. Cuando un ping falla, revisa las tablas de ida **y** las de vuelta: lo vas a ver en detalle en la lección 5.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Pensar que gana la ruta con menor distancia administrativa">
+    La distancia solo decide entre rutas a la misma red con el mismo prefijo. Entre una /24 de OSPF y una /16 estática, para un destino dentro de la /24, gana la /24, aunque la estática tenga distancia 1.
+  </ErrorComun>
+  <ErrorComun titulo="Comparar métricas de protocolos distintos">
+    Un costo 20 de OSPF no es "peor" que 3 saltos de RIP: no se comparan. Primero decide la distancia administrativa.
+  </ErrorComun>
+  <ErrorComun titulo="Leer mal show ip route con una IP">
+    "% Network not in table" no quiere decir que el paquete se descarte: si hay ruta por defecto, sale por ella. Ese comando no la muestra.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que una red caída sigue en la tabla">
+    Si la interfaz se apaga, su ruta conectada desaparece, y con ella las rutas estáticas que dependían de ese siguiente salto. Revisa show ip interface brief.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- La tabla de rutas dice, por cada red, la interfaz de salida y el siguiente salto. El router no conoce el camino completo.
+- Fuentes: conectadas (C, y L para la IP propia), estáticas (S) y dinámicas (O, D, B...). La ruta por defecto 0.0.0.0/0 coincide con todo.
+- Para cada paquete, gana el prefijo más largo de las rutas que contienen el destino. Si no coincide ninguna, se descarta (ICMP destino inalcanzable).
+- Entre rutas a la misma red y prefijo, entra a la tabla la de menor distancia administrativa (conectada 0, estática 1, OSPF 110, RIP 120) y, en el mismo protocolo, la de menor métrica.
+- show ip route y show ip route IP en IOS; ip route e ip route get en Linux.
+</Resumen>

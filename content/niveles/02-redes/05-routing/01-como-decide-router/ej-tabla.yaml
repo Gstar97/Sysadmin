@@ -1,0 +1,90 @@
+tipo: terminal
+shell: ios
+titulo: Leer la tabla de rutas
+descripcion: >-
+  R1 es el router de la sede central. Está conectado a la LAN (192.168.1.0/24), a R2 (sucursal
+  Norte) y a R3 (sucursal Sur), y aprende las redes de las sucursales por OSPF. Además tiene
+  una ruta estática por defecto hacia el proveedor de internet. Estás en su consola.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: R1
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.1/24 }
+          - { nombre: Gi0/1, ip: 10.0.12.1/30 }
+          - { nombre: Gi0/2, ip: 10.0.13.1/30 }
+          - { nombre: Gi0/3, ip: 203.0.113.2/30 }
+        rutas: [{ destino: 0.0.0.0/0, via: 203.0.113.1 }]
+        ospf:
+          router_id: 1.1.1.1
+          redes:
+            - { red: 192.168.1.0, wildcard: 0.0.0.255 }
+            - { red: 10.0.12.0, wildcard: 0.0.0.3 }
+            - { red: 10.0.13.0, wildcard: 0.0.0.3 }
+      - id: R2
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/1, ip: 10.0.12.2/30 }
+          - { nombre: Gi0/0, ip: 10.2.0.1/24 }
+          - { nombre: Gi0/2, ip: 10.2.10.1/24 }
+        ospf:
+          router_id: 2.2.2.2
+          redes: [{ red: 10.0.0.0, wildcard: 0.255.255.255 }]
+      - id: R3
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/2, ip: 10.0.13.2/30 }
+          - { nombre: Gi0/0, ip: 10.3.0.1/24 }
+        ospf:
+          router_id: 3.3.3.3
+          redes: [{ red: 10.0.0.0, wildcard: 0.255.255.255 }]
+      - { id: ISP, nombre: ISP, tipo: router, interfaces: [{ nombre: Gi0/0, ip: 203.0.113.1/30 }] }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.10/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: PCN1, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.2.0.10/24 }], puerta_enlace: 10.2.0.1 }
+      - { id: PCN2, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.2.10.25/24 }], puerta_enlace: 10.2.10.1 }
+      - { id: PCS1, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.3.0.10/24 }], puerta_enlace: 10.3.0.1 }
+    enlaces:
+      - { a: "PC1:eth0", b: "R1:Gi0/0" }
+      - { a: "PCN1:eth0", b: "R2:Gi0/0" }
+      - { a: "PCN2:eth0", b: "R2:Gi0/2" }
+      - { a: "PCS1:eth0", b: "R3:Gi0/0" }
+      - { a: "R1:Gi0/1", b: "R2:Gi0/1" }
+      - { a: "R1:Gi0/2", b: "R3:Gi0/2" }
+      - { a: "R1:Gi0/3", b: "ISP:Gi0/0" }
+pasos:
+  - consigna: Muestra la tabla de rutas completa de R1.
+    verificar:
+      - { comando_usado: show ip route }
+    pistas: ["enable y show ip route."]
+    solucion: [enable, show ip route]
+    explicacion: >-
+      Cada línea empieza con un código: C (conectada), L (la IP propia de la interfaz), S*
+      (estática por defecto) y O (aprendida por OSPF). Entre corchetes, [distancia/métrica]:
+      [110/2] es OSPF con costo 2.
+  - consigna: Pregúntale a R1 qué ruta usaría para llegar a 10.2.10.25.
+    verificar:
+      - { comando_usado: show ip route 10.2.10.25 }
+      - { salida_contiene: "10.2.10.0" }
+    pistas: ["show ip route seguido de la IP de destino."]
+    solucion: [show ip route 10.2.10.25]
+    explicacion: >-
+      Muestra la entrada que coincide: 10.2.10.0/24, aprendida por OSPF, con siguiente salto
+      10.0.12.2 (R2).
+  - consigna: Prueba lo mismo con 8.8.8.8, que no está en ninguna red de la empresa.
+    verificar:
+      - { comando_usado: show ip route 8.8.8.8 }
+      - { salida_contiene: "Network not in table" }
+    pistas: ["show ip route 8.8.8.8."]
+    solucion: [show ip route 8.8.8.8]
+    explicacion: >-
+      "% Network not in table" quiere decir que ninguna red específica contiene a 8.8.8.8. Este
+      comando no muestra la ruta por defecto, pero el router la usa igual: el paquete sale por
+      el "Gateway of last resort" (203.0.113.1) que viste arriba de la tabla.
+  - consigna: Comprueba con un ping que R1 llega a la PC de la sucursal Sur (10.3.0.10).
+    verificar:
+      - { ping: { desde: R1, hacia: 10.3.0.10 } }
+      - { comando_usado: ping 10.3.0.10 }
+    pistas: ["ping 10.3.0.10."]
+    solucion: [ping 10.3.0.10]

@@ -12,6 +12,8 @@ import {
   DisenadorVlsm,
   SimuladorNat,
   SimuladorStp,
+  EjercicioRutas,
+  SimuladorConvergencia,
   SimuladorSwitch,
   Consejo,
   ConversorBases,
@@ -142,13 +144,15 @@ export default function GalleryPage() {
         <Subnetting />
       </Section>
 
-      <Section id="redes" titulo="Redes: PoE, tabla MAC, direcciones, VLSM y NAT" descripcion="Presupuesto PoE de un switch, cómo aprende direcciones un switch (con predicción), clasificador de direcciones IPv4, diseñador VLSM con revisión de solapamientos y la tabla de traducciones NAT/PAT con redirección de puertos y CGNAT.">
+      <Section id="redes" titulo="Redes: PoE, tabla MAC, direcciones, VLSM, NAT, STP y rutas" descripcion="Presupuesto PoE de un switch, cómo aprende direcciones un switch (con predicción), clasificador de direcciones IPv4, diseñador VLSM con revisión de solapamientos, la tabla de traducciones NAT/PAT, la elección de raíz de Spanning Tree cómo decide un router (prefijo más largo y distancia administrativa) y la convergencia de vector distancia contra estado de enlace.">
         <CalculadoraPoe />
         <SimuladorSwitch />
         <ClasificadorIp />
         <DisenadorVlsm />
         <SimuladorNat />
         <SimuladorStp />
+        <EjercicioRutas />
+        <SimuladorConvergencia />
       </Section>
 
       <Section id="topologia" titulo="Armador de topologías" descripcion="Arrastra equipos, conecta cables y configúralos con formularios o con la consola. El ping muestra el recorrido sobre el diagrama y, si falla, explica dónde y por qué.">

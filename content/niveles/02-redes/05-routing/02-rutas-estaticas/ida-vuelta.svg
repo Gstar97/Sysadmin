@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" font-family="system-ui, sans-serif" font-size="12.5">
+  <defs>
+    <marker id="iv-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ok, #1e8a4c)"/></marker>
+    <marker id="iv-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--bad, #c0392b)"/></marker>
+  </defs>
+  <text x="430" y="22" text-anchor="middle" font-weight="700" fill="currentColor">Cada router decide solo: la ida y la vuelta se configuran por separado</text>
+  <g stroke="currentColor" stroke-width="2.5">
+    <line x1="120" y1="120" x2="250" y2="120"/>
+    <line x1="350" y1="120" x2="510" y2="120"/>
+    <line x1="610" y1="120" x2="740" y2="120"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.5">
+    <rect x="30" y="98" width="90" height="44" rx="6" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="250" y="94" width="100" height="52" rx="10" fill="var(--surface, #fff)"/>
+    <rect x="510" y="94" width="100" height="52" rx="10" fill="var(--surface, #fff)"/>
+    <rect x="740" y="98" width="90" height="44" rx="6" fill="var(--ok-soft, #dcf3e6)"/>
+  </g>
+  <g fill="currentColor" text-anchor="middle">
+    <text x="75" y="118" font-weight="700">PC-A</text><text x="75" y="134" font-size="11">192.168.1.10</text>
+    <text x="300" y="116" font-weight="700">R1</text><text x="300" y="134" font-size="11">central</text>
+    <text x="560" y="116" font-weight="700">R2</text><text x="560" y="134" font-size="11">sucursal</text>
+    <text x="785" y="118" font-weight="700">PC-B</text><text x="785" y="134" font-size="11">10.2.0.10</text>
+    <text x="430" y="112" font-size="11" font-family="ui-monospace, monospace">10.0.12.0/30</text>
+  </g>
+  <path d="M130 80 L730 80" stroke="var(--ok, #1e8a4c)" stroke-width="2.5" fill="none" marker-end="url(#iv-ok)"/>
+  <text x="430" y="70" text-anchor="middle" fill="currentColor" font-size="11.5">ida: R1 tiene ip route 10.2.0.0 255.255.255.0 10.0.12.2</text>
+  <path d="M730 165 L520 165" stroke="var(--bad, #c0392b)" stroke-width="2.5" stroke-dasharray="8 5" fill="none" marker-end="url(#iv-bad)"/>
+  <text x="515" y="170" text-anchor="end" fill="var(--bad, #c0392b)" font-weight="700">✕</text>
+  <text x="625" y="186" text-anchor="middle" fill="currentColor" font-size="11.5">vuelta: R2 no sabe llegar a 192.168.1.0/24</text>
+  <g fill="currentColor" font-size="11.5">
+    <text x="30" y="230">El ping sale, llega a PC-B, y PC-B responde... pero R2 descarta la respuesta: no tiene ruta.</text>
+    <text x="30" y="250">Síntoma: desde la central parece que "la sucursal no responde", aunque los paquetes sí llegan.</text>
+    <text x="30" y="270">Arreglo: en R2, ip route 192.168.1.0 255.255.255.0 10.0.12.1 (o una ruta por defecto hacia R1).</text>
+  </g>
+</svg>

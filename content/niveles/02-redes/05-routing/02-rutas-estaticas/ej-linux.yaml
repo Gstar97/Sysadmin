@@ -1,0 +1,53 @@
+tipo: terminal
+shell: bash
+titulo: Un servidor que no llega a la sucursal
+descripcion: >-
+  app01 (Rocky Linux, 192.168.10.20) sale a internet por el router de la empresa (192.168.10.1).
+  La sucursal Norte (10.2.0.0/24) está detrás de otro router, el de la VPN (192.168.10.2). Desde
+  app01 nadie llega a la sucursal. Entraste como admin, con sudo.
+estado_inicial:
+  distro: rocky
+  hostname: app01
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.20/24 }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.53]
+    alcanzables: [192.168.10.2]
+    redes_remotas:
+      - { red: 10.2.0.0/24, via: 192.168.10.2 }
+pasos:
+  - consigna: Prueba llegar a la PC 10.2.0.50 de la sucursal y averigua por dónde intenta salir app01.
+    verificar:
+      - { comando_usado: ip route get 10.2.0.50 }
+    pistas: ["ping -c 2 10.2.0.50 y después ip route get 10.2.0.50."]
+    solucion: [ping -c 2 10.2.0.50, ip route get 10.2.0.50]
+    explicacion: >-
+      El ping se pierde y ip route get muestra por qué: "via 192.168.10.1", la puerta de enlace
+      por defecto. Ese router manda la sucursal a internet, donde nadie la conoce.
+  - consigna: Agrega una ruta para 10.2.0.0/24 a través del router de la VPN.
+    verificar:
+      - { alcanza: 10.2.0.50 }
+    pistas: ["sudo ip route add 10.2.0.0/24 via 192.168.10.2."]
+    solucion: [sudo ip route add 10.2.0.0/24 via 192.168.10.2, ping -c 2 10.2.0.50]
+    explicacion: >-
+      Ahora la ruta más específica (/24) le gana a la por defecto (/0) para todo lo de la
+      sucursal. Pero una ruta agregada con ip route vive en memoria: con el próximo reinicio,
+      desaparece.
+  - consigna: Haz la ruta permanente en la conexión enp0s3 de NetworkManager y aplica el cambio.
+    verificar:
+      - { ruta: 10.2.0.0/24, via: 192.168.10.2, persistente: true }
+      - { alcanza: 10.2.0.50 }
+    pistas:
+      - "sudo nmcli connection modify enp0s3 +ipv4.routes \"10.2.0.0/24 192.168.10.2\" (el + agrega sin borrar las que ya hay)."
+      - "Después, sudo nmcli connection up enp0s3."
+    solucion:
+      - sudo nmcli connection modify enp0s3 +ipv4.routes "10.2.0.0/24 192.168.10.2"
+      - sudo nmcli connection up enp0s3
+      - ip route
+    explicacion: >-
+      ip route ahora la muestra con "proto static metric 100": la puso NetworkManager y la va a
+      volver a poner en cada arranque. En Ubuntu, lo mismo se hace en el archivo de netplan, con
+      un bloque routes (to y via).

@@ -850,6 +850,8 @@ export class IosSession {
       {
         pattern: 'show ip route <word>',
         run: (a) => {
+          const ip = parseIpv4(a[0])
+          if (ip !== undefined) return this.showRouteFor(ip)
           const kinds: Record<string, string[]> = { ospf: ['O', 'O IA', 'O*E2'], static: ['S', 'S*'], connected: ['C', 'L'] }
           const key = Object.keys(kinds).find((k) => k.startsWith(a[0].toLowerCase()))
           if (!key) throw new Invalid(3)
@@ -1033,6 +1035,24 @@ export class IosSession {
     return out
   }
 
+  /** show ip route A.B.C.D: la entrada más específica que la contiene (la ruta por defecto no cuenta, como en IOS). */
+  private showRouteFor(ip: number): string {
+    const table = this.net.routingTable(this.dev).filter((r) => r.prefix > 0 && networkOf(ip, r.prefix) === r.net)
+    table.sort((a, b) => b.prefix - a.prefix || a.distance - b.distance)
+    const r = table[0]
+    if (!r) return '% Network not in table\n'
+    const dest = `${formatIpv4(r.net)}/${r.prefix}`
+    if (r.code === 'C' || r.code === 'L') {
+      return `Routing entry for ${dest}\n  Known via "connected", distance 0, metric 0 (connected${r.code === 'C' ? ', via interface' : ''})\n  Routing Descriptor Blocks:\n  * directly connected, via ${r.port}\n      Route metric is 0, traffic share count is 1\n`
+    }
+    if (r.code === 'S' || r.code === 'S*') {
+      return `Routing entry for ${dest}\n  Known via "static", distance ${r.distance}, metric 0\n  Routing Descriptor Blocks:\n  * ${r.nextHop !== undefined ? formatIpv4(r.nextHop) : `directly connected, via ${r.port}`}\n      Route metric is 0, traffic share count is 1\n`
+    }
+    const from = [...this.net.devices.values()].find((d) => d.ports.some((p) => p.ip?.ip === r.nextHop))
+    const rid = from ? this.net.routerId(from) : undefined
+    return `Routing entry for ${dest}\n  Known via "ospf ${this.dev.ospf?.pid ?? 1}", distance ${r.distance}, metric ${r.metric}, type ${r.code === 'O IA' ? 'inter area' : 'intra area'}\n  Last update from ${formatIpv4(r.nextHop!)} on ${r.port}, 00:01:12 ago\n  Routing Descriptor Blocks:\n  * ${formatIpv4(r.nextHop!)}, from ${rid !== undefined ? formatIpv4(rid) : formatIpv4(r.nextHop!)}, 00:01:12 ago, via ${r.port}\n      Route metric is ${r.metric}, traffic share count is 1\n`
+  }
+
   private showIpRoute(codes?: string[]): string {
     const table = this.net.routingTable(this.dev).filter((r) => !codes || codes.includes(r.code))
     let out =
@@ -1042,7 +1062,8 @@ export class IosSession {
       out = gw !== undefined ? `Default gateway is ${formatIpv4(gw)}\n\nHost               Gateway           Last Use    Total Uses  Interface\nICMP redirect cache is empty\n` : 'Default gateway is not set\n\nHost               Gateway           Last Use    Total Uses  Interface\nICMP redirect cache is empty\n'
       return out
     }
-    const def = table.find((r) => r.prefix === 0)
+    // La línea del "Gateway of last resort" sale siempre, aunque se filtre por tipo de ruta.
+    const def = this.net.routingTable(this.dev).find((r) => r.prefix === 0)
     out += def?.nextHop !== undefined ? `Gateway of last resort is ${formatIpv4(def.nextHop)} to network 0.0.0.0\n\n` : def ? 'Gateway of last resort is 0.0.0.0 to network 0.0.0.0\n\n' : 'Gateway of last resort is not set\n\n'
     const groups = new Map<number, Route[]>()
     for (const r of table.filter((x) => x.prefix > 0)) {

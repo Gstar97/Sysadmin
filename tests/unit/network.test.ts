@@ -155,11 +155,11 @@ describe('enrutamiento', () => {
     delete s2.dispositivos[2].ospf
     delete s2.dispositivos[3].ospf
     expect(new Network(s2).ping('A', 'B').ok).toBe(false)
-    s2.dispositivos[2].rutas = [{ destino: '10.3.0.0/24', via: '10.2.0.2' }]
+    s2.dispositivos[2].rutas = [{ destino: '10.3.0.0/24', via: '10.2.0.2', distancia: 1 }]
     const ida = new Network(s2).ping('A', 'B')
     expect(ida.ok).toBe(false)
     expect(ida.reason).toMatch(/la respuesta no vuelve/)
-    s2.dispositivos[3].rutas = [{ destino: '0.0.0.0/0', via: '10.2.0.1' }]
+    s2.dispositivos[3].rutas = [{ destino: '0.0.0.0/0', via: '10.2.0.1', distancia: 1 }]
     expect(new Network(s2).ping('A', 'B').ok).toBe(true)
   })
 })

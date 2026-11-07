@@ -1,0 +1,79 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué muestra traceroute?
+  opciones:
+    - { texto: "Los routers por los que pasa un paquete hasta el destino, salto por salto", correcta: true, explicacion: "Usa TTL crecientes y los avisos ICMP de cada router." }
+    - { texto: "La velocidad del enlace", explicacion: "Muestra tiempos, no velocidad." }
+    - { texto: "Los puertos abiertos del destino", explicacion: "Eso es un escaneo de puertos." }
+    - { texto: "La tabla de rutas del destino", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: "Un traceroute muestra: 1 192.168.1.1, 2 10.0.12.2, 3 * * *, 4 * * *. ¿Dónde empiezas a buscar?"
+  opciones:
+    - { texto: "En 10.0.12.2 (su ruta hacia el destino) y en el siguiente router (su ruta de vuelta)", correcta: true, explicacion: "El último que respondió es el primer sospechoso." }
+    - { texto: "En el destino", explicacion: "Ni siquiera se sabe si le llega." }
+    - { texto: "En 192.168.1.1", explicacion: "Ese salto funcionó." }
+    - { texto: "En el DNS", explicacion: "traceroute -n ni lo usa." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "En un traceroute se repite: 10.0.12.2, 10.0.12.1, 10.0.12.2, 10.0.12.1... ¿Qué pasa?"
+  opciones:
+    - { texto: "Un bucle de enrutamiento: cada router cree que el otro es el camino", correcta: true, explicacion: "Revisa las rutas de los dos para ese destino." }
+    - { texto: "Es normal en enlaces punto a punto", explicacion: "No." }
+    - { texto: "El destino está caído", explicacion: "El paquete ni llega." }
+    - { texto: "Un problema de DNS", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Desde la central el ping a la sucursal falla, pero desde la sucursal el ping a la central funciona. ¿Qué indica?
+  opciones:
+    - { texto: "Que hay que revisar las rutas en los dos sentidos: algo falla en uno de los caminos (o un firewall en un extremo filtra lo entrante)", correcta: true, explicacion: "Ida y vuelta de cada ping son caminos distintos." }
+    - { texto: "Que el cable está bien, así que no es la red", explicacion: "Puede ser la red igual." }
+    - { texto: "Que el DNS falla", explicacion: "No interviene con IP." }
+    - { texto: "Nada: es normal", explicacion: "No es normal." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: show ip route IP no muestra la ruta de OSPF que esperabas, sino una estática para la misma red. ¿Por qué gana la estática?
+  opciones:
+    - { texto: "Por distancia administrativa: 1 contra 110", correcta: true, explicacion: "Misma red y prefijo: decide la distancia." }
+    - { texto: "Porque es más vieja", explicacion: "La antigüedad no cuenta." }
+    - { texto: "Por la métrica", explicacion: "Las métricas de protocolos distintos no se comparan." }
+    - { texto: "Porque OSPF está caído", explicacion: "OSPF puede estar perfecto." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC de la sucursal responde a sus compañeras, pero no a nadie de otra red. Las rutas de los routers están bien. ¿Qué revisas en la PC?
+  opciones:
+    - { texto: "Su puerta de enlace (y su máscara)", correcta: true, explicacion: "Si responde a una gateway que no existe, nada vuelve." }
+    - { texto: "Su nombre", explicacion: "No." }
+    - { texto: "Su MAC", explicacion: "Si responde en su red, la MAC anda." }
+    - { texto: "Su DNS", explicacion: "No afecta un ping a una IP." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Con dos salidas a internet, los ping funcionan pero las conexiones web de algunos usuarios se cortan. La ida va por el firewall A y la vuelta llega por el firewall B. ¿Qué pasa?
+  opciones:
+    - { texto: "Ruta asimétrica: el firewall B ve respuestas de conexiones que no vio empezar y las descarta", correcta: true, explicacion: "Un firewall con estado necesita ver los dos sentidos." }
+    - { texto: "Falta una ruta por defecto", explicacion: "El tráfico sale y vuelve." }
+    - { texto: "Es un problema de DNS", explicacion: "Las páginas resuelven." }
+    - { texto: "Los firewalls están caídos", explicacion: "El ping pasa." }
+- id: p08
+  tipo: completar_comando
+  enunciado: En Windows, escribe el comando que hace un traceroute a 10.2.10.25 sin resolver nombres.
+  aceptadas: [tracert -d 10.2.10.25]
+  explicacion: -d evita las búsquedas DNS inversas, que hacen lento el resultado.
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En un traceroute, el salto 3 muestra * * * pero los saltos 4 y 5 (el destino) responden. ¿Hay un problema?
+  opciones:
+    - { texto: "No necesariamente: ese router no contesta los avisos de traceroute, pero reenvía el tráfico", correcta: true, explicacion: "Muchos routers filtran o limitan esas respuestas." }
+    - { texto: "Sí: el salto 3 está caído", explicacion: "Si estuviera caído, no llegaría al 4." }
+    - { texto: "Sí: hay un bucle", explicacion: "No hay IP repetidas." }
+    - { texto: "Sí: falta la ruta de vuelta", explicacion: "El destino responde." }

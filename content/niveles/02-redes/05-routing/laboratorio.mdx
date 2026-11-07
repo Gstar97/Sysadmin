@@ -1,0 +1,42 @@
+---
+titulo: Tres sedes con rutas estáticas, migradas a OSPF, y un Linux con FRRouting
+horas: 4
+verificacion:
+  - Conecté las tres sedes con rutas estáticas y comprobé con traceroute por dónde pasa el tráfico.
+  - Migré a OSPF en los tres routers, con router ID fijos y las LAN como pasivas, y borré las estáticas.
+  - Corté un enlace y comprobé que OSPF encontró el camino alternativo.
+  - En mis máquinas virtuales, dos Linux con FRRouting forman vecindad OSPF y aprenden la red del otro.
+  - Vi desaparecer y volver una ruta al apagar y encender una interfaz.
+---
+
+import lab from './lab-tres-sedes.yaml'
+import frr from './lab-frr.yaml'
+
+## Objetivo
+
+Ver con tus propios ojos la diferencia entre rutas estáticas y OSPF en la misma red: cuánto hay que escribir, qué camino toma el tráfico y qué pasa cuando se corta un enlace. Y después, hacer lo mismo en Linux, que es como funcionan muchos firewalls y routers de software.
+
+## Qué necesitas
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01 y ubuntu01 en la red interna "labred" (laboratorio 2.3), con acceso a internet para instalar paquetes, y unas dos horas.
+
+## Parte 1: en la plataforma
+
+Tres routers en triángulo, con una PC en cada LAN. Primero lo resuelves a mano y después con OSPF. Entre parte y parte, compara cuántas líneas escribiste.
+
+<Terminal ejercicio={lab} />
+
+## Parte 2: dos Linux con FRRouting
+
+<PasosGuiados ejercicio={frr} />
+
+<Advertencia>
+FRR solo debe hablar OSPF en redes que controlas. Nunca actives OSPF en la tarjeta conectada a la red de tu casa o de tu trabajo: si allí hay routers con OSPF, podrías meterles rutas falsas.
+</Advertencia>
+
+## Para pensar
+
+1. En la parte A, ¿cuántas rutas tendrías que escribir si agregaras una cuarta sede unida a dos de las otras? ¿Y con OSPF?
+2. Al cortar el enlace R1-R2, ¿cuánto tardó en volver el ping? ¿Qué tiempos de OSPF lo explican y cómo se podría acortar?
+3. Si rocky01 fuera además el firewall de la sucursal Sur, ¿qué más tendrías que revisar para que el tráfico pase (pista: firewalld y las zonas)?

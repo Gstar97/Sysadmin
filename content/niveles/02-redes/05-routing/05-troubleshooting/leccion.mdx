@@ -1,0 +1,100 @@
+---
+id: n2-m5-l5
+titulo: Troubleshooting de routing
+minutos: 120
+objetivos:
+  - Diagnosticar falta de ruta de vuelta, rutas asimétricas y máscaras o siguientes saltos mal configurados.
+  - Usar traceroute y las tablas de rutas para ubicar dónde se pierde el tráfico.
+  - Reconocer rutas viejas que le ganan a las nuevas por distancia administrativa o prefijo.
+glosario: [traceroute, ruta-asimetrica, bucle-de-enrutamiento]
+verificado: 2026-11
+---
+
+import metodo from './metodo.svg?raw'
+import topoRoto from './topo-roto.yaml'
+import caso from './caso-vlan-nueva.yaml'
+
+"No llego al servidor de la sucursal" puede ser un cable, un firewall, el DNS o una ruta. En esta lección te concentras en las rutas: cómo descartar o confirmar que el problema está en las tablas, y encontrar en cuál. El secreto es no adivinar: seguir el paquete salto por salto, en los dos sentidos.
+
+<AntesDeEmpezar>
+- Prefijo más largo y distancia administrativa (lección 1).
+- La ruta de vuelta (lección 2).
+- OSPF: vecinos y rutas aprendidas (lección 4).
+- El método de diagnóstico por capas (lección 2.1.2).
+</AntesDeEmpezar>
+
+## El método
+
+Piensa en un envío que no llegó. No sirve de mucho llamar al destinatario y al remitente a la vez: lo útil es mirar el seguimiento y ver en qué centro de distribución quedó el paquete, y en ese centro, qué etiqueta tenía y para dónde lo mandaron. Donde la comparación no llega: en una red, además, la respuesta hace su propio viaje, y puede perderse en otro lugar.
+
+<Diagrama svg={metodo} alt="Cuatro pasos: 1, el origen (IP, máscara, puerta de enlace, ¿llega a su gateway?); 2, cada router de ida (show ip route con la IP de destino: ¿hay ruta?, ¿al vecino correcto?, ¿la interfaz está arriba?); 3, cada router de vuelta (show ip route con la IP de origen, el mismo control al revés, la vuelta puede ir por otro lado); 4, el destino (su puerta de enlace y su firewall). Lo que dice traceroute: asteriscos desde un salto en adelante indican que el último que respondió tiene la ruta mala o no tiene ruta de vuelta; un salto inesperado indica una ruta equivocada en el salto anterior; IP que se repiten indican un bucle entre esos dos routers; un salto con asterisco en el medio pero con el destino alcanzado no es una falla. Ruta asimétrica: ida por un camino y vuelta por otro, que funciona salvo que haya un firewall con estado en uno solo." pie="Siempre de a un salto, con la IP exacta, y en los dos sentidos." />
+
+1. **El origen**: `ip a`, `ip route` (o `ipconfig` en Windows). ¿Tiene la IP y la máscara correctas? ¿Llega a su puerta de enlace con un ping?
+2. **Cada router de la ida**: `show ip route IP-DESTINO` (o `ip route get` en Linux). ¿Hay ruta? ¿Apunta al vecino correcto? ¿Está arriba la interfaz de salida?
+3. **Cada router de la vuelta**: lo mismo con la IP de **origen**. Es el paso que más se olvida, y donde están la mitad de los problemas.
+4. **El destino**: su puerta de enlace y su firewall. Si responde a equipos de su red pero no a los de otras, sospecha de la puerta de enlace.
+
+## traceroute
+
+**traceroute** (en Windows, `tracert`) muestra los routers por los que pasa un paquete. Manda paquetes con TTL 1, 2, 3...: cada router que descarta uno porque se le terminó el TTL contesta con un aviso ICMP, y así se descubre quién está en cada salto.
+
+```bash
+traceroute -n 10.2.10.25       # Linux (-n: sin resolver nombres, más rápido)
+tracert -d 10.2.10.25          # Windows
+mtr -n 10.2.10.25              # Linux: traceroute continuo, con pérdida por salto
+```
+
+En IOS, `traceroute 10.2.10.25`. Leerlo bien es la mitad del trabajo:
+
+- Si se corta (asteriscos desde un salto en adelante), el problema está en el **último router que respondió** o en el siguiente: o no tiene ruta, o la tiene mal, o el siguiente no sabe volver.
+- Si aparece un salto inesperado (el router de otra sede, la IP del proveedor de internet), la ruta del salto anterior está mal.
+- Si se repiten dos IP (A, B, A, B...), hay un **bucle de enrutamiento**: cada uno cree que el otro es el camino. El paquete da vueltas hasta que se le termina el TTL.
+
+<EnSimple>
+traceroute te dice hasta dónde llega el paquete. El último router que contesta es el primer sospechoso: mírale la tabla de rutas para ese destino, y también la del siguiente para la vuelta.
+</EnSimple>
+
+<Topologia ejercicio={topoRoto} />
+
+## Las fallas más comunes
+
+- **Falta la ruta de vuelta**: la ida llega, la respuesta se pierde. El traceroute desde el origen se corta justo después del último router que tiene ruta de ida. Prueba desde el otro lado.
+- **Siguiente salto equivocado**: la ruta existe, pero apunta a una IP que no es la del vecino (un error de tipeo, una IP vieja). En IOS se ve el fallo de ARP; en el traceroute, asteriscos después del router con la ruta mala.
+- **Máscara o red mal escrita**: una ruta a 192.168.2.0 cuando la red es 192.168.1.0, o un /16 que abarca más de lo que debería. Lee la ruta entera, no solo el siguiente salto.
+- **Una ruta vieja que gana**: una estática olvidada le gana a OSPF para la misma red (distancia 1 contra 110), o una ruta más específica que nadie recuerda se lleva una parte del tráfico (prefijo más largo).
+- **Puerta de enlace mal en el destino**: el destino recibe, pero responde a una puerta de enlace que no existe.
+- **Ruta asimétrica**: la ida va por un camino y la vuelta por otro. A los routers no les importa, pero un **firewall con estado** que ve solo la ida (o solo la vuelta) descarta la conexión porque no la reconoce. Pasa mucho con dos salidas a internet o con dos firewalls.
+
+<Troubleshooting escenario={caso} />
+
+<Pregunta id="p07" />
+
+<Consejo titulo="Anota antes de tocar">
+Antes de cambiar una ruta, copia la salida de show ip route y show running-config | include ip route. Si el cambio empeora algo, sabes exactamente cómo estaba. Y cuando encuentres una ruta que nadie sabe para qué está, no la borres a ciegas: averigua (registro de cambios, documentación, quien la puso) y después decide.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Probar solo en un sentido">
+    La mitad de los problemas de routing están en la vuelta. Haz el traceroute y revisa las tablas desde los dos extremos.
+  </ErrorComun>
+  <ErrorComun titulo="Culpar al último salto con asteriscos">
+    Los asteriscos aparecen después del problema, no en él. Mira el último router que respondió y el siguiente.
+  </ErrorComun>
+  <ErrorComun titulo="Confiar en show ip route sin la IP">
+    En una tabla larga es fácil ver la ruta que esperas y no la que se usa. show ip route IP (o ip route get IP) te dice cuál gana de verdad.
+  </ErrorComun>
+  <ErrorComun titulo="Arreglar con una ruta más específica encima">
+    Agregar otra estática para "tapar" una ruta mala deja dos errores en lugar de uno. Corrige o borra la ruta que está mal.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar el firewall en una ruta asimétrica">
+    Los ping pueden funcionar y las conexiones TCP fallar: el firewall con estado ve el SYN sin la respuesta, o al revés. Haz que ida y vuelta pasen por el mismo firewall.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Método: origen (IP, máscara, gateway), cada router de ida con show ip route IP-DESTINO, cada router de vuelta con la IP de origen, y el destino (gateway y firewall).
+- traceroute (tracert -d en Windows, mtr para ver pérdida por salto): el último que responde es el primer sospechoso; un salto inesperado indica una ruta mala antes; IP repetidas indican un bucle.
+- Fallas típicas: falta la vuelta, siguiente salto o red mal escritos, rutas viejas que ganan por distancia o por prefijo, gateway mal en el destino.
+- Ruta asimétrica: funciona para los routers, pero rompe los firewalls con estado.
+- Anota antes de cambiar, y corrige la ruta mala en lugar de taparla con otra.
+</Resumen>

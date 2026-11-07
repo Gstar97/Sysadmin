@@ -33,6 +33,7 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   zona: '/var/named/db.empresa.local',
   named: '/etc/named.conf',
   kea: '/etc/kea/kea-dhcp4.conf',
+  frr: '/etc/frr/frr.conf',
   texto: 'archivo.txt',
 }
 
@@ -51,6 +52,7 @@ function languageFor(lang: ConfigLanguage): Extension {
     case 'sudoers':
     case 'zona':
     case 'named':
+    case 'frr':
       return StreamLanguage.define(shell)
     case 'kea':
       return StreamLanguage.define(javascript)

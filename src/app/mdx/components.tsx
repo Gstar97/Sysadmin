@@ -48,6 +48,8 @@ const MacTableSimView = lazy(() => import('@/interactive/redes/MacTableSim').the
 const AddressClassifierView = lazy(() => import('@/interactive/redes/AddressClassifier').then((m) => ({ default: m.AddressClassifier })))
 const VlsmDesignerView = lazy(() => import('@/interactive/redes/VlsmDesigner').then((m) => ({ default: m.VlsmDesigner })))
 const StpSimView = lazy(() => import('@/interactive/redes/StpSim').then((m) => ({ default: m.StpSim })))
+const ConvergenceSimView = lazy(() => import('@/interactive/redes/ConvergenceSim').then((m) => ({ default: m.ConvergenceSim })))
+const RouteDecisionView = lazy(() => import('@/interactive/redes/RouteDecision').then((m) => ({ default: m.RouteDecision })))
 const NatSimView = lazy(() => import('@/interactive/redes/NatSim').then((m) => ({ default: m.NatSim })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
@@ -369,6 +371,22 @@ export function SimuladorStp() {
   )
 }
 
+export function SimuladorConvergencia() {
+  return (
+    <Island>
+      <ConvergenceSimView />
+    </Island>
+  )
+}
+
+export function EjercicioRutas() {
+  return (
+    <Island>
+      <RouteDecisionView />
+    </Island>
+  )
+}
+
 export function SimuladorNat() {
   return (
     <Island>
@@ -563,6 +581,8 @@ export const mdxComponents = {
   DisenadorVlsm,
   SimuladorNat,
   SimuladorStp,
+  EjercicioRutas,
+  SimuladorConvergencia,
   ErroresComunes,
   ErrorComun,
   Resumen,

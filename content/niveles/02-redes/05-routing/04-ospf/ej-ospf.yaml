@@ -1,0 +1,100 @@
+tipo: terminal
+shell: ios
+titulo: Sumar la central a OSPF
+descripcion: >-
+  R2 (sucursal Norte) y R3 (sucursal Sur) ya tienen OSPF en el área 0. R1, el router de la
+  central, todavía no: solo tiene sus redes conectadas y una ruta por defecto al proveedor. La
+  LAN de la central es 192.168.1.0/24 (Gi0/0), los enlaces a las sucursales son 10.0.12.0/30
+  (Gi0/1) y 10.0.13.0/30 (Gi0/2), y Gi0/3 va al proveedor. Estás en la consola de R1.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: R1
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.1/24 }
+          - { nombre: Gi0/1, ip: 10.0.12.1/30 }
+          - { nombre: Gi0/2, ip: 10.0.13.1/30 }
+          - { nombre: Gi0/3, ip: 203.0.113.2/30 }
+        rutas: [{ destino: 0.0.0.0/0, via: 203.0.113.1 }]
+      - id: R2
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/1, ip: 10.0.12.2/30 }
+          - { nombre: Gi0/0, ip: 10.2.0.1/24 }
+          - { nombre: Gi0/2, ip: 10.2.10.1/24 }
+        ospf:
+          router_id: 2.2.2.2
+          redes: [{ red: 10.0.0.0, wildcard: 0.255.255.255 }]
+      - id: R3
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/2, ip: 10.0.13.2/30 }
+          - { nombre: Gi0/0, ip: 10.3.0.1/24 }
+        ospf:
+          router_id: 3.3.3.3
+          redes: [{ red: 10.0.0.0, wildcard: 0.255.255.255 }]
+      - { id: ISP, nombre: ISP, tipo: router, interfaces: [{ nombre: Gi0/0, ip: 203.0.113.1/30 }] }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.10/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: PCN1, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.2.0.10/24 }], puerta_enlace: 10.2.0.1 }
+      - { id: PCN2, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.2.10.25/24 }], puerta_enlace: 10.2.10.1 }
+      - { id: PCS1, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.3.0.10/24 }], puerta_enlace: 10.3.0.1 }
+    enlaces:
+      - { a: "PC1:eth0", b: "R1:Gi0/0" }
+      - { a: "PCN1:eth0", b: "R2:Gi0/0" }
+      - { a: "PCN2:eth0", b: "R2:Gi0/2" }
+      - { a: "PCS1:eth0", b: "R3:Gi0/0" }
+      - { a: "R1:Gi0/1", b: "R2:Gi0/1" }
+      - { a: "R1:Gi0/2", b: "R3:Gi0/2" }
+      - { a: "R1:Gi0/3", b: "ISP:Gi0/0" }
+pasos:
+  - consigna: Activa OSPF (proceso 1) con router-id 1.1.1.1 en las interfaces de la LAN y de los dos enlaces, todas en el área 0. No lo actives hacia el proveedor.
+    verificar:
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
+      - { equipo: R1, ruta: 10.3.0.0/24, via: 10.0.13.2 }
+      - { ping: { desde: PC1, hacia: PCS1 } }
+      - { equipo: R1, config_contiene: "router-id 1.1.1.1" }
+    pistas:
+      - "configure terminal, router ospf 1 y router-id 1.1.1.1."
+      - "Un network por red, con su wildcard: network 192.168.1.0 0.0.0.255 area 0, network 10.0.12.0 0.0.0.3 area 0 y network 10.0.13.0 0.0.0.3 area 0."
+    solucion:
+      - enable
+      - configure terminal
+      - router ospf 1
+      - router-id 1.1.1.1
+      - network 192.168.1.0 0.0.0.255 area 0
+      - network 10.0.12.0 0.0.0.3 area 0
+      - network 10.0.13.0 0.0.0.3 area 0
+    explicacion: >-
+      En segundos aparecen los mensajes "%OSPF-5-ADJCHG ... from LOADING to FULL": R1 formó
+      vecindad con R2 y R3, intercambiaron mapas y ya tiene las redes de las sucursales.
+  - consigna: Mira los vecinos de R1 y las rutas que aprendió por OSPF.
+    verificar:
+      - { comando_usado: show ip ospf neighbor }
+      - { comando_usado: show ip route ospf }
+    pistas: ["do show ip ospf neighbor y do show ip route ospf (con do, desde la configuración)."]
+    solucion: [do show ip ospf neighbor, do show ip route ospf]
+    explicacion: >-
+      Dos vecinos en FULL, uno por enlace. Las rutas O tienen distancia 110 y como métrica el
+      costo acumulado: cada enlace de 1 Gb/s cuesta 1 con el ancho de banda de referencia de
+      fábrica (100 Mb/s).
+  - consigna: La LAN de la central no tiene routers. Haz que Gi0/0 sea pasiva (se anuncia, pero no manda saludos).
+    verificar:
+      - { equipo: R1, config_contiene: "passive-interface GigabitEthernet0/0" }
+      - { equipo: R2, ruta: 192.168.1.0/24 }
+    pistas: ["En router ospf 1: passive-interface gi0/0."]
+    solucion: [passive-interface gi0/0]
+    explicacion: >-
+      Una interfaz pasiva sigue en OSPF (su red se anuncia), pero no busca vecinos. Así nadie
+      enchufado en la LAN puede hacerse pasar por router y meter rutas falsas.
+  - consigna: Haz que R1 reparta su ruta por defecto a las sucursales por OSPF, y guarda.
+    verificar:
+      - { equipo: R2, ruta: 0.0.0.0/0 }
+      - { equipo: R3, ruta: 0.0.0.0/0 }
+      - { equipo: R1, guardado: true }
+    pistas: ["default-information originate en router ospf 1. Después, end y copy running-config startup-config."]
+    solucion: [default-information originate, end, copy running-config startup-config]
+    explicacion: >-
+      R2 y R3 aprenden 0.0.0.0/0 como O*E2: una ruta externa que inyectó R1. Si mañana cambia
+      el proveedor, se cambia la estática en un solo lugar.

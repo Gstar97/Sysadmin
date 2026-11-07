@@ -1,0 +1,68 @@
+tipo: terminal
+shell: ios
+titulo: Una ruta principal y una de respaldo
+descripcion: >-
+  La central (R1, LAN 192.168.1.0/24) y la sucursal (R2, LAN 10.2.0.0/24) están unidas por
+  fibra (Gi0/1, red 10.0.12.0/30) y, de respaldo, por un enlace celular más lento (Gi0/2, red
+  10.0.21.0/30). R2 ya está configurado con sus dos rutas hacia la central. Estás en la
+  consola de R1, que todavía no sabe llegar a la sucursal.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: R1
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.1/24 }
+          - { nombre: Gi0/1, ip: 10.0.12.1/30 }
+          - { nombre: Gi0/2, ip: 10.0.21.1/30 }
+      - id: R2
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 10.2.0.1/24 }
+          - { nombre: Gi0/1, ip: 10.0.12.2/30 }
+          - { nombre: Gi0/2, ip: 10.0.21.2/30 }
+        rutas:
+          - { destino: 192.168.1.0/24, via: 10.0.12.1 }
+          - { destino: 192.168.1.0/24, via: 10.0.21.1, distancia: 5 }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.10/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: PC2, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.2.0.10/24 }], puerta_enlace: 10.2.0.1 }
+    enlaces:
+      - { a: "R1:Gi0/1", b: "R2:Gi0/1" }
+      - { a: "R1:Gi0/2", b: "R2:Gi0/2" }
+      - { a: "PC1:eth0", b: "R1:Gi0/0" }
+      - { a: "PC2:eth0", b: "R2:Gi0/0" }
+pasos:
+  - consigna: Agrega en R1 la ruta a la LAN de la sucursal por la fibra.
+    verificar:
+      - { ping: { desde: PC1, hacia: PC2 } }
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
+    pistas: ["configure terminal e ip route 10.2.0.0 255.255.255.0 10.0.12.2 (red, máscara y siguiente salto)."]
+    solucion: [enable, configure terminal, ip route 10.2.0.0 255.255.255.0 10.0.12.2]
+    explicacion: >-
+      La PC de la central ya llega a la de la sucursal: R1 sabe ir y R2 ya sabía volver. Las dos
+      cosas hacen falta.
+  - consigna: Agrega una ruta flotante por el enlace celular, con distancia administrativa 5, para que solo se use si se cae la fibra.
+    verificar:
+      - { equipo: R1, config_contiene: "ip route 10.2.0.0 255.255.255.0 10.0.21.2 5" }
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
+    pistas: ["La misma ruta, con el otro siguiente salto y un 5 al final: ip route 10.2.0.0 255.255.255.0 10.0.21.2 5."]
+    solucion: [ip route 10.2.0.0 255.255.255.0 10.0.21.2 5]
+    explicacion: >-
+      La flotante no aparece en show ip route: con distancia 5 pierde contra la principal
+      (distancia 1). Queda guardada en la configuración, esperando.
+  - consigna: Simula que se corta la fibra apagando Gi0/1 de R1, y comprueba que la sucursal sigue respondiendo.
+    verificar:
+      - { ping: { desde: PC1, hacia: PC2 } }
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.21.2 }
+    pistas: ["interface gi0/1 y shutdown. Después, do show ip route static."]
+    solucion: [interface gi0/1, shutdown, do show ip route static]
+    explicacion: >-
+      Al caer Gi0/1 desaparece su red conectada, la ruta principal queda sin siguiente salto
+      y entra la flotante: [5/0] via 10.0.21.2. R2 hizo lo mismo de su lado.
+  - consigna: Vuelve a levantar la fibra, comprueba que se vuelve a usar la ruta principal y guarda.
+    verificar:
+      - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
+      - { equipo: R1, guardado: true }
+    pistas: ["no shutdown, end y copy running-config startup-config."]
+    solucion: [no shutdown, end, copy running-config startup-config, show ip route static]

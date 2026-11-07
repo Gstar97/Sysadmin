@@ -1,0 +1,84 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es el siguiente salto en una ruta estática?
+  opciones:
+    - { texto: "La IP del router vecino al que se le entrega el paquete, en una red conectada", correcta: true, explicacion: "El router no necesita saber más que eso." }
+    - { texto: "La IP del destino final", explicacion: "Es el vecino, no el destino." }
+    - { texto: "La interfaz por la que entró el paquete", explicacion: "Es hacia dónde sale." }
+    - { texto: "El último router antes del destino", explicacion: "Es el próximo, no el último." }
+- id: p02
+  tipo: completar_comando
+  enunciado: En IOS, escribe la ruta por defecto hacia 203.0.113.1.
+  aceptadas: [ip route 0.0.0.0 0.0.0.0 203.0.113.1]
+  explicacion: Red 0.0.0.0 con máscara 0.0.0.0 coincide con cualquier destino.
+- id: p03
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: Agregaste en R1 la ruta a la sucursal. El ping a la PC de la sucursal sale, pero no vuelve. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "El router de la sucursal no tiene ruta hacia la red de la central", correcta: true, explicacion: "Falta la ruta de vuelta." }
+    - { texto: "La ruta de R1 está mal escrita", explicacion: "Si estuviera mal, el ping ni llegaría." }
+    - { texto: "Hay que reiniciar R1", explicacion: "Las rutas se aplican al instante." }
+    - { texto: "El cable está cortado", explicacion: "La ida funciona." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "Tienes ip route 10.2.0.0 255.255.255.0 10.0.12.2 y quieres un respaldo por 10.0.21.2 que solo se use si cae el primero. ¿Qué escribes?"
+  opciones:
+    - { texto: "ip route 10.2.0.0 255.255.255.0 10.0.21.2 5", correcta: true, explicacion: "Una distancia mayor que 1 la deja en espera." }
+    - { texto: "ip route 10.2.0.0 255.255.255.0 10.0.21.2", explicacion: "Con la misma distancia, se usarían las dos a la vez." }
+    - { texto: "ip route 10.2.0.0 255.255.255.0 10.0.21.2 0", explicacion: "La distancia va de 1 a 255; y menor que la principal la haría ganar." }
+    - { texto: "ip route backup 10.2.0.0 10.0.21.2", explicacion: "Ese comando no existe." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La red de la sucursal se aprende por OSPF. Quieres una estática de respaldo por otro enlace. ¿Qué distancia le pones?
+  opciones:
+    - { texto: "Una mayor que 110, por ejemplo 200", correcta: true, explicacion: "Así OSPF gana mientras funcione." }
+    - { texto: "1", explicacion: "Le ganaría a OSPF siempre." }
+    - { texto: "5", explicacion: "5 es menor que 110: ganaría la estática." }
+    - { texto: "110", explicacion: "Empataría con OSPF." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuándo entra a la tabla una ruta flotante?
+  opciones:
+    - { texto: "Cuando desaparece la ruta principal (por ejemplo, porque se cae su interfaz)", correcta: true, explicacion: "Mientras la principal exista, la flotante espera." }
+    - { texto: "Cuando la principal está muy cargada", explicacion: "Una estática no mide carga." }
+    - { texto: "Cada cierto tiempo, para repartir", explicacion: "No reparte." }
+    - { texto: "Nunca, solo queda documentada", explicacion: "Entra si la principal se va." }
+- id: p07
+  tipo: completar_comando
+  enunciado: En Linux, agrega (sin hacerla permanente) una ruta a 10.2.0.0/24 por el router 192.168.10.2.
+  aceptadas: [sudo ip route add 10.2.0.0/24 via 192.168.10.2, ip route add 10.2.0.0/24 via 192.168.10.2, sudo ip r add 10.2.0.0/24 via 192.168.10.2]
+  explicacion: Se pierde al reiniciar; para que quede, nmcli o netplan.
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un Linux con dos tarjetas, una en cada red, tiene las rutas bien, pero no deja pasar el tráfico de una red a la otra. ¿Qué revisas primero?
+  opciones:
+    - { texto: "net.ipv4.ip_forward: sin reenvío activado, descarta lo que no es para él", correcta: true, explicacion: "Viene en 0 por defecto." }
+    - { texto: "El DNS", explicacion: "No interviene en el reenvío." }
+    - { texto: "La MAC de las tarjetas", explicacion: "No." }
+    - { texto: "El nombre del equipo", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En R1 escribiste ip route 10.5.0.0 255.255.255.0 10.9.9.9, pero no aparece en show ip route. R1 no tiene ninguna red 10.9.x.x. ¿Por qué?
+  opciones:
+    - { texto: "El siguiente salto no está en una red conectada: la ruta queda configurada pero no se instala", correcta: true, explicacion: "Sin forma de llegar al vecino, no sirve." }
+    - { texto: "Falta guardar", explicacion: "Guardar no cambia la tabla." }
+    - { texto: "Las estáticas tardan un minuto", explicacion: "Se aplican al instante." }
+    - { texto: "Hay que escribirla con la interfaz", explicacion: "El problema es el siguiente salto." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: La fibra de la sucursal sigue con luz, pero el proveedor tiene una falla y no pasa tráfico. ¿Qué pasa con la ruta flotante por el enlace celular?
+  opciones:
+    - { texto: "No entra: la interfaz sigue arriba y la ruta principal no desaparece. Hace falta IP SLA o un protocolo dinámico", correcta: true, explicacion: "Una estática no sabe si el camino funciona." }
+    - { texto: "Entra enseguida", explicacion: "Solo entraría si se cayera la interfaz." }
+    - { texto: "Se reparte el tráfico", explicacion: "No." }
+    - { texto: "El router se da cuenta por el ping de los usuarios", explicacion: "No mide eso." }

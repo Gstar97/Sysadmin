@@ -10,6 +10,7 @@ import { validateSystemd } from './systemd'
 import { validateKea } from './kea'
 import { validateNamed } from './named'
 import { validateZone } from './zone'
+import { validateFrr } from './frr'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -36,6 +37,8 @@ export function validateConfig(lang: ConfigLanguage, text: string, fileName?: st
       return validateNamed(text)
     case 'kea':
       return validateKea(text)
+    case 'frr':
+      return validateFrr(text)
     case 'nginx':
       return validateNginx(text)
     case 'compose':

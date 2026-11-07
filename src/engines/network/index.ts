@@ -128,6 +128,9 @@ export function verifyIos(s: IosSession, raw: IosCheckInput, defaultDevice?: str
   })()
   if (!target) return { ok: false, label: `ruta ${check.ruta}` }
   const via = check.via ? parseIpv4(check.via) : undefined
-  const found = s.net.routingTable(d).some((r) => r.net === networkOf(target.ip, target.prefix) && r.prefix === target.prefix && (via === undefined || r.nextHop === via))
-  return { ok: found, label: `${d.hostname} tiene ruta a ${formatIpv4(networkOf(target.ip, target.prefix))}/${target.prefix}${check.via ? ` por ${check.via}` : ''}` }
+  const codes = check.origen ? { conectada: ['C'], estatica: ['S', 'S*'], ospf: ['O', 'O IA', 'O*E2'] }[check.origen] : undefined
+  const found = s.net.routingTable(d).some((r) => r.net === networkOf(target.ip, target.prefix) && r.prefix === target.prefix && (via === undefined || r.nextHop === via) && (!codes || codes.includes(r.code)))
+  const origen = check.origen ? ` aprendida por ${check.origen === 'estatica' ? 'una estática' : check.origen === 'ospf' ? 'OSPF' : 'una interfaz conectada'}` : ''
+  if (!check.existe) return { ok: !found, label: `${d.hostname} ya no tiene ruta a ${formatIpv4(networkOf(target.ip, target.prefix))}/${target.prefix}${check.via ? ` por ${check.via}` : ''}${origen}` }
+  return { ok: found, label: `${d.hostname} tiene ruta a ${formatIpv4(networkOf(target.ip, target.prefix))}/${target.prefix}${check.via ? ` por ${check.via}` : ''}${origen}` }
 }

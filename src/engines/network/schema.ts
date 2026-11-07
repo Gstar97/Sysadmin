@@ -35,7 +35,7 @@ export const deviceSpecSchema = z.strictObject({
   puerta_enlace: ipv4.optional(),
   vlans: z.array(z.strictObject({ id: z.number().int().min(1).max(4094), nombre: z.string().optional() })).default([]),
   svis: z.array(z.strictObject({ vlan: z.number().int().min(1).max(4094), ip: cidr })).default([]),
-  rutas: z.array(z.strictObject({ destino: cidr, via: ipv4 })).default([]),
+  rutas: z.array(z.strictObject({ destino: cidr, via: ipv4, distancia: z.number().int().min(1).max(255).default(1) })).default([]),
   enrutamiento: z.boolean().optional(),
   /** Prioridad de STP del switch para todas sus VLAN (de fábrica, 32768). */
   stp_prioridad: z.number().int().min(0).max(61440).multipleOf(4096).optional(),
@@ -109,7 +109,7 @@ export const iosCheckSchema = z.union([
   z.strictObject({ equipo: z.string().optional(), stp_raiz: z.boolean(), vlan: z.number().int().default(1) }),
   /** Router activo de HSRP para esa IP virtual. */
   z.strictObject({ hsrp_activo: z.string(), ip: z.string() }),
-  z.strictObject({ equipo: z.string().optional(), ruta: z.string(), via: z.string().optional() }),
+  z.strictObject({ equipo: z.string().optional(), ruta: z.string(), via: z.string().optional(), origen: z.enum(['conectada', 'estatica', 'ospf']).optional(), existe: z.boolean().default(true) }),
   z.strictObject({ ping: objectiveSpecSchema }),
   z.strictObject({ equipo: z.string().optional(), guardado: z.boolean() }),
   z.strictObject({ salida_contiene: z.string() }),
