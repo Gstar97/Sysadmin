@@ -72,7 +72,7 @@ register('dig', {
     name ??= '.'
     type ??= name === '.' ? 'NS' : 'A'
     if (plus.has('trace')) {
-      ctx.err('[simulador] +trace no está disponible: aquí se ve la respuesta final del resolvedor.\n')
+      ctx.err('[simulador] +trace no está disponible: acá se ve la respuesta final del resolvedor.\n')
     }
     const { r, errors } = ask(ctx, server, name, type)
     const short = plus.has('short')
@@ -115,7 +115,7 @@ register('nslookup', {
     let type = typeArg ? typeArg.split('=')[1].toUpperCase() : 'A'
     const [rawName, server] = ctx.args.filter((a) => !a.startsWith('-'))
     if (!rawName) {
-      ctx.err('[simulador] nslookup interactivo no está disponible: escribe nslookup nombre [servidor].\n')
+      ctx.err('[simulador] nslookup interactivo no está disponible: escribí nslookup nombre [servidor].\n')
       return 1
     }
     let name = rawName

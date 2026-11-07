@@ -813,7 +813,7 @@ export class Network {
         return { ok: true, hops, dest: dev, source: source ?? dst }
       }
       if (dev !== start && !isRouting(dev)) {
-        return { ok: false, hops, reason: `el paquete llegó a ${dev.hostname}, que no enruta paquetes. Revisa la puerta de enlace o las rutas que apuntan a ${dev.hostname}`, failedAt: dev.id, source }
+        return { ok: false, hops, reason: `el paquete llegó a ${dev.hostname}, que no enruta paquetes. Revisá la puerta de enlace o las rutas que apuntan a ${dev.hostname}`, failedAt: dev.id, source }
       }
       const r = this.lookup(dev, dst)
       if ('error' in r) return { ok: false, hops, reason: r.error, failedAt: dev.id, source, unreachable: dev !== start }

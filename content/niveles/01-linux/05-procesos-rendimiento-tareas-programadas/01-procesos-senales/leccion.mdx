@@ -72,7 +72,7 @@ kill -l              # la lista de señales
 
 Tres reglas prácticas:
 
-- **Los servicios se manejan con systemctl.** Si matas el proceso de nginx a mano, systemd puede volver a arrancarlo (si tiene `Restart=`) o marcarlo como fallido. `systemctl restart` o `stop` hacen lo correcto.
+- **Los servicios se manejan con systemctl.** Si matás el proceso de nginx a mano, systemd puede volver a arrancarlo (si tiene `Restart=`) o marcarlo como fallido. `systemctl restart` o `stop` hacen lo correcto.
 - **Un proceso en D no responde ni a KILL** hasta que vuelve la operación de disco. Si se queda así, el problema es el disco o el almacenamiento de red, no el proceso.
 - Un usuario común solo puede mandar señales a sus propios procesos; para los de otros hace falta `sudo`.
 
@@ -85,11 +85,11 @@ nice -n 10 tar czf /backup/todo.tgz /srv      # arrancar algo con baja prioridad
 renice 10 -p 1234                             # cambiar la de un proceso que ya corre
 ```
 
-Cualquiera puede bajar la prioridad de sus procesos; para subirla (nice negativo) o tocar procesos de otros, hace falta root. Es la herramienta ideal para un proceso que molesta pero que no quieres cortar.
+Cualquiera puede bajar la prioridad de sus procesos; para subirla (nice negativo) o tocar procesos de otros, hace falta root. Es la herramienta ideal para un proceso que molesta pero que no querés cortar.
 
 ## Trabajos en segundo plano
 
-Desde la terminal puedes mandar un comando a segundo plano y seguir trabajando:
+Desde la terminal podés mandar un comando a segundo plano y seguir trabajando:
 
 | Acción | Cómo |
 | --- | --- |
@@ -100,7 +100,7 @@ Desde la terminal puedes mandar un comando a segundo plano y seguir trabajando:
 | Seguir en segundo plano uno pausado | `bg %1` |
 | Terminarlo | `kill %1` |
 
-Los trabajos son de la terminal: si cierras la sesión, reciben SIGHUP y terminan. `nohup comando &` los protege de eso (la salida va a `nohup.out`). Pero para tareas que tienen que seguir funcionando de verdad, lo correcto es un **servicio** o un **timer** de systemd (lecciones 1.3.3 y 1.3.4). Para más adelante: `tmux` y `screen` mantienen sesiones de terminal vivas aunque se corte la conexión.
+Los trabajos son de la terminal: si cerrás la sesión, reciben SIGHUP y terminan. `nohup comando &` los protege de eso (la salida va a `nohup.out`). Pero para tareas que tienen que seguir funcionando de verdad, lo correcto es un **servicio** o un **timer** de systemd (lecciones 1.3.3 y 1.3.4). Para más adelante: `tmux` y `screen` mantienen sesiones de terminal vivas aunque se corte la conexión.
 
 ## Practicar en la terminal
 
@@ -108,16 +108,16 @@ Los trabajos son de la terminal: si cierras la sesión, reciben SIGHUP y termina
 
 <ErroresComunes>
   <ErrorComun titulo="Usar kill -9 de entrada">
-    El programa no puede cerrar archivos ni terminar escrituras: puedes dejar datos a medias o archivos de bloqueo que impiden volver a arrancarlo. Primero `kill` (TERM) y unos segundos de espera.
+    El programa no puede cerrar archivos ni terminar escrituras: podés dejar datos a medias o archivos de bloqueo que impiden volver a arrancarlo. Primero `kill` (TERM) y unos segundos de espera.
   </ErrorComun>
   <ErrorComun titulo='"Operation not permitted"'>
-    El proceso es de otro usuario. Con `sudo` puedes mandarle la señal, pero pregúntate primero si corresponde.
+    El proceso es de otro usuario. Con `sudo` podés mandarle la señal, pero preguntate primero si corresponde.
   </ErrorComun>
   <ErrorComun titulo="Matar el proceso de un servicio y que vuelva a aparecer">
-    systemd lo reinicia porque tiene `Restart=`. Usa `systemctl stop servicio`.
+    systemd lo reinicia porque tiene `Restart=`. Usá `systemctl stop servicio`.
   </ErrorComun>
   <ErrorComun titulo="Intentar matar un zombi">
-    Ya está muerto: kill no le hace nada. Busca el padre con `ps -o ppid= -p PID` y ocúpate de él.
+    Ya está muerto: kill no le hace nada. Buscá el padre con `ps -o ppid= -p PID` y ocupate de él.
   </ErrorComun>
   <ErrorComun titulo="Un comando largo se cortó al cerrar la sesión SSH">
     Era un trabajo de la terminal y recibió SIGHUP. Para la próxima: `nohup ... &`, tmux, o mejor un servicio o timer de systemd.

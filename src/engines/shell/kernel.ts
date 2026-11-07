@@ -219,7 +219,7 @@ export function refreshKernelFs(sys: System, m: { load: number[]; running: numbe
       writeProcSys(sys, key, sys.sysctl.get(key) ?? '')
     }
   }
-  // /dev/urandom: bytes al azar (aquí, un bloque nuevo antes de cada comando).
+  // /dev/urandom: bytes al azar (acá, un bloque nuevo antes de cada comando).
   let rnd = ''
   for (let k = 0; k < 2048; k++) rnd += String.fromCharCode(33 + Math.floor(Math.random() * 94))
   sys.vfs.writeFile('/dev/urandom', rnd, ROOT_CRED, { mode: 0o666 })

@@ -24,7 +24,7 @@ En Linux casi todo es texto: los registros, la configuración, la salida de los 
 
 ## Tres herramientas, tres trabajos
 
-Piensa en un informe impreso de cien páginas. Con un resaltador marcas las líneas que te interesan (eso es **grep**); con corrector y bolígrafo cambias palabras (**sed**); con una calculadora sumas una columna de números (**awk**). Donde la comparación no llega: las tres trabajan línea por línea, a toda velocidad, y se pueden encadenar.
+Pensá en un informe impreso de cien páginas. Con un resaltador marcás las líneas que te interesan (eso es **grep**); con corrector y bolígrafo cambiás palabras (**sed**); con una calculadora sumás una columna de números (**awk**). Donde la comparación no llega: las tres trabajan línea por línea, a toda velocidad, y se pueden encadenar.
 
 <Diagrama svg={herramientas} alt="grep elige líneas (por ejemplo, las que tienen 404, las que no son comentarios, cuántas tienen ERROR o en qué archivos aparece puerto); sed cambia texto (reemplazar, editar un archivo dejando copia, borrar comentarios, mostrar un rango de líneas); awk trabaja con columnas (imprimir la 1 y la 9, separar por dos puntos, filtrar por una columna, sumar). Juntas en una tubería: awk elige las IP de los 404, sort las ordena, uniq -c las cuenta, sort -rn pone arriba las más frecuentes y head se queda con las tres primeras." pie="grep elige, sed cambia, awk calcula. Y una tubería las junta." />
 
@@ -58,7 +58,7 @@ grep -oE '^[0-9.]+' access.log         # solo la parte que coincide
 grep -A2 -B1 'Traceback' app.log       # con contexto: 2 líneas después, 1 antes
 ```
 
-Usa `grep -E` siempre que el patrón tenga `+ ? | ( )`: es la sintaxis que vas a reconocer en otras herramientas. Y pon el patrón entre comillas simples, para que bash no toque los `$` ni los `*`.
+Usá `grep -E` siempre que el patrón tenga `+ ? | ( )`: es la sintaxis que vas a reconocer en otras herramientas. Y poné el patrón entre comillas simples, para que bash no toque los `$` ni los `*`.
 
 ## sed: cambiar texto
 
@@ -75,7 +75,7 @@ sed -E 's#/var/www/(\w+)#/srv/\1#' f      # otro separador (#) y un grupo (\1)
 Con `-i`, sed reescribe el archivo. **Siempre** prueba primero sin `-i` (te muestra cómo quedaría) y después usa `-i.bak` para quedarte con una copia. Para archivos de configuración con formato propio (sshd_config, nginx), después de editarlos con sed revisa con su verificador (`sshd -t`, `nginx -t`).
 
 <EnSimple>
-sed sin -i solo muestra cómo quedaría: úsalo así para probar. Cuando estés seguro, `-i.bak` cambia el archivo y deja una copia del original.
+sed sin -i solo muestra cómo quedaría: usalo así para probar. Cuando estés seguro, `-i.bak` cambia el archivo y deja una copia del original.
 </EnSimple>
 
 ## awk: columnas, filtros y cuentas
@@ -121,10 +121,10 @@ ps -eo user= | sort | uniq -c | sort -rn                               # proceso
     El patrón es demasiado general: ' 404 ' con espacios, `^` y `$` para anclar, `-w` para palabras completas.
   </ErrorComun>
   <ErrorComun titulo="El + o el | de grep no funcionan">
-    En grep sin -E se escriben `\+` y `\|`. Usa `grep -E`.
+    En grep sin -E se escriben `\+` y `\|`. Usá `grep -E`.
   </ErrorComun>
   <ErrorComun titulo="sed -i rompió un archivo de configuración">
-    Prueba siempre sin -i y usa `-i.bak`. Para volver: `mv archivo.bak archivo`. Después, el verificador del servicio.
+    Probá siempre sin -i y usa `-i.bak`. Para volver: `mv archivo.bak archivo`. Después, el verificador del servicio.
   </ErrorComun>
   <ErrorComun titulo="awk '{print $1}' entre comillas dobles no imprime nada">
     Con comillas dobles, bash reemplaza `$1` antes de que awk lo vea. Los programas de awk van entre comillas simples.

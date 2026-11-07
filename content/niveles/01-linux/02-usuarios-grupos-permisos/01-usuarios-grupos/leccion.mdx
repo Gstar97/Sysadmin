@@ -24,7 +24,7 @@ Dar de alta a alguien que entra a la empresa, sacarle el acceso a quien se va, a
 
 ## Usuarios, números y grupos
 
-Piensa en el legajo de una empresa. Cada empleado tiene un número de legajo, y el sistema de la empresa trabaja con ese número: el nombre es para las personas. Además, cada empleado pertenece a un área (ventas, contabilidad, soporte), y muchas cosas se habilitan por área: la puerta de un piso, una carpeta compartida.
+Pensá en el legajo de una empresa. Cada empleado tiene un número de legajo, y el sistema de la empresa trabaja con ese número: el nombre es para las personas. Además, cada empleado pertenece a un área (ventas, contabilidad, soporte), y muchas cosas se habilitan por área: la puerta de un piso, una carpeta compartida.
 
 En Linux pasa lo mismo:
 
@@ -50,7 +50,7 @@ El UID es el número de legajo y el grupo es el área. Si dos cuentas tuvieran e
 - **`/etc/shadow`**: las contraseñas cifradas y su vencimiento. Solo lo lee root.
 - **`/etc/group`**: una línea por grupo, con sus miembros secundarios: `ventas:x:1002:laura,carlos`.
 
-Toca cada campo para ver qué significa:
+Tocá cada campo para ver qué significa:
 
 <DiagramaInteractivo datos={cuentasDatos} svg={cuentas} alt="La línea laura:x:1001:1001:Laura Gómez:/home/laura:/bin/bash de /etc/passwd con sus siete campos, y la línea de laura en /etc/shadow con el nombre, la contraseña cifrada, el último cambio y los días mínimos, máximos y de aviso." />
 
@@ -73,7 +73,7 @@ Estos archivos no se editan a mano: si se rompe una línea, puede que nadie pued
 | Ver los datos de una cuenta | `id laura`, `groups laura` |
 
 <Importante titulo="La -a de usermod -aG">
-`usermod -G ventas laura` (sin la `-a`) deja a laura **solo** en el grupo ventas y la saca de todos los demás grupos secundarios, incluido `wheel` o `sudo` si los tenía. Es un error clásico que deja a un administrador sin poder usar sudo. Usa siempre `-aG` (*append*), o `gpasswd -a usuario grupo`.
+`usermod -G ventas laura` (sin la `-a`) deja a laura **solo** en el grupo ventas y la saca de todos los demás grupos secundarios, incluido `wheel` o `sudo` si los tenía. Es un error clásico que deja a un administrador sin poder usar sudo. Usá siempre `-aG` (*append*), o `gpasswd -a usuario grupo`.
 </Importante>
 
 <Distros>
@@ -81,11 +81,11 @@ Estos archivos no se editan a mano: si se rompe una línea, puede que nadie pued
     `useradd` crea la carpeta personal aunque no uses `-m` y pone `/bin/bash` como shell. Para dar permiso de usar sudo: `sudo usermod -aG wheel laura`.
   </Distro>
   <Distro nombre="Ubuntu Server LTS">
-    `useradd` solo crea la carpeta con `-m` y usa `/bin/sh` si no indicas otro shell. Ubuntu tiene además `adduser`, que pregunta todo de forma interactiva y crea la carpeta y la contraseña en un paso. Para sudo: `sudo usermod -aG sudo laura`.
+    `useradd` solo crea la carpeta con `-m` y usa `/bin/sh` si no indicás otro shell. Ubuntu tiene además `adduser`, que pregunta todo de forma interactiva y crea la carpeta y la contraseña en un paso. Para sudo: `sudo usermod -aG sudo laura`.
   </Distro>
 </Distros>
 
-Los cambios de grupo se aplican en el **próximo inicio de sesión**. Si agregas a alguien a un grupo mientras está conectado, `id` lo muestra en el grupo, pero sus procesos actuales siguen sin él hasta que cierre la sesión y vuelva a entrar.
+Los cambios de grupo se aplican en el **próximo inicio de sesión**. Si agregás a alguien a un grupo mientras está conectado, `id` lo muestra en el grupo, pero sus procesos actuales siguen sin él hasta que cierre la sesión y vuelva a entrar.
 
 ## Vencimiento de contraseñas con chage
 
@@ -111,7 +111,7 @@ Las guías de seguridad actuales (como la NIST SP 800-63B) ya no recomiendan obl
 
 <ErroresComunes>
   <ErrorComun titulo="Un administrador perdió el acceso a sudo después de agregarlo a un grupo">
-    Se usó `usermod -G grupo usuario` sin `-a`, que reemplaza todos los grupos secundarios. Desde otra cuenta con sudo (o como root desde la consola), devuélvelo al grupo: `usermod -aG wheel usuario` en Rocky, `usermod -aG sudo usuario` en Ubuntu.
+    Se usó `usermod -G grupo usuario` sin `-a`, que reemplaza todos los grupos secundarios. Desde otra cuenta con sudo (o como root desde la consola), devolvelo al grupo: `usermod -aG wheel usuario` en Rocky, `usermod -aG sudo usuario` en Ubuntu.
   </ErrorComun>
   <ErrorComun titulo="El usuario está en el grupo pero sigue sin poder acceder">
     Los grupos se cargan al iniciar sesión. Tiene que cerrar la sesión (incluidas las de SSH) y volver a entrar. Para comprobarlo en la sesión actual, `id` sin argumentos muestra los grupos que realmente tiene ese proceso.
@@ -120,7 +120,7 @@ Las guías de seguridad actuales (como la NIST SP 800-63B) ya no recomiendan obl
     `useradd` sin `-m` no crea la carpeta y sin `-s` usa `/bin/sh`. Créala con `sudo mkhomedir_helper laura` (o borra y vuelve a crear la cuenta con `-m -s /bin/bash`), o usa `adduser`.
   </ErrorComun>
   <ErrorComun titulo='"userdel: user laura is currently used by process 2381"'>
-    La persona tiene una sesión abierta o procesos corriendo. Revisa con `ps -u laura` (o `who`), pide que cierre la sesión o termina sus procesos, y después borra la cuenta.
+    La persona tiene una sesión abierta o procesos corriendo. Revisá con `ps -u laura` (o `who`), pide que cierre la sesión o termina sus procesos, y después borra la cuenta.
   </ErrorComun>
 </ErroresComunes>
 

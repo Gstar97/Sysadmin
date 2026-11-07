@@ -23,7 +23,7 @@ Comprimir cien registros, revisar veinte servidores, dar de alta a los treinta e
 
 ## Tres formas de repetir
 
-Piensa en lavar los platos: uno por uno hasta que no queden (eso es un **for** sobre una lista); seguir mientras haya platos en el fregadero, aunque alguien vaya trayendo más (un **while**); o esperar en la puerta hasta que llegue el cartero (un **until**). Bash tiene las tres.
+Pensá en lavar los platos: uno por uno hasta que no queden (eso es un **for** sobre una lista); seguir mientras haya platos en el fregadero, aunque alguien vaya trayendo más (un **while**); o esperar en la puerta hasta que llegue el cartero (un **until**). Bash tiene las tres.
 
 <Diagrama svg={bucles} alt="Tres tipos de bucle: for, que se ejecuta una vez por elemento de una lista que se arma antes de empezar (por ejemplo, los archivos a.log, b.log y c.log); while read, que se ejecuta una vez por cada línea de la entrada, como los servidores web01, web02 y db01 de un archivo; y while o until, que repiten mientras una condición sale bien o mientras falla, como esperar con until a que db01 responda al ping. break sale del bucle y continue pasa a la vuelta siguiente." pie="for recorre una lista; while read recorre líneas; while y until repiten según una condición." />
 
@@ -37,7 +37,7 @@ for u in "${usuarios[@]}"; do id "$u"; done                # un arreglo
 for ((i = 1; i <= 10; i++)); do echo "$i"; done            # estilo contador
 ```
 
-Dos detalles con los comodines: si no coincide ningún archivo, bash deja el patrón tal cual (el bucle recibe literalmente `/var/log/app/*.log`). `shopt -s nullglob` hace que, en ese caso, la lista quede vacía. Y pon siempre `"$f"` entre comillas.
+Dos detalles con los comodines: si no coincide ningún archivo, bash deja el patrón tal cual (el bucle recibe literalmente `/var/log/app/*.log`). `shopt -s nullglob` hace que, en ese caso, la lista quede vacía. Y poné siempre `"$f"` entre comillas.
 
 ## while read: una vez por línea
 
@@ -55,7 +55,7 @@ while IFS=, read -r usuario nombre depto; do
 done < <(tail -n +2 empleados.csv)      # tail -n +2: desde la línea 2 (sin el encabezado)
 ```
 
-`< <(comando)` le pasa al while la salida de un comando. No uses `comando | while ...` si después necesitas las variables: cada parte de una tubería corre aparte, y lo que el while cambie se pierde al terminar (lo vas a ver en el ejercicio).
+`< <(comando)` le pasa al while la salida de un comando. No uses `comando | while ...` si después necesitás las variables: cada parte de una tubería corre aparte, y lo que el while cambie se pierde al terminar (lo vas a ver en el ejercicio).
 
 <Emparejar ejercicio={cual} />
 
@@ -98,16 +98,16 @@ done < servidores.txt
 
 <ErroresComunes>
   <ErrorComun titulo="for linea in $(cat archivo) parte las líneas">
-    Se parte en cada espacio, no en cada línea. Usa `while read -r linea; do ...; done < archivo`.
+    Se parte en cada espacio, no en cada línea. Usá `while read -r linea; do ...; done < archivo`.
   </ErrorComun>
   <ErrorComun titulo="La variable vuelve a 0 después del while">
-    Hiciste `comando | while ...`: el while corrió aparte. Usa `done < archivo` o `done < <(comando)`.
+    Hiciste `comando | while ...`: el while corrió aparte. Usá `done < archivo` o `done < <(comando)`.
   </ErrorComun>
   <ErrorComun titulo='El bucle procesa un archivo llamado "*.log"'>
     No había coincidencias y quedó el patrón literal. `shopt -s nullglob`, o revisa con `[ -e "$f" ] || continue`.
   </ErrorComun>
   <ErrorComun titulo="El script se queda colgado">
-    Un while o until sin límite y una condición que nunca cambia. Agrega un contador de intentos.
+    Un while o until sin límite y una condición que nunca cambia. Agregá un contador de intentos.
   </ErrorComun>
   <ErrorComun titulo="Se pierde la última línea del archivo">
     El archivo no termina con salto de línea y read no la devuelve. `while read -r l || [ -n "$l" ]; do` la incluye.

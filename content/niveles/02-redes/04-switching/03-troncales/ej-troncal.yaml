@@ -34,7 +34,7 @@ estado_inicial:
       - { a: "V2:eth0", b: "SW2:Fa0/13" }
       - { a: "SW1:Gi0/1", b: "SW2:Gi0/1" }
 pasos:
-  - consigna: Mira cómo está el troncal de SW1.
+  - consigna: Mirá cómo está el troncal de SW1.
     verificar:
       - { comando_usado: show interfaces trunk }
     pistas: ["enable y show interfaces trunk."]
@@ -42,7 +42,7 @@ pasos:
     explicacion: >-
       Dos problemas a la vista: en "Vlans allowed on trunk" solo figura la 10, y la VLAN nativa
       es la 1 (SW2 usa la 99).
-  - consigna: Deja pasar también la VLAN 20 por el troncal, sin sacar la 10.
+  - consigna: Dejá pasar también la VLAN 20 por el troncal, sin sacar la 10.
     verificar:
       - { ping: { desde: V1, hacia: V2 } }
       - { ping: { desde: A1, hacia: A2 } }
@@ -61,9 +61,9 @@ pasos:
       Con la misma nativa en los dos extremos, las tramas sin etiqueta no cambian de VLAN al
       cruzar. Usar una nativa que no lleva datos (la 99) en lugar de la 1 cierra un tipo de
       ataque (el salto de VLAN por doble etiqueta).
-  - consigna: Comprueba el troncal otra vez y guarda la configuración.
+  - consigna: Comprobá el troncal otra vez y guardá la configuración.
     verificar:
       - { salida_contiene: "10,20" }
       - { guardado: true }
-    pistas: ["show interfaces trunk y después copy running-config startup-config (o write memory). Hazlo en ese orden: la verificación mira la salida del primero."]
+    pistas: ["show interfaces trunk y después copy running-config startup-config (o write memory). Hacelo en ese orden: la verificación mira la salida del primero."]
     solucion: [copy running-config startup-config, show interfaces trunk]

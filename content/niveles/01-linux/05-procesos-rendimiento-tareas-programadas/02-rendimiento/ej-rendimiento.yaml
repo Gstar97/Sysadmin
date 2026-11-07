@@ -2,7 +2,7 @@ tipo: terminal
 shell: bash
 titulo: Lento, pero ¿por qué?
 descripcion: >-
-  Los usuarios de files01 dicen que todo anda lento desde hace una hora y media. Encuentra qué
+  Los usuarios de files01 dicen que todo anda lento desde hace una hora y media. Encontrá qué
   recurso está en problemas, qué proceso lo causa, y mitígalo sin cortar nada.
 estado_inicial:
   distro: rocky
@@ -17,14 +17,14 @@ estado_inicial:
   rendimiento:
     incidente_desde_minutos: 90
 pasos:
-  - consigna: Empieza por la carga del sistema.
+  - consigna: Empezá por la carga del sistema.
     verificar:
       - { comando_usado: '^uptime|^w$|^top' }
     pistas:
       - "`uptime`"
     solucion: [uptime]
     explicacion: La carga es más alta que la cantidad de CPU (este servidor tiene 2). Algo está esperando.
-  - consigna: Mira una captura de top y fíjate en la línea de %Cpu.
+  - consigna: Mirá una captura de top y fijate en la línea de %Cpu.
     verificar:
       - { comando_usado: 'top\s+.*-b' }
       - { salida_contiene: wa }
@@ -33,14 +33,14 @@ pasos:
       - "`top -b -n 1 | head -12`"
     solucion: [top -b -n 1 | head -12]
     explicacion: La CPU casi no trabaja (us bajo), pero wa es alto. El cuello de botella es el disco.
-  - consigna: Confírmalo con vmstat (3 muestras, una por segundo).
+  - consigna: Confirmalo con vmstat (3 mostrás, una por segundo).
     verificar:
       - { comando_usado: 'vmstat\s+1\s+\d' }
     pistas:
       - "`vmstat 1 3`"
     solucion: [vmstat 1 3]
     explicacion: La columna b (procesos bloqueados esperando el disco) no es 0, bi y bo son altos, y wa también.
-  - consigna: Mira el uso del disco con iostat extendido.
+  - consigna: Mirá el uso del disco con iostat extendido.
     verificar:
       - { comando_usado: 'iostat\s+.*-\w*x' }
       - { salida_contiene: '%util' }
@@ -48,7 +48,7 @@ pasos:
       - "`iostat -x`"
     solucion: [iostat -x]
     explicacion: "%util cerca de 100: el disco está ocupado todo el tiempo. r_await y w_await (milisegundos de espera por operación) también subieron."
-  - consigna: Averigua qué proceso está usando el disco.
+  - consigna: Averiguá qué proceso está usando el disco.
     verificar:
       - { comando_usado: 'iotop' }
       - { salida_contiene: rsync }
@@ -66,9 +66,9 @@ pasos:
     solucion: ['sudo ionice -c 3 -p $(pgrep -f rsync)']
     explicacion: >-
       ionice es a los discos lo que nice a la CPU. Con la clase idle, el rsync sigue, pero cede
-      el disco a los demás. Compruébalo con top: wa baja. La próxima vez, esa copia va en un
+      el disco a los demás. Comprobalo con top: wa baja. La próxima vez, esa copia va en un
       timer de madrugada.
-  - consigna: Revisa el historial de CPU de hoy para saber desde cuándo pasa.
+  - consigna: Revisá el historial de CPU de hoy para saber desde cuándo pasa.
     verificar:
       - { comando_usado: '^sar(\s+-u)?' }
     pistas:

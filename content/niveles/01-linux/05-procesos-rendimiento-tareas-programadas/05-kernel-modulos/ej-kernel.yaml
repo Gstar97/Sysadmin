@@ -12,14 +12,14 @@ estado_inicial:
   usuarios:
     - { nombre: ana, sudo: true }
 pasos:
-  - consigna: Mira qué versión del kernel está corriendo.
+  - consigna: Mirá qué versión del kernel está corriendo.
     verificar:
       - { comando_usado: 'uname\s+-r' }
     pistas:
       - "`uname -r`"
     solucion: [uname -r]
     explicacion: Es lo primero que se anota en un incidente o al buscar un error conocido.
-  - consigna: Consulta el valor actual de vm.swappiness, leyendo el archivo de /proc/sys o con sysctl.
+  - consigna: Consultá el valor actual de vm.swappiness, leyendo el archivo de /proc/sys o con sysctl.
     verificar:
       - { salida_contiene: "60" }
       - { comando_usado: 'swappiness' }
@@ -28,7 +28,7 @@ pasos:
     solucion: [sysctl vm.swappiness]
     explicacion: Las dos formas leen lo mismo. 60 es el valor por defecto del kernel.
   - consigna: >-
-      Crea /etc/sysctl.d/90-archivos.conf con la línea `vm.swappiness = 10` y aplica todos los
+      Creá /etc/sysctl.d/90-archivos.conf con la línea `vm.swappiness = 10` y aplica todos los
       archivos de configuración.
     verificar:
       - { archivo: /etc/sysctl.d/90-archivos.conf, contenido_incluye: "vm.swappiness = 10" }
@@ -41,7 +41,7 @@ pasos:
     explicacion: >-
       sysctl -w cambia el valor solo hasta el próximo reinicio. El archivo en /etc/sysctl.d lo hace
       permanente, y sysctl --system lo aplica ya, sin reiniciar.
-  - consigna: Comprueba si el módulo de almacenamiento USB está cargado.
+  - consigna: Comprobá si el módulo de almacenamiento USB está cargado.
     verificar:
       - { comando_usado: 'lsmod' }
     pistas:
@@ -49,7 +49,7 @@ pasos:
     solucion: [lsmod | grep usb]
     explicacion: No aparece, pero se cargaría solo en cuanto alguien conecte una memoria USB.
   - consigna: >-
-      Bloquéalo: crea /etc/modprobe.d/no-usb.conf con las líneas `blacklist usb-storage` y
+      Bloquéalo: creá /etc/modprobe.d/no-usb.conf con las líneas `blacklist usb-storage` y
       `install usb-storage /bin/false`.
     verificar:
       - { archivo: /etc/modprobe.d/no-usb.conf, contenido_incluye: "install usb-storage /bin/false" }
@@ -61,11 +61,11 @@ pasos:
     explicacion: >-
       blacklist evita que se cargue solo al detectar el dispositivo; install ... /bin/false hace
       que cualquier intento de cargarlo falle, incluso uno manual o el de otro módulo que lo pida.
-  - consigna: Prueba que funciona intentando cargarlo a mano.
+  - consigna: Probá que funciona intentando cargarlo a mano.
     verificar:
       - { comando_usado: 'modprobe\s+usb[-_]storage' }
       - { salida_contiene: "could not insert" }
     pistas:
       - "`sudo modprobe usb-storage`"
     solucion: [sudo modprobe usb-storage]
-    explicacion: El error es la prueba de que el bloqueo funciona. Anótalo en la documentación del servidor, para que nadie pierda una tarde buscando por qué no anda una memoria USB.
+    explicacion: El error es la prueba de que el bloqueo funciona. Anotalo en la documentación del servidor, para que nadie pierda una tarde buscando por qué no anda una memoria USB.

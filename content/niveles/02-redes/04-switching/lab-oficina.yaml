@@ -6,7 +6,7 @@ descripcion: >-
   de Administración (Fa0/1, VLAN 10), una de Ventas (Fa0/2, VLAN 20) y una de Invitados (Fa0/3,
   VLAN 30). R1 está conectado a Gi0/2 de SW1 y va a enrutar entre las VLAN. Las PC ya tienen su
   IP (192.168.10.0/24, 192.168.20.0/24 y 192.168.30.0/24) y como puerta de enlace la .1 de su
-  red. Los tres equipos están de fábrica. Empiezas en la consola de SW1; para pasar a otro
+  red. Los tres equipos están de fábrica. Empezás en la consola de SW1; para pasar a otro
   equipo, usa el selector de equipo de la terminal.
 estado_inicial:
   consola: SW1
@@ -67,14 +67,14 @@ pasos:
       - { equipo: SW1, config_contiene: "switchport trunk allowed vlan 10,20,30" }
     pistas: ["interface range gi0/1 - 2, switchport mode trunk y switchport trunk allowed vlan 10,20,30."]
     solucion: [interface range gi0/1 - 2, switchport mode trunk, "switchport trunk allowed vlan 10,20,30", end]
-  - consigna: Pasa a la consola de SW2 y configúralo igual (las tres VLAN, los tres puertos de acceso y Gi0/1 como troncal). Los equipos del mismo área se tienen que ver entre pisos.
+  - consigna: Pasá a la consola de SW2 y configuralo igual (las tres VLAN, los tres puertos de acceso y Gi0/1 como troncal). Los equipos del mismo área se tienen que ver entre pisos.
     verificar:
       - { ping: { desde: A1, hacia: A2 } }
       - { ping: { desde: V1, hacia: V2 } }
       - { ping: { desde: I1, hacia: I2 } }
       - { ping: { desde: A1, hacia: V1, resultado: falla } }
     pistas:
-      - "Cambia la consola a SW2 con el selector de equipo."
+      - "Cambiá la consola a SW2 con el selector de equipo."
       - "Los mismos comandos que en SW1; el troncal es solo Gi0/1."
     solucion:
       - "@consola SW2"
@@ -102,7 +102,7 @@ pasos:
     explicacion: >-
       Cada área se ve entre pisos gracias al troncal, pero Administración y Ventas siguen
       separadas: falta quien enrute.
-  - consigna: Pasa a R1 y configura router-on-a-stick en Gi0/0, con las subinterfaces .10, .20 y .30 y la .1 de cada red.
+  - consigna: Pasá a R1 y configurá router-on-a-stick en Gi0/0, con las subinterfaces .10, .20 y .30 y la .1 de cada red.
     verificar:
       - { ping: { desde: A1, hacia: V2 } }
       - { ping: { desde: I2, hacia: A1 } }
@@ -130,7 +130,7 @@ pasos:
       Ahora todas las VLAN se comunican a través de R1. Ojo: Invitados también llega a
       Administración. Eso se corta con una lista de acceso en R1 o con un firewall (módulo 2.6).
   - consigna: >-
-      Fija Spanning Tree: SW1 tiene que ser la raíz de las tres VLAN (prioridad 4096) y, en SW2,
+      Fijá Spanning Tree: SW1 tiene que ser la raíz de las tres VLAN (prioridad 4096) y, en SW2,
       los puertos de las PC (Fa0/1 a Fa0/3) tienen que tener PortFast y BPDU Guard.
     verificar:
       - { equipo: SW1, stp_raiz: true, vlan: 10 }
@@ -151,7 +151,7 @@ pasos:
       - spanning-tree portfast
       - spanning-tree bpduguard enable
       - end
-  - consigna: Guarda la configuración de los tres equipos.
+  - consigna: Guardá la configuración de los tres equipos.
     verificar:
       - { equipo: SW1, guardado: true }
       - { equipo: SW2, guardado: true }

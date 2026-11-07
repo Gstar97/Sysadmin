@@ -2,8 +2,8 @@ tipo: vim
 titulo: Ajustar la configuración de una aplicación con vim
 descripcion: >-
   Vas a dejar lista para producción la configuración de una aplicación. Cada paso agrega una
-  habilidad nueva sobre el mismo archivo. Haz clic en el editor para empezar a escribir; si te
-  pierdes, aprieta Esc.
+  habilidad nueva sobre el mismo archivo. Hacé clic en el editor para empezar a escribir; si te
+  perdés, apretá Esc.
 archivo:
   nombre: servidor.conf
   contenido: |
@@ -16,7 +16,7 @@ archivo:
     max_conexiones = 50
 pasos:
   - consigna: >-
-      Lleva el cursor a la línea 3, la que dice `modo = desarrollo`. Puedes bajar con `j` (o la
+      Llevá el cursor a la línea 3, la que dice `modo = desarrollo`. Podés bajar con `j` (o la
       flecha abajo) dos veces, o escribir `3G` para ir directo.
     verificar:
       - { linea_cursor: 3 }
@@ -28,7 +28,7 @@ pasos:
       En vim casi todo movimiento acepta un número delante: `5j` baja cinco líneas, `3G` va a la
       línea 3, `gg` al principio y `G` al final.
   - consigna: >-
-      Agrega al final del archivo una línea que diga `# Revisado por ana`. Ve al final con `G`,
+      Agregá al final del archivo una línea que diga `# Revisado por ana`. Ve al final con `G`,
       abre una línea nueva debajo con `o`, escribe el texto y vuelve al modo normal con Esc.
     verificar:
       - { linea: 8, texto: "# Revisado por ana" }
@@ -41,8 +41,8 @@ pasos:
       Hay varias formas de entrar al modo inserción: `i` antes del cursor, `a` después, `A` al
       final de la línea, `o` en una línea nueva debajo y `O` arriba. Para salir, siempre Esc.
   - consigna: >-
-      Borra la línea comentada `# usuario_admin = root`. Búscala con `/usuario_admin` y Enter, y
-      bórrala con `dd`.
+      Borrá la línea comentada `# usuario_admin = root`. Buscala con `/usuario_admin` y Enter, y
+      borrala con `dd`.
     verificar:
       - { contenido_no_incluye: usuario_admin }
       - { comando_usado: '^\d*dd$' }
@@ -53,34 +53,34 @@ pasos:
     explicacion: >-
       `dd` borra la línea y la guarda para pegar: `p` la pegaría debajo del cursor. Si te
       equivocas, `u` deshace el último cambio (y Ctrl+R lo rehace).
-  - consigna: Cambia `desarrollo` por `produccion` en todo el archivo con el comando `:%s/desarrollo/produccion/g`.
+  - consigna: Cambiá `desarrollo` por `produccion` en todo el archivo con el comando `:%s/desarrollo/produccion/g`.
     verificar:
       - { linea: 3, texto: "modo = produccion" }
     pistas:
-      - "Escribe `:` para abrir la línea de comandos, el resto del comando y Enter"
+      - "Escribí `:` para abrir la línea de comandos, el resto del comando y Enter"
     solucion: ":%s/desarrollo/produccion/g<CR>"
     explicacion: >-
       `%` significa "en todas las líneas", `s` es sustituir y la `g` final reemplaza todas las
       apariciones de cada línea, no solo la primera.
   - consigna: >-
-      Cambia el nivel de log de `debug` a `info`. Busca `debug` y usa `cw` (cambiar palabra):
-      borra la palabra y te deja en modo inserción para escribir la nueva. Vuelve con Esc.
+      Cambiá el nivel de log de `debug` a `info`. Buscá `debug` y usá `cw` (cambiar palabra):
+      borra la palabra y te deja en modo inserción para escribir la nueva. Volvé con Esc.
     verificar:
       - { linea: 4, texto: "log_nivel = info" }
       - { modo: normal }
     pistas:
       - "`/debug` y Enter pone el cursor al principio de la palabra"
-      - "`cw`, escribes `info` y Esc"
+      - "`cw`, escribís `info` y Esc"
     solucion: /debug<CR>cwinfo<Esc>
     explicacion: Es más rápido que borrar letra por letra con `x`. `cw` funciona desde el principio de cualquier palabra.
-  - consigna: Muestra los números de línea con `:set nu` para revisar el archivo completo.
+  - consigna: Mostrá los números de línea con `:set nu` para revisar el archivo completo.
     verificar:
       - { numeros: true }
     pistas:
       - "`:set nu` y Enter (para quitarlos, `:set nonu`)"
     solucion: ":set nu<CR>"
     explicacion: Los números ayudan cuando un mensaje de error dice "error en la línea 14" de un archivo de configuración.
-  - consigna: Guarda los cambios y sal de vim con `:wq`.
+  - consigna: Guardá los cambios y salí de vim con `:wq`.
     verificar:
       - { guardado: true }
       - { cerrado: true }
@@ -88,5 +88,5 @@ pasos:
       - "Esc (por las dudas), después `:wq` y Enter"
     solucion: ":wq<CR>"
     explicacion: >-
-      `:w` guarda, `:q` sale y `:wq` hace las dos cosas. Si quieres salir descartando los cambios,
-      `:q!`. Si intentas `:q` con cambios sin guardar, vim se niega y muestra el error E37.
+      `:w` guarda, `:q` sale y `:wq` hace las dos cosas. Si querés salir descartando los cambios,
+      `:q!`. Si intentás `:q` con cambios sin guardar, vim se niega y muestra el error E37.

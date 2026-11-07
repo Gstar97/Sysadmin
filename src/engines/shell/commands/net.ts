@@ -457,7 +457,7 @@ register(['ping', 'ping6'], {
       const avg = times.reduce((s, x) => s + x, 0) / times.length
       ctx.out(`rtt min/avg/max/mdev = ${min.toFixed(3)}/${avg.toFixed(3)}/${max.toFixed(3)}/${((max - min) / 2).toFixed(3)} ms\n`)
     }
-    if (!a.values.has('c') && ctx.isTTY) ctx.err('[simulador] Sin -c, ping sigue enviando paquetes hasta cortarlo con Ctrl+C; aquí se envían 4.\n')
+    if (!a.values.has('c') && ctx.isTTY) ctx.err('[simulador] Sin -c, ping sigue enviando paquetes hasta cortarlo con Ctrl+C; acá se envían 4.\n')
     return ok ? 0 : 1
   },
 })

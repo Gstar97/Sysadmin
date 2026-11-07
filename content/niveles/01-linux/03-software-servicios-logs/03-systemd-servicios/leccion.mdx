@@ -16,7 +16,7 @@ import statusPuntos from './status.yaml'
 import verbos from './verbos.yaml'
 import ejServicio from './ej-servicio.yaml'
 
-Un servidor web, una base de datos, el acceso por SSH o el reloj sincronizado: casi todo lo importante de un servidor son programas que funcionan todo el tiempo, sin que nadie los abra. En esta lección vas a ver quién los arranca, quién los vigila y cómo los manejas tú.
+Un servidor web, una base de datos, el acceso por SSH o el reloj sincronizado: casi todo lo importante de un servidor son programas que funcionan todo el tiempo, sin que nadie los abra. En esta lección vas a ver quién los arranca, quién los vigila y cómo los manejás vos.
 
 <AntesDeEmpezar>
 - Un **proceso** es un programa en ejecución, con su número (PID) y su dueño (lección 0.2.2).
@@ -26,7 +26,7 @@ Un servidor web, una base de datos, el acceso por SSH o el reloj sincronizado: c
 
 ## Qué es un servicio
 
-Piensa en un edificio de oficinas. Hay gente que trabaja sin que nadie la llame cada vez: el personal de seguridad en la entrada, el de mantenimiento, la recepción. Empiezan su turno cuando abre el edificio y siguen ahí, esperando a que alguien los necesite.
+Pensá en un edificio de oficinas. Hay gente que trabaja sin que nadie la llame cada vez: el personal de seguridad en la entrada, el de mantenimiento, la recepción. Empiezan su turno cuando abre el edificio y siguen ahí, esperando a que alguien los necesite.
 
 Un **servicio** es lo mismo en un servidor: un programa que arranca solo, trabaja en segundo plano y espera pedidos. `sshd` espera conexiones SSH, `nginx` espera visitas a la página web, `chronyd` mantiene la hora en hora. Por tradición, muchos de estos programas terminan en **d** (de *daemon*, el nombre que se les da en Unix).
 
@@ -40,7 +40,7 @@ Alguien tiene que decidir quién empieza su turno, en qué orden, y qué hacer s
 - guardar sus mensajes en un registro central, el **journal** (lección 1.3.5).
 
 <EnSimple>
-systemd es el programa que arranca y vigila a todos los demás. Tú no le hablas directamente: le das órdenes con el comando `systemctl`. La comparación con el encargado tiene un límite: systemd no decide nada por su cuenta; hace exactamente lo que dicen sus archivos de configuración.
+systemd es el programa que arranca y vigila a todos los demás. Vos no le hablás directamente: le das órdenes con el comando `systemctl`. La comparación con el encargado tiene un límite: systemd no decide nada por su cuenta; hace exactamente lo que dicen sus archivos de configuración.
 </EnSimple>
 
 Cada cosa que maneja systemd se llama **unidad** (*unit*), y el tipo se ve en la extensión del nombre:
@@ -56,7 +56,7 @@ Con los servicios, la extensión se puede omitir: `systemctl status nginx` es lo
 
 ## Mirar un servicio
 
-El comando que más vas a usar es `systemctl status`. Toca cada parte de la salida para ver qué significa:
+El comando que más vas a usar es `systemctl status`. Tocá cada parte de la salida para ver qué significa:
 
 <DiagramaInteractivo svg={status} datos={statusPuntos} alt="Salida de systemctl status nginx: el punto verde con el nombre y la descripción, la línea Loaded con el archivo de la unidad y el estado enabled, la línea Active con active (running) y desde cuándo, el Main PID, las tareas y la memoria, el CGroup con los procesos del servicio, y al final las últimas líneas del journal." />
 
@@ -82,10 +82,10 @@ Este es el punto que más confunde al empezar. Sobre cada servicio hay dos pregu
 2. **¿Arranca solo cuando se enciende el servidor?** Se cambia con `enable` y `disable`.
 
 <EnSimple>
-`start` es abrir el negocio hoy. `enable` es dejar anotado en la agenda que abre todos los días. Puedes abrir hoy sin anotarlo (mañana estará cerrado), o anotarlo sin abrir hoy (abrirá mañana). `enable --now` hace las dos cosas.
+`start` es abrir el negocio hoy. `enable` es dejar anotado en la agenda que abre todos los días. Podés abrir hoy sin anotarlo (mañana estará cerrado), o anotarlo sin abrir hoy (abrirá mañana). `enable --now` hace las dos cosas.
 </EnSimple>
 
-Después de instalar un servicio nuevo, lo normal es `sudo systemctl enable --now nombre`. Ojo con la diferencia entre distribuciones: en Ubuntu, muchos paquetes dejan el servicio arrancado y habilitado apenas los instalas; en Rocky, casi nunca. Por eso, después de instalar, siempre conviene mirar con `status`.
+Después de instalar un servicio nuevo, lo normal es `sudo systemctl enable --now nombre`. Ojo con la diferencia entre distribuciones: en Ubuntu, muchos paquetes dejan el servicio arrancado y habilitado apenas los instalás; en Rocky, casi nunca. Por eso, después de instalar, siempre conviene mirar con `status`.
 
 ## Los comandos de cada día
 
@@ -93,7 +93,7 @@ Después de instalar un servicio nuevo, lo normal es `sudo systemctl enable --no
 
 Algunos detalles:
 
-- **restart o reload.** `restart` detiene el programa y lo vuelve a arrancar: las conexiones en curso se cortan. `reload` le pide que vuelva a leer su configuración sin detenerse, pero no todos los servicios lo permiten (nginx sí). Si no sabes, `systemctl reload-or-restart` usa reload cuando se puede.
+- **restart o reload.** `restart` detiene el programa y lo vuelve a arrancar: las conexiones en curso se cortan. `reload` le pide que vuelva a leer su configuración sin detenerse, pero no todos los servicios lo permiten (nginx sí). Si no sabés, `systemctl reload-or-restart` usa reload cuando se puede.
 - **Para scripts.** `systemctl is-active nginx`, `is-enabled` e `is-failed` responden con una palabra y con un código de salida (0 si la respuesta es sí), así que sirven en un `if`.
 - **disable o mask.** `disable` solo saca el servicio del arranque automático; alguien todavía puede arrancarlo a mano, o puede arrancarlo otro servicio que lo necesite. `mask` lo bloquea del todo: es la opción para algo que **no debe** funcionar en ese servidor. Se revierte con `unmask`.
 - **Todo cambio necesita sudo**, menos mirar (`status`, `is-active`, `list-units`).
@@ -105,10 +105,10 @@ Un **target** agrupa unidades para formar un estado del sistema completo. Los qu
 - **multi-user.target**: el modo normal de un servidor, con red y servicios pero sin escritorio gráfico.
 - **graphical.target**: lo mismo, más el escritorio. Es el de las computadoras de escritorio.
 
-Cuando ejecutas `systemctl enable nginx`, en realidad se crea un enlace en `/etc/systemd/system/multi-user.target.wants/`: "cuando el sistema llegue al modo multiusuario, arranca también nginx". `systemctl get-default` dice con qué target arranca tu servidor. Vas a volver a los targets en la lección del arranque (1.3.6), donde aparecen los modos de rescate.
+Cuando ejecutás `systemctl enable nginx`, en realidad se crea un enlace en `/etc/systemd/system/multi-user.target.wants/`: "cuando el sistema llegue al modo multiusuario, arranca también nginx". `systemctl get-default` dice con qué target arranca tu servidor. Vas a volver a los targets en la lección del arranque (1.3.6), donde aparecen los modos de rescate.
 
 <Nota titulo="Para más adelante: dependencias">
-Las unidades pueden decir que necesitan a otras (`Requires=`, `Wants=`) o que van después de otras (`After=`). `systemctl list-dependencies nginx` muestra ese árbol. Las vas a escribir tú en la próxima lección, al crear tu propia unidad.
+Las unidades pueden decir que necesitan a otras (`Requires=`, `Wants=`) o que van después de otras (`After=`). `systemctl list-dependencies nginx` muestra ese árbol. Las vas a escribir vos en la próxima lección, al crear tu propia unidad.
 </Nota>
 
 ## Cuando un servicio no arranca
@@ -121,7 +121,7 @@ Lo importante es seguir siempre el mismo orden, en lugar de probar cosas al azar
 4. **Arreglar** la causa (la configuración, un puerto ocupado, un permiso).
 5. **Arrancar y comprobar**: `systemctl start`, y después `status`, `ss -tlnp` (¿escucha en su puerto?) o `curl` (¿responde?).
 
-Las causas más comunes: un error en el archivo de configuración, un puerto que ya usa otro programa, un archivo o carpeta sin permisos, o una dependencia que no arrancó. Practica con un caso real:
+Las causas más comunes: un error en el archivo de configuración, un puerto que ya usa otro programa, un archivo o carpeta sin permisos, o una dependencia que no arrancó. Practicá con un caso real:
 
 <Terminal ejercicio={ejServicio} />
 
@@ -133,18 +133,18 @@ Las causas más comunes: un error en el archivo de configuración, un puerto que
     El paquete no está instalado, o el nombre de la unidad es otro. En Rocky el servidor SSH es `sshd` y en Ubuntu es `ssh`; Apache es `httpd` en Rocky y `apache2` en Ubuntu. `systemctl list-unit-files | grep -i nombre` ayuda a encontrarlo.
   </ErrorComun>
   <ErrorComun titulo='"Job for nginx.service failed because the control process exited with error code."'>
-    El servicio intentó arrancar y falló. El mensaje no dice por qué: dice dónde mirar. Ejecuta los dos comandos que sugiere (`systemctl status` y `journalctl -xeu`) y lee las últimas líneas.
+    El servicio intentó arrancar y falló. El mensaje no dice por qué: dice dónde mirar. Ejecutá los dos comandos que sugiere (`systemctl status` y `journalctl -xeu`) y lee las últimas líneas.
   </ErrorComun>
   <ErrorComun titulo='"Interactive authentication required" o "Access denied"'>
     Cambiar el estado de un servicio necesita privilegios: falta `sudo` adelante.
   </ErrorComun>
   <ErrorComun titulo="Usar restart cuando alcanzaba con reload">
-    En un servidor web con usuarios conectados, restart corta todas las conexiones. Si solo cambiaste la configuración y el servicio admite reload, úsalo (después de probar la configuración con `nginx -t`).
+    En un servidor web con usuarios conectados, restart corta todas las conexiones. Si solo cambiaste la configuración y el servicio admite reload, usalo (después de probar la configuración con `nginx -t`).
   </ErrorComun>
 </ErroresComunes>
 
 <Resumen>
-- Un **servicio** es un programa que funciona en segundo plano. **systemd** (PID 1) los arranca, los vigila y guarda sus mensajes; tú lo manejas con `systemctl`.
+- Un **servicio** es un programa que funciona en segundo plano. **systemd** (PID 1) los arranca, los vigila y guarda sus mensajes; vos lo manejás con `systemctl`.
 - Lo que maneja systemd son **unidades**: `.service`, `.timer`, `.target` y otras.
 - `systemctl status` muestra el archivo de la unidad, si está enabled, el estado (running, dead, failed), el PID y los últimos mensajes.
 - `start`/`stop`/`restart`/`reload` cambian lo que pasa **ahora**; `enable`/`disable` cambian lo que pasa **al encender**. `enable --now` hace las dos cosas. `mask` bloquea del todo.

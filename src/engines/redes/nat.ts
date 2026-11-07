@@ -58,7 +58,7 @@ export function outbound(s: NatState, ip: string, puerto: number, destino: strin
 /** Alguien de internet intenta conectarse a la IP pública. */
 export function inbound(s: NatState, puerto: number, proto: 'TCP' | 'UDP' = 'TCP'): { ok: boolean; hacia?: string; explicacion: string } {
   if (s.publica !== s.wan && isCgnat(s.wan)) {
-    return { ok: false, explicacion: `La IP de tu router (${s.wan}) es de CGNAT: la IP pública ${s.publica} la comparte el proveedor con muchos clientes y es su router el que recibe la conexión. Como ese equipo no tiene ninguna redirección hacia ti, la descarta. Con CGNAT no se puede publicar un servicio así: hace falta pedir una IP pública, usar IPv6 o un túnel saliente.` }
+    return { ok: false, explicacion: `La IP de tu router (${s.wan}) es de CGNAT: la IP pública ${s.publica} la comparte el proveedor con muchos clientes y es su router el que recibe la conexión. Como ese equipo no tiene ninguna redirección hacia vos, la descarta. Con CGNAT no se puede publicar un servicio así: hace falta pedir una IP pública, usar IPv6 o un túnel saliente.` }
   }
   const fwd = s.redirecciones.find((r) => r.puerto === puerto && r.proto === proto)
   if (!fwd) return { ok: false, explicacion: `Llega una conexión a ${s.wan}:${puerto}, pero no hay ninguna fila en la tabla ni redirección para ese puerto: el router no sabe a qué equipo de adentro mandarla y la descarta. Por eso, sin configurar nada, desde internet no se puede iniciar una conexión hacia tu red.` }

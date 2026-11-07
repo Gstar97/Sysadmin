@@ -15,21 +15,21 @@ estado_inicial:
     - { nombre: diego }
     - { nombre: pedro }
 pasos:
-  - consigna: Crea el grupo `contabilidad` y agrega a marta y a diego.
+  - consigna: Creá el grupo `contabilidad` y agregá a marta y a diego.
     verificar:
       - { grupo: contabilidad, miembros: [marta, diego] }
     pistas:
       - "`sudo groupadd contabilidad`, y después `sudo usermod -aG contabilidad` para cada uno"
     solucion: [sudo groupadd contabilidad, sudo usermod -aG contabilidad marta, sudo usermod -aG contabilidad diego]
     explicacion: Los permisos se dan al grupo, no a cada persona. Cuando entre alguien nuevo al área, alcanza con agregarlo al grupo.
-  - consigna: Crea la carpeta `/srv/contabilidad`, cuyo grupo sea contabilidad.
+  - consigna: Creá la carpeta `/srv/contabilidad`, cuyo grupo sea contabilidad.
     verificar:
       - { archivo: /srv/contabilidad, tipo: directorio, grupo: contabilidad }
     pistas:
       - "`sudo mkdir /srv/contabilidad` y `sudo chgrp contabilidad /srv/contabilidad`"
     solucion: [sudo mkdir /srv/contabilidad, sudo chgrp contabilidad /srv/contabilidad]
     explicacion: La carpeta sigue siendo de root, pero el grupo ahora es contabilidad.
-  - consigna: Deja permisos 2770 en la carpeta (todo para el dueño y el grupo, nada para el resto, y el bit SGID).
+  - consigna: Dejá permisos 2770 en la carpeta (todo para el dueño y el grupo, nada para el resto, y el bit SGID).
     verificar:
       - { archivo: /srv/contabilidad, modo: "2770" }
     pistas:
@@ -51,14 +51,14 @@ pasos:
       es 002, nace con escritura para el grupo. Un detalle: con sudo -u marta el archivo nacería
       con 644, porque sudo suma la umask 022 a la del usuario; su - abre una sesión igual a la de
       marta, con su umask.
-  - consigna: Comprueba que diego puede agregar una línea al archivo de marta.
+  - consigna: Comprobá que diego puede agregar una línea al archivo de marta.
     verificar:
       - { archivo: /srv/contabilidad/balance.txt, contenido_incluye: revisado }
     pistas:
       - "Como diego: `echo revisado | sudo -u diego tee -a /srv/contabilidad/balance.txt`"
     solucion: ['echo revisado | sudo -u diego tee -a /srv/contabilidad/balance.txt']
     explicacion: Diego no es el dueño, pero está en el grupo del archivo, que tiene rw-.
-  - consigna: Crea la carpeta pública `/srv/intercambio` con permisos 1777 (todos pueden crear archivos, pero cada uno solo borra los suyos).
+  - consigna: Creá la carpeta pública `/srv/intercambio` con permisos 1777 (todos pueden crear archivos, pero cada uno solo borra los suyos).
     verificar:
       - { archivo: /srv/intercambio, tipo: directorio, modo: "1777" }
     pistas:
@@ -77,7 +77,7 @@ pasos:
       - "`sudo -u pedro rm -f /srv/intercambio/aviso.txt`"
     solucion: [sudo -u marta touch /srv/intercambio/aviso.txt, sudo -u pedro rm -f /srv/intercambio/aviso.txt]
     explicacion: Pedro tiene w en la carpeta, pero el sticky bit solo deja borrar al dueño del archivo, al dueño de la carpeta y a root.
-  - consigna: Busca los programas con SUID en /usr/bin, como haría una auditoría de seguridad.
+  - consigna: Buscá los programas con SUID en /usr/bin, como haría una auditoría de seguridad.
     verificar:
       - { comando_usado: 'find\s+/usr/bin\s+.*-perm\s+(-4000|-u=s|/4000|/u=s)' }
       - { salida_contiene: /usr/bin/passwd }

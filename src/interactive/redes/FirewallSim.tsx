@@ -152,7 +152,7 @@ export function FirewallSim() {
             </>
           ) : (
             <>
-              <p className="text-sm">Estas son las reglas de la interfaz LAN, desordenadas. Ponlas en el orden correcto para que se cumpla todo lo de abajo. Recuerda: gana la primera que coincide.</p>
+              <p className="text-sm">Estas son las reglas de la interfaz LAN, desordenadas. Ponelas en el orden correcto para que se cumpla todo lo de abajo. Recordá: gana la primera que coincide.</p>
               <ol className="space-y-1 text-xs">
                 {orden.map((r, i) => (
                   <li key={r.id} className="flex items-center gap-2 rounded-lg border border-line px-2 py-1">

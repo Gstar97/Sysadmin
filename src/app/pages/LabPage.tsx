@@ -67,7 +67,7 @@ export default function LabPage() {
       <aside>
         <Card className="space-y-3 lg:sticky lg:top-20">
           <h2 className="font-semibold">Lista de verificación</h2>
-          <p className="text-sm text-muted">Marca cada punto cuando lo hayas comprobado en tu laboratorio. Al completar todos, el laboratorio cuenta como hecho para el módulo.</p>
+          <p className="text-sm text-muted">Marcá cada punto cuando lo hayas comprobado en tu laboratorio. Al completar todos, el laboratorio cuenta como hecho para el módulo.</p>
           <Checklist items={lab.verificacion} checked={checked} label="Verificación del laboratorio" onChange={(c) => void setLabChecklist(mod.id, c, lab.verificacion.length)} />
           {state?.labDone && (
             <Callout tone="ok" title="¡Laboratorio completo!">

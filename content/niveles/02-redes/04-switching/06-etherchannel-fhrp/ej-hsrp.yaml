@@ -4,7 +4,7 @@ titulo: Una puerta de enlace que no se cae
 descripcion: >-
   La oficina sale por dos routers, R1 y R2, conectados al mismo switch. Las PC usan como puerta
   de enlace 192.168.1.254, una IP virtual de HSRP. R2 ya está configurado en el grupo 1 con la
-  prioridad de fábrica. Quieres que R1 sea el principal y que, si se cae, R2 tome su lugar. Estás
+  prioridad de fábrica. Querés que R1 sea el principal y que, si se cae, R2 tome su lugar. Estás
   en la consola de R1.
 estado_inicial:
   consola: R1
@@ -25,13 +25,13 @@ estado_inicial:
       - { a: "R2:Gi0/0", b: "SW1:Gi0/2" }
       - { a: "PC1:eth0", b: "SW1:Fa0/1" }
 pasos:
-  - consigna: Mira el estado de HSRP antes de tocar nada.
+  - consigna: Mirá el estado de HSRP antes de tocar nada.
     verificar:
       - { comando_usado: show standby }
-    pistas: ["enable y show standby brief (en R1 todavía no hay nada: prueba igual, y fíjate que no aparece ningún grupo)."]
+    pistas: ["enable y show standby brief (en R1 todavía no hay nada: probá igual, y fijate que no aparece ningún grupo)."]
     solucion: [enable, show standby brief]
   - consigna: >-
-      Suma R1 al grupo 1 con la IP virtual 192.168.1.254, prioridad 110 y preempt, para que sea el
+      Sumá R1 al grupo 1 con la IP virtual 192.168.1.254, prioridad 110 y preempt, para que sea el
       router activo.
     verificar:
       - { hsrp_activo: R1, ip: 192.168.1.254 }
@@ -49,14 +49,14 @@ pasos:
     explicacion: >-
       R2 deja de oír a R1 y toma la IP virtual en unos segundos. La PC sigue usando la misma
       puerta de enlace sin enterarse: no hubo que cambiar nada en ella.
-  - consigna: Vuelve a levantar Gi0/0 y comprueba que R1 recupera el rol de activo.
+  - consigna: Volvé a levantar Gi0/0 y comprobá que R1 recupera el rol de activo.
     verificar:
       - { hsrp_activo: R1, ip: 192.168.1.254 }
       - { salida_contiene: "Active" }
     pistas: ["no shutdown, end y show standby brief."]
     solucion: [no shutdown, end, show standby brief]
     explicacion: Gracias a preempt, R1 vuelve a ser el activo. Sin preempt, R2 seguiría activo hasta su próxima falla.
-  - consigna: Guarda la configuración.
+  - consigna: Guardá la configuración.
     verificar:
       - { guardado: true }
     pistas: ["copy running-config startup-config."]

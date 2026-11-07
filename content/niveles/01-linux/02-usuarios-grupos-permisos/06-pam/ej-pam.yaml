@@ -15,7 +15,7 @@ estado_inicial:
   faillock:
     laura: 5
 pasos:
-  - consigna: Mira qué perfil y qué funciones de authselect están activos.
+  - consigna: Mirá qué perfil y qué funciones de authselect están activos.
     verificar:
       - { comando_usado: 'authselect\s+current' }
       - { salida_contiene: "Profile ID" }
@@ -23,16 +23,16 @@ pasos:
       - "`sudo authselect current`"
     solucion: [sudo authselect current]
     explicacion: En la familia Red Hat, authselect genera los archivos de PAM. No se editan a mano, porque authselect los vuelve a escribir.
-  - consigna: Activa el bloqueo por intentos fallidos (la función with-faillock).
+  - consigna: Activá el bloqueo por intentos fallidos (la función with-faillock).
     verificar:
       - { archivo: /etc/authselect/system-auth, contenido_incluye: pam_faillock.so }
     pistas:
       - "`sudo authselect enable-feature with-faillock`"
     solucion: [sudo authselect enable-feature with-faillock]
-    explicacion: authselect agregó las líneas de pam_faillock en system-auth y password-auth. Puedes verlas con `grep faillock /etc/pam.d/system-auth`.
+    explicacion: authselect agregó las líneas de pam_faillock en system-auth y password-auth. Podés verlas con `grep faillock /etc/pam.d/system-auth`.
   - consigna: >-
-      Configura el bloqueo: 5 intentos (`deny = 5`) y 15 minutos de bloqueo (`unlock_time = 900`)
-      en `/etc/security/faillock.conf`. Las líneas vienen comentadas; puedes descomentarlas con sed.
+      Configurá el bloqueo: 5 intentos (`deny = 5`) y 15 minutos de bloqueo (`unlock_time = 900`)
+      en `/etc/security/faillock.conf`. Las líneas vienen comentadas; podés descomentarlas con sed.
     verificar:
       - { archivo: /etc/security/faillock.conf, contenido_incluye: "\ndeny = 5" }
       - { archivo: /etc/security/faillock.conf, contenido_incluye: "\nunlock_time = 900" }
@@ -42,7 +42,7 @@ pasos:
     solucion: ["sudo sed -i 's/^# deny = 3/deny = 5/' /etc/security/faillock.conf", "sudo sed -i 's/^# unlock_time = 600/unlock_time = 900/' /etc/security/faillock.conf"]
     explicacion: También podías abrirlo con `sudo vi` y editar las dos líneas. sed -i es útil cuando hay que repetir el mismo cambio en muchos servidores.
   - consigna: >-
-      Crea la política de contraseñas en un archivo propio:
+      Creá la política de contraseñas en un archivo propio:
       `/etc/security/pwquality.conf.d/10-empresa.conf` con `minlen = 12` y `minclass = 3`.
     verificar:
       - { archivo: /etc/security/pwquality.conf.d/10-empresa.conf, contenido_incluye: "minlen = 12" }
@@ -55,7 +55,7 @@ pasos:
       Un archivo propio en la carpeta .d no se pisa con las actualizaciones del paquete y deja
       claro qué cambió la empresa. minclass = 3 exige tres tipos entre minúsculas, mayúsculas,
       números y símbolos.
-  - consigna: Laura dice que no puede entrar. Revisa sus intentos fallidos con faillock.
+  - consigna: Laura dice que no puede entrar. Revisá sus intentos fallidos con faillock.
     verificar:
       - { comando_usado: 'faillock\s+--user\s+laura' }
       - { salida_contiene: RHOST }

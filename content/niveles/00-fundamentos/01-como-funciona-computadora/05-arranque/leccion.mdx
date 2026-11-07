@@ -15,7 +15,7 @@ import ordenar from './ordenar-arranque.yaml'
 import ejArranque from './ej-arranque.yaml'
 import noArranca from './no-arranca.yaml'
 
-"No arranca" puede significar cosas muy distintas: que no enciende ni una luz, que la pantalla queda negra, que aparece un mensaje de error del firmware o que el sistema operativo empieza a cargar y se detiene. Cada caso tiene causas y soluciones distintas. Si conoces las etapas del arranque, el último mensaje en pantalla te dice dónde buscar.
+"No arranca" puede significar cosas muy distintas: que no enciende ni una luz, que la pantalla queda negra, que aparece un mensaje de error del firmware o que el sistema operativo empieza a cargar y se detiene. Cada caso tiene causas y soluciones distintas. Si conocés las etapas del arranque, el último mensaje en pantalla te dice dónde buscar.
 
 <AntesDeEmpezar>
 - La **placa madre** tiene un chip con un programa propio, que funciona aunque el disco esté vacío.
@@ -25,14 +25,14 @@ import noArranca from './no-arranca.yaml'
 
 ## Del botón al sistema operativo
 
-El arranque funciona como una carrera de postas: cada corredor hace su tramo y le pasa el testigo al siguiente. Si la carrera se detiene, mirando quién tenía el testigo sabes en qué tramo fue el problema. En una computadora, cada etapa prepara lo necesario y le entrega el control a la siguiente.
+El arranque funciona como una carrera de postas: cada corredor hace su tramo y le pasa el testigo al siguiente. Si la carrera se detiene, mirando quién tenía el testigo sabés en qué tramo fue el problema. En una computadora, cada etapa prepara lo necesario y le entrega el control a la siguiente.
 
 <Diagrama svg={etapas} alt="Las seis etapas del arranque: encendido, POST, búsqueda del dispositivo de arranque, cargador, kernel y servicios, con el síntoma típico de una falla en cada una" pie="Las tres primeras etapas son del firmware; las tres últimas, del sistema operativo." />
 
 1. **Encendido**: la fuente estabiliza sus tensiones y le avisa a la placa. El procesador empieza a ejecutar el **<Termino id="firmware">firmware</Termino>**, el programa guardado en el chip de la placa madre.
 2. **<Termino id="post">POST</Termino>** (*Power-On Self-Test*): el firmware prueba e inicializa la memoria, el procesador, el video y los demás dispositivos. Si algo grave falla, avisa con pitidos o con luces de diagnóstico, porque todavía no hay video. En un servidor el POST puede tardar varios minutos (prueba mucha memoria e inicia controladoras de discos y de red): es normal.
 3. **Búsqueda del dispositivo de arranque**: el firmware recorre el **orden de arranque** (disco, USB, red) hasta encontrar algo que pueda arrancar.
-4. **<Termino id="cargador-arranque">Cargador de arranque</Termino>**: un programa pequeño que sabe cargar el sistema operativo. En Linux es **GRUB**; en Windows, el **Windows Boot Manager**. Si hay varios sistemas instalados, aquí aparece el menú para elegir.
+4. **<Termino id="cargador-arranque">Cargador de arranque</Termino>**: un programa pequeño que sabe cargar el sistema operativo. En Linux es **GRUB**; en Windows, el **Windows Boot Manager**. Si hay varios sistemas instalados, acá aparece el menú para elegir.
 5. **Kernel**: el núcleo del sistema operativo inicia los controladores de hardware y monta el disco donde está el sistema. En Linux lo ayuda el **initramfs**, un sistema mínimo con los controladores necesarios para llegar al disco.
 6. **Servicios**: en Linux, **systemd** arranca los servicios (red, SSH, bases de datos) y aparece el inicio de sesión. En Windows pasa lo mismo con el administrador de servicios.
 
@@ -41,7 +41,7 @@ El arranque funciona como una carrera de postas: cada corredor hace su tramo y l
 ## BIOS y UEFI
 
 <EnSimple>
-Imagina a dos personas a las que les pides que busquen las instrucciones para encender una máquina dentro de una carpeta. La primera (BIOS) solo sabe leer la primera hoja: si las instrucciones no están ahí, no sabe seguir. La segunda (UEFI) sabe leer el índice, buscar el archivo correcto por su nombre y abrirlo. Por eso UEFI es más flexible y puede tener varios sistemas a mano.
+Imagina a dos personas a las que les pedís que busquen las instrucciones para encender una máquina dentro de una carpeta. La primera (BIOS) solo sabe leer la primera hoja: si las instrucciones no están ahí, no sabe seguir. La segunda (UEFI) sabe leer el índice, buscar el archivo correcto por su nombre y abrirlo. Por eso UEFI es más flexible y puede tener varios sistemas a mano.
 </EnSimple>
 
 Hay dos tipos de firmware:
@@ -62,7 +62,7 @@ Con UEFI, el disco tiene una **<Termino id="particion-efi">partición EFI</Termi
 \EFI\BOOT\BOOTX64.EFI                cargador de respaldo
 ```
 
-Piensa en la partición EFI como la recepción de un edificio: cada sistema operativo deja ahí su "tarjeta" con las instrucciones para despertarlo, y el firmware sabe que tiene que ir a buscar a la recepción.
+Pensá en la partición EFI como la recepción de un edificio: cada sistema operativo deja ahí su "tarjeta" con las instrucciones para despertarlo, y el firmware sabe que tiene que ir a buscar a la recepción.
 
 El firmware guarda en su propia memoria una lista de **entradas de arranque** ("Rocky Linux: disco 1, archivo `\EFI\rocky\shimx64.efi`") y el orden en que las prueba. Si esa lista se pierde (por ejemplo, al reiniciar la configuración del firmware o al cambiar el disco de equipo), el firmware busca el cargador de respaldo `\EFI\BOOT\BOOTX64.EFI`, y si tampoco existe, muestra que no hay dispositivo de arranque.
 
@@ -118,19 +118,19 @@ Junto a Secure Boot suele aparecer el **TPM** (*Trusted Platform Module*), un ch
 
 <Terminal ejercicio={ejArranque} />
 
-Ahora un caso real: una PC que no termina de arrancar. Usa lo que sabes de las etapas para no perder tiempo.
+Ahora un caso real: una PC que no termina de arrancar. Usá lo que sabés de las etapas para no perder tiempo.
 
 <Troubleshooting escenario={noArranca} />
 
 <ErroresComunes>
   <ErrorComun titulo='"No boot device" o "Reboot and select proper boot device" después de cambiar o clonar un disco'>
-    El firmware no encuentra un cargador. Revisa en este orden: que el disco aparezca en el firmware, que el **modo de arranque** (UEFI o heredado) coincida con cómo se instaló el sistema (GPT con partición EFI necesita UEFI) y que en el **orden de arranque** exista una entrada para ese disco. Cuando la entrada se perdió, muchas veces basta con elegir el disco de nuevo en el menú de arranque del firmware.
+    El firmware no encuentra un cargador. Revisá en este orden: que el disco aparezca en el firmware, que el **modo de arranque** (UEFI o heredado) coincida con cómo se instaló el sistema (GPT con partición EFI necesita UEFI) y que en el **orden de arranque** exista una entrada para ese disco. Cuando la entrada se perdió, muchas veces basta con elegir el disco de nuevo en el menú de arranque del firmware.
   </ErrorComun>
   <ErrorComun titulo='Windows dice "En sistemas EFI, Windows solo se puede instalar en discos GPT"'>
     El instalador arrancó en modo UEFI y el disco tiene tabla MBR. Si el disco no tiene datos que conservar, se puede convertir desde el mismo instalador (con `diskpart`: `clean` y `convert gpt`, que **borran todo el disco**). Si es una instalación existente de Windows, la herramienta `MBR2GPT` convierte sin borrar.
   </ErrorComun>
   <ErrorComun titulo='"Verification failed: (0x1A) Security Violation" al arrancar'>
-    Es shim avisando que Secure Boot rechazó un cargador o un kernel sin firma válida, por ejemplo un USB armado con una herramienta vieja o un kernel compilado a mano. Usa la imagen oficial de la distribución; si el componente es legítimo, regístralo con MOK. Desactivar Secure Boot es el último recurso, no el primero.
+    Es shim avisando que Secure Boot rechazó un cargador o un kernel sin firma válida, por ejemplo un USB armado con una herramienta vieja o un kernel compilado a mano. Usá la imagen oficial de la distribución; si el componente es legítimo, registralo con MOK. Desactivar Secure Boot es el último recurso, no el primero.
   </ErrorComun>
   <ErrorComun titulo="El equipo pierde la fecha y la configuración del firmware cada vez que se desenchufa">
     La pila de la placa se agotó. Además de la hora, se pierde la configuración: modo de arranque, orden de arranque, virtualización activada. Es una causa clásica de "ayer arrancaba y hoy no": se cambia la pila y se vuelve a configurar el firmware.

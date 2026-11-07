@@ -2,7 +2,7 @@ tipo: terminal
 shell: bash
 titulo: Cuentas y privilegios en un servidor
 descripcion: >-
-  Conoce las cuentas de un servidor Rocky Linux con nginx instalado: quién eres, qué puedes
+  Conoce las cuentas de un servidor Rocky Linux con nginx instalado: quién sos, qué podés
   hacer, cómo se usa sudo y cómo son las cuentas de servicio.
 estado_inicial:
   distro: rocky
@@ -14,7 +14,7 @@ estado_inicial:
   paquetes:
     instalados: [nginx]
 pasos:
-  - consigna: Averigua con qué usuario estás trabajando y a qué grupos perteneces con `id`.
+  - consigna: Averiguá con qué usuario estás trabajando y a qué grupos pertenecés con `id`.
     verificar:
       - { comando_usado: '^\s*id\s*$' }
     pistas:
@@ -24,7 +24,7 @@ pasos:
       Tu usuario tiene el UID 1000 (el primero creado en la instalación) y pertenece al grupo
       **wheel**: en Rocky, los miembros de wheel pueden usar sudo. En Ubuntu ese grupo se llama
       **sudo**.
-  - consigna: Intenta leer el archivo de contraseñas cifradas con `cat /etc/shadow`.
+  - consigna: Intentá leer el archivo de contraseñas cifradas con `cat /etc/shadow`.
     verificar:
       - { comando_usado: '^\s*cat\s+/etc/shadow' }
     pistas:
@@ -43,14 +43,14 @@ pasos:
     explicacion: >-
       sudo ejecutó solo ese comando como root. Las cuentas de sistema muestran `!!` o `*` en lugar
       de una contraseña: no se puede iniciar sesión con ellas.
-  - consigna: Mira qué te permite hacer sudo con `sudo -l`.
+  - consigna: Mirá qué te permite hacer sudo con `sudo -l`.
     verificar:
       - { comando_usado: 'sudo\s+-l' }
     pistas:
       - "`sudo -l`"
     solucion: [sudo -l]
-    explicacion: "`(ALL) ALL` significa que puedes ejecutar cualquier comando como cualquier usuario. A otra persona se le podría permitir solo un comando concreto."
-  - consigna: Busca la cuenta de servicio de nginx en la lista de usuarios con `grep nginx /etc/passwd`.
+    explicacion: "`(ALL) ALL` significa que podés ejecutar cualquier comando como cualquier usuario. A otra persona se le podría permitir solo un comando concreto."
+  - consigna: Buscá la cuenta de servicio de nginx en la lista de usuarios con `grep nginx /etc/passwd`.
     verificar:
       - { salida_contiene: nologin }
     pistas:
@@ -60,7 +60,7 @@ pasos:
       Los campos son: nombre, contraseña (la `x` indica que está en /etc/shadow), UID, GID,
       descripción, carpeta personal y shell. El shell `/sbin/nologin` impide iniciar sesión: la
       cuenta existe solo para que el servicio corra con permisos limitados.
-  - consigna: Comprueba que no se puede iniciar sesión con esa cuenta, ni siquiera siendo administrador, con `sudo su - nginx`.
+  - consigna: Comprobá que no se puede iniciar sesión con esa cuenta, ni siquiera siendo administrador, con `sudo su - nginx`.
     verificar:
       - { comando_usado: 'sudo\s+su\s+-?\s*nginx' }
     pistas:

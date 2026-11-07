@@ -2,7 +2,7 @@ tipo: terminal
 shell: bash
 titulo: Sacarle información a un registro
 descripcion: >-
-  En web01 tienes el registro de accesos de nginx de esta mañana y el archivo de configuración
+  En web01 tenés el registro de accesos de nginx de esta mañana y el archivo de configuración
   de una aplicación. Vas a responder preguntas concretas con grep, sed y awk, sin abrir ningún
   editor.
 estado_inicial:
@@ -42,7 +42,7 @@ pasos:
       - "`grep -c ' 404 ' access.log` o `awk '$9 == 404' access.log | wc -l`"
     solucion: ["grep -c ' 404 ' access.log"]
     explicacion: Con espacios alrededor se evita contar un 404 que aparezca en otro lado (un tamaño, una ruta).
-  - consigna: Muestra la IP y la ruta de cada 404.
+  - consigna: Mostrá la IP y la ruta de cada 404.
     verificar:
       - { comando_usado: 'awk\s+.*\$9' }
       - { salida_contiene: "198.51.100.7 /.env" }
@@ -50,7 +50,7 @@ pasos:
       - "`awk '$9 == 404 {print $1, $7}' access.log`"
     solucion: ["awk '$9 == 404 {print $1, $7}' access.log"]
     explicacion: /admin, /wp-login.php, /.env, /config.php... son pedidos típicos de robots que buscan agujeros conocidos.
-  - consigna: ¿Qué IP generó más 404? Arma la tubería que las cuenta y las ordena de mayor a menor.
+  - consigna: ¿Qué IP generó más 404? Armá la tubería que las cuenta y las ordena de mayor a menor.
     verificar:
       - { comando_usado: 'uniq\s+-c' }
       - { salida_regex: '^\s*3 198\.51\.100\.7' }
@@ -59,7 +59,7 @@ pasos:
       - "`awk '$9 == 404 {print $1}' access.log | sort | uniq -c | sort -rn`"
     solucion: ["awk '$9 == 404 {print $1}' access.log | sort | uniq -c | sort -rn"]
     explicacion: Esa IP es candidata a bloquearse en el firewall. Esta tubería (sort | uniq -c | sort -rn) sirve para contar casi cualquier cosa.
-  - consigna: Suma cuántos bytes se enviaron por cada código de estado, con un arreglo de awk.
+  - consigna: Sumá cuántos bytes se enviaron por cada código de estado, con un arreglo de awk.
     verificar:
       - { comando_usado: 'awk\s+.*END' }
       - { salida_contiene: "200 26490" }
@@ -68,7 +68,7 @@ pasos:
       - "`awk '{total[$9] += $10} END {for (k in total) print k, total[k]}' access.log`"
     solucion: ["awk '{total[$9] += $10} END {for (k in total) print k, total[k]}' access.log"]
     explicacion: Los arreglos de awk agrupan por la clave que quieras. Es como una tabla dinámica de una hoja de cálculo, en una línea.
-  - consigna: Muestra la configuración efectiva de app.conf, sin comentarios ni líneas vacías.
+  - consigna: Mostrá la configuración efectiva de app.conf, sin comentarios ni líneas vacías.
     verificar:
       - { comando_usado: 'grep\s+-\w*v|sed\s+.*d' }
       - { salida_contiene: "db_host=db01" }
@@ -79,7 +79,7 @@ pasos:
     solucion: ["grep -Ev '^\\s*(#|$)' app.conf"]
     explicacion: >-
       Es lo primero que se hace con un archivo de configuración largo: ver solo lo que está activo.
-  - consigna: Cambia db_host a db02 directamente en el archivo, dejando una copia del original en app.conf.bak, y compara los dos.
+  - consigna: Cambiá db_host a db02 directamente en el archivo, dejando una copia del original en app.conf.bak, y compara los dos.
     verificar:
       - { archivo: /home/ana/app.conf, contenido_incluye: "db_host=db02" }
       - { archivo: /home/ana/app.conf.bak, contenido_incluye: "db_host=db01" }

@@ -16,22 +16,22 @@ import paquetes from './paquetes.yaml'
 import sintomas from './sintomas.yaml'
 import ejCamino from './ej-camino.yaml'
 
-Abres el navegador, escribes `tienda.example.com` y en menos de un segundo aparece la página. En ese segundo participan más de diez sistemas distintos, y cada uno es parte de esta carrera. Esta lección es el mapa: no vas a dominar ninguna pieza todavía (para eso están los niveles siguientes), pero vas a saber qué hace cada una, en qué orden actúan y dónde se aprende. Y vas a ganar algo muy práctico: cuando alguien diga "la página no carga", vas a saber por dónde empezar a mirar.
+Abrís el navegador, escribís `tienda.example.com` y en menos de un segundo aparece la página. En ese segundo participan más de diez sistemas distintos, y cada uno es parte de esta carrera. Esta lección es el mapa: no vas a dominar ninguna pieza todavía (para eso están los niveles siguientes), pero vas a saber qué hace cada una, en qué orden actúan y dónde se aprende. Y vas a ganar algo muy práctico: cuando alguien diga "la página no carga", vas a saber por dónde empezar a mirar.
 
 <AntesDeEmpezar>
 - Una **dirección IP** identifica a un equipo en una red, y se divide en una parte de red y otra de equipo (lo viste en la lección de lógica binaria).
 - Un **servidor** es una computadora que atiende pedidos de otras, con programas llamados **servicios**.
-- Un **hash** y la verificación de imágenes te mostraron una idea que vuelve aquí: comprobar que algo es lo que dice ser.
+- Un **hash** y la verificación de imágenes te mostraron una idea que vuelve acá: comprobar que algo es lo que dice ser.
 </AntesDeEmpezar>
 
 ## Primero, sin tecnología: pedir comida por teléfono
 
-Todo el recorrido se parece a pedir comida a un restaurante que no conoces:
+Todo el recorrido se parece a pedir comida a un restaurante que no conocés:
 
-1. **Buscas el número** del restaurante en la guía, porque sabes el nombre pero no el teléfono.
-2. **Llamas**, y la central del restaurante te pasa con el sector que corresponde (pedidos, reservas, reclamos). Hay una recepcionista que solo pasa llamadas a algunos sectores.
-3. **Confirmas que llamaste al lugar correcto** antes de dar tu dirección y tu tarjeta.
-4. **Haces el pedido**, y te dicen si lo pueden preparar o no.
+1. **Buscás el número** del restaurante en la guía, porque sabés el nombre pero no el teléfono.
+2. **Llamás**, y la central del restaurante te pasa con el sector que corresponde (pedidos, reservas, reclamos). Hay una recepcionista que solo pasa llamadas a algunos sectores.
+3. **Confirmás que llamaste al lugar correcto** antes de dar tu dirección y tu tarjeta.
+4. **Hacés el pedido**, y te dicen si lo pueden preparar o no.
 5. **En la cocina** preparan el plato con ingredientes que sacan del depósito.
 6. **El pedido vuelve** hasta tu casa.
 
@@ -39,7 +39,7 @@ Con esa idea en mente, la mayoría de las piezas técnicas de esta lección corr
 
 ## Las piezas del camino
 
-Haz clic en cada pieza para ver qué hace, qué puede fallar y en qué nivel la vas a estudiar.
+Hacé clic en cada pieza para ver qué hace, qué puede fallar y en qué nivel la vas a estudiar.
 
 <DiagramaInteractivo datos={recorridoDatos} svg={recorrido} alt="Recorrido de un pedido web: la PC consulta al servidor DNS, sale por el router con NAT, cruza Internet, pasa el firewall y llega al servidor web, que usa la aplicación y la base de datos. Debajo, dónde corre todo (servidores físicos, máquinas virtuales, contenedores y nube) y lo que lo mantiene funcionando (backups, monitoreo, seguridad, documentación)." />
 
@@ -54,7 +54,7 @@ Haz clic en cada pieza para ver qué hace, qué puede fallar y en qué nivel la 
 **4. TCP: abrir la conexión.** Es la llamada, y el puerto es el sector al que te pasan. Un servidor puede ofrecer muchos servicios a la vez, y cada uno escucha en un número de **<Termino id="puerto">puerto</Termino>** distinto: 443 para HTTPS, 80 para HTTP, 22 para SSH, 53 para DNS. Antes de enviar datos, la PC y el servidor hacen el saludo de **<Termino id="tcp">TCP</Termino>** en tres pasos (SYN, SYN-ACK, ACK). TCP se ocupa de que todo llegue completo y en orden: si un paquete se pierde, se vuelve a enviar. En el medio, el **<Termino id="firewall">firewall</Termino>** decide si deja pasar la conexión a ese puerto: es la recepcionista que solo pasa llamadas a algunos sectores.
 
 <EnSimple titulo="Dicho más simple: la IP y el puerto">
-La IP es la dirección del edificio y el puerto es el número de oficina dentro del edificio. Con la IP llegas al servidor; con el puerto llegas al servicio que buscas (la web en el 443, el acceso remoto en el 22). El saludo de TCP en tres pasos es como empezar una llamada: "¿me escuchas?", "sí, te escucho, ¿y tú a mí?", "sí, empecemos".
+La IP es la dirección del edificio y el puerto es el número de oficina dentro del edificio. Con la IP llegás al servidor; con el puerto llegás al servicio que buscás (la web en el 443, el acceso remoto en el 22). El saludo de TCP en tres pasos es como empezar una llamada: "¿me escuchás?", "sí, te escucho, ¿y vos a mí?", "sí, empecemos".
 </EnSimple>
 
 **5. TLS: verificar y cifrar.** Es confirmar que llamaste al lugar correcto antes de dar tus datos, y hablar de forma que nadie más entienda. Antes de hablar HTTP, el navegador y el servidor hacen el saludo **<Termino id="tls">TLS</Termino>**. El servidor presenta su **<Termino id="certificado">certificado</Termino>**: un documento digital que dice "soy tienda.example.com", firmado por una autoridad en la que el navegador confía (por ejemplo, Let's Encrypt). Si el certificado venció o es de otro sitio, el navegador muestra una advertencia. Si está bien, acuerdan claves y desde ahí todo viaja cifrado: es el candado de la barra de direcciones.
@@ -81,9 +81,9 @@ Los códigos de estado HTTP son de lo primero que mira un sysadmin cuando una p�
 | 502 Bad Gateway | El servidor web no pudo hablar con la aplicación | Si la aplicación está funcionando |
 | 503 Service Unavailable | El servicio no puede atender (sobrecarga o mantenimiento) | La carga del servidor y los servicios detrás |
 
-## Míralo paquete por paquete
+## Miralo paquete por paquete
 
-Avanza paso a paso y fíjate qué encabezados cambian en cada tramo (las MAC en cada salto, las IP en el NAT) y cuáles llegan intactos (los puertos de destino, el contenido cifrado).
+Avanza paso a paso y fijate qué encabezados cambian en cada tramo (las MAC en cada salto, las IP en el NAT) y cuáles llegan intactos (los puertos de destino, el contenido cifrado).
 
 <SimuladorPaquetes escenario={paquetes} />
 
@@ -101,7 +101,7 @@ El recorrido es también una lista de control. Cuando "la página no carga", se 
 | ¿Responde el puerto? | `curl -v https://nombre` | `Test-NetConnection nombre -Port 443` |
 | ¿Qué responde el servidor web? | `curl -I https://nombre` | `curl.exe -I https://nombre` |
 
-`curl -v` es especialmente útil porque muestra el recorrido entero en una sola salida (aquí recortada):
+`curl -v` es especialmente útil porque muestra el recorrido entero en una sola salida (acá recortada):
 
 ```text
 $ curl -v https://tienda.example.com
@@ -120,7 +120,7 @@ $ curl -v https://tienda.example.com
 < server: nginx
 ```
 
-Prueba la secuencia completa en la terminal:
+Probá la secuencia completa en la terminal:
 
 <Terminal ejercicio={ejCamino} />
 
@@ -133,7 +133,7 @@ Ahora usa el mapa para decidir por dónde empezar en cada caso:
     El ping prueba que la red llega al servidor (las capas de abajo). No dice nada del puerto 443, del certificado ni de la aplicación. Y al revés: muchos servidores bloquean el ping y la página funciona igual. Para probar un servicio web, usa `curl` o `Test-NetConnection` con el puerto.
   </ErrorComun>
   <ErrorComun titulo="Olvidarse del DNS">
-    "No funciona internet" muchas veces es "no funciona el DNS". La prueba clave: si con la IP funciona y con el nombre no, la red está bien y el problema es la resolución de nombres. Revisa qué servidor DNS tiene configurado la PC y si responde.
+    "No funciona internet" muchas veces es "no funciona el DNS". La prueba clave: si con la IP funciona y con el nombre no, la red está bien y el problema es la resolución de nombres. Revisá qué servidor DNS tiene configurado la PC y si responde.
   </ErrorComun>
   <ErrorComun titulo="Culpar al servidor web por un 502">
     El 502 lo genera el servidor web, pero el problema está detrás: la aplicación no responde. Reiniciar Nginx no lo arregla; hay que revisar el servicio de la aplicación y sus registros.

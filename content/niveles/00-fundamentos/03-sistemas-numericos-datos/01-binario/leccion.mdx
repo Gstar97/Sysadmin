@@ -14,13 +14,13 @@ import byte from './byte.svg?raw'
 
 El binario aparece en el trabajo de un sysadmin mucho más de lo que parece: en las direcciones IP y sus máscaras, en los permisos de Linux, en los tamaños de disco y en las reglas de firewall. En el nivel de redes vas a calcular subredes, y ese cálculo es binario puro. Esta lección te da la base para hacerlo de cabeza, sin calculadora.
 
-<AntesDeEmpezar titulo="Antes de empezar: algo que ya sabes hacer">
-Cuando lees el número 405, sin pensarlo sabes que son 4 centenas, 0 decenas y 5 unidades. Toda esta lección se apoya en esa misma idea, solo que con otros valores por posición. No hace falta saber matemática más allá de sumar y restar.
+<AntesDeEmpezar titulo="Antes de empezar: algo que ya sabés hacer">
+Cuando leés el número 405, sin pensarlo sabés que son 4 centenas, 0 decenas y 5 unidades. Toda esta lección se apoya en esa misma idea, solo que con otros valores por posición. No hace falta saber matemática más allá de sumar y restar.
 </AntesDeEmpezar>
 
 ## Por qué las computadoras usan binario
 
-Piensa en un interruptor de luz: solo tiene dos posiciones, encendido o apagado. No hay "medio encendido". Con una fila de interruptores puedes armar combinaciones distintas: con dos interruptores hay cuatro (apagado-apagado, apagado-encendido, encendido-apagado, encendido-encendido). Una computadora es, en el fondo, una cantidad enorme de interruptores diminutos.
+Pensá en un interruptor de luz: solo tiene dos posiciones, encendido o apagado. No hay "medio encendido". Con una fila de interruptores podés armar combinaciones distintas: con dos interruptores hay cuatro (apagado-apagado, apagado-encendido, encendido-apagado, encendido-encendido). Una computadora es, en el fondo, una cantidad enorme de interruptores diminutos.
 
 Todo circuito digital distingue solo dos estados: hay tensión o no hay, una celda de memoria flash está cargada o no, una zona del disco está magnetizada en un sentido o en el otro. Por eso la información se guarda con solo dos dígitos, 0 y 1.
 
@@ -34,7 +34,7 @@ En decimal, cada posición vale diez veces más que la de su derecha: el número
 <Diagrama svg={byte} alt="Un byte con los pesos 128, 64, 32, 16, 8, 4, 2 y 1 sobre cada bit; el valor 11000000 equivale a 192. Debajo, la IP 192.168.1.10 con cada octeto convertido a binario" pie="Cada bit en 1 suma su peso. Una IPv4 son cuatro bytes." />
 
 <EnSimple titulo="Dicho más simple: monedas de 1, 2, 4, 8...">
-Imagina que tienes una sola moneda de cada uno de estos valores: 1, 2, 4, 8, 16, 32, 64 y 128. Con esas ocho monedas puedes pagar cualquier monto entre 0 y 255, usando cada moneda o no usándola. Un número binario es simplemente la lista de qué monedas usaste: 1 si la usaste, 0 si no. Por ejemplo, para pagar 11 usas la de 8, la de 2 y la de 1: eso es `1011`.
+Imagina que tenés una sola moneda de cada uno de estos valores: 1, 2, 4, 8, 16, 32, 64 y 128. Con esas ocho monedas podés pagar cualquier monto entre 0 y 255, usando cada moneda o no usándola. Un número binario es simplemente la lista de qué monedas usaste: 1 si la usaste, 0 si no. Por ejemplo, para pagar 11 usás la de 8, la de 2 y la de 1: eso es `1011`.
 </EnSimple>
 
 Para leer un número binario, se suman los pesos de las posiciones que tienen un 1. Por ejemplo, `1011`:
@@ -45,7 +45,7 @@ bit:    1   0   1   1
         8 + 0 + 2 + 1 = 11
 ```
 
-Prueba con el tablero: cada interruptor es un bit. Enciende y apaga bits y mira cómo cambia el número. Fíjate también qué pasa al "correr" todos los bits una posición: a la izquierda el valor se duplica, a la derecha se divide por dos.
+Probá con el tablero: cada interruptor es un bit. Encendé y apagá bits y mirá cómo cambia el número. Fijate también qué pasa al "correr" todos los bits una posición: a la izquierda el valor se duplica, a la derecha se divide por dos.
 
 <TableroBits />
 
@@ -63,10 +63,10 @@ bit:      1   0   1   0   1   0   0   0
 
 ## De decimal a binario
 
-El método más rápido para números de hasta 255 es **restar pesos de mayor a menor**. Es lo mismo que pagar con las monedas del ejemplo: empiezas por la más grande que no se pase del monto, y sigues con las más chicas hasta completar.
+El método más rápido para números de hasta 255 es **restar pesos de mayor a menor**. Es lo mismo que pagar con las monedas del ejemplo: empezás por la más grande que no se pase del monto, y sigues con las más chicas hasta completar.
 
-1. Escribe los pesos: 128, 64, 32, 16, 8, 4, 2, 1.
-2. Para cada peso, de izquierda a derecha: si cabe en lo que queda, pon un 1 y réstalo; si no cabe, pon un 0.
+1. Escribí los pesos: 128, 64, 32, 16, 8, 4, 2, 1.
+2. Para cada peso, de izquierda a derecha: si cabe en lo que queda, pon un 1 y restalo; si no cabe, pon un 0.
 
 Por ejemplo, 200:
 
@@ -82,7 +82,7 @@ Por ejemplo, 200:
 
 Hay otro método que sirve para números de cualquier tamaño: dividir por 2 una y otra vez, anotar los restos y leerlos de abajo hacia arriba. Los dos dan el mismo resultado; usa el que te resulte más natural.
 
-Practica las dos direcciones. Cada ejercicio, si te equivocas, muestra los pasos:
+Practicá las dos direcciones. Cada ejercicio, si te equivocas, muestra los pasos:
 
 <ConversorBases modo="practicar" tipos={["dec-bin", "bin-dec"]} />
 
@@ -126,7 +126,7 @@ Para verificar tus cuentas en una terminal Linux: `echo $((2#11001000))` convier
 
 <ErroresComunes>
   <ErrorComun titulo="Leer los pesos al revés">
-    El bit de la derecha es el que vale 1, y el de la izquierda el que más vale (128 en un byte). Si lees `00000001` como 128, estás leyendo de derecha a izquierda. Escribe los pesos arriba de cada bit hasta que sea automático.
+    El bit de la derecha es el que vale 1, y el de la izquierda el que más vale (128 en un byte). Si leés `00000001` como 128, estás leyendo de derecha a izquierda. Escribí los pesos arriba de cada bit hasta que sea automático.
   </ErrorComun>
   <ErrorComun titulo="Olvidar los ceros a la izquierda en un octeto">
     En una IP, cada octeto tiene siempre 8 bits: 10 es `00001010`, no `1010`. Al juntar los octetos de una dirección, si a uno le faltan ceros, todos los bits siguientes quedan corridos y el cálculo de la red sale mal.

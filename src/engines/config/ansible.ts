@@ -140,13 +140,13 @@ function checkTask(task: unknown, path: (string | number)[], err: (p: (string | 
   }
   if (actions.length > 1) {
     const known = actions.filter((a) => moduleName(a))
-    err(path, known.length > 1 ? `Hay dos módulos en la misma tarea: ${known.join(' y ')} (ansible: conflicting action statements). Sepáralos en dos tareas.` : `Atributos desconocidos en la tarea: ${actions.join(', ')}. ¿Quedó mal sangrado el argumento de un módulo?`)
+    err(path, known.length > 1 ? `Hay dos módulos en la misma tarea: ${known.join(' y ')} (ansible: conflicting action statements). Separalos en dos tareas.` : `Atributos desconocidos en la tarea: ${actions.join(', ')}. ¿Quedó mal sangrado el argumento de un módulo?`)
     return
   }
   const key = actions[0]
   const mod = moduleName(key)
   if (!mod) {
-    err([...path, key], `Ansible no conoce el módulo "${key}" (couldn't resolve module/action '${key}'). Revisa cómo está escrito o usa su nombre completo (ansible.builtin.${key}).`)
+    err([...path, key], `Ansible no conoce el módulo "${key}" (couldn't resolve module/action '${key}'). Revisá cómo está escrito o usa su nombre completo (ansible.builtin.${key}).`)
     return
   }
   const spec = MODULES[mod]

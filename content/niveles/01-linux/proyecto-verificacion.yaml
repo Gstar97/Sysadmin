@@ -1,11 +1,11 @@
 tipo: pasos
 titulo: Verificación final antes de entregar
 descripcion: >-
-  Recorre estos pasos en el servidor terminado, de ser posible después de un reinicio. Cada uno
+  Recorré estos pasos en el servidor terminado, de ser posible después de un reinicio. Cada uno
   comprueba un entregable con comandos que viste en el nivel. Los comandos son para Rocky; donde
   cambia algo en Ubuntu, está la variante.
 pasos:
-  - titulo: Reinicia y comprueba que todo vuelve solo
+  - titulo: Reiniciá y comprueba que todo vuelve solo
     detalle: Un servidor que funciona hasta el primer reinicio no está terminado.
     comandos:
       - sudo systemctl reboot
@@ -28,7 +28,7 @@ pasos:
     comprobar: >-
       Cada departamento tiene su grupo y su carpeta (con SGID y sin acceso para "otros"), gerencia
       puede leer todo por ACL, y solo el grupo de soporte tiene sudo.
-  - titulo: Prueba los permisos como usuarios reales
+  - titulo: Probá los permisos como usuarios reales
     detalle: Con un usuario de cada departamento (sudo -u o iniciando sesión).
     comandos:
       - sudo -u un_usuario_de_contabilidad touch /srv/compartido/contabilidad/prueba.txt
@@ -72,16 +72,16 @@ pasos:
       - sudo diff -r /srv/compartido /tmp/restaurar/compartido && echo idénticos
       - sudo sha256sum -c "$(ls -t /backup/compartido-*.sha256 | head -1)"
     comprobar: diff no muestra diferencias (salvo lo que cambió desde el respaldo) y la suma de control da OK.
-  - titulo: Fuerza un fallo del respaldo
+  - titulo: Forzá un fallo del respaldo
     detalle: >-
-      Cambia por un momento el origen del respaldo a una carpeta que no existe (o vacía) y
-      ejecútalo a mano. Después déjalo como estaba.
+      Cambiá por un momento el origen del respaldo a una carpeta que no existe (o vaciá) y
+      ejecutalo a mano. Después dejalo como estaba.
     comandos:
       - sudo /usr/local/sbin/respaldo.sh /srv/no-existe /backup; echo $?
       - systemctl status respaldo.service --no-pager | head -5
     comprobar: El script termina con un código distinto de 0 y queda registrado; no deja un archivo vacío en /backup.
-  - titulo: Revisa el documento de entrega con otra persona
+  - titulo: Revisá el documento de entrega con otra persona
     detalle: >-
-      Pídele a alguien que, leyendo solo tu documento, te explique cómo daría de alta a un
-      empleado nuevo y cómo recuperaría un archivo borrado ayer. Corrige lo que no se entienda.
+      Pedile a alguien que, leyendo solo tu documento, te explique cómo daría de alta a un
+      empleado nuevo y cómo recuperaría un archivo borrado ayer. Corregí lo que no se entienda.
     comprobar: La otra persona pudo responder las dos preguntas sin preguntarte nada.

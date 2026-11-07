@@ -25,7 +25,7 @@ Con particiones comunes hay un problema que tarde o temprano aparece: una partic
 
 ## La idea
 
-Imagina que tienes varios bidones de agua de distintos tamaños. En lugar de usarlos por separado, los vuelcas todos en un **tanque** grande. Del tanque llenas **botellas** del tamaño que necesites, y si una botella se queda corta, le agregas más agua del tanque. Si el tanque se vacía, le sumas otro bidón.
+Imagina que tenés varios bidones de agua de distintos tamaños. En lugar de usarlos por separado, los vuelcas todos en un **tanque** grande. Del tanque llenas **botellas** del tamaño que necesites, y si una botella se queda corta, le agregás más agua del tanque. Si el tanque se vacía, le sumas otro bidón.
 
 LVM hace eso con el espacio en disco:
 
@@ -38,7 +38,7 @@ LVM hace eso con el espacio en disco:
 La comparación deja de servir en un punto: en LVM no se trasvasa nada al agrandar. Agrandar un LV es asignarle más pedacitos del grupo (los **extents**, de 4 MiB), estén en el disco que estén.
 
 <EnSimple>
-LVM junta el espacio de varios discos y te deja repartirlo en volúmenes que puedes agrandar cuando quieras, sin apagar el servidor y sin mover datos.
+LVM junta el espacio de varios discos y te deja repartirlo en volúmenes que podés agrandar cuando quieras, sin apagar el servidor y sin mover datos.
 </EnSimple>
 
 ## Armarlo desde cero
@@ -54,7 +54,7 @@ sudo mount /dev/datos/srv /srv/datos      # 5. montarlo
 
 El volumen tiene dos nombres equivalentes: `/dev/datos/srv` y `/dev/mapper/datos-srv`. Los dos son estables, así que se pueden usar en fstab (o el UUID, como siempre).
 
-Sobre el paso 1: puedes usar el disco entero (`/dev/sdb`) o una partición del tipo LVM (`/dev/sdb1`, lección 1.4.2). Las dos formas son comunes; la partición deja más claro, para quien mire el disco con otra herramienta, que está en uso.
+Sobre el paso 1: podés usar el disco entero (`/dev/sdb`) o una partición del tipo LVM (`/dev/sdb1`, lección 1.4.2). Las dos formas son comunes; la partición deja más claro, para quien mire el disco con otra herramienta, que está en uso.
 
 Para ver cómo está todo, hay un comando de resumen y uno de detalle para cada pieza:
 
@@ -68,7 +68,7 @@ Para ver cómo está todo, hay un comando de resumen y uno de detalle para cada 
 
 ## Agrandar sin apagar
 
-Es la tarea de LVM más común en el trabajo real: llega una alerta de "/srv/datos al 90 %", y lo resuelves en un minuto, con todo funcionando.
+Es la tarea de LVM más común en el trabajo real: llega una alerta de "/srv/datos al 90 %", y lo resolvés en un minuto, con todo funcionando.
 
 **Si el grupo tiene espacio libre** (`vgs` muestra VFree):
 
@@ -93,7 +93,7 @@ En una máquina virtual o en la nube, otra opción es agrandar el disco virtual 
     El grupo del sistema se llama `rl`, con los volúmenes `root` y `swap`. Normalmente no tiene espacio libre: para agrandar la raíz hay que sumar un disco al grupo (`vgextend rl /dev/sdb`) o agrandar el disco virtual.
   </Distro>
   <Distro nombre="Ubuntu Server LTS">
-    El grupo se llama `ubuntu-vg` y el volumen de la raíz `ubuntu-lv`. Según el tamaño del disco, el instalador puede dejar parte del grupo sin usar. Mira `sudo vgs`: si **VFree** tiene espacio, la raíz se agranda con `sudo lvextend -r -l +100%FREE ubuntu-vg/ubuntu-lv`, sin tocar nada más.
+    El grupo se llama `ubuntu-vg` y el volumen de la raíz `ubuntu-lv`. Según el tamaño del disco, el instalador puede dejar parte del grupo sin usar. Mirá `sudo vgs`: si **VFree** tiene espacio, la raíz se agranda con `sudo lvextend -r -l +100%FREE ubuntu-vg/ubuntu-lv`, sin tocar nada más.
   </Distro>
 </Distros>
 
@@ -116,16 +116,16 @@ LVM puede sacar **instantáneas** (snapshots) de un volumen: una foto del moment
 
 <ErroresComunes>
   <ErrorComun titulo="Agrandé el volumen y df sigue mostrando lo mismo">
-    Faltó agrandar el sistema de archivos: usaste lvextend sin `-r`. Complétalo con `sudo xfs_growfs /punto/de/montaje` o `sudo resize2fs /dev/vg/lv`.
+    Faltó agrandar el sistema de archivos: usaste lvextend sin `-r`. Completalo con `sudo xfs_growfs /punto/de/montaje` o `sudo resize2fs /dev/vg/lv`.
   </ErrorComun>
   <ErrorComun titulo='"Insufficient free space" o "insufficient free space (N extents)"'>
-    El grupo no tiene ese espacio libre. Mira `sudo vgs` (VFree) y suma un disco con `vgextend` o pide menos.
+    El grupo no tiene ese espacio libre. Mirá `sudo vgs` (VFree) y suma un disco con `vgextend` o pide menos.
   </ErrorComun>
   <ErrorComun titulo='"Cannot use /dev/sdb: device is partitioned"'>
-    El disco tiene una tabla de particiones. Usa la partición (`/dev/sdb1`) o, si el disco es nuevo y está vacío, borra la tabla con `wipefs -a /dev/sdb` (confirmando antes con lsblk).
+    El disco tiene una tabla de particiones. Usá la partición (`/dev/sdb1`) o, si el disco es nuevo y está vacío, borrá la tabla con `wipefs -a /dev/sdb` (confirmando antes con lsblk).
   </ErrorComun>
   <ErrorComun titulo="Intentar achicar un XFS">
-    No se puede. lvreduce lo avisa: *"File system reduce is required and not supported (xfs)"*. Planifica los tamaños empezando chico, porque agrandar es fácil.
+    No se puede. lvreduce lo avisa: *"File system reduce is required and not supported (xfs)"*. Planificá los tamaños empezando chico, porque agrandar es fácil.
   </ErrorComun>
 </ErroresComunes>
 
@@ -134,6 +134,6 @@ LVM puede sacar **instantáneas** (snapshots) de un volumen: una foto del moment
 - Crear: `pvcreate`, `vgcreate NOMBRE PV`, `lvcreate -n NOMBRE -L TAMAÑO VG`; después mkfs y mount con `/dev/VG/LV`.
 - Ver: `pvs`, `vgs` (VFree), `lvs`; con `display` para el detalle.
 - Agrandar sin apagar: `lvextend -r -L +5G VG/LV` o `-l +100%FREE`; sin espacio, primero `vgextend VG /dev/nuevo`.
-- `-r` agranda también el sistema de archivos; si te lo olvidas, `xfs_growfs` o `resize2fs`.
+- `-r` agranda también el sistema de archivos; si te lo olvidás, `xfs_growfs` o `resize2fs`.
 - XFS no se achica; ext4 sí, desmontado y con una copia de seguridad antes.
 </Resumen>

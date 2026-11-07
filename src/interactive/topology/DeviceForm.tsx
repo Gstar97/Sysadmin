@@ -68,7 +68,7 @@ function Field({
   )
 }
 
-const validCidr = (v: string) => (!v.trim() || parseCidrInput(v) ? undefined : 'Usa el formato 192.168.1.10/24')
+const validCidr = (v: string) => (!v.trim() || parseCidrInput(v) ? undefined : 'Usá el formato 192.168.1.10/24')
 const validIp = (v: string) => (!v.trim() || parseIpv4(v) !== undefined ? undefined : 'Dirección IPv4 inválida')
 
 function Section({ title, children, open = true }: { title: string; children: ReactNode; open?: boolean }) {

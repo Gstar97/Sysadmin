@@ -6,7 +6,7 @@ descripcion: >-
   empresa.internal. Vas a agregarle la zona inversa, montar en infra01 (192.168.10.53, Rocky)
   un resolvedor Unbound y un servidor Kea, y comprobar todo desde pc1, que pide su dirección
   por DHCP. infra01 y pc1 tienen además una placa en la red de administración (192.168.56.0/24),
-  que es por donde entras a pc1.
+  que es por donde entrás a pc1.
 estado_inicial:
   distro: rocky
   hostname: infra01
@@ -56,8 +56,8 @@ estado_inicial:
         dns: []
 pasos:
   - consigna: >-
-      Entra a ns1 (ssh 192.168.10.54) y crea la zona inversa de 192.168.10.0/24 en /etc/bind/db.192.168.10, con
-      PTR para ns1 (.54), infra01 (.53), intranet (.80) e impresora (.30). Declárala en
+      Entrá a ns1 (ssh 192.168.10.54) y creá la zona inversa de 192.168.10.0/24 en /etc/bind/db.192.168.10, con
+      PTR para ns1 (.54), infra01 (.53), intranet (.80) e impresora (.30). Declarala en
       /etc/bind/named.conf.local, revisa todo con named-checkconf -z y recarga BIND.
     verificar:
       - { en: ns1, verificar: { resuelve: 80.10.168.192.in-addr.arpa, tipo: PTR, servidor: 127.0.0.1, responde: intranet.empresa.internal } }
@@ -93,14 +93,14 @@ pasos:
       De vuelta en infra01, configura Unbound en /etc/unbound/conf.d/lan.conf: que escuche en
       todas las interfaces, responda a 192.168.10.0/24, trate empresa.internal como zona sin
       DNSSEC y reenvíe a ns1 (192.168.10.54) tanto empresa.internal como la zona inversa.
-      Revisa la configuración, arranca y habilita unbound y abre DNS en firewalld.
+      Revisá la configuración, arranca y habilitá unbound y abrí DNS en firewalld.
     verificar:
       - { servicio: unbound, activo: true, habilitado: true }
       - { firewall_permite: 53/udp }
       - { resuelve: www.empresa.internal, servidor: 127.0.0.1, responde: "192.168.10.80" }
       - { resuelve: rockylinux.org, servidor: 127.0.0.1 }
     pistas:
-      - "Mira el ejemplo de la lección 2.3.6: server con interface, access-control y domain-insecure, y dos forward-zone."
+      - "Mirá el ejemplo de la lección 2.3.6: server con interface, access-control y domain-insecure, y dos forward-zone."
       - "sudo unbound-checkconf, sudo systemctl enable --now unbound, sudo firewall-cmd --permanent --add-service=dns y --reload."
     solucion:
       - |
@@ -125,15 +125,15 @@ pasos:
       Unbound contesta lo interno preguntándole a ns1 y lo externo recorriendo internet, y
       guarda todo en caché. La segunda consulta igual es instantánea.
   - consigna: >-
-      Configura Kea en infra01 para la red de clientes: escucha en enp0s3, rango .100 a .199,
+      Configurá Kea en infra01 para la red de clientes: escucha en enp0s3, rango .100 a .199,
       puerta de enlace .1, DNS 192.168.10.53, dominio empresa.internal y una reserva de
-      192.168.10.61 para pc1 (MAC 52:54:00:aa:10:61). Revisa, arranca y habilita kea-dhcp4,
-      y abre DHCP en firewalld.
+      192.168.10.61 para pc1 (MAC 52:54:00:aa:10:61). Revisá, arranca y habilitá kea-dhcp4,
+      y abrí DHCP en firewalld.
     verificar:
       - { servicio: kea-dhcp4, activo: true, habilitado: true }
       - { firewall_permite: 67/udp }
     pistas:
-      - "Reemplaza /etc/kea/kea-dhcp4.conf con sudo tee y un heredoc. No te olvides del id de la subred ni de las comas."
+      - "Reemplazá /etc/kea/kea-dhcp4.conf con sudo tee y un heredoc. No te olvides del id de la subred ni de las comas."
       - "sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf antes de arrancar."
     solucion:
       - |
@@ -163,8 +163,8 @@ pasos:
     explicacion: >-
       Como id se usó 10, el tercer octeto de la red: una convención cómoda para no repetirlos.
   - consigna: >-
-      Entra a pc1 por la red de administración (192.168.56.21), levanta su conexión enp0s8 para
-      que pida dirección y comprueba que recibió la reserva y que resuelve nombres internos,
+      Entrá a pc1 por la red de administración (192.168.56.21), levantá su conexión enp0s8 para
+      que pida dirección y comprobá que recibió la reserva y que resuelve nombres internos,
       inversos y externos.
     verificar:
       - { en: pc1, verificar: { interfaz: enp0s8, ip_en: 192.168.10.61/32 } }

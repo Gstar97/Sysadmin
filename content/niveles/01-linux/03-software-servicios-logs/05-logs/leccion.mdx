@@ -15,7 +15,7 @@ import flujo from './flujo.svg?raw'
 import opciones from './opciones.yaml'
 import ejLogs from './ej-logs.yaml'
 
-Cuando algo falla en un servidor, casi nunca lo ves pasar. Lo que tienes es lo que quedó escrito: los **logs**. Saber encontrar en minutos la línea que importa, entre miles, es una de las habilidades que más diferencia a un buen administrador. En esta lección vas a aprender dónde están, cómo leerlos con filtros y cómo evitar que llenen el disco.
+Cuando algo falla en un servidor, casi nunca lo ves pasar. Lo que tenés es lo que quedó escrito: los **logs**. Saber encontrar en minutos la línea que importa, entre miles, es una de las habilidades que más diferencia a un buen administrador. En esta lección vas a aprender dónde están, cómo leerlos con filtros y cómo evitar que llenen el disco.
 
 <AntesDeEmpezar>
 - Un **log** es un registro de lo que pasó, con fecha y hora (lección 1.1.5).
@@ -25,7 +25,7 @@ Cuando algo falla en un servidor, casi nunca lo ves pasar. Lo que tienes es lo q
 
 ## Para qué sirven los logs
 
-Piensa en el libro de novedades de la portería de un edificio: "08:15, llegó el técnico del ascensor. 10:40, se cortó la luz en el piso 3. 10:52, volvió". Nadie lo lee todos los días, pero cuando algo sale mal es lo primero que se consulta, porque dice qué pasó, cuándo y quién estuvo.
+Pensá en el libro de novedades de la portería de un edificio: "08:15, llegó el técnico del ascensor. 10:40, se cortó la luz en el piso 3. 10:52, volvió". Nadie lo lee todos los días, pero cuando algo sale mal es lo primero que se consulta, porque dice qué pasó, cuándo y quién estuvo.
 
 En un servidor pasa lo mismo, con una diferencia: se escriben cientos o miles de líneas por hora. El trabajo no es leerlo todo, sino **filtrar** hasta quedarte con lo que importa.
 
@@ -58,11 +58,11 @@ Cada mensaje tiene una **prioridad**, de 0 (lo más grave) a 7 (lo menos importa
 | 6 | info | Información de rutina |
 | 7 | debug | Detalle para programadores |
 
-Cuando filtras por una prioridad, ves esa y todas las más graves: `journalctl -p err` muestra err, crit, alert y emerg. En la terminal, los errores aparecen en rojo y las advertencias en amarillo.
+Cuando filtrás por una prioridad, ves esa y todas las más graves: `journalctl -p err` muestra err, crit, alert y emerg. En la terminal, los errores aparecen en rojo y las advertencias en amarillo.
 
 ## journalctl paso a paso
 
-Sin opciones, `journalctl` muestra **todo** desde el principio, dentro de `less` (q para salir, / para buscar). Casi nunca es lo que quieres. Empieza por un filtro y agrega otros de a uno:
+Sin opciones, `journalctl` muestra **todo** desde el principio, dentro de `less` (q para salir, / para buscar). Casi nunca es lo que querés. Empezá por un filtro y agregá otros de a uno:
 
 ```bash
 journalctl -u nginx                  # un servicio
@@ -76,7 +76,7 @@ journalctl -u nginx --since "2026-11-01 02:00" --until "2026-11-01 04:00"
 
 Otras que vas a usar seguido:
 
-- **`-f`**: sigue mostrando las líneas nuevas mientras llegan, como `tail -f`. Ideal para mirar qué pasa mientras pruebas algo. Se corta con Ctrl+C.
+- **`-f`**: sigue mostrando las líneas nuevas mientras llegan, como `tail -f`. Ideal para mirar qué pasa mientras probás algo. Se corta con Ctrl+C.
 - **`-e`**: abre directamente en el final. **`-x`** agrega explicaciones a algunos mensajes. Por eso `journalctl -xeu nginx` es la receta que sugiere systemd cuando un servicio falla.
 - **`-b`**: solo desde el último encendido. `-b -1` es el encendido anterior (si el journal se guarda en disco).
 - **`-k`**: solo los mensajes del kernel (lo mismo que muestra `dmesg`).
@@ -90,7 +90,7 @@ root, y los miembros de los grupos `wheel` (Rocky), `adm` (Ubuntu) o `systemd-jo
 
 ### ¿Se guarda después de reiniciar?
 
-Depende de si existe la carpeta `/var/log/journal`. Si existe, el journal se guarda en el disco y sobrevive a los reinicios; si no, se guarda en memoria y se pierde al apagar. Para comprobarlo, `journalctl --list-boots` muestra cuántos encendidos tiene guardados. Si hay uno solo y lo necesitas, se hace persistente así:
+Depende de si existe la carpeta `/var/log/journal`. Si existe, el journal se guarda en el disco y sobrevive a los reinicios; si no, se guarda en memoria y se pierde al apagar. Para comprobarlo, `journalctl --list-boots` muestra cuántos encendidos tiene guardados. Si hay uno solo y lo necesitás, se hace persistente así:
 
 ```bash
 sudo mkdir -p /var/log/journal
@@ -101,7 +101,7 @@ El journal se limita solo para no llenar el disco (por defecto, hasta un 10 % de
 
 ## Los archivos de /var/log
 
-Muchos manuales y compañeros te van a decir "mira el syslog" o "fíjate en secure". Los nombres cambian entre familias:
+Muchos manuales y compañeros te van a decir "mira el syslog" o "fijate en secure". Los nombres cambian entre familias:
 
 | Qué contiene | Rocky | Ubuntu |
 | --- | --- | --- |
@@ -130,7 +130,7 @@ Los archivos de texto crecen sin parar. Un servidor web con mucho tráfico puede
 logrotate es como el archivo de una oficina: cada semana, las carpetas de la semana pasada se guardan en una caja con fecha, se empieza una carpeta nueva, y las cajas de hace más de un mes se tiran.
 </EnSimple>
 
-Se ejecuta solo, una vez por día, con `logrotate.timer`. Lee `/etc/logrotate.conf` (las opciones generales) y un archivo por aplicación en `/etc/logrotate.d/`. Un ejemplo típico:
+Se ejecuta solo, una vez por día, con `logrotate.timer`. Leé `/etc/logrotate.conf` (las opciones generales) y un archivo por aplicación en `/etc/logrotate.d/`. Un ejemplo típico:
 
 ```text
 /var/log/inventario/*.log {
@@ -153,7 +153,7 @@ Línea por línea:
 - `notifempty`: si está vacío, no rotarlo.
 - `create 0640 inventario inventario`: crear el log nuevo con esos permisos, dueño y grupo.
 
-Ojo: logrotate no acepta comentarios al final de una línea. Si quieres comentar, usa una línea aparte que empiece con `#`.
+Ojo: logrotate no acepta comentarios al final de una línea. Si querés comentar, usa una línea aparte que empiece con `#`.
 
 Con eso, la carpeta queda así después de unos días: `app.log` (el actual), `app.log.1` (el de ayer, sin comprimir), `app.log.2.gz`, `app.log.3.gz`... hasta el 7.
 
@@ -162,7 +162,7 @@ Dos situaciones que vas a encontrar:
 - **El programa sigue escribiendo en el archivo viejo.** Muchos programas tienen el archivo abierto y no se enteran de que fue renombrado. Hay dos soluciones: avisarle al programa con un bloque `postrotate` (`systemctl reload nginx` entre `postrotate` y `endscript`), o usar `copytruncate`, que copia el contenido y vacía el original sin renombrarlo.
 - **La carpeta del log es de otro usuario.** Si la carpeta es escribible por un usuario que no es root, logrotate se niega a trabajar ahí por seguridad. Se resuelve con `su usuario grupo` dentro del bloque.
 
-Antes de confiar en una configuración, pruébala:
+Antes de confiar en una configuración, probala:
 
 ```bash
 sudo logrotate -d /etc/logrotate.d/inventario    # modo de prueba: explica qué haría, sin cambiar nada
@@ -175,19 +175,19 @@ sudo logrotate -f /etc/logrotate.d/inventario    # forzar una rotación ahora
 
 <ErroresComunes>
   <ErrorComun titulo="journalctl muestra miles de líneas y no encuentro nada">
-    Siempre empieza con un filtro: `-u servicio`, `-p err`, `--since`, `-b`. Y combínalos. Si buscas un texto, `-g "texto"`.
+    Siempre empieza con un filtro: `-u servicio`, `-p err`, `--since`, `-b`. Y combinalos. Si buscás un texto, `-g "texto"`.
   </ErrorComun>
   <ErrorComun titulo='"No journal files were found" o falta lo de ayer'>
-    El journal no se guarda en el disco (no existe `/var/log/journal`) y el servidor se reinició. Crea la carpeta y reinicia `systemd-journald` para que, de ahora en adelante, se conserve.
+    El journal no se guarda en el disco (no existe `/var/log/journal`) y el servidor se reinició. Creá la carpeta y reiniciá `systemd-journald` para que, de ahora en adelante, se conserve.
   </ErrorComun>
   <ErrorComun titulo='"error: Ignoring app because of bad file mode - must be 0644 or 0444."'>
     El archivo de `/etc/logrotate.d/` tiene permisos de escritura para el grupo o para otros. logrotate lo ignora por seguridad: `sudo chmod 644 /etc/logrotate.d/app`.
   </ErrorComun>
   <ErrorComun titulo='"skipping ... because parent directory has insecure permissions"'>
-    La carpeta del log es escribible por un usuario o grupo que no es root. Agrega `su usuario grupo` al bloque de logrotate (no cambies los permisos de la carpeta: la aplicación los necesita).
+    La carpeta del log es escribible por un usuario o grupo que no es root. Agregá `su usuario grupo` al bloque de logrotate (no cambies los permisos de la carpeta: la aplicación los necesita).
   </ErrorComun>
   <ErrorComun titulo="Después de rotar, el log nuevo queda vacío y el viejo sigue creciendo">
-    El programa sigue escribiendo en el archivo que tenía abierto. Agrega un `postrotate` que le avise (reload) o usa `copytruncate`.
+    El programa sigue escribiendo en el archivo que tenía abierto. Agregá un `postrotate` que le avise (reload) o usa `copytruncate`.
   </ErrorComun>
 </ErroresComunes>
 

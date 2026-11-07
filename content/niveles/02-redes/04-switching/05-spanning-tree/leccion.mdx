@@ -22,7 +22,7 @@ En una red seria, los switches se conectan con más de un camino: si se corta un
 
 ## La tormenta de broadcast
 
-Piensa en tres amigos en un grupo de mensajes que tienen la regla de reenviar a los otros dos todo lo que les llega. Alguien manda un mensaje: cada uno lo reenvía a los otros dos, que a su vez lo reenvían... A los pocos segundos tienen miles de copias y el teléfono no responde. Donde la comparación no llega: una persona en algún momento se cansa; un switch no, reenvía a toda velocidad para siempre.
+Pensá en tres amigos en un grupo de mensajes que tienen la regla de reenviar a los otros dos todo lo que les llega. Alguien manda un mensaje: cada uno lo reenvía a los otros dos, que a su vez lo reenvían... A los pocos segundos tienen miles de copias y el celular no responde. Donde la comparación no llega: una persona en algún momento se cansa; un switch no, reenvía a toda velocidad para siempre.
 
 <Diagrama svg={tormenta} alt="Izquierda: tres switches en triángulo sin Spanning Tree; un broadcast da vueltas en los dos sentidos y se multiplica. Ethernet no tiene TTL, así que en segundos la red queda saturada. Derecha: los mismos tres switches con Spanning Tree; SW1 es la raíz y el enlace entre SW2 y SW3 queda bloqueado, con un solo camino entre cada par de switches. Si se corta otro enlace, el bloqueado se activa solo." pie="STP no saca los enlaces de repuesto: los deja en espera." />
 
@@ -40,7 +40,7 @@ Los switches se mandan mensajes llamados **BPDU** cada dos segundos, y con eso a
 2. **Cada switch elige su puerto raíz**: el que le da el camino más barato hasta la raíz. El costo depende de la velocidad: 4 para 1 Gb/s, 19 para 100 Mb/s, 2 para 10 Gb/s.
 3. **En cada enlace hay un puerto designado**: el del lado más cercano a la raíz. Los puertos que no son ni raíz ni designados quedan **bloqueados** (en RSTP se llaman alternativos): no reenvían datos, pero siguen escuchando BPDU por si tienen que entrar en servicio.
 
-Pruébalo: elige quién crees que va a ser la raíz, cambia prioridades y corta enlaces para ver cómo se reacomoda el árbol.
+Probalo: elige quién creés que va a ser la raíz, cambia prioridades y corta enlaces para ver cómo se reacomoda el árbol.
 
 <SimuladorStp />
 
@@ -78,7 +78,7 @@ Un puerto err-disabled no vuelve solo: se resuelve la causa y se hace `shutdown`
 <Terminal ejercicio={ejStp} />
 
 <Consejo titulo="Leer show spanning-tree">
-Arriba, "Root ID" es la raíz y "Bridge ID" es este switch; si son iguales, aparece "This bridge is the root". Abajo, cada puerto con su rol (Root, Desg, Altn) y su estado (FWD reenvía, BLK bloqueado). Si un puerto que esperabas activo está en BLK, el árbol no es el que diseñaste: revisa quién es la raíz.
+Arriba, "Root ID" es la raíz y "Bridge ID" es este switch; si son iguales, aparece "This bridge is the root". Abajo, cada puerto con su rol (Root, Desg, Altn) y su estado (FWD reenvía, BLK bloqueado). Si un puerto que esperabas activo está en BLK, el árbol no es el que diseñaste: revisá quién es la raíz.
 </Consejo>
 
 <ErroresComunes>
@@ -86,23 +86,23 @@ Arriba, "Root ID" es la raíz y "Bridge ID" es este switch; si son iguales, apar
     Con un solo cable de más, la red se cae entera. La solución a la demora es RSTP y PortFast, no apagar STP.
   </ErrorComun>
   <ErrorComun titulo="Dejar que la raíz se elija sola">
-    Gana la MAC más baja, que suele ser el switch más viejo de la red. Fija la prioridad del núcleo (4096) y la de un respaldo (8192).
+    Gana la MAC más baja, que suele ser el switch más viejo de la red. Fijá la prioridad del núcleo (4096) y la de un respaldo (8192).
   </ErrorComun>
   <ErrorComun titulo="PortFast en un puerto hacia otro switch">
     El puerto reenvía antes de saber si hay un bucle. PortFast es solo para equipos finales, y siempre con BPDU Guard.
   </ErrorComun>
   <ErrorComun titulo="Esperar que un puerto err-disabled vuelva solo">
-    Queda apagado hasta que alguien lo levanta. Saca el equipo que lo causó, y después shutdown y no shutdown.
+    Queda apagado hasta que alguien lo levanta. Sacá el equipo que lo causó, y después shutdown y no shutdown.
   </ErrorComun>
   <ErrorComun titulo="Distinto modo de STP en cada switch">
-    Mezclar versiones funciona, pero el reacomodo cae a la velocidad del más lento. Usa el mismo modo en toda la red.
+    Mezclar versiones funciona, pero el reacomodo cae a la velocidad del más lento. Usá el mismo modo en toda la red.
   </ErrorComun>
 </ErroresComunes>
 
 <Resumen>
 - Un bucle en capa 2 produce una tormenta de broadcast: las tramas no tienen TTL y se multiplican hasta saturar la red.
 - STP deja un solo camino activo: elige la raíz (prioridad + VLAN y, si empatan, la MAC más baja), un puerto raíz por switch (menor costo: 4 en 1 Gb/s, 19 en 100 Mb/s) y un designado por enlace; el resto queda bloqueado en espera.
-- Elige la raíz a propósito: spanning-tree vlan N priority 4096 en el núcleo (de a 4096). Usa Rapid PVST+ (RSTP): converge en segundos.
+- Elegí la raíz a propósito: spanning-tree vlan N priority 4096 en el núcleo (de a 4096). Usá Rapid PVST+ (RSTP): converge en segundos.
 - En puertos de equipos finales: PortFast (reenvía de inmediato) y BPDU Guard (lo pasa a err-disabled si aparece un switch).
 - show spanning-tree: Root ID, Bridge ID, rol y estado de cada puerto. show interfaces status para ver los err-disabled.
 </Resumen>

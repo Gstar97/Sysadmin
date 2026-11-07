@@ -111,7 +111,7 @@ export function Troubleshooting({ scenario, onSolved }: Props) {
             </Callout>
             {timed && optimal && node.final === 'exito' && (
               <p className="text-sm text-muted">
-                {minutes <= optimal.minutes ? '¡Elegiste el camino más rápido posible!' : `El camino más corto lleva ${optimal.minutes} minutos (tardaste ${minutes - optimal.minutes} más). Repasa qué conviene revisar primero.`}
+                {minutes <= optimal.minutes ? '¡Elegiste el camino más rápido posible!' : `El camino más corto lleva ${optimal.minutes} minutos (tardaste ${minutes - optimal.minutes} más). Repasá qué conviene revisar primero.`}
               </p>
             )}
             <Button onClick={restart}>
@@ -120,8 +120,8 @@ export function Troubleshooting({ scenario, onSolved }: Props) {
             </Button>
           </div>
         ) : (
-          <div className="space-y-2" role="group" aria-label="¿Qué haces?">
-            <div className="text-sm font-semibold">¿Qué haces?</div>
+          <div className="space-y-2" role="group" aria-label="¿Qué hacés?">
+            <div className="text-sm font-semibold">¿Qué hacés?</div>
             {node.opciones.map((op, i) => (
               <button key={i} type="button" onClick={() => choose(i)} className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-line px-3 py-2 text-left hover:border-accent hover:bg-accent-soft">
                 <Icon name="arrowRight" className="h-4 w-4 text-accent" />

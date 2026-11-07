@@ -1562,7 +1562,7 @@ export class IosSession {
     const end = text.indexOf(delim, 1)
     if (end === -1) {
       this.dev.mgmt.banner = text.slice(1)
-      return `Enter TEXT message.  End with the character '${delim}'.\n[simulador] Escribe el banner completo en una sola línea, entre dos delimitadores: banner motd #Texto#\n`
+      return `Enter TEXT message.  End with the character '${delim}'.\n[simulador] Escribí el banner completo en una sola línea, entre dos delimitadores: banner motd #Texto#\n`
     }
     this.dev.mgmt.banner = text.slice(1, end)
   }

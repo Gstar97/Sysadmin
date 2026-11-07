@@ -46,7 +46,7 @@ Este esquema resuelve varios problemas a la vez:
 
 ## Fallos de página y swap
 
-Piensa en tu escritorio y en el archivo del sótano. En el escritorio (la RAM) tienes a mano los papeles que estás usando. Cuando se llena, los papeles que hace días que no tocas los bajas al archivo del sótano (el disco) para hacer lugar. Si un día necesitas uno de esos, bajas a buscarlo: funciona, pero tardas. Y si tienes que bajar a cada rato, no trabajas más: te pasas el día subiendo y bajando la escalera.
+Pensá en tu escritorio y en el archivo del sótano. En el escritorio (la RAM) tenés a mano los papeles que estás usando. Cuando se llena, los papeles que hace días que no tocás los bajás al archivo del sótano (el disco) para hacer lugar. Si un día necesitás uno de esos, bajás a buscarlo: funciona, pero tardás. Y si tenés que bajar a cada rato, no trabajás más: te pasás el día subiendo y bajando la escalera.
 
 Ese archivo del sótano es el **swap**, y "bajar a buscar un papel" es lo que el sistema llama un fallo de página.
 
@@ -64,7 +64,7 @@ Tener swap no es malo: le permite al sistema sacar de la RAM páginas que nadie 
 ## La caché de disco
 
 <EnSimple titulo="Dicho más simple: la caché">
-Si leíste un documento hace un rato, dejas una fotocopia sobre el escritorio por si lo vuelves a necesitar. Si mañana te hace falta lugar, la tiras sin pensarlo: no perdiste nada, porque el original sigue en el archivo. La caché de disco son esas fotocopias. Por eso la RAM puede parecer "llena" y en realidad tener muchísimo lugar disponible.
+Si leíste un documento hace un rato, dejás una fotocopia sobre el escritorio por si lo volvés a necesitar. Si mañana te hace falta lugar, la tirás sin pensarlo: no perdiste nada, porque el original sigue en el archivo. La caché de disco son esas fotocopias. Por eso la RAM puede parecer "llena" y en realidad tener muchísimo lugar disponible.
 </EnSimple>
 
 Como viste en el módulo anterior, la RAM que los programas no usan se aprovecha como **<Termino id="cache-disco">caché de disco</Termino>** (en Linux, *page cache*): copias de archivos leídos hace poco. Es memoria "ocupada" que se libera en el acto cuando un programa la necesita. Por eso las herramientas distinguen:
@@ -78,12 +78,12 @@ La pregunta "¿le falta memoria a este servidor?" se contesta mirando la memoria
 
 ## Ver la memoria virtual en acción
 
-Este simulador tiene 12 marcos de RAM y 4 espacios de swap. Prueba esta secuencia:
+Este simulador tiene 12 marcos de RAM y 4 espacios de swap. Probá esta secuencia:
 
-1. Toca **Leer un archivo grande** un par de veces: la memoria libre se convierte en caché.
-2. Haz que el **reporte mensual** pida memoria varias veces. Fíjate en el registro: primero ocupa la memoria libre, después el kernel descarta caché y después empieza a mover páginas poco usadas al swap.
-3. Toca **usar** en una página que quedó en el swap: es un fallo de página que obliga a leer el disco.
-4. Sigue pidiendo memoria con el reporte hasta que no quede lugar ni en la RAM ni en el swap.
+1. Tocá **Leer un archivo grande** un par de veces: la memoria libre se convierte en caché.
+2. Hacé que el **reporte mensual** pida memoria varias veces. Fijate en el registro: primero ocupa la memoria libre, después el kernel descarta caché y después empieza a mover páginas poco usadas al swap.
+3. Tocá **usar** en una página que quedó en el swap: es un fallo de página que obliga a leer el disco.
+4. Seguí pidiendo memoria con el reporte hasta que no quede lugar ni en la RAM ni en el swap.
 
 <SimuladorMemoria />
 
@@ -117,7 +117,7 @@ Ubuntu, además, incluye **systemd-oomd**, que actúa antes que el kernel: si de
     Es la caché de disco, y es una buena noticia: la RAM que no se usa no sirve para nada, y el sistema la aprovecha para acelerar el acceso a los archivos. En `free -h`, mira la columna *available*. Si es alta, al servidor no le falta memoria.
   </ErrorComun>
   <ErrorComun titulo="Un servicio se cae sin ningún error en su propio log">
-    Si un proceso desaparece de golpe sin escribir nada, sospecha del OOM killer: con SIGKILL el proceso no tiene oportunidad de registrar nada. Busca en los mensajes del kernel: `sudo journalctl -k | grep -i "out of memory"` o `sudo dmesg | grep -i oom`.
+    Si un proceso desaparece de golpe sin escribir nada, sospecha del OOM killer: con SIGKILL el proceso no tiene oportunidad de registrar nada. Buscá en los mensajes del kernel: `sudo journalctl -k | grep -i "out of memory"` o `sudo dmesg | grep -i oom`.
   </ErrorComun>
   <ErrorComun titulo="Agregar más swap para resolver la falta de memoria">
     Más swap solo cambia "el proceso desaparece" por "el servidor se arrastra durante horas". Si la memoria no alcanza para el trabajo normal, hay que reducir el consumo (limitar o mover procesos) o agregar RAM. El swap es un colchón para picos, no un reemplazo de la RAM.

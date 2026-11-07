@@ -12,7 +12,7 @@ estado_inicial:
     - { nombre: ana, sudo: true }
 pasos:
   - consigna: >-
-      Crea ~/info.sh con este contenido (con nano, o con cat y un here-document):
+      Creá ~/info.sh con este contenido (con nano, o con cat y un here-document):
       la línea #!/bin/bash, un comentario, servidor=$(hostname), echo "Servidor: $servidor" y df -h /.
     verificar:
       - { archivo: /home/ana/info.sh, contenido_incluye: "#!/bin/bash" }
@@ -22,7 +22,7 @@ pasos:
       - "`cat > ~/info.sh <<'FIN'` y después las líneas, y FIN para terminar."
     solucion: ["cat > ~/info.sh <<'FIN'\n#!/bin/bash\n# info.sh: datos básicos del servidor\nservidor=$(hostname)\necho \"Servidor: $servidor\"\ndf -h /\nFIN"]
     explicacion: Un script es un archivo de texto con comandos. La primera línea dice con qué programa se lee.
-  - consigna: Intenta ejecutarlo con ./info.sh.
+  - consigna: Intentá ejecutarlo con ./info.sh.
     verificar:
       - { comando_usado: '\./info\.sh' }
       - { salida_contiene: Permission denied }
@@ -30,17 +30,17 @@ pasos:
       - "`cd ~` y `./info.sh`"
     solucion: [cd ~, ./info.sh]
     explicacion: Al crearlo, el archivo no tiene permiso de ejecución. Es una protección, no un error del script.
-  - consigna: Dale permiso de ejecución y ejecútalo.
+  - consigna: Dale permiso de ejecución y ejecutalo.
     verificar:
       - { archivo: /home/ana/info.sh, modo: "0775" }
       - { salida_contiene: "Servidor: app01" }
     pistas:
       - "`chmod +x info.sh` y `./info.sh`"
     solucion: [chmod +x info.sh, ./info.sh]
-    explicacion: "./ indica que el programa está en la carpeta actual: bash no busca ahí si no se lo pides."
+    explicacion: "./ indica que el programa está en la carpeta actual: bash no busca ahí si no se lo pedís."
   - consigna: >-
-      Prueba el problema de las comillas: guarda "informe final.txt" en una variable y crea el
-      archivo con touch, sin comillas. Después mira qué se creó.
+      Probá el problema de las comillas: guardá "informe final.txt" en una variable y crea el
+      archivo con touch, sin comillas. Después mirá qué se creó.
     verificar:
       - { archivo: /home/ana/informe, existe: true }
       - { comando_usado: 'ls' }
@@ -56,10 +56,10 @@ pasos:
     pistas:
       - "`touch \"$archivo\"` y `rm informe final.txt`"
     solucion: ['touch "$archivo"', rm informe final.txt]
-    explicacion: '"$archivo" es una sola palabra, tenga los espacios que tenga. Pon siempre las variables entre comillas dobles.'
+    explicacion: '"$archivo" es una sola palabra, tenga los espacios que tenga. Poné siempre las variables entre comillas dobles.'
   - consigna: >-
-      Instala el script como un comando para todos: cópialo a /usr/local/bin/info-servidor (sin
-      .sh) y ejecútalo por su nombre desde cualquier carpeta.
+      Instalá el script como un comando para todos: copialo a /usr/local/bin/info-servidor (sin
+      .sh) y ejecutalo por su nombre desde cualquier carpeta.
     verificar:
       - { archivo: /usr/local/bin/info-servidor, existe: true }
       - { comando_usado: '^info-servidor' }

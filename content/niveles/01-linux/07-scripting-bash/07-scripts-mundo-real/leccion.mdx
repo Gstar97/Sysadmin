@@ -14,7 +14,7 @@ import ciclo from './ciclo.svg?raw'
 import checklist from './checklist.yaml'
 import ejRespaldo from './ej-respaldo.yaml'
 
-Con todo lo del módulo ya puedes escribir las herramientas que se usan de verdad en un servidor. En esta lección vas a ver tres, completas, que son la base del laboratorio y del proyecto del nivel: un respaldo en el que se puede confiar, un reporte de salud y un alta de usuarios a partir de una lista. Y lo que hace la diferencia entre un script que funciona en tu terminal y uno que funciona en producción.
+Con todo lo del módulo ya podés escribir las herramientas que se usan de verdad en un servidor. En esta lección vas a ver tres, completas, que son la base del laboratorio y del proyecto del nivel: un respaldo en el que se puede confiar, un reporte de salud y un alta de usuarios a partir de una lista. Y lo que hace la diferencia entre un script que funciona en tu terminal y uno que funciona en producción.
 
 <AntesDeEmpezar>
 - Todo el módulo, en especial funciones, modo estricto y registro (lección 1.7.5).
@@ -24,7 +24,7 @@ Con todo lo del módulo ya puedes escribir las herramientas que se usan de verda
 
 ## 1. Un respaldo en el que se puede confiar
 
-Hacer una copia es fácil. Lo difícil es saber, sin mirar, que la copia de anoche sirve. Piensa en la rueda de repuesto del auto: no alcanza con tenerla, tiene que estar inflada, y eso solo lo sabes si la revisas antes de necesitarla. Un buen respaldo hace cinco cosas:
+Hacer una copia es fácil. Lo difícil es saber, sin mirar, que la copia de anoche sirve. Pensá en la rueda de repuesto del auto: no alcanza con tenerla, tiene que estar inflada, y eso solo lo sabés si la revisás antes de necesitarla. Un buen respaldo hace cinco cosas:
 
 <Diagrama svg={ciclo} alt="Las cinco etapas de un respaldo confiable: copiar con tar czf, verificar con tar tzf que se puede leer y no está vacío, sellar con sha256sum, rotar borrando los de más de 7 días con find -mtime +7 -delete, y registrar con log, logger y el código de salida. Si la verificación falla, el script termina con exit 1 y un mensaje claro. Y de vez en cuando, la prueba de restaurar en una carpeta temporal y comparar con diff -r." pie="Copiar, verificar, sellar, rotar, registrar. Y de vez en cuando, restaurar." />
 
@@ -60,7 +60,7 @@ systemctl --failed --no-legend | awk '{print "  " $1}' | grep . || echo "  ningu
 echo "Intentos fallidos de SSH (hoy): $(journalctl -u sshd --since today 2>/dev/null | grep -c 'Failed password')"
 ```
 
-Fíjate en el `set -uo pipefail` **sin -e**: en un reporte conviene que una parte que falla no corte las demás. Cada herramienta tiene su forma de usar el modo estricto.
+Fijate en el `set -uo pipefail` **sin -e**: en un reporte conviene que una parte que falla no corte las demás. Cada herramienta tiene su forma de usar el modo estricto.
 
 ## 3. Alta de usuarios desde un CSV
 
@@ -92,7 +92,7 @@ tail -n +2 "$csv" | while IFS=, read -r usuario nombre grupo; do
 done
 ```
 
-Es **idempotente**: si lo ejecutas dos veces, la segunda solo dice "ya existe". Las claves temporales se entregan por un canal seguro (nunca por el mismo correo que el nombre de usuario) y se fuerzan a cambiar con `chage -d 0`.
+Es **idempotente**: si lo ejecutás dos veces, la segunda solo dice "ya existe". Las claves temporales se entregan por un canal seguro (nunca por el mismo correo que el nombre de usuario) y se fuerzan a cambiar con `chage -d 0`.
 
 ## De tu terminal a producción
 
@@ -113,13 +113,13 @@ Un script de producción no termina cuando funciona en tu terminal: termina cuan
 
 <ErroresComunes>
   <ErrorComun titulo="sudo: respaldo.sh: command not found">
-    sudo no busca en /usr/local/bin en Rocky (secure_path). Usa la ruta completa: `sudo /usr/local/bin/respaldo.sh`.
+    sudo no busca en /usr/local/bin en Rocky (secure_path). Usá la ruta completa: `sudo /usr/local/bin/respaldo.sh`.
   </ErrorComun>
   <ErrorComun titulo="El respaldo existe pero está vacío">
     Falta verificar el contenido (`tar tzf ... | wc -l`) y fallar si no hay nada. Es el caso real de este módulo.
   </ErrorComun>
   <ErrorComun titulo="Los respaldos llenaron el disco">
-    Falta la rotación, o el patrón de find no coincide con los nombres. Prueba primero con `-print` y sin `-delete`.
+    Falta la rotación, o el patrón de find no coincide con los nombres. Probá primero con `-print` y sin `-delete`.
   </ErrorComun>
   <ErrorComun titulo="El respaldo está en el mismo disco que los datos">
     Si ese disco se rompe, se pierden los dos. Otro disco como mínimo; mejor, otro servidor.

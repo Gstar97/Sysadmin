@@ -72,7 +72,7 @@ export function OrderExercise({ exercise, onComplete }: { exercise: Exercise; on
       </div>
       {checked && (
         <Callout tone={correct ? 'ok' : 'warn'} className="mt-3" title={correct ? (attempts === 1 ? '¡Perfecto al primer intento!' : '¡Ordenado correctamente!') : 'Todavía hay pasos fuera de lugar'}>
-          {correct ? exercise.explicacion ? <RichText text={exercise.explicacion} /> : 'Ese es el orden correcto.' : 'Los pasos en rojo no están en su lugar. Puedes moverlos y volver a comprobar.'}
+          {correct ? exercise.explicacion ? <RichText text={exercise.explicacion} /> : 'Ese es el orden correcto.' : 'Los pasos en rojo no están en su lugar. Podés moverlos y volver a comprobar.'}
         </Callout>
       )}
     </div>

@@ -4,7 +4,7 @@ titulo: Acceso de lectura para auditoría
 descripcion: >-
   Llega una auditoría externa. Laura, del grupo auditoria, necesita leer (sin modificar) todo lo
   que hay en la carpeta de contabilidad durante un mes, y también lo que se cree en ese tiempo.
-  No puedes cambiar el grupo de la carpeta, porque contabilidad sigue trabajando ahí.
+  No podés cambiar el grupo de la carpeta, porque contabilidad sigue trabajando ahí.
 estado_inicial:
   distro: rocky
   hostname: rocky01
@@ -20,7 +20,7 @@ estado_inicial:
     /srv/contabilidad: { tipo: directorio, modo: "2770", grupo: contabilidad }
     /srv/contabilidad/balance.txt: { contenido: "Activo: 120000\nPasivo: 45000\n", modo: "0660", dueno: marta, grupo: contabilidad }
 pasos:
-  - consigna: Comprueba que laura hoy no puede leer el balance.
+  - consigna: Comprobá que laura hoy no puede leer el balance.
     verificar:
       - { comando_usado: 'sudo\s+-u\s+laura\s+(cat|less|head)\s+/srv/contabilidad/balance\.txt' }
       - { salida_contiene: Permission denied }
@@ -45,7 +45,7 @@ pasos:
       - "Después: `sudo -u laura cat /srv/contabilidad/balance.txt`"
     solucion: [sudo setfacl -m g:auditoria:r /srv/contabilidad/balance.txt, sudo -u laura cat /srv/contabilidad/balance.txt]
     explicacion: Con muchos archivos se haría de una vez con `sudo setfacl -R -m g:auditoria:rX /srv/contabilidad` (la X mayúscula da ejecución solo a las carpetas).
-  - consigna: Agrega una ACL por defecto para que lo que se cree desde ahora también lo pueda leer auditoria.
+  - consigna: Agregá una ACL por defecto para que lo que se cree desde ahora también lo pueda leer auditoria.
     verificar:
       - { archivo: /srv/contabilidad, acl_incluye: "default:group:auditoria:r-x" }
     pistas:
@@ -62,10 +62,10 @@ pasos:
       - "`sudo -u marta touch /srv/contabilidad/marzo.txt` y `sudo getfacl /srv/contabilidad/marzo.txt`"
     solucion: [sudo -u marta touch /srv/contabilidad/marzo.txt, sudo getfacl /srv/contabilidad/marzo.txt]
     explicacion: >-
-      El archivo heredó la entrada de auditoria. Fíjate en el comentario #effective: como un
+      El archivo heredó la entrada de auditoria. Fijate en el comentario #effective: como un
       archivo nuevo se pide sin permiso de ejecución, la máscara queda en rw- y auditoria tiene en
       la práctica r--, que es justo lo que se quería.
-  - consigna: Terminó la auditoría. Quita todas las ACL de la carpeta y de su contenido.
+  - consigna: Terminó la auditoría. Quitá todas las ACL de la carpeta y de su contenido.
     verificar:
       - { archivo: /srv/contabilidad, acl_no_incluye: auditoria }
       - { archivo: /srv/contabilidad/balance.txt, acl_no_incluye: auditoria }

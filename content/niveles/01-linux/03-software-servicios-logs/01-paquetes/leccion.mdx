@@ -26,7 +26,7 @@ Hasta ahora usaste los programas que ya venían con el servidor. Pero un servido
 
 ## Qué es un paquete
 
-Piensa en un mueble que compras para armar. Viene en una caja con todas las piezas, un manual, y una nota que dice "para armarlo necesitas un destornillador". La caja no trae el destornillador: se supone que lo tienes o que lo consigues aparte.
+Pensá en un mueble que comprás para armar. Viene en una caja con todas las piezas, un manual, y una nota que dice "para armarlo necesitás un destornillador". La caja no trae el destornillador: se supone que lo tenés o que lo consigues aparte.
 
 Un **paquete** es lo mismo para un programa: un archivo que trae adentro el programa, su configuración de ejemplo y su documentación, más una ficha con datos como el nombre, la versión, una descripción y la lista de otros paquetes que necesita para funcionar. Esos paquetes que necesita se llaman **dependencias**.
 
@@ -36,12 +36,12 @@ Un **paquete** es lo mismo para un programa: un archivo que trae adentro el prog
 Son formatos distintos: un .deb no se instala en Rocky ni un .rpm en Ubuntu.
 
 <EnSimple>
-Un paquete es un programa listo para instalar, con una etiqueta que dice qué es, qué versión es y qué otras cosas necesita. Hasta aquí la comparación con el mueble funciona; donde se queda corta es en que, en Linux, el sistema **sí** consigue el destornillador por ti: si un paquete necesita otro, el gestor lo busca y lo instala solo.
+Un paquete es un programa listo para instalar, con una etiqueta que dice qué es, qué versión es y qué otras cosas necesita. Hasta acá la comparación con el mueble funciona; donde se queda corta es en que, en Linux, el sistema **sí** consigue el destornillador por vos: si un paquete necesita otro, el gestor lo busca y lo instala solo.
 </EnSimple>
 
 ## Qué es un repositorio
 
-Un **repositorio** es un servidor en internet que guarda miles de paquetes, ya probados para tu distribución, y un catálogo con la lista de todo lo que tiene. Funciona como la tienda de aplicaciones de un teléfono: buscas por nombre, ves la descripción, instalas, y cuando sale una versión nueva te avisa.
+Un **repositorio** es un servidor en internet que guarda miles de paquetes, ya probados para tu distribución, y un catálogo con la lista de todo lo que tiene. Funciona como la tienda de aplicaciones de un celular: buscás por nombre, ves la descripción, instalás, y cuando sale una versión nueva te avisa.
 
 La diferencia con bajar un instalador de cualquier página es la confianza. Cada paquete de un repositorio viene **firmado** por quien lo armó, con una clave GPG (una especie de sello que no se puede falsificar). Antes de instalar, el sistema revisa que el sello sea el correcto: si alguien modificó el paquete en el camino, la firma no coincide y la instalación se detiene.
 
@@ -53,12 +53,12 @@ En cada familia hay dos herramientas que trabajan juntas:
 
 | | Familia Red Hat (Rocky) | Familia Debian (Ubuntu) |
 | --- | --- | --- |
-| Gestor que usas a diario | `dnf` | `apt` |
+| Gestor que usás a diario | `dnf` | `apt` |
 | Herramienta de bajo nivel | `rpm` | `dpkg` |
 | Formato de paquete | `.rpm` | `.deb` |
 | Configuración de repositorios | `/etc/yum.repos.d/*.repo` | `/etc/apt/sources.list.d/` |
 
-En el día a día usas `dnf` o `apt`. Las de bajo nivel sirven sobre todo para **consultar**: qué versión hay instalada, qué archivos trajo un paquete o de qué paquete viene un archivo.
+En el día a día usás `dnf` o `apt`. Las de bajo nivel sirven sobre todo para **consultar**: qué versión hay instalada, qué archivos trajo un paquete o de qué paquete viene un archivo.
 
 <Nota titulo="¿Y yum?">
 En documentación vieja vas a ver `yum`. Es el antecesor de `dnf`: en Rocky, `yum` sigue existiendo como un atajo que ejecuta `dnf`, así que los comandos viejos funcionan. En Fedora ya se usa **DNF5**, una versión nueva; Rocky 10 todavía usa dnf 4. Para lo que ves en esta lección, se escriben igual.
@@ -66,7 +66,7 @@ En documentación vieja vas a ver `yum`. Es el antecesor de `dnf`: en Rocky, `yu
 
 ## Las tareas de todos los días
 
-Empieza por lo más simple: buscar, ver información e instalar.
+Empezá por lo más simple: buscar, ver información e instalar.
 
 <Distros>
   <Distro nombre="Rocky / AlmaLinux 10">
@@ -99,9 +99,9 @@ Después, las consultas: ¿esto de dónde salió?, ¿qué trajo este paquete?
 | ¿De qué paquete es este archivo? | `rpm -qf /usr/bin/ls` | `dpkg -S /usr/bin/ls` |
 | ¿Qué paquete trae un comando que no tengo? | `dnf provides /usr/bin/dig` | `apt-file search bin/dig` (hay que instalar apt-file) |
 
-La última es muy útil: alguien te dice "usa `dig`", escribes `dig` y aparece `command not found`. En Rocky, `dnf provides` te dice que viene en el paquete `bind-utils`; en Ubuntu viene en `bind9-dnsutils` (el nombre viejo, `dnsutils`, también funciona). Los nombres de los paquetes no siempre coinciden con el del comando, y cambian entre distribuciones.
+La última es muy útil: alguien te dice "usa `dig`", escribís `dig` y aparece `command not found`. En Rocky, `dnf provides` te dice que viene en el paquete `bind-utils`; en Ubuntu viene en `bind9-dnsutils` (el nombre viejo, `dnsutils`, también funciona). Los nombres de los paquetes no siempre coinciden con el del comando, y cambian entre distribuciones.
 
-Practica cuál es cuál:
+Practicá cuál es cuál:
 
 <Emparejar ejercicio={tareas} />
 
@@ -112,9 +112,9 @@ Actualizar es la tarea más importante del módulo: la mayoría de las intrusion
 En **Ubuntu** son dos pasos con nombres engañosos:
 
 1. `sudo apt update` **no actualiza nada instalado**: solo baja el catálogo nuevo de los repositorios, para saber qué versiones existen.
-2. `sudo apt upgrade` instala las versiones nuevas de lo que ya tienes.
+2. `sudo apt upgrade` instala las versiones nuevas de lo que ya tenés.
 
-Si te saltas el primero, el segundo no encuentra nada nuevo, porque el catálogo es viejo. Y si instalas un paquete con un catálogo muy viejo, puede fallar porque esa versión ya no está en el servidor.
+Si te saltás el primero, el segundo no encuentra nada nuevo, porque el catálogo es viejo. Y si instalás un paquete con un catálogo muy viejo, puede fallar porque esa versión ya no está en el servidor.
 
 <EnSimple>
 `apt update` es leer el diario para enterarte de qué hay de nuevo. `apt upgrade` es ir a comprarlo. Leer el diario no te trae nada a casa.
@@ -137,14 +137,14 @@ Para ver qué repositorios está usando el sistema:
   </Distro>
 </Distros>
 
-A veces el programa que necesitas no está en los repositorios oficiales. En la familia Red Hat, el repositorio extra más usado es **EPEL** (Extra Packages for Enterprise Linux), mantenido por el proyecto Fedora. Herramientas comunes como `htop` vienen de ahí. En Rocky se activa instalando un paquete:
+A veces el programa que necesitás no está en los repositorios oficiales. En la familia Red Hat, el repositorio extra más usado es **EPEL** (Extra Packages for Enterprise Linux), mantenido por el proyecto Fedora. Herramientas comunes como `htop` vienen de ahí. En Rocky se activa instalando un paquete:
 
 ```bash
 sudo dnf install epel-release
 ```
 
-<Advertencia titulo="Cada repositorio es alguien en quien confías">
-Agregar un repositorio es darle a otra organización permiso para instalar software en tu servidor con permisos de root, ahora y en cada actualización. EPEL es confiable y muy usado; un repositorio que encontraste en un foro, no necesariamente. Antes de agregar uno, pregúntate quién lo mantiene y si de verdad lo necesitas. En Ubuntu pasa lo mismo con los **PPA** (repositorios personales): son útiles, pero los arma cualquier persona.
+<Advertencia titulo="Cada repositorio es alguien en quien confiás">
+Agregar un repositorio es darle a otra organización permiso para instalar software en tu servidor con permisos de root, ahora y en cada actualización. EPEL es confiable y muy usado; un repositorio que encontraste en un foro, no necesariamente. Antes de agregar uno, preguntate quién lo mantiene y si de verdad lo necesitás. En Ubuntu pasa lo mismo con los **PPA** (repositorios personales): son útiles, pero los arma cualquier persona.
 </Advertencia>
 
 ## Instalar un archivo suelto
@@ -156,7 +156,7 @@ sudo dnf install ./agente-monitoreo-2.1.rpm     # Rocky
 sudo apt install ./agente-monitoreo_2.1.deb     # Ubuntu
 ```
 
-Así el gestor resuelve las dependencias desde los repositorios. Con `rpm -i` o `dpkg -i` el archivo se instala solo si ya tienes todo lo que necesita; si falta algo, se detiene con un error de dependencias (o, en el caso de dpkg, deja el paquete a medio instalar).
+Así el gestor resuelve las dependencias desde los repositorios. Con `rpm -i` o `dpkg -i` el archivo se instala solo si ya tenés todo lo que necesita; si falta algo, se detiene con un error de dependencias (o, en el caso de dpkg, deja el paquete a medio instalar).
 
 ## El historial: qué cambió y cómo volver atrás
 
@@ -183,16 +183,16 @@ Ahora en Ubuntu, con el paso que más se olvida:
 
 <ErroresComunes>
   <ErrorComun titulo='"No match for argument: htop" (Rocky) o "Unable to locate package htop" (Ubuntu)'>
-    El paquete no está en los repositorios que tienes activos, o el nombre es otro. En Ubuntu, casi siempre falta un `sudo apt update` antes. En Rocky, revisa si viene de EPEL. Y busca el nombre real con `dnf search` o `apt search`: por ejemplo, el comando `dig` viene en `bind-utils` (Rocky) o `bind9-dnsutils` (Ubuntu).
+    El paquete no está en los repositorios que tenés activos, o el nombre es otro. En Ubuntu, casi siempre falta un `sudo apt update` antes. En Rocky, revisa si viene de EPEL. Y busca el nombre real con `dnf search` o `apt search`: por ejemplo, el comando `dig` viene en `bind-utils` (Rocky) o `bind9-dnsutils` (Ubuntu).
   </ErrorComun>
   <ErrorComun titulo='"Could not get lock /var/lib/dpkg/lock-frontend" o "waiting for process with pid ... to finish"'>
-    Otro proceso está instalando o actualizando en ese momento (en Ubuntu, muchas veces la actualización automática de seguridad). Espera a que termine. **No borres el archivo de bloqueo**: si dos instalaciones escriben a la vez, la lista de paquetes puede quedar dañada.
+    Otro proceso está instalando o actualizando en ese momento (en Ubuntu, muchas veces la actualización automática de seguridad). Esperá a que termine. **No borres el archivo de bloqueo**: si dos instalaciones escriben a la vez, la lista de paquetes puede quedar dañada.
   </ErrorComun>
   <ErrorComun titulo='"GPG check FAILED" o "NO_PUBKEY"'>
     El sistema no tiene la clave para verificar la firma del repositorio, o la firma no coincide. No lo resuelvas desactivando la verificación: consigue la clave oficial desde la página del proyecto. Si la firma no coincide con una clave correcta, el paquete pudo haber sido modificado.
   </ErrorComun>
   <ErrorComun titulo="Instalar un .rpm con rpm -i y que falle por dependencias">
-    rpm no busca dependencias. Usa `sudo dnf install ./archivo.rpm` (o `sudo apt install ./archivo.deb` en Ubuntu), que las trae de los repositorios.
+    rpm no busca dependencias. Usá `sudo dnf install ./archivo.rpm` (o `sudo apt install ./archivo.deb` en Ubuntu), que las trae de los repositorios.
   </ErrorComun>
 </ErroresComunes>
 

@@ -33,7 +33,7 @@ estado_inicial:
       - { a: "PC1:eth0", b: "R1:Gi0/0" }
       - { a: "PC2:eth0", b: "R2:Gi0/0" }
 pasos:
-  - consigna: Agrega en R1 la ruta a la LAN de la sucursal por la fibra.
+  - consigna: Agregá en R1 la ruta a la LAN de la sucursal por la fibra.
     verificar:
       - { ping: { desde: PC1, hacia: PC2 } }
       - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
@@ -42,7 +42,7 @@ pasos:
     explicacion: >-
       La PC de la central ya llega a la de la sucursal: R1 sabe ir y R2 ya sabía volver. Las dos
       cosas hacen falta.
-  - consigna: Agrega una ruta flotante por el enlace celular, con distancia administrativa 5, para que solo se use si se cae la fibra.
+  - consigna: Agregá una ruta flotante por el enlace celular, con distancia administrativa 5, para que solo se use si se cae la fibra.
     verificar:
       - { equipo: R1, config_contiene: "ip route 10.2.0.0 255.255.255.0 10.0.21.2 5" }
       - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
@@ -60,7 +60,7 @@ pasos:
     explicacion: >-
       Al caer Gi0/1 desaparece su red conectada, la ruta principal queda sin siguiente salto
       y entra la flotante: [5/0] via 10.0.21.2. R2 hizo lo mismo de su lado.
-  - consigna: Vuelve a levantar la fibra, comprueba que se vuelve a usar la ruta principal y guarda.
+  - consigna: Volvé a levantar la fibra, comprobá que se vuelve a usar la ruta principal y guardá.
     verificar:
       - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
       - { equipo: R1, guardado: true }

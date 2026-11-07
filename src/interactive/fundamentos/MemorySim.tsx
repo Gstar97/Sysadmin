@@ -104,7 +104,7 @@ export function MemorySim() {
         </div>
       </div>
       <p className="mt-3 text-xs text-muted">
-        Prueba: haz que el reporte mensual pida memoria varias veces. Primero se ocupa la memoria libre, después el kernel descarta caché, después manda páginas poco usadas al swap y, si todo se llena, el OOM killer termina un proceso.
+        Probá: hacé que el reporte mensual pida memoria varias veces. Primero se ocupa la memoria libre, después el kernel descarta caché, después manda páginas poco usadas al swap y, si todo se llena, el OOM killer termina un proceso.
       </p>
     </Frame>
   )

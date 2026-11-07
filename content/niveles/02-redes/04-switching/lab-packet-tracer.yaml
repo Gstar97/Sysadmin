@@ -7,8 +7,8 @@ descripcion: >-
 pasos:
   - titulo: Los equipos y los cables
     detalle: >-
-      Crea un proyecto nuevo. Agrega dos switches 2960 (SW1 y SW2), un router 2911 (R1) y seis
-      PC. Conecta con cable directo (cobre): las PC a Fa0/1, Fa0/2 y Fa0/3 de cada switch, R1
+      Creá un proyecto nuevo. Agregá dos switches 2960 (SW1 y SW2), un router 2911 (R1) y seis
+      PC. Conectá con cable directo (cobre): las PC a Fa0/1, Fa0/2 y Fa0/3 de cada switch, R1
       Gi0/0 a SW1 Gi0/2, y SW1 con SW2 dos veces: Gi0/1 con Gi0/1 y Fa0/24 con Fa0/24.
     comprobar: Las luces de los enlaces entre switches se ponen verdes; una de las dos queda naranja (bloqueada por STP) después de unos segundos.
   - titulo: IP de las PC
@@ -33,7 +33,7 @@ pasos:
   - titulo: Spanning Tree
     detalle: >-
       En SW1: spanning-tree vlan 10,20,30 priority 4096. En los dos switches, PortFast y BPDU
-      Guard en Fa0/1 a Fa0/3. Mira show spanning-tree vlan 10 en SW2: el puerto raíz tiene que
+      Guard en Fa0/1 a Fa0/3. Mirá show spanning-tree vlan 10 en SW2: el puerto raíz tiene que
       ser Gi0/1 (costo 4) y Fa0/24 tiene que quedar bloqueado (Altn BLK, costo 19).
     comandos:
       - "spanning-tree vlan 10,20,30 priority 4096"
@@ -41,11 +41,11 @@ pasos:
     comprobar: En SW1, show spanning-tree vlan 10 dice "This bridge is the root"; en SW2, Fa0/24 está en BLK.
   - titulo: Romper y mirar
     detalle: >-
-      Pasa al modo Simulation (abajo a la derecha), haz un ping continuo de Admin-PB a Admin-P1 y
-      borra el cable Gi0/1 entre los switches. Mira cómo Fa0/24 pasa a reenviar. Después, en SW2,
+      Pasá al modo Simulation (abajo a la derecha), hacé un ping continuo de Admin-PB a Admin-P1 y
+      borra el cable Gi0/1 entre los switches. Mirá cómo Fa0/24 pasa a reenviar. Después, en SW2,
       ejecuta no spanning-tree vlan 10 y mira qué pasa con un broadcast (ARP) en la VLAN 10 con
-      los dos cables conectados. Vuelve a activarlo con spanning-tree vlan 10.
+      los dos cables conectados. Volvé a activarlo con spanning-tree vlan 10.
     comprobar: Con STP, el ping vuelve tras unos segundos por Fa0/24. Sin STP en la VLAN 10, ves el ARP multiplicarse entre los dos switches.
   - titulo: Guardar
-    detalle: Guarda la configuración en cada equipo (copy running-config startup-config) y el proyecto (.pkt).
+    detalle: Guardá la configuración en cada equipo (copy running-config startup-config) y el proyecto (.pkt).
     comprobar: show startup-config en cada equipo muestra tu configuración.

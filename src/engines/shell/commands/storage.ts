@@ -336,7 +336,7 @@ register('fdisk', {
     }
     if (ctx.stdin.empty) {
       ctx.err(
-        `Welcome to fdisk (util-linux 2.40.2).\nChanges will remain in memory only, until you decide to write them.\nBe careful before using the write command.\n\n[simulador] El menú interactivo de fdisk se practica en tu laboratorio. Aquí puedes pasarle las respuestas por una tubería, por ejemplo:\n  printf 'g\\nn\\n\\n\\n\\nw\\n' | sudo fdisk ${devArg}\no usar parted, que no es interactivo: sudo parted -s ${devArg} mklabel gpt mkpart datos 1MiB 100%\n`,
+        `Welcome to fdisk (util-linux 2.40.2).\nChanges will remain in memory only, until you decide to write them.\nBe careful before using the write command.\n\n[simulador] El menú interactivo de fdisk se practica en tu laboratorio. Acá podés pasarle las respuestas por una tubería, por ejemplo:\n  printf 'g\\nn\\n\\n\\n\\nw\\n' | sudo fdisk ${devArg}\no usar parted, que no es interactivo: sudo parted -s ${devArg} mklabel gpt mkpart datos 1MiB 100%\n`,
       )
       return 1
     }
@@ -370,7 +370,7 @@ register('fdisk', {
         if (work.label === 'dos') {
           const t = ask(`Partition type\n   p   primary (${work.parts.length} primary, 0 extended, ${4 - work.parts.length} free)\n   e   extended (container for logical partitions)\nSelect (default p): `)
           if (t && t.trim() && t.trim() !== 'p') {
-            ctx.out('[simulador] Las particiones extendidas no se simulan: usa primarias o GPT.\n\n')
+            ctx.out('[simulador] Las particiones extendidas no se simulan: usá primarias o GPT.\n\n')
             continue
           }
         }
@@ -496,7 +496,7 @@ register('parted', {
     }
     const words = args.slice(1)
     if (!words.length) {
-      ctx.err(`GNU Parted 3.6\nUsing ${devArg}\n[simulador] El modo interactivo de parted se practica en tu laboratorio. Aquí escribe los comandos seguidos: sudo parted ${devArg} print, o sudo parted -s ${devArg} mklabel gpt mkpart datos 1MiB 100%\n`)
+      ctx.err(`GNU Parted 3.6\nUsing ${devArg}\n[simulador] El modo interactivo de parted se practica en tu laboratorio. Acá escribí los comandos seguidos: sudo parted ${devArg} print, o sudo parted -s ${devArg} mklabel gpt mkpart datos 1MiB 100%\n`)
       return 1
     }
     let i = 0
@@ -1054,7 +1054,7 @@ register('umount', {
     const busyProc = ctx.sys.procs.find((p) => p.cmd.includes(m.target + '/'))
     if (cwd === m.target || cwd.startsWith(m.target + '/') || nested || openDeleted || busyProc) {
       ctx.err(`umount: ${m.target}: target is busy.\n`)
-      if (cwd === m.target || cwd.startsWith(m.target + '/')) ctx.err('[simulador] Tu propia sesión está dentro de esa carpeta: sal con cd antes de desmontar.\n')
+      if (cwd === m.target || cwd.startsWith(m.target + '/')) ctx.err('[simulador] Tu propia sesión está dentro de esa carpeta: salí con cd antes de desmontar.\n')
       return 32
     }
     s.unmount(m)
@@ -1697,7 +1697,7 @@ function lvResize(ctx: CommandContext, grow: 'extend' | 'reduce' | 'resize'): nu
   if (newSize > (sig?.size ?? 0) && a.flags.has('r') && sig && (sig.type === 'xfs' || sig.type === 'ext4')) {
     if (sig.type === 'xfs' && !mounted) {
       ctx.out(`  Logical volume ${name} successfully resized.\n`)
-      ctx.err(`  [simulador] XFS solo se agranda montado: monta el volumen y ejecuta xfs_growfs.\n`)
+      ctx.err(`  [simulador] XFS solo se agranda montado: montá el volumen y ejecutá xfs_growfs.\n`)
       return 0
     }
     ctx.out(`  Extending file system ${sig.type} to ${lvmLong(newSize)} (${newSize} bytes) on ${name}...\n`)
@@ -1832,7 +1832,7 @@ register('dd', {
       return 1
     }
     if (kv.of.startsWith('/dev/')) {
-      ctx.err(`[simulador] Escribir con dd sobre un disco (${kv.of}) borra todo lo que tiene. Aquí no se simula: para limpiar firmas usa wipefs -a.\n`)
+      ctx.err(`[simulador] Escribir con dd sobre un disco (${kv.of}) borra todo lo que tiene. Acá no se simula: para limpiar firmas usá wipefs -a.\n`)
       return 1
     }
     if (!['/dev/zero', '/dev/urandom', '/dev/random'].includes(kv.if ?? '')) {
@@ -1906,7 +1906,7 @@ register('lsof', {
       rows.push(`${d.command.slice(0, 9).padEnd(9)} ${String(d.pid).padStart(5)} ${d.user.padEnd(6)} ${'4w'.padStart(4)}   REG ${device.padStart(6)} ${String(d.size).padStart(10)}     0 ${String(33554000 + d.pid).padStart(8)} ${d.path} (deleted)`)
     }
     if (!plusL && !arg && !rows.length) {
-      ctx.err('[simulador] lsof sin argumentos lista miles de archivos abiertos. Prueba lsof +L1 (archivos borrados que siguen abiertos) o lsof /carpeta.\n')
+      ctx.err('[simulador] lsof sin argumentos lista miles de archivos abiertos. Probá lsof +L1 (archivos borrados que siguen abiertos) o lsof /carpeta.\n')
       return 1
     }
     if (!rows.length) return 1

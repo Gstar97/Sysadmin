@@ -228,11 +228,11 @@ export function TopologyBuilder({ exercise, onComplete }: Props) {
     const pa = freePort(net, a, b)
     const pb = freePort(net, b, a)
     if (!pa || !pb) {
-      setNotice(`${!pa ? a.hostname : b.hostname} no tiene puertos libres. Quita otro cable antes de conectar este.`)
+      setNotice(`${!pa ? a.hostname : b.hostname} no tiene puertos libres. Quitá otro cable antes de conectar este.`)
       return
     }
     net.connect({ dev: a.id, port: pa.name }, { dev: b.id, port: pb.name })
-    setNotice(`Cable conectado: ${a.hostname} ${shortIfName(pa.name)} ↔ ${b.hostname} ${shortIfName(pb.name)}. Puedes cambiar los puertos tocando el cable.`)
+    setNotice(`Cable conectado: ${a.hostname} ${shortIfName(pa.name)} ↔ ${b.hostname} ${shortIfName(pb.name)}. Podés cambiar los puertos tocando el cable.`)
     changed()
   }
 
@@ -327,7 +327,7 @@ export function TopologyBuilder({ exercise, onComplete }: Props) {
             </button>
           </div>
         )}
-        {editable.enlaces && !notice && <p className="border-t border-line px-3 py-2 text-xs text-muted">Para conectar un cable, arrastra desde uno de los puntos de un equipo hasta otro equipo. Toca un equipo o un cable para configurarlo.</p>}
+        {editable.enlaces && !notice && <p className="border-t border-line px-3 py-2 text-xs text-muted">Para conectar un cable, arrastra desde uno de los puntos de un equipo hasta otro equipo. Tocá un equipo o un cable para configurarlo.</p>}
       </div>
 
       {selectedDevice && (

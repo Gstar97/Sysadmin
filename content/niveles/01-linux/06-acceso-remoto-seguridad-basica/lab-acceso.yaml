@@ -5,16 +5,16 @@ descripcion: >-
   SSH solo desde el bastión, solo con clave, y va a servir un sitio desde /srv/sitio en el puerto
   8090 con SELinux en enforcing. Todo desde la terminal de tu PC.
 pasos:
-  - titulo: Toma instantáneas de las dos máquinas
+  - titulo: Tomá instantáneas de las dos máquinas
     detalle: >-
       Vas a tocar sshd y el firewall: es fácil quedarse afuera. Con las instantáneas
-      antes-de-acceso, un error se arregla en un minuto. Anota también las IP solo-anfitrión de
+      antes-de-acceso, un error se arregla en un minuto. Anotá también las IP solo-anfitrión de
       cada una (ip -4 addr); en los pasos se usan 192.168.56.102 (ubuntu01) y 192.168.56.103
-      (rocky01): cámbialas por las tuyas.
-    comprobar: Las dos instantáneas aparecen en el hipervisor y tienes las IP anotadas.
-  - titulo: Crea tu clave en tu PC
+      (rocky01): cambialas por las tuyas.
+    comprobar: Las dos instantáneas aparecen en el hipervisor y tenés las IP anotadas.
+  - titulo: Creá tu clave en tu PC
     detalle: >-
-      Ponle una frase de paso: es tu clave personal. El agente te evita escribirla en cada
+      Ponele una frase de paso: es tu clave personal. El agente te evita escribirla en cada
       conexión.
     variantes:
       - nombre: Linux o macOS
@@ -29,7 +29,7 @@ pasos:
           - Get-Service ssh-agent | Set-Service -StartupType Automatic; Start-Service ssh-agent
           - ssh-add $env:USERPROFILE\.ssh\id_ed25519
     comprobar: Existen id_ed25519 e id_ed25519.pub en la carpeta .ssh de tu usuario, y ssh-add -l muestra la clave.
-  - titulo: Instala la clave en los dos servidores
+  - titulo: Instalá la clave en los dos servidores
     detalle: >-
       Todavía se puede entrar con contraseña: es el momento de copiar la clave.
     variantes:
@@ -39,12 +39,12 @@ pasos:
           - ssh-copy-id tu_usuario@192.168.56.102
           - ssh-copy-id tu_usuario@192.168.56.103
       - nombre: Windows
-        detalle: Windows no trae ssh-copy-id. Este comando hace lo mismo (repítelo con la otra IP).
+        detalle: Windows no trae ssh-copy-id. Este comando hace lo mismo (repetilo con la otra IP).
         comandos:
           - type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh tu_usuario@192.168.56.102 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
     comprobar: ssh tu_usuario@192.168.56.102 y ssh tu_usuario@192.168.56.103 entran sin pedir la contraseña del servidor.
     si_falla: Si en rocky01 sigue pidiendo contraseña, entra y ejecuta restorecon -Rv ~/.ssh (etiqueta de SELinux) y revisa los permisos de ~/.ssh (700) y authorized_keys (600).
-  - titulo: Guarda las conexiones en ~/.ssh/config de tu PC
+  - titulo: Guardá las conexiones en ~/.ssh/config de tu PC
     detalle: Con ProxyJump, ssh rocky01 va a pasar solo por el bastión.
     archivo:
       ruta: ~/.ssh/config (en tu PC)
@@ -61,7 +61,7 @@ pasos:
       - ssh bastion hostname
       - ssh rocky01 hostname
     comprobar: Los dos comandos responden con el nombre de cada servidor, sin pedir nada (o solo la frase de paso, si no usaste el agente).
-  - titulo: Cierra las contraseñas en los dos servidores
+  - titulo: Cerrá las contraseñas en los dos servidores
     detalle: >-
       En cada servidor, con una sesión abierta que no vas a cerrar hasta el final del paso. Después
       prueba desde OTRA terminal de tu PC.
@@ -77,7 +77,7 @@ pasos:
       - sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin'
     comprobar: Desde otra terminal, ssh -o PubkeyAuthentication=no bastion responde Permission denied (publickey), y ssh bastion entra normalmente.
     si_falla: Si sshd -T sigue mostrando passwordauthentication yes, hay otro archivo en sshd_config.d que se lee antes (ls /etc/ssh/sshd_config.d/).
-  - titulo: Activa ufw en el bastión
+  - titulo: Activá ufw en el bastión
     comandos:
       - sudo ufw allow OpenSSH
       - sudo ufw enable
@@ -86,7 +86,7 @@ pasos:
   - titulo: En rocky01, acepta SSH solo desde el bastión
     detalle: >-
       Una regla "rica" de firewalld permite SSH solo desde la IP del bastión; después se quita ssh
-      (y cockpit) de la zona, que lo permitían desde cualquier lado. Hazlo con la sesión abierta a
+      (y cockpit) de la zona, que lo permitían desde cualquier lado. Hacelo con la sesión abierta a
       través del bastión: esa conexión viene desde el bastión, así que no se corta.
     comandos:
       - sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="192.168.56.102/32" service name="ssh" accept'
@@ -96,7 +96,7 @@ pasos:
       - sudo firewall-cmd --list-all
     comprobar: Desde tu PC, ssh tu_usuario@192.168.56.103 (directo) ya no entra (No route to host), y ssh rocky01 (por el bastión) sí.
     si_falla: Si te quedaste afuera de rocky01, entra por la consola del hipervisor y ejecuta sudo firewall-cmd --permanent --add-service=ssh && sudo firewall-cmd --reload.
-  - titulo: Prepara el sitio en /srv/sitio, puerto 8090
+  - titulo: Prepará el sitio en /srv/sitio, puerto 8090
     comandos:
       - sudo dnf install -y nginx policycoreutils-python-utils
       - sudo mkdir -p /srv/sitio
@@ -114,9 +114,9 @@ pasos:
         }
     comprobar: >-
       nginx -t dice syntax is ok. Es muy probable que nginx no arranque: es lo que vas a arreglar en el paso siguiente.
-  - titulo: Arregla lo que bloquea SELinux, sin apagarlo
+  - titulo: Arreglá lo que bloquea SELinux, sin apagarlo
     detalle: >-
-      Mira primero las denegaciones y después aplica un arreglo por cada una. El index.html lo
+      Mirá primero las denegaciones y después aplica un arreglo por cada una. El index.html lo
       moviste con mv a propósito: trae la etiqueta del home.
     comandos:
       - sudo ausearch -m avc -ts recent
@@ -128,12 +128,12 @@ pasos:
       - curl -s http://localhost:8090
       - getenforce
     comprobar: curl muestra el título del sitio y getenforce sigue diciendo Enforcing.
-  - titulo: Abre el 8090 y pruébalo desde tu PC
+  - titulo: Abrí el 8090 y probalo desde tu PC
     comandos:
       - sudo firewall-cmd --permanent --add-port=8090/tcp
       - sudo firewall-cmd --reload
     comprobar: En el navegador de tu PC, http://192.168.56.103:8090 muestra el sitio.
-  - titulo: Documenta
+  - titulo: Documentá
     detalle: >-
       En el cuaderno técnico: cómo se entra a cada servidor (bastión, ProxyJump), qué permite cada
       firewall y por qué, los cambios de SELinux (puerto y regla de fcontext), y qué hacer si

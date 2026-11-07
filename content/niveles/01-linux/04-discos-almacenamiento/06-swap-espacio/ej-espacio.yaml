@@ -2,8 +2,8 @@ tipo: terminal
 shell: bash
 titulo: El disco del sistema está casi lleno
 descripcion: >-
-  El monitoreo avisa que la raíz de app01 está al 98 %. Encuentra qué ocupa el espacio, libera
-  lo que el equipo confirmó que se puede borrar y, ya que estás, agrega 1 GiB de swap en un
+  El monitoreo avisa que la raíz de app01 está al 98 %. Encontrá qué ocupa el espacio, liberá
+  lo que el equipo confirmó que se puede borrar y, ya que estás, agregá 1 GiB de swap en un
   archivo, porque el servidor anda justo de memoria.
 estado_inicial:
   distro: rocky
@@ -17,14 +17,14 @@ estado_inicial:
     /var/log/app/app-2025-09.log: { contenido: "x", tamano: 900M }
     /home/ana/rocky.iso: { contenido: "x", tamano: 1.1G, dueno: ana }
 pasos:
-  - consigna: Confirma cuánto espacio queda en la raíz.
+  - consigna: Confirmá cuánto espacio queda en la raíz.
     verificar:
       - { comando_usado: 'df\s+-h' }
     pistas:
       - "`df -h /`"
     solucion: [df -h /]
     explicacion: 98 % usado, unos 500 MiB libres. Con tan poco, cualquier log grande puede llenarlo y frenar los servicios.
-  - consigna: Mira qué carpetas de primer nivel ocupan más, sin entrar en otros discos, ordenadas de menor a mayor.
+  - consigna: Mirá qué carpetas de primer nivel ocupan más, sin entrar en otros discos, ordenadas de menor a mayor.
     verificar:
       - { comando_usado: 'du\s+.*(-x|--one-file-system).*(--max-depth=1|-d\s*1).*/|du\s+.*(--max-depth=1|-d\s*1).*(-x|--one-file-system).*/' }
       - { salida_contiene: /var }
@@ -33,7 +33,7 @@ pasos:
       - "`sudo du -xh --max-depth=1 / | sort -h`"
     solucion: [sudo du -xh --max-depth=1 / | sort -h]
     explicacion: /var es la que más ocupa. Desde ahí se puede seguir bajando (du en /var) hasta encontrar al responsable.
-  - consigna: Busca directamente los archivos de más de 500 MiB, con su tamaño y su dueño.
+  - consigna: Buscá directamente los archivos de más de 500 MiB, con su tamaño y su dueño.
     verificar:
       - { comando_usado: 'find\s+/\s+.*-size\s+\+\d+[MG]' }
       - { salida_contiene: backup-2025.tar }
@@ -42,7 +42,7 @@ pasos:
       - "`sudo find / -xdev -type f -size +500M -exec ls -lh {} +`"
     solucion: ["sudo find / -xdev -type f -size +500M -exec ls -lh {} +"]
     explicacion: Hay tres candidatos. El equipo confirma que el .tar de /var/tmp es una copia vieja que ya está en el servidor de respaldos; los otros dos se quedan por ahora.
-  - consigna: Borra /var/tmp/backup-2025.tar y comprueba cuánto espacio quedó libre.
+  - consigna: Borrá /var/tmp/backup-2025.tar y comprueba cuánto espacio quedó libre.
     verificar:
       - { archivo: /var/tmp/backup-2025.tar, existe: false }
       - { comando_usado: 'df\s+-h' }
@@ -50,7 +50,7 @@ pasos:
       - "`sudo rm /var/tmp/backup-2025.tar` y `df -h /`"
     solucion: [sudo rm /var/tmp/backup-2025.tar, df -h /]
     explicacion: Bajó a un 84 %. Si df no hubiera cambiado, sospecharías de un proceso que tiene el archivo abierto (lsof +L1).
-  - consigna: Crea un archivo de swap de 1 GiB en /swapfile, con permisos 600, y actívalo.
+  - consigna: Creá un archivo de swap de 1 GiB en /swapfile, con permisos 600, y activalo.
     verificar:
       - { swap: /swapfile }
       - { archivo: /swapfile, modo: "0600" }
@@ -59,7 +59,7 @@ pasos:
       - "`sudo fallocate -l 1G /swapfile`, `sudo chmod 600 /swapfile`, `sudo mkswap /swapfile` y `sudo swapon /swapfile`"
     solucion: [sudo fallocate -l 1G /swapfile, sudo chmod 600 /swapfile, sudo mkswap /swapfile, sudo swapon /swapfile]
     explicacion: Los permisos 600 importan, porque en la swap terminan pedazos de la memoria de los programas, incluidas contraseñas.
-  - consigna: Deja la swap nueva en fstab para que se active en cada arranque, y comprueba con swapon --show y free -h.
+  - consigna: Dejá la swap nueva en fstab para que se active en cada arranque, y comprobá con swapon --show y free -h.
     verificar:
       - { archivo: /etc/fstab, contenido_incluye: "/swapfile" }
       - { comando_usado: 'swapon\s+--show|free\s+-h' }

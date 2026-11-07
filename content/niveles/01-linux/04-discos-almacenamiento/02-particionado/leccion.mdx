@@ -23,7 +23,7 @@ Un disco nuevo es un espacio en blanco. Antes de guardar algo, casi siempre se d
 
 ## Qué es una partición
 
-Piensa en un terreno grande. Antes de construir, se marca en el plano qué parte va a ser la casa, cuál el jardín y cuál el garaje. El terreno es el mismo, pero cada parte tiene su límite y su uso. Una **partición** es eso para un disco: un rango de bloques reservado para algo. La **tabla de particiones** es el plano, y se guarda al principio del disco.
+Pensá en un terreno grande. Antes de construir, se marca en el plano qué parte va a ser la casa, cuál el jardín y cuál el garaje. El terreno es el mismo, pero cada parte tiene su límite y su uso. Una **partición** es eso para un disco: un rango de bloques reservado para algo. La **tabla de particiones** es el plano, y se guarda al principio del disco.
 
 Para qué sirve dividir un disco:
 
@@ -51,7 +51,7 @@ MBR (que las herramientas llaman `msdos` o `dos`) sigue apareciendo en servidore
 | `fdisk` | Interactiva, con un menú de letras | Lo más común para trabajar a mano; maneja MBR y GPT |
 | `gdisk` | Interactiva, solo GPT | Para quien viene de fdisk y trabaja solo con GPT |
 
-Las tres escriben lo mismo en el disco: elige una y úsala bien. En esta lección practicas con parted, porque se puede escribir todo en una línea:
+Las tres escriben lo mismo en el disco: elige una y usala bien. En esta lección practicás con parted, porque se puede escribir todo en una línea:
 
 ```bash
 sudo parted -s /dev/sdb mklabel gpt                 # tabla nueva (borra la anterior)
@@ -61,14 +61,14 @@ sudo parted -s /dev/sdb set 2 lvm on                # marcarla para LVM
 sudo parted /dev/sdb print                          # ver el resultado
 ```
 
-- `-s` (script): no hace preguntas. Úsalo solo cuando estés seguro del disco.
+- `-s` (script): no hace preguntas. Usalo solo cuando estés seguro del disco.
 - Las posiciones son **inicio y fin**, no tamaños: `6GiB 100%` significa "desde los 6 GiB hasta el final".
 - Empezar en `1MiB` deja el espacio **alineado** con los bloques físicos del disco, que es lo que conviene para el rendimiento. Todas las herramientas modernas lo hacen por defecto.
-- Ojo con las unidades: en parted, `GB` son mil millones de bytes y `GiB` son 1024³ (lección 0.3.3). Usa siempre `MiB` y `GiB`.
+- Ojo con las unidades: en parted, `GB` son mil millones de bytes y `GiB` son 1024³ (lección 0.3.3). Usá siempre `MiB` y `GiB`.
 
 ### Lo mismo con fdisk
 
-fdisk funciona con un menú: cada letra es una acción, y **nada se escribe en el disco hasta que eliges `w`**. Si algo sale mal, `q` sale sin guardar.
+fdisk funciona con un menú: cada letra es una acción, y **nada se escribe en el disco hasta que elegís `w`**. Si algo sale mal, `q` sale sin guardar.
 
 ```text
 $ sudo fdisk /dev/sdb
@@ -104,13 +104,13 @@ Al escribir la tabla, la herramienta le avisa al kernel para que vea las partici
     El disco no tiene tabla de particiones. No es un error: es un disco nuevo. Créala con `mklabel gpt`.
   </ErrorComun>
   <ErrorComun titulo='"Error: Partition(s) on /dev/sdb are being used."'>
-    Alguna partición del disco está montada, es swap o es parte de LVM. Nunca cambies la tabla de un disco en uso: desmonta o libera primero, o revisa si de verdad es el disco que querías.
+    Alguna partición del disco está montada, es swap o es parte de LVM. Nunca cambies la tabla de un disco en uso: desmontá o liberá primero, o revisá si de verdad es el disco que querías.
   </ErrorComun>
   <ErrorComun titulo="La partición quedó mucho más chica (o más grande) de lo pensado">
     En parted, los números son posiciones de inicio y fin, no tamaños; y GB no es lo mismo que GiB. Para borrarla y empezar de nuevo: `sudo parted /dev/sdb rm 1`.
   </ErrorComun>
   <ErrorComun titulo="Salir de fdisk sin w">
-    fdisk no escribe nada hasta que eliges w. Si saliste con q o con Ctrl+C, el disco quedó como estaba.
+    fdisk no escribe nada hasta que elegís w. Si saliste con q o con Ctrl+C, el disco quedó como estaba.
   </ErrorComun>
 </ErroresComunes>
 

@@ -1350,7 +1350,7 @@ cmdlet('New-LocalUser', {
     const name = str(ctx, 'Name')!
     const users = data(ctx.s, 'localUsers')
     if (users.some((u) => toText(u.Name).toLowerCase() === name.toLowerCase())) throw new PsError(`User ${name} already exists.`, 'ResourceExists', 'UserExists,Microsoft.PowerShell.Commands.NewLocalUserCommand', name)
-    if (!has(ctx, 'Password') && !has(ctx, 'NoPassword')) ctx.host('[simulador] Sin -Password ni -NoPassword, PowerShell pide la contraseña; aquí se da por cargada.\n')
+    if (!has(ctx, 'Password') && !has(ctx, 'NoPassword')) ctx.host('[simulador] Sin -Password ni -NoPassword, PowerShell pide la contraseña; acá se da por cargada.\n')
     const u = psObject('Microsoft.PowerShell.Commands.LocalUser', { Name: name, Enabled: !has(ctx, 'Disabled'), Description: str(ctx, 'Description') ?? '', FullName: str(ctx, 'FullName') ?? '' })
     users.push(u)
     return [u]

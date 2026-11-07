@@ -1,7 +1,7 @@
 /**
  * SELinux en el Rocky simulado (política targeted): etiquetas de archivos por ruta, reglas
  * locales de semanage, tipos de puertos, booleanos y registro de denegaciones (AVC).
- * Ubuntu usa AppArmor: aquí solo se guarda su estado básico.
+ * Ubuntu usa AppArmor: acá solo se guarda su estado básico.
  */
 import type { Inode } from './vfs'
 import { ROOT_CRED } from './vfs'

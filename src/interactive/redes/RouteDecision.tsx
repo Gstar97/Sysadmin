@@ -38,7 +38,7 @@ export function RouteDecision() {
       qs.answer !== undefined
         ? `Gana la más específica (el prefijo más largo): /${qs.table[qs.answer].prefix}. Sale por ${qs.table[qs.answer].iface}${qs.table[qs.answer].via ? ` hacia ${qs.table[qs.answer].via}` : ', directo al destino'}.`
         : 'El router descarta el paquete y avisa al origen con un ICMP "destino inalcanzable".',
-      'La distancia administrativa y la métrica no se comparan aquí: solo deciden entre rutas a la misma red con el mismo prefijo.',
+      'La distancia administrativa y la métrica no se comparan acá: solo deciden entre rutas a la misma red con el mismo prefijo.',
     ]
   }
   if (answer !== undefined && modo === 'instalada') {
@@ -70,7 +70,7 @@ export function RouteDecision() {
         {modo === 'salida' ? (
           <>
             <p className="text-sm">
-              Llega un paquete para <strong className="font-mono">{qs.dest}</strong>. ¿Qué ruta usa el router? Toca una línea de la tabla.
+              Llega un paquete para <strong className="font-mono">{qs.dest}</strong>. ¿Qué ruta usa el router? Tocá una línea de la tabla.
             </p>
             <div className="overflow-x-auto rounded-lg p-2 font-mono text-xs sm:text-sm" style={{ background: 'var(--term-bg)', color: 'var(--term-fg)' }}>
               <p className="px-2 opacity-70">R1# show ip route</p>

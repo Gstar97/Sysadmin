@@ -23,7 +23,7 @@ El filtrado de paquetes de Linux vive en el núcleo y se llama **netfilter**. Lo
 
 ## Los hooks: por dónde pasa un paquete
 
-Piensa en una oficina de correo con varios puestos de control: el de la entrada, donde se ve todo lo que llega; uno para lo que es para la propia oficina; otro para lo que solo está de paso hacia otra ciudad; y el de la salida. En cada puesto puedes poner un control distinto. Donde la comparación no llega: el núcleo pasa cada paquete por esos puestos en microsegundos y en un orden fijo; no hay atajos.
+Pensá en una oficina de correo con varios puestos de control: el de la entrada, donde se ve todo lo que llega; uno para lo que es para la propia oficina; otro para lo que solo está de paso hacia otra ciudad; y el de la salida. En cada puesto podés poner un control distinto. Donde la comparación no llega: el núcleo pasa cada paquete por esos puestos en microsegundos y en un orden fijo; no hay atajos.
 
 <Diagrama svg={hooks} alt="Un paquete entra por una placa y pasa por prerouting (donde va el dnat); después la decisión de ruta pregunta si es para este equipo. Si lo es, va a input y al programa local (sshd, nginx). Si solo lo atraviesa, va a forward y después a postrouting (donde va el masquerade) y sale. Lo que genera el propio equipo sale por output y también pasa por postrouting. En un servidor importa input; en un router o firewall Linux, además forward y los NAT de prerouting y postrouting." pie="Cada cadena de nftables se engancha en uno de estos puntos." />
 
@@ -63,10 +63,10 @@ sudo nft list ruleset                         # lo que está cargado ahora
 sudo systemctl enable --now nftables          # cargarlo en cada arranque
 ```
 
-En Rocky el archivo que carga el servicio es `/etc/sysconfig/nftables.conf`; en Ubuntu y Debian, `/etc/nftables.conf`. Y si usas nftables a mano, desactiva firewalld (o ufw): dos herramientas escribiendo reglas a la vez terminan pisándose.
+En Rocky el archivo que carga el servicio es `/etc/sysconfig/nftables.conf`; en Ubuntu y Debian, `/etc/nftables.conf`. Y si usás nftables a mano, desactiva firewalld (o ufw): dos herramientas escribiendo reglas a la vez terminan pisándose.
 
 <EnSimple>
-En nftables escribes una cadena por cada punto que quieres controlar (input para lo que llega al equipo, forward para lo que lo atraviesa), con una política que bloquea todo, una línea que deja volver las respuestas y una línea por cada cosa que sí quieres permitir.
+En nftables escribís una cadena por cada punto que querés controlar (input para lo que llega al equipo, forward para lo que lo atraviesa), con una política que bloquea todo, una línea que deja volver las respuestas y una línea por cada cosa que sí querés permitir.
 </EnSimple>
 
 <Pregunta id="p05" />
@@ -88,7 +88,7 @@ table ip nat {
 }
 ```
 
-**masquerade** es NAT de origen con la IP que tenga la interfaz en ese momento (ideal si la WAN la recibe por DHCP). Si la IP pública es fija, `snat to 203.0.113.10` hace lo mismo un poco más eficiente. Y si publicas un servidor con `dnat`, recuerda permitirlo también en **forward**.
+**masquerade** es NAT de origen con la IP que tenga la interfaz en ese momento (ideal si la WAN la recibe por DHCP). Si la IP pública es fija, `snat to 203.0.113.10` hace lo mismo un poco más eficiente. Y si publicás un servidor con `dnat`, recuerda permitirlo también en **forward**.
 
 <EditorConfig ejercicio={ejNft} />
 
@@ -98,7 +98,7 @@ iptables fue la herramienta durante veinte años, y vas a encontrar scripts y do
 
 <ErroresComunes>
   <ErrorComun titulo="Cargar policy drop en input sin permitir SSH, por SSH">
-    Te quedas afuera en el instante. Prueba primero con nft -c, y si estás conectado a distancia, programa un "seguro" (por ejemplo, un at que haga nft flush ruleset en 5 minutos) antes de aplicar.
+    Te quedás afuera en el instante. Probá primero con nft -c, y si estás conectado a distancia, programa un "seguro" (por ejemplo, un at que haga nft flush ruleset en 5 minutos) antes de aplicar.
   </ErrorComun>
   <ErrorComun titulo="Olvidar ct state established,related">
     Con política drop, el equipo no recibe ni las respuestas del DNS ni de las actualizaciones. Es la primera línea de cada cadena.
@@ -110,7 +110,7 @@ iptables fue la herramienta durante veinte años, y vas a encontrar scripts y do
     El destino se traduce, pero el paquete muere en forward por la política drop. Hacen falta las dos cosas.
   </ErrorComun>
   <ErrorComun titulo="Mezclar firewalld y reglas a mano">
-    firewalld regenera sus tablas y puede borrar o contradecir las tuyas. Usa una sola herramienta por equipo.
+    firewalld regenera sus tablas y puede borrar o contradecir las tuyas. Usá una sola herramienta por equipo.
   </ErrorComun>
 </ErroresComunes>
 

@@ -25,7 +25,7 @@ Una partición recién creada es un rango de bloques vacío: no tiene carpetas, 
 
 ## Qué es un sistema de archivos
 
-Piensa en una biblioteca. Los libros están en estantes numerados, pero sin un fichero nadie podría encontrar nada. El fichero dice: "El libro de redes está en el estante 14, posición 3". Si un libro se mueve, se actualiza la ficha.
+Pensá en una biblioteca. Los libros están en estantes numerados, pero sin un fichero nadie podría encontrar nada. El fichero dice: "El libro de redes está en el estante 14, posición 3". Si un libro se mueve, se actualiza la ficha.
 
 Un **sistema de archivos** es el fichero del disco. Guarda:
 
@@ -53,7 +53,7 @@ En servidores Linux vas a ver sobre todo dos:
 | Inodos | Se crean a medida que hacen falta | Cantidad fija, se decide al crearlo |
 | Reparar | `xfs_repair` | `e2fsck` (o `fsck.ext4`) |
 
-Los dos son estables y rinden bien. La regla práctica: usa el de tu distribución. La diferencia que más importa en el día a día es que **XFS no se puede achicar**: si creas un volumen demasiado grande, la única salida es copiar los datos a otro lado y rehacerlo.
+Los dos son estables y rinden bien. La regla práctica: usa el de tu distribución. La diferencia que más importa en el día a día es que **XFS no se puede achicar**: si creás un volumen demasiado grande, la única salida es copiar los datos a otro lado y rehacerlo.
 
 También vas a encontrar **vfat** (FAT32) en la partición EFI y en memorias USB, porque lo entiende casi cualquier sistema. Para más adelante: **Btrfs** (con instantáneas incorporadas, el predeterminado de Fedora y openSUSE) y los sistemas de archivos de red como NFS.
 
@@ -69,7 +69,7 @@ sudo mkfs.xfs -L datos /dev/sdb1     # XFS también acepta -L
 ```
 
 - `mkfs -t xfs /dev/sdb1` es lo mismo que `mkfs.xfs /dev/sdb1`.
-- La **etiqueta** (label) es un nombre que tú eliges, útil para reconocer el disco en `lsblk -f`. Debe ser única en el servidor.
+- La **etiqueta** (label) es un nombre que vos elegís, útil para reconocer el disco en `lsblk -f`. Debe ser única en el servidor.
 - Al crearlo, cada sistema de archivos recibe un **UUID** nuevo. `sudo blkid` lo muestra.
 
 Las herramientas protegen lo que ya existe:
@@ -80,7 +80,7 @@ mkfs.xfs: /dev/sdb1 appears to contain an existing filesystem (xfs).
 mkfs.xfs: Use the -f option to force overwrite.
 ```
 
-mkfs.ext4 pregunta *"Proceed anyway? (y,N)"*. Y si está montado, ninguno de los dos lo toca. Para borrar las firmas de un dispositivo que quieres reutilizar, `sudo wipefs -a /dev/sdb1` (sin `-a`, solo las muestra).
+mkfs.ext4 pregunta *"Proceed anyway? (y,N)"*. Y si está montado, ninguno de los dos lo toca. Para borrar las firmas de un dispositivo que querés reutilizar, `sudo wipefs -a /dev/sdb1` (sin `-a`, solo las muestra).
 
 ## Cuando un sistema de archivos se daña
 
@@ -102,13 +102,13 @@ Si el disco está fallando, primero copia los datos que puedas: reparar sobre un
 
 <ErroresComunes>
   <ErrorComun titulo='"appears to contain an existing filesystem"'>
-    mkfs.xfs encontró un sistema de archivos. Confirma con `lsblk -f` que es el dispositivo correcto y que no tiene nada que necesites. Recién ahí, `-f`.
+    mkfs.xfs encontró un sistema de archivos. Confirmá con `lsblk -f` que es el dispositivo correcto y que no tiene nada que necesites. Recién ahí, `-f`.
   </ErrorComun>
   <ErrorComun titulo='"contains a mounted filesystem"'>
-    Está montado: ni mkfs ni las herramientas de reparación lo van a tocar. Revisa si de verdad es el dispositivo que querías.
+    Está montado: ni mkfs ni las herramientas de reparación lo van a tocar. Revisá si de verdad es el dispositivo que querías.
   </ErrorComun>
   <ErrorComun titulo="Crear el sistema de archivos sobre el disco entero en lugar de la partición">
-    `mkfs.xfs /dev/sdb` en lugar de `/dev/sdb1` borra la tabla de particiones. Fíjate siempre en el número al final.
+    `mkfs.xfs /dev/sdb` en lugar de `/dev/sdb1` borra la tabla de particiones. Fijate siempre en el número al final.
   </ErrorComun>
   <ErrorComun titulo="Un XFS demasiado grande que hay que achicar">
     XFS no se achica. Antes de crear un volumen enorme, piensa si no conviene empezar más chico y agrandarlo cuando haga falta (con LVM es muy fácil, lección 1.4.5).

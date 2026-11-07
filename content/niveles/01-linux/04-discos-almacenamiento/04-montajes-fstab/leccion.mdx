@@ -15,7 +15,7 @@ import lineaPuntos from './linea.yaml'
 import editorFstab from './editor-fstab.yaml'
 import ejMontar from './ej-montar.yaml'
 
-Ya tienes una partición con su sistema de archivos. Falta lo último: conectarla al árbol de carpetas para poder usarla, y que esa conexión sobreviva a los reinicios. Es la lección más corta en comandos, pero tiene una trampa importante: un error en `/etc/fstab` puede dejar el servidor sin arrancar.
+Ya tenés una partición con su sistema de archivos. Falta lo último: conectarla al árbol de carpetas para poder usarla, y que esa conexión sobreviva a los reinicios. Es la lección más corta en comandos, pero tiene una trampa importante: un error en `/etc/fstab` puede dejar el servidor sin arrancar.
 
 <AntesDeEmpezar>
 - En Linux hay un solo árbol de carpetas que empieza en `/`; los discos se **montan** en carpetas de ese árbol (lección 0.2.4).
@@ -37,11 +37,11 @@ sudo umount /srv/datos                 # sacarlo (umount, sin la n)
 Al desmontar, la carpeta vuelve a mostrar lo que tenía antes, que normalmente es nada. Los archivos no se borraron: siguen en el disco, que ya no está encajado.
 
 <EnSimple>
-Montar es conectar un disco a una carpeta. Lo que guardas en la carpeta va al disco; si lo desmontas, la carpeta queda vacía otra vez, pero los archivos siguen en el disco.
+Montar es conectar un disco a una carpeta. Lo que guardás en la carpeta va al disco; si lo desmontás, la carpeta queda vacía otra vez, pero los archivos siguen en el disco.
 </EnSimple>
 
 <Advertencia titulo="Los archivos escondidos debajo de un montaje">
-Si guardas algo en `/srv/datos` cuando el disco **no** está montado, queda en el disco del sistema. Cuando después montas el disco encima, esos archivos quedan tapados: no se ven, pero ocupan lugar. Es una de las causas de "df dice que el disco está lleno, pero du no encuentra nada" (el caso real del módulo).
+Si guardás algo en `/srv/datos` cuando el disco **no** está montado, queda en el disco del sistema. Cuando después montás el disco encima, esos archivos quedan tapados: no se ven, pero ocupan lugar. Es una de las causas de "df dice que el disco está lleno, pero du no encuentra nada" (el caso real del módulo).
 </Advertencia>
 
 Para ver qué está montado y dónde: `findmnt` (en forma de árbol), `mount` sin argumentos o `df -h`.
@@ -55,11 +55,11 @@ $ sudo umount /srv/datos
 umount: /srv/datos: target is busy.
 ```
 
-Sal de la carpeta (`cd`) y, si sigue ocupado, `sudo lsof /srv/datos` muestra qué procesos lo usan.
+Salí de la carpeta (`cd`) y, si sigue ocupado, `sudo lsof /srv/datos` muestra qué procesos lo usan.
 
 ## /etc/fstab: los montajes permanentes
 
-Lo que montas con `mount` dura hasta el próximo reinicio. Para que se monte solo al arrancar, se escribe en `/etc/fstab`, una línea por sistema de archivos:
+Lo que montás con `mount` dura hasta el próximo reinicio. Para que se monte solo al arrancar, se escribe en `/etc/fstab`, una línea por sistema de archivos:
 
 <DiagramaInteractivo svg={linea} datos={lineaPuntos} alt="Una línea de fstab dividida en sus seis columnas: UUID=0e69434a-6154-4c3c-a364-9935dcae73e5 (qué montar), /srv/datos (dónde), xfs (tipo), defaults,nofail (opciones), 0 (dump) y 2 (orden de fsck)." />
 
@@ -81,7 +81,7 @@ echo "UUID=$(sudo blkid -s UUID -o value /dev/sdb1) /srv/datos xfs defaults 0 0"
 
 Ojo con el `-a` de `tee`: sin él, el archivo se reemplaza entero y el servidor pierde la raíz y `/boot`.
 
-Practica corrigiendo un fstab real:
+Practicá corrigiendo un fstab real:
 
 <EditorConfig ejercicio={editorFstab} />
 
@@ -97,7 +97,7 @@ sudo mount -a                    # monta lo que falta, como en el arranque
 
 - `findmnt --verify` avisa de carpetas que no existen, UUID que no aparecen, tipos que no coinciden. Si todo está bien, dice *"Success, no errors or warnings detected"*.
 - `mount -a` intenta montar todo lo de fstab que no esté montado. Si da un error, el arranque también lo va a dar.
-- systemd arma las unidades de montaje a partir de fstab. Si te olvidas de `daemon-reload`, mount te lo recuerda con un *hint*.
+- systemd arma las unidades de montaje a partir de fstab. Si te olvidás de `daemon-reload`, mount te lo recuerda con un *hint*.
 
 <Distros>
   <Distro nombre="Rocky / AlmaLinux 10">
@@ -120,13 +120,13 @@ sudo mount -a                    # monta lo que falta, como en el arranque
     El dispositivo no tiene un sistema de archivos que mount entienda (¿falta el mkfs?), el tipo indicado no coincide, o hay una opción mal escrita. `lsblk -f` muestra qué tiene.
   </ErrorComun>
   <ErrorComun titulo='"can&#39;t find UUID=..."'>
-    El UUID de fstab no existe: está mal copiado, o se volvió a crear el sistema de archivos (mkfs genera un UUID nuevo). Compáralo con `sudo blkid`.
+    El UUID de fstab no existe: está mal copiado, o se volvió a crear el sistema de archivos (mkfs genera un UUID nuevo). Comparalo con `sudo blkid`.
   </ErrorComun>
   <ErrorComun titulo="El servidor no arranca después de editar fstab">
     Es el caso de la lección 1.3.6: modo de emergencia, `journalctl -xb`, corregir o comentar la línea, `systemctl daemon-reload` y `mount -a`. Para discos que pueden faltar, `nofail`.
   </ErrorComun>
   <ErrorComun titulo="Usar > en lugar de >> (o tee sin -a)">
-    Se borra todo fstab. Si no reiniciaste, recréalo con la información de `findmnt` y `blkid`, o recupéralo de una copia. Por eso conviene `sudo cp /etc/fstab /etc/fstab.bak` antes de tocarlo.
+    Se borra todo fstab. Si no reiniciaste, recréalo con la información de `findmnt` y `blkid`, o recuperalo de una copia. Por eso conviene `sudo cp /etc/fstab /etc/fstab.bak` antes de tocarlo.
   </ErrorComun>
 </ErroresComunes>
 

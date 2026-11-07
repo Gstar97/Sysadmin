@@ -49,7 +49,7 @@ estado_inicial:
       - { a: "R1:Gi0/2", b: "R3:Gi0/2" }
       - { a: "R1:Gi0/3", b: "ISP:Gi0/0" }
 pasos:
-  - consigna: Activa OSPF (proceso 1) con router-id 1.1.1.1 en las interfaces de la LAN y de los dos enlaces, todas en el área 0. No lo actives hacia el proveedor.
+  - consigna: Activá OSPF (proceso 1) con router-id 1.1.1.1 en las interfaces de la LAN y de los dos enlaces, todas en el área 0. No lo actives hacia el proveedor.
     verificar:
       - { equipo: R1, ruta: 10.2.0.0/24, via: 10.0.12.2 }
       - { equipo: R1, ruta: 10.3.0.0/24, via: 10.0.13.2 }
@@ -69,7 +69,7 @@ pasos:
     explicacion: >-
       En segundos aparecen los mensajes "%OSPF-5-ADJCHG ... from LOADING to FULL": R1 formó
       vecindad con R2 y R3, intercambiaron mapas y ya tiene las redes de las sucursales.
-  - consigna: Mira los vecinos de R1 y las rutas que aprendió por OSPF.
+  - consigna: Mirá los vecinos de R1 y las rutas que aprendió por OSPF.
     verificar:
       - { comando_usado: show ip ospf neighbor }
       - { comando_usado: show ip route ospf }
@@ -79,7 +79,7 @@ pasos:
       Dos vecinos en FULL, uno por enlace. Las rutas O tienen distancia 110 y como métrica el
       costo acumulado: cada enlace de 1 Gb/s cuesta 1 con el ancho de banda de referencia de
       fábrica (100 Mb/s).
-  - consigna: La LAN de la central no tiene routers. Haz que Gi0/0 sea pasiva (se anuncia, pero no manda saludos).
+  - consigna: La LAN de la central no tiene routers. Hacé que Gi0/0 sea pasiva (se anuncia, pero no manda saludos).
     verificar:
       - { equipo: R1, config_contiene: "passive-interface GigabitEthernet0/0" }
       - { equipo: R2, ruta: 192.168.1.0/24 }
@@ -88,7 +88,7 @@ pasos:
     explicacion: >-
       Una interfaz pasiva sigue en OSPF (su red se anuncia), pero no busca vecinos. Así nadie
       enchufado en la LAN puede hacerse pasar por router y meter rutas falsas.
-  - consigna: Haz que R1 reparta su ruta por defecto a las sucursales por OSPF, y guarda.
+  - consigna: Hacé que R1 reparta su ruta por defecto a las sucursales por OSPF, y guardá.
     verificar:
       - { equipo: R2, ruta: 0.0.0.0/0 }
       - { equipo: R3, ruta: 0.0.0.0/0 }

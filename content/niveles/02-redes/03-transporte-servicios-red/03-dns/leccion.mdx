@@ -15,7 +15,7 @@ import resolucion from './resolucion.yaml'
 import registros from './registros.yaml'
 import ejDig from './ej-dig.yaml'
 
-"Es el DNS" es casi un chiste entre administradores, porque cuando algo raro pasa en una red, muy seguido la causa está ahí. El DNS traduce nombres en direcciones, y casi todo lo demás depende de él: la web, el correo, la autenticación de Windows, las conexiones entre servidores. En esta lección entiendes cómo funciona y aprendes a interrogarlo; en la lección 6 vas a montar el tuyo.
+"Es el DNS" es casi un chiste entre administradores, porque cuando algo raro pasa en una red, muy seguido la causa está ahí. El DNS traduce nombres en direcciones, y casi todo lo demás depende de él: la web, el correo, la autenticación de Windows, las conexiones entre servidores. En esta lección entendés cómo funciona y aprendés a interrogarlo; en la lección 6 vas a montar el tuyo.
 
 <AntesDeEmpezar>
 - Que el DNS traduce nombres en IP y usa el puerto 53 (lección 0.4.5).
@@ -38,7 +38,7 @@ Hay dos tipos de servidores DNS, y confundirlos es una fuente clásica de proble
 - **Resolvedor** (o recursivo): recibe las preguntas de los equipos, recorre el árbol por ellos y guarda las respuestas en su **caché**. Es el que figura en `/etc/resolv.conf` de cada equipo: el del router, el de la empresa, o uno público (1.1.1.1, 8.8.8.8, 9.9.9.9).
 - **Autoritativo**: tiene los datos oficiales de una o más zonas y responde solo por ellas. No sale a buscar nada.
 
-La pregunta de la PC al resolvedor es **recursiva** ("tráeme la respuesta final"). Las del resolvedor a cada servidor del árbol son **iterativas** ("dime lo que sepas"): la raíz contesta "pregúntale a .com", .com contesta "pregúntale a los servidores de empresa.com", y estos dan la respuesta. Recórrelo:
+La pregunta de la PC al resolvedor es **recursiva** ("tráeme la respuesta final"). Las del resolvedor a cada servidor del árbol son **iterativas** ("decime lo que sepas"): la raíz contesta "preguntale a .com", .com contesta "preguntale a los servidores de empresa.com", y estos dan la respuesta. Recorrelo:
 
 <SimuladorPaquetes escenario={resolucion} />
 
@@ -66,7 +66,7 @@ Tres detalles que causan problemas:
 
 ## Preguntarle al DNS: dig
 
-`dig` es la herramienta de diagnóstico de DNS por excelencia (en Rocky viene en el paquete bind-utils; en Ubuntu, en bind9-dnsutils). Su salida tiene todo lo que necesitas saber:
+`dig` es la herramienta de diagnóstico de DNS por excelencia (en Rocky viene en el paquete bind-utils; en Ubuntu, en bind9-dnsutils). Su salida tiene todo lo que necesitás saber:
 
 ```text
 ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 47140
@@ -79,7 +79,7 @@ empresa.com.		300	IN	A	203.0.113.10
 - **status**: `NOERROR` (respondió; puede venir vacío si el nombre existe pero no tiene ese tipo), `NXDOMAIN` (el nombre no existe), `SERVFAIL` (el servidor no pudo resolver), `REFUSED` (no te quiere responder).
 - **flags**: `aa` si la respuesta es autoritativa; `rd` (pediste recursión) y `ra` (el servidor la ofrece).
 - **ANSWER**: nombre, TTL, clase, tipo y dato.
-- **SERVER**: quién contestó. Siempre míralo: muchas sorpresas vienen de preguntarle al servidor equivocado.
+- **SERVER**: quién contestó. Siempre miralo: muchas sorpresas vienen de preguntarle al servidor equivocado.
 
 Las formas que más vas a usar:
 
@@ -100,7 +100,7 @@ nslookup empresa.com             # la herramienta clásica, también en Windows
 
 <ErroresComunes>
   <ErrorComun titulo="&quot;Cambié el DNS y no anda&quot;">
-    Probablemente sí anda, pero los resolvedores tienen la respuesta vieja en caché hasta que vence el TTL. Pregúntale directo al autoritativo (dig @servidor-autoritativo) para ver lo que realmente publicaste.
+    Probablemente sí anda, pero los resolvedores tienen la respuesta vieja en caché hasta que vence el TTL. Preguntale directo al autoritativo (dig @servidor-autoritativo) para ver lo que realmente publicaste.
   </ErrorComun>
   <ErrorComun titulo="Confundir NXDOMAIN con un problema de red">
     NXDOMAIN es una respuesta: el servidor dice que el nombre no existe. Si el problema fuera de red, verías "timed out" o "no servers could be reached".
@@ -118,5 +118,5 @@ nslookup empresa.com             # la herramienta clásica, también en Windows
 - Los equipos le preguntan a un resolvedor (consulta recursiva); el resolvedor recorre el árbol (consultas iterativas) y guarda las respuestas en caché durante el TTL.
 - Registros: A, AAAA, CNAME (alias, sin otros registros), MX (correo, apunta a un nombre), TXT, NS, SOA, PTR (inversa, en in-addr.arpa), SRV.
 - dig: status (NOERROR, NXDOMAIN, SERVFAIL, REFUSED), flags (aa = autoritativa), ANSWER con TTL, y SERVER (quién contestó). @servidor para elegir a quién preguntar, +short para la respuesta sola, -x para la inversa.
-- Los cambios tardan lo que dura el TTL en verse en todos lados: bájalo antes de una migración.
+- Los cambios tardan lo que dura el TTL en verse en todos lados: bajalo antes de una migración.
 </Resumen>

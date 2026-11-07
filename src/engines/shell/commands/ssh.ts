@@ -85,7 +85,7 @@ interface Session {
   method: 'publickey' | 'password'
 }
 
-const NOTE_KEY = '[simulador] Respondes "yes" porque este es tu servidor. En uno real, compara la huella con la que te dio quien administra el servidor.\n'
+const NOTE_KEY = '[simulador] Respondés "yes" porque este es tu servidor. En uno real, compara la huella con la que te dio quien administra el servidor.\n'
 
 /** Conecta y autentica. Escribe en la terminal lo mismo que ssh; devuelve null si no se pudo. */
 async function connect(ctx: CommandContext, o: ConnectOpts, via: System = ctx.sys): Promise<Session | null> {
@@ -270,7 +270,7 @@ async function connect(ctx: CommandContext, o: ConnectOpts, via: System = ctx.sy
       dbg('Server accepts key')
       if (k.encrypted && !agent?.has(k.body)) {
         if (batch) continue
-        ctx.err(`Enter passphrase for key '${k.file}': \n[simulador] Escribes la frase de paso de la clave (no la contraseña del servidor). Con ssh-agent y ssh-add la escribes una sola vez por sesión.\n`)
+        ctx.err(`Enter passphrase for key '${k.file}': \n[simulador] Escribís la frase de paso de la clave (no la contraseña del servidor). Con ssh-agent y ssh-add la escribís una sola vez por sesión.\n`)
       }
       sshLog(host, sshPid, `Accepted publickey for ${user} from ${src} port ${srcPort} ssh2: ${KEY_TYPES[k.type].label} ${fingerprintOf(k.body)}`)
       return opened(ctx, host, user, o.alias, hostname, 'publickey', sshPid)
@@ -283,7 +283,7 @@ async function connect(ctx: CommandContext, o: ConnectOpts, via: System = ctx.sy
     const okPw = !!u && !denied && rootPw && u.hasPassword && !u.locked
     ctx.err(`${user}@${hostname}'s password: \n`)
     if (okPw) {
-      ctx.err('[simulador] Escribes la contraseña de la cuenta en el servidor (en pantalla no se ve nada mientras la escribes).\n')
+      ctx.err('[simulador] Escribís la contraseña de la cuenta en el servidor (en pantalla no se ve nada mientras la escribís).\n')
       sshLog(host, sshPid, `Accepted password for ${user} from ${src} port ${srcPort} ssh2`)
       return opened(ctx, host, user, o.alias, hostname, 'password', sshPid)
     }
@@ -531,7 +531,7 @@ register('ssh-keygen', {
     if (sys.vfs.exists(path)) {
       ctx.out(`${path} already exists.\nOverwrite (y/n)? `)
       const ans = ctx.stdin.readLine()
-      if (ans === null) ctx.out('n\n[simulador] Respondes "n": pisar una clave que ya se usa deja afuera a todos los servidores donde estaba instalada.\n')
+      if (ans === null) ctx.out('n\n[simulador] Respondés "n": pisar una clave que ya se usa deja afuera a todos los servidores donde estaba instalada.\n')
       else ctx.out('\n')
       if (!ans || !/^y/i.test(ans.trim())) return 1
     }

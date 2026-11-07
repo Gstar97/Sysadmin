@@ -9,7 +9,7 @@
     - { texto: "Que todo está bien", explicacion: "El uso constante de swap es una señal de alerta." }
 - id: p02
   tipo: ordenar_pasos
-  enunciado: Ordena los pasos para agregar un archivo de swap de forma permanente.
+  enunciado: Ordená los pasos para agregar un archivo de swap de forma permanente.
   pasos: [sudo fallocate -l 2G /swapfile, sudo chmod 600 /swapfile, sudo mkswap /swapfile, sudo swapon /swapfile, Agregar /swapfile none swap defaults 0 0 a /etc/fstab]
   explicacion: Reservar, proteger, dar formato, activar y dejarlo en fstab.
 - id: p03
@@ -23,12 +23,12 @@
     - { texto: "Por costumbre", explicacion: "Hay una razón de seguridad concreta." }
 - id: p04
   tipo: completar_comando
-  enunciado: Escribe el comando que muestra, ordenadas de menor a mayor, cuánto ocupan las carpetas de primer nivel de /var, sin entrar en otros discos.
+  enunciado: Escribí el comando que muestra, ordenadas de menor a mayor, cuánto ocupan las carpetas de primer nivel de /var, sin entrar en otros discos.
   aceptadas: ["sudo du -xh --max-depth=1 /var | sort -h", "du -xh --max-depth=1 /var | sort -h", "sudo du -hx --max-depth=1 /var | sort -h", "sudo du -xh -d 1 /var | sort -h", "sudo du -xh -d1 /var | sort -h"]
   explicacion: sort -h entiende las unidades (K, M, G) al ordenar.
 - id: p05
   tipo: opcion_multiple
-  enunciado: Una aplicación escribe en /var/log/app/app.log, que ocupa 8 GB. ¿Cómo liberas ese espacio sin detenerla?
+  enunciado: Una aplicación escribe en /var/log/app/app.log, que ocupa 8 GB. ¿Cómo liberás ese espacio sin detenerla?
   opciones:
     - { texto: "Vaciarlo con : > /var/log/app/app.log (o truncate -s 0) y configurar logrotate", correcta: true, explicacion: "El archivo sigue existiendo y la aplicación sigue escribiendo, desde cero." }
     - { texto: "rm /var/log/app/app.log", explicacion: "La aplicación lo tiene abierto: el espacio no se libera hasta que lo cierre." }
@@ -36,7 +36,7 @@
     - { texto: "Comprimirlo con gzip", explicacion: "gzip crea otro archivo y borra el original, con el mismo problema." }
 - id: p06
   tipo: interpretar_salida
-  enunciado: df dice que /var/log está al 97 %, pero du suma solo 300 MB. Ejecutas esto. ¿Qué pasa?
+  enunciado: df dice que /var/log está al 97 %, pero du suma solo 300 MB. Ejecutás esto. ¿Qué pasa?
   salida: |
     $ sudo lsof +L1
     COMMAND   PID USER   FD   TYPE DEVICE   SIZE/OFF NLINK  NODE NAME
@@ -48,7 +48,7 @@
     - { texto: "du está mal", explicacion: "du suma lo que tiene nombre; el archivo borrado no lo tiene." }
 - id: p07
   tipo: opcion_multiple
-  enunciado: Una aplicación falla con "No space left on device", pero df -h muestra 40 % libre. ¿Qué revisas?
+  enunciado: Una aplicación falla con "No space left on device", pero df -h muestra 40 % libre. ¿Qué revisás?
   opciones:
     - { texto: "df -i: pueden haberse agotado los inodos por tener millones de archivos chicos", correcta: true, explicacion: "En ext4 la cantidad de inodos es fija." }
     - { texto: "La swap", explicacion: "No tiene relación con el espacio del disco." }
@@ -56,7 +56,7 @@
     - { texto: "Los permisos de la carpeta", explicacion: "Eso daría Permission denied." }
 - id: p08
   tipo: completar_comando
-  enunciado: Escribe el comando que busca, en la raíz y sin entrar en otros discos, los archivos de más de 1 GiB.
+  enunciado: Escribí el comando que busca, en la raíz y sin entrar en otros discos, los archivos de más de 1 GiB.
   aceptadas: ["sudo find / -xdev -type f -size +1G", "find / -xdev -type f -size +1G", "sudo find / -xdev -size +1G -type f", "sudo find / -type f -size +1G -xdev"]
   explicacion: Agregando -exec ls -lh {} + ves el tamaño y el dueño de cada uno.
 - id: p09

@@ -23,11 +23,11 @@ En un servidor conviven muchas personas y servicios: el servidor web no debería
 
 ## Tres preguntas, tres clases de personas
 
-Piensa en una oficina con un archivero. El dueño del archivero tiene una llave que abre todo; las personas de su área tienen otra llave que quizás solo abre algunos cajones; y el resto de la empresa tiene una tercera llave, o ninguna. Para cada archivo, Linux responde lo mismo: qué puede hacer **el dueño**, qué puede hacer **el grupo** y qué puede hacer **el resto**. Y para cada uno, tres permisos: **leer (r)**, **escribir (w)** y **ejecutar (x)**.
+Pensá en una oficina con un archivero. El dueño del archivero tiene una llave que abre todo; las personas de su área tienen otra llave que quizás solo abre algunos cajones; y el resto de la empresa tiene una tercera llave, o ninguna. Para cada archivo, Linux responde lo mismo: qué puede hacer **el dueño**, qué puede hacer **el grupo** y qué puede hacer **el resto**. Y para cada uno, tres permisos: **leer (r)**, **escribir (w)** y **ejecutar (x)**.
 
 <Diagrama svg={permisos} alt="La línea -rwxr-x---. 1 ana ventas de ls -l, con el tipo, los permisos del dueño (rwx), del grupo (r-x) y del resto (---), y el dueño ana y el grupo ventas. Debajo, una tabla con lo que permiten r, w y x en un archivo y en una carpeta." pie="Los nueve caracteres después del tipo son tres grupos de rwx: dueño, grupo y resto." />
 
-Linux revisa en orden: si eres el dueño, se usan los permisos del dueño (y nada más); si no, si perteneces al grupo, los del grupo; si no, los del resto. Root puede todo, salvo ejecutar un archivo que no tiene ninguna x.
+Linux revisa en orden: si sos el dueño, se usan los permisos del dueño (y nada más); si no, si pertenecés al grupo, los del grupo; si no, los del resto. Root puede todo, salvo ejecutar un archivo que no tiene ninguna x.
 
 ### En una carpeta, las letras significan otra cosa
 
@@ -38,7 +38,7 @@ Esta es la parte que más confunde, y la causa de muchos "Permission denied" que
 - **x** deja **entrar** a la carpeta y acceder a lo que tiene. Sin x, no sirve de nada tener r o w.
 
 <EnSimple>
-Una carpeta es como un salón con un listado pegado en la puerta. **x** es la llave para entrar al salón; **r** es poder leer el listado de lo que hay; **w** es poder agregar o sacar cosas. Si tienes la llave pero no puedes leer el listado, puedes buscar algo cuyo nombre ya conoces, pero no ver qué más hay. Y si no tienes la llave, no importa lo demás: no entras.
+Una carpeta es como un salón con un listado pegado en la puerta. **x** es la llave para entrar al salón; **r** es poder leer el listado de lo que hay; **w** es poder agregar o sacar cosas. Si tenés la llave pero no podés leer el listado, podés buscar algo cuyo nombre ya conocés, pero no ver qué más hay. Y si no tenés la llave, no importa lo demás: no entrás.
 </EnSimple>
 
 ## Cambiar permisos con chmod
@@ -64,9 +64,9 @@ chmod u=rwx,g=rx,o= carpeta
 | 750 | `rwxr-x---` | Carpetas y scripts del dueño y su grupo |
 | 770 | `rwxrwx---` | Carpetas compartidas de un grupo |
 
-La simbólica sirve para cambiar una cosa puntual sin tocar el resto; la octal, para dejar los permisos exactamente como quieres. Con `-R`, `chmod` cambia una carpeta y todo su contenido (con cuidado: los archivos y las carpetas casi nunca deberían tener los mismos permisos).
+La simbólica sirve para cambiar una cosa puntual sin tocar el resto; la octal, para dejar los permisos exactamente como querés. Con `-R`, `chmod` cambia una carpeta y todo su contenido (con cuidado: los archivos y las carpetas casi nunca deberían tener los mismos permisos).
 
-Prueba combinaciones en la calculadora:
+Probá combinaciones en la calculadora:
 
 <CalculadoraPermisos />
 
@@ -104,13 +104,13 @@ Y ahora en la terminal:
 
 <ErroresComunes>
   <ErrorComun titulo="chmod 777 para que &quot;ande&quot;">
-    777 deja que cualquier usuario y cualquier servicio del servidor lea, modifique o borre. Si un servicio web es atacado, el atacante también. Averigua qué usuario necesita qué permiso (con `ls -l` en cada carpeta del camino y `id` del usuario) y da exactamente eso: casi siempre alcanza con ajustar el grupo y usar 770, 750 o 640.
+    777 deja que cualquier usuario y cualquier servicio del servidor lea, modifique o borre. Si un servicio web es atacado, el atacante también. Averiguá qué usuario necesita qué permiso (con `ls -l` en cada carpeta del camino y `id` del usuario) y da exactamente eso: casi siempre alcanza con ajustar el grupo y usar 770, 750 o 640.
   </ErrorComun>
   <ErrorComun titulo="Tengo permiso sobre el archivo pero igual da &quot;Permission denied&quot;">
-    Revisa las carpetas del camino: para llegar a `/srv/datos/informe.txt` hace falta x en `/srv` y en `/srv/datos`. `namei -l /srv/datos/informe.txt` muestra los permisos de cada parte de la ruta.
+    Revisá las carpetas del camino: para llegar a `/srv/datos/informe.txt` hace falta x en `/srv` y en `/srv/datos`. `namei -l /srv/datos/informe.txt` muestra los permisos de cada parte de la ruta.
   </ErrorComun>
   <ErrorComun titulo="Alguien borró un archivo que no podía modificar">
-    Para borrar alcanza con w en la carpeta. Si en una carpeta compartida no quieres que cada uno pueda borrar lo de los demás, hace falta el bit sticky (próxima lección).
+    Para borrar alcanza con w en la carpeta. Si en una carpeta compartida no querés que cada uno pueda borrar lo de los demás, hace falta el bit sticky (próxima lección).
   </ErrorComun>
   <ErrorComun titulo="chmod -R 644 dejó las carpetas inaccesibles">
     Las carpetas necesitan x para poder entrar. Para dar permisos distintos a archivos y carpetas: `find ruta -type d -exec chmod 755 {} +` y `find ruta -type f -exec chmod 644 {} +`, o en simbólico `chmod -R u=rwX,g=rX,o= ruta` (la X mayúscula agrega ejecución solo a las carpetas).

@@ -130,7 +130,7 @@ export default function GalleryPage() {
         ))}
       </nav>
 
-      <Section id="terminal-linux" titulo="Terminal Linux (bash)" descripcion="Sistema de archivos con permisos reales, usuarios, sudo, servicios de systemd, paquetes y red. Cada paso se verifica solo después de cada comando. Prueba también ls, cat, grep, systemctl, ip a, nano...">
+      <Section id="terminal-linux" titulo="Terminal Linux (bash)" descripcion="Sistema de archivos con permisos reales, usuarios, sudo, servicios de systemd, paquetes y red. Cada paso se verifica solo después de cada comando. Probá también ls, cat, grep, systemctl, ip a, nano...">
         <Terminal ejercicio={terminalBash} />
       </Section>
 
@@ -138,7 +138,7 @@ export default function GalleryPage() {
         <Terminal ejercicio={terminalPs} />
       </Section>
 
-      <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde aquí usa las mismas VLAN y rutas que el armador de topologías.">
+      <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">
         <Terminal ejercicio={terminalIos} />
       </Section>
 
@@ -159,7 +159,7 @@ export default function GalleryPage() {
         <PlanificadorWifi />
       </Section>
 
-      <Section id="topologia" titulo="Armador de topologías" descripcion="Arrastra equipos, conecta cables y configúralos con formularios o con la consola. El ping muestra el recorrido sobre el diagrama y, si falla, explica dónde y por qué.">
+      <Section id="topologia" titulo="Armador de topologías" descripcion="Arrastrá equipos, conectá cables y configuralos con formularios o con la consola. El ping muestra el recorrido sobre el diagrama y, si falla, explica dónde y por qué.">
         <Topologia ejercicio={topologia} />
       </Section>
 
@@ -220,7 +220,7 @@ export default function GalleryPage() {
             Antes de editar un archivo de configuración, haz una copia: <code>cp archivo archivo.bak</code>.
           </Consejo>
           <Advertencia>
-            Un <code>rm -rf</code> con una ruta mal escrita no se puede deshacer. Revisa la ruta dos veces.
+            Un <code>rm -rf</code> con una ruta mal escrita no se puede deshacer. Revisá la ruta dos veces.
           </Advertencia>
           <Distros>
             <Distro nombre="Rocky / AlmaLinux 10">
@@ -244,7 +244,7 @@ export default function GalleryPage() {
             </ErrorComun>
             <ErrorComun titulo="El servicio no arranca después de un cambio">
               <p>
-                Mira el motivo con <code>systemctl status servicio</code> y <code>journalctl -u servicio -n 30</code>. Casi siempre el log dice la línea exacta del error.
+                Mirá el motivo con <code>systemctl status servicio</code> y <code>journalctl -u servicio -n 30</code>. Casi siempre el log dice la línea exacta del error.
               </p>
             </ErrorComun>
           </ErroresComunes>

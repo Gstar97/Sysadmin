@@ -30,7 +30,7 @@ Los valores que puede tener un octeto de máscara son pocos, porque los unos sie
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Valor | 0 | 128 | 192 | 224 | 240 | 248 | 252 | 254 | 255 |
 
-Con esa tabla conviertes cualquier máscara: `/26` = 24 + 2 → `255.255.255.192`. `/20` = 16 + 4 → `255.255.240.0`. Y al revés: `255.255.255.248` = 24 + 5 = `/29`.
+Con esa tabla convertís cualquier máscara: `/26` = 24 + 2 → `255.255.255.192`. `/20` = 16 + 4 → `255.255.240.0`. Y al revés: `255.255.255.248` = 24 + 5 = `/29`.
 
 Los prefijos que más vas a ver:
 
@@ -53,7 +53,7 @@ La máscara es el prefijo escrito "en forma de IP": unos donde está la red, cer
 
 ## Las cuatro cuentas
 
-Toma `192.168.10.77/26`. Para no perderte, trabaja solo con el octeto donde cae el corte (aquí, el cuarto: 24 bits van enteros a la red y el corte está 2 bits adentro del último octeto).
+Tomá `192.168.10.77/26`. Para no perderte, trabaja solo con el octeto donde cae el corte (acá, el cuarto: 24 bits van enteros a la red y el corte está 2 bits adentro del último octeto).
 
 1. **Dirección de red**: la IP con todos los bits de host en 0. Se obtiene haciendo **IP AND máscara**.
 2. **Broadcast**: la IP con todos los bits de host en 1. Es la última dirección de la red.
@@ -64,7 +64,7 @@ Toma `192.168.10.77/26`. Para no perderte, trabaja solo con el octeto donde cae 
 
 Una comparación para la dirección de red y el broadcast: en un edificio, la dirección de red es el número de la calle (identifica el edificio entero, no un departamento) y el broadcast es el portero eléctrico que suena en todos los departamentos a la vez. Ninguno de los dos es un departamento donde viva alguien.
 
-Pruébalo con la herramienta: escribe una IP y una máscara y mira el AND bit por bit.
+Probalo con la herramienta: escribí una IP y una máscara y mirá el AND bit por bit.
 
 <OperacionesBits modo="red" />
 
@@ -72,7 +72,7 @@ Pruébalo con la herramienta: escribe una IP y una máscara y mira el AND bit po
 
 Cuando el corte cae dentro de un octeto, el tamaño de cada red es **256 menos el valor de la máscara en ese octeto**. Con `/26` el octeto vale 192, así que las redes son de 256 − 192 = **64** direcciones: empiezan en 0, 64, 128 y 192. La IP 77 cae en el bloque que empieza en 64: red `.64`, broadcast `.127` (la siguiente red menos uno). Es el método del **tamaño de bloque**, y en la lección 4 lo vas a usar para resolver todo de cabeza.
 
-Practica las cuatro cuentas con direcciones al azar. Empieza en dificultad 1 (cortes en el último octeto) y sube cuando te salgan sin errores:
+Practicá las cuatro cuentas con direcciones al azar. Empezá en dificultad 1 (cortes en el último octeto) y sube cuando te salgan sin errores:
 
 <Subnetting modo="practica" tipos={['red', 'broadcast', 'rango', 'hosts', 'misma_red']} dificultad={1} />
 
@@ -81,11 +81,11 @@ Practica las cuatro cuentas con direcciones al azar. Empieza en dificultad 1 (co
 ## Las dos excepciones: /31 y /32
 
 - **/32** es una sola dirección: no tiene red ni broadcast aparte. Se usa para rutas a un único equipo y para las interfaces de loopback de los routers.
-- **/31** tiene dos direcciones y las dos son utilizables (RFC 3021): en un enlace punto a punto entre dos routers no hace falta broadcast. Ahorra la mitad de direcciones que el `/30` clásico. Algunos equipos viejos no lo soportan; por eso todavía vas a ver muchos `/30`.
+- **/31** tiene dos direcciones y las dos son utilizables (RFC 3021): en un enlace punto a punto entre dos routers no hace falta broadcast. Ahorrá la mitad de direcciones que el `/30` clásico. Algunos equipos viejos no lo soportan; por eso todavía vas a ver muchos `/30`.
 
 ## En la terminal
 
-`ipcalc` hace las cuatro cuentas por ti. Úsalo para comprobar las tuyas, no para reemplazarlas: en una entrevista o un examen no vas a tenerlo.
+`ipcalc` hace las cuatro cuentas por vos. Usalo para comprobar las tuyas, no para reemplazarlas: en una entrevista o un examen no vas a tenerlo.
 
 <Terminal ejercicio={ejMascara} />
 

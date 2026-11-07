@@ -24,9 +24,9 @@ El kernel es el que reparte la CPU, la memoria y los discos entre los procesos (
 
 ## Las ventanas del kernel
 
-El kernel no tiene una pantalla para mirar adentro, pero muestra lo que sabe como si fueran archivos. Piensa en el tablero de un auto: no ves el motor, pero ves la velocidad, el combustible y la temperatura; y algunos controles (las luces, el aire) los puedes cambiar desde ahí. La diferencia es que aquí los "indicadores" se leen con `cat` y los controles se cambian escribiendo en un archivo.
+El kernel no tiene una pantalla para mirar adentro, pero muestra lo que sabe como si fueran archivos. Pensá en el tablero de un auto: no ves el motor, pero ves la velocidad, el combustible y la temperatura; y algunos controles (las luces, el aire) los podés cambiar desde ahí. La diferencia es que acá los "indicadores" se leen con `cat` y los controles se cambian escribiendo en un archivo.
 
-<Diagrama svg={ventanas} alt="El kernel en el centro y cuatro formas de verlo: /proc, con un archivo por cada proceso y datos como la memoria, la carga y la CPU; /proc/sys, con los ajustes que se cambian en marcha mediante sysctl y se hacen permanentes en /etc/sysctl.d; /sys, con los dispositivos y los módulos cargados; y /lib/modules, con los módulos en archivos .ko que se cargan con modprobe y se bloquean en /etc/modprobe.d." pie="Ni /proc ni /sys están en el disco: el kernel arma su contenido cada vez que los lees." />
+<Diagrama svg={ventanas} alt="El kernel en el centro y cuatro formas de verlo: /proc, con un archivo por cada proceso y datos como la memoria, la carga y la CPU; /proc/sys, con los ajustes que se cambian en marcha mediante sysctl y se hacen permanentes en /etc/sysctl.d; /sys, con los dispositivos y los módulos cargados; y /lib/modules, con los módulos en archivos .ko que se cargan con modprobe y se bloquean en /etc/modprobe.d." pie="Ni /proc ni /sys están en el disco: el kernel arma su contenido cada vez que los leés." />
 
 <Emparejar ejercicio={donde} />
 
@@ -48,7 +48,7 @@ tr '\0' ' ' < /proc/1234/cmdline; echo         # la línea de comandos completa
 sudo ls -l /proc/1234/fd                       # los archivos que tiene abiertos
 ```
 
-En `cmdline` los argumentos van separados por un carácter invisible (el byte cero), por eso se usa `tr` para cambiarlo por espacios. Fíjate que `ps`, `top`, `free` y `uptime`, que viste en las lecciones anteriores, en realidad leen estos archivos y los muestran ordenados.
+En `cmdline` los argumentos van separados por un carácter invisible (el byte cero), por eso se usa `tr` para cambiarlo por espacios. Fijate que `ps`, `top`, `free` y `uptime`, que viste en las lecciones anteriores, en realidad leen estos archivos y los muestran ordenados.
 
 ## /proc/sys y sysctl: los ajustes
 
@@ -72,7 +72,7 @@ vm.swappiness = 10
 `sysctl -w` cambia el ajuste hasta el próximo reinicio. El archivo en `/etc/sysctl.d` hace que se aplique en cada arranque. Lo prolijo es hacer las dos cosas: el archivo, y `sysctl --system` para aplicarlo ya.
 </EnSimple>
 
-Algunos ajustes que vas a ver seguido: `vm.swappiness` (cuánto prefiere usar la swap), `net.ipv4.ip_forward` (reenviar paquetes entre redes, necesario en un router o para contenedores), `fs.inotify.max_user_watches` (cuántos archivos pueden vigilar los programas) y `net.core.somaxconn` (cola de conexiones pendientes). No cambies valores por una receta de internet sin entender qué hacen: anota siempre por qué los cambiaste.
+Algunos ajustes que vas a ver seguido: `vm.swappiness` (cuánto prefiere usar la swap), `net.ipv4.ip_forward` (reenviar paquetes entre redes, necesario en un router o para contenedores), `fs.inotify.max_user_watches` (cuántos archivos pueden vigilar los programas) y `net.core.somaxconn` (cola de conexiones pendientes). No cambies valores por una receta de internet sin entender qué hacen: anotá siempre por qué los cambiaste.
 
 ## /sys: los dispositivos
 
@@ -87,7 +87,7 @@ ls /sys/module/usb_storage/parameters    # parámetros de un módulo cargado
 
 ## Módulos del kernel
 
-Un **módulo** es una pieza del kernel que se carga solo cuando hace falta: el driver de una placa de red, el soporte para un sistema de archivos, el de las memorias USB. Están en `/lib/modules/VERSIÓN/` como archivos `.ko`. Es como una caja de herramientas: no las tienes todas en la mano, las sacas cuando las necesitas.
+Un **módulo** es una pieza del kernel que se carga solo cuando hace falta: el driver de una placa de red, el soporte para un sistema de archivos, el de las memorias USB. Están en `/lib/modules/VERSIÓN/` como archivos `.ko`. Es como una caja de herramientas: no las tenés todas en la mano, las sacás cuando las necesitás.
 
 ```bash
 lsmod                          # los cargados (y quién los usa)
@@ -96,7 +96,7 @@ sudo modprobe wireguard        # cargar uno (y sus dependencias)
 sudo modprobe -r wireguard     # quitarlo, si nadie lo está usando
 ```
 
-En los nombres de módulos, `-` y `_` valen lo mismo (`usb-storage` y `usb_storage`). Casi siempre se cargan solos, al detectar el hardware. Si necesitas que uno se cargue en cada arranque, su nombre va en un archivo de `/etc/modules-load.d/` (por ejemplo, `br_netfilter` para Kubernetes, nivel 7).
+En los nombres de módulos, `-` y `_` valen lo mismo (`usb-storage` y `usb_storage`). Casi siempre se cargan solos, al detectar el hardware. Si necesitás que uno se cargue en cada arranque, su nombre va en un archivo de `/etc/modules-load.d/` (por ejemplo, `br_netfilter` para Kubernetes, nivel 7).
 
 Para **bloquear** uno (una política de "nada de memorias USB", o un driver que falla), se crea un archivo en `/etc/modprobe.d/`:
 
@@ -114,7 +114,7 @@ Con `blacklist` solo, el módulo todavía se puede cargar a mano o como dependen
 
 <ErroresComunes>
   <ErrorComun titulo="El cambio con sysctl -w desapareció después del reinicio">
-    -w es temporal. Ponlo en un archivo de /etc/sysctl.d/ y aplícalo con `sysctl --system`.
+    -w es temporal. Ponelo en un archivo de /etc/sysctl.d/ y aplicalo con `sysctl --system`.
   </ErrorComun>
   <ErrorComun titulo='"sysctl: cannot stat /proc/sys/...: No such file or directory"'>
     El nombre está mal escrito, o el módulo que crea ese ajuste no está cargado (por ejemplo, los net.bridge.* necesitan br_netfilter).
@@ -123,7 +123,7 @@ Con `blacklist` solo, el módulo todavía se puede cargar a mano o como dependen
     Algo lo está usando (un sistema de archivos montado, una interfaz activa). lsmod muestra quién en la columna Used by.
   </ErrorComun>
   <ErrorComun titulo="Pusiste blacklist y el módulo se carga igual">
-    Lo pidió otro módulo o alguien lo cargó a mano. Agrega `install MÓDULO /bin/false`.
+    Lo pidió otro módulo o alguien lo cargó a mano. Agregá `install MÓDULO /bin/false`.
   </ErrorComun>
   <ErrorComun titulo="Editar archivos de /proc o /sys con un editor">
     No son archivos de verdad y el editor puede fallar al guardar. Para /proc/sys usa sysctl; para lo demás, `echo valor | sudo tee archivo`.

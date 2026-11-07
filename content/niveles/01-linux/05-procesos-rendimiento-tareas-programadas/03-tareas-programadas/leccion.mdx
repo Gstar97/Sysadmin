@@ -26,7 +26,7 @@ Respaldos de madrugada, reportes a primera hora, limpieza de archivos viejos una
 
 ## La línea de crontab
 
-Piensa en una agenda con recordatorios: "todos los lunes a las 9, reunión". cron es eso para el servidor: un servicio que cada minuto revisa la lista y ejecuta lo que corresponde. La diferencia con una agenda es que no hay nadie para leer el recordatorio: el comando se ejecuta solo y, si falla, nadie se entera a menos que lo prepares.
+Pensá en una agenda con recordatorios: "todos los lunes a las 9, reunión". cron es eso para el servidor: un servicio que cada minuto revisa la lista y ejecuta lo que corresponde. La diferencia con una agenda es que no hay nadie para leer el recordatorio: el comando se ejecuta solo y, si falla, nadie se entera a menos que lo prepares.
 
 Cada línea tiene cinco campos de tiempo y después el comando:
 
@@ -35,10 +35,10 @@ Cada línea tiene cinco campos de tiempo y después el comando:
 <Emparejar ejercicio={expresiones} />
 
 <EnSimple>
-Cinco casilleros: minuto, hora, día, mes y día de la semana. Un asterisco es "me da igual". Si quieres que algo pase una vez por día, el minuto y la hora tienen que ser números.
+Cinco casilleros: minuto, hora, día, mes y día de la semana. Un asterisco es "me da igual". Si querés que algo pase una vez por día, el minuto y la hora tienen que ser números.
 </EnSimple>
 
-Un detalle que sorprende: si pones algo en el día del mes **y** en el día de la semana (`0 8 1 * 1`), cron lo ejecuta cuando se cumple **cualquiera** de los dos (el día 1 y también todos los lunes), no cuando se cumplen ambos.
+Un detalle que sorprende: si ponés algo en el día del mes **y** en el día de la semana (`0 8 1 * 1`), cron lo ejecuta cuando se cumple **cualquiera** de los dos (el día 1 y también todos los lunes), no cuando se cumplen ambos.
 
 ## Las tareas de cada usuario: crontab
 
@@ -71,11 +71,11 @@ Un archivo por tarea, con un comentario arriba, hace que cualquiera entienda qu�
 
 "A mano funciona y desde cron no" es casi un clásico. Casi siempre es una de estas tres cosas:
 
-1. **La PATH es mínima.** cron ejecuta con muy pocas variables; la PATH de las tareas de usuario es solo `/usr/bin:/bin`. Lo que está en `/usr/local/bin` o `/usr/sbin` no se encuentra. Usa rutas completas o define `PATH=` arriba del crontab o dentro del script. Tampoco carga tu `.bashrc`, y el directorio de trabajo es tu home.
+1. **La PATH es mínima.** cron ejecuta con muy pocas variables; la PATH de las tareas de usuario es solo `/usr/bin:/bin`. Lo que está en `/usr/local/bin` o `/usr/sbin` no se encuentra. Usá rutas completas o define `PATH=` arriba del crontab o dentro del script. Tampoco carga tu `.bashrc`, y el directorio de trabajo es tu home.
 2. **El % tiene un significado especial.** En una línea de crontab, `%` es un salto de línea. `date +%F` corta el comando a la mitad; hay que escribirlo `date +\%F` (o, mejor, llevar el comando a un script).
-3. **La salida se pierde.** Si no la rediriges, cron intenta mandarla por correo al usuario, y en casi todos los servidores ese correo no llega a nadie. Termina siempre las líneas con `>> /ruta/al.log 2>&1`.
+3. **La salida se pierde.** Si no la redirigís, cron intenta mandarla por correo al usuario, y en casi todos los servidores ese correo no llega a nadie. Terminá siempre las líneas con `>> /ruta/al.log 2>&1`.
 
-Para saber si cron lanzó la tarea: en Rocky, `/var/log/cron` (o `journalctl -u crond`); en Ubuntu, `journalctl -u cron`. Y para probar una línea nueva, prográmala para dentro de dos o tres minutos, mira el log, y recién después ponle el horario de verdad.
+Para saber si cron lanzó la tarea: en Rocky, `/var/log/cron` (o `journalctl -u crond`); en Ubuntu, `journalctl -u cron`. Y para probar una línea nueva, programala para dentro de dos o tres minutos, mira el log, y recién después ponele el horario de verdad.
 
 <Troubleshooting escenario={noCorre} />
 
@@ -103,7 +103,7 @@ Necesita el paquete `at` y su servicio `atd` funcionando. Cada usuario ve y canc
 | Evitar dos ejecuciones a la vez | Hay que resolverlo aparte | No arranca el servicio si ya está corriendo |
 | Dónde lo vas a encontrar | En todos lados, desde hace décadas | En todas las distribuciones actuales |
 
-Una regla práctica: para algo nuevo e importante en el servidor (un respaldo, por ejemplo), un timer te da más control y más rastro. Pero vas a leer y mantener crontabs toda tu carrera, así que tienes que manejar los dos. Para más adelante: `flock` evita que una tarea de cron arranque si la anterior todavía no terminó.
+Una regla práctica: para algo nuevo e importante en el servidor (un respaldo, por ejemplo), un timer te da más control y más rastro. Pero vas a leer y mantener crontabs toda tu carrera, así que tenés que manejar los dos. Para más adelante: `flock` evita que una tarea de cron arranque si la anterior todavía no terminó.
 
 ## Practicar en la terminal
 
@@ -117,16 +117,16 @@ Una regla práctica: para algo nuevo e importante en el servidor (un respaldo, p
     La PATH de cron es corta. Rutas completas en la línea y en el script, o `PATH=...` al principio.
   </ErrorComun>
   <ErrorComun titulo="El nombre del archivo queda cortado en date +%F">
-    El % es especial en crontab. Escríbelo `\%` o mueve el comando a un script.
+    El % es especial en crontab. Escribilo `\%` o mueve el comando a un script.
   </ErrorComun>
   <ErrorComun titulo="Borrar todo con crontab -r">
     Quisiste escribir -e. No hay papelera: guarda copias con `crontab -l > archivo` antes de cambios grandes.
   </ErrorComun>
   <ErrorComun titulo="echo 'línea' | crontab - borró las otras tareas">
-    Reemplaza la lista entera. Para agregar: `(crontab -l; echo 'línea nueva') | crontab -`, o usa `crontab -e`.
+    Reemplazá la lista entera. Para agregar: `(crontab -l; echo 'línea nueva') | crontab -`, o usa `crontab -e`.
   </ErrorComun>
   <ErrorComun titulo="Editar /var/spool/cron a mano">
-    cron puede no enterarse y no se valida nada. Usa siempre `crontab -e`.
+    cron puede no enterarse y no se valida nada. Usá siempre `crontab -e`.
   </ErrorComun>
 </ErroresComunes>
 

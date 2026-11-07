@@ -51,7 +51,7 @@ function Calculator() {
             {r.lines.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-2 text-muted">
-                  Agrega equipos con los botones +.
+                  Agregá equipos con los botones +.
                 </td>
               </tr>
             )}

@@ -3,7 +3,7 @@ shell: bash
 titulo: Delegar el reinicio del servidor web
 descripcion: >-
   Laura entra al equipo de soporte. Tiene que poder reiniciar nginx sin pedírtelo cada vez, pero
-  nada más. Prepara la regla, valídala antes de instalarla y comprueba que funciona y que el resto
+  nada más. Prepará la regla, validala antes de instalarla y comprobá que funciona y que el resto
   sigue cerrado.
 estado_inicial:
   distro: rocky
@@ -15,7 +15,7 @@ estado_inicial:
   servicios:
     nginx: { activo: true, habilitado: true, descripcion: "The nginx HTTP and reverse proxy server", puertos: [80] }
 pasos:
-  - consigna: Crea el grupo `soporte` y agrega a laura.
+  - consigna: Creá el grupo `soporte` y agregá a laura.
     verificar:
       - { grupo: soporte, miembros: [laura] }
     pistas:
@@ -23,7 +23,7 @@ pasos:
     solucion: [sudo groupadd soporte, sudo usermod -aG soporte laura]
     explicacion: La regla va a ser para el grupo, así que cuando entre otra persona a soporte, alcanza con agregarla.
   - consigna: >-
-      Escribe la regla en un archivo temporal, `/tmp/soporte`:
+      Escribí la regla en un archivo temporal, `/tmp/soporte`:
       `%soporte ALL=(root) /usr/bin/systemctl restart nginx, /usr/bin/systemctl status nginx`
     verificar:
       - { archivo: /tmp/soporte, contenido_incluye: "%soporte ALL=(root) /usr/bin/systemctl restart nginx" }
@@ -31,7 +31,7 @@ pasos:
       - "Con comillas simples para que el shell no interprete nada: `echo '...' > /tmp/soporte`"
     solucion: ["echo '%soporte ALL=(root) /usr/bin/systemctl restart nginx, /usr/bin/systemctl status nginx' > /tmp/soporte"]
     explicacion: Trabajar sobre una copia permite validarla antes de que sudo la lea. Un error en un archivo de sudoers.d puede dejar sudo sin funcionar para todos.
-  - consigna: Valida el archivo con `visudo` antes de instalarlo.
+  - consigna: Validá el archivo con `visudo` antes de instalarlo.
     verificar:
       - { comando_usado: 'visudo\s+(-c\s+-f|-cf|-f\s+\S+\s+-c)\s*/tmp/soporte|visudo\s+-c\s+-f\s+/tmp/soporte' }
       - { salida_contiene: parsed OK }
@@ -40,14 +40,14 @@ pasos:
       - "`sudo visudo -c -f /tmp/soporte`"
     solucion: [sudo visudo -c -f /tmp/soporte]
     explicacion: En el día a día se edita directamente con `sudo visudo -f /etc/sudoers.d/soporte`, que valida al guardar y no te deja salir con errores.
-  - consigna: Instálalo en `/etc/sudoers.d/soporte` con permisos 440.
+  - consigna: Instalalo en `/etc/sudoers.d/soporte` con permisos 440.
     verificar:
       - { archivo: /etc/sudoers.d/soporte, modo: "0440", dueno: root }
     pistas:
       - "`sudo cp /tmp/soporte /etc/sudoers.d/soporte` y `sudo chmod 440 /etc/sudoers.d/soporte`"
     solucion: [sudo cp /tmp/soporte /etc/sudoers.d/soporte, sudo chmod 440 /etc/sudoers.d/soporte]
     explicacion: El nombre no puede tener puntos (sudo ignora `soporte.conf` o `soporte.bak`) y el archivo tiene que ser de root y no tener permiso de escritura para nadie más.
-  - consigna: Revisa qué puede hacer laura con sudo, sin convertirte en ella.
+  - consigna: Revisá qué puede hacer laura con sudo, sin convertirte en ella.
     verificar:
       - { comando_usado: 'sudo\s+-l\s+-U\s+laura' }
       - { salida_contiene: /usr/bin/systemctl restart nginx }
@@ -55,7 +55,7 @@ pasos:
       - "`sudo -l -U laura`"
     solucion: [sudo -l -U laura]
     explicacion: Es la forma de auditar los permisos de sudo de cualquier cuenta.
-  - consigna: Abre una sesión como laura con `sudo su - laura` y reinicia nginx con sudo.
+  - consigna: Abrí una sesión como laura con `sudo su - laura` y reiniciá nginx con sudo.
     verificar:
       - { usuario_actual: laura }
       - { comando_usado: 'sudo\s+systemctl\s+restart\s+nginx' }
@@ -72,7 +72,7 @@ pasos:
       - "`sudo cat /etc/shadow`"
     solucion: [sudo cat /etc/shadow]
     explicacion: Rechazado. La regla da exactamente lo necesario y nada más.
-  - consigna: Vuelve a tu usuario con `exit` y busca en el registro de seguridad el intento rechazado de laura.
+  - consigna: Volvé a tu usuario con `exit` y buscá en el registro de seguridad el intento rechazado de laura.
     verificar:
       - { usuario_actual: ana }
       - { salida_contiene: command not allowed }

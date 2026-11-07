@@ -19,7 +19,7 @@ estado_inicial:
     redes_remotas:
       - { red: 10.2.0.0/24, via: 192.168.10.2 }
 pasos:
-  - consigna: Prueba llegar a la PC 10.2.0.50 de la sucursal y averigua por dónde intenta salir app01.
+  - consigna: Probá llegar a la PC 10.2.0.50 de la sucursal y averiguá por dónde intenta salir app01.
     verificar:
       - { comando_usado: ip route get 10.2.0.50 }
     pistas: ["ping -c 2 10.2.0.50 y después ip route get 10.2.0.50."]
@@ -27,7 +27,7 @@ pasos:
     explicacion: >-
       El ping se pierde y ip route get muestra por qué: "via 192.168.10.1", la puerta de enlace
       por defecto. Ese router manda la sucursal a internet, donde nadie la conoce.
-  - consigna: Agrega una ruta para 10.2.0.0/24 a través del router de la VPN.
+  - consigna: Agregá una ruta para 10.2.0.0/24 a través del router de la VPN.
     verificar:
       - { alcanza: 10.2.0.50 }
     pistas: ["sudo ip route add 10.2.0.0/24 via 192.168.10.2."]
@@ -36,7 +36,7 @@ pasos:
       Ahora la ruta más específica (/24) le gana a la por defecto (/0) para todo lo de la
       sucursal. Pero una ruta agregada con ip route vive en memoria: con el próximo reinicio,
       desaparece.
-  - consigna: Haz la ruta permanente en la conexión enp0s3 de NetworkManager y aplica el cambio.
+  - consigna: Hacé la ruta permanente en la conexión enp0s3 de NetworkManager y aplicá el cambio.
     verificar:
       - { ruta: 10.2.0.0/24, via: 192.168.10.2, persistente: true }
       - { alcanza: 10.2.0.50 }

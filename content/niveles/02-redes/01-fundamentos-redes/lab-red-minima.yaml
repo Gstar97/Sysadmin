@@ -4,7 +4,7 @@ descripcion: >-
   Vas a conectar rocky01 y ubuntu01 por una red interna del hipervisor (un switch virtual que
   solo ven ellas dos) y a mirar, con tus propios ojos, el ARP y las tramas.
 pasos:
-  - titulo: Toma instantáneas y agrega una placa en red interna
+  - titulo: Tomá instantáneas y agrega una placa en red interna
     detalle: >-
       Con las dos máquinas apagadas, toma una instantánea de cada una (antes-de-redes). Después
       agrega a cada una una segunda placa de red conectada a una red interna con el mismo
@@ -14,11 +14,11 @@ pasos:
       - nombre: VirtualBox
         detalle: Configuración → Red → Adaptador 2 → Habilitar → Conectado a "Red interna" → Nombre "labred". En las dos máquinas.
       - nombre: virt-manager (KVM)
-        detalle: Crea primero una red aislada (Editar → Detalles de la conexión → Redes virtuales → + , modo "aislada", sin DHCP) y agrégala como segunda placa en las dos máquinas.
+        detalle: Creá primero una red aislada (Editar → Detalles de la conexión → Redes virtuales → + , modo "aislada", sin DHCP) y agregala como segunda placa en las dos máquinas.
     comprobar: Al encender, ip -br link muestra una placa nueva en cada máquina (en VirtualBox suele ser enp0s8), en estado UP o DOWN.
-  - titulo: Ponle una IP a cada máquina en la red nueva
+  - titulo: Ponele una IP a cada máquina en la red nueva
     detalle: >-
-      Usa la red 10.10.10.0/24, que no se superpone con las que ya tienes. Reemplaza enp0s8 por
+      Usá la red 10.10.10.0/24, que no se superpone con las que ya tenés. Reemplazá enp0s8 por
       el nombre de tu placa. Con ip addr la configuración dura hasta reiniciar, que para este
       laboratorio alcanza.
     variantes:
@@ -33,22 +33,22 @@ pasos:
           - sudo ip link set enp0s8 up
           - sudo ip addr add 10.10.10.2/24 dev enp0s8
     comprobar: ip -br a muestra 10.10.10.1/24 en rocky01 y 10.10.10.2/24 en ubuntu01.
-  - titulo: Mira las MAC de las dos placas
+  - titulo: Mirá las MAC de las dos placas
     comandos:
       - ip -br link
     detalle: >-
-      Anota la MAC de enp0s8 de cada máquina. En VirtualBox empiezan con 08:00:27 (el OUI de
+      Anotá la MAC de enp0s8 de cada máquina. En VirtualBox empiezan con 08:00:27 (el OUI de
       VirtualBox); en KVM, con 52:54:00.
-    comprobar: Tienes anotadas las dos MAC.
-  - titulo: Prepara una captura de ARP en ubuntu01
+    comprobar: Tenés anotadas las dos MAC.
+  - titulo: Prepará una captura de ARP en ubuntu01
     detalle: >-
       tcpdump muestra el tráfico que pasa por una placa (lo verás a fondo en el módulo 2.7).
-      Con -e muestra las MAC y con "arp" filtra solo ARP. Déjalo corriendo en ubuntu01.
+      Con -e muestra las MAC y con "arp" filtra solo ARP. Dejalo corriendo en ubuntu01.
     comandos:
       - sudo apt install -y tcpdump
       - sudo tcpdump -e -n -i enp0s8 arp
     comprobar: tcpdump dice "listening on enp0s8" y espera.
-  - titulo: Haz ping desde rocky01 y mira la captura
+  - titulo: Hacé ping desde rocky01 y mira la captura
     comandos:
       - ip neigh show dev enp0s8
       - ping -c 3 10.10.10.2
@@ -59,7 +59,7 @@ pasos:
       ff:ff:ff:ff:ff:ff, y después la respuesta ("Reply 10.10.10.2 is-at ..."), ya dirigida a
       la MAC de rocky01.
     comprobar: La tabla de vecinos de rocky01 muestra 10.10.10.2 con la MAC que anotaste de ubuntu01.
-  - titulo: Vacía la tabla y repite
+  - titulo: Vaciá la tabla y repite
     comandos:
       - sudo ip neigh flush dev enp0s8
       - ping -c 1 10.10.10.2
@@ -69,7 +69,7 @@ pasos:
     comprobar: Ves una segunda solicitud y respuesta ARP en tcpdump.
   - titulo: Provoca una IP duplicada
     detalle: >-
-      En ubuntu01 corta tcpdump (Ctrl+C) y agrégale también la IP de rocky01. Después, desde
+      En ubuntu01 corta tcpdump (Ctrl+C) y agregale también la IP de rocky01. Después, desde
       ubuntu01, pregunta quién tiene esa IP. Verás que contesta la otra máquina: la IP está
       repetida. Ojo: al agregar una IP con ip addr, Linux no comprueba si otro la usa; por eso
       conviene probar con arping -D antes.
@@ -81,10 +81,10 @@ pasos:
           - sudo apt install -y iputils-arping
           - sudo arping -D -c 2 -I enp0s8 10.10.10.1
     comprobar: arping muestra una respuesta ("Unicast reply from 10.10.10.1 [MAC de rocky01]") y termina con código distinto de 0 (echo $? da 1).
-  - titulo: Deja todo como estaba
+  - titulo: Dejá todo como estaba
     comandos:
       - sudo ip addr del 10.10.10.1/24 dev enp0s8
     detalle: >-
-      En ubuntu01 quita la IP repetida. Si prefieres, vuelve a las instantáneas: la
+      En ubuntu01 quita la IP repetida. Si preferís, vuelve a las instantáneas: la
       configuración con ip addr se borra igual al reiniciar.
     comprobar: ip -br a en ubuntu01 muestra solo 10.10.10.2/24 en enp0s8.

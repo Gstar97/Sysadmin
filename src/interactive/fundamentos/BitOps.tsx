@@ -68,7 +68,7 @@ function Bits() {
         <div className="ml-[88px] w-[300px] border-t border-fg/40" />
         <BitRow label={op === 'NOT' ? 'NOT A' : `A ${op} B`} value={apply(op, a, b)} highlight />
       </div>
-      <p className="mt-2 text-xs text-muted">Toca los bits de A y B para cambiarlos.</p>
+      <p className="mt-2 text-xs text-muted">Tocá los bits de A y B para cambiarlos.</p>
     </div>
   )
 }

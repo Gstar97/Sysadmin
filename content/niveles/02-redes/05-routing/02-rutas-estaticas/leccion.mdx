@@ -15,7 +15,7 @@ import ejFlotante from './ej-flotante.yaml'
 import ejLinux from './ej-linux.yaml'
 import topoTres from './topo-tres.yaml'
 
-Una ruta estática es la forma más simple de enseñarle a un router una red que no tiene conectada: se la escribes tú. En redes pequeñas, en sucursales con un solo camino y para la ruta por defecto hacia internet, es lo más usado. Y entenderlas bien es la base para todo lo demás: un protocolo dinámico no hace otra cosa que escribir estas mismas rutas automáticamente.
+Una ruta estática es la forma más simple de enseñarle a un router una red que no tiene conectada: se la escribís vos. En redes pequeñas, en sucursales con un solo camino y para la ruta por defecto hacia internet, es lo más usado. Y entenderlas bien es la base para todo lo demás: un protocolo dinámico no hace otra cosa que escribir estas mismas rutas automáticamente.
 
 <AntesDeEmpezar>
 - Cómo decide un router: prefijo más largo y distancia administrativa (lección anterior).
@@ -39,14 +39,14 @@ También se puede indicar la interfaz de salida en lugar del siguiente salto (`i
 
 ## La ruta de vuelta
 
-El error más común con rutas estáticas no es de sintaxis: es olvidarse de la vuelta. Es como mandar una carta a otra ciudad: el correo sabe llevarla, pero si en la ciudad de destino nadie sabe dónde queda tu barrio, la respuesta nunca vuelve. Donde la comparación no llega: la red no te avisa que la respuesta se perdió; para ti, simplemente "no responde".
+El error más común con rutas estáticas no es de sintaxis: es olvidarse de la vuelta. Es como mandar una carta a otra ciudad: el correo sabe llevarla, pero si en la ciudad de destino nadie sabe dónde queda tu barrio, la respuesta nunca vuelve. Donde la comparación no llega: la red no te avisa que la respuesta se perdió; para vos, simplemente "no responde".
 
 <Diagrama svg={idaVuelta} alt="PC-A (192.168.1.10) conectada a R1 (central), unido por 10.0.12.0/30 a R2 (sucursal), que tiene a PC-B (10.2.0.10). La ida funciona porque R1 tiene ip route 10.2.0.0 255.255.255.0 10.0.12.2. La vuelta falla porque R2 no sabe llegar a 192.168.1.0/24: PC-B responde, pero R2 descarta la respuesta. El síntoma es que la sucursal parece no responder aunque los paquetes llegan; el arreglo es una ruta en R2 hacia 192.168.1.0/24 por 10.0.12.1, o una ruta por defecto hacia R1." pie="Cada router decide con su propia tabla: la vuelta se configura aparte." />
 
-Por eso, cada vez que agregas una ruta, la pregunta siguiente es: "¿y del otro lado, saben volver?". En una sucursal con un solo camino, lo más simple es una ruta por defecto hacia la central.
+Por eso, cada vez que agregás una ruta, la pregunta siguiente es: "¿y del otro lado, saben volver?". En una sucursal con un solo camino, lo más simple es una ruta por defecto hacia la central.
 
 <EnSimple>
-Que tú sepas llegar a alguien no quiere decir que él sepa volver hasta ti. Cada router necesita su ruta para la ida o para la vuelta, según el lado en que esté.
+Que vos sepas llegar a alguien no quiere decir que él sepa volver hasta ti. Cada router necesita su ruta para la ida o para la vuelta, según el lado en que esté.
 </EnSimple>
 
 ## Rutas flotantes: un respaldo que espera
@@ -119,16 +119,16 @@ Con eso y las rutas, el Linux enruta igual que un router. Así funcionan OPNsens
     IOS acepta la ruta, pero no la instala: no aparece en show ip route. En Linux, ip route add responde "Nexthop has invalid gateway".
   </ErrorComun>
   <ErrorComun titulo="Escribir la red con bits de host">
-    ip route 10.2.0.5 255.255.255.0 ... no es una red. IOS responde "%Inconsistent address and mask" y Linux "Invalid prefix for given prefix length". Escribe siempre la dirección de red.
+    ip route 10.2.0.5 255.255.255.0 ... no es una red. IOS responde "%Inconsistent address and mask" y Linux "Invalid prefix for given prefix length". Escribí siempre la dirección de red.
   </ErrorComun>
   <ErrorComun titulo="Una flotante con la distancia equivocada">
     Si la flotante tiene distancia 1 (o menos que la principal), se usa siempre. Para respaldar OSPF, más de 110.
   </ErrorComun>
   <ErrorComun titulo="La ruta solo en memoria en Linux">
-    ip route add se pierde en el próximo reinicio. Ponla en NetworkManager o netplan.
+    ip route add se pierde en el próximo reinicio. Ponela en NetworkManager o netplan.
   </ErrorComun>
   <ErrorComun titulo="Linux con dos interfaces que no reenvía">
-    Sin net.ipv4.ip_forward = 1, los paquetes de otros se descartan. Y revisa el firewall: firewalld y nftables pueden bloquear el tráfico que lo atraviesa.
+    Sin net.ipv4.ip_forward = 1, los paquetes de otros se descartan. Y revisá el firewall: firewalld y nftables pueden bloquear el tráfico que lo atraviesa.
   </ErrorComun>
 </ErroresComunes>
 

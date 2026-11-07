@@ -65,7 +65,7 @@ export default function ProjectPage() {
       <aside>
         <Card className="space-y-3 lg:sticky lg:top-20">
           <h2 className="font-semibold">Entregables</h2>
-          <p className="text-sm text-muted">Marca cada entregable cuando lo tengas listo. Con todos marcados y los módulos completos, se otorga la insignia del nivel.</p>
+          <p className="text-sm text-muted">Marcá cada entregable cuando lo tengas listo. Con todos marcados y los módulos completos, se otorga la insignia del nivel.</p>
           <Checklist items={project.entregables} checked={checked} label="Entregables del proyecto" onChange={(c) => void setProjectChecklist(level.id, c, project.entregables.length)} />
         </Card>
       </aside>

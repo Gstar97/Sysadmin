@@ -43,16 +43,16 @@ Lo que vale la pena recordar:
 
 - **`interfaces-config`**: en qué placas escucha. Solo en la de la red de clientes, nunca "en todas" por las dudas.
 - **`subnet4`**: una entrada por red. Cada una con su **`id`** numérico único (obligatorio desde Kea 2.6: los préstamos se guardan con ese número), su `subnet`, sus `pools` y sus opciones.
-- **`option-data`**: los nombres de las opciones son fijos: `routers` (puerta de enlace), `domain-name-servers`, `domain-name`, `ntp-servers`. Las que pones fuera de `subnet4` valen para todas las subredes.
+- **`option-data`**: los nombres de las opciones son fijos: `routers` (puerta de enlace), `domain-name-servers`, `domain-name`, `ntp-servers`. Las que ponés fuera de `subnet4` valen para todas las subredes.
 - **`reservations`**: por MAC (`hw-address`) o por identificador del cliente. Conviene dejarlas fuera del rango dinámico.
 - Es **JSON estricto**: comas entre elementos, comillas dobles, nada de coma después del último. Kea acepta comentarios con `//` o `#`, pero no perdona una coma faltante.
 
-Corrige una configuración que no arranca:
+Corregí una configuración que no arranca:
 
 <EditorConfig ejercicio={ejKea} />
 
 <EnSimple>
-En el archivo de Kea dices en qué placa atender, qué red y qué rango prestar, qué datos entregar con cada dirección (puerta de enlace, DNS) y qué equipos tienen dirección reservada. Antes de arrancar, siempre `kea-dhcp4 -t`.
+En el archivo de Kea decís en qué placa atender, qué red y qué rango prestar, qué datos entregar con cada dirección (puerta de enlace, DNS) y qué equipos tienen dirección reservada. Antes de arrancar, siempre `kea-dhcp4 -t`.
 </EnSimple>
 
 ## Arrancar, probar y mirar los préstamos
@@ -76,7 +76,7 @@ ipconfig /renew                     # Windows
 <Terminal ejercicio={ejDhcp} />
 
 <Consejo titulo="El firewall del servidor">
-Abre el servicio en el firewall: `sudo firewall-cmd --permanent --add-service=dhcp` y `sudo firewall-cmd --reload` en Rocky, o `sudo ufw allow 67/udp` en Ubuntu. Según cómo reciba Kea los pedidos de cada placa, algunos pueden llegarle aunque el firewall esté cerrado, y eso confunde al diagnosticar: deja abierto lo que el servicio necesita y no dependas de esa casualidad.
+Abrí el servicio en el firewall: `sudo firewall-cmd --permanent --add-service=dhcp` y `sudo firewall-cmd --reload` en Rocky, o `sudo ufw allow 67/udp` en Ubuntu. Según cómo reciba Kea los pedidos de cada placa, algunos pueden llegarle aunque el firewall esté cerrado, y eso confunde al diagnosticar: deja abierto lo que el servicio necesita y no dependas de esa casualidad.
 </Consejo>
 
 <Pregunta id="p06" />
@@ -96,13 +96,13 @@ Lo usan muchos routers hogareños, libvirt (las redes virtuales de KVM) y herram
 
 <ErroresComunes>
   <ErrorComun titulo="Kea arranca pero nadie recibe dirección">
-    Revisa interfaces-config: si está vacío o con otra placa, Kea no escucha donde están los clientes. Mira con ss -ulnp en qué IP está el puerto 67.
+    Revisá interfaces-config: si está vacío o con otra placa, Kea no escucha donde están los clientes. Mirá con ss -ulnp en qué IP está el puerto 67.
   </ErrorComun>
   <ErrorComun titulo="Error de sintaxis por una coma">
-    JSON no admite comas faltantes ni sobrantes. kea-dhcp4 -t te dice la línea; revísalo siempre antes de reiniciar el servicio.
+    JSON no admite comas faltantes ni sobrantes. kea-dhcp4 -t te dice la línea; revisalo siempre antes de reiniciar el servicio.
   </ErrorComun>
   <ErrorComun titulo="missing parameter 'id'">
-    Desde Kea 2.6 cada subred necesita su id. Si copias una configuración vieja (o de Ubuntu 24.04, que trae Kea 2.4), agrégalo.
+    Desde Kea 2.6 cada subred necesita su id. Si copiás una configuración vieja (o de Ubuntu 24.04, que trae Kea 2.4), agregalo.
   </ErrorComun>
   <ErrorComun titulo="Opciones con nombres inventados">
     Es routers (en plural), no router ni gateway; domain-name-servers, no dns. Kea rechaza las opciones que no conoce.

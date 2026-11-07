@@ -3,7 +3,7 @@ shell: bash
 titulo: La página de la empresa no carga
 descripcion: >-
   Después de la ventana de mantenimiento de anoche, la página web de la empresa no responde. El
-  servidor web oficial es nginx. Encuentra qué pasa, arréglalo y deja el servidor listo para el
+  servidor web oficial es nginx. Encontrá qué pasa, arreglalo y deja el servidor listo para el
   próximo reinicio.
 estado_inicial:
   distro: rocky
@@ -20,7 +20,7 @@ estado_inicial:
     - { unidad: nginx.service, prioridad: err, mensaje: "nginx: [emerg] bind() to 0.0.0.0:80 failed (98: Address already in use)", hace_minutos: 40 }
     - { unidad: nginx.service, prioridad: err, mensaje: "Failed to start nginx.service - The nginx HTTP and reverse proxy server.", hace_minutos: 40 }
 pasos:
-  - consigna: Empieza por lo general. Lista los servicios que fallaron.
+  - consigna: Empezá por lo general. Lista los servicios que fallaron.
     verificar:
       - { comando_usado: 'systemctl\s+(--failed|list-units\s+.*--state=failed)' }
       - { salida_contiene: nginx.service }
@@ -29,7 +29,7 @@ pasos:
       - "`systemctl --failed`"
     solucion: [systemctl --failed]
     explicacion: Es lo primero que conviene mirar en un servidor con problemas.
-  - consigna: Mira el estado de nginx.
+  - consigna: Mirá el estado de nginx.
     verificar:
       - { comando_usado: 'systemctl\s+status\s+nginx' }
     pistas:
@@ -38,7 +38,7 @@ pasos:
     explicacion: >-
       La línea Loaded dice enabled (iba a arrancar solo) y Active dice failed. Las últimas líneas
       del journal ya muestran la causa: el puerto 80 está ocupado.
-  - consigna: Averigua qué programa está usando el puerto 80.
+  - consigna: Averiguá qué programa está usando el puerto 80.
     verificar:
       - { comando_usado: 'ss\s+-\w*[tl]\w*' }
       - { salida_contiene: httpd }
@@ -47,7 +47,7 @@ pasos:
       - "`sudo ss -tlnp`"
     solucion: [sudo ss -tlnp]
     explicacion: Alguien instaló y dejó habilitado httpd (Apache), otro servidor web. Solo un programa puede escuchar en un mismo puerto.
-  - consigna: Detén httpd y haz que no vuelva a arrancar al encender el servidor, con un solo comando.
+  - consigna: Detené httpd y hacé que no vuelva a arrancar al encender el servidor, con un solo comando.
     verificar:
       - { servicio: httpd, activo: false, habilitado: false }
     pistas:
@@ -62,7 +62,7 @@ pasos:
       - "`sudo systemctl start nginx`"
     solucion: [sudo systemctl start nginx]
     explicacion: Ahora el puerto está libre y nginx arranca sin problemas.
-  - consigna: Comprueba, como lo haría un script, que nginx está activo y habilitado.
+  - consigna: Comprobá, como lo haría un script, que nginx está activo y habilitado.
     verificar:
       - { comando_usado: 'systemctl\s+is-active\s+nginx' }
       - { comando_usado: 'systemctl\s+is-enabled\s+nginx' }

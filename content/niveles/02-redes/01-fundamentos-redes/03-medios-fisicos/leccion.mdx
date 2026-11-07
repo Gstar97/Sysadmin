@@ -73,24 +73,24 @@ Los teléfonos IP, las cámaras y los puntos de acceso suelen estar en lugares s
 | PoE++ | 802.3bt (Tipo 3) | 60 W | 51 W | Punto de acceso Wi-Fi 7, cámara PTZ |
 | PoE++ | 802.3bt (Tipo 4) | 90 W | 71,3 W | Pantallas, iluminación |
 
-Además del límite por puerto, cada switch tiene un **presupuesto total**: un switch de 24 puertos PoE+ con 195 W no puede dar 30 W a los 24 a la vez (serían 720 W). Muchos switches reservan por puerto el máximo de la clase del equipo, no lo que consume de verdad, así que el presupuesto se agota antes de lo que parece. Prueba con la calculadora y después con la práctica:
+Además del límite por puerto, cada switch tiene un **presupuesto total**: un switch de 24 puertos PoE+ con 195 W no puede dar 30 W a los 24 a la vez (serían 720 W). Muchos switches reservan por puerto el máximo de la clase del equipo, no lo que consume de verdad, así que el presupuesto se agota antes de lo que parece. Probá con la calculadora y después con la práctica:
 
 <CalculadoraPoe />
 
 <EnSimple>
-PoE manda electricidad por el cable de red. Cada puerto tiene un tope según la norma, y el switch entero tiene un total que se reparte entre todos. Si te pasas, los últimos equipos no encienden o se reinician.
+PoE manda electricidad por el cable de red. Cada puerto tiene un tope según la norma, y el switch entero tiene un total que se reparte entre todos. Si te pasás, los últimos equipos no encienden o se reinician.
 </EnSimple>
 
 ## Velocidad, dúplex y autonegociación
 
-Cuando conectas un cable, los dos extremos se ponen de acuerdo en dos cosas:
+Cuando conectás un cable, los dos extremos se ponen de acuerdo en dos cosas:
 
 - La **velocidad**: 10, 100, 1000 Mb/s o más, la mayor que soporten los dos y el cable.
 - El **dúplex**: **full** (los dos hablan a la vez, como en una llamada telefónica) o **half** (de a uno, como con un *walkie-talkie*: si los dos hablan a la vez, chocan y hay que repetir). Hoy todo es full dúplex; half es de las redes viejas con hubs.
 
 Ese acuerdo se llama **autonegociación** y funciona solo, siempre que esté activada en los dos extremos. El problema clásico aparece cuando alguien fija la velocidad a mano en un extremo y deja el otro en automático: el automático no puede negociar, asume half dúplex y queda un extremo en full y el otro en half. La red **anda, pero lenta**, con errores y retransmisiones. Es una de las fallas más difíciles de ver, porque nada se cae.
 
-En Linux, `ethtool` muestra lo que negoció cada placa. Practícalo:
+En Linux, `ethtool` muestra lo que negoció cada placa. Practicalo:
 
 <Terminal ejercicio={ejEthtool} />
 
@@ -100,19 +100,19 @@ Otras pistas de un problema físico: la luz del puerto que se prende y se apaga 
 
 <ErroresComunes>
   <ErrorComun titulo="Pasar de 100 m con cobre &quot;porque anda&quot;">
-    A 110 m puede funcionar en una prueba y fallar cuando hace calor o cuando hay más tráfico. Si necesitas más distancia, pon un switch en el medio o usa fibra.
+    A 110 m puede funcionar en una prueba y fallar cuando hace calor o cuando hay más tráfico. Si necesitás más distancia, pon un switch en el medio o usa fibra.
   </ErrorComun>
   <ErrorComun titulo="Comprar el módulo SFP equivocado">
-    Revisa velocidad (SFP o SFP+), tipo de fibra (SR multimodo, LR monomodo) y que el switch acepte esa marca: muchos fabricantes solo aceptan sus propios módulos o los compatibles certificados.
+    Revisá velocidad (SFP o SFP+), tipo de fibra (SR multimodo, LR monomodo) y que el switch acepte esa marca: muchos fabricantes solo aceptan sus propios módulos o los compatibles certificados.
   </ErrorComun>
   <ErrorComun titulo="Fijar la velocidad en un solo extremo">
-    Si fijas la velocidad y el dúplex a mano, hazlo en los dos extremos. Lo normal y recomendado es dejar la autonegociación en los dos.
+    Si fijás la velocidad y el dúplex a mano, hacelo en los dos extremos. Lo normal y recomendado es dejar la autonegociación en los dos.
   </ErrorComun>
   <ErrorComun titulo="Calcular el PoE con el consumo real y no con lo que reserva el switch">
-    Si el switch reserva por clase, un punto de acceso que consume 20 W le "cuesta" 30 W de presupuesto. Revisa la hoja de datos del switch y deja margen.
+    Si el switch reserva por clase, un punto de acceso que consume 20 W le "cuesta" 30 W de presupuesto. Revisá la hoja de datos del switch y deja margen.
   </ErrorComun>
   <ErrorComun titulo="Una placa de 1 Gb/s que negocia 100 Mb/s">
-    Casi siempre es el cable o el conector (un par dañado). Cambia el cable antes de tocar la configuración.
+    Casi siempre es el cable o el conector (un par dañado). Cambiá el cable antes de tocar la configuración.
   </ErrorComun>
 </ErroresComunes>
 

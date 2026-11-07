@@ -3,8 +3,8 @@ shell: bash
 titulo: Un respaldo que se hace solo
 descripcion: >-
   El servidor de archivos guarda los datos de la oficina en /srv/datos. Ya hay un script de
-  respaldo y un compañero dejó escrita la unidad en tu carpeta. Conviértelo en un servicio de
-  systemd y prográmalo para que se ejecute todos los días a las 2:30.
+  respaldo y un compañero dejó escrita la unidad en tu carpeta. Convertilo en un servicio de
+  systemd y programalo para que se ejecute todos los días a las 2:30.
 estado_inicial:
   distro: rocky
   hostname: files01
@@ -39,7 +39,7 @@ pasos:
       - "`sudo /usr/local/bin/respaldo.sh` y después `ls /backup`"
     solucion: [sudo /usr/local/bin/respaldo.sh, ls /backup]
     explicacion: Si el script no funciona a mano, tampoco va a funcionar desde systemd, y ahí es más difícil ver por qué.
-  - consigna: Lee la unidad que dejó tu compañero en tu carpeta personal.
+  - consigna: Leé la unidad que dejó tu compañero en tu carpeta personal.
     verificar:
       - { comando_usado: '(cat|less|head)\s+(~/|/home/ana/)?respaldo\.service' }
     pistas:
@@ -48,7 +48,7 @@ pasos:
     explicacion: >-
       Es Type=oneshot: el script hace su trabajo y termina. No tiene sección [Install] porque no
       lo vas a habilitar directamente: lo va a lanzar un timer.
-  - consigna: Copia la unidad a la carpeta de unidades propias y haz que systemd la lea.
+  - consigna: Copiá la unidad a la carpeta de unidades propias y hacé que systemd la lea.
     verificar:
       - { archivo: /etc/systemd/system/respaldo.service, contenido_incluye: "ExecStart=/usr/local/bin/respaldo.sh" }
       - { comando_usado: 'systemctl\s+daemon-reload' }
@@ -56,8 +56,8 @@ pasos:
       - "Las unidades propias van en /etc/systemd/system/. Después, systemd tiene que volver a leer su configuración."
       - "`sudo cp ~/respaldo.service /etc/systemd/system/` y `sudo systemctl daemon-reload`"
     solucion: [sudo cp /home/ana/respaldo.service /etc/systemd/system/, sudo systemctl daemon-reload]
-    explicacion: daemon-reload hace que systemd vuelva a leer los archivos de unidades. Hay que ejecutarlo cada vez que creas o cambias uno.
-  - consigna: Ejecuta el servicio una vez y mira en el journal lo que escribió el script.
+    explicacion: daemon-reload hace que systemd vuelva a leer los archivos de unidades. Hay que ejecutarlo cada vez que creás o cambiás uno.
+  - consigna: Ejecutá el servicio una vez y mirá en el journal lo que escribió el script.
     verificar:
       - { comando_usado: 'systemctl\s+start\s+respaldo' }
       - { comando_usado: 'journalctl\s+.*-u\s*respaldo|journalctl\s+-u\s*respaldo' }
@@ -70,7 +70,7 @@ pasos:
       Así, si una noche falla, vas a poder ver por qué. systemctl status respaldo dice
       inactive (dead) con status=0/SUCCESS: terminó bien.
   - consigna: >-
-      Crea el timer `/etc/systemd/system/respaldo.timer` (por ejemplo con `sudo nano`) con una
+      Creá el timer `/etc/systemd/system/respaldo.timer` (por ejemplo con `sudo nano`) con una
       sección [Timer] que tenga `OnCalendar=*-*-* 02:30:00` y `Persistent=true`, y una sección
       [Install] con `WantedBy=timers.target`.
     verificar:
@@ -93,14 +93,14 @@ pasos:
     solucion:
       - "printf '[Unit]\\nDescription=Respaldo diario de /srv/datos\\n\\n[Timer]\\nOnCalendar=*-*-* 02:30:00\\nPersistent=true\\n\\n[Install]\\nWantedBy=timers.target\\n' | sudo tee /etc/systemd/system/respaldo.timer"
     explicacion: Persistent=true hace que, si el servidor estaba apagado a las 2:30, el respaldo se ejecute apenas vuelva a encenderse.
-  - consigna: Comprueba con systemd-analyze que la expresión significa lo que quieres.
+  - consigna: Comprobá con systemd-analyze que la expresión significa lo que querés.
     verificar:
       - { comando_usado: 'systemd-analyze\s+calendar' }
     pistas:
       - "`systemd-analyze calendar '*-*-* 02:30:00'`"
     solucion: ["systemd-analyze calendar '*-*-* 02:30:00'"]
     explicacion: Next elapse dice cuándo será la próxima ejecución. Es la forma más rápida de evitar sorpresas con las fechas.
-  - consigna: Habilita y arranca el timer (no el servicio) con un solo comando.
+  - consigna: Habilitá y arranca el timer (no el servicio) con un solo comando.
     verificar:
       - { servicio: respaldo.timer, activo: true, habilitado: true }
     pistas:
@@ -111,7 +111,7 @@ pasos:
       Se habilita el timer porque es el que tiene que quedar activo después de cada reinicio. El
       servicio no se habilita: lo lanza el timer. Como el archivo es nuevo, systemd lo encuentra
       solo; si hubieras cambiado uno que ya estaba cargado, haría falta daemon-reload.
-  - consigna: Mira la lista de timers y comprueba cuándo se va a ejecutar el respaldo.
+  - consigna: Mirá la lista de timers y comprobá cuándo se va a ejecutar el respaldo.
     verificar:
       - { comando_usado: 'systemctl\s+list-timers' }
       - { salida_contiene: respaldo.timer }

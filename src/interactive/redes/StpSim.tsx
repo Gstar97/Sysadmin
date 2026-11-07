@@ -163,7 +163,7 @@ export function StpSim() {
               )
             })}
           </svg>
-          <p className="text-xs text-muted">R = puerto raíz · D = designado · B = bloqueado (alternativo). Toca un enlace para cortarlo o reconectarlo.</p>
+          <p className="text-xs text-muted">R = puerto raíz · D = designado · B = bloqueado (alternativo). Tocá un enlace para cortarlo o reconectarlo.</p>
           {predict && guess === undefined && (
             <div className="mt-2">
               <p className="text-sm font-medium">¿Qué switch va a ser el puente raíz?</p>

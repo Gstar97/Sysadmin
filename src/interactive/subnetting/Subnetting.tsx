@@ -66,7 +66,7 @@ export function Subnetting({ modo = 'ambos', tipos, dificultad = 2 }: Props) {
 function parseInput(text: string): { ip: number; prefix: number } | string {
   const t = text.trim()
   const m = /^(\S+?)\s*(?:\/\s*(\d{1,2})|\s+(\S+))$/.exec(t)
-  if (!m) return 'Escribe una dirección con su prefijo (192.168.10.71/26) o con su máscara (192.168.10.71 255.255.255.192).'
+  if (!m) return 'Escribí una dirección con su prefijo (192.168.10.71/26) o con su máscara (192.168.10.71 255.255.255.192).'
   const ip = parseIpv4(m[1])
   if (ip === undefined) return `"${m[1]}" no es una dirección IPv4 válida: son cuatro números de 0 a 255 separados por puntos.`
   const prefix = m[2] !== undefined ? Number(m[2]) : parsePrefix(m[3])
@@ -220,7 +220,7 @@ function Ipv6Calculator() {
         <input value={text} onChange={(e) => setText(e.target.value)} className="w-full max-w-lg rounded-lg border border-line bg-bg px-3 py-2 font-mono" spellCheck={false} autoCapitalize="off" aria-invalid={!valid} />
       </label>
       {!valid ? (
-        <Callout tone="warn">Escribe una dirección IPv6 válida, por ejemplo 2001:db8:acad:10::25/64. Solo puede haber un "::" y cada grupo tiene hasta 4 dígitos hexadecimales.</Callout>
+        <Callout tone="warn">Escribí una dirección IPv6 válida, por ejemplo 2001:db8:acad:10::25/64. Solo puede haber un "::" y cada grupo tiene hasta 4 dígitos hexadecimales.</Callout>
       ) : (
         <dl className="grid grid-cols-1 gap-y-1 text-sm">
           {[
@@ -252,7 +252,7 @@ function Ipv6Calculator() {
             )}
           </p>
         ) : (
-          <p className="mt-2 text-sm text-muted">Escribe una MAC de 12 dígitos hexadecimales.</p>
+          <p className="mt-2 text-sm text-muted">Escribí una MAC de 12 dígitos hexadecimales.</p>
         )}
       </div>
     </div>

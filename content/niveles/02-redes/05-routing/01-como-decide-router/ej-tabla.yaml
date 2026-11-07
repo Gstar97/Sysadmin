@@ -54,7 +54,7 @@ estado_inicial:
       - { a: "R1:Gi0/2", b: "R3:Gi0/2" }
       - { a: "R1:Gi0/3", b: "ISP:Gi0/0" }
 pasos:
-  - consigna: Muestra la tabla de rutas completa de R1.
+  - consigna: Mostrá la tabla de rutas completa de R1.
     verificar:
       - { comando_usado: show ip route }
     pistas: ["enable y show ip route."]
@@ -63,7 +63,7 @@ pasos:
       Cada línea empieza con un código: C (conectada), L (la IP propia de la interfaz), S*
       (estática por defecto) y O (aprendida por OSPF). Entre corchetes, [distancia/métrica]:
       [110/2] es OSPF con costo 2.
-  - consigna: Pregúntale a R1 qué ruta usaría para llegar a 10.2.10.25.
+  - consigna: Preguntale a R1 qué ruta usaría para llegar a 10.2.10.25.
     verificar:
       - { comando_usado: show ip route 10.2.10.25 }
       - { salida_contiene: "10.2.10.0" }
@@ -72,7 +72,7 @@ pasos:
     explicacion: >-
       Muestra la entrada que coincide: 10.2.10.0/24, aprendida por OSPF, con siguiente salto
       10.0.12.2 (R2).
-  - consigna: Prueba lo mismo con 8.8.8.8, que no está en ninguna red de la empresa.
+  - consigna: Probá lo mismo con 8.8.8.8, que no está en ninguna red de la empresa.
     verificar:
       - { comando_usado: show ip route 8.8.8.8 }
       - { salida_contiene: "Network not in table" }
@@ -82,7 +82,7 @@ pasos:
       "% Network not in table" quiere decir que ninguna red específica contiene a 8.8.8.8. Este
       comando no muestra la ruta por defecto, pero el router la usa igual: el paquete sale por
       el "Gateway of last resort" (203.0.113.1) que viste arriba de la tabla.
-  - consigna: Comprueba con un ping que R1 llega a la PC de la sucursal Sur (10.3.0.10).
+  - consigna: Comprobá con un ping que R1 llega a la PC de la sucursal Sur (10.3.0.10).
     verificar:
       - { ping: { desde: R1, hacia: 10.3.0.10 } }
       - { comando_usado: ping 10.3.0.10 }

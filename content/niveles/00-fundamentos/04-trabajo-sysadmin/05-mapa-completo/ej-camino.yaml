@@ -25,7 +25,7 @@ estado_inicial:
         <!doctype html>
         <html><head><title>Tienda</title></head><body><h1>Bienvenido a la tienda</h1></body></html>
 pasos:
-  - consigna: Mira qué dirección IP tiene la PC con `ip -br address`.
+  - consigna: Mirá qué dirección IP tiene la PC con `ip -br address`.
     verificar:
       - { comando_usado: 'ip\s+(-\S+\s+)*a(d|dd|ddr|ddress)?(\s|$)' }
       - { salida_contiene: 192.168.1.20 }
@@ -33,7 +33,7 @@ pasos:
       - "`ip -br address` muestra una línea por placa de red"
     solucion: [ip -br address]
     explicacion: La placa enp0s3 tiene la IP 192.168.1.20 con máscara /24. Sin una IP válida, nada de lo que sigue puede funcionar.
-  - consigna: Averigua cuál es la puerta de enlace con `ip route`.
+  - consigna: Averiguá cuál es la puerta de enlace con `ip route`.
     verificar:
       - { comando_usado: 'ip\s+(-\S+\s+)*r(o|ou|out|oute)?(\s|$)' }
       - { salida_contiene: default via 192.168.1.1 }
@@ -43,7 +43,7 @@ pasos:
     explicacion: >-
       `default via 192.168.1.1` significa: todo lo que no sea de la red local se le entrega al
       router 192.168.1.1. Es el camino de salida hacia Internet.
-  - consigna: Pregúntale al DNS la IP de tienda.example.com con `dig +short tienda.example.com`.
+  - consigna: Preguntale al DNS la IP de tienda.example.com con `dig +short tienda.example.com`.
     verificar:
       - { comando_usado: '(dig|nslookup|host)\s+.*tienda\.example\.com' }
       - { salida_contiene: 198.51.100.20 }
@@ -51,7 +51,7 @@ pasos:
       - "`dig +short nombre` muestra solo la respuesta; `nslookup nombre` también sirve"
     solucion: [dig +short tienda.example.com]
     explicacion: El DNS respondió 198.51.100.20. Si este paso fallara, el navegador mostraría que no encuentra el servidor, aunque la red funcione.
-  - consigna: Comprueba que el servidor responde a través de Internet con `ping -c 3 tienda.example.com`.
+  - consigna: Comprobá que el servidor responde a través de Internet con `ping -c 3 tienda.example.com`.
     verificar:
       - { comando_usado: 'ping\s+.*(tienda\.example\.com|198\.51\.100\.20)' }
     pistas:
@@ -61,7 +61,7 @@ pasos:
       Las respuestas confirman que los paquetes van y vuelven: la puerta de enlace, el NAT y el
       routing funcionan. Ojo: muchos servidores bloquean el ping, así que si no responde no
       siempre es un problema.
-  - consigna: Pide la página y mira solo los encabezados de la respuesta con `curl -I https://tienda.example.com`.
+  - consigna: Pedí la página y mirá solo los encabezados de la respuesta con `curl -I https://tienda.example.com`.
     verificar:
       - { comando_usado: 'curl\s+.*tienda\.example\.com' }
       - { salida_contiene: 200 OK }

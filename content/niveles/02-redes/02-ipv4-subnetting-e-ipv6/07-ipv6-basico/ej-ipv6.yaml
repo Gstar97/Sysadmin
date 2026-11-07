@@ -14,7 +14,7 @@ estado_inicial:
   servidores:
     - { ip: 192.168.10.20, hostname: srv-b, red: { interfaces: [{ nombre: enp0s3, ip: 192.168.10.20/24, ipv6: ["fd00:10::20/64"] }] } }
 pasos:
-  - consigna: Mira las direcciones IPv6 de srv-a.
+  - consigna: Mirá las direcciones IPv6 de srv-a.
     verificar:
       - { comando_usado: ip -6 }
       - { salida_contiene: "fe80::" }
@@ -24,7 +24,7 @@ pasos:
       Aunque nadie configuró IPv6, la placa ya tiene una dirección fe80::...: es la de enlace
       local, que toda interfaz con IPv6 se pone sola. Sirve para hablar con los vecinos de la
       misma red (y la usa NDP), pero no sale de ella.
-  - consigna: Intenta un ping a fd00:10::20.
+  - consigna: Intentá un ping a fd00:10::20.
     verificar:
       - { comando_usado: ping }
     pistas: ["ping -c 2 fd00:10::20"]
@@ -33,7 +33,7 @@ pasos:
       "Network is unreachable": srv-a no tiene ninguna dirección en la red fd00:10::/64, así que
       no sabe por dónde mandar el paquete. Es lo mismo que pasaría en IPv4 sin una IP de la red
       del destino ni puerta de enlace.
-  - consigna: Agrégale a enp0s3 la dirección fd00:10::10 con prefijo /64 (hace falta sudo).
+  - consigna: Agregale a enp0s3 la dirección fd00:10::10 con prefijo /64 (hace falta sudo).
     verificar:
       - { interfaz: enp0s3, ipv6: "fd00:10::10" }
     pistas: ["sudo ip -6 addr add fd00:10::10/64 dev enp0s3"]

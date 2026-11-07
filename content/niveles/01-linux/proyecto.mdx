@@ -34,7 +34,7 @@ falta no encontramos nada. Necesitamos:
 Ya tenemos una máquina con dos discos de 500 GB y uno de 1 TB. ¡Gracias!
 ```
 
-Lo vas a hacer en una máquina virtual nueva (`oficina01`), con tres discos virtuales chicos que representan los de la oficina: uno para el sistema, uno para los datos y otro para los respaldos. Puede ser Rocky o Ubuntu; si tienes tiempo, hazlo en uno y después repite lo básico en el otro.
+Lo vas a hacer en una máquina virtual nueva (`oficina01`), con tres discos virtuales chicos que representan los de la oficina: uno para el sistema, uno para los datos y otro para los respaldos. Puede ser Rocky o Ubuntu; si tenés tiempo, hacelo en uno y después repite lo básico en el otro.
 
 | Fase | Se apoya en | Tiempo estimado |
 | --- | --- | --- |
@@ -59,44 +59,44 @@ Antes de tocar la máquina, escribe en tu cuaderno las decisiones. Cambiarlas en
 
 ## 2. Instalación y almacenamiento
 
-- Instala el sistema en el disco 1 con LVM y un hostname con criterio (`oficina01`).
-- Actualiza, configura la zona horaria y comprueba que chrony sincroniza.
-- Arma el grupo `datos` en el disco 2, el volumen `compartido` (XFS en Rocky, ext4 en Ubuntu) y móntalo por UUID en `/srv/compartido`. No uses todo el espacio: deja al menos un tercio libre.
-- Formatea el disco 3 y móntalo por UUID en `/backup`.
-- Revisa con `findmnt --verify`, reinicia, y comprueba que todo vuelve.
+- Instalá el sistema en el disco 1 con LVM y un hostname con criterio (`oficina01`).
+- Actualizá, configurá la zona horaria y comprobá que chrony sincroniza.
+- Armá el grupo `datos` en el disco 2, el volumen `compartido` (XFS en Rocky, ext4 en Ubuntu) y montalo por UUID en `/srv/compartido`. No uses todo el espacio: deja al menos un tercio libre.
+- Formateá el disco 3 y montalo por UUID en `/backup`.
+- Revisá con `findmnt --verify`, reinicia, y comprobá que todo vuelve.
 
 **Criterio de calidad:** `lsblk -f` y `df -h` muestran exactamente lo que dice tu diseño, sobrevive a un reinicio y el grupo de datos tiene espacio para agrandar `/srv/compartido` sin apagar nada.
 
 ## 3. Usuarios, grupos y carpetas
 
-- Crea los grupos y da de alta a las ocho personas con tu `alta-usuarios.sh` (laboratorio del módulo 1.7), con claves temporales que se cambian en el primer inicio de sesión.
-- Crea `/srv/compartido/administracion`, `contabilidad`, `gerencia` y `comun`, cada una con su grupo, permisos `2770` (SGID para que lo nuevo herede el grupo) y `comun` para todos.
+- Creá los grupos y da de alta a las ocho personas con tu `alta-usuarios.sh` (laboratorio del módulo 1.7), con claves temporales que se cambian en el primer inicio de sesión.
+- Creá `/srv/compartido/administracion`, `contabilidad`, `gerencia` y `comun`, cada una con su grupo, permisos `2770` (SGID para que lo nuevo herede el grupo) y `comun` para todos.
 - Da a gerencia permiso de lectura en todas las carpetas con una ACL, también por defecto (para lo que se cree después).
-- Configura sudo para el grupo `soporte` con un archivo en `/etc/sudoers.d`, revisado con `visudo -c`.
+- Configurá sudo para el grupo `soporte` con un archivo en `/etc/sudoers.d`, revisado con `visudo -c`.
 
 **Criterio de calidad:** probado con usuarios reales (sección de verificación): cada área escribe solo en lo suyo, gerencia lee todo, los archivos nuevos quedan con el grupo correcto y nadie más que soporte tiene sudo.
 
 ## 4. Acceso remoto y seguridad
 
-- Martín (usuario del grupo `soporte`) entra con su clave SSH. Configura en `/etc/ssh/sshd_config.d/01-oficina.conf`: `PasswordAuthentication no`, `PermitRootLogin no` y `AllowGroups soporte`, con el orden seguro (sesión abierta, `sshd -t`, reload, prueba desde otra terminal).
+- Martín (usuario del grupo `soporte`) entra con su clave SSH. Configurá en `/etc/ssh/sshd_config.d/01-oficina.conf`: `PasswordAuthentication no`, `PermitRootLogin no` y `AllowGroups soporte`, con el orden seguro (sesión abierta, `sshd -t`, reload, prueba desde otra terminal).
 - Firewall con lo mínimo: SSH (y nada más por ahora; el servicio de archivos para Windows, Samba, llega en el nivel 4).
-- SELinux en enforcing (Rocky) o AppArmor activo (Ubuntu). Si algo choca, arréglalo con lo de la lección 1.6.6, nunca apagándolo.
-- Revisa que no quede nada escuchando que no corresponda (`ss -tlnp`).
+- SELinux en enforcing (Rocky) o AppArmor activo (Ubuntu). Si algo choca, arreglalo con lo de la lección 1.6.6, nunca apagándolo.
+- Revisá que no quede nada escuchando que no corresponda (`ss -tlnp`).
 
 **Criterio de calidad:** desde tu PC, entrar con contraseña falla con `Permission denied (publickey)`, con la clave funciona, y `ss -tlnp` y el firewall muestran solo lo que está en tu diseño.
 
 ## 5. Respaldos y tareas automáticas
 
-- Instala tu `respaldo.sh` (lección 1.7.7) en `/usr/local/sbin`, con dueño root y permisos 755, y adáptalo: que respalde `/srv/compartido` y `/etc`, guarde 14 días y deje todo en el journal con `logger -t respaldo`.
-- Prográmalo con un **timer de systemd** (lección 1.3.4) todas las noches a las 2:30, con `Persistent=true` (si la máquina estaba apagada, corre al encender). El servicio es `Type=oneshot` y llama al script con ruta completa.
-- Agrega el reporte de salud (`salud.sh`) los días hábiles a las 7:30, guardando cada reporte en `/var/log/salud/`, y una regla de logrotate (o la limpieza del laboratorio 1.7) para que esos archivos no crezcan para siempre.
-- Haz una restauración de prueba completa y anota cuánto tardó.
+- Instalá tu `respaldo.sh` (lección 1.7.7) en `/usr/local/sbin`, con dueño root y permisos 755, y adáptalo: que respalde `/srv/compartido` y `/etc`, guarde 14 días y deje todo en el journal con `logger -t respaldo`.
+- Programalo con un **timer de systemd** (lección 1.3.4) todas las noches a las 2:30, con `Persistent=true` (si la máquina estaba apagada, corre al encender). El servicio es `Type=oneshot` y llama al script con ruta completa.
+- Agregá el reporte de salud (`salud.sh`) los días hábiles a las 7:30, guardando cada reporte en `/var/log/salud/`, y una regla de logrotate (o la limpieza del laboratorio 1.7) para que esos archivos no crezcan para siempre.
+- Hacé una restauración de prueba completa y anotá cuánto tardó.
 
 **Criterio de calidad:** `systemctl list-timers` muestra el próximo respaldo, el registro muestra el último con "ok", la restauración de prueba da `diff -r` sin diferencias y, si se fuerza un fallo, el script termina con error y no deja un respaldo vacío.
 
 ## 6. Documento de entrega
 
-Es el entregable que más se valora en un trabajo real: lo que queda cuando tú ya no estás. Escríbelo en texto plano (`entrega-oficina01.txt`) con esta estructura:
+Es el entregable que más se valora en un trabajo real: lo que queda cuando vos ya no estás. Escribilo en texto plano (`entrega-oficina01.txt`) con esta estructura:
 
 ```text
 SERVIDOR oficina01 — DOCUMENTO DE ENTREGA
@@ -150,5 +150,5 @@ Fecha: ...   Preparado por: ...   Para: Estudio Ríos y Asociados
 | Documento | Notas sueltas | Cubre las nueve secciones | Otra persona lo usó con éxito para las dos tareas de prueba |
 
 <Consejo>
-Toma una instantánea `entrega-nivel-1` cuando termines. Vas a seguir con este mismo servidor: en el Nivel 2, su lugar en la red de la oficina; en el Nivel 4, Samba para que las computadoras con Windows vean las carpetas, y en el Nivel 5, respaldos fuera de la oficina.
+Tomá una instantánea `entrega-nivel-1` cuando termines. Vas a seguir con este mismo servidor: en el Nivel 2, su lugar en la red de la oficina; en el Nivel 4, Samba para que las computadoras con Windows vean las carpetas, y en el Nivel 5, respaldos fuera de la oficina.
 </Consejo>

@@ -33,7 +33,7 @@ register(['bash', 'sh'], {
     }
     const script = args.shift()
     if (!script) {
-      ctx.err(`[simulador] Aquí no se abre un shell dentro de otro: ejecuta los comandos directamente, o usa ${ctx.name} script.sh o ${ctx.name} -c 'comando'.\n`)
+      ctx.err(`[simulador] Acá no se abre un shell dentro de otro: ejecutá los comandos directamente, o usá ${ctx.name} script.sh o ${ctx.name} -c 'comando'.\n`)
       return 0
     }
     if (syntaxOnly) {

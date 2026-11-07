@@ -24,7 +24,7 @@ import ejFrr from './ej-frr.yaml'
 
 ## Las piezas de OSPF
 
-- **Router ID**: el nombre de cada router dentro de OSPF, con forma de IPv4 (1.1.1.1). Si no lo fijas, se elige solo (la IP de loopback más alta o, si no hay, la IP más alta de una interfaz activa), y puede cambiar si cambian las direcciones. Fíjalo siempre.
+- **Router ID**: el nombre de cada router dentro de OSPF, con forma de IPv4 (1.1.1.1). Si no lo fijas, se elige solo (la IP de loopback más alta o, si no hay, la IP más alta de una interfaz activa), y puede cambiar si cambian las direcciones. Fijalo siempre.
 - **Saludos (hello)**: cada 10 segundos, por cada interfaz con OSPF, un router manda un saludo a la dirección multicast 224.0.0.5. Si un vecino pasa 40 segundos sin saludar (el *dead interval*), se lo da por caído.
 - **Vecinos y adyacencias**: dos routers que se oyen se hacen vecinos; si además intercambian sus mapas completos, forman una **adyacencia** y llegan al estado **FULL**.
 - **Áreas**: OSPF puede dividir una red grande en áreas para que el mapa de cada router no sea enorme. Todas se conectan al **área 0** (el *backbone*). En una empresa mediana, una sola área 0 alcanza.
@@ -93,18 +93,18 @@ La configuración vive en `/etc/frr/frr.conf`. Se puede editar a mano (y reinici
 Dentro de vtysh, se verifica igual que en IOS: `show ip ospf neighbor`, `show ip route ospf`. Y fuera, `ip route` muestra las rutas que instaló FRR con `proto ospf`.
 
 <Consejo titulo="Cuando un vecino no aparece">
-Revisa, en este orden: que las dos interfaces estén en la misma subred y la misma área; que ninguna sea pasiva; que el firewall (en Linux) deje pasar el protocolo 89; que los tiempos de saludo coincidan; que los router ID sean distintos; y, si se queda en EXSTART, que el MTU sea igual en los dos lados.
+Revisá, en este orden: que las dos interfaces estén en la misma subred y la misma área; que ninguna sea pasiva; que el firewall (en Linux) deje pasar el protocolo 89; que los tiempos de saludo coincidan; que los router ID sean distintos; y, si se queda en EXSTART, que el MTU sea igual en los dos lados.
 </Consejo>
 
 <ErroresComunes>
   <ErrorComun titulo="La wildcard equivocada">
-    network 10.0.12.0 0.0.0.255 area 0 incluye mucho más que el enlace /30. Funciona, pero puede meter interfaces que no querías. Usa la wildcard exacta o ip ospf area en la interfaz.
+    network 10.0.12.0 0.0.0.255 area 0 incluye mucho más que el enlace /30. Funciona, pero puede meter interfaces que no querías. Usá la wildcard exacta o ip ospf area en la interfaz.
   </ErrorComun>
   <ErrorComun titulo="La interfaz hacia otro router como pasiva">
     Se anuncia la red, pero no hay saludos: el vecino nunca aparece. Pasivas solo las LAN sin routers.
   </ErrorComun>
   <ErrorComun titulo="Dejar la referencia de 100 Mb/s">
-    1 Gb/s y 10 Gb/s cuestan lo mismo y OSPF puede elegir el camino lento. Sube auto-cost reference-bandwidth, igual en todos los routers.
+    1 Gb/s y 10 Gb/s cuestan lo mismo y OSPF puede elegir el camino lento. Subí auto-cost reference-bandwidth, igual en todos los routers.
   </ErrorComun>
   <ErrorComun titulo="Router ID repetido">
     Dos routers con el mismo ID no forman adyacencia (y el log lo dice: "duplicate router-id"). Pasa mucho al clonar máquinas virtuales con FRR.
@@ -118,7 +118,7 @@ Revisa, en este orden: que las dos interfaces estén en la misma subred y la mis
 </ErroresComunes>
 
 <Resumen>
-- OSPF es estado de enlace y estándar abierto. Router ID con forma de IPv4 (fíjalo), saludos cada 10 s a 224.0.0.5, vecino caído a los 40 s.
+- OSPF es estado de enlace y estándar abierto. Router ID con forma de IPv4 (fijalo), saludos cada 10 s a 224.0.0.5, vecino caído a los 40 s.
 - Adyacencia: Down, Init, 2-Way, ExStart, Exchange, Loading, Full. Para formarla: misma subred, área, tiempos, autenticación y MTU, e IDs distintos.
 - En segmentos con switch se eligen DR y BDR (prioridad más alta, después router ID). En punto a punto, no.
 - Costo = referencia ÷ ancho de banda; sube la referencia (auto-cost reference-bandwidth) en todos los routers.

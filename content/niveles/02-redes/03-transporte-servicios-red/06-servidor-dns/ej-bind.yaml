@@ -29,13 +29,13 @@ estado_inicial:
   servidores:
     - { ip: 192.168.10.101, hostname: pc1, clave_conocida: si, usuarios: [{ nombre: admin, sudo: true, clave_ssh: true }], red: { interfaces: [{ nombre: enp0s3, ip: 192.168.10.101/24 }], puerta_enlace: 192.168.10.1, dns: [192.168.10.54] }, paquetes: { instalados: [bind-utils] } }
 pasos:
-  - consigna: Revisa el archivo de zona con named-checkzone (nombre de la zona y archivo).
+  - consigna: Revisá el archivo de zona con named-checkzone (nombre de la zona y archivo).
     verificar:
       - { comando_usado: named-checkzone }
       - { salida_contiene: "loaded serial 2026110201" }
     pistas: ["named-checkzone empresa.internal /var/named/db.empresa.internal"]
     solucion: [named-checkzone empresa.internal /var/named/db.empresa.internal]
-    explicacion: "OK y el serial: la zona está bien escrita. Revísala siempre antes de cargarla."
+    explicacion: "OK y el serial: la zona está bien escrita. Revisala siempre antes de cargarla."
   - consigna: >-
       Declara la zona al final de /etc/named.conf: tipo primary, archivo db.empresa.internal
       (relativo a /var/named, el directorio de BIND en Rocky).
@@ -53,14 +53,14 @@ pasos:
         };
         EOF
     explicacion: Cada zona que el servidor publica se declara en named.conf con su tipo y su archivo.
-  - consigna: Revisa toda la configuración, incluidas las zonas, antes de arrancar.
+  - consigna: Revisá toda la configuración, incluidas las zonas, antes de arrancar.
     verificar:
       - { comando_usado: named-checkconf }
       - { salida_contiene: "zone empresa.internal/IN: loaded serial" }
     pistas: ["sudo named-checkconf -z"]
     solucion: [sudo named-checkconf -z]
     explicacion: Sin errores de sintaxis y con todas las zonas cargadas. Es lo mismo que hace el servicio antes de arrancar.
-  - consigna: Arranca named, déjalo habilitado y prueba localmente qué responde para www.empresa.internal.
+  - consigna: Arranca named, dejalo habilitado y prueba localmente qué responde para www.empresa.internal.
     verificar:
       - { servicio: named, activo: true, habilitado: true }
       - { salida_contiene: "192.168.10.80" }
@@ -77,8 +77,8 @@ pasos:
       de fábrica de Rocky: named escucha solo en 127.0.0.1 (listen-on) y solo responde a
       localhost (allow-query), y además firewalld no deja pasar el puerto 53.
   - consigna: >-
-      Haz que named escuche en todas las interfaces y responda a la red local (listen-on con
-      any y allow-query con localnets), abre DNS en firewalld de forma permanente y reinicia
+      Hacé que named escuche en todas las interfaces y responda a la red local (listen-on con
+      any y allow-query con localnets), abrí DNS en firewalld de forma permanente y reiniciá
       named.
     verificar:
       - { en: pc1, verificar: { resuelve: www.empresa.internal, responde: "192.168.10.80" } }
@@ -94,4 +94,4 @@ pasos:
       - sudo systemctl restart named
     explicacion: >-
       localnets son las redes de las interfaces del servidor. Con esto, cualquier equipo de
-      192.168.10.0/24 puede consultar. Comprueba desde pc1 con ssh pc1 dig www.empresa.internal.
+      192.168.10.0/24 puede consultar. Comprobá desde pc1 con ssh pc1 dig www.empresa.internal.

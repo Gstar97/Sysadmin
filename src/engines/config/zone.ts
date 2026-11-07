@@ -170,7 +170,7 @@ export function parseZone(text: string, zoneName: string, fileName = 'zona'): Pa
       continue
     }
     if (!TYPES.includes(type)) {
-      err(e.line, `unknown RR type '${t[k]}'`, `"${t[k]}" no es un tipo de registro. Revisa que esté bien escrito (A, AAAA, CNAME, MX, NS, TXT, PTR, SRV, SOA, CAA).`)
+      err(e.line, `unknown RR type '${t[k]}'`, `"${t[k]}" no es un tipo de registro. Revisá que esté bien escrito (A, AAAA, CNAME, MX, NS, TXT, PTR, SRV, SOA, CAA).`)
       continue
     }
     if (ttl === undefined) {
@@ -275,7 +275,7 @@ export function parseZone(text: string, zoneName: string, fileName = 'zona'): Pa
         const has = records.some((r) => r.name === n.data && (r.type === 'A' || r.type === 'AAAA'))
         if (!has) {
           const doubled = n.data.endsWith(`${zoneOrigin.replace(/\.$/, '')}.${zoneOrigin}`)
-          zoneErr(n.line, `NS '${n.data.replace(/\.$/, '')}' has no address records (A or AAAA)`, doubled ? `Al nombre le falta el punto final: sin él, BIND le agrega la zona y queda "${n.data}". Escríbelo terminado en punto.` : `El servidor del NS está dentro de esta zona, así que necesita su registro A (o AAAA) aquí: ${n.data.split('.')[0]} IN A ...`)
+          zoneErr(n.line, `NS '${n.data.replace(/\.$/, '')}' has no address records (A or AAAA)`, doubled ? `Al nombre le falta el punto final: sin él, BIND le agrega la zona y queda "${n.data}". Escribilo terminado en punto.` : `El servidor del NS está dentro de esta zona, así que necesita su registro A (o AAAA) acá: ${n.data.split('.')[0]} IN A ...`)
         }
       }
     }

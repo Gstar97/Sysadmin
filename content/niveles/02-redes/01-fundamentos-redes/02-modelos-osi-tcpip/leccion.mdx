@@ -25,7 +25,7 @@ Para que un navegador en Buenos Aires hable con un servidor en Fráncfort tienen
 
 ## La idea de las capas
 
-Piensa en mandar un regalo por correo a otro país. Tú escribes la carta (lo que quieres decir). La metes en un sobre con la dirección del destinatario. El correo de tu ciudad pone ese sobre en una bolsa rotulada "para Fráncfort". La bolsa viaja en un camión, después en un avión. En cada etapa alguien agrega o lee **su propio rótulo**, y a nadie le importa qué dice la carta. Al llegar, se hace todo al revés: se abre la bolsa, se lee el sobre, se entrega la carta.
+Pensá en mandar un regalo por correo a otro país. Vos escribís la carta (lo que querés decir). La metés en un sobre con la dirección del destinatario. El correo de tu ciudad pone ese sobre en una bolsa rotulada "para Fráncfort". La bolsa viaja en un camión, después en un avión. En cada etapa alguien agrega o lee **su propio rótulo**, y a nadie le importa qué dice la carta. Al llegar, se hace todo al revés: se abre la bolsa, se lee el sobre, se entrega la carta.
 
 En una red pasa lo mismo: cada capa agrega su **encabezado** al mensaje al enviar y lo saca al recibir. Donde la comparación no llega: en una red, los "rótulos" se agregan y se quitan en microsegundos, y un mensaje grande se parte en muchos paquetes que pueden viajar por caminos distintos.
 
@@ -64,11 +64,11 @@ En TCP/IP, la sesión y la presentación las resuelve el propio programa (o una 
 
 Cada capa le pone nombre propio al conjunto que arma: la aplicación produce **datos**; con el encabezado de TCP es un **segmento** (con UDP se le dice datagrama); con el de IP, un **paquete**; con el de Ethernet, una **trama**; y en el cable son **bits**. A estos nombres se los llama **unidades de datos de protocolo** (PDU). Sirven para hablar con precisión: un switch reenvía tramas, un router reenvía paquetes.
 
-Mira el ejemplo paso a paso: los primeros pasos pasan dentro de la PC, mientras se arma el mensaje.
+Mirá el ejemplo paso a paso: los primeros pasos pasan dentro de la PC, mientras se arma el mensaje.
 
 <SimuladorPaquetes escenario={encapsular} />
 
-Fíjate en dos cosas del simulador:
+Fijate en dos cosas del simulador:
 
 1. Los datos HTTP del primer paso llegan **intactos** al servidor. Ninguna capa de abajo los mira.
 2. El switch solo necesitó leer la MAC de destino. Cada equipo trabaja hasta la capa que necesita: el switch hasta la 2, el router hasta la 3, un firewall que filtra puertos hasta la 4.
@@ -81,25 +81,25 @@ El modelo de capas es, sobre todo, una herramienta para no perderse cuando algo 
 
 - Si `ping` a la IP del servidor responde, las capas 1 a 3 funcionan entre los dos equipos. El problema está más arriba.
 - Si `ping` al nombre falla pero a la IP responde, el problema es la resolución de nombres (el DNS es un servicio de aplicación).
-- Si el puerto responde (`nc -zv servidor 443`) pero la página da error, todo hasta la capa 4 anda: mira la aplicación.
+- Si el puerto responde (`nc -zv servidor 443`) pero la página da error, todo hasta la capa 4 anda: mirá la aplicación.
 
 Hay tres formas de recorrer las capas, y las vas a usar según el caso (el módulo 2.7 las trabaja a fondo):
 
-- **De abajo hacia arriba**: empiezas por el cable y subes. Conviene cuando sospechas algo físico (un equipo "no tiene red").
-- **De arriba hacia abajo**: empiezas por la aplicación. Conviene cuando el resto de la red anda y falla un servicio.
-- **Dividir por la mitad**: empiezas por la capa 3 (un ping). Si responde, el problema está arriba; si no, abajo. Es la más rápida cuando no tienes ninguna pista.
+- **De abajo hacia arriba**: empezás por el cable y subís. Conviene cuando sospechás algo físico (un equipo "no tiene red").
+- **De arriba hacia abajo**: empezás por la aplicación. Conviene cuando el resto de la red anda y falla un servicio.
+- **Dividir por la mitad**: empezás por la capa 3 (un ping). Si responde, el problema está arriba; si no, abajo. Es la más rápida cuando no tenés ninguna pista.
 
 <Emparejar ejercicio={fallasCapa} />
 
 <ErroresComunes>
   <ErrorComun titulo="Memorizar las siete capas y no saber qué hace cada una">
-    Saber el nombre de la capa 5 sirve para un examen; saber que el switch trabaja con MAC y el router con IP te sirve todos los días. Prioriza el "qué resuelve" y "con qué dirección".
+    Saber el nombre de la capa 5 sirve para un examen; saber que el switch trabaja con MAC y el router con IP te sirve todos los días. Priorizá el "qué resuelve" y "con qué dirección".
   </ErrorComun>
   <ErrorComun titulo="Pensar que el switch cambia los paquetes">
     El switch reenvía la trama tal como llegó. Quien cambia algo (las MAC, el TTL) es el router, al pasar de una red a otra. Lo vas a ver en la lección de ARP y en el módulo 2.5.
   </ErrorComun>
   <ErrorComun titulo="Reiniciar el servicio cuando el problema es de abajo">
-    Si no responde ni el ping a la IP, reiniciar nginx no va a cambiar nada. Primero ubica la capa que falla.
+    Si no responde ni el ping a la IP, reiniciar nginx no va a cambiar nada. Primero ubicá la capa que falla.
   </ErrorComun>
   <ErrorComun titulo="Concluir que &quot;la red anda&quot; porque hay luz en el puerto">
     La luz solo dice que la capa física tiene enlace. Puede haber una IP mal puesta (capa 3) o un firewall (capa 4) que igual corten la comunicación.

@@ -16,7 +16,7 @@ estado_inicial:
   servidores:
     - { ip: 192.168.10.20, hostname: web01, distro: ubuntu, usuarios: [{ nombre: ana, sudo: true }], clave_conocida: si }
 pasos:
-  - consigna: Crea tu par de claves ed25519 con un comentario que diga de quién y de dónde es.
+  - consigna: Creá tu par de claves ed25519 con un comentario que diga de quién y de dónde es.
     verificar:
       - { archivo: /home/ana/.ssh/id_ed25519, modo: "0600" }
       - { archivo: /home/ana/.ssh/id_ed25519.pub, contenido_incluye: ssh-ed25519 }
@@ -24,9 +24,9 @@ pasos:
       - "`ssh-keygen -t ed25519 -C \"ana@admin01\"` y Enter para la ubicación por defecto."
     solucion: ['ssh-keygen -t ed25519 -C "ana@admin01"']
     explicacion: >-
-      La privada quedó con permisos 600. En tu equipo de trabajo, ponle una frase de paso: si
+      La privada quedó con permisos 600. En tu equipo de trabajo, ponele una frase de paso: si
       alguien copia el archivo, sin la frase no le sirve.
-  - consigna: Instala tu clave pública en web01.
+  - consigna: Instalá tu clave pública en web01.
     verificar:
       - { comando_usado: 'ssh-copy-id\s+.*web01' }
       - { en: web01, verificar: { archivo: /home/ana/.ssh/authorized_keys, contenido_incluye: ana@admin01, modo: "0600" } }
@@ -34,7 +34,7 @@ pasos:
       - "`ssh-copy-id web01` (te pide la contraseña por última vez)"
     solucion: [ssh-copy-id web01]
     explicacion: ssh-copy-id agrega la clave al final de authorized_keys y deja los permisos como los exige sshd.
-  - consigna: Entra a web01 y confirma en su registro que entraste con la clave.
+  - consigna: Entrá a web01 y confirmá en su registro que entraste con la clave.
     verificar:
       - { comando_usado: 'ssh\s+(ana@)?web01\s*$' }
       - { salida_contiene: Accepted publickey for ana }
@@ -56,14 +56,14 @@ pasos:
       Un archivo propio en sshd_config.d no se pisa con las actualizaciones. El "01-" no es un
       capricho: sshd usa el PRIMER valor que encuentra, así que tu archivo tiene que leerse antes
       que otros (por ejemplo, el 50-cloud-init.conf de algunas imágenes de nube).
-  - consigna: Revisa que la configuración no tenga errores antes de aplicarla.
+  - consigna: Revisá que la configuración no tenga errores antes de aplicarla.
     verificar:
       - { comando_usado: 'sudo\s+sshd\s+-t' }
     pistas:
       - "`sudo sshd -t` (si no muestra nada, está bien)"
     solucion: [sudo sshd -t]
-    explicacion: Si sshd -t encuentra un error y reinicias igual, el servicio no arranca. Con la sesión abierta no te quedas afuera, pero nadie más puede entrar.
-  - consigna: Aplica el cambio.
+    explicacion: Si sshd -t encuentra un error y reiniciás igual, el servicio no arranca. Con la sesión abierta no te quedás afuera, pero nadie más puede entrar.
+  - consigna: Aplicá el cambio.
     verificar:
       - { comando_usado: 'systemctl\s+(reload|restart)\s+ssh' }
       - { en: web01, verificar: { servicio: ssh, activo: true } }
@@ -72,7 +72,7 @@ pasos:
     solucion: [sudo systemctl reload ssh]
     explicacion: Todavía no cierres esta sesión. Primero prueba desde otra terminal que todo funciona.
   - consigna: >-
-      Vuelve a admin01 (como si fuera otra terminal) y prueba que con contraseña ya no se puede
+      Volvé a admin01 (como si fuera otra terminal) y probá que con contraseña ya no se puede
       entrar, forzando a ssh a no usar la clave.
     verificar:
       - { comando_usado: 'ssh\s+.*PubkeyAuthentication=no.*web01' }
@@ -80,4 +80,4 @@ pasos:
     pistas:
       - "`exit` y después `ssh -o PubkeyAuthentication=no web01`"
     solucion: [exit, ssh -o PubkeyAuthentication=no web01]
-    explicacion: '"Permission denied (publickey)": el servidor solo ofrece clave. Y con tu clave sigues entrando normalmente (pruébalo con ssh web01).'
+    explicacion: '"Permission denied (publickey)": el servidor solo ofrece clave. Y con tu clave sigues entrando normalmente (probalo con ssh web01).'

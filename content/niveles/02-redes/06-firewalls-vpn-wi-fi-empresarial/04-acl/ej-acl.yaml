@@ -31,7 +31,7 @@ estado_inicial:
       - { a: "R1:Gi0/0", b: "SW1:Gi0/1" }
       - { a: "R1:Gi0/1", b: "WEB:eth0" }
 pasos:
-  - consigna: Mira la ACL y dónde está aplicada.
+  - consigna: Mirá la ACL y dónde está aplicada.
     verificar:
       - { comando_usado: show access-lists }
       - { comando_usado: show ip interface }
@@ -41,7 +41,7 @@ pasos:
       Está aplicada en Gi0/1 de entrada ("Inbound access list is DMZ-OUT"): filtra lo que viene
       DESDE la DMZ, o sea, las respuestas del servidor. Ninguna línea coincide con ellas y caen
       en el deny implícito. Primer error: el sentido.
-  - consigna: Aplícala hacia la DMZ, de salida en Gi0/1 (y quítala de entrada).
+  - consigna: Aplicala hacia la DMZ, de salida en Gi0/1 (y quitala de entrada).
     verificar:
       - { equipo: R1, config_contiene: "ip access-group DMZ-OUT out" }
       - { ping: { desde: SIS, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
@@ -51,16 +51,16 @@ pasos:
       Ahora filtra lo que va hacia la DMZ. Pero la PC de sistemas sigue sin poder entrar por SSH:
       su paquete coincide primero con la línea 10 (deny para toda la LAN) y la 20 nunca se mira.
       Segundo error: el orden.
-  - consigna: Haz que la excepción de la PC de sistemas quede antes del bloqueo general, usando números de secuencia.
+  - consigna: Hacé que la excepción de la PC de sistemas quede antes del bloqueo general, usando números de secuencia.
     verificar:
       - { ping: { desde: SIS, hacia: WEB, proto: tcp, puerto: 22 } }
       - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
     pistas:
       - "ip access-list extended DMZ-OUT, y dentro: 5 permit tcp host 192.168.1.50 host 172.16.0.10 eq 22."
-      - "Después borra la línea vieja con no 20."
+      - "Después borrá la línea vieja con no 20."
     solucion: [ip access-list extended DMZ-OUT, 5 permit tcp host 192.168.1.50 host 172.16.0.10 eq 22, no 20]
     explicacion: Con la línea 5 arriba, la excepción gana para la PC de sistemas y el resto de la LAN sigue bloqueado para SSH.
-  - consigna: Falta lo más importante, la web para toda la LAN. Agrégala al final de la ACL.
+  - consigna: Falta lo más importante, la web para toda la LAN. Agregala al final de la ACL.
     verificar:
       - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 443 } }
       - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
@@ -71,7 +71,7 @@ pasos:
       Tercer error: sin esa línea, la web caía en el deny implícito, que bloquea todo lo que no
       está permitido. El ping también se bloquea (no está en la política), y los contadores de
       show access-lists muestran qué línea se usó cada vez.
-  - consigna: Guarda la configuración.
+  - consigna: Guardá la configuración.
     verificar:
       - { equipo: R1, guardado: true }
     pistas: ["copy running-config startup-config."]

@@ -12,9 +12,9 @@ interface Props {
 }
 
 const BANNERS: Record<Exercise['shell'], string> = {
-  bash: 'Terminal simulada. Escribe "help" para ver los comandos internos o "man comando" para la ayuda.',
+  bash: 'Terminal simulada. Escribí "help" para ver los comandos internos o "man comando" para la ayuda.',
   powershell: 'Windows PowerShell (simulada)\nCopyright (C) Microsoft Corporation. All rights reserved.\n\nUsa Get-Help <comando> para la ayuda y Get-Command para ver los comandos disponibles.',
-  ios: 'Consola simulada de un equipo Cisco. Escribe ? para ver los comandos disponibles en cada modo.\n\nPress RETURN to get started.',
+  ios: 'Consola simulada de un equipo Cisco. Escribí ? para ver los comandos disponibles en cada modo.\n\nPress RETURN to get started.',
 }
 
 export function TerminalExercise({ exercise, onComplete }: Props) {
@@ -103,7 +103,7 @@ export function TerminalExercise({ exercise, onComplete }: Props) {
           {done ? (
             <div className="flex items-start gap-2 text-ok">
               <Icon name="check" />
-              <p>Completaste todos los pasos. Puedes seguir practicando en la misma terminal o reiniciarla para empezar de nuevo.</p>
+              <p>Completaste todos los pasos. Podés seguir practicando en la misma terminal o reiniciarla para empezar de nuevo.</p>
             </div>
           ) : (
             current && (

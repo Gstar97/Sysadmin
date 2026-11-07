@@ -24,7 +24,7 @@ En la lección 3 aprendiste a preguntarle al DNS. Ahora vas a ser el DNS. Toda e
 
 ## La arquitectura
 
-Piensa en la recepción de una empresa grande. Una persona en la entrada (el resolvedor) atiende todas las preguntas de los empleados: si es sobre un área interna, llama al conmutador interno (el autoritativo); si es de afuera, averigua por su cuenta. Y anota las respuestas en una libreta para no volver a averiguar lo mismo (la caché). Donde la comparación no llega: el resolvedor solo le debe responder a la gente de adentro; uno que responde a cualquiera de internet (un "resolvedor abierto") se usa para ataques de amplificación contra terceros.
+Pensá en la recepción de una empresa grande. Una persona en la entrada (el resolvedor) atiende todas las preguntas de los empleados: si es sobre un área interna, llama al conmutador interno (el autoritativo); si es de afuera, averigua por su cuenta. Y anotá las respuestas en una libreta para no volver a averiguar lo mismo (la caché). Donde la comparación no llega: el resolvedor solo le debe responder a la gente de adentro; uno que responde a cualquiera de internet (un "resolvedor abierto") se usa para ataques de amplificación contra terceros.
 
 <Diagrama svg={arquitectura} alt="Los equipos de la red le preguntan todo a Unbound (resolvedor en 192.168.10.53, con caché, solo para la red interna). Unbound reenvía las consultas de empresa.internal a BIND (autoritativo en 192.168.10.54, con la zona directa y la inversa, sin recursión) y resuelve todo lo demás en internet." pie="Resolvedor para todos; autoritativo solo para la zona interna." />
 
@@ -68,11 +68,11 @@ www       IN  CNAME intranet
 Las reglas que más errores evitan:
 
 - **`@`** es el nombre de la zona; una línea que empieza con espacio usa el mismo nombre que la anterior.
-- **Nombres relativos y completos**: `mail` se completa como `mail.empresa.internal.`; `ns1.empresa.internal.` **con punto final** es un nombre completo. Si te olvidas el punto, BIND le agrega la zona y queda `ns1.empresa.internal.empresa.internal.`.
+- **Nombres relativos y completos**: `mail` se completa como `mail.empresa.internal.`; `ns1.empresa.internal.` **con punto final** es un nombre completo. Si te olvidás el punto, BIND le agrega la zona y queda `ns1.empresa.internal.empresa.internal.`.
 - En el SOA, el correo del responsable se escribe con **punto en lugar de @**: `admin.empresa.internal.`.
-- El **serial** se sube **cada vez** que cambias la zona. La convención es la fecha más un número de cambio: `2026110201`, `2026110202`... Los servidores secundarios solo copian la zona si el serial aumentó.
+- El **serial** se sube **cada vez** que cambiás la zona. La convención es la fecha más un número de cambio: `2026110201`, `2026110202`... Los servidores secundarios solo copian la zona si el serial aumentó.
 
-Corrige una zona con errores; el editor te los marca como named-checkzone:
+Corregí una zona con errores; el editor te los marca como named-checkzone:
 
 <EditorConfig ejercicio={ejZona} />
 
@@ -98,7 +98,7 @@ dig @127.0.0.1 www.empresa.internal    # probar en el propio servidor
 ```
 
 <Advertencia titulo="Editar no es aplicar">
-named sigue sirviendo la zona que cargó al arrancar. Si editas el archivo y no haces `rndc reload` (o reinicias), los clientes siguen viendo lo viejo. Y si la zona nueva tiene un error, named la rechaza y sigue con la anterior: revisa siempre `journalctl -u named` después de recargar.
+named sigue sirviendo la zona que cargó al arrancar. Si editás el archivo y no hacés `rndc reload` (o reiniciás), los clientes siguen viendo lo viejo. Y si la zona nueva tiene un error, named la rechaza y sigue con la anterior: revisá siempre `journalctl -u named` después de recargar.
 </Advertencia>
 
 <Terminal ejercicio={ejBind} />
@@ -120,7 +120,7 @@ $TTL 1h
 80  IN  PTR intranet.empresa.internal.
 ```
 
-Aquí el punto final es obligatorio en los nombres de los PTR: sin él quedarían como `intranet.empresa.internal.10.168.192.in-addr.arpa.`.
+Acá el punto final es obligatorio en los nombres de los PTR: sin él quedarían como `intranet.empresa.internal.10.168.192.in-addr.arpa.`.
 
 <Pregunta id="p05" />
 
@@ -163,10 +163,10 @@ BIND guarda los nombres de la empresa. Unbound es el que contesta las preguntas 
     NS, MX, CNAME y PTR que apuntan a nombres completos llevan punto al final. Sin él, BIND les agrega la zona. named-checkzone lo detecta cuando el NS queda sin dirección.
   </ErrorComun>
   <ErrorComun titulo="Cambiar la zona y no subir el serial">
-    El primario sirve el cambio después del reload, pero los secundarios no lo copian y responden con datos viejos. Súbelo en cada cambio.
+    El primario sirve el cambio después del reload, pero los secundarios no lo copian y responden con datos viejos. Subilo en cada cambio.
   </ErrorComun>
   <ErrorComun titulo="El servidor responde en sí mismo pero no a la red">
-    En Rocky, named viene con listen-on 127.0.0.1 y allow-query localhost, y firewalld no deja pasar el 53. Revisa los tres: ss -ulnp (¿dónde escucha?), allow-query y firewall-cmd --list-services.
+    En Rocky, named viene con listen-on 127.0.0.1 y allow-query localhost, y firewalld no deja pasar el 53. Revisá los tres: ss -ulnp (¿dónde escucha?), allow-query y firewall-cmd --list-services.
   </ErrorComun>
   <ErrorComun titulo="Un resolvedor abierto a internet">
     Un resolvedor que responde a cualquiera se usa en ataques de amplificación. Limita quién puede preguntar (allow-query o allow-recursion en BIND, access-control en Unbound) y no lo publiques hacia afuera.

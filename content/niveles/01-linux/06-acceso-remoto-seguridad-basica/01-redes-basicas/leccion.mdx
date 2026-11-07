@@ -14,7 +14,7 @@ import red from './red.svg?raw'
 import errores from './errores-conexion.yaml'
 import ejRed from './ej-red.yaml'
 
-Para administrar un servidor a distancia tienes que llegar hasta él. Este módulo trata de eso: entrar por SSH, protegerlo y que solo entre quien debe. Antes, lo mínimo de redes para entender qué pasa cuando una conexión no anda. Las redes tienen un nivel entero más adelante (nivel 2); en esta lección, solo lo que vas a usar todos los días.
+Para administrar un servidor a distancia tenés que llegar hasta él. Este módulo trata de eso: entrar por SSH, protegerlo y que solo entre quien debe. Antes, lo mínimo de redes para entender qué pasa cuando una conexión no anda. Las redes tienen un nivel entero más adelante (nivel 2); en esta lección, solo lo que vas a usar todos los días.
 
 <AntesDeEmpezar>
 - Qué son una dirección IP, un puerto y el DNS (lección 0.4.5).
@@ -23,7 +23,7 @@ Para administrar un servidor a distancia tienes que llegar hasta él. Este módu
 
 ## Direcciones, redes y puerta de enlace
 
-Piensa en el correo de una ciudad. Cada edificio tiene su dirección (la **IP**), los edificios de un mismo barrio comparten el principio de la dirección (la **red**), y para mandar algo a otro barrio lo dejas en la oficina de correo del tuyo (la **puerta de enlace**), que sabe cómo seguir. Dentro de cada edificio hay ventanillas numeradas (los **puertos**), una para cada servicio. Y para saber la dirección de alguien a partir de su nombre, consultas una guía (el **DNS**). Donde la comparación no llega: en una red no hay carteros, los paquetes viajan en milésimas de segundo y muchas veces se pierden y se vuelven a mandar.
+Pensá en el correo de una ciudad. Cada edificio tiene su dirección (la **IP**), los edificios de un mismo barrio comparten el principio de la dirección (la **red**), y para mandar algo a otro barrio lo dejás en la oficina de correo del tuyo (la **puerta de enlace**), que sabe cómo seguir. Dentro de cada edificio hay ventanillas numeradas (los **puertos**), una para cada servicio. Y para saber la dirección de alguien a partir de su nombre, consultás una guía (el **DNS**). Donde la comparación no llega: en una red no hay carteros, los paquetes viajan en milésimas de segundo y muchas veces se pierden y se vuelven a mandar.
 
 <Diagrama svg={red} alt="La red de la oficina 192.168.10.0/24 con tu PC (192.168.10.50), app01 (192.168.10.15), web01 (192.168.10.20), el servidor DNS (192.168.10.2) y la puerta de enlace (192.168.10.1), que conecta con otras redes como internet. Para llegar a web01 primero se traduce el nombre con el DNS, después se ve que está en la misma red y se va directo al puerto que corresponde." pie="En la misma red se llega directo; a otra red se llega a través de la puerta de enlace." />
 
@@ -64,7 +64,7 @@ LISTEN 0      128          0.0.0.0:22         0.0.0.0:*     users:(("sshd",pid=8
 LISTEN 0      511        127.0.0.1:8080       0.0.0.0:*     users:(("java",pid=1210,fd=12))
 ```
 
-`-t` TCP, `-l` solo los que escuchan, `-n` números en vez de nombres, `-p` qué proceso (necesita `sudo`). Fíjate en la dirección: **0.0.0.0** escucha en todas las interfaces (se puede llegar desde afuera), **127.0.0.1** solo desde el mismo servidor. Una aplicación que "no se ve desde afuera" muchas veces está escuchando en 127.0.0.1.
+`-t` TCP, `-l` solo los que escuchan, `-n` números en vez de nombres, `-p` qué proceso (necesita `sudo`). Fijate en la dirección: **0.0.0.0** escucha en todas las interfaces (se puede llegar desde afuera), **127.0.0.1** solo desde el mismo servidor. Una aplicación que "no se ve desde afuera" muchas veces está escuchando en 127.0.0.1.
 
 ## Diagnosticar escalón por escalón
 
@@ -82,7 +82,7 @@ Y aprende a leer lo que te dicen los errores:
 
 <Emparejar ejercicio={errores} />
 
-La diferencia entre **refused** y **timed out** es la más útil: refused quiere decir que llegaste y el servidor te contestó "aquí no hay nadie" (el servicio está apagado o escucha en otro puerto); timed out quiere decir que nadie contestó (no hay camino, o un firewall descarta en silencio).
+La diferencia entre **refused** y **timed out** es la más útil: refused quiere decir que llegaste y el servidor te contestó "acá no hay nadie" (el servicio está apagado o escucha en otro puerto); timed out quiere decir que nadie contestó (no hay camino, o un firewall descarta en silencio).
 
 ## Practicar en la terminal
 
@@ -90,10 +90,10 @@ La diferencia entre **refused** y **timed out** es la más útil: refused quiere
 
 <ErroresComunes>
   <ErrorComun titulo="Concluir que el servidor está caído porque no responde al ping">
-    Muchos firewalls bloquean ping. Prueba el puerto del servicio con `nc -zv` antes de dar por caído un equipo.
+    Muchos firewalls bloquean ping. Probá el puerto del servicio con `nc -zv` antes de dar por caído un equipo.
   </ErrorComun>
   <ErrorComun titulo="El servicio funciona en el servidor pero no desde afuera">
-    Mira `ss -tlnp`: si escucha en 127.0.0.1, solo acepta conexiones locales. Si escucha en 0.0.0.0, revisa el firewall (lección 1.6.5).
+    Mirá `ss -tlnp`: si escucha en 127.0.0.1, solo acepta conexiones locales. Si escucha en 0.0.0.0, revisa el firewall (lección 1.6.5).
   </ErrorComun>
   <ErrorComun titulo="dig resuelve bien, pero ssh va a otra IP">
     Hay una línea vieja en `/etc/hosts`, que se consulta antes que el DNS. `getent hosts` te muestra lo que realmente usan los programas.

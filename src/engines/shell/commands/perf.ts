@@ -73,7 +73,7 @@ register(['top', 'htop'], {
         '    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\n',
     )
     procRows(ctx, procs, 15)
-    if (ctx.isTTY && !a.flags.has('b')) ctx.err(`[simulador] ${ctx.name} se actualiza en vivo y se sale con q; aquí se muestra una sola captura (como top -b -n 1).\n`)
+    if (ctx.isTTY && !a.flags.has('b')) ctx.err(`[simulador] ${ctx.name} se actualiza en vivo y se sale con q; acá se muestra una sola captura (como top -b -n 1).\n`)
     return 0
   },
 })
@@ -290,7 +290,7 @@ register('iotop', {
       const pct = Math.min(99.99, ((io.r + io.w) / 1024) * 1.4 + (p.stat.startsWith('D') ? 40 : 0))
       ctx.out(`${String(p.pid).padStart(7)} be/4 ${p.user.padEnd(8).slice(0, 8)} ${kb(io.r).padStart(11)} ${kb(io.w).padStart(11)}  0.00 % ${pct.toFixed(2).padStart(6)} % ${p.cmd}\n`)
     }
-    if (ctx.isTTY && !ctx.args.includes('-b')) ctx.err('[simulador] iotop se actualiza en vivo; aquí se muestra una sola captura.\n')
+    if (ctx.isTTY && !ctx.args.includes('-b')) ctx.err('[simulador] iotop se actualiza en vivo; acá se muestra una sola captura.\n')
     return 0
   },
 })

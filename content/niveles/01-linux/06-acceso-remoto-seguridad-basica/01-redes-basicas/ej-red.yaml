@@ -21,7 +21,7 @@ estado_inicial:
     - { ip: 192.168.10.20, hostname: web01, distro: ubuntu }
     - { ip: 10.0.5.20, hostname: db01 }
 pasos:
-  - consigna: Mira qué dirección IP tiene app01.
+  - consigna: Mirá qué dirección IP tiene app01.
     verificar:
       - { comando_usado: 'ip\s+(-br\s+)?(a|addr|address)' }
       - { salida_contiene: 192.168.10.15/24 }
@@ -30,7 +30,7 @@ pasos:
     solucion: [ip -br a]
     explicacion: >-
       192.168.10.15 con /24: está en la red 192.168.10.0, donde todas las direcciones empiezan con 192.168.10.
-  - consigna: Mira por dónde sale hacia otras redes (la puerta de enlace).
+  - consigna: Mirá por dónde sale hacia otras redes (la puerta de enlace).
     verificar:
       - { comando_usado: 'ip\s+r(oute)?' }
       - { salida_contiene: default via 192.168.10.1 }
@@ -38,7 +38,7 @@ pasos:
       - "`ip route`"
     solucion: [ip route]
     explicacion: '"default via 192.168.10.1": todo lo que no es de la red local se manda a esa dirección.'
-  - consigna: Averigua qué IP tiene web01.
+  - consigna: Averiguá qué IP tiene web01.
     verificar:
       - { comando_usado: '(getent\s+hosts|dig|host|nslookup)\s+.*web01' }
       - { salida_contiene: 192.168.10.20 }
@@ -46,7 +46,7 @@ pasos:
       - "`getent hosts web01` (busca en /etc/hosts y en el DNS, como los programas) o `dig +short web01`"
     solucion: [getent hosts web01]
     explicacion: El nombre resuelve. Si no lo hiciera, ssh y curl darían "Could not resolve hostname".
-  - consigna: Comprueba que web01 responde.
+  - consigna: Comprobá que web01 responde.
     verificar:
       - { comando_usado: 'ping\s+.*web01' }
       - { salida_contiene: 0% packet loss }
@@ -55,14 +55,14 @@ pasos:
     solucion: [ping -c 3 web01]
     explicacion: >-
       El equipo está prendido y hay camino. Ojo: algunos firewalls bloquean ping, así que un ping que falla no siempre quiere decir que el servidor esté caído.
-  - consigna: Prueba si responde algo en el puerto 80 (la web) de web01.
+  - consigna: Probá si responde algo en el puerto 80 (la web) de web01.
     verificar:
       - { comando_usado: '(nc\s+-\w*z\w*\s+.*web01\s+80|curl\s+.*web01)' }
     pistas:
       - "`nc -zv web01 80` prueba solo si el puerto acepta conexiones."
     solucion: [nc -zv web01 80]
     explicacion: >-
-      "Connection refused": llegas al servidor, pero nada escucha en el 80. El problema no es la
+      "Connection refused": llegás al servidor, pero nada escucha en el 80. El problema no es la
       red: el servidor web está apagado o no está instalado. Eso se revisa entrando a web01.
   - consigna: Y en el puerto 22 (SSH)?
     verificar:

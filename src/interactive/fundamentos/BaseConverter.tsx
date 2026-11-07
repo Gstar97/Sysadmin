@@ -30,9 +30,9 @@ function Converter() {
         ))}
       </div>
       {n === undefined ? (
-        <p className="mt-3 text-sm text-bad">{text.trim() ? `"${text}" no es un número ${BASE_NAMES[from]} válido: en base ${from} solo existen los dígitos ${'0123456789ABCDEF'.slice(0, from).split('').join(', ')}.` : 'Escribe un número.'}</p>
+        <p className="mt-3 text-sm text-bad">{text.trim() ? `"${text}" no es un número ${BASE_NAMES[from]} válido: en base ${from} solo existen los dígitos ${'0123456789ABCDEF'.slice(0, from).split('').join(', ')}.` : 'Escribí un número.'}</p>
       ) : tooBig ? (
-        <p className="mt-3 text-sm text-bad">Usa números de hasta 32 bits (4.294.967.295).</p>
+        <p className="mt-3 text-sm text-bad">Usá números de hasta 32 bits (4.294.967.295).</p>
       ) : (
         <>
           <dl className="mt-4 grid gap-2 sm:grid-cols-2">

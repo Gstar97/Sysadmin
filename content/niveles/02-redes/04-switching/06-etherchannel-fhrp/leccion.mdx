@@ -14,7 +14,7 @@ import redundancia from './redundancia.svg?raw'
 import ejEtherchannel from './ej-etherchannel.yaml'
 import ejHsrp from './ej-hsrp.yaml'
 
-En la lección anterior viste que Spanning Tree bloquea los enlaces sobrantes. Eso tiene un costo: si conectas dos switches con dos cables para tener el doble de capacidad, STP bloquea uno y usas la mitad. Y queda otro punto débil: todas las PC usan una sola puerta de enlace; si ese router se apaga, nadie sale de su red. Esta lección resuelve las dos cosas.
+En la lección anterior viste que Spanning Tree bloquea los enlaces sobrantes. Eso tiene un costo: si conectás dos switches con dos cables para tener el doble de capacidad, STP bloquea uno y usás la mitad. Y queda otro punto débil: todas las PC usan una sola puerta de enlace; si ese router se apaga, nadie sale de su red. Esta lección resuelve las dos cosas.
 
 <AntesDeEmpezar>
 - Spanning Tree, puertos bloqueados y show spanning-tree (lección anterior).
@@ -26,7 +26,7 @@ En la lección anterior viste que Spanning Tree bloquea los enlaces sobrantes. E
 
 ## EtherChannel: sumar cables
 
-Piensa en una autopista con tres carriles: para el tránsito es una sola ruta, pero lleva tres veces más autos, y si se cierra un carril por obras, sigue funcionando con dos. **EtherChannel** hace eso con cables: agrupa de 2 a 8 puertos iguales en una interfaz lógica, **Port-channel**, que para Spanning Tree es **un solo enlace**. Donde la comparación no llega: cada conversación (cada par de origen y destino) viaja siempre por el mismo cable, para que no lleguen tramas desordenadas. Una sola copia de archivos no va al triple de velocidad; muchas conversaciones a la vez sí se reparten.
+Pensá en una autopista con tres carriles: para el tránsito es una sola ruta, pero lleva tres veces más autos, y si se cierra un carril por obras, sigue funcionando con dos. **EtherChannel** hace eso con cables: agrupa de 2 a 8 puertos iguales en una interfaz lógica, **Port-channel**, que para Spanning Tree es **un solo enlace**. Donde la comparación no llega: cada conversación (cada par de origen y destino) viaja siempre por el mismo cable, para que no lleguen tramas desordenadas. Una sola copia de archivos no va al triple de velocidad; muchas conversaciones a la vez sí se reparten.
 
 Los dos extremos negocian el grupo con un protocolo:
 
@@ -55,7 +55,7 @@ EtherChannel junta varios cables entre dos switches para que funcionen como uno 
 
 Las PC tienen configurada **una** puerta de enlace. Poner dos routers no alcanza: cada PC seguiría apuntando a uno solo. La solución es una **IP virtual**: los dos routers se ponen de acuerdo para que uno de ellos, el **activo**, responda por una IP (y una MAC virtual) que no es de ninguno en particular. Las PC usan esa IP como puerta de enlace. Si el activo deja de dar señales, el otro toma la IP virtual y manda un ARP gratuito para que los switches aprendan dónde está ahora la MAC virtual.
 
-Es como el número de la guardia de un hospital: siempre es el mismo, y lo atiende el médico de turno. Si ese médico se enferma, el número pasa al teléfono del suplente, y quien llama ni se entera.
+Es como el número de la guardia de un hospital: siempre es el mismo, y lo atiende el médico de turno. Si ese médico se enferma, el número pasa al celular del suplente, y quien llama ni se entera.
 
 Los protocolos que hacen esto se llaman **FHRP** (protocolos de redundancia del primer salto):
 
@@ -92,13 +92,13 @@ En servidores Linux, la misma idea se usa con **keepalived** (VRRP) para que dos
     Ninguno propone y el canal nunca se forma. Al menos uno tiene que estar en active (lo habitual es active en los dos).
   </ErrorComun>
   <ErrorComun titulo="Puertos distintos dentro del mismo canal">
-    Si un miembro tiene otra velocidad, otro modo u otras VLAN, queda suspendido. Configura en interface port-channel para que todos queden iguales.
+    Si un miembro tiene otra velocidad, otro modo u otras VLAN, queda suspendido. Configurá en interface port-channel para que todos queden iguales.
   </ErrorComun>
   <ErrorComun titulo="Usar mode on para &quot;evitar problemas&quot;">
-    Sin negociación, un error de un lado no se detecta y puede armar un bucle. Usa LACP.
+    Sin negociación, un error de un lado no se detecta y puede armar un bucle. Usá LACP.
   </ErrorComun>
   <ErrorComun titulo="Olvidar preempt">
-    Después de una falla, el router de respaldo queda activo para siempre, aunque el principal ya volvió. Si quieres que vuelva al principal, preempt.
+    Después de una falla, el router de respaldo queda activo para siempre, aunque el principal ya volvió. Si querés que vuelva al principal, preempt.
   </ErrorComun>
   <ErrorComun titulo="Poner en las PC la IP real de un router">
     Si la puerta de enlace es .2 en lugar de la virtual .254, cuando R1 se cae esas PC se quedan sin salida aunque HSRP funcione perfecto.

@@ -2,7 +2,7 @@ tipo: terminal
 shell: bash
 titulo: Preguntarle al DNS con dig
 descripcion: >-
-  Antes de migrar el correo de empresa.com, quieres ver cómo está su DNS hoy.
+  Antes de migrar el correo de empresa.com, querés ver cómo está su DNS hoy.
 estado_inicial:
   distro: ubuntu
   hostname: pc-admin
@@ -16,7 +16,7 @@ estado_inicial:
       TXT empresa.com: '"v=spf1 mx -all"'
       NS empresa.com: ns1.proveedor.net; ns2.proveedor.net
 pasos:
-  - consigna: Consulta la dirección IPv4 de empresa.com y mira la salida completa.
+  - consigna: Consultá la dirección IPv4 de empresa.com y mira la salida completa.
     verificar:
       - { comando_usado: dig }
       - { salida_contiene: "203.0.113.10" }
@@ -25,34 +25,34 @@ pasos:
     explicacion: >-
       status NOERROR (hay respuesta), en flags falta aa (no es autoritativa: viene del
       resolvedor de tu red, en SERVER), el TTL es 300 segundos y la respuesta, 203.0.113.10.
-  - consigna: ¿Qué servidor recibe el correo de empresa.com? Pide solo la respuesta, corta.
+  - consigna: ¿Qué servidor recibe el correo de empresa.com? Pedí solo la respuesta, cortá.
     verificar:
       - { comando_usado: dig }
       - { salida_contiene: "mail.empresa.com" }
     pistas: ["dig empresa.com MX +short"]
     solucion: [dig empresa.com MX +short]
     explicacion: El MX dice que el correo va a mail.empresa.com, con prioridad 10 (cuanto más bajo, más preferido).
-  - consigna: Mira qué es www.empresa.com, solo con la sección de respuesta.
+  - consigna: Mirá qué es www.empresa.com, solo con la sección de respuesta.
     verificar:
       - { comando_usado: dig }
       - { salida_contiene: "CNAME" }
     pistas: ["dig www.empresa.com +noall +answer"]
     solucion: [dig www.empresa.com +noall +answer]
     explicacion: www es un alias (CNAME) de empresa.com; el resolvedor ya siguió el alias y trajo también su A.
-  - consigna: Consulta un nombre que no existe, por ejemplo intranet.empresa.com, y fíjate el status.
+  - consigna: Consultá un nombre que no existe, por ejemplo intranet.empresa.com, y fijate el status.
     verificar:
       - { comando_usado: dig }
       - { salida_contiene: "NXDOMAIN" }
     pistas: ["dig intranet.empresa.com"]
     solucion: [dig intranet.empresa.com]
     explicacion: NXDOMAIN es "ese nombre no existe". Es distinto de no recibir respuesta (timed out), que es un problema de red o de servidor.
-  - consigna: Por último, pregúntale el registro TXT directamente a un resolvedor público (1.1.1.1).
+  - consigna: Por último, preguntale el registro TXT directamente a un resolvedor público (1.1.1.1).
     verificar:
       - { comando_usado: "@1.1.1.1" }
       - { salida_contiene: "spf1" }
     pistas: ["dig @1.1.1.1 empresa.com TXT +short"]
     solucion: [dig @1.1.1.1 empresa.com TXT +short]
     explicacion: >-
-      Con @servidor eliges a quién preguntarle. Es la forma de saber si un problema es del
+      Con @servidor elegís a quién preguntarle. Es la forma de saber si un problema es del
       resolvedor de tu red o del dominio: si 1.1.1.1 contesta bien y el tuyo no, el problema
       es tu resolvedor. El TXT con v=spf1 dice qué servidores pueden mandar correo del dominio.

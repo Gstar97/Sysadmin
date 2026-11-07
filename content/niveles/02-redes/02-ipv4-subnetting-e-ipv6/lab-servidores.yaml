@@ -16,15 +16,15 @@ estado_inicial:
   servidores:
     - { ip: 172.20.10.227, hostname: db01, red: { interfaces: [{ nombre: enp0s3, ip: 172.20.10.227/28, ipv6: ["fd00:20:4::227/64"] }], puerta_enlace: 172.20.10.225 } }
 pasos:
-  - consigna: Mira cómo está la placa enp0s3 de app01.
+  - consigna: Mirá cómo está la placa enp0s3 de app01.
     verificar:
       - { comando_usado: ip }
     pistas: ["ip -br a"]
     solucion: [ip -br a]
     explicacion: No tiene IPv4, solo la IPv6 de enlace local (fe80::), que se pone sola.
   - consigna: >-
-      Configura la conexión enp0s3 con nmcli, de forma permanente: IPv4 172.20.10.226/28, puerta
-      de enlace 172.20.10.225, método manual, e IPv6 fd00:20:4::226/64. Después levanta la conexión.
+      Configurá la conexión enp0s3 con nmcli, de forma permanente: IPv4 172.20.10.226/28, puerta
+      de enlace 172.20.10.225, método manual, e IPv6 fd00:20:4::226/64. Después levantá la conexión.
     verificar:
       - { interfaz: enp0s3, ip_en: 172.20.10.224/28, ipv6: "fd00:20:4::226" }
     pistas:
@@ -36,14 +36,14 @@ pasos:
     explicacion: >-
       nmcli guarda la configuración en el perfil de NetworkManager: sobrevive a un reinicio, a
       diferencia de ip addr. El cambio se aplica al levantar la conexión.
-  - consigna: Comprueba la ruta por defecto.
+  - consigna: Comprobá la ruta por defecto.
     verificar:
       - { comando_usado: ip route }
       - { salida_contiene: "default via 172.20.10.225" }
     pistas: ["ip route"]
     solucion: [ip route]
     explicacion: La puerta de enlace .225 está dentro de la /28 (de .225 a .238), así que el sistema la acepta.
-  - consigna: Prueba la conectividad con db01 por IPv4 y por IPv6.
+  - consigna: Probá la conectividad con db01 por IPv4 y por IPv6.
     verificar:
       - { comando_usado: ping }
       - { salida_contiene: "64 bytes from fd00:20:4::227" }

@@ -14,7 +14,7 @@ import arp from './arp.yaml'
 import arpAfuera from './arp-afuera.yaml'
 import ejArp from './ej-arp.yaml'
 
-Ya sabes que para mandar algo dentro de la red local hace falta la MAC del destino (lección anterior). Pero los programas no conocen MAC: conocen IP. Cuando haces `ping 192.168.10.20`, ¿cómo sabe tu equipo qué MAC poner en la trama? Lo averigua con **ARP** (Address Resolution Protocol), un protocolo tan chico como imprescindible.
+Ya sabés que para mandar algo dentro de la red local hace falta la MAC del destino (lección anterior). Pero los programas no conocen MAC: conocen IP. Cuando hacés `ping 192.168.10.20`, ¿cómo sabe tu equipo qué MAC poner en la trama? Lo averigua con **ARP** (Address Resolution Protocol), un protocolo tan chico como imprescindible.
 
 <AntesDeEmpezar>
 - La trama lleva MAC de origen y de destino, y `ff:ff:ff:ff:ff:ff` es para todos (lección 2.1.4).
@@ -23,7 +23,7 @@ Ya sabes que para mandar algo dentro de la red local hace falta la MAC del desti
 
 ## Preguntar en voz alta
 
-Imagina que llegas a una oficina con un sobre para "la persona del escritorio 20", pero no sabes quién es. Te paras en el medio y preguntas en voz alta: "¿Quién está en el escritorio 20?". Todos te escuchan; solo una persona levanta la mano y te dice su nombre. Anotas el dato para la próxima vez. Eso es ARP:
+Imagina que llegás a una oficina con un sobre para "la persona del escritorio 20", pero no sabés quién es. Te paras en el medio y preguntas en voz alta: "¿Quién está en el escritorio 20?". Todos te escuchan; solo una persona levanta la mano y te dice su nombre. Anotás el dato para la próxima vez. Eso es ARP:
 
 1. **Solicitud ARP** (broadcast): "¿Quién tiene la IP 192.168.10.20? Responde a 192.168.10.50, que soy yo, con esta MAC".
 2. **Respuesta ARP** (unicast, directo al que preguntó): "192.168.10.20 soy yo, mi MAC es 52:54:00:aa:10:20".
@@ -31,7 +31,7 @@ Imagina que llegas a una oficina con un sobre para "la persona del escritorio 20
 
 Donde la comparación no llega: en la oficina, alguien que miente sobre su escritorio se nota; en una red, cualquier equipo puede responder una solicitud ARP con su MAC, y los demás le creen. Ese es el punto débil de ARP que aprovechan algunos ataques, y lo que causa los problemas de IP duplicada.
 
-Recórrelo paso a paso:
+Recorrelo paso a paso:
 
 <SimuladorPaquetes escenario={arp} />
 
@@ -67,7 +67,7 @@ sudo ip neigh del 192.168.10.20 dev enp0s3   # borrar una sola entrada
 
 - **REACHABLE**: confirmada hace poco.
 - **STALE**: vieja; se usa, pero se va a volver a confirmar.
-- **FAILED** (o INCOMPLETE): se preguntó y nadie contestó. Ese equipo no está en la red, o está apagado. Es una pista valiosa: si tienes FAILED para la puerta de enlace, el problema es de capa 2 (cable, VLAN o el router apagado), no de rutas.
+- **FAILED** (o INCOMPLETE): se preguntó y nadie contestó. Ese equipo no está en la red, o está apagado. Es una pista valiosa: si tenés FAILED para la puerta de enlace, el problema es de capa 2 (cable, VLAN o el router apagado), no de rutas.
 
 En Windows, `arp -a` muestra la misma tabla (y `arp -d *` la borra, como administrador).
 
@@ -76,7 +76,7 @@ En Windows, `arp -a` muestra la misma tabla (y `arp -d *` la borra, como adminis
 Si dos equipos tienen la misma IP, los dos contestan las solicitudes ARP. Los demás se quedan con la respuesta que llegó última, y esa puede cambiar de un minuto al otro. Los síntomas son característicos:
 
 - La conexión con ese equipo funciona **a veces** sí y a veces no, sin patrón claro.
-- Por SSH, a veces entras a "otro" servidor: aparece el aviso de que **cambió la clave del servidor** (lección 1.6.2).
+- Por SSH, a veces entrás a "otro" servidor: aparece el aviso de que **cambió la clave del servidor** (lección 1.6.2).
 - Windows muestra el aviso "conflicto de dirección IP"; Linux deja un mensaje en el journal.
 
 El caso típico: alguien configuró a mano en un equipo nuevo una IP que ya tenía otro, o una IP fija dentro del rango que reparte el DHCP.
@@ -105,7 +105,7 @@ Como cualquiera puede contestar, un atacante en la misma red puede responder "la
     ARP no sale de la red local. Para cualquier destino de otra red, tu equipo usa la MAC de la puerta de enlace; por eso en `ip neigh` nunca vas a ver la MAC de 8.8.8.8.
   </ErrorComun>
   <ErrorComun titulo="Dar por buena una conexión que &quot;a veces&quot; anda">
-    Una falla intermitente con un único equipo es la firma de una IP duplicada. Prueba con `arping` desde otro equipo antes de cambiar cables o reiniciar.
+    Una falla intermitente con un único equipo es la firma de una IP duplicada. Probá con `arping` desde otro equipo antes de cambiar cables o reiniciar.
   </ErrorComun>
   <ErrorComun titulo="Cambiar la placa de un servidor y que nadie llegue durante un rato">
     Los demás tienen la MAC vieja en su tabla. Se resuelve solo en minutos, o al instante con un ARP gratuito (muchos sistemas lo mandan al levantar la interfaz) o vaciando la tabla en los clientes.

@@ -47,16 +47,16 @@ Una ACL es una lista de permitir y bloquear que el router revisa de arriba hacia
 
 ## Dónde aplicarla
 
-Una ACL no hace nada hasta que se aplica a una interfaz, en un sentido: `ip access-group NOMBRE in` o `out`. Es como un control de entrada o de salida de un edificio: el mismo guardia, con la misma lista, hace cosas muy distintas si lo pones a controlar a los que entran o a los que salen. Donde la comparación no llega: "entrar" y "salir" se miran siempre desde el router, no desde la red.
+Una ACL no hace nada hasta que se aplica a una interfaz, en un sentido: `ip access-group NOMBRE in` o `out`. Es como un control de entrada o de salida de un edificio: el mismo guardia, con la misma lista, hace cosas muy distintas si lo ponés a controlar a los que entran o a los que salen. Donde la comparación no llega: "entrar" y "salir" se miran siempre desde el router, no desde la red.
 
 <Diagrama svg={sentido} alt="La LAN (192.168.1.0/24) conectada a Gi0/0 de R1 y la DMZ (web 172.16.0.10) a Gi0/1. Lo que va de la LAN a la DMZ entra a R1 por Gi0/0 (in en Gi0/0) y sale por Gi0/1 (out en Gi0/1). Para filtrarlo sirve cualquiera: in en Gi0/0 descarta apenas entra pero afecta todo lo que sale de la LAN; out en Gi0/1 afecta solo lo que va a la DMZ. Una ACL por interfaz, por sentido y por protocolo. La estándar va cerca del destino y la extendida cerca del origen. Al final de toda ACL hay un deny ip any any invisible." pie="El error más común con ACL es el sentido, no la sintaxis." />
 
 Dos reglas de ubicación clásicas:
 
 - **Extendidas, cerca del origen**: así el tráfico prohibido se descarta antes de recorrer la red.
-- **Estándar, cerca del destino**: como solo miran el origen, si las pones cerca de él bloquean ese origen para todos los destinos.
+- **Estándar, cerca del destino**: como solo miran el origen, si las ponés cerca de él bloquean ese origen para todos los destinos.
 
-Y como las ACL **no tienen estado**, si filtras en los dos sentidos tienes que pensar en las respuestas: una ACL de entrada en la interfaz de la DMZ ve las respuestas del servidor, no las preguntas. Para TCP existe la palabra `established`, que deja pasar los segmentos de conexiones ya abiertas (los que llevan ACK).
+Y como las ACL **no tienen estado**, si filtrás en los dos sentidos tenés que pensar en las respuestas: una ACL de entrada en la interfaz de la DMZ ve las respuestas del servidor, no las preguntas. Para TCP existe la palabra `established`, que deja pasar los segmentos de conexiones ya abiertas (los que llevan ACK).
 
 ## La denegación implícita
 
@@ -74,19 +74,19 @@ Una ACL estándar aplicada a las líneas vty limita desde dónde se puede entrar
 
 <ErroresComunes>
   <ErrorComun titulo="Aplicarla en el sentido equivocado">
-    Una ACL de entrada en la interfaz del servidor filtra lo que viene del servidor (las respuestas). Dibuja el recorrido y mira desde el router.
+    Una ACL de entrada en la interfaz del servidor filtra lo que viene del servidor (las respuestas). Dibujá el recorrido y mirá desde el router.
   </ErrorComun>
   <ErrorComun titulo="La excepción debajo del bloqueo general">
     Si "deny toda la LAN puerto 22" está antes de "permit la PC de sistemas puerto 22", la excepción nunca se usa. Las excepciones, arriba (con números de secuencia).
   </ErrorComun>
   <ErrorComun titulo="Olvidar el deny implícito">
-    Una ACL con solo deny bloquea todo. Si quieres dejar pasar lo demás, termina con permit ip any any.
+    Una ACL con solo deny bloquea todo. Si querés dejar pasar lo demás, termina con permit ip any any.
   </ErrorComun>
   <ErrorComun titulo="Confundir wildcard con máscara">
     192.168.1.0 255.255.255.0 en una ACL no es la red /24: con wildcard, los bits en 1 son los que no importan. Lo correcto es 0.0.0.255.
   </ErrorComun>
   <ErrorComun titulo="Bloquear el protocolo de enrutamiento">
-    Una ACL de entrada que no permite OSPF en la interfaz entre routers corta los saludos y se caen los vecinos. Si filtras ahí, agrega permit ospf any any.
+    Una ACL de entrada que no permite OSPF en la interfaz entre routers corta los saludos y se caen los vecinos. Si filtrás ahí, agrega permit ospf any any.
   </ErrorComun>
 </ErroresComunes>
 

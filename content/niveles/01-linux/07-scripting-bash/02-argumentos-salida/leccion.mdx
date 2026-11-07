@@ -24,7 +24,7 @@ Un script que siempre hace lo mismo sirve para poco. Uno que recibe datos ("revi
 
 ## Lo que entra y lo que sale
 
-Piensa en un trámite en una ventanilla: entregas papeles (los argumentos), a veces te piden algún dato más en el momento (la entrada), te devuelven un resultado (la salida), te avisan si algo estaba mal (los errores) y te dicen si el trámite quedó aprobado o no (el código de salida). Donde la comparación no llega: el código de salida es solo un número, y nadie lo ve si no lo miras.
+Pensá en un trámite en una ventanilla: entregás papeles (los argumentos), a veces te piden algún dato más en el momento (la entrada), te devuelven un resultado (la salida), te avisan si algo estaba mal (los errores) y te dicen si el trámite quedó aprobado o no (el código de salida). Donde la comparación no llega: el código de salida es solo un número, y nadie lo ve si no lo mirás.
 
 <Diagrama svg={flujo} alt="Un script recibe argumentos ($1, $2, el conjunto con $@ y la cantidad con $#) y datos por la entrada estándar (con read, desde el teclado, una tubería o un archivo). Devuelve el resultado por la salida estándar, los avisos por la salida de errores (echo con mayor que ampersand 2) y un código de salida (exit 0 o exit 1, que se lee con $?)." pie="Resultado por stdout, avisos por stderr, y siempre un código de salida." />
 
@@ -61,7 +61,7 @@ while read -r linea; do              # una vuelta por cada línea de la entrada
 done < lista.txt
 ```
 
-Usa siempre `-r`, para que las barras invertidas no se interpreten. Y recuerda que un script que corre desde cron no tiene teclado: si necesita datos, que vengan por argumentos o por un archivo.
+Usá siempre `-r`, para que las barras invertidas no se interpreten. Y recordá que un script que corre desde cron no tiene teclado: si necesita datos, que vengan por argumentos o por un archivo.
 
 ## Códigos de salida
 
@@ -79,7 +79,7 @@ Una convención útil para tus scripts: **0** todo bien, **1** falló la tarea, 
 Los avisos van por **stderr** con `>&2`. Así, quien use el script puede guardar el resultado en un archivo y seguir viendo los errores en pantalla (o mandarlos a otro lado con `2>`).
 
 <EnSimple>
-0 es "todo bien" y cualquier otro número es "algo salió mal". Haz que tus scripts devuelvan el número correcto: es la única forma en que cron, un monitoreo u otro script se enteren de un problema.
+0 es "todo bien" y cualquier otro número es "algo salió mal". Hacé que tus scripts devuelvan el número correcto: es la única forma en que cron, un monitoreo u otro script se enteren de un problema.
 </EnSimple>
 
 ## El modo estricto
@@ -103,19 +103,19 @@ Un ejemplo de por qué importa `-u`: con `rm -rf "$destino/"*` y `$destino` vac�
 
 <ErroresComunes>
   <ErrorComun titulo="El script terminó con 0 aunque falló un paso">
-    Sin `set -e`, el código final es el del último comando. Usa el modo estricto, o revisa los pasos importantes y termina con `exit 1`.
+    Sin `set -e`, el código final es el del último comando. Usá el modo estricto, o revisá los pasos importantes y termina con `exit 1`.
   </ErrorComun>
   <ErrorComun titulo='"unbound variable" con set -u'>
-    Usas una variable que no se definió, a menudo un argumento que no vino. Valida `$#` al principio, o usa un valor por defecto: `"${1:-}"`.
+    Usás una variable que no se definió, a menudo un argumento que no vino. Validá `$#` al principio, o usa un valor por defecto: `"${1:-}"`.
   </ErrorComun>
   <ErrorComun titulo="Los errores aparecen mezclados con el resultado">
-    Mándalos a stderr: `echo "error" >&2`.
+    Mandalos a stderr: `echo "error" >&2`.
   </ErrorComun>
   <ErrorComun titulo="Pasar los argumentos a otro comando con $*">
-    `$*` junta todo en una cadena y rompe los argumentos con espacios. Usa `"$@"`.
+    `$*` junta todo en una cadena y rompe los argumentos con espacios. Usá `"$@"`.
   </ErrorComun>
   <ErrorComun titulo="El script se queda esperando cuando corre desde cron">
-    Tiene un read y no hay teclado. Pasa los datos por argumentos o por un archivo.
+    Tiene un read y no hay teclado. Pasá los datos por argumentos o por un archivo.
   </ErrorComun>
 </ErroresComunes>
 

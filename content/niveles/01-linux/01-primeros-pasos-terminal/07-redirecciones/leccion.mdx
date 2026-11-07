@@ -14,10 +14,10 @@ import flujos from './flujos.svg?raw'
 import operadores from './operadores.yaml'
 import ejFiltros from './ej-filtros.yaml'
 
-Esta es la lección que convierte la terminal en una herramienta poderosa. Cada comando de Linux hace una sola cosa, pero se pueden **encadenar**: uno filtra, otro ordena, otro cuenta. Con tres o cuatro comandos unidos respondes preguntas como "¿qué IP hizo más intentos fallidos de inicio de sesión hoy?" sobre un archivo de un millón de líneas, en segundos. Lo vas a usar todos los días, y es la base de los scripts del final de este nivel.
+Esta es la lección que convierte la terminal en una herramienta poderosa. Cada comando de Linux hace una sola cosa, pero se pueden **encadenar**: uno filtra, otro ordena, otro cuenta. Con tres o cuatro comandos unidos respondés preguntas como "¿qué IP hizo más intentos fallidos de inicio de sesión hoy?" sobre un archivo de un millón de líneas, en segundos. Lo vas a usar todos los días, y es la base de los scripts del final de este nivel.
 
 <AntesDeEmpezar>
-- Sabes ver archivos con `cat`, `head` y `tail`, y buscar texto con `grep palabra archivo`.
+- Sabés ver archivos con `cat`, `head` y `tail`, y buscar texto con `grep palabra archivo`.
 - Los logs son archivos de texto con una línea por evento.
 - Un comando tiene la forma `comando opciones argumentos`.
 </AntesDeEmpezar>
@@ -63,16 +63,16 @@ La **<Termino id="tuberia">tubería</Termino>** (*pipe*), el símbolo `|`, conec
 cut -d' ' -f1 access.log | sort | uniq -c | sort -rn | head -5
 ```
 
-Se lee de izquierda a derecha: toma la primera columna de cada línea (la IP), ordénalas, cuenta las repetidas, ordena por cantidad de mayor a menor y muestra las cinco primeras. Resultado: las cinco IP que más pedidos hicieron.
+Se lee de izquierda a derecha: toma la primera columna de cada línea (la IP), ordenalas, cuenta las repetidas, ordena por cantidad de mayor a menor y muestra las cinco primeras. Resultado: las cinco IP que más pedidos hicieron.
 
 <EnSimple>
-Es una línea de producción: el primer puesto separa las piezas, el segundo las ordena, el tercero las cuenta y el último arma el informe. Cada puesto hace una sola cosa simple y le pasa el resultado al siguiente por una cinta. Para entender una tubería larga, se arma de a un comando: ejecutas el primero, miras la salida, agregas `| el siguiente`, y así.
+Es una línea de producción: el primer puesto separa las piezas, el segundo las ordena, el tercero las cuenta y el último arma el informe. Cada puesto hace una sola cosa simple y le pasa el resultado al siguiente por una cinta. Para entender una tubería larga, se arma de a un comando: ejecutás el primero, mirás la salida, agregás `| el siguiente`, y así.
 </EnSimple>
 
 **`tee`** es una T en la cañería: copia lo que recibe a un archivo **y** lo deja seguir por la tubería. Sirve para guardar un resultado intermedio y seguir trabajando: `grep ERROR app.log | tee errores.txt | wc -l`.
 
 <Nota>
-Los errores (stderr) no pasan por la tubería: siguen saliendo en la pantalla. Si quieres filtrarlos también, primero júntalos con stdout: `comando 2>&1 | grep algo`.
+Los errores (stderr) no pasan por la tubería: siguen saliendo en la pantalla. Si querés filtrarlos también, primero juntalos con stdout: `comando 2>&1 | grep algo`.
 </Nota>
 
 ## Los filtros que más se usan
@@ -116,7 +116,7 @@ Dos combinaciones que vas a usar toda la carrera. En Rocky, los intentos fallido
     `uniq` solo junta líneas iguales consecutivas. Si no ordenaste antes, la misma IP aparece varias veces con conteos parciales. Siempre `sort | uniq -c`.
   </ErrorComun>
   <ErrorComun titulo='"Permission denied" al redirigir con sudo'>
-    En `sudo echo "texto" > /etc/archivo`, el `>` lo procesa tu shell, que no tiene permisos; sudo solo afecta a `echo`. Usa `echo "texto" | sudo tee /etc/archivo` (o `sudo tee -a` para agregar).
+    En `sudo echo "texto" > /etc/archivo`, el `>` lo procesa tu shell, que no tiene permisos; sudo solo afecta a `echo`. Usá `echo "texto" | sudo tee /etc/archivo` (o `sudo tee -a` para agregar).
   </ErrorComun>
   <ErrorComun titulo="cut devuelve columnas vacías">
     `cut -d' '` cuenta cada espacio como separador, así que dos espacios seguidos generan una columna vacía. Para salidas alineadas con varios espacios, primero `tr -s ' '` (que junta los espacios repetidos) o usa `awk '{print $2}'`, que verás en el módulo de scripting.

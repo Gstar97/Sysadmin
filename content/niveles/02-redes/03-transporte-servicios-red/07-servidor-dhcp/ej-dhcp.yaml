@@ -4,7 +4,7 @@ titulo: Kea en marcha y un cliente que recibe su dirección
 descripcion: >-
   srv-dhcp (Rocky) tiene dos placas: enp0s3 en la red de administración (192.168.56.10) y
   enp0s8 en la red de clientes (192.168.10.5). pc1 está en la red de clientes sin IP: pide la
-  suya por DHCP. A pc1 entras por la red de administración (192.168.56.21).
+  suya por DHCP. A pc1 entrás por la red de administración (192.168.56.21).
 estado_inicial:
   distro: rocky
   hostname: srv-dhcp
@@ -28,14 +28,14 @@ estado_inicial:
         dns: []
 pasos:
   - consigna: >-
-      Escribe en /etc/kea/kea-dhcp4.conf una configuración que escuche en enp0s8 y preste
+      Escribí en /etc/kea/kea-dhcp4.conf una configuración que escuche en enp0s8 y preste
       192.168.10.100 a 192.168.10.199, con puerta de enlace 192.168.10.1 y DNS 192.168.10.53.
-      Después revísala con kea-dhcp4 -t.
+      Después revisala con kea-dhcp4 -t.
     verificar:
       - { comando_usado: kea-dhcp4 -t }
       - { salida_contiene: "Syntax check OK" }
     pistas:
-      - "Puedes reemplazar todo el archivo con sudo tee /etc/kea/kea-dhcp4.conf y un heredoc."
+      - "Podés reemplazar todo el archivo con sudo tee /etc/kea/kea-dhcp4.conf y un heredoc."
       - "No te olvides del id de la subred: en Kea 2.6 es obligatorio."
     solucion:
       - |
@@ -56,7 +56,7 @@ pasos:
         EOF
       - sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
     explicacion: Syntax check OK. Revisar antes de arrancar evita dejar la red sin DHCP por una coma.
-  - consigna: Arranca kea-dhcp4, déjalo habilitado y comprueba en qué dirección y puerto escucha.
+  - consigna: Arranca kea-dhcp4, dejalo habilitado y comprueba en qué dirección y puerto escucha.
     verificar:
       - { servicio: kea-dhcp4, activo: true, habilitado: true }
       - { salida_contiene: "192.168.10.5:67" }
@@ -64,14 +64,14 @@ pasos:
     solucion: [sudo systemctl enable --now kea-dhcp4, sudo ss -ulnp]
     explicacion: >-
       Escucha en UDP 67, en la IP de enp0s8: solo atiende a la red de clientes, como pediste en interfaces-config.
-  - consigna: Entra a pc1 por la red de administración y levanta su conexión de la red de clientes (enp0s8), que pide la dirección por DHCP.
+  - consigna: Entrá a pc1 por la red de administración y levantá su conexión de la red de clientes (enp0s8), que pide la dirección por DHCP.
     verificar:
       - { en: pc1, verificar: { interfaz: enp0s8, ip_en: 192.168.10.0/24 } }
     pistas: ["ssh 192.168.56.21 'sudo nmcli connection up enp0s8; ip -br a'"]
     solucion: ["ssh 192.168.56.21 'sudo nmcli connection up enp0s8; ip -br a; ip route'"]
     explicacion: >-
       pc1 recibió la primera dirección libre del rango (192.168.10.100), la ruta por defecto
-      hacia .1 y el DNS .53 (míralo en su /etc/resolv.conf).
+      hacia .1 y el DNS .53 (miralo en su /etc/resolv.conf).
   - consigna: De vuelta en srv-dhcp, mira el préstamo que quedó registrado.
     verificar:
       - { comando_usado: kea-leases4 }

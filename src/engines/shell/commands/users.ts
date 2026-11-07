@@ -176,7 +176,7 @@ register('adduser', {
     ctx.out(
       `info: Adding user \`${name}' ...\ninfo: Selecting UID/GID from range 1000 to 59999 ...\ninfo: Adding new group \`${name}' (${user.gid}) ...\ninfo: Adding new user \`${name}' (${user.uid}) with group \`${name} (${user.gid})' ...\ninfo: Creating home directory \`${user.home}' ...\ninfo: Copying files from \`/etc/skel' ...\n`,
     )
-    if (user.hasPassword) ctx.out('[simulador] adduser pide la contraseña y los datos personales; aquí se dan por cargados.\n')
+    if (user.hasPassword) ctx.out('[simulador] adduser pide la contraseña y los datos personales; acá se dan por cargados.\n')
     return 0
   },
 })

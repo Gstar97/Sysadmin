@@ -3,7 +3,7 @@ shell: bash
 titulo: Herramientas para el equipo de soporte
 descripcion: >-
   Pablo, de soporte, te pide tree y htop en el servidor para revisar carpetas y procesos.
-  Instálalos con cuidado: primero averigua qué hay, después instala, y al final deja todo
+  Instalalos con cuidado: primero averigua qué hay, después instala, y al final deja todo
   documentado.
 estado_inicial:
   distro: rocky
@@ -12,7 +12,7 @@ estado_inicial:
   usuarios:
     - { nombre: ana, sudo: true }
 pasos:
-  - consigna: Comprueba si `tree` ya está instalado, consultando la lista de paquetes con rpm.
+  - consigna: Comprobá si `tree` ya está instalado, consultando la lista de paquetes con rpm.
     verificar:
       - { comando_usado: 'rpm\s+-q\s+tree' }
     pistas:
@@ -22,15 +22,15 @@ pasos:
     explicacion: >-
       "package tree is not installed": no está. Con un paquete instalado, rpm -q muestra el nombre
       con la versión, por ejemplo tree-2.1.0-1.el10.x86_64.
-  - consigna: Mira la información del paquete antes de instalarlo (descripción, versión y repositorio).
+  - consigna: Mirá la información del paquete antes de instalarlo (descripción, versión y repositorio).
     verificar:
       - { comando_usado: 'dnf\s+info\s+tree' }
       - { salida_contiene: File system tree viewer }
     pistas:
       - "`dnf info tree`"
     solucion: [dnf info tree]
-    explicacion: Es un buen hábito revisar qué vas a instalar, sobre todo con nombres que no conoces.
-  - consigna: Instala `tree` sin que pregunte la confirmación.
+    explicacion: Es un buen hábito revisar qué vas a instalar, sobre todo con nombres que no conocés.
+  - consigna: Instalá `tree` sin que pregunte la confirmación.
     verificar:
       - { paquete: tree, instalado: true }
     pistas:
@@ -38,7 +38,7 @@ pasos:
       - "`sudo dnf install -y tree`"
     solucion: [sudo dnf install -y tree]
     explicacion: Sin -y, dnf muestra la lista de lo que va a instalar y pregunta. En un servidor real conviene leer esa lista.
-  - consigna: Ahora intenta instalar `htop` de la misma forma. Va a fallar; lee el mensaje.
+  - consigna: Ahora intentá instalar `htop` de la misma forma. Va a fallar; lee el mensaje.
     verificar:
       - { comando_usado: 'dnf\s+install.*htop' }
       - { salida_contiene: No match for argument }
@@ -46,7 +46,7 @@ pasos:
       - "`sudo dnf install -y htop`"
     solucion: [sudo dnf install -y htop]
     explicacion: htop no está en los repositorios oficiales de Rocky. Viene de EPEL, un repositorio extra.
-  - consigna: Activa el repositorio EPEL instalando su paquete de configuración, y comprueba con `dnf repolist` que aparece.
+  - consigna: Activá el repositorio EPEL instalando su paquete de configuración, y comprobá con `dnf repolist` que aparece.
     verificar:
       - { paquete: epel-release, instalado: true }
       - { comando_usado: 'dnf\s+repolist' }
@@ -56,15 +56,15 @@ pasos:
       - "`sudo dnf install -y epel-release` y después `dnf repolist`"
     solucion: [sudo dnf install -y epel-release, dnf repolist]
     explicacion: El paquete solo deja un archivo .repo en /etc/yum.repos.d/ con la dirección del repositorio y su clave de firma.
-  - consigna: Instala `htop` otra vez.
+  - consigna: Instalá `htop` otra vez.
     verificar:
       - { paquete: htop, instalado: true }
     pistas:
       - "`sudo dnf install -y htop`"
     solucion: [sudo dnf install -y htop]
     explicacion: >-
-      Fíjate en la columna Repository del resumen: dice epel.
-  - consigna: Averigua de qué paquete viene el comando `journalctl` (archivo `/usr/bin/journalctl`).
+      Fijate en la columna Repository del resumen: dice epel.
+  - consigna: Averiguá de qué paquete viene el comando `journalctl` (archivo `/usr/bin/journalctl`).
     verificar:
       - { comando_usado: 'rpm\s+-qf\s+(/usr/bin/journalctl|\$\(which journalctl\)|`which journalctl`)' }
       - { salida_contiene: systemd }
@@ -73,7 +73,7 @@ pasos:
       - "`rpm -qf /usr/bin/journalctl`"
     solucion: [rpm -qf /usr/bin/journalctl]
     explicacion: Sirve para saber a quién pertenece un archivo antes de tocarlo o borrarlo.
-  - consigna: Revisa el historial de dnf para ver las transacciones que hiciste.
+  - consigna: Revisá el historial de dnf para ver las transacciones que hiciste.
     verificar:
       - { comando_usado: 'dnf\s+history' }
     pistas:

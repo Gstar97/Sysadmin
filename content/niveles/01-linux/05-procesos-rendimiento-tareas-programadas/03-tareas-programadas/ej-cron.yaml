@@ -21,26 +21,26 @@ estado_inicial:
         df -h /
       modo: "0755"
 pasos:
-  - consigna: Mira si ya tienes tareas programadas en tu crontab.
+  - consigna: Mirá si ya tenés tareas programadas en tu crontab.
     verificar:
       - { comando_usado: 'crontab\s+-l' }
     pistas:
       - "`crontab -l`"
     solucion: [crontab -l]
-    explicacion: '"no crontab for ana": todavía no tienes ninguna.'
+    explicacion: '"no crontab for ana": todavía no tenés ninguna.'
   - consigna: >-
-      Intenta instalar esta línea, que tiene un error, para ver cómo responde crontab:
+      Intentá instalar esta línea, que tiene un error, para ver cómo responde crontab:
       `45 25 * * 1-5 /usr/local/bin/reporte-disco.sh`
     verificar:
       - { comando_usado: 'crontab\s+-\s*$|crontab\s+-$' }
       - { salida_contiene: bad hour }
     pistas:
-      - "Puedes pasarle la línea por una tubería: echo 'línea' | crontab -"
+      - "Podés pasarle la línea por una tubería: echo 'línea' | crontab -"
       - "`echo '45 25 * * 1-5 /usr/local/bin/reporte-disco.sh' | crontab -`"
     solucion: ["echo '45 25 * * 1-5 /usr/local/bin/reporte-disco.sh' | crontab -"]
     explicacion: La hora va de 0 a 23. crontab valida antes de guardar, igual que si usaras crontab -e.
   - consigna: >-
-      Instala la línea correcta: de lunes a viernes a las 7:45, guardando la salida y los errores
+      Instalá la línea correcta: de lunes a viernes a las 7:45, guardando la salida y los errores
       al final de /home/ana/reporte.log.
     verificar:
       - { archivo: /var/spool/cron/ana, contenido_incluye: "45 7 * * 1-5" }
@@ -53,7 +53,7 @@ pasos:
       Sin redirigir la salida, cron intenta mandarla por correo, y en la mayoría de los
       servidores eso no llega a nadie. Con el log, cada ejecución deja rastro. En el trabajo
       diario usarías crontab -e, que abre un editor.
-  - consigna: Comprueba qué quedó en tu crontab.
+  - consigna: Comprobá qué quedó en tu crontab.
     verificar:
       - { comando_usado: 'crontab\s+-l' }
       - { salida_contiene: reporte-disco.sh }
@@ -61,7 +61,7 @@ pasos:
       - "`crontab -l`"
     solucion: [crontab -l]
     explicacion: Cuidado con echo ... | crontab -, que reemplaza el crontab entero. Para agregar una línea a lo que ya hay se usa (crontab -l; echo 'línea nueva') | crontab -.
-  - consigna: Instala at, arranca su servicio y programa un reinicio de nginx para hoy a las 23:30.
+  - consigna: Instalá at, arranca su servicio y programa un reinicio de nginx para hoy a las 23:30.
     verificar:
       - { paquete: at, instalado: true }
       - { servicio: atd, activo: true }
@@ -71,7 +71,7 @@ pasos:
       - "`sudo dnf install -y at`, `sudo systemctl enable --now atd` y `echo 'systemctl restart nginx' | sudo at 23:30`"
     solucion: [sudo dnf install -y at, sudo systemctl enable --now atd, "echo 'systemctl restart nginx' | sudo at 23:30"]
     explicacion: at es para una sola vez; cron, para lo que se repite.
-  - consigna: Mira la cola de tareas de at de root.
+  - consigna: Mirá la cola de tareas de at de root.
     verificar:
       - { comando_usado: 'atq' }
       - { salida_contiene: '23:30' }

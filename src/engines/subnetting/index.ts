@@ -281,7 +281,7 @@ export function generateExercise(rng: Rng, tipo: SubnetExerciseType, d: Difficul
       const res = sameSubnet(a, b, prefix)
       return {
         tipo,
-        enunciado: `Con máscara /${prefix} (${formatIpv4(prefixToMask(prefix))}), ¿${formatIpv4(a)} y ${formatIpv4(b)} están en la misma red? Responde sí o no.`,
+        enunciado: `Con máscara /${prefix} (${formatIpv4(prefixToMask(prefix))}), ¿${formatIpv4(a)} y ${formatIpv4(b)} están en la misma red? Respondé sí o no.`,
         campos: [{ id: 'misma', etiqueta: '¿Misma red?', formato: 'si_no', respuesta: res ? 'sí' : 'no' }],
         pasos: [`Red de ${formatIpv4(a)}: ${formatIpv4(networkOf(a, prefix))}.`, `Red de ${formatIpv4(b)}: ${formatIpv4(networkOf(b >>> 0, prefix))}.`, res ? 'Las dos redes coinciden: se comunican sin pasar por un router.' : 'Las redes son distintas: necesitan un router (o puerta de enlace) para comunicarse.'],
       }
@@ -336,14 +336,14 @@ export function generateExercise(rng: Rng, tipo: SubnetExerciseType, d: Difficul
       if (tipo === 'ipv6_abreviar') {
         return {
           tipo,
-          enunciado: `Escribe en su forma abreviada (RFC 5952): ${full}`,
+          enunciado: `Escribí en su forma abreviada (RFC 5952): ${full}`,
           campos: [{ id: 'v6', etiqueta: 'Dirección abreviada', formato: 'ipv6', respuesta: short }],
           pasos: ['Regla 1: se quitan los ceros a la izquierda de cada grupo (0db8 → db8, 0000 → 0).', 'Regla 2: la secuencia más larga de grupos en 0 se reemplaza por "::" (una sola vez).', `Resultado: ${short}`],
         }
       }
       return {
         tipo,
-        enunciado: `Escribe la forma completa (8 grupos de 4 dígitos) de: ${short}`,
+        enunciado: `Escribí la forma completa (8 grupos de 4 dígitos) de: ${short}`,
         campos: [{ id: 'v6', etiqueta: 'Dirección completa', formato: 'ipv6', respuesta: full }],
         pasos: ['Se completa cada grupo con ceros a la izquierda hasta tener 4 dígitos.', `El "::" representa los grupos en 0 que faltan para llegar a 8: ${8 - short.split(':').filter(Boolean).length} grupos.`, `Resultado: ${full}`],
       }
@@ -354,7 +354,7 @@ export function generateExercise(rng: Rng, tipo: SubnetExerciseType, d: Difficul
       const net = ipv6Network(addr, prefix)!
       return {
         tipo,
-        enunciado: `¿Cuál es el prefijo de red de ${addr}/${prefix}? (escríbelo con su /${prefix})`,
+        enunciado: `¿Cuál es el prefijo de red de ${addr}/${prefix}? (escribilo con su /${prefix})`,
         campos: [{ id: 'v6', etiqueta: 'Prefijo de red', formato: 'ipv6', respuesta: `${net}/${prefix}` }],
         pasos: [`Cada grupo tiene 16 bits: /${prefix} son los primeros ${prefix / 16} grupos${prefix % 16 ? ' y parte del siguiente' : ''}.`, 'El resto se pone en 0 y se abrevia.', `Resultado: ${net}/${prefix}`],
       }

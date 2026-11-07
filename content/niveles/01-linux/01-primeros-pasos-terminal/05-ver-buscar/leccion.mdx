@@ -14,10 +14,10 @@ import findSvg from './find.svg?raw'
 import teclasLess from './teclas-less.yaml'
 import ejBuscar from './ej-buscar.yaml'
 
-Gran parte del trabajo de un sysadmin es leer: configuraciones para entender cómo funciona algo, y **<Termino id="log">logs</Termino>** para entender qué pasó. Y antes de leer, hay que encontrar el archivo. En esta lección vas a aprender a mirar archivos de cualquier tamaño sin perderte, y a encontrar lo que buscas aunque no sepas dónde está.
+Gran parte del trabajo de un sysadmin es leer: configuraciones para entender cómo funciona algo, y **<Termino id="log">logs</Termino>** para entender qué pasó. Y antes de leer, hay que encontrar el archivo. En esta lección vas a aprender a mirar archivos de cualquier tamaño sin perderte, y a encontrar lo que buscás aunque no sepas dónde está.
 
 <AntesDeEmpezar>
-- Te mueves con `cd` y listas con `ls -l`.
+- Te movés con `cd` y listas con `ls -l`.
 - Los comodines (`*`, `?`) seleccionan varios nombres a la vez.
 - La configuración está en `/etc`, los logs en `/var/log` y los programas en `/usr/bin`.
 </AntesDeEmpezar>
@@ -41,22 +41,22 @@ Con un archivo de diez líneas, `cat` es perfecto. Con un log de cien mil línea
 <Emparejar ejercicio={teclasLess} />
 
 <EnSimple>
-`cat` es tirar todo el libro sobre la mesa de una vez. `less` es leerlo página por página, con un índice para saltar a la palabra que buscas. `head` es mirar la primera página y `tail`, la última. Y `tail -f` es como una cámara en vivo apuntando a la última página: cada línea nueva que se escribe, aparece en tu pantalla.
+`cat` es tirar todo el libro sobre la mesa de una vez. `less` es leerlo página por página, con un índice para saltar a la palabra que buscás. `head` es mirar la primera página y `tail`, la última. Y `tail -f` es como una cámara en vivo apuntando a la última página: cada línea nueva que se escribe, aparece en tu pantalla.
 </EnSimple>
 
 ### tail -f: mirar lo que pasa ahora
 
-Es una de las herramientas más usadas en un incidente: abres el log del servicio con `tail -f`, le pides a alguien que pruebe de nuevo, y ves en vivo lo que el servicio registra. Se sale con **Ctrl+C**. Si el log se "rota" (se renombra y se empieza uno nuevo, algo que verás en el módulo de logs), `tail -F` con mayúscula sigue al archivo nuevo.
+Es una de las herramientas más usadas en un incidente: abrís el log del servicio con `tail -f`, le pedís a alguien que pruebe de nuevo, y ves en vivo lo que el servicio registra. Se sale con **Ctrl+C**. Si el log se "rota" (se renombra y se empieza uno nuevo, algo que verás en el módulo de logs), `tail -F` con mayúscula sigue al archivo nuevo.
 
 <Consejo>
-`tail -n +5 archivo` muestra desde la línea 5 hasta el final; `head -c 100` muestra solo los primeros 100 bytes. Y `less +F archivo` funciona como `tail -f`, pero con Ctrl+C vuelves a poder navegar y buscar sin salir.
+`tail -n +5 archivo` muestra desde la línea 5 hasta el final; `head -c 100` muestra solo los primeros 100 bytes. Y `less +F archivo` funciona como `tail -f`, pero con Ctrl+C volvés a poder navegar y buscar sin salir.
 </Consejo>
 
 ## Identificar: qué es esto y dónde está
 
 - `file archivo` dice **qué tipo de contenido** tiene, mirando sus primeros bytes, sin importar la extensión: texto, script, programa compilado, imagen, archivo comprimido. Antes de abrir algo desconocido con `cat`, conviene preguntarle a `file` (un binario en pantalla se ve como basura y puede desordenar la terminal).
 - `stat archivo` muestra **todos los metadatos**: tamaño, inodo, enlaces, permisos, dueño y fechas.
-- `which comando` dice **qué programa se ejecuta** cuando escribes ese comando (la primera coincidencia en el PATH).
+- `which comando` dice **qué programa se ejecuta** cuando escribís ese comando (la primera coincidencia en el PATH).
 - `type comando` dice además si es un alias o un comando interno del shell.
 
 ## Buscar archivos con find
@@ -93,7 +93,7 @@ find /tmp -type f -mtime +30 -exec ls -l {} \;   # temporales viejos (mirar ante
 ```
 
 <Nota>
-Cuando buscas en carpetas que tu usuario no puede leer, `find` muestra un "Permission denied" por cada una. Agregar `2>/dev/null` al final los descarta: lo vas a entender a fondo en la lección de redirecciones. Si necesitas buscar también ahí, usa `sudo find`.
+Cuando buscás en carpetas que tu usuario no puede leer, `find` muestra un "Permission denied" por cada una. Agregar `2>/dev/null` al final los descarta: lo vas a entender a fondo en la lección de redirecciones. Si necesitás buscar también ahí, usa `sudo find`.
 </Nota>
 
 <Pregunta id="p06" />
@@ -104,10 +104,10 @@ Cuando buscas en carpetas que tu usuario no puede leer, `find` muestra un "Permi
 
 <ErroresComunes>
   <ErrorComun titulo="find no encuentra archivos que sí existen (o da &quot;paths must precede expression&quot;)">
-    Casi siempre falta poner el patrón entre comillas. `find . -name *.conf` hace que el shell expanda `*.conf` con los archivos de la carpeta actual antes de que find lo vea. Escribe siempre `-name '*.conf'`.
+    Casi siempre falta poner el patrón entre comillas. `find . -name *.conf` hace que el shell expanda `*.conf` con los archivos de la carpeta actual antes de que find lo vea. Escribí siempre `-name '*.conf'`.
   </ErrorComun>
   <ErrorComun titulo="La terminal muestra símbolos raros después de un cat">
-    Abriste un archivo binario (un programa, una imagen, algo comprimido). Usa `reset` para recuperar la terminal, y en adelante pregunta antes con `file`.
+    Abriste un archivo binario (un programa, una imagen, algo comprimido). Usá `reset` para recuperar la terminal, y en adelante pregunta antes con `file`.
   </ErrorComun>
   <ErrorComun titulo="No sé cómo salir de less o de man">
     Con la tecla `q`. Si escribiste algo en la búsqueda, primero Esc o Enter.

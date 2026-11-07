@@ -36,7 +36,7 @@ export function MatchExercise({ exercise, onComplete }: { exercise: Exercise; on
         <Icon name="layers" className="mt-0.5 text-accent" />
         <RichText text={exercise.consigna} className="font-medium" />
       </div>
-      <p className="mb-3 text-xs text-muted">Toca un elemento de la izquierda y después su pareja de la derecha. Para deshacer, vuelve a tocarlo.</p>
+      <p className="mb-3 text-xs text-muted">Tocá un elemento de la izquierda y después su pareja de la derecha. Para deshacer, vuelve a tocarlo.</p>
       <div className="grid grid-cols-2 gap-3">
         <ul className="space-y-2">
           {exercise.pares.map((p, i) => {
@@ -115,7 +115,7 @@ export function MatchExercise({ exercise, onComplete }: { exercise: Exercise; on
       </div>
       {checked && (
         <Callout tone={correctCount === n ? 'ok' : 'warn'} className="mt-3" title={correctCount === n ? '¡Todas las parejas son correctas!' : `${correctCount} de ${n} parejas correctas`}>
-          {correctCount === n ? exercise.explicacion ? <RichText text={exercise.explicacion} /> : 'Bien hecho.' : 'Las parejas en rojo no coinciden. Tócalas para deshacerlas y probar otra vez.'}
+          {correctCount === n ? exercise.explicacion ? <RichText text={exercise.explicacion} /> : 'Bien hecho.' : 'Las parejas en rojo no coinciden. Tocalas para deshacerlas y probar otra vez.'}
         </Callout>
       )}
     </div>

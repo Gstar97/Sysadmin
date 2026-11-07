@@ -3,7 +3,7 @@ shell: bash
 titulo: Revisar la memoria de un servidor
 descripcion: >-
   Un compañero dice que el servidor "se está quedando sin memoria" porque casi no tiene memoria
-  libre. Revisa los datos antes de pedir una ampliación.
+  libre. Revisá los datos antes de pedir una ampliación.
 estado_inicial:
   distro: rocky
   hostname: srv-app01
@@ -11,7 +11,7 @@ estado_inicial:
   usuarios:
     - { nombre: estudiante, sudo: true }
 pasos:
-  - consigna: Mira el uso de memoria con `free -h`.
+  - consigna: Mirá el uso de memoria con `free -h`.
     verificar:
       - { comando_usado: '^\s*free' }
     pistas:
@@ -22,7 +22,7 @@ pasos:
       libera en cuanto un programa la necesita. La columna que importa es **available** (2,7 Gi):
       la memoria que los programas todavía pueden usar. El swap está en 0: el servidor no tuvo que
       usar el disco como memoria. No hace falta ampliar.
-  - consigna: Mira los mismos datos en crudo con `cat /proc/meminfo`. Busca *MemTotal* y *MemAvailable*.
+  - consigna: Mirá los mismos datos en crudo con `cat /proc/meminfo`. Buscá *MemTotal* y *MemAvailable*.
     verificar:
       - { comando_usado: '/proc/meminfo' }
     pistas:
@@ -32,8 +32,8 @@ pasos:
       `free` y otras herramientas leen este archivo, que genera el kernel. Los valores están en kB
       (en realidad KiB: 1024 bytes).
   - consigna: >-
-      Averigua si el equipo tiene memoria ECC y cuántos módulos tiene con
-      `sudo dmidecode -t memory`. Busca *Error Correction Type* y la sección *Memory Device*.
+      Averiguá si el equipo tiene memoria ECC y cuántos módulos tiene con
+      `sudo dmidecode -t memory`. Buscá *Error Correction Type* y la sección *Memory Device*.
     verificar:
       - { comando_usado: 'sudo\s+dmidecode.*memory|sudo\s+dmidecode.*-t\s*1[67]' }
     pistas:
@@ -41,6 +41,6 @@ pasos:
     solucion: [sudo dmidecode -t memory]
     explicacion: >-
       *Error Correction Type: Multi-bit ECC* indica memoria con corrección de errores. Hay un solo
-      módulo (*Memory Device*) de 4 GB en la ranura *DIMM 0*. En un servidor físico aquí también
+      módulo (*Memory Device*) de 4 GB en la ranura *DIMM 0*. En un servidor físico acá también
       aparecen la velocidad, el fabricante, el número de parte y las ranuras vacías, que es lo que
       hace falta para pedir una ampliación compatible.

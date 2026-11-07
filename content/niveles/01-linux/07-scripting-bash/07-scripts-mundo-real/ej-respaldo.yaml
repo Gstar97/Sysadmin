@@ -21,7 +21,7 @@ estado_inicial:
     /backup/datos-2026-10-30-0230.tar.gz: { contenido: "reciente\n", antiguedad_dias: 3 }
 pasos:
   - consigna: >-
-      Instala el script en /usr/local/bin/respaldo.sh (con sudo tee y un here-document) y dale
+      Instalá el script en /usr/local/bin/respaldo.sh (con sudo tee y un here-document) y dale
       permisos 755. Léelo antes de seguir: cada bloque tiene un comentario.
     verificar:
       - { archivo: /usr/local/bin/respaldo.sh, contenido_incluye: "sha256sum" }
@@ -32,7 +32,7 @@ pasos:
     explicacion: >-
       Lo importante no es el tar: es la verificación (que el archivo se pueda leer y no esté
       vacío), la suma de control para comprobarlo después, la rotación y el registro.
-  - consigna: Ejecútalo con sudo, usando solo el nombre (respaldo.sh), para ver qué pasa.
+  - consigna: Ejecutalo con sudo, usando solo el nombre (respaldo.sh), para ver qué pasa.
     verificar:
       - { comando_usado: 'sudo\s+respaldo\.sh' }
       - { salida_contiene: "command not found" }
@@ -43,7 +43,7 @@ pasos:
       En Rocky, sudo busca los comandos en su propia lista de carpetas (secure_path, en
       /etc/sudoers), que no incluye /usr/local/bin. Con sudo, y en cron, usa siempre la ruta
       completa.
-  - consigna: Ahora sí, ejecútalo con la ruta completa, guardando 7 días.
+  - consigna: Ahora sí, ejecutalo con la ruta completa, guardando 7 días.
     verificar:
       - { comando_usado: 'sudo\s+/usr/local/bin/respaldo\.sh\s+/srv/datos' }
       - { salida_contiene: "respaldo: ok:" }
@@ -53,7 +53,7 @@ pasos:
       - "`sudo /usr/local/bin/respaldo.sh /srv/datos /backup 7`"
     solucion: [sudo /usr/local/bin/respaldo.sh /srv/datos /backup 7]
     explicacion: Creó el respaldo nuevo, lo verificó y borró el de hace 13 días. El de hace 3 días queda.
-  - consigna: Comprueba la suma de control del respaldo nuevo.
+  - consigna: Comprobá la suma de control del respaldo nuevo.
     verificar:
       - { comando_usado: 'sha256sum\s+-c' }
       - { salida_contiene: ": OK" }
@@ -62,7 +62,7 @@ pasos:
     solucion: [sha256sum -c /backup/datos-*.sha256]
     explicacion: Si el archivo se dañara (un disco que falla, una copia cortada), esto daría FAILED.
   - consigna: >-
-      La prueba que de verdad importa: restáuralo en /tmp/prueba y compáralo con el original.
+      La prueba que de verdad importa: restauralo en /tmp/prueba y comparalo con el original.
     verificar:
       - { comando_usado: 'tar\s+-?x' }
       - { comando_usado: 'diff\s+-r' }
@@ -72,7 +72,7 @@ pasos:
       - "`mkdir -p /tmp/prueba && tar xzf \"$(ls -t /backup/datos-*.tar.gz | head -1)\" -C /tmp/prueba && diff -r /srv/datos /tmp/prueba/datos && echo idénticos`"
     solucion: ['mkdir -p /tmp/prueba && tar xzf "$(ls -t /backup/datos-*.tar.gz | head -1)" -C /tmp/prueba && diff -r /srv/datos /tmp/prueba/datos && echo idénticos']
     explicacion: Un respaldo que nunca se restauró es solo una esperanza. Esta prueba, hecha de vez en cuando, es lo que le da valor.
-  - consigna: Ejecuta el script sobre /srv/vacia, una carpeta vacía, y mira el código de salida.
+  - consigna: Ejecutá el script sobre /srv/vacia, una carpeta vacía, y mirá el código de salida.
     verificar:
       - { comando_usado: 'respaldo\.sh\s+/srv/vacia' }
       - { salida_contiene: "no tiene archivos" }
@@ -83,7 +83,7 @@ pasos:
       Falla con 1 y no deja un archivo inútil en /backup. Un script que hubiera terminado con 0
       habría dejado durante semanas respaldos vacíos sin que nadie se entere.
   - consigna: >-
-      Prográmalo todos los días a las 2:30 con un archivo /etc/cron.d/respaldo (usuario root, ruta
+      Programalo todos los días a las 2:30 con un archivo /etc/cron.d/respaldo (usuario root, ruta
       completa, salida al log /var/log/respaldo.log).
     verificar:
       - { archivo: /etc/cron.d/respaldo, contenido_incluye: "30 2 * * * root /usr/local/bin/respaldo.sh /srv/datos /backup 7" }

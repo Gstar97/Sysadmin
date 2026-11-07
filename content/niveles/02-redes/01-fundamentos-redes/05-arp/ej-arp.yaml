@@ -18,7 +18,7 @@ estado_inicial:
     - { ip: 192.168.10.30, hostname: impresora, red: { interfaces: [{ nombre: eth0, ip: 192.168.10.30/24, mac: "00:1b:a9:30:30:30" }] } }
     - { ip: 192.168.10.31, hostname: camara-entrada, red: { interfaces: [{ nombre: eth0, ip: 192.168.10.30/24, mac: "9c:8e:cd:0c:ca:01" }] } }
 pasos:
-  - consigna: Mira la tabla ARP (los vecinos que este equipo ya conoce).
+  - consigna: Mirá la tabla ARP (los vecinos que este equipo ya conoce).
     verificar:
       - { comando_usado: ip neigh }
     pistas: ["ip neigh (o ip n)."]
@@ -27,14 +27,14 @@ pasos:
       Solo aparece la puerta de enlace: es con quien más se habla. REACHABLE quiere decir que
       la entrada se confirmó hace poco; STALE, que es vieja y se va a volver a confirmar la
       próxima vez que se use.
-  - consigna: Haz dos pings al servidor 192.168.10.20 y vuelve a mirar la tabla ARP.
+  - consigna: Hacé dos pings al servidor 192.168.10.20 y volvé a mirar la tabla ARP.
     verificar:
       - { comando_usado: ping }
       - { salida_contiene: "52:54:00:aa:10:20" }
     pistas: ["ping -c 2 192.168.10.20 y después ip neigh."]
     solucion: [ping -c 2 192.168.10.20, ip neigh]
     explicacion: Antes del primer ping hubo una consulta ARP; ahora la MAC del servidor está en la tabla.
-  - consigna: Vacía la tabla ARP (hace falta sudo) y comprueba que el servidor ya no figura.
+  - consigna: Vaciá la tabla ARP (hace falta sudo) y comprobá que el servidor ya no figura.
     verificar:
       - { comando_usado: ip neigh flush }
       - { salida_no_contiene: "52:54:00:aa:10:20" }
@@ -44,7 +44,7 @@ pasos:
       Vaciar la tabla es útil cuando un equipo cambió de placa o de IP y los demás siguen
       usando la MAC vieja. Las entradas se vuelven a aprender solas.
   - consigna: >-
-      Ahora la impresora. Usa arping para preguntar varias veces quién tiene la IP
+      Ahora la impresora. Usá arping para preguntar varias veces quién tiene la IP
       192.168.10.30 (con -c 3 y la interfaz enp0s3). ¿Cuántos equipos contestan?
     verificar:
       - { comando_usado: arping }

@@ -299,7 +299,7 @@ function NotesPanel({ lessonId }: { lessonId: string }) {
         onChange={(e) => onChange(e.target.value)}
         rows={5}
         className="w-full rounded-xl border border-line bg-surface p-3 text-[0.97rem]"
-        placeholder="Escribe lo que quieras recordar de esta lección: comandos, dudas, ideas. Se guarda solo en este navegador."
+        placeholder="Escribí lo que quieras recordar de esta lección: comandos, dudas, ideas. Se guarda solo en este navegador."
         aria-label="Notas personales de esta lección"
       />
       <div className="mt-1 flex justify-between text-xs text-muted">

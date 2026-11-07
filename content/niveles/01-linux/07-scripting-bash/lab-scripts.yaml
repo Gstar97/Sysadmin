@@ -5,23 +5,23 @@ descripcion: >-
   viejos y alta de usuarios desde un CSV), guardarlas en un repositorio git, revisarlas con
   ShellCheck, instalarlas y programarlas.
 pasos:
-  - titulo: Toma una instantánea e instala las herramientas
+  - titulo: Tomá una instantánea e instala las herramientas
     detalle: ShellCheck está en EPEL, el repositorio extra que viste en la lección 1.3.1.
     comandos:
       - sudo dnf install -y git epel-release
       - sudo dnf install -y ShellCheck
       - git --version && shellcheck --version | head -2
     comprobar: Los dos comandos muestran su versión.
-  - titulo: Crea el repositorio del kit
+  - titulo: Creá el repositorio del kit
     comandos:
       - mkdir -p ~/kit-admin && cd ~/kit-admin
       - git init
       - git config --global user.name "Tu Nombre"
       - git config --global user.email "tu@correo"
     comprobar: git status dice "On branch main" (o master) y "No commits yet".
-  - titulo: Escribe salud.sh
+  - titulo: Escribí salud.sh
     detalle: >-
-      Usa el script de la lección 1.7.7 como base. Agrégale una línea con los últimos inicios de
+      Usá el script de la lección 1.7.7 como base. Agregale una línea con los últimos inicios de
       sesión (last -n 5) y otra con los servicios que no arrancan.
     archivo:
       ruta: ~/kit-admin/salud.sh
@@ -42,11 +42,11 @@ pasos:
     comandos:
       - chmod +x salud.sh && ./salud.sh
       - shellcheck salud.sh
-    comprobar: El reporte se ve completo y shellcheck no muestra advertencias (o entiendes y corriges las que muestre).
-  - titulo: Escribe limpiar-logs.sh
+    comprobar: El reporte se ve completo y shellcheck no muestra advertencias (o entendés y corregís las que muestre).
+  - titulo: Escribí limpiar-logs.sh
     detalle: >-
       Parte de limpiar-tmp.sh de la lección 1.7.5 y adáptalo: que comprima con gzip los .log de
-      más de 7 días y borre los .gz de más de 30, con -n para probar. Crea datos de prueba con
+      más de 7 días y borre los .gz de más de 30, con -n para probar. Creá datos de prueba con
       fechas viejas para probarlo.
     comandos:
       - sudo mkdir -p /var/log/miapp
@@ -55,7 +55,7 @@ pasos:
       - sudo ./limpiar-logs.sh /var/log/miapp && ls -l /var/log/miapp
       - shellcheck limpiar-logs.sh
     comprobar: Con -n solo muestra lo que haría; sin -n, app-10.log queda comprimido, app-3.log intacto, y el registro dice qué hizo.
-  - titulo: Escribe alta-usuarios.sh y pruébalo dos veces
+  - titulo: Escribí alta-usuarios.sh y probalo dos veces
     detalle: El script de la lección 1.7.7, con este CSV de prueba.
     archivo:
       ruta: ~/kit-admin/empleados.csv
@@ -70,13 +70,13 @@ pasos:
       - sudo ./alta-usuarios.sh empleados.csv
       - id mgarcia && sudo chage -l mgarcia | head -1
     comprobar: La primera ejecución real crea los tres usuarios con su clave temporal; la segunda dice "ya existe" para los tres; chage dice password must be changed.
-  - titulo: Guarda todo en git
+  - titulo: Guardá todo en git
     comandos:
       - git add salud.sh limpiar-logs.sh alta-usuarios.sh
       - 'git commit -m "Kit de administración: salud, limpieza de logs y alta de usuarios"'
       - git log --oneline
     comprobar: git log muestra el commit. No agregues empleados.csv si tuviera datos reales.
-  - titulo: Instálalos y prográmalos
+  - titulo: Instalalos y programalos
     detalle: >-
       install copia y deja dueño y permisos en un solo paso. salud.sh todos los días hábiles a
       las 7:30 y limpiar-logs.sh los domingos a las 3:00, con rutas completas y la salida a un log.
@@ -92,7 +92,7 @@ pasos:
         0 3 * * 0     root  /usr/local/sbin/limpiar-logs.sh /var/log/miapp >> /var/log/limpiar-logs.log 2>&1
     comprobar: ls -l /usr/local/sbin muestra los tres scripts de root con rwxr-xr-x, y /etc/cron.d/kit-admin tiene las dos líneas.
     si_falla: Si cron no los ejecuta, revisa /var/log/cron (usuario root en la línea, % escapado con \%).
-  - titulo: Revisa el resultado y documenta
+  - titulo: Revisá el resultado y documenta
     detalle: >-
       Al día siguiente, mira /var/log/salud y el registro de la limpieza. En el cuaderno técnico:
       qué hace cada script, dónde está instalado, cuándo corre, dónde deja su salida y dónde está

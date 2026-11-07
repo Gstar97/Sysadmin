@@ -36,7 +36,7 @@ En una casa, el Wi-Fi es un aparato con una clave pegada abajo. En una empresa s
 
 ## Planificar canales
 
-Un AP en el mismo canal que su vecino no "choca": se turnan para hablar, y los dos van más lentos. Un AP en un canal que **se pisa** con el del vecino (el 1 con el 3, por ejemplo) es peor: cada uno es ruido para el otro. La regla: vecinos en canales que no se pisen, y la potencia ajustada para que cada AP cubra su zona y no la del de al lado. Pruébalo:
+Un AP en el mismo canal que su vecino no "choca": se turnan para hablar, y los dos van más lentos. Un AP en un canal que **se pisa** con el del vecino (el 1 con el 3, por ejemplo) es peor: cada uno es ruido para el otro. La regla: vecinos en canales que no se pisen, y la potencia ajustada para que cada AP cubra su zona y no la del de al lado. Probalo:
 
 <PlanificadorWifi />
 
@@ -49,7 +49,7 @@ En la práctica, antes de instalar se hace un **relevamiento** (un recorrido mid
 - **WPA2/WPA3-Personal**: una clave compartida para todos. Sirve en una casa o para la red de invitados. Su problema en una empresa: si alguien se va, hay que cambiar la clave en todos los equipos. WPA3-Personal (SAE) protege mejor que WPA2 contra quien intenta adivinar la clave.
 - **WPA2/WPA3-Enterprise**: cada persona entra con **sus** credenciales (usuario y contraseña del dominio, o un certificado), usando **802.1X** y un servidor **RADIUS** (FreeRADIUS en Linux, NPS en Windows Server) que consulta el directorio.
 
-<Diagrama svg={dot1x} alt="Tres actores: la portátil (suplicante), el punto de acceso (autenticador, que no sabe las contraseñas) y el servidor RADIUS (FreeRADIUS o NPS, que consulta el directorio). 1, la portátil pide entrar con EAP; 2, el AP pasa el pedido a RADIUS; 3, RADIUS responde aceptado, usuario de Ventas, VLAN 20; 4, la portátil recibe claves propias y queda en la VLAN 20. Métodos: PEAP-MSCHAPv2, con usuario y contraseña del dominio dentro de un túnel TLS, donde el equipo tiene que validar el certificado del servidor; y EAP-TLS, con un certificado por equipo o usuario, el más seguro. Si alguien se va, se desactiva su cuenta." pie="El punto de acceso solo pasa mensajes: quien decide es RADIUS." />
+<Diagrama svg={dot1x} alt="Tres actores: la notebook (suplicante), el punto de acceso (autenticador, que no sabe las contraseñas) y el servidor RADIUS (FreeRADIUS o NPS, que consulta el directorio). 1, la notebook pide entrar con EAP; 2, el AP pasa el pedido a RADIUS; 3, RADIUS responde aceptado, usuario de Ventas, VLAN 20; 4, la notebook recibe claves propias y queda en la VLAN 20. Métodos: PEAP-MSCHAPv2, con usuario y contraseña del dominio dentro de un túnel TLS, donde el equipo tiene que validar el certificado del servidor; y EAP-TLS, con un certificado por equipo o usuario, el más seguro. Si alguien se va, se desactiva su cuenta." pie="El punto de acceso solo pasa mensajes: quien decide es RADIUS." />
 
 <Ordenar ejercicio={pasos} />
 
@@ -59,7 +59,7 @@ En una empresa, cada persona entra al Wi-Fi con su propio usuario, no con una cl
 
 ## SSID, VLAN y controladoras
 
-Cada **SSID** (el nombre de la red que ves en el teléfono) se asocia a una **VLAN**. Un mismo AP emite varios SSID y los manda por un **troncal** hasta el switch:
+Cada **SSID** (el nombre de la red que ves en el celular) se asocia a una **VLAN**. Un mismo AP emite varios SSID y los manda por un **troncal** hasta el switch:
 
 | SSID | Seguridad | VLAN | Qué puede hacer |
 | --- | --- | --- | --- |
@@ -69,7 +69,7 @@ Cada **SSID** (el nombre de la red que ves en el teléfono) se asocia a una **VL
 
 Pocos SSID es mejor: cada uno agrega anuncios por el aire que restan capacidad. Con RADIUS, un solo SSID corporativo puede mandar a cada usuario a la VLAN de su área (**VLAN dinámica**).
 
-En una empresa los AP no se configuran de a uno: los maneja una **controladora** (un equipo, una máquina virtual o un servicio en la nube, según el fabricante: UniFi, Aruba, Meraki, Omada, Ruckus...) que define los SSID, los canales y la seguridad para todos. Y se encarga del **roaming**: que un teléfono en una videollamada pase de un AP a otro mientras su dueño camina, sin cortarse (los estándares 802.11k, v y r ayudan a que el cambio sea rápido).
+En una empresa los AP no se configuran de a uno: los maneja una **controladora** (un equipo, una máquina virtual o un servicio en la nube, según el fabricante: UniFi, Aruba, Meraki, Omada, Ruckus...) que define los SSID, los canales y la seguridad para todos. Y se encarga del **roaming**: que un celular en una videollamada pase de un AP a otro mientras su dueño camina, sin cortarse (los estándares 802.11k, v y r ayudan a que el cambio sea rápido).
 
 <ErroresComunes>
   <ErrorComun titulo="Usar canales que se pisan en 2,4 GHz">
@@ -82,10 +82,10 @@ En una empresa los AP no se configuran de a uno: los maneja una **controladora**
     Termina en un papel pegado en la pared y nadie la cambia cuando alguien se va. Para empleados, Enterprise con RADIUS.
   </ErrorComun>
   <ErrorComun titulo="No validar el certificado del servidor RADIUS">
-    Con PEAP, si el equipo no verifica el certificado, un AP falso puede recibir las credenciales. Configura los clientes para que validen el certificado y el nombre del servidor.
+    Con PEAP, si el equipo no verifica el certificado, un AP falso puede recibir las credenciales. Configurá los clientes para que validen el certificado y el nombre del servidor.
   </ErrorComun>
   <ErrorComun titulo="Invitados en la misma VLAN que los empleados">
-    Un teléfono de un visitante queda al lado del servidor de archivos. Los invitados, en su VLAN, solo con salida a internet.
+    Un celular de un visitante queda al lado del servidor de archivos. Los invitados, en su VLAN, solo con salida a internet.
   </ErrorComun>
   <ErrorComun titulo="Potencia al máximo en todos los AP">
     Los equipos se quedan pegados a un AP lejano y los vecinos se pisan. Menos potencia y más AP cubren mejor.

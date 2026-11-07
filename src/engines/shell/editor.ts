@@ -42,7 +42,7 @@ export function saveEditor(sh: Shell, req: EditorRequest, content: string): Save
   const text = content.endsWith('\n') || content === '' ? content : `${content}\n`
   if (req.editor === 'visudo') {
     const bad = checkSudoers(text)
-    if (bad) return { ok: false, message: `>>> ${req.path}: syntax error near line ${bad} <<<\n[simulador] visudo no guarda un sudoers con errores: corrígelo o descarta los cambios.` }
+    if (bad) return { ok: false, message: `>>> ${req.path}: syntax error near line ${bad} <<<\n[simulador] visudo no guarda un sudoers con errores: corregilo o descarta los cambios.` }
     vfs.writeFile(req.path, text, ROOT_CRED, { mode: 0o440 })
     return { ok: true }
   }

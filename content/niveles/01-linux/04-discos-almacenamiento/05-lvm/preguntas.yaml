@@ -10,12 +10,12 @@
 - id: p02
   tipo: ordenar_pasos
   diagnostico: true
-  enunciado: Ordena los pasos para tener un volumen de LVM montado a partir de un disco nuevo.
+  enunciado: Ordená los pasos para tener un volumen de LVM montado a partir de un disco nuevo.
   pasos: [pvcreate /dev/sdb, vgcreate datos /dev/sdb, lvcreate -n srv -L 4G datos, mkfs.xfs /dev/datos/srv, mount /dev/datos/srv /srv/datos]
   explicacion: PV, VG, LV, sistema de archivos y montaje.
 - id: p03
   tipo: interpretar_salida
-  enunciado: Necesitas 5 GiB más en un volumen del grupo app. ¿Qué te dice esta salida?
+  enunciado: Necesitás 5 GiB más en un volumen del grupo app. ¿Qué te dice esta salida?
   salida: |
     $ sudo vgs
       VG  #PV #LV #SN Attr   VSize   VFree
@@ -28,7 +28,7 @@
     - { texto: "No se puede saber", explicacion: "La columna VFree lo dice." }
 - id: p04
   tipo: completar_comando
-  enunciado: Escribe el comando que agranda el volumen datos/srv en 10 GiB, junto con su sistema de archivos.
+  enunciado: Escribí el comando que agranda el volumen datos/srv en 10 GiB, junto con su sistema de archivos.
   aceptadas: [sudo lvextend -r -L +10G datos/srv, sudo lvextend -L +10G -r datos/srv, sudo lvextend -r -L +10G /dev/datos/srv, sudo lvextend --resizefs -L +10G datos/srv]
   explicacion: Sin el +, -L 10G significaría "que quede en 10 GiB", no "sumar 10 GiB".
 - id: p05
@@ -41,7 +41,7 @@
     - { texto: "df está roto", explicacion: "df muestra el tamaño del sistema de archivos, que sigue igual." }
 - id: p06
   tipo: opcion_multiple
-  enunciado: El grupo datos no tiene espacio libre y el volumen srv está lleno. Agregaste el disco /dev/sdd a la VM. ¿Qué haces?
+  enunciado: El grupo datos no tiene espacio libre y el volumen srv está lleno. Agregaste el disco /dev/sdd a la VM. ¿Qué hacés?
   opciones:
     - { texto: "vgextend datos /dev/sdd y después lvextend -r -l +100%FREE datos/srv", correcta: true, explicacion: "El disco nuevo suma espacio al grupo, y el volumen lo toma." }
     - { texto: "lvextend -r -L +10G /dev/sdd", explicacion: "lvextend recibe el volumen, no el disco." }
@@ -73,6 +73,6 @@
     - { texto: "Que hay que reinstalar", explicacion: "No hace falta." }
 - id: p10
   tipo: completar_comando
-  enunciado: Escribe el comando que suma el disco /dev/sdc al grupo de volúmenes datos.
+  enunciado: Escribí el comando que suma el disco /dev/sdc al grupo de volúmenes datos.
   aceptadas: [sudo vgextend datos /dev/sdc]
   explicacion: Si /dev/sdc todavía no es un PV, vgextend lo prepara solo.

@@ -176,7 +176,7 @@ register('journalctl', {
       const failed = /^Failed to start (\S+)/.exec(e.message)
       if (a.flags.has('x') && failed && e.ident === 'systemd') ctx.out(CATALOG_FAILED(failed[1]) + '\n')
     }
-    if (a.flags.has('f')) ctx.err('[simulador] journalctl -f se queda mostrando líneas nuevas en vivo; aquí termina enseguida. En un servidor real se corta con Ctrl+C.\n')
+    if (a.flags.has('f')) ctx.err('[simulador] journalctl -f se queda mostrando líneas nuevas en vivo; acá termina enseguida. En un servidor real se corta con Ctrl+C.\n')
     return 0
   },
 })

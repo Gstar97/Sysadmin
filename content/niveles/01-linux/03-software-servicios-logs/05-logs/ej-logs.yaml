@@ -3,7 +3,7 @@ shell: bash
 titulo: Revisar los logs del inventario
 descripcion: >-
   El sistema de inventario de la oficina tuvo cortes esta madrugada, y su archivo de log no deja
-  de crecer. Investiga qué pasó con journalctl, revisa los intentos de acceso por SSH y configura
+  de crecer. Investigá qué pasó con journalctl, revisá los intentos de acceso por SSH y configurá
   la rotación de su log.
 estado_inicial:
   distro: rocky
@@ -32,7 +32,7 @@ estado_inicial:
     - { unidad: inventario.service, prioridad: err, mensaje: "No se pudo conectar a la base de datos: tiempo de espera agotado", hace_minutos: 45 }
     - { unidad: inventario.service, prioridad: warning, mensaje: "Reintentando la conexión (2/5)", hace_minutos: 44 }
 pasos:
-  - consigna: Empieza por lo grave. Muestra solo los errores desde el último arranque.
+  - consigna: Empezá por lo grave. Mostrá solo los errores desde el último arranque.
     verificar:
       - { comando_usado: 'journalctl\s+.*-p\s*(err|3)' }
       - { salida_contiene: base de datos }
@@ -40,8 +40,8 @@ pasos:
       - "-p filtra por prioridad y -b se queda con el arranque actual."
       - "`journalctl -p err -b`"
     solucion: [journalctl -p err -b]
-    explicacion: Con -p err ves los errores y lo más grave. Es una buena primera mirada a un servidor que no conoces.
-  - consigna: Ahora mira todo lo que dijo el servicio inventario en la última hora.
+    explicacion: Con -p err ves los errores y lo más grave. Es una buena primera mirada a un servidor que no conocés.
+  - consigna: Ahora mirá todo lo que dijo el servicio inventario en la última hora.
     verificar:
       - { comando_usado: 'journalctl\s+.*-u\s*inventario.*--since|journalctl\s+.*--since.*-u\s*inventario' }
       - { salida_contiene: Reintentando }
@@ -50,7 +50,7 @@ pasos:
       - "`journalctl -u inventario --since \"1 hour ago\"`"
     solucion: ['journalctl -u inventario --since "1 hour ago"']
     explicacion: El servicio perdió la conexión con la base de datos y está reintentando. El próximo paso sería revisar el servidor de la base de datos.
-  - consigna: Revisa si hubo intentos fallidos de acceso por SSH, buscando el texto "Failed password" en los mensajes de sshd.
+  - consigna: Revisá si hubo intentos fallidos de acceso por SSH, buscando el texto "Failed password" en los mensajes de sshd.
     verificar:
       - { comando_usado: 'journalctl\s+.*(-g|--grep)|grep\s+.*Failed password' }
       - { salida_contiene: Failed password }
@@ -62,7 +62,7 @@ pasos:
       Tres intentos desde la misma IP en un minuto, con usuarios típicos (root, admin, test): es un
       robot probando contraseñas. Es habitual en servidores expuestos a internet; en el módulo 1.6
       vas a ver cómo protegerte.
-  - consigna: Mira los permisos de la carpeta del log del inventario.
+  - consigna: Mirá los permisos de la carpeta del log del inventario.
     verificar:
       - { comando_usado: 'ls\s+-\w*l\w*d?\w*\s+/var/log/inventario' }
     pistas:
@@ -70,7 +70,7 @@ pasos:
     solucion: [ls -ld /var/log/inventario]
     explicacion: La carpeta es del usuario inventario y su grupo puede escribir (rwxrwxr-x). Vas a ver por qué importa en el próximo paso.
   - consigna: >-
-      Crea `/etc/logrotate.d/inventario` para rotar `/var/log/inventario/*.log` todos los días,
+      Creá `/etc/logrotate.d/inventario` para rotar `/var/log/inventario/*.log` todos los días,
       guardando 7 copias comprimidas (con delaycompress), sin quejarse si falta o está vacío, y
       creando el log nuevo con `create 0640 inventario inventario`.
     verificar:
@@ -78,7 +78,7 @@ pasos:
       - { archivo: /etc/logrotate.d/inventario, contenido_incluye: "rotate 7" }
       - { archivo: /etc/logrotate.d/inventario, contenido_incluye: "create 0640 inventario inventario" }
     pistas:
-      - "Puedes usar sudo nano /etc/logrotate.d/inventario."
+      - "Podés usar sudo nano /etc/logrotate.d/inventario."
       - |-
         Contenido:
         /var/log/inventario/*.log {
@@ -93,7 +93,7 @@ pasos:
     solucion:
       - "printf '/var/log/inventario/*.log {\\n    daily\\n    rotate 7\\n    compress\\n    delaycompress\\n    missingok\\n    notifempty\\n    create 0640 inventario inventario\\n}\\n' | sudo tee /etc/logrotate.d/inventario"
     explicacion: Cada opción va en su línea, dentro de las llaves. Lo que no pongas se toma de /etc/logrotate.conf.
-  - consigna: Prueba la configuración en modo de prueba, que no cambia nada. Lee el error.
+  - consigna: Probá la configuración en modo de prueba, que no cambia nada. Leé el error.
     verificar:
       - { comando_usado: 'logrotate\s+(-d|--debug)\s+/etc/logrotate\.d/inventario' }
       - { salida_contiene: insecure permissions }
@@ -104,7 +104,7 @@ pasos:
       logrotate trabaja como root, y no quiere hacerlo en una carpeta donde otro usuario puede
       escribir: podría usarse para engañarlo y pisar archivos del sistema. La solución es decirle
       con qué cuenta trabajar ahí, con la opción su.
-  - consigna: Agrega la línea `su inventario inventario` dentro del bloque y vuelve a probar.
+  - consigna: Agregá la línea `su inventario inventario` dentro del bloque y volvé a probar.
     verificar:
       - { archivo: /etc/logrotate.d/inventario, contenido_incluye: "su inventario inventario" }
       - { comando_usado: 'logrotate\s+(-d|--debug)\s+/etc/logrotate\.d/inventario' }
@@ -114,7 +114,7 @@ pasos:
       - "sudo sed -i 's/    daily/    daily\\n    su inventario inventario/' /etc/logrotate.d/inventario"
       - sudo logrotate -d /etc/logrotate.d/inventario
     explicacion: Ya no hay error. Dice que el log no necesita rotarse todavía porque es la primera vez que logrotate lo ve.
-  - consigna: Fuerza una rotación para comprobar que funciona y mira cómo quedó la carpeta.
+  - consigna: Forzá una rotación para comprobar que funciona y mirá cómo quedó la carpeta.
     verificar:
       - { archivo: /var/log/inventario/app.log.1 }
       - { archivo: /var/log/inventario/app.log, dueno: inventario, modo: "0640" }

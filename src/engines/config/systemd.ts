@@ -88,7 +88,7 @@ export function validateSystemd(text: string): { diagnostics: Diagnostic[]; entr
     if (!KEYS[section].includes(key)) {
       const elsewhere = Object.entries(KEYS).find(([, ks]) => ks.includes(key))?.[0]
       if (elsewhere) {
-        diagnostics.push({ line, severity: 'error', message: `${key} va en la sección [${elsewhere}], no en [${section}]. Aquí systemd la ignora.` })
+        diagnostics.push({ line, severity: 'error', message: `${key} va en la sección [${elsewhere}], no en [${section}]. Acá systemd la ignora.` })
       } else {
         const s = suggest(key, KEYS[section])
         diagnostics.push({ line, severity: s ? 'error' : 'warning', message: `systemd no conoce la opción "${key}" en [${section}] y la ignora.${s ? ` ¿Quisiste decir ${s}? Las mayúsculas importan.` : ''}` })
@@ -114,7 +114,7 @@ export function validateSystemd(text: string): { diagnostics: Diagnostic[]; entr
       diagnostics.push({ line, severity: 'error', message: `Restart=${value} no existe. Valores comunes: no, on-failure (si falla) o always (siempre).` })
     }
     if (key === 'OnCalendar' && !parseCalendar(value)) {
-      diagnostics.push({ line, severity: 'error', message: `systemd no entiende "${value}" como fecha. Ejemplos: daily, *-*-* 03:00:00, Mon..Fri 08:30. Puedes probarlo con systemd-analyze calendar.` })
+      diagnostics.push({ line, severity: 'error', message: `systemd no entiende "${value}" como fecha. Ejemplos: daily, *-*-* 03:00:00, Mon..Fri 08:30. Podés probarlo con systemd-analyze calendar.` })
     }
     if (key === 'WantedBy') {
       for (const v of value.split(/\s+/)) {
@@ -128,7 +128,7 @@ export function validateSystemd(text: string): { diagnostics: Diagnostic[]; entr
         diagnostics.push({ line, severity: 'warning', message: `Conviene la ruta completa del programa (por ejemplo /usr/bin/${exe}). systemd no usa tu PATH: solo busca en unas pocas carpetas fijas.` })
       }
       if (/(\s\||\|\s|>|&&|;\s|\$\()/.test(cmd) && !/^\/(usr\/)?bin\/(ba)?sh\s+-c\s/.test(cmd)) {
-        diagnostics.push({ line, severity: 'warning', message: 'systemd ejecuta el programa sin una shell: |, >, && o ; no funcionan aquí. Ponlo en un script o usa /bin/bash -c "...".' })
+        diagnostics.push({ line, severity: 'warning', message: 'systemd ejecuta el programa sin una shell: |, >, && o ; no funcionan acá. Ponelo en un script o usá /bin/bash -c "...".' })
       }
     }
   }

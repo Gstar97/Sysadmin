@@ -1091,7 +1091,7 @@ register('systemctl', {
         }
         const t = verb === 'isolate' ? args[0] : verb === 'default' ? sys.defaultTarget : `${verb}.target`
         ctx.err(
-          `[simulador] En un servidor real, pasar a ${t} detiene todo lo que ese target no necesita${t === 'rescue.target' || t === 'emergency.target' ? ': se cortan las sesiones SSH y solo queda la consola' : ''}. Aquí no se cambia de target para que no pierdas la sesión.\n`,
+          `[simulador] En un servidor real, pasar a ${t} detiene todo lo que ese target no necesita${t === 'rescue.target' || t === 'emergency.target' ? ': se cortan las sesiones SSH y solo queda la consola' : ''}. Acá no se cambia de target para que no pierdas la sesión.\n`,
         )
         return 0
       }

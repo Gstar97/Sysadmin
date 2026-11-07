@@ -40,13 +40,13 @@ Lo que TCP garantiza:
 - **Orden**: si los segmentos llegan desordenados, se reordenan antes de entregarlos al programa.
 - **Control de flujo y de congestión**: TCP ajusta cuánto manda según lo que el otro puede recibir y según cuánto se pierde en el camino.
 
-UDP es como mandar una postal: la escribes y la tiras al buzón. No avisa que va, no confirma que llegó, no reordena. A cambio, es liviano: un DNS que pregunta por UDP tiene la respuesta en un ida y vuelta, en lugar de los tres pasos del saludo más la pregunta.
+UDP es como mandar una postal: la escribís y la tirás al buzón. No avisa que va, no confirma que llegó, no reordena. A cambio, es liviano: un DNS que pregunta por UDP tiene la respuesta en un ida y vuelta, en lugar de los tres pasos del saludo más la pregunta.
 
 <Diagrama svg={tcpUdp} alt="A la izquierda, una conexión TCP entre un cliente y un servidor en el puerto 443: SYN, SYN-ACK y ACK para abrir, datos con confirmaciones, y FIN para cerrar. A la derecha, UDP entre un cliente y un servidor DNS en el puerto 53: una consulta y una respuesta, sin conexión previa ni confirmaciones." pie="TCP abre una conexión y confirma todo; UDP manda y listo." />
 
 ## El saludo, paso a paso
 
-Mira una conexión completa: los indicadores que cambian (SYN, ACK, FIN) y cómo se invierten los puertos al contestar.
+Mirá una conexión completa: los indicadores que cambian (SYN, ACK, FIN) y cómo se invierten los puertos al contestar.
 
 <SimuladorPaquetes escenario={handshake} />
 
@@ -56,7 +56,7 @@ Dos cosas que te ayudan a diagnosticar:
 - Si al SYN no le contesta nadie, TCP reintenta unas veces y se rinde: **Connection timed out**. Pasa cuando no hay camino o cuando un firewall descarta en silencio.
 
 <EnSimple>
-TCP primero saluda y después habla, confirmando todo. UDP habla sin saludar. Si un puerto contesta el saludo, está abierto; si contesta "aquí no hay nadie", está cerrado; si no contesta nada, algo en el medio lo está bloqueando.
+TCP primero saluda y después habla, confirmando todo. UDP habla sin saludar. Si un puerto contesta el saludo, está abierto; si contesta "acá no hay nadie", está cerrado; si no contesta nada, algo en el medio lo está bloqueando.
 </EnSimple>
 
 <Terminal ejercicio={ejPuertos} />
@@ -85,7 +85,7 @@ HTTP/3 corre sobre QUIC, un protocolo que va sobre UDP pero agrega confiabilidad
 
 <ErroresComunes>
   <ErrorComun titulo="Abrir solo TCP para un servicio que usa UDP">
-    DNS usa sobre todo UDP 53 (y TCP 53 para respuestas grandes), NTP usa UDP 123, la VPN WireGuard usa UDP. Si abres solo TCP, el servicio no anda.
+    DNS usa sobre todo UDP 53 (y TCP 53 para respuestas grandes), NTP usa UDP 123, la VPN WireGuard usa UDP. Si abrís solo TCP, el servicio no anda.
   </ErrorComun>
   <ErrorComun titulo="Usar ping para decidir si un servicio funciona">
     Ping usa ICMP, no TCP ni UDP. Un equipo puede responder ping y tener el puerto cerrado, o al revés. Para un servicio, prueba su puerto (nc -zv, curl).

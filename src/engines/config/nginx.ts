@@ -250,7 +250,7 @@ export function validateNginx(src: string): { tree: NginxDirective[]; diagnostic
       const spec = D[d.name]
       if (!spec) {
         if (!/^(proxy|fastcgi|uwsgi|ssl|gzip|limit|open_file|client|large_client|real_ip|set_real_ip|sub_filter)_/.test(d.name) && !d.name.startsWith('$')) {
-          diagnostics.push({ line: d.line, severity: 'error', message: `Directiva desconocida "${d.name}" (nginx: unknown directive). Revisa si está bien escrita.` })
+          diagnostics.push({ line: d.line, severity: 'error', message: `Directiva desconocida "${d.name}" (nginx: unknown directive). Revisá si está bien escrita.` })
         }
       } else {
         const allowed = spec.ctx.includes(ctx) || (ctx === 'map' || ctx === 'types')

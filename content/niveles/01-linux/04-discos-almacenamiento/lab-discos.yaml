@@ -2,38 +2,38 @@ tipo: pasos
 titulo: Almacenamiento con LVM en rocky01
 descripcion: >-
   Vas a agregarle dos discos a rocky01, armar un grupo de volúmenes con ellos, crear volúmenes
-  para /srv/datos y /var/log, montarlos por UUID y agrandarlos sin apagar nada. Al final repites
+  para /srv/datos y /var/log, montarlos por UUID y agrandarlos sin apagar nada. Al final repetís
   la parte básica en ubuntu01.
 pasos:
-  - titulo: Toma una instantánea
+  - titulo: Tomá una instantánea
     detalle: >-
       Vas a tocar fstab y a mover /var/log: si algo sale mal, el servidor puede no arrancar.
-      Apaga rocky01 y toma una instantánea llamada antes-de-discos (con la VM apagada, la
+      Apagá rocky01 y tomá una instantánea llamada antes-de-discos (con la VM apagada, la
       instantánea es más simple y segura).
     comprobar: La instantánea aparece en tu hipervisor.
-  - titulo: Agrega dos discos virtuales
+  - titulo: Agregá dos discos virtuales
     detalle: >-
       En la configuración de la VM, agrega dos discos nuevos de 5 GiB cada uno (en VirtualBox:
-      Configuración → Almacenamiento → agregar disco al controlador). Enciende la VM y entra por
+      Configuración → Almacenamiento → agregar disco al controlador). Encendé la VM y entrá por
       SSH.
     comandos:
       - lsblk
     comprobar: lsblk muestra sdb y sdc de 5G, sin particiones.
     si_falla: Si no aparecen, revisa que los discos estén conectados al mismo controlador que sda y reinicia la VM.
-  - titulo: Particiona los dos discos para LVM
+  - titulo: Particioná los dos discos para LVM
     comandos:
       - sudo parted -s /dev/sdb mklabel gpt mkpart lvm 1MiB 100% set 1 lvm on
       - sudo parted -s /dev/sdc mklabel gpt mkpart lvm 1MiB 100% set 1 lvm on
       - lsblk /dev/sdb /dev/sdc
     comprobar: Cada disco tiene una partición (sdb1 y sdc1) que ocupa todo el disco.
-  - titulo: Arma el grupo y los volúmenes
+  - titulo: Armá el grupo y los volúmenes
     comandos:
       - sudo vgcreate datos /dev/sdb1 /dev/sdc1
       - sudo lvcreate -n srv -L 3G datos
       - sudo lvcreate -n logs -L 2G datos
       - sudo vgs; sudo lvs
     comprobar: "`vgs` muestra el grupo datos de casi 10 GiB con unos 5 GiB libres, y `lvs` los dos volúmenes."
-  - titulo: Crea los sistemas de archivos y monta /srv/datos por UUID
+  - titulo: Creá los sistemas de archivos y monta /srv/datos por UUID
     comandos:
       - sudo mkfs.xfs /dev/datos/srv
       - sudo mkfs.xfs /dev/datos/logs
@@ -44,7 +44,7 @@ pasos:
       - sudo systemctl daemon-reload && sudo mount -a
       - df -h /srv/datos
     comprobar: findmnt --verify no da errores y df muestra /srv/datos con unos 3 GiB.
-  - titulo: Mueve /var/log al volumen logs
+  - titulo: Mové /var/log al volumen logs
     detalle: >-
       Mover /var/log con el sistema funcionando tiene una trampa: los servicios tienen abiertos
       los logs viejos. Por eso se copian los datos, se monta el volumen nuevo y se reinicia. En
@@ -62,9 +62,9 @@ pasos:
     si_falla: >-
       Si el servidor arranca en modo de emergencia, entra con la contraseña de root, revisa
       `journalctl -xb`, comenta la línea nueva de fstab, `systemctl daemon-reload` y
-      `systemctl default`. Si no puedes entrar, vuelve a la instantánea.
+      `systemctl default`. Si no podés entrar, vuelve a la instantánea.
   - titulo: Agranda /srv/datos en caliente
-    detalle: Mientras escribes un archivo en /srv/datos, agranda el volumen con el espacio libre del grupo.
+    detalle: Mientras escribís un archivo en /srv/datos, agranda el volumen con el espacio libre del grupo.
     comandos:
       - sudo fallocate -l 2G /srv/datos/relleno
       - df -h /srv/datos
@@ -75,7 +75,7 @@ pasos:
   - titulo: Agranda un disco virtual y aprovecha el espacio
     detalle: >-
       En el hipervisor, agranda el disco sdc de 5 a 8 GiB con la VM encendida (si tu hipervisor
-      no lo permite, apágala, agrándalo y enciéndela). Después, Linux tiene que enterarse en tres
+      no lo permite, apagala, agrandalo y encendela). Después, Linux tiene que enterarse en tres
       capas: el disco, la partición y el PV.
     comandos:
       - echo 1 | sudo tee /sys/class/block/sdc/device/rescan
@@ -87,21 +87,21 @@ pasos:
     si_falla: >-
       Si parted pregunta por la copia de la tabla GPT ("Fix/Ignore?"), responde Fix: la tabla de
       respaldo tiene que estar al final del disco, que se movió.
-  - titulo: Agrega 1 GiB de swap en un archivo
+  - titulo: Agregá 1 GiB de swap en un archivo
     comandos:
       - sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
       - sudo mkswap /swapfile && sudo swapon /swapfile
       - echo '/swapfile none swap defaults 0 0' | sudo tee -a /etc/fstab
       - swapon --show
     comprobar: swapon --show muestra rl-swap y /swapfile.
-  - titulo: Repite lo básico en ubuntu01
+  - titulo: Repetí lo básico en ubuntu01
     detalle: |-
-      Agrega un disco de 5 GiB a ubuntu01 y crea un volumen montado en /srv/datos. Ten en cuenta:
+      Agregá un disco de 5 GiB a ubuntu01 y creá un volumen montado en /srv/datos. Tené en cuenta:
       - El sistema de archivos habitual es ext4 (mkfs.ext4), y en fstab el último campo va en 2.
-      - Mira sudo vgs: si ubuntu-vg tiene espacio libre (VFree), puedes agrandar la raíz con sudo lvextend -r -l +100%FREE ubuntu-vg/ubuntu-lv.
+      - Mirá sudo vgs: si ubuntu-vg tiene espacio libre (VFree), podés agrandar la raíz con sudo lvextend -r -l +100%FREE ubuntu-vg/ubuntu-lv.
       - Ubuntu no usa SELinux: no hace falta restorecon.
     comprobar: /srv/datos de ubuntu01 aparece en df -h y sobrevive a un reinicio.
-  - titulo: Documenta
+  - titulo: Documentá
     detalle: >-
       En tu cuaderno técnico: discos, particiones, grupo y volúmenes con sus tamaños, qué se
       monta dónde (con el UUID), cómo se agranda cada volumen y dónde está la copia de fstab.

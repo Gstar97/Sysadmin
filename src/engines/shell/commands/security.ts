@@ -221,7 +221,7 @@ register('restorecon', {
 
 register('chcon', {
   usage: 'chcon [-R] -t TIPO RUTA...',
-  summary: '  Cambia la etiqueta a mano. Ojo: un restorecon (o un relabel completo) la deshace;\n  para que dure, usa semanage fcontext -a y después restorecon.',
+  summary: '  Cambia la etiqueta a mano. Ojo: un restorecon (o un relabel completo) la deshace;\n  para que dure, usá semanage fcontext -a y después restorecon.',
   run(ctx) {
     if (!rockyOnly(ctx)) return 127
     const args = [...ctx.args]
@@ -365,7 +365,7 @@ register('semanage', {
       }
       const current = portType(ctx.sys, proto, Number(port))
       if (has('-a') && !['reserved_port_t', 'unreserved_port_t'].includes(current)) {
-        ctx.err(`ValueError: Port ${key} already defined\n[simulador] Ese puerto ya tiene el tipo ${current}. Para cambiarlo, usa -m en lugar de -a.\n`)
+        ctx.err(`ValueError: Port ${key} already defined\n[simulador] Ese puerto ya tiene el tipo ${current}. Para cambiarlo, usá -m en lugar de -a.\n`)
         return 1
       }
       se.localPorts.set(key, type)
@@ -507,7 +507,7 @@ register('aa-status', {
   path: '/usr/sbin',
   run(ctx) {
     if (ctx.sys.distro !== 'ubuntu') {
-      ctx.err(`bash: ${ctx.name}: command not found\n[simulador] Rocky usa SELinux, no AppArmor: prueba getenforce o sestatus.\n`)
+      ctx.err(`bash: ${ctx.name}: command not found\n[simulador] Rocky usa SELinux, no AppArmor: probá getenforce o sestatus.\n`)
       return 127
     }
     if (!needRoot(ctx, 'apparmor module is loaded.\nYou do not have enough privilege to read the profile set.\n')) return 4

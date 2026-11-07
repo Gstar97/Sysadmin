@@ -16,7 +16,7 @@ estado_inicial:
   archivos:
     /home/temporal/notas.txt: "pendientes del pasante\n"
 pasos:
-  - consigna: Crea el grupo `ventas`.
+  - consigna: Creá el grupo `ventas`.
     verificar:
       - { grupo: ventas }
     pistas:
@@ -24,7 +24,7 @@ pasos:
     solucion: [sudo groupadd ventas]
     explicacion: Como casi todo lo que cambia cuentas, necesita sudo. Quedó registrado al final de /etc/group.
   - consigna: >-
-      Crea la cuenta `laura` con su carpeta personal, el comentario "Laura Gómez" y bash como
+      Creá la cuenta `laura` con su carpeta personal, el comentario "Laura Gómez" y bash como
       shell.
     verificar:
       - { usuario: laura, shell: /bin/bash, home: /home/laura }
@@ -35,15 +35,15 @@ pasos:
     solucion: ['sudo useradd -m -c "Laura Gómez" -s /bin/bash laura']
     explicacion: >-
       En Rocky, useradd crea la carpeta aunque no pongas -m, pero en Ubuntu no: escribirlo
-      siempre evita sorpresas. Ubuntu, además, usa /bin/sh como shell si no lo indicas.
-  - consigna: Asígnale una contraseña inicial con `passwd`.
+      siempre evita sorpresas. Ubuntu, además, usa /bin/sh como shell si no lo indicás.
+  - consigna: Asignale una contraseña inicial con `passwd`.
     verificar:
       - { comando_usado: 'passwd\s+laura' }
     pistas:
       - "`sudo passwd laura`"
     solucion: [sudo passwd laura]
     explicacion: Hasta que tenga contraseña, la cuenta no puede iniciar sesión (en /etc/shadow figura !! en lugar de la contraseña cifrada).
-  - consigna: Agrega a laura al grupo `ventas` sin sacarla de los grupos que ya tiene.
+  - consigna: Agregá a laura al grupo `ventas` sin sacarla de los grupos que ya tiene.
     verificar:
       - { usuario: laura, en_grupos: [ventas] }
       - { comando_usado: 'usermod\s+.*-a\w*G|usermod\s+.*-G\s+\S+\s+-a|gpasswd\s+-a' }
@@ -52,7 +52,7 @@ pasos:
       - "`sudo usermod -aG ventas laura`"
     solucion: [sudo usermod -aG ventas laura]
     explicacion: "`sudo gpasswd -a laura ventas` hace lo mismo. Laura va a ver el grupo nuevo la próxima vez que inicie sesión."
-  - consigna: Comprueba a qué grupos pertenece laura con `id`.
+  - consigna: Comprobá a qué grupos pertenece laura con `id`.
     verificar:
       - { comando_usado: 'id\s+laura' }
       - { salida_contiene: ventas }
@@ -62,7 +62,7 @@ pasos:
     explicacion: Muestra el UID, el grupo principal (laura) y los secundarios (ventas).
   - consigna: >-
       La política dice que la contraseña vence cada 90 días y que la primera hay que cambiarla al
-      entrar. Configúralo con `chage -M 90` y `chage -d 0`, y revisa el resultado con `chage -l`.
+      entrar. Configuralo con `chage -M 90` y `chage -d 0`, y revisa el resultado con `chage -l`.
     verificar:
       - { comando_usado: 'chage\s+.*-M\s*90' }
       - { comando_usado: 'chage\s+.*-d\s*0' }
@@ -72,7 +72,7 @@ pasos:
       - "Después: `sudo chage -l laura`"
     solucion: [sudo chage -M 90 -d 0 laura, sudo chage -l laura]
     explicacion: Así Laura elige una contraseña que solo ella conoce en su primer inicio de sesión, y la va a renovar cada 90 días.
-  - consigna: Bloquea la cuenta de pedro mientras está de licencia, sin borrarla.
+  - consigna: Bloqueá la cuenta de pedro mientras está de licencia, sin borrarla.
     verificar:
       - { usuario: pedro, bloqueado: true }
     pistas:
@@ -92,5 +92,5 @@ pasos:
     solucion: [sudo userdel -r temporal]
     explicacion: >-
       Antes de borrar en una empresa real, confirma que no haya archivos que haya que conservar
-      (y respáldalos): userdel -r no pregunta. Los archivos que la cuenta tenía fuera de su carpeta
+      (y respaldalos): userdel -r no pregunta. Los archivos que la cuenta tenía fuera de su carpeta
       quedan con un número de usuario huérfano, que `find / -nouser` encuentra.

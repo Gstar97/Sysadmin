@@ -5,7 +5,7 @@ descripcion: >-
   diario de uso programado con cron, y hacer que rocky01 tome la hora de ubuntu01, como en una
   empresa con un servidor de hora interno.
 pasos:
-  - titulo: Activa el historial de rendimiento
+  - titulo: Activá el historial de rendimiento
     detalle: >-
       En los dos servidores. Desde ahora, sar va a poder contarte qué pasó en cualquier momento
       (el historial empieza el día que lo activas).
@@ -24,19 +24,19 @@ pasos:
       - top -b -n 1 | head -12
       - mpstat -P ALL 2 1
     comprobar: top muestra yes cerca de 100 % y mpstat muestra una CPU casi sin tiempo libre (idle) y la otra tranquila.
-  - titulo: Bájale la prioridad sin cortarlo
+  - titulo: Bajale la prioridad sin cortarlo
     comandos:
       - pgrep -a yes
       - renice 19 -p $(pgrep -x yes)
       - ps -o pid,ni,stat,%cpu,cmd -p $(pgrep -x yes)
     comprobar: La columna NI muestra 19 y top lo muestra en la parte ni de la CPU en lugar de us.
     si_falla: Si renice responde "Permission denied", el proceso no es tuyo; con sudo funciona, pero en este caso es tuyo.
-  - titulo: Termínalo como corresponde
+  - titulo: Terminalo como corresponde
     comandos:
       - "kill %1          # o kill PID: manda TERM"
       - jobs; pgrep yes || echo "ya no está"
     comprobar: pgrep no encuentra nada y uptime muestra la carga bajando en los minutos siguientes.
-  - titulo: Escribe el script del reporte de uso
+  - titulo: Escribí el script del reporte de uso
     detalle: >-
       Un script simple que junta lo que mirarías a la mañana. En el módulo 1.7 vas a aprender a
       escribirlos mejor; por ahora, copia este con nano.
@@ -59,10 +59,10 @@ pasos:
           echo; /usr/bin/ps aux --sort=-%cpu | head -6
         } > "$salida"
     comprobar: En /var/log/reporte-uso hay un archivo con la fecha de hoy y su contenido se lee bien.
-  - titulo: Prográmalo con cron y pruébalo
+  - titulo: Programalo con cron y probalo
     detalle: >-
       Primero lo programas para dentro de 2 o 3 minutos (mira la hora con date) y, cuando
-      compruebes que funcionó, le pones el horario de verdad: de lunes a viernes a las 7:45.
+      compruebes que funcionó, le ponés el horario de verdad: de lunes a viernes a las 7:45.
     comandos:
       - date
       - sudo nano /etc/cron.d/reporte-uso
@@ -80,7 +80,7 @@ pasos:
       cron.log.
   - titulo: Convierte ubuntu01 en el servidor de hora del laboratorio
     detalle: >-
-      En ubuntu01. Ubuntu 24.04 usa systemd-timesyncd: al instalar chrony, lo reemplaza. Busca la
+      En ubuntu01. Ubuntu 24.04 usa systemd-timesyncd: al instalar chrony, lo reemplaza. Buscá la
       IP de ubuntu01 en la red solo-anfitrión con ip -4 addr (la de 192.168.56.x).
     comandos:
       - sudo apt install -y chrony
@@ -89,10 +89,10 @@ pasos:
       - chronyc sources
       - ip -4 addr
     comprobar: chronyc sources muestra una fuente con ^* (ubuntu01 tiene internet por la otra placa) y anotaste su IP.
-  - titulo: Haz que rocky01 tome la hora de ubuntu01
+  - titulo: Hacé que rocky01 tome la hora de ubuntu01
     detalle: >-
-      En rocky01. Reemplaza la línea pool por la IP de ubuntu01 (usa la tuya en lugar de
-      192.168.56.102) y pon la zona horaria de tu ciudad.
+      En rocky01. Reemplazá la línea pool por la IP de ubuntu01 (usa la tuya en lugar de
+      192.168.56.102) y poné la zona horaria de tu ciudad.
     comandos:
       - sudo cp /etc/chrony.conf /etc/chrony.conf.bak
       - sudo sed -i 's/^pool .*/server 192.168.56.102 iburst/' /etc/chrony.conf
@@ -104,17 +104,17 @@ pasos:
       - timedatectl
     comprobar: chronyc sources muestra la IP de ubuntu01 con ^*, y timedatectl dice System clock synchronized yes con tu zona.
     si_falla: >-
-      Si queda en ^?, revisa desde rocky01 que llegas a ubuntu01 (ping) y que el archivo de
+      Si queda en ^?, revisa desde rocky01 que llegás a ubuntu01 (ping) y que el archivo de
       ubuntu01 tiene la red correcta en allow. Si ubuntu01 tuviera activo el firewall (ufw), haría
       falta abrir el puerto 123/udp (módulo 1.6).
-  - titulo: Mira el historial al día siguiente
+  - titulo: Mirá el historial al día siguiente
     detalle: Después de unas horas (o al otro día), consulta lo que guardó sar.
     comandos:
       - sar -u | head -20
       - sar -q | tail -5
       - ls /var/log/reporte-uso
     comprobar: En sar -u se ve el pico de CPU de la hora en que corriste yes.
-  - titulo: Documenta
+  - titulo: Documentá
     detalle: >-
       En tu cuaderno técnico: qué hace el reporte, dónde está el script, cuándo corre y dónde deja
       los archivos; qué servidor da la hora a cuál, y la zona horaria elegida.

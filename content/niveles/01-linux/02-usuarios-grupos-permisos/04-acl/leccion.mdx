@@ -24,7 +24,7 @@ Los permisos básicos tienen un límite: cada archivo tiene **un** dueño y **un
 
 ## Más nombres en la lista
 
-Piensa en la lista de invitados de una fiesta privada. Normalmente entran el anfitrión (el dueño) y su familia (el grupo). Una **<Termino id="acl">ACL</Termino>** (*Access Control List*) es poder agregar a esa lista nombres puntuales: "y también Laura", "y también la gente de auditoría, pero solo para mirar".
+Pensá en la lista de invitados de una fiesta privada. Normalmente entran el anfitrión (el dueño) y su familia (el grupo). Una **<Termino id="acl">ACL</Termino>** (*Access Control List*) es poder agregar a esa lista nombres puntuales: "y también Laura", "y también la gente de auditoría, pero solo para mirar".
 
 ```bash
 sudo setfacl -m u:laura:rx /srv/contabilidad        # un usuario más
@@ -46,13 +46,13 @@ Cuando un archivo tiene ACL, `ls -l` lo marca con un **+** al final de los permi
 
 ## Leer getfacl, la máscara y las ACL por defecto
 
-Toca cada parte de la salida:
+Tocá cada parte de la salida:
 
 <DiagramaInteractivo datos={getfaclDatos} svg={getfacl} alt="Salida de getfacl de /srv/contabilidad: el encabezado con archivo, dueño, grupo y flags; las entradas user::rwx, user:laura:r-x, group::rwx, group:auditoria:r-x, mask::rwx y other::---; y las entradas default para los archivos nuevos." />
 
 Dos conceptos merecen un repaso aparte:
 
-- **La máscara** es un techo para todas las entradas con nombre y para el grupo dueño. Se calcula sola cuando agregas entradas, pero si después haces `chmod g-w` sobre el archivo, la máscara baja a `r` y nadie de las entradas con nombre puede escribir, aunque su entrada diga `rw-`. getfacl lo avisa con `#effective:r--`.
+- **La máscara** es un techo para todas las entradas con nombre y para el grupo dueño. Se calcula sola cuando agregás entradas, pero si después hacés `chmod g-w` sobre el archivo, la máscara baja a `r` y nadie de las entradas con nombre puede escribir, aunque su entrada diga `rw-`. getfacl lo avisa con `#effective:r--`.
 - **La ACL por defecto** de una carpeta no da acceso a la carpeta: es el modelo que copian los archivos nuevos. Sin ella, el acceso de auditoría alcanzaría a lo que ya existe, pero no a lo que se cree mañana.
 
 <EnSimple titulo="Dicho más simple: la máscara">
@@ -73,16 +73,16 @@ Una regla práctica: si el acceso es para un **área entera** y permanente, lo c
 
 <ErroresComunes>
   <ErrorComun titulo="Agregué la ACL pero el usuario sigue sin acceso">
-    Revisa tres cosas: la máscara (getfacl muestra `#effective`), las carpetas del camino (también necesitan x para esa persona, con ACL o con permisos básicos) y que el usuario haya vuelto a iniciar sesión si el acceso es por un grupo nuevo.
+    Revisá tres cosas: la máscara (getfacl muestra `#effective`), las carpetas del camino (también necesitan x para esa persona, con ACL o con permisos básicos) y que el usuario haya vuelto a iniciar sesión si el acceso es por un grupo nuevo.
   </ErrorComun>
   <ErrorComun titulo="Los archivos nuevos no tienen la ACL">
     Las ACL comunes solo afectan a lo que ya existe. Para lo que se cree después hace falta la ACL por defecto en la carpeta: `setfacl -d -m g:grupo:rx carpeta`.
   </ErrorComun>
   <ErrorComun titulo="Después de un chmod, las personas de la ACL perdieron la escritura">
-    Con ACL, los permisos de grupo de `chmod` y de `ls -l` son la máscara. `chmod 750` dejó la máscara en `r-x`. Vuelve a subirla con `setfacl -m m::rwx archivo` o con `chmod g+w archivo`.
+    Con ACL, los permisos de grupo de `chmod` y de `ls -l` son la máscara. `chmod 750` dejó la máscara en `r-x`. Volvé a subirla con `setfacl -m m::rwx archivo` o con `chmod g+w archivo`.
   </ErrorComun>
   <ErrorComun titulo="Restauré un backup y desaparecieron los permisos especiales">
-    La herramienta de copia no guardó las ACL. Para respaldos con ACL: `tar --acls`, `rsync -A`, o guarda la lista con `getfacl -R carpeta > acl.txt` y restáurala con `setfacl --restore=acl.txt`.
+    La herramienta de copia no guardó las ACL. Para respaldos con ACL: `tar --acls`, `rsync -A`, o guarda la lista con `getfacl -R carpeta > acl.txt` y restaurala con `setfacl --restore=acl.txt`.
   </ErrorComun>
 </ErroresComunes>
 

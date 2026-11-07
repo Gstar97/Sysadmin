@@ -3,7 +3,7 @@ shell: bash
 titulo: Formatear las particiones nuevas
 descripcion: >-
   El disco sdb ya tiene dos particiones vacías: la primera va a guardar los datos de la oficina
-  y la segunda, los logs de una aplicación. Crea sus sistemas de archivos.
+  y la segunda, los logs de una aplicación. Creá sus sistemas de archivos.
 estado_inicial:
   distro: rocky
   hostname: files01
@@ -18,14 +18,14 @@ estado_inicial:
         - { tamano: 6G }
         - { tamano: "100%" }
 pasos:
-  - consigna: Mira qué sistema de archivos tiene cada parte del disco sdb.
+  - consigna: Mirá qué sistema de archivos tiene cada parte del disco sdb.
     verificar:
       - { comando_usado: 'lsblk\s+.*-f|lsblk\s+--fs' }
     pistas:
       - "`lsblk -f /dev/sdb`"
     solucion: [lsblk -f /dev/sdb]
     explicacion: Las particiones existen, pero la columna FSTYPE está vacía. Todavía no se puede guardar nada en ellas.
-  - consigna: Crea un sistema de archivos XFS en /dev/sdb1.
+  - consigna: Creá un sistema de archivos XFS en /dev/sdb1.
     verificar:
       - { particion: /dev/sdb1, fs: xfs }
     pistas:
@@ -33,7 +33,7 @@ pasos:
       - "`sudo mkfs.xfs /dev/sdb1`"
     solucion: [sudo mkfs.xfs /dev/sdb1]
     explicacion: La salida muestra los parámetros elegidos (tamaño de bloque, cantidad de grupos). En general no hace falta cambiarlos.
-  - consigna: Crea un ext4 con la etiqueta logs en /dev/sdb2.
+  - consigna: Creá un ext4 con la etiqueta logs en /dev/sdb2.
     verificar:
       - { particion: /dev/sdb2, fs: ext4 }
       - { comando_usado: 'mkfs\.ext4\s+.*-L\s+logs|mkfs\s+-t\s+ext4\s+.*-L\s+logs|mke2fs\s+.*-L\s+logs' }
@@ -42,7 +42,7 @@ pasos:
       - "`sudo mkfs.ext4 -L logs /dev/sdb2`"
     solucion: [sudo mkfs.ext4 -L logs /dev/sdb2]
     explicacion: ext4 crea la carpeta lost+found, donde su herramienta de reparación deja los archivos que encuentra sueltos.
-  - consigna: Intenta crear de nuevo un XFS en /dev/sdb1, sin -f, y lee qué responde.
+  - consigna: Intentá crear de nuevo un XFS en /dev/sdb1, sin -f, y leé qué responde.
     verificar:
       - { comando_usado: 'mkfs\.xfs\s+/dev/sdb1' }
       - { salida_contiene: appears to contain an existing filesystem }
@@ -50,7 +50,7 @@ pasos:
       - "`sudo mkfs.xfs /dev/sdb1`"
     solucion: [sudo mkfs.xfs /dev/sdb1]
     explicacion: mkfs.xfs protege lo que ya existe. Con -f lo pisaría, y los datos que hubiera ya no se podrían leer. Es una buena razón para pensar antes de agregar -f.
-  - consigna: Muestra el UUID, el tipo y la etiqueta de las dos particiones con blkid.
+  - consigna: Mostrá el UUID, el tipo y la etiqueta de las dos particiones con blkid.
     verificar:
       - { comando_usado: 'blkid' }
       - { salida_contiene: 'LABEL="logs"' }

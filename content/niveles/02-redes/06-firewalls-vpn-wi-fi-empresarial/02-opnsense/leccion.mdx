@@ -14,7 +14,7 @@ import lab from './laboratorio-vm.svg?raw'
 import orden from './puesta-en-marcha.yaml'
 import pantallas from './pantallas.yaml'
 
-**OPNsense** es un firewall de código abierto basado en FreeBSD, con interfaz web. Se instala en un equipo con dos o más placas de red (o en una máquina virtual) y hace de firewall con estado, router, NAT, DHCP, DNS, VPN y más. Es muy usado en pymes, en sucursales y en laboratorios; su pariente **pfSense** (de donde nació en 2015) funciona casi igual. Lo que aprendas aquí se traslada a firewalls comerciales como FortiGate, Palo Alto o Sophos: cambian los menús, no las ideas.
+**OPNsense** es un firewall de código abierto basado en FreeBSD, con interfaz web. Se instala en un equipo con dos o más placas de red (o en una máquina virtual) y hace de firewall con estado, router, NAT, DHCP, DNS, VPN y más. Es muy usado en pymes, en sucursales y en laboratorios; su pariente **pfSense** (de donde nació en 2015) funciona casi igual. Lo que aprendas acá se traslada a firewalls comerciales como FortiGate, Palo Alto o Sophos: cambian los menús, no las ideas.
 
 <AntesDeEmpezar>
 - Zonas, DMZ, reglas de arriba hacia abajo y denegación por defecto (lección anterior).
@@ -24,7 +24,7 @@ import pantallas from './pantallas.yaml'
 
 ## El laboratorio
 
-La versión actual es la **26.7** (julio de 2026); OPNsense saca dos versiones grandes por año, en enero y en julio, y actualizaciones pequeñas cada pocas semanas. Vas a armar esto en el laboratorio del módulo; aquí va la idea completa:
+La versión actual es la **26.7** (julio de 2026); OPNsense saca dos versiones grandes por año, en enero y en julio, y actualizaciones pequeñas cada pocas semanas. Vas a armar esto en el laboratorio del módulo; acá va la idea completa:
 
 <Diagrama svg={lab} alt="fw01 con OPNsense 26.7 en una máquina virtual de 2 vCPU, 2 GiB de memoria y 20 GiB de disco, con tres adaptadores: WAN por DHCP hacia la casa o internet (adaptador NAT o puente), LAN 192.168.10.1/24 en la red interna labred (donde están rocky01 y ubuntu01, con gateway y DNS 192.168.10.1) y DMZ 172.16.0.1/24 en la red interna labdmz (con web01, un clon de ubuntu01, en 172.16.0.10). La administración web se entra desde la LAN en https://192.168.10.1 y nunca se publica en la WAN." pie="Tres redes, tres interfaces: cada una es una zona." />
 
@@ -62,19 +62,19 @@ Y para publicar la web, en **Firewall, NAT, Port Forward** (en las versiones nue
 ## Comprobar
 
 - **Firewall, Log Files, Live View**: cada paquete permitido o bloqueado, con la regla que lo decidió (para que aparezca, la regla tiene que tener activado el registro, *Log*). La regla de bloqueo por defecto ya registra.
-- **Firewall, Diagnostics, States**: la tabla de estados. Si una conexión aparece aquí, el firewall la dejó pasar.
+- **Firewall, Diagnostics, States**: la tabla de estados. Si una conexión aparece acá, el firewall la dejó pasar.
 - **Interfaces, Diagnostics, Packet Capture**: una captura como tcpdump, desde la interfaz web (módulo 2.7).
 
 <EnSimple>
-OPNsense es un firewall que se maneja por la web. Cada placa es una zona. En cada zona escribes qué puede hacer lo que entra por ahí, usando alias para que las reglas se lean fácil. Y el registro en vivo te dice qué pasó con cada paquete y por qué regla.
+OPNsense es un firewall que se maneja por la web. Cada placa es una zona. En cada zona escribís qué puede hacer lo que entra por ahí, usando alias para que las reglas se lean fácil. Y el registro en vivo te dice qué pasó con cada paquete y por qué regla.
 </EnSimple>
 
 <Consejo titulo="Copias de la configuración">
-Toda la configuración de OPNsense es un único archivo XML. **System, Configuration, Backups** lo descarga; guárdalo después de cada cambio importante. Si el disco muere, se reinstala, se sube el archivo y el firewall vuelve a ser exactamente el mismo. OPNsense también guarda un historial de las últimas versiones para volver atrás.
+Toda la configuración de OPNsense es un único archivo XML. **System, Configuration, Backups** lo descarga; guardalo después de cada cambio importante. Si el disco muere, se reinstala, se sube el archivo y el firewall vuelve a ser exactamente el mismo. OPNsense también guarda un historial de las últimas versiones para volver atrás.
 </Consejo>
 
 <ErroresComunes>
-  <ErrorComun titulo="Bloquearte a ti mismo">
+  <ErrorComun titulo="Bloquearte a vos mismo">
     Una regla de bloqueo en la LAN puede dejarte sin interfaz web si borraste la anti-lockout. Si pasa, desde la consola: opción 8 (shell) y pfctl -d desactiva el filtrado un momento para arreglarlo.
   </ErrorComun>
   <ErrorComun titulo="Publicar la administración en la WAN">
@@ -84,10 +84,10 @@ Toda la configuración de OPNsense es un único archivo XML. **System, Configura
     Una interfaz OPT nueva no tiene reglas: los servidores de la DMZ no tienen ni DNS ni actualizaciones hasta que las permitas.
   </ErrorComun>
   <ErrorComun titulo="No desactivar Block private networks en el laboratorio">
-    Si la WAN está en la red de tu casa, todo lo que pruebes desde allí se descarta antes de llegar a tus reglas. En una WAN real con IP pública, déjala activada.
+    Si la WAN está en la red de tu casa, todo lo que pruebes desde allí se descarta antes de llegar a tus reglas. En una WAN real con IP pública, dejala activada.
   </ErrorComun>
   <ErrorComun titulo="Reglas sin registro">
-    Sin Log, el Live View no muestra qué regla dejó pasar algo. Actívalo, al menos mientras pruebas.
+    Sin Log, el Live View no muestra qué regla dejó pasar algo. Activalo, al menos mientras probás.
   </ErrorComun>
 </ErroresComunes>
 

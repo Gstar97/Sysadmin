@@ -16,7 +16,7 @@ import orden from './orden.yaml'
 import noArranca from './no-arranca.yaml'
 import ejArranque from './ej-arranque.yaml'
 
-Un servidor que no arranca es una de las situaciones que más nervios generan: no hay SSH, no hay servicios, y muchas veces solo tienes una pantalla negra con unas líneas de texto. La buena noticia es que el arranque sigue siempre los mismos pasos, y el mensaje en pantalla casi siempre dice en cuál se detuvo. En esta lección vas a aprender a leerlo y a usar las herramientas de recuperación.
+Un servidor que no arranca es una de las situaciones que más nervios generan: no hay SSH, no hay servicios, y muchas veces solo tenés una pantalla negra con unas líneas de texto. La buena noticia es que el arranque sigue siempre los mismos pasos, y el mensaje en pantalla casi siempre dice en cuál se detuvo. En esta lección vas a aprender a leerlo y a usar las herramientas de recuperación.
 
 <AntesDeEmpezar>
 - Al encender, el firmware (UEFI o BIOS) revisa el hardware y busca un cargador de arranque (lección 0.1.5).
@@ -33,7 +33,7 @@ El arranque es como una carrera de postas: cada corredor hace su tramo y le pasa
 La etapa que más extraña al principio es el **initramfs**. El kernel necesita leer el disco donde está el sistema, pero los programas para leerlo (por ejemplo, los de LVM o de una controladora de discos) están... en ese mismo disco. El initramfs resuelve el problema: es un sistema mínimo, en un solo archivo dentro de `/boot`, que GRUB carga en memoria junto con el kernel. Trae lo justo para encontrar el disco raíz real, montarlo y pasarle el control a systemd.
 
 <EnSimple>
-El initramfs es como la llave de repuesto que dejas en la caja de seguridad de la entrada: para entrar a la casa necesitas la llave, pero la llave está dentro de la casa. Con la de repuesto abres la puerta, y después ya usas todo lo de adentro.
+El initramfs es como la llave de repuesto que dejás en la caja de seguridad de la entrada: para entrar a la casa necesitás la llave, pero la llave está dentro de la casa. Con la de repuesto abrís la puerta, y después ya usás todo lo de adentro.
 </EnSimple>
 
 <Ordenar ejercicio={orden} />
@@ -64,7 +64,7 @@ BOOT_IMAGE=(hd0,gpt2)/vmlinuz-6.12.0-55.el10.x86_64 root=/dev/mapper/rl-root ro 
 
 ### Cambiar un parámetro una sola vez
 
-En el menú de GRUB, posicionado en una entrada, la tecla **e** permite editarla. Buscas la línea que empieza con `linux`, agregas o cambias lo que necesites al final, y arrancas con **Ctrl+X** (o F10). El cambio vale solo para ese arranque: al reiniciar, todo vuelve a ser como antes. Es la forma segura de probar.
+En el menú de GRUB, posicionado en una entrada, la tecla **e** permite editarla. Buscás la línea que empieza con `linux`, agregás o cambiás lo que necesites al final, y arrancás con **Ctrl+X** (o F10). El cambio vale solo para ese arranque: al reiniciar, todo vuelve a ser como antes. Es la forma segura de probar.
 
 En Ubuntu Server el menú está oculto (el tiempo de espera es 0). Para que aparezca, mantén presionada la tecla **Shift** al encender (equipos con BIOS) o presiona **Esc** varias veces (equipos con UEFI).
 
@@ -90,7 +90,7 @@ En Ubuntu Server el menú está oculto (el tiempo de espera es 0). Para que apar
     sudo update-grub
     ```
 
-    Si te olvidas de `update-grub`, el cambio no se aplica.
+    Si te olvidás de `update-grub`, el cambio no se aplica.
   </Distro>
 </Distros>
 
@@ -110,7 +110,7 @@ Además de multi-user.target, hay dos targets pensados para reparar el sistema. 
 | Servicios | Los básicos | Casi ninguno |
 | Cuándo se usa | Reparar algo con el sistema casi completo | Cuando ni siquiera se pueden montar los discos |
 
-systemd entra solo en el modo de emergencia cuando no puede montar un sistema de archivos: es el error de arranque más común. También puedes pedirlo al arrancar, agregando `systemd.unit=rescue.target` o `systemd.unit=emergency.target` a la línea `linux` en GRUB.
+systemd entra solo en el modo de emergencia cuando no puede montar un sistema de archivos: es el error de arranque más común. También podés pedirlo al arrancar, agregando `systemd.unit=rescue.target` o `systemd.unit=emergency.target` a la línea `linux` en GRUB.
 
 Desde ahí, `journalctl -xb` muestra qué pasó en este arranque, y cuando arreglaste el problema, `systemctl default` sigue hasta el modo normal (o `systemctl reboot` reinicia).
 
@@ -118,7 +118,7 @@ Desde ahí, `journalctl -xb` muestra qué pasó en este arranque, y cuando arreg
 Los modos de rescate y emergencia piden la contraseña de root. En Ubuntu la cuenta root está bloqueada por defecto, así que esos modos responden *"Cannot open access to console, the root account is locked"*. Ahí hace falta el método de la próxima sección.
 </Advertencia>
 
-Practica con un caso real:
+Practicá con un caso real:
 
 <Troubleshooting escenario={noArranca} />
 
@@ -130,7 +130,7 @@ Si nadie recuerda la contraseña de root (o de la única cuenta con sudo), hay u
   <Distro nombre="Rocky / AlmaLinux 10">
     1. En el menú de GRUB, posiciónate en la entrada y presiona **e**.
     2. Al final de la línea que empieza con `linux`, agrega `rd.break` y arranca con **Ctrl+X**.
-    3. El arranque se detiene en el initramfs, con el disco real montado en `/sysroot` en solo lectura. Presiona Enter si lo pide, y escribe:
+    3. El arranque se detiene en el initramfs, con el disco real montado en `/sysroot` en solo lectura. Presioná Enter si lo pide, y escribí:
 
     ```bash
     mount -o remount,rw /sysroot     # montarlo en lectura y escritura
@@ -144,7 +144,7 @@ Si nadie recuerda la contraseña de root (o de la única cuenta con sudo), hay u
     El archivo `/.autorelabel` hace que, al arrancar, SELinux (el sistema de seguridad de la familia Red Hat, que vas a ver más adelante) revise las etiquetas de todos los archivos. Sin ese paso, el archivo de contraseñas modificado queda con una etiqueta incorrecta y nadie puede iniciar sesión. El próximo arranque tarda un poco más por eso, y reinicia solo una vez.
   </Distro>
   <Distro nombre="Ubuntu Server LTS">
-    1. Haz aparecer el menú de GRUB (Shift o Esc), posiciónate en la entrada de Ubuntu y presiona **e**.
+    1. Hacé aparecer el menú de GRUB (Shift o Esc), posiciónate en la entrada de Ubuntu y presioná **e**.
     2. En la línea que empieza con `linux`, cambia `ro` por `rw` y agrega al final `init=/bin/bash`. Arranca con **Ctrl+X**.
     3. Aparece una consola de root, sin haber pasado por systemd:
 
@@ -176,7 +176,7 @@ Este procedimiento muestra algo importante: cualquiera con acceso a la consola (
     En Ubuntu falta `sudo update-grub`. En Rocky, los parámetros de cada kernel se cambian con grubby. Y en los dos casos, el cambio recién se ve después de reiniciar.
   </ErrorComun>
   <ErrorComun titulo="Después de cambiar la contraseña con rd.break, nadie puede entrar">
-    Faltó `touch /.autorelabel` antes de salir. Repite el procedimiento y créalo.
+    Faltó `touch /.autorelabel` antes de salir. Repetí el procedimiento y créalo.
   </ErrorComun>
   <ErrorComun titulo="Un kernel nuevo no arranca">
     En el menú de GRUB elige el kernel anterior: por eso se guardan varios. Una vez dentro, revisa con `journalctl -b -1 -p err` qué pasó en el arranque fallido, y decide si volver a intentar o reportarlo.

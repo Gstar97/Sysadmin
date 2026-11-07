@@ -34,7 +34,7 @@ estado_inicial:
       archivos:
         /home/ana/informe-db.txt: "Tamaño de la base de pedidos: 12 GB\nÚltimo respaldo: anoche, 02:10\n"
 pasos:
-  - consigna: Intenta entrar a db01 directamente, para ver qué pasa.
+  - consigna: Intentá entrar a db01 directamente, para ver qué pasa.
     verificar:
       - { comando_usado: 'ssh\s+(ana@)?db01' }
       - { salida_contiene: timed out }
@@ -42,7 +42,7 @@ pasos:
       - "`ssh db01`"
     solucion: [ssh db01]
     explicacion: Desde la red de oficina no hay camino a 10.0.5.0/24. Solo el bastión está en las dos redes.
-  - consigna: Entra a db01 pasando por bastion, con una sola orden, y vuelve.
+  - consigna: Entrá a db01 pasando por bastion, con una sola orden, y volvé.
     verificar:
       - { comando_usado: 'ssh\s+.*-J\s+(ana@)?bastion\s+(ana@)?db01' }
     pistas:
@@ -50,7 +50,7 @@ pasos:
     solucion: [ssh -J bastion db01, exit]
     explicacion: Una sola sesión, cifrada hasta db01. Tu clave privada no se copió al bastión.
   - consigna: >-
-      Crea ~/.ssh/config para no tener que escribir -J cada vez: un bloque Host bastion (HostName
+      Creá ~/.ssh/config para no tener que escribir -J cada vez: un bloque Host bastion (HostName
       192.168.10.30, User ana) y un bloque Host db01 (HostName 10.0.5.20, ProxyJump bastion).
     verificar:
       - { archivo: /home/ana/.ssh/config, contenido_incluye: ProxyJump bastion }
@@ -59,8 +59,8 @@ pasos:
       - Con nano ~/.ssh/config, o con cat y un here-document (cat > archivo <<'FIN' ... FIN).
       - "Cada opción en su línea: Host bastion / HostName 192.168.10.30 / User ana, una línea vacía, y Host db01 / HostName 10.0.5.20 / ProxyJump bastion."
     solucion: ["cat > ~/.ssh/config <<'FIN'\nHost bastion\n    HostName 192.168.10.30\n    User ana\n\nHost db01\n    HostName 10.0.5.20\n    ProxyJump bastion\nFIN"]
-    explicacion: Cada bloque Host se aplica cuando escribes ese nombre. La sangría es solo para leerlo mejor.
-  - consigna: Comprueba que ahora alcanza con el nombre, ejecutando hostname en db01.
+    explicacion: Cada bloque Host se aplica cuando escribís ese nombre. La sangría es solo para leerlo mejor.
+  - consigna: Comprobá que ahora alcanza con el nombre, ejecutando hostname en db01.
     verificar:
       - { comando_usado: 'ssh\s+db01\s+hostname' }
       - { salida_contiene: db01 }
@@ -76,7 +76,7 @@ pasos:
       - "`scp db01:informe-db.txt ~/`"
     solucion: ["scp db01:informe-db.txt ~/"]
     explicacion: scp también usa ~/.ssh/config, así que pasó por el bastión sin que lo pidieras.
-  - consigna: Publica la carpeta sitio en web01, en /home/ana/sitio, con rsync.
+  - consigna: Publicá la carpeta sitio en web01, en /home/ana/sitio, con rsync.
     verificar:
       - { en: web01, verificar: { archivo: /home/ana/sitio/css/estilo.css, existe: true } }
       - { comando_usado: 'rsync\s+-\w*a' }
@@ -86,7 +86,7 @@ pasos:
     solucion: [rsync -av sitio/ web01:/home/ana/sitio/]
     explicacion: -a copia recursivamente y conserva permisos y fechas; -v muestra qué copió.
   - consigna: >-
-      Cambia index.html (agrégale una línea) y, antes de volver a sincronizar, pide a rsync que te
+      Cambiá index.html (agregale una línea) y, antes de volver a sincronizar, pide a rsync que te
       muestre qué haría sin copiar nada.
     verificar:
       - { comando_usado: 'rsync\s+-\w*n|rsync\s+.*--dry-run' }

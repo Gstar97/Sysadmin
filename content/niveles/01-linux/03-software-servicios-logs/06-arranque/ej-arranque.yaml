@@ -12,7 +12,7 @@ estado_inicial:
   usuarios:
     - { nombre: ana, sudo: true }
 pasos:
-  - consigna: Mira con qué parámetros arrancó el kernel esta vez.
+  - consigna: Mirá con qué parámetros arrancó el kernel esta vez.
     verificar:
       - { comando_usado: 'cat\s+/proc/cmdline' }
     pistas:
@@ -20,7 +20,7 @@ pasos:
       - "`cat /proc/cmdline`"
     solucion: [cat /proc/cmdline]
     explicacion: root= dice cuál es el disco raíz y ro que se monta primero en solo lectura (systemd lo pasa a lectura y escritura más adelante). Los rd.lvm.lv son para el initramfs.
-  - consigna: Comprueba con qué target arranca el servidor por defecto.
+  - consigna: Comprobá con qué target arranca el servidor por defecto.
     verificar:
       - { comando_usado: 'systemctl\s+get-default' }
       - { salida_contiene: multi-user.target }
@@ -28,7 +28,7 @@ pasos:
       - "`systemctl get-default`"
     solucion: [systemctl get-default]
     explicacion: multi-user.target es el modo normal de un servidor, sin escritorio gráfico.
-  - consigna: Mira la entrada de arranque por defecto con grubby.
+  - consigna: Mirá la entrada de arranque por defecto con grubby.
     verificar:
       - { comando_usado: 'grubby\s+--info(=|\s+)(DEFAULT|ALL)' }
     pistas:
@@ -36,7 +36,7 @@ pasos:
       - "`sudo grubby --info=DEFAULT`"
     solucion: [sudo grubby --info=DEFAULT]
     explicacion: Muestra el kernel, el initramfs y los parámetros (args) que se van a usar en el próximo arranque.
-  - consigna: Agrega los parámetros `console=tty0 console=ttyS0,115200` a todos los kernels.
+  - consigna: Agregá los parámetros `console=tty0 console=ttyS0,115200` a todos los kernels.
     verificar:
       - { archivo: "/boot/loader/entries/4b0c2f1e9a7d4c55b1e2f30a8d6c7e91-6.12.0-55.el10.x86_64.conf", contenido_incluye: "console=ttyS0,115200" }
       - { archivo: "/boot/loader/entries/4b0c2f1e9a7d4c55b1e2f30a8d6c7e91-6.12.0-55.el10.x86_64.conf", contenido_incluye: "console=tty0" }
@@ -48,7 +48,7 @@ pasos:
       Con dos console=, los mensajes salen por la pantalla (tty0) y por el puerto serie (ttyS0)
       a 115200 baudios. ALL hace que se aplique a todos los kernels instalados, incluidos los que
       se instalen en futuras actualizaciones.
-  - consigna: Comprueba que el cambio quedó guardado, y que /proc/cmdline todavía no lo tiene.
+  - consigna: Comprobá que el cambio quedó guardado, y que /proc/cmdline todavía no lo tiene.
     verificar:
       - { comando_usado: 'grubby\s+--info' }
       - { comando_usado: 'cat\s+/proc/cmdline' }
@@ -56,7 +56,7 @@ pasos:
       - "`sudo grubby --info=DEFAULT` y `cat /proc/cmdline`"
     solucion: [sudo grubby --info=DEFAULT, cat /proc/cmdline]
     explicacion: Los parámetros se aplican en el próximo arranque. Hasta que reinicies (en una ventana de mantenimiento), el kernel que está corriendo sigue con los de antes.
-  - consigna: Averigua cuánto tardó el arranque y qué servicio demoró más.
+  - consigna: Averiguá cuánto tardó el arranque y qué servicio demoró más.
     verificar:
       - { comando_usado: 'systemd-analyze(\s+time)?$|systemd-analyze\s+blame' }
       - { salida_contiene: NetworkManager-wait-online }
@@ -68,7 +68,7 @@ pasos:
       NetworkManager-wait-online espera a que la red esté lista, así que casi siempre encabeza la
       lista. No significa que esté mal: blame mide cuánto tardó cada uno, y varios arrancan al
       mismo tiempo.
-  - consigna: Revisa si hubo errores durante este arranque.
+  - consigna: Revisá si hubo errores durante este arranque.
     verificar:
       - { comando_usado: 'journalctl\s+.*-b.*-p\s*(err|3)|journalctl\s+.*-p\s*(err|3).*-b' }
     pistas:

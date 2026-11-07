@@ -15,7 +15,7 @@ import modosRed from './modos-red.yaml'
 import pasos from './pasos-primera-vm.yaml'
 import noArranca from './vm-no-arranca.yaml'
 
-Desde ahora, la práctica de la carrera pasa a tu propio laboratorio: servidores Linux y Windows que puedes romper, arreglar y volver a crear sin miedo, todos dentro de tu computadora. En esta lección vas a entender cómo funciona una máquina virtual, vas a elegir un hipervisor y vas a instalar tu primer servidor Linux.
+Desde ahora, la práctica de la carrera pasa a tu propio laboratorio: servidores Linux y Windows que podés romper, arreglar y volver a crear sin miedo, todos dentro de tu computadora. En esta lección vas a entender cómo funciona una máquina virtual, vas a elegir un hipervisor y vas a instalar tu primer servidor Linux.
 
 ## Qué es una máquina virtual
 
@@ -44,8 +44,8 @@ En una Mac con Apple Silicon (M1 en adelante) solo se pueden virtualizar con bue
 
 Al crear una VM se le asignan recursos de tu equipo:
 
-- **CPU**: cantidad de procesadores virtuales. Nunca más que las CPU lógicas que tienes; para servidores de práctica, 2 alcanzan.
-- **Memoria**: la VM la toma de tu RAM mientras está encendida. Deja siempre al menos 4 GB para tu propio sistema. Un Linux de servidor funciona con 2 GB; Windows Server con interfaz gráfica, mejor con 4 GB.
+- **CPU**: cantidad de procesadores virtuales. Nunca más que las CPU lógicas que tenés; para servidores de práctica, 2 alcanzan.
+- **Memoria**: la VM la toma de tu RAM mientras está encendida. Dejá siempre al menos 4 GB para tu propio sistema. Un Linux de servidor funciona con 2 GB; Windows Server con interfaz gráfica, mejor con 4 GB.
 - **Disco**: un archivo grande en tu disco (`.vdi` en VirtualBox, `.vmdk` en VMware, `.vhdx` en Hyper-V, `.qcow2` en KVM). Si es **dinámico**, ocupa solo lo que la VM realmente escribe y crece a medida que hace falta.
 - **Firmware**: BIOS o UEFI, como viste en el módulo anterior. Para sistemas actuales, UEFI.
 - **Placa de red**: conectada a una red virtual según el modo que elijas.
@@ -68,16 +68,16 @@ La combinación recomendada para el laboratorio: **dos placas de red**, una en N
 
 Una **<Termino id="instantanea">instantánea</Termino>** (*snapshot*; en Hyper-V, *punto de control*) guarda el estado completo de la VM en un momento: disco, configuración y, si está encendida, también la memoria. Si después algo sale mal, se vuelve a ese momento en segundos.
 
-Es la herramienta perfecta para practicar: tomas una instantánea antes de un ejercicio difícil y, si rompes el sistema, vuelves atrás. Dos advertencias:
+Es la herramienta perfecta para practicar: tomás una instantánea antes de un ejercicio difícil y, si rompés el sistema, volvés atrás. Dos advertencias:
 
-- **Una instantánea no es una copia de seguridad.** Vive en el mismo disco que la VM: si ese disco falla o borras la VM, se pierde todo junto.
-- Una cadena larga de instantáneas hace más lenta la VM y ocupa cada vez más espacio, porque cada una guarda los cambios desde la anterior. Borra las que ya no necesites.
+- **Una instantánea no es una copia de seguridad.** Vive en el mismo disco que la VM: si ese disco falla o borrás la VM, se pierde todo junto.
+- Una cadena larga de instantáneas hace más lenta la VM y ocupa cada vez más espacio, porque cada una guarda los cambios desde la anterior. Borrá las que ya no necesites.
 
 <Pregunta id="p07" />
 
 ## Manos a la obra
 
-Sigue los pasos en tu computadora. El progreso queda marcado en este navegador, así que puedes dejarlo y continuar después.
+Seguí los pasos en tu computadora. El progreso queda marcado en este navegador, así que podés dejarlo y continuar después.
 
 <PasosGuiados ejercicio={pasos} />
 
@@ -87,19 +87,19 @@ Y antes de terminar, los tres problemas que más aparecen al armar un laboratori
 
 <ErroresComunes>
   <ErrorComun titulo='"VT-x is disabled in the BIOS" o "AMD-V is disabled"'>
-    La virtualización del procesador está desactivada en el firmware. Reinicia, entra a la configuración del firmware y activa **Intel Virtualization Technology** o **SVM Mode**. Si ya está activada y el error sigue en Windows, otra función puede estar usando la virtualización (Hyper-V, WSL2, la integridad de memoria): usa Hyper-V o desactívalas.
+    La virtualización del procesador está desactivada en el firmware. Reiniciá, entra a la configuración del firmware y activa **Intel Virtualization Technology** o **SVM Mode**. Si ya está activada y el error sigue en Windows, otra función puede estar usando la virtualización (Hyper-V, WSL2, la integridad de memoria): usa Hyper-V o desactivalas.
   </ErrorComun>
   <ErrorComun titulo="La VM no tiene internet">
-    Revisa el modo de la placa de red: en solo anfitrión no hay salida a internet; en NAT sí. En modo puente sobre Wi-Fi, el punto de acceso puede estar bloqueando la VM: prueba con NAT. Dentro de la VM, `ip -br address` muestra si la placa recibió una IP.
+    Revisá el modo de la placa de red: en solo anfitrión no hay salida a internet; en NAT sí. En modo puente sobre Wi-Fi, el punto de acceso puede estar bloqueando la VM: prueba con NAT. Dentro de la VM, `ip -br address` muestra si la placa recibió una IP.
   </ErrorComun>
   <ErrorComun titulo="Tu PC se pone lenta al encender la VM">
-    Le asignaste demasiada memoria o demasiadas CPU. Tu sistema necesita su parte: con 8 GB de RAM, no le des más de 4 GB a las VMs en total. Apaga las VMs que no estés usando.
+    Le asignaste demasiada memoria o demasiadas CPU. Tu sistema necesita su parte: con 8 GB de RAM, no le des más de 4 GB a las VMs en total. Apagá las VMs que no estés usando.
   </ErrorComun>
   <ErrorComun titulo="Al reiniciar, la VM vuelve a abrir el instalador">
-    La ISO sigue conectada a la unidad óptica virtual y el firmware la prueba antes que el disco. Desconéctala desde la configuración de la VM.
+    La ISO sigue conectada a la unidad óptica virtual y el firmware la prueba antes que el disco. Desconectala desde la configuración de la VM.
   </ErrorComun>
   <ErrorComun titulo="El disco de tu PC se llena por las VMs">
-    Los discos dinámicos crecen y las instantáneas acumulan cambios. Borra las instantáneas viejas y las VMs que ya no uses; desde el hipervisor, no borrando archivos a mano, para no dejar la VM rota.
+    Los discos dinámicos crecen y las instantáneas acumulan cambios. Borrá las instantáneas viejas y las VMs que ya no uses; desde el hipervisor, no borrando archivos a mano, para no dejar la VM rota.
   </ErrorComun>
 </ErroresComunes>
 

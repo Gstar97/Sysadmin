@@ -119,7 +119,7 @@ export function ConvergenceSim() {
               )
             })}
           </svg>
-          <p className="text-xs text-muted">Toca un enlace para cortarlo o reconectarlo, y un router para ver su tabla. Verde: tabla al día. Amarillo: desactualizada.</p>
+          <p className="text-xs text-muted">Tocá un enlace para cortarlo o reconectarlo, y un router para ver su tabla. Verde: tabla al día. Amarillo: desactualizada.</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button onClick={step} disabled={todos}>
               {modo === 'dv' ? 'Siguiente intercambio' : 'Siguiente salto del aviso'}

@@ -4,7 +4,7 @@ titulo: Abrir lo justo
 descripcion: >-
   En web01 (Rocky) nginx funciona, pero nadie ve la web. En app02 (Ubuntu) todavía no hay
   firewall y hay que activarlo, dejando SSH y la base de datos solo para la red de oficina.
-  Trabajas desde admin01, y tu clave ya está en los dos servidores.
+  Trabajás desde admin01, y tu clave ya está en los dos servidores.
 estado_inicial:
   distro: rocky
   hostname: admin01
@@ -33,7 +33,7 @@ pasos:
     explicacion: >-
       "No route to host" con un servidor que responde al ping y a SSH: es el firewall de web01
       rechazando el puerto 80.
-  - consigna: Entra a web01 y mira qué permite el firewall.
+  - consigna: Entrá a web01 y mirá qué permite el firewall.
     verificar:
       - { comando_usado: 'firewall-cmd\s+.*--list-(all|services)' }
       - { salida_contiene: ssh }
@@ -50,7 +50,7 @@ pasos:
       - "`sudo firewall-cmd --permanent --add-service=http` y `sudo firewall-cmd --reload`"
     solucion: [sudo firewall-cmd --permanent --add-service=http, sudo firewall-cmd --reload]
     explicacion: --permanent lo guarda; --reload lo aplica. Sin el reload, lo verías recién después de reiniciar.
-  - consigna: Quita cockpit, que en este servidor no se usa, también de forma permanente.
+  - consigna: Quitá cockpit, que en este servidor no se usa, también de forma permanente.
     verificar:
       - { comando_usado: 'firewall-cmd\s+.*--remove-service=cockpit' }
       - { en: web01, verificar: { firewall_permite: 9090/tcp, permite: false } }
@@ -58,7 +58,7 @@ pasos:
       - "`sudo firewall-cmd --permanent --remove-service=cockpit`, `sudo firewall-cmd --reload` y `sudo firewall-cmd --list-services`"
     solucion: [sudo firewall-cmd --permanent --remove-service=cockpit, sudo firewall-cmd --reload, sudo firewall-cmd --list-services]
     explicacion: Lo que no se usa, se cierra. Cada puerto abierto es algo más para vigilar.
-  - consigna: Vuelve a admin01 y comprueba que la web ya se ve.
+  - consigna: Volvé a admin01 y comprobá que la web ya se ve.
     verificar:
       - { comando_usado: 'curl\s+.*web01' }
       - { salida_contiene: 200 OK }
@@ -67,7 +67,7 @@ pasos:
     solucion: [exit, curl -I http://web01]
     explicacion: Probar desde afuera es la única prueba que vale para un firewall.
   - consigna: >-
-      Entra a app02 y activa ufw sin quedarte afuera: primero permite OpenSSH, después actívalo.
+      Entrá a app02 y activá ufw sin quedarte afuera: primero permite OpenSSH, después activalo.
     verificar:
       - { en: app02, verificar: { ufw_activo: true } }
       - { en: app02, verificar: { firewall_permite: 22/tcp } }
@@ -84,7 +84,7 @@ pasos:
       - "`sudo ufw allow from 192.168.10.0/24 to any port 5432` y `sudo ufw status`"
     solucion: [sudo ufw allow from 192.168.10.0/24 to any port 5432, sudo ufw status]
     explicacion: Una regla con origen es mucho mejor que abrir el puerto a todo el mundo.
-  - consigna: Vuelve a admin01 y prueba desde afuera el 22 y el 8080 de app02 (este último no está permitido).
+  - consigna: Volvé a admin01 y probá desde afuera el 22 y el 8080 de app02 (este último no está permitido).
     verificar:
       - { comando_usado: 'nc\s+-\w*z\w*\s+.*app02\s+8080' }
       - { salida_contiene: timed out }

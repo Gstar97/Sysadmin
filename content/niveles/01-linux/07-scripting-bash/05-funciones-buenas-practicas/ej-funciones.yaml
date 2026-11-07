@@ -18,8 +18,8 @@ estado_inicial:
     /home/ana/tmpapp/cache/indice.tmp: { contenido: "x\n", antiguedad_dias: 3 }
 pasos:
   - consigna: >-
-      Antes del script, prueba una función en la terminal: define es_par, que devuelva éxito si
-      un número es par, y úsala con && para mostrar "par" con el 4.
+      Antes del script, prueba una función en la terminal: definí es_par, que devuelva éxito si
+      un número es par, y usala con && para mostrar "par" con el 4.
     verificar:
       - { comando_usado: 'es_par\s*\(\)' }
       - { salida_contiene: par }
@@ -28,17 +28,17 @@ pasos:
       - "`es_par() { (( $1 % 2 == 0 )); }; es_par 4 && echo par`"
     solucion: ["es_par() { (( $1 % 2 == 0 )); }; es_par 4 && echo par"]
     explicacion: Las funciones devuelven un código (como los comandos) y escriben su resultado en la salida. Dentro, $1 es su primer argumento.
-  - consigna: Crea ~/limpiar-tmp.sh con el contenido de la solución y léelo con calma.
+  - consigna: Creá ~/limpiar-tmp.sh con el contenido de la solución y léelo con calma.
     verificar:
       - { archivo: /home/ana/limpiar-tmp.sh, contenido_incluye: getopts }
       - { archivo: /home/ana/limpiar-tmp.sh, contenido_incluye: "log() {" }
     pistas:
-      - "Usa cat > ~/limpiar-tmp.sh <<'FIN' ... FIN con el contenido de la solución."
+      - "Usá cat > ~/limpiar-tmp.sh <<'FIN' ... FIN con el contenido de la solución."
     solucion: ["cat > ~/limpiar-tmp.sh <<'FIN'\n#!/bin/bash\n# limpiar-tmp.sh: borra archivos viejos de una carpeta.\n# Uso: limpiar-tmp.sh [-n] [-d DÍAS] CARPETA\n#   -n       solo muestra lo que borraría\n#   -d DÍAS  antigüedad mínima en días (por defecto, 7)\nset -euo pipefail\n\nLOG=/home/ana/limpiar.log\ndias=7\nprueba=0\n\nlog() { echo \"$(date '+%F %T') $*\" | tee -a \"$LOG\"; }\ndie() { log \"ERROR: $*\" >&2; exit 1; }\nuso() { echo \"Uso: $0 [-n] [-d DÍAS] CARPETA\" >&2; exit 2; }\n\nwhile getopts \"nd:\" opt; do\n  case $opt in\n    n) prueba=1 ;;\n    d) dias=$OPTARG ;;\n    *) uso ;;\n  esac\ndone\nshift $((OPTIND - 1))\n[ $# -eq 1 ] || uso\ncarpeta=\"$1\"\n[ -d \"$carpeta\" ] || die \"no existe la carpeta $carpeta\"\n\nlog \"inicio: $carpeta, más de $dias días, prueba=$prueba\"\ncantidad=0\nwhile read -r f; do\n  if (( prueba )); then\n    log \"borraría $f\"\n  else\n    rm -f -- \"$f\" && log \"borrado $f\"\n  fi\n  cantidad=$((cantidad + 1))\ndone < <(find \"$carpeta\" -type f -mtime +\"$dias\")\nlog \"fin: $cantidad archivos\"\nFIN"]
     explicacion: >-
       Arriba, cómo se usa. Después, el modo estricto, los valores por defecto y tres funciones
       chicas (log, die, uso). Luego las opciones, la validación, y recién al final el trabajo.
-  - consigna: Ejecútalo sin la carpeta, para ver el mensaje de uso y su código.
+  - consigna: Ejecutalo sin la carpeta, para ver el mensaje de uso y su código.
     verificar:
       - { comando_usado: 'limpiar-tmp\.sh' }
       - { salida_contiene: "Uso:" }
@@ -46,7 +46,7 @@ pasos:
       - "`bash ~/limpiar-tmp.sh; echo $?`"
     solucion: ["bash ~/limpiar-tmp.sh; echo $?"]
     explicacion: "2: se usó mal. Lo primero que hace el script es validar lo que recibió."
-  - consigna: Pruébalo con -n sobre ~/tmpapp, para ver qué borraría sin borrar nada.
+  - consigna: Probalo con -n sobre ~/tmpapp, para ver qué borraría sin borrar nada.
     verificar:
       - { comando_usado: 'limpiar-tmp\.sh\s+.*-n' }
       - { salida_contiene: borraría }
@@ -55,7 +55,7 @@ pasos:
       - "`bash ~/limpiar-tmp.sh -n ~/tmpapp`"
     solucion: [bash ~/limpiar-tmp.sh -n ~/tmpapp]
     explicacion: Un modo de prueba es la mejor costumbre en scripts que borran o cambian cosas. Aparecen solo los dos de más de 7 días.
-  - consigna: Mira con bash -x cómo se toman las opciones, probando con -n -d 2.
+  - consigna: Mirá con bash -x cómo se toman las opciones, probando con -n -d 2.
     verificar:
       - { comando_usado: 'bash\s+-x\s+.*limpiar-tmp\.sh' }
       - { salida_contiene: "+ dias=2" }
@@ -63,7 +63,7 @@ pasos:
       - "`bash -x ~/limpiar-tmp.sh -n -d 2 ~/tmpapp`"
     solucion: [bash -x ~/limpiar-tmp.sh -n -d 2 ~/tmpapp]
     explicacion: Cada línea con + es un comando ya expandido, tal como bash lo ejecutó. Es la herramienta principal para encontrar por qué un script hace otra cosa de la que esperabas.
-  - consigna: Ahora sí, ejecútalo de verdad con los 7 días por defecto y revisa el registro.
+  - consigna: Ahora sí, ejecutalo de verdad con los 7 días por defecto y revisa el registro.
     verificar:
       - { archivo: /home/ana/tmpapp/sesion-0101.tmp, existe: false }
       - { archivo: /home/ana/tmpapp/sesion-hoy.tmp, existe: true }

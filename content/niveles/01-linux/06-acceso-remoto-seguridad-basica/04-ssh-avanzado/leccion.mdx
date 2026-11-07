@@ -14,7 +14,7 @@ import bastion from './bastion.svg?raw'
 import herramientas from './herramientas.yaml'
 import ejAvanzado from './ej-avanzado.yaml'
 
-Con lo de las lecciones anteriores ya entras a cualquier servidor. Esta lección es sobre el día a día: no escribir diez veces la misma conexión, llegar a servidores que no están en tu red y mover archivos de un lado a otro sin romper nada.
+Con lo de las lecciones anteriores ya entrás a cualquier servidor. Esta lección es sobre el día a día: no escribir diez veces la misma conexión, llegar a servidores que no están en tu red y mover archivos de un lado a otro sin romper nada.
 
 <AntesDeEmpezar>
 - Claves SSH y known_hosts (lecciones 1.6.2 y 1.6.3).
@@ -23,7 +23,7 @@ Con lo de las lecciones anteriores ya entras a cualquier servidor. Esta lección
 
 ## ~/.ssh/config: tus conexiones con nombre
 
-Si siempre escribes `ssh -p 2222 -i ~/.ssh/clave_trabajo ana@192.168.10.20`, guárdalo con un nombre:
+Si siempre escribís `ssh -p 2222 -i ~/.ssh/clave_trabajo ana@192.168.10.20`, guardalo con un nombre:
 
 ```text
 # ~/.ssh/config
@@ -37,13 +37,13 @@ Host *.empresa.local
     User ana
 ```
 
-Con eso alcanza con `ssh web01`, y lo mismo vale para scp, rsync y cualquier programa que use ssh. Como en sshd, para cada opción gana el **primer** valor que coincide: pon los bloques específicos arriba y los generales (como `Host *`) al final. El archivo tiene que ser tuyo y no escribible por otros (`chmod 600 ~/.ssh/config`).
+Con eso alcanza con `ssh web01`, y lo mismo vale para scp, rsync y cualquier programa que use ssh. Como en sshd, para cada opción gana el **primer** valor que coincide: poné los bloques específicos arriba y los generales (como `Host *`) al final. El archivo tiene que ser tuyo y no escribible por otros (`chmod 600 ~/.ssh/config`).
 
 ## El bastión
 
 En muchas empresas, los servidores importantes (bases de datos, por ejemplo) están en una red interna a la que no se llega desde la oficina ni desde internet. Para entrar, se pasa por un único servidor de entrada, el **bastión** (también *jump host*), que está en las dos redes y que se cuida de forma especial: pocos usuarios, solo claves, todo registrado.
 
-Piensa en un edificio con un único acceso con guardia: para llegar a cualquier oficina, primero pasas por la recepción. La diferencia es que con SSH no te bajas en la recepción: tu conexión pasa a través del bastión y llega cifrada hasta el servidor de destino.
+Pensá en un edificio con un único acceso con guardia: para llegar a cualquier oficina, primero pasás por la recepción. La diferencia es que con SSH no te bajás en la recepción: tu conexión pasa a través del bastión y llega cifrada hasta el servidor de destino.
 
 <Diagrama svg={bastion} alt="admin01, en la red de oficina 192.168.10.0/24, no llega directo a db01, que está en la red interna 10.0.5.0/24. El bastión tiene una dirección en cada red (192.168.10.30 y 10.0.5.1). Con ssh -J bastion db01, la conexión pasa por el bastión y va cifrada de punta a punta hasta db01." pie="El bastión pasa los datos, pero no puede leerlos: la sesión con db01 va cifrada de punta a punta." />
 
@@ -83,7 +83,7 @@ rsync -avn --delete sitio/ web01:/var/www/sitio/   # -n: muestra lo que haría, 
 Dos detalles que causan la mayoría de los accidentes con rsync:
 
 - **La barra final del origen.** `sitio/` copia el contenido de la carpeta; `sitio` copia la carpeta entera (en el destino queda `/var/www/sitio/sitio`).
-- **--delete** borra en el destino lo que no está en el origen. Con el origen o el destino equivocados, puede borrar mucho. Prueba siempre primero con `-n`.
+- **--delete** borra en el destino lo que no está en el origen. Con el origen o el destino equivocados, puede borrar mucho. Probá siempre primero con `-n`.
 
 <EnSimple>
 scp para un archivo, rsync para una carpeta. Y con rsync, mira dos veces la barra final y prueba con -n antes de usar --delete.
@@ -91,7 +91,7 @@ scp para un archivo, rsync para una carpeta. Y con rsync, mira dos veces la barr
 
 ## Túneles: llegar a un servicio que no se ve
 
-A veces un servicio escucha solo en `127.0.0.1` del servidor (una base de datos, un panel de administración): está bien que no se vea desde la red. Si necesitas usarlo desde tu equipo, SSH puede hacer de túnel:
+A veces un servicio escucha solo en `127.0.0.1` del servidor (una base de datos, un panel de administración): está bien que no se vea desde la red. Si necesitás usarlo desde tu equipo, SSH puede hacer de túnel:
 
 ```bash
 ssh -L 5432:localhost:5432 db01
@@ -111,7 +111,7 @@ Mientras esa sesión esté abierta, lo que conectes a `localhost:5432` en tu equ
     Origen y destino al revés, o destino equivocado. Siempre primero con `-n`, y mira la lista de "deleting".
   </ErrorComun>
   <ErrorComun titulo="scp -p 2222 no usa el puerto">
-    En scp, `-p` (minúscula) conserva fechas y permisos; el puerto es `-P` (mayúscula). Mejor: ponlo en ~/.ssh/config.
+    En scp, `-p` (minúscula) conserva fechas y permisos; el puerto es `-P` (mayúscula). Mejor: ponelo en ~/.ssh/config.
   </ErrorComun>
   <ErrorComun titulo="Copiar la clave privada al bastión para seguir saltando">
     No hace falta: con `-J` o `ProxyJump` la clave se queda en tu equipo. Una privada en el bastión es un riesgo para todos los servidores.

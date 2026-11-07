@@ -15,7 +15,7 @@ import etiqueta from './etiqueta.svg?raw'
 import causas from './causas.yaml'
 import ejSelinux from './ej-selinux.yaml'
 
-"Le di permisos 777 y sigue diciendo Permission denied." Si trabajas con Rocky, vas a escuchar (o decir) esa frase. Casi siempre es **SELinux**, una capa de seguridad que va por encima de los permisos de archivos. Mucha gente lo apaga a la primera; un buen administrador aprende a leerlo, porque es de las protecciones más efectivas que tiene un servidor. Ubuntu tiene una capa parecida, **AppArmor**.
+"Le di permisos 777 y sigue diciendo Permission denied." Si trabajás con Rocky, vas a escuchar (o decir) esa frase. Casi siempre es **SELinux**, una capa de seguridad que va por encima de los permisos de archivos. Mucha gente lo apaga a la primera; un buen administrador aprende a leerlo, porque es de las protecciones más efectivas que tiene un servidor. Ubuntu tiene una capa parecida, **AppArmor**.
 
 <AntesDeEmpezar>
 - Permisos de archivos, dueños y grupos (lecciones 1.2.2 y 1.2.3).
@@ -27,7 +27,7 @@ import ejSelinux from './ej-selinux.yaml'
 
 Los permisos de siempre los decide el dueño de cada archivo: si el dueño le da permiso a otro, ese otro puede. SELinux agrega reglas que pone el sistema y que ni root salta a voluntad: cada programa solo puede hacer lo que su tipo tiene permitido. nginx, por ejemplo, puede leer contenido web y escuchar en puertos web, y nada más. Si alguien aprovecha una falla de nginx para meterse, queda encerrado en eso: no puede leer `/etc/shadow` ni los homes, aunque los permisos de esos archivos fueran abiertos.
 
-Piensa en un hotel: tu tarjeta abre tu habitación (los permisos), pero además el sistema del edificio decide a qué pisos te lleva el ascensor según el tipo de tarjeta (SELinux). Una tarjeta de huésped no te lleva a la sala de máquinas aunque alguien haya dejado esa puerta abierta. Donde la comparación no llega: en SELinux, los "tipos de tarjeta" y los "tipos de puerta" son **etiquetas**, y casi todos los problemas vienen de una etiqueta equivocada.
+Pensá en un hotel: tu tarjeta abre tu habitación (los permisos), pero además el sistema del edificio decide a qué pisos te lleva el ascensor según el tipo de tarjeta (SELinux). Una tarjeta de huésped no te lleva a la sala de máquinas aunque alguien haya dejado esa puerta abierta. Donde la comparación no llega: en SELinux, los "tipos de tarjeta" y los "tipos de puerta" son **etiquetas**, y casi todos los problemas vienen de una etiqueta equivocada.
 
 <Diagrama svg={etiqueta} alt="nginx, que corre con el tipo httpd_t, pasa por dos controles para leer un archivo: primero los permisos de siempre y después SELinux, que mira si httpd_t puede leer el tipo del archivo. /var/www/html/index.html tiene httpd_sys_content_t y pasa; el mismo archivo movido con mv a /srv/catalogo conserva user_home_t y se deniega con un 403; después de restorecon queda con httpd_sys_content_t y pasa." pie="Aunque los permisos digan que sí, si SELinux dice que no, no se puede." />
 
@@ -44,7 +44,7 @@ ps -eZ | grep nginx      # la de los procesos (nginx corre como httpd_t)
 - **Permissive**: no bloquea nada, solo registra. `sudo setenforce 0` lo pone así hasta el próximo reinicio: sirve para confirmar si un problema es de SELinux (si con permissive funciona, lo es), y se vuelve con `sudo setenforce 1`.
 - **Disabled**: apagado. No lo hagas: volver a encenderlo después obliga a reetiquetar todo el disco.
 
-Las etiquetas salen de reglas por ruta: todo lo que está en `/var/www` es `httpd_sys_content_t`, lo de un home es `user_home_t`, y así. Un archivo nuevo toma la etiqueta de la carpeta donde se crea. Y aquí está la trampa más común: **`mv` conserva la etiqueta** (el archivo es el mismo, cambió de lugar) mientras que `cp` crea uno nuevo con la etiqueta del destino.
+Las etiquetas salen de reglas por ruta: todo lo que está en `/var/www` es `httpd_sys_content_t`, lo de un home es `user_home_t`, y así. Un archivo nuevo toma la etiqueta de la carpeta donde se crea. Y acá está la trampa más común: **`mv` conserva la etiqueta** (el archivo es el mismo, cambió de lugar) mientras que `cp` crea uno nuevo con la etiqueta del destino.
 
 ## Encontrar la denegación
 
@@ -101,7 +101,7 @@ En Rocky, `semanage` y `audit2why` vienen en el paquete **policycoreutils-python
 Si algo falla con "Permission denied" y los permisos están bien, mira `ausearch -m avc`. Casi siempre es una de tres cosas: la etiqueta de un archivo (restorecon, semanage fcontext), la de un puerto (semanage port) o un booleano (setsebool -P). Apagar SELinux no es un arreglo.
 </EnSimple>
 
-Para más adelante: `audit2allow` genera un módulo de política a partir de las denegaciones. Es una herramienta potente y peligrosa: si la usas antes de entender la causa, le das permisos de más al programa. Casi nunca hace falta para los problemas de todos los días.
+Para más adelante: `audit2allow` genera un módulo de política a partir de las denegaciones. Es una herramienta potente y peligrosa: si la usás antes de entender la causa, le das permisos de más al programa. Casi nunca hace falta para los problemas de todos los días.
 
 ## AppArmor en Ubuntu
 
@@ -112,7 +112,7 @@ sudo aa-status                          # perfiles cargados y en qué modo
 sudo journalctl -k | grep DENIED        # denegaciones: apparmor="DENIED" operation="open" profile="..."
 ```
 
-En un Ubuntu Server recién instalado, AppArmor confina algunos servicios (chronyd, rsyslogd, tcpdump, y los que traen sus paquetes, como MySQL), pero no nginx. El problema típico aparece cuando mueves los datos de un servicio confinado a otra carpeta (por ejemplo, los de MySQL): el perfil no conoce la ruta nueva y se agrega en `/etc/apparmor.d/local/`. Para probar, `sudo aa-complain PERFIL` (del paquete apparmor-utils) lo pasa a modo que solo registra; después se vuelve con `aa-enforce`.
+En un Ubuntu Server recién instalado, AppArmor confina algunos servicios (chronyd, rsyslogd, tcpdump, y los que traen sus paquetes, como MySQL), pero no nginx. El problema típico aparece cuando movés los datos de un servicio confinado a otra carpeta (por ejemplo, los de MySQL): el perfil no conoce la ruta nueva y se agrega en `/etc/apparmor.d/local/`. Para probar, `sudo aa-complain PERFIL` (del paquete apparmor-utils) lo pasa a modo que solo registra; después se vuelve con `aa-enforce`.
 
 ## Practicar en la terminal
 
@@ -120,19 +120,19 @@ En un Ubuntu Server recién instalado, AppArmor confina algunos servicios (chron
 
 <ErroresComunes>
   <ErrorComun titulo="Poner SELINUX=disabled para que algo funcione">
-    Le quitas al servidor una protección muy efectiva, y volver a encenderlo obliga a reetiquetar todo. Busca la denegación con `ausearch -m avc` y aplica el arreglo de su tipo.
+    Le quitás al servidor una protección muy efectiva, y volver a encenderlo obliga a reetiquetar todo. Buscá la denegación con `ausearch -m avc` y aplica el arreglo de su tipo.
   </ErrorComun>
   <ErrorComun titulo="chmod 777 para arreglar un 403 en Rocky">
-    Si los permisos ya alcanzaban, 777 no cambia nada y deja el archivo abierto a todos. Mira `ls -Z`.
+    Si los permisos ya alcanzaban, 777 no cambia nada y deja el archivo abierto a todos. Mirá `ls -Z`.
   </ErrorComun>
   <ErrorComun titulo="Arreglé con chcon y al tiempo volvió a fallar">
-    chcon no es permanente: un restorecon o un reetiquetado lo deshace. Usa `semanage fcontext -a` y `restorecon`.
+    chcon no es permanente: un restorecon o un reetiquetado lo deshace. Usá `semanage fcontext -a` y `restorecon`.
   </ErrorComun>
   <ErrorComun titulo="La regla de semanage fcontext no se aplica a lo de adentro">
     Faltó `(/.*)?` al final de la ruta, o faltó correr `restorecon -Rv` después.
   </ErrorComun>
   <ErrorComun titulo='"semanage: command not found"'>
-    Instala policycoreutils-python-utils.
+    Instalá policycoreutils-python-utils.
   </ErrorComun>
   <ErrorComun titulo="sshd no arranca en Rocky después de cambiar el puerto">
     Además del firewall, el puerto nuevo necesita `semanage port -a -t ssh_port_t -p tcp PUERTO`. El propio sshd_config de Rocky lo recuerda en un comentario.

@@ -11,7 +11,7 @@ verificado: 2026-11
 
 import sumarizar from './sumarizar.svg?raw'
 
-Dos herramientas cortas que se apoyan en lo que ya sabes de máscaras. La **sumarización** junta muchas redes en una sola ruta, y hace que las tablas de los routers sean más chicas y más fáciles de leer. La **máscara wildcard** es una máscara escrita al revés, que vas a encontrar en las configuraciones de equipos Cisco (ACL en el módulo 2.6, OSPF en el 2.5).
+Dos herramientas cortas que se apoyan en lo que ya sabés de máscaras. La **sumarización** junta muchas redes en una sola ruta, y hace que las tablas de los routers sean más chicas y más fáciles de leer. La **máscara wildcard** es una máscara escrita al revés, que vas a encontrar en las configuraciones de equipos Cisco (ACL en el módulo 2.6, OSPF en el 2.5).
 
 <AntesDeEmpezar>
 - Máscaras, prefijos y tamaño de bloque (lecciones 2.2.2 y 2.2.4).
@@ -26,8 +26,8 @@ Es como el correo: el centro de distribución de otra provincia no necesita una 
 
 ### Cómo se calcula
 
-1. Escribe en binario el octeto donde las redes cambian.
-2. Cuenta cuántos bits tienen **en común** desde la izquierda.
+1. Escribí en binario el octeto donde las redes cambian.
+2. Contá cuántos bits tienen **en común** desde la izquierda.
 3. El resumen es la primera red con ese prefijo.
 
 <Diagrama svg={sumarizar} alt="Las redes 172.16.20.0, 21, 22 y 23 con prefijo /24, con el tercer octeto en binario (00010100, 00010101, 00010110, 00010111): los primeros seis bits coinciden y los dos últimos cambian. Con 16 + 6 = 22 bits en común, el resumen es 172.16.20.0/22. Debajo, la máscara 255.255.252.0 y su wildcard 0.0.3.255." pie="Los bits en común forman el prefijo del resumen." />
@@ -69,7 +69,7 @@ Se lee así: un **0** quiere decir "este bit tiene que coincidir" y un **1**, "e
 
 <ErroresComunes>
   <ErrorComun titulo="Sumarizar redes que no forman un bloque alineado">
-    10.1.6.0/24 a 10.1.9.0/24 son cuatro redes seguidas, pero no hay un /22 que las contenga solo a ellas. Revisa que el inicio sea múltiplo de la cantidad de redes.
+    10.1.6.0/24 a 10.1.9.0/24 son cuatro redes seguidas, pero no hay un /22 que las contenga solo a ellas. Revisá que el inicio sea múltiplo de la cantidad de redes.
   </ErrorComun>
   <ErrorComun titulo="Poner la máscara donde va la wildcard">
     En una ACL de Cisco, `192.168.10.0 255.255.255.0` no significa /24: el equipo lo interpreta como wildcard y casi siempre termina haciendo otra cosa. En OSPF y en las ACL va la wildcard (0.0.0.255).

@@ -10,15 +10,15 @@ export interface ParsedYaml {
 }
 
 const TRANSLATIONS: [RegExp, string][] = [
-  [/Tabs are not allowed as indentation/i, 'YAML no permite tabulaciones para sangrar: usa espacios.'],
+  [/Tabs are not allowed as indentation/i, 'YAML no permite tabulaciones para sangrar: usá espacios.'],
   [/Implicit map keys need to be followed by map values/i, 'Falta ":" después de la clave, o la línea quedó mal sangrada.'],
-  [/All mapping items must start at the same column/i, 'Las claves de un mismo nivel tienen que empezar en la misma columna (revisa la sangría).'],
-  [/Nested mappings are not allowed in compact mappings/i, 'Hay dos ":" en la misma línea: si el valor tiene ":", ponlo entre comillas.'],
+  [/All mapping items must start at the same column/i, 'Las claves de un mismo nivel tienen que empezar en la misma columna (revisá la sangría).'],
+  [/Nested mappings are not allowed in compact mappings/i, 'Hay dos ":" en la misma línea: si el valor tiene ":", ponelo entre comillas.'],
   [/Map keys must be unique/i, 'Hay una clave repetida en el mismo nivel.'],
   [/Missing closing "quote|Missing closing 'quote/i, 'Faltan comillas de cierre.'],
   [/A block sequence may not be used as an implicit map key/i, 'La lista está mal sangrada respecto de su clave.'],
   [/Sequence items are not allowed on the same line/i, 'Los elementos de una lista (-) van cada uno en su línea.'],
-  [/Unexpected scalar at node end|Unexpected flow-map-end|Unexpected/i, 'Hay un elemento inesperado: revisa la sangría y los ":" de esta zona.'],
+  [/Unexpected scalar at node end|Unexpected flow-map-end|Unexpected/i, 'Hay un elemento inesperado: revisá la sangría y los ":" de esta zona.'],
 ]
 
 function translate(message: string): string {
@@ -32,7 +32,7 @@ export function parseYaml(text: string): ParsedYaml {
   const doc = parseDocument(text, { lineCounter: lc, prettyErrors: false, uniqueKeys: true })
   const diagnostics: Diagnostic[] = []
   const tabLine = text.split('\n').findIndex((l) => /^ *\t/.test(l))
-  if (tabLine !== -1) diagnostics.push({ line: tabLine + 1, column: 1, severity: 'error', message: 'YAML no permite tabulaciones para sangrar: usa espacios (2 por nivel es lo habitual).' })
+  if (tabLine !== -1) diagnostics.push({ line: tabLine + 1, column: 1, severity: 'error', message: 'YAML no permite tabulaciones para sangrar: usá espacios (2 por nivel es lo habitual).' })
   for (const e of doc.errors.slice(0, tabLine !== -1 ? 0 : 3)) {
     const pos = e.linePos?.[0] ?? lc.linePos(e.pos[0])
     diagnostics.push({ line: pos.line, column: pos.col, severity: 'error', message: translate(e.message) })

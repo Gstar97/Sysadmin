@@ -32,7 +32,7 @@ Se agregan como un cuarto dígito **adelante** del octal: SUID vale 4, SGID vale
 Las contraseñas están en `/etc/shadow`, que solo root puede modificar. Pero cualquier usuario puede cambiar la suya con `passwd`. ¿Cómo? `/usr/bin/passwd` tiene el bit **<Termino id="suid">SUID</Termino>**: quien lo ejecuta lo hace con los permisos de su dueño, root. El programa, a su vez, se encarga de que cada uno solo pueda cambiar su propia contraseña.
 
 <EnSimple>
-Es como el cajero de un banco: tú no puedes entrar a la bóveda, pero el cajero sí, y cuando le pides tu dinero entra y te trae exactamente eso, ni un billete más. SUID le presta al programa la llave del dueño, y el programa decide qué hacer con ella. Si el programa tiene un error, quien lo use puede terminar con la llave en la mano: por eso un SUID root es un riesgo.
+Es como el cajero de un banco: vos no podés entrar a la bóveda, pero el cajero sí, y cuando le pedís tu dinero entra y te trae exactamente eso, ni un billete más. SUID le presta al programa la llave del dueño, y el programa decide qué hacer con ella. Si el programa tiene un error, quien lo use puede terminar con la llave en la mano: por eso un SUID root es un riesgo.
 </EnSimple>
 
 Por ese riesgo, los programas con SUID root son lo primero que revisa una auditoría de seguridad (y lo primero que busca un atacante). Linux ignora el SUID en los scripts por seguridad: solo funciona en programas compilados. Nunca se agrega SUID a un programa "para que ande".
@@ -67,7 +67,7 @@ Una mayúscula en lugar de la minúscula avisa que algo está mal: `S` o `T` sig
 
 <ErroresComunes>
   <ErrorComun titulo="En la carpeta compartida, nadie puede modificar los archivos de los demás">
-    Falta el SGID (los archivos quedan con el grupo personal de cada uno) o la umask de las personas es 022 (los archivos nacen sin escritura para el grupo). Revisa con `ls -l`: el grupo de los archivos tiene que ser el del área y sus permisos `rw-` para el grupo. Corrige los existentes con `chgrp -R` y `chmod -R g+w`, y pon el SGID con `chmod g+s`.
+    Falta el SGID (los archivos quedan con el grupo personal de cada uno) o la umask de las personas es 022 (los archivos nacen sin escritura para el grupo). Revisá con `ls -l`: el grupo de los archivos tiene que ser el del área y sus permisos `rw-` para el grupo. Corregí los existentes con `chgrp -R` y `chmod -R g+w`, y poné el SGID con `chmod g+s`.
   </ErrorComun>
   <ErrorComun titulo="Agregar SUID a un script para que ejecute cosas como root">
     Linux ignora el SUID en scripts, así que no funciona, y si alguien lo copia a un programa compilado, abre una puerta para que cualquier usuario sea root. Para dar a alguien permiso de ejecutar un comando como root, se usa sudo con una regla acotada (lección 1.2.5).

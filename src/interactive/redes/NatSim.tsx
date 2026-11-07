@@ -89,7 +89,7 @@ export function NatSim() {
               Conectar
             </Button>
           </div>
-          <p className="mt-1 text-xs text-muted">Prueba conectar dos equipos con el mismo puerto de origen: el router tiene que cambiar uno.</p>
+          <p className="mt-1 text-xs text-muted">Probá conectar dos equipos con el mismo puerto de origen: el router tiene que cambiar uno.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[480px] text-xs">

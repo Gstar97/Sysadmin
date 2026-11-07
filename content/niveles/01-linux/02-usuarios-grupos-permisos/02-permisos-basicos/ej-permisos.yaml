@@ -3,7 +3,7 @@ shell: bash
 titulo: Poner en orden los permisos
 descripcion: >-
   Un script que no se puede ejecutar, un archivo con contraseñas que todos pueden leer y una
-  carpeta de informes que tiene que ser solo del área de ventas. Arréglalo.
+  carpeta de informes que tiene que ser solo del área de ventas. Arreglalo.
 estado_inicial:
   distro: rocky
   hostname: rocky01
@@ -19,7 +19,7 @@ estado_inicial:
     /home/ana/claves.txt: { contenido: "router: Admin2026!\n", modo: "0644", dueno: ana, grupo: ana }
     /srv/informes/q3.txt: { contenido: "Ventas del tercer trimestre\n", modo: "0644" }
 pasos:
-  - consigna: Intenta ejecutar el script con `./backup.sh` y mira qué pasa.
+  - consigna: Intentá ejecutar el script con `./backup.sh` y mirá qué pasa.
     verificar:
       - { comando_usado: '^\s*\./backup\.sh' }
       - { salida_contiene: Permission denied }
@@ -27,7 +27,7 @@ pasos:
       - "`./backup.sh` (el ./ indica \"el archivo de esta carpeta\")"
     solucion: [./backup.sh]
     explicacion: El archivo no tiene permiso de ejecución (x). Con `ls -l backup.sh` lo ves `-rw-rw-r--`.
-  - consigna: Dale permiso de ejecución solo a ti (el dueño), en notación simbólica, y ejecútalo.
+  - consigna: Dale permiso de ejecución solo a vos (el dueño), en notación simbólica, y ejecutalo.
     verificar:
       - { archivo: /home/ana/backup.sh, modo: "0764" }
       - { salida_contiene: Backup iniciado }
@@ -35,8 +35,8 @@ pasos:
       - "u es el dueño, + agrega, x es ejecutar"
       - "`chmod u+x backup.sh` y después `./backup.sh`"
     solucion: [chmod u+x backup.sh, ./backup.sh]
-    explicacion: La notación simbólica cambia solo lo que nombras y deja el resto como estaba.
-  - consigna: El archivo `claves.txt` lo pueden leer todos. Déjalo solo para ti (lectura y escritura del dueño), con notación octal.
+    explicacion: La notación simbólica cambia solo lo que nombrás y deja el resto como estaba.
+  - consigna: El archivo `claves.txt` lo pueden leer todos. Dejalo solo para vos (lectura y escritura del dueño), con notación octal.
     verificar:
       - { archivo: /home/ana/claves.txt, modo: "0600" }
     pistas:
@@ -44,14 +44,14 @@ pasos:
       - "`chmod 600 claves.txt`"
     solucion: [chmod 600 claves.txt]
     explicacion: El octal define los tres grupos de una vez. 600 es el permiso típico de cualquier archivo con secretos, como las claves SSH privadas.
-  - consigna: Haz que la carpeta `/srv/informes` pertenezca al grupo `ventas`.
+  - consigna: Hacé que la carpeta `/srv/informes` pertenezca al grupo `ventas`.
     verificar:
       - { archivo: /srv/informes, grupo: ventas }
     pistas:
       - "`sudo chgrp ventas /srv/informes`"
     solucion: [sudo chgrp ventas /srv/informes]
     explicacion: Necesita sudo porque la carpeta es de root. `chown :ventas` hace lo mismo.
-  - consigna: Deja la carpeta con todos los permisos para el dueño y el grupo, y nada para el resto.
+  - consigna: Dejá la carpeta con todos los permisos para el dueño y el grupo, y nada para el resto.
     verificar:
       - { archivo: /srv/informes, modo: "0770" }
     pistas:
@@ -59,7 +59,7 @@ pasos:
       - "`sudo chmod 770 /srv/informes`"
     solucion: [sudo chmod 770 /srv/informes]
     explicacion: Ahora laura, que está en ventas, puede entrar y crear archivos; pedro no puede ni ver qué hay.
-  - consigna: Haz que el informe `q3.txt` sea de laura y del grupo ventas, en un solo comando.
+  - consigna: Hacé que el informe `q3.txt` sea de laura y del grupo ventas, en un solo comando.
     verificar:
       - { archivo: /srv/informes/q3.txt, dueno: laura, grupo: ventas }
     pistas:
@@ -67,7 +67,7 @@ pasos:
       - "`sudo chown laura:ventas /srv/informes/q3.txt`"
     solucion: [sudo chown laura:ventas /srv/informes/q3.txt]
     explicacion: Solo root puede cambiar el dueño de un archivo. Con `-R` cambia una carpeta y todo su contenido.
-  - consigna: Comprueba que pedro no puede ver la carpeta, ejecutando `ls` como él con `sudo -u pedro`.
+  - consigna: Comprobá que pedro no puede ver la carpeta, ejecutando `ls` como él con `sudo -u pedro`.
     verificar:
       - { comando_usado: 'sudo\s+-u\s+pedro\s+ls\s+/srv/informes' }
       - { salida_contiene: Permission denied }
@@ -75,7 +75,7 @@ pasos:
       - "`sudo -u pedro ls /srv/informes`"
     solucion: [sudo -u pedro ls /srv/informes]
     explicacion: Probar como el usuario afectado es la forma más segura de confirmar que un permiso quedó como querías.
-  - consigna: Cambia tu umask a 027 y crea un archivo `nuevo.txt` para ver con qué permisos nace.
+  - consigna: Cambiá tu umask a 027 y creá un archivo `nuevo.txt` para ver con qué permisos nace.
     verificar:
       - { archivo: /home/ana/nuevo.txt, modo: "0640" }
     pistas:

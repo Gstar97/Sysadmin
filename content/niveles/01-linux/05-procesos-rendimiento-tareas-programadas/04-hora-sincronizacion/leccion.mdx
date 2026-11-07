@@ -42,7 +42,7 @@ date                                          # la hora en la zona del servidor
 date -u                                       # la hora en UTC
 ```
 
-Muchos equipos dejan todos los servidores en UTC: si tienes servidores en varios países, los registros se comparan sin hacer cuentas. Otros prefieren la hora local para que coincida con lo que reporta la gente. Las dos opciones son válidas; lo importante es que el equipo lo decida y sea igual en todos.
+Muchos equipos dejan todos los servidores en UTC: si tenés servidores en varios países, los registros se comparan sin hacer cuentas. Otros prefieren la hora local para que coincida con lo que reporta la gente. Las dos opciones son válidas; lo importante es que el equipo lo decida y sea igual en todos.
 
 Además está el **reloj de hardware** (RTC), el que sigue andando con el equipo apagado. Linux lo guarda en UTC (`RTC in local TZ: no`) y lo corrige solo mientras está sincronizado.
 
@@ -82,7 +82,7 @@ makestep 1.0 3                       # si el desfase supera 1 s, corregir de un 
                                      # (solo en las 3 primeras actualizaciones)
 ```
 
-Después de un cambio: `sudo systemctl restart chronyd` (o `chrony` en Ubuntu) y `chronyc sources` para confirmar. Fuera de esas primeras actualizaciones, chrony corrige **de a poco** (acelera o frena el reloj un poquito) en lugar de saltar, para que los programas no vean la hora ir hacia atrás. Si el desfase es grande y necesitas corregirlo ya, `chronyc makestep`.
+Después de un cambio: `sudo systemctl restart chronyd` (o `chrony` en Ubuntu) y `chronyc sources` para confirmar. Fuera de esas primeras actualizaciones, chrony corrige **de a poco** (acelera o frena el reloj un poquito) en lugar de saltar, para que los programas no vean la hora ir hacia atrás. Si el desfase es grande y necesitás corregirlo ya, `chronyc makestep`.
 
 Para más adelante: un servidor puede **dar** la hora a la red con `allow 192.168.10.0/24` en chrony.conf (y el puerto UDP 123 abierto en el firewall), y NTS agrega cifrado y autenticación a NTP.
 
@@ -92,19 +92,19 @@ Para más adelante: un servidor puede **dar** la hora a la red con `allow 192.16
 
 <ErroresComunes>
   <ErrorComun titulo='"System clock synchronized: no" en un servidor sin internet'>
-    El pool público no se alcanza. Usa el servidor de hora de la empresa (`server ... iburst`) o pide que se habilite UDP 123 hacia afuera.
+    El pool público no se alcanza. Usá el servidor de hora de la empresa (`server ... iburst`) o pide que se habilite UDP 123 hacia afuera.
   </ErrorComun>
   <ErrorComun titulo="Cambiar la zona horaria para corregir una hora mal">
     La zona solo cambia cómo se muestra. Si la hora está mal en UTC, el problema es la sincronización.
   </ErrorComun>
   <ErrorComun titulo="Poner la hora a mano con date -s">
-    chrony la vuelve a corregir, y mientras tanto los registros quedan con saltos. Arregla la fuente de hora y usa `chronyc makestep`.
+    chrony la vuelve a corregir, y mientras tanto los registros quedan con saltos. Arreglá la fuente de hora y usa `chronyc makestep`.
   </ErrorComun>
   <ErrorComun titulo="Inicios de sesión de dominio que fallan sin explicación">
-    Revisa la hora antes que nada: Kerberos no acepta más de 5 minutos de diferencia.
+    Revisá la hora antes que nada: Kerberos no acepta más de 5 minutos de diferencia.
   </ErrorComun>
   <ErrorComun titulo="Cada servidor con su propia zona horaria">
-    Los registros no se pueden comparar. Elige UTC o la hora local para todos y anótalo en la documentación.
+    Los registros no se pueden comparar. Elegí UTC o la hora local para todos y anotalo en la documentación.
   </ErrorComun>
 </ErroresComunes>
 

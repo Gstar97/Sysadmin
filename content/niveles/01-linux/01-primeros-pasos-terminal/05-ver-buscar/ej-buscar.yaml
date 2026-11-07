@@ -3,7 +3,7 @@ shell: bash
 titulo: El archivo de configuración perdido
 descripcion: >-
   Te piden revisar la aplicación de facturación, pero nadie recuerda dónde se instaló ni dónde
-  guarda su configuración. Encuéntrala, mira qué hay en sus logs y averigua qué archivos de la
+  guarda su configuración. Encontrala, mira qué hay en sus logs y averigua qué archivos de la
   carpeta compartida son de Carlos.
 estado_inicial:
   distro: rocky
@@ -23,7 +23,7 @@ estado_inicial:
     /srv/compartido/presupuesto.xlsx: { contenido: "PK", dueno: ana, grupo: ana }
 pasos:
   - consigna: >-
-      Busca en todo el sistema un archivo llamado `facturacion.ini`. Para no llenar la pantalla
+      Buscá en todo el sistema un archivo llamado `facturacion.ini`. Para no llenar la pantalla
       de avisos de permisos, agrega `2>/dev/null` al final.
     verificar:
       - { comando_usado: 'find\s+/\s+.*-i?name\s+.*facturacion\.ini' }
@@ -33,18 +33,18 @@ pasos:
     solucion: ['find / -name facturacion.ini 2>/dev/null']
     explicacion: >-
       Buscar desde `/` recorre todo el sistema: es lento en un servidor grande, pero sirve cuando
-      no tienes idea de dónde está algo. `2>/dev/null` descarta los mensajes de "Permission
+      no tenés idea de dónde está algo. `2>/dev/null` descarta los mensajes de "Permission
       denied" de las carpetas que tu usuario no puede leer.
-  - consigna: Mira el contenido del archivo que encontraste.
+  - consigna: Mirá el contenido del archivo que encontraste.
     verificar:
       - { comando_usado: '(cat|less|more|head)\s+.*/opt/facturacion/etc/facturacion\.ini' }
     pistas:
       - "Es un archivo corto: `cat /opt/facturacion/etc/facturacion.ini`"
     solucion: [cat /opt/facturacion/etc/facturacion.ini]
     explicacion: >-
-      Ya sabes a qué base de datos se conecta (10.0.0.5, puerto 5432) y dónde escribe su log.
+      Ya sabés a qué base de datos se conecta (10.0.0.5, puerto 5432) y dónde escribe su log.
       Leer la configuración suele responder la mitad de las preguntas sobre una aplicación.
-  - consigna: Averigua qué tipo de archivo es `/opt/facturacion/bin/facturar` con `file`.
+  - consigna: Averiguá qué tipo de archivo es `/opt/facturacion/bin/facturar` con `file`.
     verificar:
       - { comando_usado: 'file\s+/opt/facturacion/bin/facturar' }
       - { salida_contiene: shell script }
@@ -52,7 +52,7 @@ pasos:
       - "`file /opt/facturacion/bin/facturar`"
     solucion: [file /opt/facturacion/bin/facturar]
     explicacion: Es un script de bash, así que se puede leer con `cat` para ver qué hace. Si fuera un programa compilado, `file` diría ELF.
-  - consigna: Muestra las últimas 3 líneas del log de errores, `/var/log/facturacion/error.log`.
+  - consigna: Mostrá las últimas 3 líneas del log de errores, `/var/log/facturacion/error.log`.
     verificar:
       - { comando_usado: 'tail\s+(-n\s*3|-3)\s+/var/log/facturacion/error\.log' }
       - { salida_contiene: conexión restablecida }
@@ -60,7 +60,7 @@ pasos:
       - "`tail -n 3 archivo`"
     solucion: [tail -n 3 /var/log/facturacion/error.log]
     explicacion: Lo más reciente de un log está al final. La base de datos dejó de responder a las 09:12 y volvió a las 09:13.
-  - consigna: Busca en `/var/log/facturacion` los archivos de más de 1 KiB.
+  - consigna: Buscá en `/var/log/facturacion` los archivos de más de 1 KiB.
     verificar:
       - { comando_usado: 'find\s+/var/log/facturacion/?\s+.*-size\s+\+1k' }
       - { salida_contiene: app.log }
@@ -68,8 +68,8 @@ pasos:
       - "`-size +1k` significa más de 1 KiB; `-type f` deja afuera la carpeta"
       - "`find /var/log/facturacion -type f -size +1k`"
     solucion: [find /var/log/facturacion -type f -size +1k]
-    explicacion: Con `+` es "más de", con `-` es "menos de". Con `M` y `G` buscas los archivos grandes cuando un disco se llena.
-  - consigna: Averigua qué archivos de `/srv/compartido` pertenecen al usuario carlos.
+    explicacion: Con `+` es "más de", con `-` es "menos de". Con `M` y `G` buscás los archivos grandes cuando un disco se llena.
+  - consigna: Averiguá qué archivos de `/srv/compartido` pertenecen al usuario carlos.
     verificar:
       - { comando_usado: 'find\s+/srv/compartido/?\s+.*-user\s+carlos' }
       - { salida_contiene: ventas-octubre.xlsx }
@@ -77,7 +77,7 @@ pasos:
       - "`find /srv/compartido -user carlos`"
     solucion: [find /srv/compartido -user carlos]
     explicacion: Muy útil cuando alguien deja la empresa y hay que decidir qué hacer con sus archivos.
-  - consigna: Sigue en vivo el log de la aplicación con `tail -f`, como harías mientras alguien prueba el sistema.
+  - consigna: Seguí en vivo el log de la aplicación con `tail -f`, como harías mientras alguien prueba el sistema.
     verificar:
       - { comando_usado: 'tail\s+-[fF]\s+/var/log/facturacion/app\.log' }
     pistas:
@@ -85,4 +85,4 @@ pasos:
     solucion: [tail -f /var/log/facturacion/app.log]
     explicacion: >-
       `tail -f` muestra las últimas líneas y se queda esperando las nuevas. Es lo que se hace
-      cuando alguien dice "pruebo ahora": miras el log en una ventana mientras pasa.
+      cuando alguien dice "pruebo ahora": mirás el log en una ventana mientras pasa.

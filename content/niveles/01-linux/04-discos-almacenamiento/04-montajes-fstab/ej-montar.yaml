@@ -2,8 +2,8 @@ tipo: terminal
 shell: bash
 titulo: Montar el disco de datos para siempre
 descripcion: >-
-  La partición /dev/sdb1 ya tiene un XFS. Móntala en /srv/datos, comprueba cómo funciona el
-  montaje y déjala en fstab para que se monte sola en cada arranque.
+  La partición /dev/sdb1 ya tiene un XFS. Montala en /srv/datos, comprueba cómo funciona el
+  montaje y dejala en fstab para que se monte sola en cada arranque.
 estado_inicial:
   distro: rocky
   hostname: files01
@@ -17,7 +17,7 @@ estado_inicial:
       particiones:
         - { tamano: "100%", fs: xfs }
 pasos:
-  - consigna: Crea la carpeta /srv/datos y monta ahí /dev/sdb1.
+  - consigna: Creá la carpeta /srv/datos y montá ahí /dev/sdb1.
     verificar:
       - { montaje: /srv/datos, dispositivo: /dev/sdb1 }
     pistas:
@@ -25,7 +25,7 @@ pasos:
       - "`sudo mkdir -p /srv/datos` y `sudo mount /dev/sdb1 /srv/datos`"
     solucion: [sudo mkdir -p /srv/datos, sudo mount /dev/sdb1 /srv/datos]
     explicacion: Desde ahora, lo que se guarde en /srv/datos va al disco sdb.
-  - consigna: Comprueba con df cuánto espacio tiene /srv/datos y crea ahí un archivo prueba.txt.
+  - consigna: Comprobá con df cuánto espacio tiene /srv/datos y creá ahí un archivo prueba.txt.
     verificar:
       - { comando_usado: 'df\s+.*/srv/datos' }
       - { archivo: /srv/datos/prueba.txt }
@@ -33,7 +33,7 @@ pasos:
       - "`df -h /srv/datos` y `sudo touch /srv/datos/prueba.txt`"
     solucion: [df -h /srv/datos, sudo touch /srv/datos/prueba.txt]
     explicacion: df muestra el disco que está detrás de esa carpeta, con sus 10 GiB.
-  - consigna: Desmonta /srv/datos y mira qué hay ahora en la carpeta.
+  - consigna: Desmontá /srv/datos y mirá qué hay ahora en la carpeta.
     verificar:
       - { montaje: /srv/datos, montado: false }
       - { comando_usado: 'ls\s+.*/srv/datos' }
@@ -44,7 +44,7 @@ pasos:
       La carpeta está vacía: prueba.txt sigue en el disco, pero el disco ya no está conectado a
       esa carpeta. Si guardaras algo ahora, quedaría en el disco del sistema, escondido debajo
       del próximo montaje.
-  - consigna: Agrega a /etc/fstab una línea que monte /srv/datos por UUID, con xfs, defaults, 0 y 0.
+  - consigna: Agregá a /etc/fstab una línea que monte /srv/datos por UUID, con xfs, defaults, 0 y 0.
     verificar:
       - { fstab: /srv/datos, por_uuid: true, tipo: xfs }
     pistas:
@@ -54,7 +54,7 @@ pasos:
     solucion:
       - 'echo "UUID=$(sudo blkid -s UUID -o value /dev/sdb1) /srv/datos xfs defaults 0 0" | sudo tee -a /etc/fstab'
     explicacion: tee -a agrega al final. Con > en lugar de >> (o tee sin -a) borrarías todo fstab, y el servidor no arrancaría.
-  - consigna: Revisa fstab sin montar nada.
+  - consigna: Revisá fstab sin montar nada.
     verificar:
       - { comando_usado: 'findmnt\s+--verify' }
       - { salida_contiene: Success }
@@ -62,7 +62,7 @@ pasos:
       - "`sudo findmnt --verify`"
     solucion: [sudo findmnt --verify]
     explicacion: Es la prueba más importante antes de reiniciar. Si algo está mal escrito, lo dice sin riesgo.
-  - consigna: Haz que systemd lea el fstab nuevo, monta todo lo que dice fstab y comprueba que prueba.txt volvió.
+  - consigna: Hacé que systemd lea el fstab nuevo, montá todo lo que dice fstab y comprobá que prueba.txt volvió.
     verificar:
       - { comando_usado: 'systemctl\s+daemon-reload' }
       - { comando_usado: 'mount\s+-a' }

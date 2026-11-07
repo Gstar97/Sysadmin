@@ -2,17 +2,17 @@ tipo: pasos
 titulo: La estructura de una oficina
 descripcion: >-
   Vas a dejar rocky01 preparado para una oficina chica con tres áreas, un equipo de soporte y una
-  auditoría. Todo se hace por SSH desde tu PC. Al final, repites las partes que cambian en
+  auditoría. Todo se hace por SSH desde tu PC. Al final, repetís las partes que cambian en
   ubuntu01.
 pasos:
-  - titulo: Toma una instantánea
+  - titulo: Tomá una instantánea
     detalle: >-
       Antes de cambiar usuarios, permisos y PAM, toma una instantánea de rocky01 llamada
-      antes-de-usuarios. Si algo sale mal (por ejemplo, quedas sin sudo), vuelves atrás en segundos.
+      antes-de-usuarios. Si algo sale mal (por ejemplo, quedás sin sudo), volvés atrás en segundos.
     comprobar: La instantánea aparece en tu hipervisor.
-  - titulo: Crea los grupos y las cuentas
+  - titulo: Creá los grupos y las cuentas
     detalle: >-
-      Crea los grupos de cada área y dos personas por área. Asígnales una contraseña inicial y
+      Creá los grupos de cada área y dos personas por área. Asignales una contraseña inicial y
       obliga a cambiarla en el primer inicio de sesión.
     comandos:
       - sudo groupadd ventas; sudo groupadd contabilidad; sudo groupadd soporte; sudo groupadd auditoria
@@ -24,7 +24,7 @@ pasos:
       - sudo useradd -m -s /bin/bash -c "Auditor Externo" -G auditoria auditor
       - for u in laura carlos marta diego sofia auditor; do sudo passwd $u; sudo chage -d 0 $u; done
     comprobar: "`getent group ventas contabilidad soporte auditoria` muestra cada grupo con sus miembros."
-  - titulo: Arma las carpetas compartidas
+  - titulo: Armá las carpetas compartidas
     detalle: Una carpeta por área, de root y del grupo del área, con 2770.
     comandos:
       - sudo mkdir -p /srv/ventas /srv/contabilidad
@@ -32,9 +32,9 @@ pasos:
       - sudo chmod 2770 /srv/ventas /srv/contabilidad
       - ls -ld /srv/ventas /srv/contabilidad
     comprobar: Las dos carpetas se ven `drwxrws---` con el grupo de su área.
-  - titulo: Prueba el trabajo compartido
+  - titulo: Probá el trabajo compartido
     detalle: >-
-      Como laura, crea un archivo en /srv/ventas; como carlos, agrégale una línea; y como marta
+      Como laura, crea un archivo en /srv/ventas; como carlos, agregale una línea; y como marta
       (de otra área), intenta verlo.
     comandos:
       - "sudo su - laura -c 'echo \"precio: 100\" > /srv/ventas/lista.txt'"
@@ -44,8 +44,8 @@ pasos:
     comprobar: Carlos pudo escribir, marta recibió "Permission denied" y el archivo es del grupo ventas.
     si_falla: >-
       Si carlos no puede escribir, revisa que el archivo tenga `rw-` para el grupo. Un detalle que
-      confunde: si lo creas con `sudo -u laura`, nace con 644, porque sudo suma la umask 022 a la
-      del usuario. `su - laura` abre una sesión igual a la de ella, con su umask 002 (compruébalo
+      confunde: si lo creás con `sudo -u laura`, nace con 644, porque sudo suma la umask 022 a la
+      del usuario. `su - laura` abre una sesión igual a la de ella, con su umask 002 (comprobalo
       con `sudo su - laura -c umask`).
   - titulo: Da acceso de lectura a la auditoría con ACL
     comandos:
@@ -54,9 +54,9 @@ pasos:
       - getfacl /srv/contabilidad
       - sudo -u marta touch /srv/contabilidad/nuevo.txt; getfacl /srv/contabilidad/nuevo.txt
     comprobar: El archivo nuevo tiene la entrada `group:auditoria:r-x` (con permisos efectivos r--).
-  - titulo: Delega tareas a soporte con sudo
+  - titulo: Delegá tareas a soporte con sudo
     detalle: >-
-      Soporte puede reiniciar el servicio de hora (chronyd) y ver su registro, nada más. Escribe la
+      Soporte puede reiniciar el servicio de hora (chronyd) y ver su registro, nada más. Escribí la
       regla con visudo, que valida al guardar.
     comandos:
       - sudo visudo -f /etc/sudoers.d/soporte
@@ -65,22 +65,22 @@ pasos:
     si_falla: >-
       La línea a escribir es `%soporte ALL=(root) /usr/bin/systemctl restart chronyd, /usr/bin/journalctl -u chronyd`.
       Si visudo marca un error, elige (e) para volver a editar.
-  - titulo: Aplica la política de contraseñas y el bloqueo
+  - titulo: Aplicá la política de contraseñas y el bloqueo
     comandos:
       - printf 'minlen = 12\nminclass = 3\n' | sudo tee /etc/security/pwquality.conf.d/10-empresa.conf
       - sudo authselect enable-feature with-faillock
       - sudo sed -i 's/^# deny = 3/deny = 5/' /etc/security/faillock.conf
     comprobar: "Desde tu PC, fallar 5 veces la contraseña de auditor por SSH hace que `sudo faillock --user auditor` muestre los intentos y que la cuenta quede bloqueada."
     si_falla: Antes de este paso, deja abierta una sesión con `sudo -i`. Si algo falla, desactiva el cambio con `sudo authselect disable-feature with-faillock`.
-  - titulo: Repite lo que cambia en ubuntu01
+  - titulo: Repetí lo que cambia en ubuntu01
     detalle: |-
-      En ubuntu01, crea al menos un área completa (grupo, dos cuentas y carpeta compartida). Ten en cuenta:
+      En ubuntu01, crea al menos un área completa (grupo, dos cuentas y carpeta compartida). Tené en cuenta:
       - useradd necesita -m y -s /bin/bash (o usa adduser).
       - El grupo de administradores es sudo, no wheel.
       - pwquality se instala con sudo apt install libpam-pwquality.
       - Los registros de sudo están en /var/log/auth.log.
     comprobar: La carpeta compartida de ubuntu01 funciona igual que la de rocky01.
-  - titulo: Documenta
+  - titulo: Documentá
     detalle: >-
       En tu cuaderno técnico, crea una tabla con cada área: grupo, miembros, carpeta, permisos y
       ACL, y anota las reglas de sudo y la política de contraseñas. Es la documentación que pediría

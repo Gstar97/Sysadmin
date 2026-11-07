@@ -204,7 +204,7 @@ export function EnSimple({ titulo, children }: { titulo?: string; children: Reac
 /** Repaso breve, al comienzo de una lección, de lo que se va a usar de lecciones anteriores. */
 export function AntesDeEmpezar({ titulo, children }: { titulo?: string; children: ReactNode }) {
   return (
-    <Callout tone="neutral" title={titulo ?? 'Antes de empezar: lo que ya sabes'}>
+    <Callout tone="neutral" title={titulo ?? 'Antes de empezar: lo que ya sabés'}>
       {children}
     </Callout>
   )

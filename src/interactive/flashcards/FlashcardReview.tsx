@@ -59,7 +59,7 @@ export function FlashcardReview({
         {item.origen && <> · {item.origen}</>}
       </div>
       <Card className="min-h-48">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted">Pregunta</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted">Preguntá</div>
         <RichText text={item.frente} className="mt-2 text-lg" />
         {flipped && (
           <div className="mt-5 border-t border-line pt-4">

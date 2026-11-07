@@ -3,7 +3,7 @@ shell: bash
 titulo: ¿Esta máquina puede correr Rocky Linux 10?
 descripcion: >-
   Rocky Linux 10 necesita un procesador x86-64 de nivel v3 (con instrucciones AVX2) o un ARM de
-  64 bits. Revisa la máquina virtual antes de planificar una actualización.
+  64 bits. Revisá la máquina virtual antes de planificar una actualización.
 estado_inicial:
   distro: ubuntu
   hostname: vm-lab02
@@ -11,7 +11,7 @@ estado_inicial:
   usuarios:
     - { nombre: estudiante, sudo: true }
 pasos:
-  - consigna: Averigua la arquitectura con `uname -m`.
+  - consigna: Averiguá la arquitectura con `uname -m`.
     verificar:
       - { comando_usado: 'uname\s+(-\w*m|--machine)' }
     pistas:
@@ -19,7 +19,7 @@ pasos:
     solucion: [uname -m]
     explicacion: >-
       `x86_64` es un procesador Intel o AMD de 64 bits. En un ARM de 64 bits diría `aarch64`.
-  - consigna: Averigua cuántas CPU lógicas tiene con `nproc`.
+  - consigna: Averiguá cuántas CPU lógicas tiene con `nproc`.
     verificar:
       - { comando_usado: '^\s*nproc' }
     pistas:
@@ -29,8 +29,8 @@ pasos:
       `nproc` es lo más rápido cuando solo importa el número. Para el detalle (núcleos, hilos y
       zócalos) se usa `lscpu`.
   - consigna: >-
-      Busca la instrucción AVX2 en la lista de capacidades del procesador. La lista está en el
-      archivo `/proc/cpuinfo`: usa `grep -o avx2 /proc/cpuinfo` (grep busca un texto dentro de
+      Buscá la instrucción AVX2 en la lista de capacidades del procesador. La lista está en el
+      archivo `/proc/cpuinfo`: usá `grep -o avx2 /proc/cpuinfo` (grep busca un texto dentro de
       un archivo y `-o` muestra solo la parte encontrada).
     verificar:
       - { comando_usado: 'grep.*avx2.*/proc/cpuinfo' }
@@ -42,7 +42,7 @@ pasos:
       Aparece una vez por cada CPU lógica: el procesador tiene AVX2, así que cumple el nivel
       x86-64-v3 y Rocky 10 puede arrancar. Si el comando no mostrara nada, habría que usar
       AlmaLinux 10 en su versión x86-64-v2 o quedarse en una versión anterior.
-  - consigna: Mira el detalle completo con `lscpu` y fíjate en *Thread(s) per core*, *Core(s) per socket* y *Socket(s)*.
+  - consigna: Mirá el detalle completo con `lscpu` y fijate en *Thread(s) per core*, *Core(s) per socket* y *Socket(s)*.
     verificar:
       - { comando_usado: '^\s*lscpu' }
     pistas:

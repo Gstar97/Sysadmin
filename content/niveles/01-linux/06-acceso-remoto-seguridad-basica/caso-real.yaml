@@ -37,8 +37,8 @@ nodos:
       - { texto: "Analizar los errores", ir_a: n_analisis, minutos: 2 }
   n_analisis:
     situacion: >-
-      "Connection refused" en los dos puertos: llegas al servidor, pero nada escucha. sshd no
-      está funcionando. No es el firewall (daría timed out o no route to host). Necesitas entrar
+      "Connection refused" en los dos puertos: llegás al servidor, pero nada escucha. sshd no
+      está funcionando. No es el firewall (daría timed out o no route to host). Necesitás entrar
       por otro lado que no sea SSH.
     opciones:
       - { texto: "Abrir la consola serie del proveedor de nube (la pantalla del servidor)", ir_a: n_consola, minutos: 3 }
@@ -48,8 +48,8 @@ nodos:
         consecuencia: Todos dan refused. sshd no está escuchando en ninguno.
   n_consola:
     situacion: >-
-      Entras por la consola serie con el usuario admin y su contraseña (la consola no depende de
-      sshd). Miras por qué sshd no arranca.
+      Entrás por la consola serie con el usuario admin y su contraseña (la consola no depende de
+      sshd). Mirás por qué sshd no arranca.
     evidencia:
       - titulo: sudo systemctl status sshd
         contenido: |
@@ -72,7 +72,7 @@ nodos:
         minutos: 3
   n_setenforce:
     situacion: >-
-      sshd arranca y puedes entrar por el 2222... con SELinux en permissive para todo el servidor.
+      sshd arranca y podés entrar por el 2222... con SELinux en permissive para todo el servidor.
       El lunes, en la revisión de seguridad, lo detectan; además, al primer reinicio sshd va a
       volver a fallar, porque setenforce 0 no dura.
     opciones:
@@ -82,7 +82,7 @@ nodos:
         consecuencia: Bien. Lo temporal sirvió para confirmar la causa, nada más.
   n_vuelta22:
     situacion: >-
-      Con Port 22, sshd arranca y vuelves a entrar. Aplicas el parche a tiempo. Pero el pedido era
+      Con Port 22, sshd arranca y volvés a entrar. Aplicás el parche a tiempo. Pero el pedido era
       mover SSH al 2222, y queda pendiente entender por qué no anduvo.
     opciones:
       - { texto: "Ahora sí, investigar con calma y hacer bien el cambio de puerto", ir_a: n_selinux, minutos: 3 }
@@ -108,7 +108,7 @@ nodos:
     situacion: >-
       Con semanage port -a -t ssh_port_t -p tcp 2222 y firewall-cmd --permanent --add-port=2222/tcp
       más --reload, sshd arranca. Desde tu equipo, ssh -p 2222 admin@tienda01 entra con clave.
-      19:22: aplicas el parche a tiempo.
+      19:22: aplicás el parche a tiempo.
     opciones:
       - { texto: "Cerrar el puerto 22 en el firewall y dejar escrito lo que pasó", ir_a: n_ok, minutos: 5 }
   n_ok:

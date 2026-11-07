@@ -21,7 +21,7 @@ Cuando un servidor anda lento, casi siempre hay un proceso detrás. Saber qué e
 - Un **<Termino id="proceso">proceso</Termino>** es un programa en ejecución. Tiene su propia memoria, un dueño (el usuario que lo ejecutó), archivos abiertos y un número único: el **<Termino id="pid">PID</Termino>**. El mismo programa puede estar corriendo en muchos procesos a la vez: cada persona conectada por SSH tiene su propio proceso `bash`.
 - Un **<Termino id="hilo">hilo</Termino>** (*thread*) es una línea de ejecución dentro de un proceso. Los hilos de un mismo proceso comparten su memoria y trabajan en paralelo. Una base de datos atiende cada consulta en un hilo distinto; un navegador usa decenas.
 
-Cada proceso, además, tiene un **proceso padre** (el que lo creó), identificado por su **PPID**. Todos descienden del primer proceso que arranca el kernel, que tiene el PID 1: en Linux es **systemd**. Cuando te conectas por SSH, el servicio `sshd` crea un proceso para tu sesión, y ese proceso crea tu `bash`; cada comando que escribes es un proceso hijo de ese `bash`.
+Cada proceso, además, tiene un **proceso padre** (el que lo creó), identificado por su **PPID**. Todos descienden del primer proceso que arranca el kernel, que tiene el PID 1: en Linux es **systemd**. Cuando te conectás por SSH, el servicio `sshd` crea un proceso para tu sesión, y ese proceso crea tu `bash`; cada comando que escribís es un proceso hijo de ese `bash`.
 
 ### Cómo se ven
 
@@ -70,11 +70,11 @@ En la columna STAT de `ps` y en la S de `top`:
 
 Si hay más procesos listos que núcleos, alguien tiene que decidir quién usa la CPU en cada momento: es el **<Termino id="planificador">planificador</Termino>** del kernel. Da a cada proceso un turno muy corto (milisegundos) y lo cambia por otro. Cambiar de proceso se llama **cambio de contexto** y tiene un pequeño costo: guardar los registros de uno y cargar los del siguiente.
 
-Como los turnos son tan cortos, parece que todo corre a la vez: eso es la **multitarea**. Prueba los tres algoritmos clásicos con el mismo grupo de procesos y compara los resultados:
+Como los turnos son tan cortos, parece que todo corre a la vez: eso es la **multitarea**. Probá los tres algoritmos clásicos con el mismo grupo de procesos y compara los resultados:
 
 <PlanificadorCpu />
 
-Fíjate en tres cosas:
+Fijate en tres cosas:
 
 - **Por orden de llegada**: si el primer proceso es largo, todos los demás esperan detrás. El tiempo de respuesta es malo.
 - **Turnos rotativos**: todos empiezan a ejecutarse enseguida (buena respuesta), a cambio de más cambios de contexto. Con un quantum muy pequeño, los cambios se multiplican; con uno muy grande, se parece a "por orden de llegada".
@@ -118,7 +118,7 @@ La regla de oro: **primero SIGTERM y, solo si el proceso no responde, SIGKILL**.
 
 <ErroresComunes>
   <ErrorComun titulo="Usar kill -9 como primera opción">
-    SIGKILL no deja que el proceso guarde nada: una base de datos o un programa que estaba escribiendo un archivo pueden quedar con datos corruptos. Envía primero SIGTERM (`kill PID`), espera unos segundos y solo si sigue vivo usa `kill -9`. Para servicios, lo correcto es directamente `systemctl stop servicio`.
+    SIGKILL no deja que el proceso guarde nada: una base de datos o un programa que estaba escribiendo un archivo pueden quedar con datos corruptos. Enviá primero SIGTERM (`kill PID`), espera unos segundos y solo si sigue vivo usa `kill -9`. Para servicios, lo correcto es directamente `systemctl stop servicio`.
   </ErrorComun>
   <ErrorComun titulo='"Operation not permitted" al intentar terminar un proceso'>
     Un usuario común solo puede enviar señales a sus propios procesos. Para los de otros usuarios hace falta `sudo`. Antes de usarlo, confirma de quién es y qué hace ese proceso, y si es posible avisa al dueño.
@@ -130,7 +130,7 @@ La regla de oro: **primero SIGTERM y, solo si el proceso no responde, SIGKILL**.
     En Linux el load average también cuenta a los procesos en estado D, que esperan al disco o a un almacenamiento de red. Si `top` muestra la CPU ociosa y un valor alto en *wa* (espera de E/S), el problema está en el disco o en el almacenamiento, no en la CPU.
   </ErrorComun>
   <ErrorComun titulo="Terminar el proceso equivocado">
-    Con `ps aux | grep nombre`, una de las líneas suele ser el propio `grep`. Lee siempre la línea de comandos completa y el usuario antes de enviar una señal, o usa `pgrep -a nombre`, que no se lista a sí mismo.
+    Con `ps aux | grep nombre`, una de las líneas suele ser el propio `grep`. Leé siempre la línea de comandos completa y el usuario antes de enviar una señal, o usa `pgrep -a nombre`, que no se lista a sí mismo.
   </ErrorComun>
 </ErroresComunes>
 

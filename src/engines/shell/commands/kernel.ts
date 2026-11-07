@@ -289,7 +289,7 @@ register('timedatectl', {
       return 0
     }
     if (verb === 'show-timesync' || verb === 'timesync-status') {
-      ctx.err('[simulador] timesync-status es de systemd-timesyncd. Con chrony, usa chronyc tracking y chronyc sources.\n')
+      ctx.err('[simulador] timesync-status es de systemd-timesyncd. Con chrony, usá chronyc tracking y chronyc sources.\n')
       return 1
     }
     const d = new Date(Date.now() + sys.clock.offset * 1000)
@@ -414,7 +414,7 @@ register('at', {
       return 1
     }
     if (!ctx.sys.services.get('atd')?.active) {
-      ctx.err(`[simulador] atd no está funcionando: instala el paquete at y arráncalo (sudo systemctl enable --now atd).\n`)
+      ctx.err(`[simulador] atd no está funcionando: instalá el paquete at y arrancalo (sudo systemctl enable --now atd).\n`)
       return 1
     }
     const when = parseAtTime(spec)

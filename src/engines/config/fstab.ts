@@ -17,13 +17,13 @@ export function validateFstab(text: string): { entries: string[][]; diagnostics:
       diagnostics.push({ line, severity: 'error', message: `La línea tiene ${f.length} campos: hacen falta al menos 4 (dispositivo, punto de montaje, tipo y opciones); lo habitual son 6.` })
       return
     }
-    if (f.length > 6) diagnostics.push({ line, severity: 'error', message: `La línea tiene ${f.length} campos y fstab usa 6. Si una ruta tiene espacios, escríbelos como \\040.` })
+    if (f.length > 6) diagnostics.push({ line, severity: 'error', message: `La línea tiene ${f.length} campos y fstab usa 6. Si una ruta tiene espacios, escribilos como \\040.` })
     const [dev, mnt, type, opts, dump = '0', pass = '0'] = f
     if (!/^(UUID=|LABEL=|PARTUUID=|PARTLABEL=|\/dev\/|\/\/|[\w.-]+:\/|tmpfs$|proc$|sysfs$|devpts$|none$|\/)/.test(dev)) {
       diagnostics.push({ line, severity: 'error', message: `"${dev}" no parece un dispositivo válido. Formatos habituales: UUID=..., LABEL=..., /dev/sdb1, servidor:/exportación (NFS) o //servidor/recurso (CIFS).` })
     }
     if (/^UUID=/.test(dev) && !/^UUID=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}|[0-9a-fA-F]{16})$/.test(dev)) {
-      diagnostics.push({ line, severity: 'warning', message: 'El UUID no tiene el formato habitual: cópialo tal cual de "blkid" o "lsblk -f".' })
+      diagnostics.push({ line, severity: 'warning', message: 'El UUID no tiene el formato habitual: copialo tal cual de "blkid" o "lsblk -f".' })
     }
     if (type !== 'swap' && mnt !== 'none' && !mnt.startsWith('/')) diagnostics.push({ line, severity: 'error', message: `El punto de montaje "${mnt}" tiene que ser una ruta absoluta (empezar con /).` })
     if (type === 'swap' && mnt !== 'none' && mnt !== 'swap') diagnostics.push({ line, severity: 'warning', message: 'Para swap, el punto de montaje se escribe "none".' })

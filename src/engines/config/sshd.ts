@@ -98,7 +98,7 @@ export function validateSshd(text: string): { entries: { key: string; value: str
     }
     const kind = SSHD_KEYWORDS[lower]
     if (!kind) {
-      diagnostics.push({ line, severity: 'error', message: `Opción desconocida "${key}" (sshd: Bad configuration option: ${key}). Revisa cómo está escrita.` })
+      diagnostics.push({ line, severity: 'error', message: `Opción desconocida "${key}" (sshd: Bad configuration option: ${key}). Revisá cómo está escrita.` })
       return
     }
     if (lower === 'match') inMatch = true

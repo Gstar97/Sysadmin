@@ -24,7 +24,7 @@ Las contraseñas tienen dos problemas en un servidor: se pueden adivinar (los ro
 
 ## Un par de claves
 
-Una clave SSH son dos archivos que van juntos. Piensa en un candado y su llave: puedes fabricar muchos candados iguales y dejarlos en todas las puertas que quieras (la **clave pública**), pero la única llave que los abre la guardas tú (la **clave privada**). Donde la comparación no llega: el servidor no te pide la llave; te manda un desafío distinto cada vez y tu equipo lo responde usando la privada. La privada nunca viaja por la red.
+Una clave SSH son dos archivos que van juntos. Pensá en un candado y su llave: podés fabricar muchos candados iguales y dejarlos en todas las puertas que quieras (la **clave pública**), pero la única llave que los abre la guardás vos (la **clave privada**). Donde la comparación no llega: el servidor no te pide la llave; te manda un desafío distinto cada vez y tu equipo lo responde usando la privada. La privada nunca viaja por la red.
 
 <Diagrama svg={claves} alt="En tu equipo, la clave privada id_ed25519, que no sale nunca de ahí y tiene permisos 600, y la pública id_ed25519.pub, que se copia con ssh-copy-id al archivo authorized_keys del usuario en el servidor. El servidor exige que el home y la carpeta .ssh no los pueda modificar nadie más y que authorized_keys tenga permisos 600; si no, ignora la clave." pie="La pública se reparte; la privada no se mueve de tu equipo." />
 
@@ -38,11 +38,11 @@ ssh web01                                # ya entras con la clave
 
 **ed25519** es el tipo recomendado hoy: claves cortas, rápidas y seguras. Vas a ver también **RSA** (`-t rsa -b 4096`) en sistemas viejos que no soportan ed25519. El comentario (`-C`) es solo una etiqueta, pero ayuda mucho cuando un authorized_keys tiene diez claves y hay que saber cuál borrar.
 
-ssh-keygen te pide una **frase de paso**: protege la clave privada si alguien la copia. Para tus claves personales, ponle una. Para una clave que usa un proceso automático (un respaldo nocturno, por ejemplo), se deja vacía, y se compensa limitando lo que esa clave puede hacer (nivel 8, hardening).
+ssh-keygen te pide una **frase de paso**: protege la clave privada si alguien la copia. Para tus claves personales, ponele una. Para una clave que usa un proceso automático (un respaldo nocturno, por ejemplo), se deja vacía, y se compensa limitando lo que esa clave puede hacer (nivel 8, hardening).
 
 ## Sin ssh-copy-id: a mano
 
-Si no tienes ssh-copy-id, o la contraseña ya está desactivada y alguien con acceso te ayuda, la clave se agrega a mano en el servidor:
+Si no tenés ssh-copy-id, o la contraseña ya está desactivada y alguien con acceso te ayuda, la clave se agrega a mano en el servidor:
 
 ```bash
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
@@ -64,11 +64,11 @@ ssh-add                    # le das la frase una vez
 ssh-add -l                 # las claves que tiene cargadas
 ```
 
-Para más adelante: con `ssh -A` el agente viaja con tu conexión a otro servidor. Úsalo solo en servidores de confianza: root en ese servidor podría usar tu agente mientras estás conectado. Para pasar por un servidor intermedio hay una forma mejor (`-J`, en la próxima lección).
+Para más adelante: con `ssh -A` el agente viaja con tu conexión a otro servidor. Usalo solo en servidores de confianza: root en ese servidor podría usar tu agente mientras estás conectado. Para pasar por un servidor intermedio hay una forma mejor (`-J`, en la próxima lección).
 
 ## Cerrar las contraseñas (sin dejarte afuera)
 
-Una vez que entras con clave, el paso siguiente es que nadie pueda entrar con contraseña. Esto se hace en el servidor, con un archivo propio en `sshd_config.d`:
+Una vez que entrás con clave, el paso siguiente es que nadie pueda entrar con contraseña. Esto se hace en el servidor, con un archivo propio en `sshd_config.d`:
 
 ```text
 # /etc/ssh/sshd_config.d/01-endurecido.conf
@@ -80,17 +80,17 @@ PermitRootLogin no
 
 El orden seguro para tocar sshd, siempre:
 
-1. Comprobar que **ya entras con clave**.
+1. Comprobar que **ya entrás con clave**.
 2. Dejar **una sesión abierta** (es tu red de seguridad).
 3. Editar y revisar con `sudo sshd -t`.
 4. Aplicar con `sudo systemctl reload sshd` (o `ssh` en Ubuntu).
-5. Probar desde **otra terminal** que entras, y que con contraseña no (`ssh -o PubkeyAuthentication=no servidor`).
+5. Probar desde **otra terminal** que entrás, y que con contraseña no (`ssh -o PubkeyAuthentication=no servidor`).
 6. Recién entonces, cerrar la sesión de seguridad.
 
 Para comprobar qué valor quedó en realidad: `sudo sshd -T | grep -E 'passwordauth|permitroot'`.
 
 <EnSimple>
-Antes de cerrar una puerta, comprueba que tu llave funciona y deja otra puerta abierta mientras pruebas. Con sshd, la puerta abierta es la sesión que ya tienes.
+Antes de cerrar una puerta, comprueba que tu llave funciona y deja otra puerta abierta mientras probás. Con sshd, la puerta abierta es la sesión que ya tenés.
 </EnSimple>
 
 ## Practicar en la terminal
@@ -99,7 +99,7 @@ Antes de cerrar una puerta, comprueba que tu llave funciona y deja otra puerta a
 
 <ErroresComunes>
   <ErrorComun titulo="Sigue pidiendo contraseña aunque copiaste la clave">
-    Permisos: home o `~/.ssh` escribibles por el grupo, `authorized_keys` que no es 600 o no es del usuario. Mira el registro del servidor ("bad ownership or modes"). En Rocky, también puede ser la etiqueta de SELinux: `restorecon -Rv ~/.ssh`.
+    Permisos: home o `~/.ssh` escribibles por el grupo, `authorized_keys` que no es 600 o no es del usuario. Mirá el registro del servidor ("bad ownership or modes"). En Rocky, también puede ser la etiqueta de SELinux: `restorecon -Rv ~/.ssh`.
   </ErrorComun>
   <ErrorComun titulo='"UNPROTECTED PRIVATE KEY FILE!"'>
     La clave privada se puede leer por otros. `chmod 600 ~/.ssh/id_ed25519`.
@@ -111,7 +111,7 @@ Antes de cerrar una puerta, comprueba que tu llave funciona y deja otra puerta a
     Otro archivo lo define antes (sshd usa el primer valor) o no recargaste el servicio. `sudo sshd -T | grep passwordauth` muestra el valor efectivo.
   </ErrorComun>
   <ErrorComun titulo="Me quedé afuera después de tocar sshd_config">
-    Necesitas la consola del hipervisor o del proveedor de nube. Para la próxima: sesión abierta, `sshd -t`, reload y prueba desde otra terminal (el caso real del módulo trata de esto).
+    Necesitás la consola del hipervisor o del proveedor de nube. Para la próxima: sesión abierta, `sshd -t`, reload y prueba desde otra terminal (el caso real del módulo trata de esto).
   </ErrorComun>
 </ErroresComunes>
 

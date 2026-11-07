@@ -108,7 +108,7 @@ export function MacTableSim() {
           </svg>
           <div className="mt-3 flex flex-wrap items-end gap-3 text-sm">
             <label>
-              <span className="block text-muted">Envía</span>
+              <span className="block text-muted">Enviá</span>
               <select className="min-h-10 rounded-lg border border-line bg-bg px-2" value={from} onChange={(e) => setFrom(e.target.value)}>
                 {HOSTS.map((h) => (
                   <option key={h.id} value={h.id}>

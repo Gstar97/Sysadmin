@@ -11,7 +11,7 @@ estado_inicial:
   usuarios:
     - { nombre: ana, sudo: true }
 pasos:
-  - consigna: Averigua, solo como número, el porcentaje usado de la raíz.
+  - consigna: Averiguá, solo como número, el porcentaje usado de la raíz.
     verificar:
       - { comando_usado: 'df\s+.*(--output=pcent|-P).*\|' }
       - { salida_regex: '^\s*\d+\s*$' }
@@ -21,7 +21,7 @@ pasos:
     solucion: ["df --output=pcent / | tail -1 | tr -dc '0-9'; echo"]
     explicacion: Así se consigue un número limpio para comparar. El echo del final solo agrega el salto de línea.
   - consigna: >-
-      Crea ~/espacio.sh con el contenido de la solución: recibe la partición y los dos límites
+      Creá ~/espacio.sh con el contenido de la solución: recibe la partición y los dos límites
       (por defecto /, 80 y 90) y responde según corresponda.
     verificar:
       - { archivo: /home/ana/espacio.sh, contenido_incluye: elif }
@@ -30,7 +30,7 @@ pasos:
       - "La estructura: if (( uso >= critico )); then ... exit 2; elif (( uso >= aviso )); then ... exit 1; else ... exit 0; fi"
     solucion: ["cat > ~/espacio.sh <<'FIN'\n#!/bin/bash\n# espacio.sh: controla el uso de una partición.\n# Uso: espacio.sh [PARTICIÓN] [AVISO] [CRÍTICO]   (0 OK, 1 AVISO, 2 CRÍTICO, 3 error)\nparticion=\"${1:-/}\"\naviso=\"${2:-80}\"\ncritico=\"${3:-90}\"\nif [ ! -d \"$particion\" ]; then\n  echo \"No existe: $particion\" >&2\n  exit 3\nfi\nuso=$(df --output=pcent \"$particion\" | tail -1 | tr -dc '0-9')\nif (( uso >= critico )); then\n  echo \"CRÍTICO: $particion al $uso %\"\n  exit 2\nelif (( uso >= aviso )); then\n  echo \"AVISO: $particion al $uso %\"\n  exit 1\nelse\n  echo \"OK: $particion al $uso %\"\n  exit 0\nfi\nFIN", chmod +x ~/espacio.sh]
     explicacion: Primero se valida lo que entra (que la partición exista), después se decide. Solo una de las ramas se ejecuta.
-  - consigna: Ejecútalo con los valores por defecto y mira el código de salida.
+  - consigna: Ejecutalo con los valores por defecto y mira el código de salida.
     verificar:
       - { comando_usado: 'espacio\.sh' }
       - { salida_contiene: "OK: / al" }
@@ -38,7 +38,7 @@ pasos:
       - "`~/espacio.sh; echo $?`"
     solucion: ["~/espacio.sh; echo $?"]
     explicacion: "OK y 0: por debajo del 80 %."
-  - consigna: Pruébalo con una carpeta que no existe y con límites bajos (por ejemplo 10 y 20) para forzar el CRÍTICO.
+  - consigna: Probalo con una carpeta que no existe y con límites bajos (por ejemplo 10 y 20) para forzar el CRÍTICO.
     verificar:
       - { salida_contiene: "CRÍTICO" }
       - { comando_usado: 'espacio\.sh\s+/\S+' }
@@ -47,8 +47,8 @@ pasos:
     solucion: ["~/espacio.sh /no/existe; echo $?", "~/espacio.sh / 10 20; echo $?"]
     explicacion: Probar todas las ramas, también las de error, es parte de escribir un script.
   - consigna: >-
-      Ahora un case: crea ~/accion.sh que responda a "inicio", "fin" o "estado", y para
-      cualquier otra cosa muestre el uso por stderr y salga con 2. Pruébalo con estado y con otra.
+      Ahora un case: creá ~/accion.sh que responda a "inicio", "fin" o "estado", y para
+      cualquier otra cosa muestre el uso por stderr y salga con 2. Probalo con estado y con otra.
     verificar:
       - { archivo: /home/ana/accion.sh, contenido_incluye: esac }
       - { salida_contiene: "Uso:" }

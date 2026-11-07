@@ -74,7 +74,7 @@ export function validateWireguard(text: string): { diagnostics: Diagnostic[]; en
     const map = section === 'interface' ? iface : peers.at(-1)!.keys
     if (map.has(key) && !['address', 'allowedips', 'dns', 'postup', 'postdown', 'preup', 'predown'].includes(key)) err(n, `${kv[1]} está repetida en esta sección.`)
     map.set(key, map.has(key) ? { value: `${map.get(key)!.value}, ${value}`, line: map.get(key)!.line } : { value, line: n })
-    if ((key === 'privatekey' || key === 'publickey' || key === 'presharedkey') && !isKey(value)) err(n, `${kv[1]} no parece una clave de WireGuard: son 44 caracteres en base64 que terminan en "=" (cópiala completa, sin espacios).`)
+    if ((key === 'privatekey' || key === 'publickey' || key === 'presharedkey') && !isKey(value)) err(n, `${kv[1]} no parece una clave de WireGuard: son 44 caracteres en base64 que terminan en "=" (copiala completa, sin espacios).`)
     if (key === 'address' || key === 'allowedips') {
       for (const part of value.split(',').map((x) => x.trim()).filter(Boolean)) {
         if (part.includes(':')) continue
@@ -119,7 +119,7 @@ export function validateWireguard(text: string): { diagnostics: Diagnostic[]; en
         if (c.prefix === 0 && peers.length > 1) warn(p.keys.get('allowedips')!.line, '0.0.0.0/0 en un [Peer] cuando hay varios: todo el tráfico va a este peer y los demás quedan sin rutas.')
       }
     }
-    if (p.keys.has('endpoint') && !p.keys.has('persistentkeepalive') && !iface.has('listenport')) warn(p.line, 'Este equipo no escucha en un puerto fijo y no tiene PersistentKeepalive: si está detrás de NAT, el otro extremo no va a poder iniciar el contacto. Agrega PersistentKeepalive = 25.')
+    if (p.keys.has('endpoint') && !p.keys.has('persistentkeepalive') && !iface.has('listenport')) warn(p.line, 'Este equipo no escucha en un puerto fijo y no tiene PersistentKeepalive: si está detrás de NAT, el otro extremo no va a poder iniciar el contacto. Agregá PersistentKeepalive = 25.')
   })
   iface = new Map()
   return { diagnostics, entries }

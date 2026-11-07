@@ -128,7 +128,7 @@ function Calculator() {
           <input value={umask} onChange={(e) => setUmask(e.target.value)} className={`${inputClass} w-24`} aria-label="umask" />
         </label>
         {umaskValue === null ? (
-          <p className="mt-2 text-bad">Escribe una umask en octal, por ejemplo 0022.</p>
+          <p className="mt-2 text-bad">Escribí una umask en octal, por ejemplo 0022.</p>
         ) : (
           <p className="mt-2">
             Un archivo nuevo se crea con <b className="font-mono">{toOctal(applyUmask(umaskValue, false))}</b> ({toSymbolic(applyUmask(umaskValue, false))}) y una carpeta nueva con{' '}

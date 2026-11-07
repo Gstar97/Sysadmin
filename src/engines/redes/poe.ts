@@ -115,7 +115,7 @@ export function generatePoeExercise(rng: Rng): PoeExercise {
     alcanza ? 'Alcanza.' : r.sinPoe.length ? 'No alcanza: hay equipos que este switch no puede alimentar.' : r.puertosUsados > sw.puertos ? 'No alcanza: faltan puertos.' : 'No alcanza: se pasa del presupuesto de potencia.',
   ]
   return {
-    enunciado: `Tienes un ${sw.nombre} y quieres conectar: ${devices.map((d) => `${d.cantidad} × ${d.nombre.toLowerCase()} (${d.watts} W)`).join(', ')}. Si el switch reserva la potencia por clase, ¿alcanza?`,
+    enunciado: `Tenés un ${sw.nombre} y querés conectar: ${devices.map((d) => `${d.cantidad} × ${d.nombre.toLowerCase()} (${d.watts} W)`).join(', ')}. Si el switch reserva la potencia por clase, ¿alcanza?`,
     devices,
     presupuesto: sw.presupuesto,
     puertos: sw.puertos,

@@ -106,7 +106,7 @@ export function VimSimulator({ exercise }: { exercise: VimExercise }) {
         {done ? (
           <div className="flex items-start gap-2 text-ok">
             <Icon name="check" />
-            <p>Completaste todos los pasos. Puedes seguir practicando en el editor o reiniciarlo para empezar de nuevo.</p>
+            <p>Completaste todos los pasos. Podés seguir practicando en el editor o reiniciarlo para empezar de nuevo.</p>
           </div>
         ) : (
           current && (
@@ -230,7 +230,7 @@ export function VimSimulator({ exercise }: { exercise: VimExercise }) {
               </span>
             </div>
             {!focused && (
-              <div className="pointer-events-none absolute right-3 top-2 rounded bg-white/10 px-2 py-0.5 font-sans text-xs">Haz clic aquí para escribir</div>
+              <div className="pointer-events-none absolute right-3 top-2 rounded bg-white/10 px-2 py-0.5 font-sans text-xs">Hacé clic acá para escribir</div>
             )}
           </div>
         )}

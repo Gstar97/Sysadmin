@@ -117,7 +117,7 @@ export function parseKea(text: string, file = '/etc/kea/kea-dhcp4.conf', opts: {
     const pos = /position (\d+)/.exec(msg)
     const lc = /line (\d+) column (\d+)/.exec(msg)
     const line = lc ? Number(lc[1]) : pos ? lineOf(clean, Number(pos[1])) : 1
-    let explicacion = 'El archivo no es JSON válido. Revisa comillas, comas entre elementos y que cada { y [ tenga su cierre.'
+    let explicacion = 'El archivo no es JSON válido. Revisá comillas, comas entre elementos y que cada { y [ tenga su cierre.'
     const prevLine = clean.split('\n').slice(0, line - 1).reverse().find((l) => l.trim())
     if (prevLine && /["}\]\d]\s*$/.test(prevLine) && !/[,{[]\s*$/.test(prevLine)) explicacion = 'Falta una coma al final de la línea anterior: en JSON cada elemento se separa del siguiente con ",".'
     if (/'/.test(clean.split('\n')[line - 1] ?? '')) explicacion = "En JSON los textos van entre comillas dobles (\"...\"), no simples ('...')."
@@ -132,10 +132,10 @@ export function parseKea(text: string, file = '/etc/kea/kea-dhcp4.conf', opts: {
   }
   const d = (data as { Dhcp4: Record<string, unknown> }).Dhcp4
   const known = ['interfaces-config', 'lease-database', 'valid-lifetime', 'renew-timer', 'rebind-timer', 'max-valid-lifetime', 'min-valid-lifetime', 'subnet4', 'option-data', 'loggers', 'control-socket', 'shared-networks', 'reservations', 'client-classes', 'hooks-libraries', 'dhcp-ddns', 'authoritative', 'expired-leases-processing', 'host-reservation-identifiers', 'reservations-global', 'reservations-in-subnet', 'reservations-out-of-pool', 'calculate-tee-times', 'match-client-id', 'next-server', 'boot-file-name', 'multi-threading', 'sanity-checks', 'option-def', 'host-reservation-identifiers', 'ddns-send-updates', 'early-global-reservations-lookup', 'cache-threshold', 'decline-probation-period']
-  for (const k of Object.keys(d)) if (!known.includes(k)) err(keyLine(clean, k), `${file}: got unexpected keyword "${k}" in Dhcp4 map.`, `"${k}" no es una opción de Kea DHCPv4. Revisa cómo está escrito (Kea usa minúsculas con guiones, por ejemplo "valid-lifetime").`)
+  for (const k of Object.keys(d)) if (!known.includes(k)) err(keyLine(clean, k), `${file}: got unexpected keyword "${k}" in Dhcp4 map.`, `"${k}" no es una opción de Kea DHCPv4. Revisá cómo está escrito (Kea usa minúsculas con guiones, por ejemplo "valid-lifetime").`)
   const ifc = d['interfaces-config'] as { interfaces?: unknown } | undefined
   const interfaces = Array.isArray(ifc?.interfaces) ? (ifc!.interfaces as unknown[]).map(String) : []
-  if (!interfaces.length) warn(keyLine(clean, 'interfaces-config'), 'interfaces-config: no interfaces specified', 'No hay interfaces en "interfaces-config": Kea arranca pero no escucha en ninguna placa de red y nadie recibe dirección. Pon la interfaz de la red de clientes, por ejemplo ["enp0s3"].')
+  if (!interfaces.length) warn(keyLine(clean, 'interfaces-config'), 'interfaces-config: no interfaces specified', 'No hay interfaces en "interfaces-config": Kea arranca pero no escucha en ninguna placa de red y nadie recibe dirección. Poné la interfaz de la red de clientes, por ejemplo ["enp0s3"].')
   const readOptions = (arr: unknown, at: number): Record<string, string> => {
     const out: Record<string, string> = {}
     if (!Array.isArray(arr)) return out
@@ -168,7 +168,7 @@ export function parseKea(text: string, file = '/etc/kea/kea-dhcp4.conf', opts: {
     const id = typeof s.id === 'number' ? s.id : undefined
     if (id === undefined) {
       if (idRequired) err(line, "subnet configuration failed: missing parameter 'id'", 'Cada subred necesita un "id" numérico único (1, 2, 3...). Desde Kea 2.6 es obligatorio: los préstamos se guardan asociados a ese número.')
-      else warn(line, "subnet without 'id'", 'Esta subred no tiene "id": esta versión de Kea le asigna uno solo, pero desde Kea 2.6 es obligatorio. Ponlo siempre (1, 2, 3...).')
+      else warn(line, "subnet without 'id'", 'Esta subred no tiene "id": esta versión de Kea le asigna uno solo, pero desde Kea 2.6 es obligatorio. Ponelo siempre (1, 2, 3...).')
     } else if (subnets.some((x) => x.id === id)) err(line, `subnet configuration failed: subnet with the prefix of '${cidr}' already exists or id ${id} is duplicated`, `El id ${id} ya lo usa otra subred: cada subred necesita un id distinto.`)
     for (const o of subnets) {
       const r = cidrRange(o.subnet)!

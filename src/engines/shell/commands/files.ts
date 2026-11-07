@@ -444,7 +444,7 @@ function headTail(ctx: CommandContext, tail: boolean) {
     if (sel.length) ctx.out(sel.join('\n') + '\n')
   })
   if (tail && (a.flags.has('follow') || a.flags.has('F'))) {
-    ctx.err('[simulador] tail -f se queda esperando líneas nuevas; aquí termina enseguida. En un servidor real se corta con Ctrl+C.\n')
+    ctx.err('[simulador] tail -f se queda esperando líneas nuevas; acá termina enseguida. En un servidor real se corta con Ctrl+C.\n')
   }
   return 0
 }

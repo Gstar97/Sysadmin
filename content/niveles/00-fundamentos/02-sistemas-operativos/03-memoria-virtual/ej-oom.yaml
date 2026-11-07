@@ -19,7 +19,7 @@ estado_inicial:
     - { unidad: mariadb.service, mensaje: "mariadb.service: Failed with result 'oom-kill'.", prioridad: err, hace_minutos: 312 }
     - { unidad: crond.service, mensaje: "(contabilidad) CMD (python3 /home/contabilidad/reporte_mensual.py)", prioridad: info, hace_minutos: 330 }
 pasos:
-  - consigna: Mira cómo está la memoria ahora con `free -h`.
+  - consigna: Mirá cómo está la memoria ahora con `free -h`.
     verificar:
       - { comando_usado: '^\s*free' }
     pistas:
@@ -27,9 +27,9 @@ pasos:
     solucion: [free -h]
     explicacion: >-
       Ahora la memoria está bien: hay bastante disponible y el swap no se usa. Lo que pasó a la
-      madrugada ya no se ve aquí; hay que buscarlo en los registros.
+      madrugada ya no se ve acá; hay que buscarlo en los registros.
   - consigna: >-
-      Busca en los mensajes del kernel si actuó el OOM killer con
+      Buscá en los mensajes del kernel si actuó el OOM killer con
       `sudo journalctl -k | grep -i "out of memory"`.
     verificar:
       - { salida_contiene: Killed process }
@@ -42,7 +42,7 @@ pasos:
       3 GB de memoria real (*anon-rss: 3105736kB*). Lo eligió porque era el que más memoria usaba,
       no porque fuera el culpable.
   - consigna: >-
-      Averigua qué proceso pidió la memoria que faltaba: busca la línea que contiene
+      Averiguá qué proceso pidió la memoria que faltaba: buscá la línea que contiene
       `invoked oom-killer` con `sudo journalctl -k | grep oom-killer`.
     verificar:
       - { salida_contiene: invoked oom-killer }
@@ -53,7 +53,7 @@ pasos:
       Fue un `python3`. Justo antes, el registro de cron muestra que a esa hora arrancó
       `reporte_mensual.py` de contabilidad. El reporte fue pidiendo cada vez más memoria hasta
       agotarla, y el kernel terminó a la base de datos para salvar al resto del sistema.
-  - consigna: Confirma qué registró systemd sobre la base de datos con `sudo journalctl -u mariadb`.
+  - consigna: Confirmá qué registró systemd sobre la base de datos con `sudo journalctl -u mariadb`.
     verificar:
       - { comando_usado: 'journalctl.*-u\s*mariadb' }
     pistas:

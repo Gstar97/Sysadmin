@@ -25,16 +25,16 @@ pasos:
       22 SSH, 80 y 443 nginx, 3306 MariaDB... y 21, vsftpd: un servidor FTP. FTP manda usuario
       y contraseña sin cifrar. Si nadie lo usa, hay que apagarlo; si alguien lo usa, migrarlo a
       SFTP (que viene con SSH).
-  - consigna: Ahora mira los puertos UDP.
+  - consigna: Ahora mirá los puertos UDP.
     verificar:
       - { comando_usado: ss }
       - { salida_contiene: "123" }
     pistas: ["sudo ss -ulnp"]
     solucion: [sudo ss -ulnp]
     explicacion: El 123 es chronyd, el cliente NTP que mantiene la hora (lección 1.5.4).
-  - consigna: Confirmaste que nadie usa FTP. Detén vsftpd y evita que arranque al reiniciar, con un solo comando.
+  - consigna: Confirmaste que nadie usa FTP. Detené vsftpd y evitá que arranque al reiniciar, con un solo comando.
     verificar:
       - { servicio: vsftpd, activo: false, habilitado: false }
     pistas: ["systemctl disable --now hace las dos cosas."]
     solucion: [sudo systemctl disable --now vsftpd]
-    explicacion: Un servicio menos escuchando es un riesgo menos. Anótalo en la documentación del servidor.
+    explicacion: Un servicio menos escuchando es un riesgo menos. Anotalo en la documentación del servidor.

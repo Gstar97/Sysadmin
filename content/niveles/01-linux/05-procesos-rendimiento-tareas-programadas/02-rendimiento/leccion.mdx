@@ -26,7 +26,7 @@ import ejRendimiento from './ej-rendimiento.yaml'
 
 ## El método: un recurso por vez
 
-Piensa en un supermercado donde la fila no avanza. Puede ser que falten cajeros (CPU), que no haya lugar para dejar los carritos (memoria) o que el depósito tarde en traer la mercadería (disco). Mirar la fila no te dice cuál; tienes que mirar cada cosa.
+Pensá en un supermercado donde la fila no avanza. Puede ser que falten cajeros (CPU), que no haya lugar para dejar los carritos (memoria) o que el depósito tarde en traer la mercadería (disco). Mirar la fila no te dice cuál; tenés que mirar cada cosa.
 
 El orden que vamos a seguir:
 
@@ -53,12 +53,12 @@ Los tres números son la cantidad promedio de procesos que querían CPU (o estab
 Un detalle de Linux: los procesos en estado **D** (esperando el disco) también suman. Por eso puede haber carga alta con la CPU casi libre: es el disco.
 
 <EnSimple>
-El load average es el largo de la fila. Para saber si es mucho, compáralo con la cantidad de cajas abiertas (las CPU).
+El load average es el largo de la fila. Para saber si es mucho, comparalo con la cantidad de cajas abiertas (las CPU).
 </EnSimple>
 
 ## La parte de arriba de top
 
-Toca cada parte para ver qué significa:
+Tocá cada parte para ver qué significa:
 
 <DiagramaInteractivo svg={top} datos={topPuntos} alt="Las cinco líneas de arriba de top: la hora, el tiempo encendido y el load average; la cantidad de procesos por estado; el reparto de la CPU en us, sy, ni, id, wa, hi, si y st; la memoria total, libre, usada y en caché; y la swap con la memoria disponible." />
 
@@ -78,7 +78,7 @@ Mem:           3.7Gi       3.0Gi       210Mi        12Mi       442Mi       380Mi
 Swap:          2.0Gi       737Mi       1.3Gi
 ```
 
-Mira **available**, no free. Y para saber si la swap se está usando **ahora** (no hace horas), `vmstat`:
+Mirá **available**, no free. Y para saber si la swap se está usando **ahora** (no hace horas), `vmstat`:
 
 ```text
 $ vmstat 1 5
@@ -115,11 +115,11 @@ sar -q        # carga
 sar -b        # disco
 ```
 
-Instálalo y actívalo en todos tus servidores **antes** de necesitarlo: el historial empieza el día que lo activas.
+Instalalo y activalo en todos tus servidores **antes** de necesitarlo: el historial empieza el día que lo activas.
 
 ## Aliviar sin cortar
 
-Encontraste al culpable y no puedes (o no debes) cortarlo. Opciones:
+Encontraste al culpable y no podés (o no debés) cortarlo. Opciones:
 
 - **CPU**: `renice 10 -p PID` le baja la prioridad (lección 1.5.1).
 - **Disco**: `ionice -c 3 -p PID` lo pone en la clase *idle*: solo usa el disco cuando nadie más lo necesita.
@@ -133,13 +133,13 @@ Y si el servidor está siempre al límite, ninguna de estas opciones lo arregla:
 
 <ErroresComunes>
   <ErrorComun titulo='"free muestra casi nada libre: falta memoria"'>
-    Linux usa la memoria sobrante como caché del disco. Mira la columna available; y si/so en vmstat para saber si de verdad falta.
+    Linux usa la memoria sobrante como caché del disco. Mirá la columna available; y si/so en vmstat para saber si de verdad falta.
   </ErrorComun>
   <ErrorComun titulo="Load average alto y CPU tranquila">
-    Los procesos en D (esperando el disco) suman a la carga. Mira wa en top e iostat -x.
+    Los procesos en D (esperando el disco) suman a la carga. Mirá wa en top e iostat -x.
   </ErrorComun>
   <ErrorComun titulo='"bash: iostat: command not found" o sar sin datos'>
-    Instala sysstat y activa su servicio (`systemctl enable --now sysstat`). El historial empieza desde ese momento.
+    Instalá sysstat y activa su servicio (`systemctl enable --now sysstat`). El historial empieza desde ese momento.
   </ErrorComun>
   <ErrorComun titulo="Reiniciar el servidor para que ande más rápido">
     A veces "funciona" un rato, pero el problema vuelve y perdiste la evidencia (el proceso, los números). Primero mide, después decide.

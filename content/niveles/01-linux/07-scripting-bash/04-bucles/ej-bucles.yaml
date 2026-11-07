@@ -18,7 +18,7 @@ estado_inicial:
     /home/ana/servidores.txt: "# servidores de producción\nweb01\nweb02\n\n# base de datos\ndb01\n"
     /home/ana/tamanos.txt: "120\n118\n125\n130\n0\n127\n122\n"
 pasos:
-  - consigna: Recorre una lista fija de servidores y muestra "Revisando NOMBRE" para cada uno (web01, web02 y db01).
+  - consigna: Recorré una lista fija de servidores y mostrá "Revisando NOMBRE" para cada uno (web01, web02 y db01).
     verificar:
       - { comando_usado: 'for\s+\w+\s+in\s+web01' }
       - { salida_contiene: Revisando db01 }
@@ -26,7 +26,7 @@ pasos:
       - "`for s in web01 web02 db01; do echo \"Revisando $s\"; done`"
     solucion: ['for s in web01 web02 db01; do echo "Revisando $s"; done']
     explicacion: El for asigna cada palabra a la variable y ejecuta el cuerpo una vez por cada una.
-  - consigna: Muestra cuántas líneas tiene cada .log de ~/logs.
+  - consigna: Mostrá cuántas líneas tiene cada .log de ~/logs.
     verificar:
       - { comando_usado: 'for\s+\w+\s+in\s+.*logs/\*\.log' }
       - { salida_contiene: "ventas.log: 3" }
@@ -44,7 +44,7 @@ pasos:
     solucion: ['for f in ~/logs/*.log; do gzip "$f"; done']
     explicacion: Así se hace a mano lo que hace logrotate. Las comillas en "$f" protegen nombres con espacios.
   - consigna: >-
-      Recorre ~/servidores.txt línea por línea y muestra "ping a NOMBRE", sin procesar las líneas
+      Recorré ~/servidores.txt línea por línea y muestra "ping a NOMBRE", sin procesar las líneas
       vacías y los comentarios con continue.
     verificar:
       - { comando_usado: 'while\s+.*read' }
@@ -57,8 +57,8 @@ pasos:
     solucion: ['while read -r s; do [[ -z $s || $s == \#* ]] && continue; echo "ping a $s"; done < ~/servidores.txt']
     explicacion: continue pasa a la línea siguiente sin ejecutar el resto del cuerpo. Así el archivo puede tener comentarios.
   - consigna: >-
-      Suma los tamaños de ~/tamanos.txt usando cat y una tubería hacia el while, y muestra el
-      total después del bucle. Fíjate en el resultado.
+      Sumá los tamaños de ~/tamanos.txt usando cat y una tubería hacia el while, y muestra el
+      total después del bucle. Fijate en el resultado.
     verificar:
       - { comando_usado: 'cat\s+.*tamanos\.txt\s*\|\s*while' }
       - { salida_contiene: "Total: 0" }
@@ -68,7 +68,7 @@ pasos:
     explicacion: >-
       ¡0! Cada parte de una tubería corre aparte, así que el while sumó en su propia copia de
       total, que se perdió al terminar. Es una de las trampas más famosas de bash.
-  - consigna: Hazlo bien, pasando el archivo al while con < en lugar de la tubería.
+  - consigna: Hacelo bien, pasando el archivo al while con < en lugar de la tubería.
     verificar:
       - { comando_usado: 'done\s*<\s*~?/?\S*tamanos\.txt' }
       - { salida_contiene: "Total: 742" }
@@ -77,7 +77,7 @@ pasos:
     solucion: ['total=0; while read -r n; do ((total += n)); done < ~/tamanos.txt; echo "Total: $total"']
     explicacion: Con < el while corre en el mismo shell y la variable queda. (Si los datos vienen de un comando, usa done < <(comando).)
   - consigna: >-
-      Ahora encuentra el día sin respaldo: recorre los tamaños con un contador y detén el bucle con break en el primer 0.
+      Ahora encontrá el día sin respaldo: recorré los tamaños con un contador y detené el bucle con break en el primer 0.
     verificar:
       - { comando_usado: 'break' }
       - { salida_contiene: "Día 5: respaldo vacío" }

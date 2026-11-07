@@ -24,7 +24,7 @@ Una **VPN** (red privada virtual) une dos puntos a través de internet como si h
 
 ## Para qué y de qué tipo
 
-<DiagramaInteractivo datos={tiposDatos} svg={tipos} alt="Arriba a la izquierda, una VPN sitio a sitio: la central (192.168.10.0/24) y la sucursal (10.2.0.0/24) unidas por un túnel entre sus firewalls a través de internet. Arriba a la derecha, acceso remoto: una portátil en un café con una aplicación de VPN, unida por un túnel al servidor VPN del firewall de la central. Abajo, túnel completo (todo el tráfico del cliente va por la VPN, también internet; la empresa filtra todo pero es más lento) y túnel dividido (por la VPN solo lo de la empresa e internet sale directo; más rápido, pero lo de internet no pasa por los controles)." />
+<DiagramaInteractivo datos={tiposDatos} svg={tipos} alt="Arriba a la izquierda, una VPN sitio a sitio: la central (192.168.10.0/24) y la sucursal (10.2.0.0/24) unidas por un túnel entre sus firewalls a través de internet. Arriba a la derecha, acceso remoto: una notebook en un café con una aplicación de VPN, unida por un túnel al servidor VPN del firewall de la central. Abajo, túnel completo (todo el tráfico del cliente va por la VPN, también internet; la empresa filtra todo pero es más lento) y túnel dividido (por la VPN solo lo de la empresa e internet sale directo; más rápido, pero lo de internet no pasa por los controles)." />
 
 Lo importante, sin importar el producto:
 
@@ -39,7 +39,7 @@ Lo importante, sin importar el producto:
 | Qué es | El estándar de toda la vida, en todos los firewalls y routers | Moderno, simple y muy rápido; está dentro del núcleo de Linux | Basado en TLS, muy flexible |
 | Puertos | UDP 500 y 4500 (más el protocolo ESP) | Un puerto UDP (51820 de fábrica) | UDP o TCP 1194 (o 443) |
 | Configuración | Muchas opciones que tienen que coincidir (fases, cifrados) | Un archivo corto con claves y redes | Certificados y un archivo de configuración |
-| Dónde brilla | Sitio a sitio entre fabricantes distintos; clientes nativos de Windows, macOS, iOS | Sitio a sitio y acceso remoto entre equipos que controlas; Linux | Acceso remoto cuando hay redes que solo dejan salir HTTPS |
+| Dónde brilla | Sitio a sitio entre fabricantes distintos; clientes nativos de Windows, macOS, iOS | Sitio a sitio y acceso remoto entre equipos que controlás; Linux | Acceso remoto cuando hay redes que solo dejan salir HTTPS |
 
 En una red nueva con equipos propios, **WireGuard** es la opción más simple. Para unirte a la VPN de un proveedor o de otra empresa, casi siempre va a ser **IPsec**. Y muchos servicios de acceso remoto actuales (Tailscale, NetBird y similares) son WireGuard con una capa de administración encima.
 
@@ -72,8 +72,8 @@ PublicKey = (la pública de gw-norte)
 AllowedIPs = 10.99.0.2/32, 10.2.0.0/24
 
 [Peer]
-# La portátil de Laura
-PublicKey = (la pública de la portátil)
+# La notebook de Laura
+PublicKey = (la pública de la notebook)
 AllowedIPs = 10.99.0.10/32
 ```
 
@@ -98,7 +98,7 @@ La aplicación oficial de WireGuard (Windows, macOS, Android, iOS) importa el mi
     En [Peer] va la clave pública del otro extremo. El síntoma: wg show nunca muestra "latest handshake".
   </ErrorComun>
   <ErrorComun titulo="AllowedIPs sin la red de destino">
-    El túnel sube, pero el tráfico a la LAN del otro lado no entra al túnel (ni es aceptado al llegar). Agrega las redes de cada lado.
+    El túnel sube, pero el tráfico a la LAN del otro lado no entra al túnel (ni es aceptado al llegar). Agregá las redes de cada lado.
   </ErrorComun>
   <ErrorComun titulo="La punta detrás de NAT sin PersistentKeepalive">
     Mientras no haya tráfico, el NAT olvida la conexión y la central ya no puede llegar. PersistentKeepalive = 25 en la punta que está detrás.

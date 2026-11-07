@@ -11,7 +11,7 @@ verificado: 2026-11
 
 import vlsm from './vlsm.svg?raw'
 
-En la vida real las áreas no tienen el mismo tamaño: Ventas tiene 100 personas, Gerencia tiene 10, y el enlace con la sucursal necesita solo 2 direcciones. Si las divides a todas en partes iguales, o desperdicias muchísimo o no te alcanza. **VLSM** (máscaras de subred de longitud variable) es hacer subnetting con un prefijo distinto para cada subred, el justo para lo que necesita. Es lo que vas a usar en el laboratorio de este módulo y en el proyecto del nivel.
+En la vida real las áreas no tienen el mismo tamaño: Ventas tiene 100 personas, Gerencia tiene 10, y el enlace con la sucursal necesita solo 2 direcciones. Si las dividís a todas en partes iguales, o desperdiciás muchísimo o no te alcanza. **VLSM** (máscaras de subred de longitud variable) es hacer subnetting con un prefijo distinto para cada subred, el justo para lo que necesita. Es lo que vas a usar en el laboratorio de este módulo y en el proyecto del nivel.
 
 <AntesDeEmpezar>
 - Elegir el prefijo según la cantidad de hosts y listar subredes (lección 2.2.3).
@@ -20,18 +20,18 @@ En la vida real las áreas no tienen el mismo tamaño: Ventas tiene 100 personas
 
 ## El problema con las partes iguales
 
-Tienes `192.168.30.0/24` y necesitas: Ventas 100 hosts, Administración 50, IT 25, Gerencia 10 y dos enlaces entre routers de 2 hosts cada uno. Son 6 subredes.
+Tenés `192.168.30.0/24` y necesitás: Ventas 100 hosts, Administración 50, IT 25, Gerencia 10 y dos enlaces entre routers de 2 hosts cada uno. Son 6 subredes.
 
 - Con subredes **iguales** del tamaño de la más grande (/25, 126 hosts), solo entran **2** en un /24. No alcanza.
 - Con subredes iguales para que entren 6 (/27, 8 subredes), Ventas no entra en 30 hosts.
 
-Es como repartir un terreno en lotes: si todos los lotes son iguales al más grande que necesitas, se te acaba el terreno; si son todos chicos, la fábrica no entra. Lo lógico es hacer lotes de distinto tamaño, empezando por los grandes. Donde la comparación no llega: en un terreno puedes poner un lote donde quieras; en IP, cada subred tiene que empezar en un **múltiplo de su tamaño**, y eso es lo que obliga a ordenar.
+Es como repartir un terreno en lotes: si todos los lotes son iguales al más grande que necesitás, se te acaba el terreno; si son todos chicos, la fábrica no entra. Lo lógico es hacer lotes de distinto tamaño, empezando por los grandes. Donde la comparación no llega: en un terreno podés poner un lote donde quieras; en IP, cada subred tiene que empezar en un **múltiplo de su tamaño**, y eso es lo que obliga a ordenar.
 
 ## El método: de la más grande a la más chica
 
 1. **Ordena** las necesidades de mayor a menor.
 2. Para cada una, elige el **prefijo más chico que alcanza** (2ʰ − 2 ≥ hosts).
-3. **Ubica** cada subred en la primera dirección libre que sea múltiplo de su tamaño. Si empiezas por las grandes, cada una cae justo después de la anterior, sin huecos.
+3. **Ubica** cada subred en la primera dirección libre que sea múltiplo de su tamaño. Si empezás por las grandes, cada una cae justo después de la anterior, sin huecos.
 4. **Documenta** el resultado, incluido el espacio que queda libre.
 
 <Diagrama svg={vlsm} alt="La red 192.168.30.0/24 repartida con VLSM: Ventas /25 (.0 a .127), Administración /26 (.128 a .191), IT /27 (.192 a .223), Gerencia /28 (.224 a .239), dos enlaces WAN /30 (.240 y .244) y un /29 libre (.248). Los pasos: ordenar de mayor a menor, elegir el prefijo justo, ubicar cada bloque en un múltiplo de su tamaño y documentar." pie="Empezando por la más grande, cada subred cae alineada justo después de la anterior." />
@@ -56,11 +56,11 @@ Detalles que hacen a un buen plan:
 
 - **Una convención para la puerta de enlace**: la primera utilizable de cada subred (.1, .129...). Cualquiera puede deducirla sin buscar.
 - **Margen para crecer**: si Ventas tiene 100 personas hoy y va a tener 130 el año que viene, un /25 no alcanza. Muchas empresas planifican con el doble de lo actual.
-- **El espacio libre, a la vista**: anota qué bloques quedan disponibles; si no, en dos años alguien superpone una subred nueva.
+- **El espacio libre, a la vista**: anotá qué bloques quedan disponibles; si no, en dos años alguien superpone una subred nueva.
 
-## Ahora tú
+## Ahora vos
 
-Primero el ejemplo de arriba (tápalo e intenta hacerlo sin mirar). El diseñador revisa cada subred: que sea una dirección de red válida, que alcance, que no se superponga con otra y que esté dentro del espacio disponible.
+Primero el ejemplo de arriba (tapalo e intenta hacerlo sin mirar). El diseñador revisa cada subred: que sea una dirección de red válida, que alcance, que no se superponga con otra y que esté dentro del espacio disponible.
 
 <DisenadorVlsm red="192.168.30.0/24" areas={[{ nombre: 'Ventas', hosts: 100 }, { nombre: 'Administración', hosts: 50 }, { nombre: 'IT', hosts: 25 }, { nombre: 'Gerencia', hosts: 10 }, { nombre: 'Enlace R1-R2', hosts: 2 }, { nombre: 'Enlace R1-R3', hosts: 2 }]} />
 
@@ -78,13 +78,13 @@ Una distribución habitual dentro de cada subred: la primera dirección para la 
 
 <ErroresComunes>
   <ErrorComun titulo="Empezar por las subredes chicas">
-    Si ubicas primero los /30 al principio, la /25 ya no puede empezar en .0 y quedan huecos que no sirven. Siempre de mayor a menor.
+    Si ubicás primero los /30 al principio, la /25 ya no puede empezar en .0 y quedan huecos que no sirven. Siempre de mayor a menor.
   </ErrorComun>
   <ErrorComun titulo="Superponer subredes">
     192.168.30.128/25 y 192.168.30.192/27 se pisan: la segunda está dentro de la primera. El diseñador lo detecta; en la vida real lo detecta un usuario que "no llega" a algo.
   </ErrorComun>
   <ErrorComun titulo="Calcular justo, sin margen">
-    Un área con 62 personas en un /26 está llena el primer día. Suma la puerta de enlace, las impresoras y el crecimiento antes de elegir el prefijo.
+    Un área con 62 personas en un /26 está llena el primer día. Sumá la puerta de enlace, las impresoras y el crecimiento antes de elegir el prefijo.
   </ErrorComun>
   <ErrorComun titulo="Diseñar y no documentar">
     Un plan que solo está en la cabeza de quien lo hizo se rompe en la primera ampliación. La tabla de direccionamiento es parte del trabajo.

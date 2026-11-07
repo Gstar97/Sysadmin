@@ -23,7 +23,7 @@ En la lección anterior cada VLAN vivía en un solo switch. Pero Ventas tiene ge
 
 ## La etiqueta 802.1Q
 
-Piensa en un camión que lleva paquetes de varias empresas desde un depósito a otro. Cada paquete lleva una etiqueta de color con el nombre de su empresa; al llegar, se reparten según la etiqueta y se le saca antes de entregarlo. El cliente final recibe su paquete sin etiqueta y nunca supo que viajó mezclado. Eso es un troncal **802.1Q**: el switch le agrega a cada trama una etiqueta de 4 bytes con el número de VLAN al mandarla por el troncal, y el switch del otro lado la lee, la saca y entrega la trama solo a los puertos de esa VLAN.
+Pensá en un camión que lleva paquetes de varias empresas desde un depósito a otro. Cada paquete lleva una etiqueta de color con el nombre de su empresa; al llegar, se reparten según la etiqueta y se le saca antes de entregarlo. El cliente final recibe su paquete sin etiqueta y nunca supo que viajó mezclado. Eso es un troncal **802.1Q**: el switch le agrega a cada trama una etiqueta de 4 bytes con el número de VLAN al mandarla por el troncal, y el switch del otro lado la lee, la saca y entrega la trama solo a los puertos de esa VLAN.
 
 <Diagrama svg={etiqueta} alt="Dos switches unidos por un troncal 802.1Q que lleva las VLAN 10, 20 y 99. La trama tiene la MAC de destino, la de origen, la etiqueta 802.1Q de 4 bytes con la VLAN 20, el tipo, los datos y la FCS. La etiqueta se agrega al salir por el troncal y se quita al llegar; tiene 12 bits para la VLAN (1 a 4094); la VLAN nativa viaja sin etiqueta; y solo pasan las VLAN permitidas." pie="Un troncal lleva muchas VLAN por el mismo cable, cada trama con su etiqueta." />
 
@@ -73,13 +73,13 @@ Un método que no falla: corre `show interfaces trunk` en **los dos** extremos y
     Las tramas sin etiqueta cambian de VLAN al cruzar. Iguálalas y usa una nativa sin equipos (la 99 o similar).
   </ErrorComun>
   <ErrorComun titulo="Un extremo troncal y el otro de acceso">
-    El de acceso recibe tramas etiquetadas que no entiende y las descarta. Revisa el modo en los dos lados.
+    El de acceso recibe tramas etiquetadas que no entiende y las descarta. Revisá el modo en los dos lados.
   </ErrorComun>
   <ErrorComun titulo="La VLAN no existe en el otro switch">
     Aunque el troncal la permita, si el switch de destino no tiene la VLAN creada, no la reenvía.
   </ErrorComun>
   <ErrorComun titulo="Dejar la negociación automática">
-    DTP puede formar troncales donde no querías. Fija el modo y usa switchport nonegotiate.
+    DTP puede formar troncales donde no querías. Fijá el modo y usa switchport nonegotiate.
   </ErrorComun>
 </ErroresComunes>
 

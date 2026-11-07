@@ -2,8 +2,8 @@ tipo: terminal
 shell: bash
 titulo: Ordenar la carpeta de descargas
 descripcion: >-
-  Tu carpeta de descargas es un desorden. Arma una estructura de proyecto, mueve cada cosa a su
-  lugar, borra lo que sobra sin llevarte nada por delante y deja un acceso directo a los logs.
+  Tu carpeta de descargas es un desorden. Armá una estructura de proyecto, mueve cada cosa a su
+  lugar, borrá lo que sobra sin llevarte nada por delante y deja un acceso directo a los logs.
 estado_inicial:
   distro: rocky
   hostname: rocky01
@@ -21,7 +21,7 @@ estado_inicial:
     /var/log/app/app.log: "inicio\n"
 pasos:
   - consigna: >-
-      Crea la carpeta `proyecto` con tres subcarpetas, `docs`, `img` y `logs`, en un solo comando:
+      Creá la carpeta `proyecto` con tres subcarpetas, `docs`, `img` y `logs`, en un solo comando:
       `mkdir -p proyecto/{docs,img,logs}`.
     verificar:
       - { archivo: /home/ana/proyecto/docs, tipo: directorio }
@@ -33,7 +33,7 @@ pasos:
     explicacion: >-
       Las llaves se expanden antes de ejecutar el comando: es lo mismo que escribir
       `mkdir -p proyecto/docs proyecto/img proyecto/logs`.
-  - consigna: Copia todos los PDF de `descargas` a `proyecto/docs` usando un comodín.
+  - consigna: Copiá todos los PDF de `descargas` a `proyecto/docs` usando un comodín.
     verificar:
       - { archivo: /home/ana/proyecto/docs/informe-enero.pdf }
       - { archivo: /home/ana/proyecto/docs/informe-febrero.pdf }
@@ -43,7 +43,7 @@ pasos:
       - "`cp descargas/*.pdf proyecto/docs/`"
     solucion: ['cp descargas/*.pdf proyecto/docs/']
     explicacion: cp deja el original donde estaba. Si el destino es una carpeta, los archivos se copian dentro con el mismo nombre.
-  - consigna: Mueve las fotos a `proyecto/img`.
+  - consigna: Mové las fotos a `proyecto/img`.
     verificar:
       - { archivo: /home/ana/proyecto/img/foto1.jpg }
       - { archivo: /home/ana/proyecto/img/foto2.jpg }
@@ -52,7 +52,7 @@ pasos:
       - "`mv` mueve; `*.jpg` o `foto?.jpg` seleccionan las fotos"
     solucion: ['mv descargas/*.jpg proyecto/img/']
     explicacion: "`foto?.jpg` también funcionaba: `?` reemplaza exactamente un carácter."
-  - consigna: Mueve `notas.txt` al proyecto y cámbiale el nombre a `LEEME.txt` en el mismo paso.
+  - consigna: Mové `notas.txt` al proyecto y cambiale el nombre a `LEEME.txt` en el mismo paso.
     verificar:
       - { archivo: /home/ana/proyecto/LEEME.txt, contenido_incluye: Pendientes }
       - { archivo: /home/ana/descargas/notas.txt, existe: false }
@@ -64,18 +64,18 @@ pasos:
       En Linux no hay un comando para renombrar aparte: renombrar es mover a un nombre nuevo.
   - consigna: >-
       Antes de borrar los temporales, mira qué archivos coinciden con `descargas/*.tmp` usando `ls`.
-      Después bórralos con `rm`.
+      Después borralos con `rm`.
     verificar:
       - { comando_usado: 'ls\s+.*\*\.tmp' }
       - { archivo: /home/ana/descargas/instalador.tmp, existe: false }
       - { archivo: /home/ana/descargas/descarga.tmp, existe: false }
     pistas:
-      - "Primero `ls descargas/*.tmp`; si la lista es la que esperas, `rm descargas/*.tmp`"
+      - "Primero `ls descargas/*.tmp`; si la lista es la que esperás, `rm descargas/*.tmp`"
     solucion: ['ls descargas/*.tmp', 'rm descargas/*.tmp']
     explicacion: Probar el comodín con `ls` antes de usarlo con `rm` es un hábito que evita desastres. rm no tiene papelera.
   - consigna: >-
-      En `descargas` solo quedan los PDF originales, que ya copiaste. Intenta borrar la carpeta con
-      `rmdir descargas` y fíjate qué pasa. Después bórrala con todo su contenido usando `rm -r`.
+      En `descargas` solo quedan los PDF originales, que ya copiaste. Intentá borrar la carpeta con
+      `rmdir descargas` y fijate qué pasa. Después borrala con todo su contenido usando `rm -r`.
     verificar:
       - { comando_usado: 'rm\s+(-\w*[rR]\w*\s+)+descargas' }
       - { archivo: /home/ana/descargas, existe: false }
@@ -84,10 +84,10 @@ pasos:
       - "`rm -r descargas`"
     solucion: [rmdir descargas, rm -r descargas]
     explicacion: >-
-      `rmdir` solo borra carpetas vacías, así que es la opción segura cuando crees que no queda
-      nada. Cuando sabes que quieres borrar todo, `rm -r`, revisando bien el nombre antes de
+      `rmdir` solo borra carpetas vacías, así que es la opción segura cuando creés que no queda
+      nada. Cuando sabés que querés borrar todo, `rm -r`, revisando bien el nombre antes de
       apretar Enter.
-  - consigna: Crea en `proyecto/logs` un enlace simbólico llamado `app` que apunte a `/var/log/app`.
+  - consigna: Creá en `proyecto/logs` un enlace simbólico llamado `app` que apunte a `/var/log/app`.
     verificar:
       - { archivo: /home/ana/proyecto/logs/app, tipo: enlace, destino: /var/log/app }
     pistas:
@@ -95,7 +95,7 @@ pasos:
       - "`ln -s /var/log/app proyecto/logs/app`"
     solucion: [ln -s /var/log/app proyecto/logs/app]
     explicacion: Ahora `ls proyecto/logs/app` muestra el contenido de `/var/log/app` sin tener que escribir la ruta completa.
-  - consigna: Crea un enlace duro de `proyecto/LEEME.txt` llamado `LEEME-respaldo.txt` en tu carpeta personal.
+  - consigna: Creá un enlace duro de `proyecto/LEEME.txt` llamado `LEEME-respaldo.txt` en tu carpeta personal.
     verificar:
       - { archivo: /home/ana/LEEME-respaldo.txt, tipo: archivo, enlaces: 2 }
     pistas:
@@ -103,4 +103,4 @@ pasos:
     solucion: [ln proyecto/LEEME.txt LEEME-respaldo.txt]
     explicacion: >-
       Con `ls -li` verás que los dos nombres tienen el mismo número de inodo y un 2 en la columna
-      de enlaces: son el mismo archivo. Ojo: no es un backup. Si editas uno, cambia el otro.
+      de enlaces: son el mismo archivo. Ojo: no es un backup. Si editás uno, cambia el otro.

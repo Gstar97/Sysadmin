@@ -24,7 +24,7 @@ Esta lección junta dos tareas que vas a hacer seguido: darle al servidor un poc
 
 ## La swap
 
-Piensa en un escritorio (la RAM) y un archivo en el sótano (el disco). Lo que estás usando va en el escritorio. Si se llena, mandas al sótano lo que hace rato no tocas, para hacer lugar. Funciona, pero si tienes que bajar al sótano a cada rato, todo se vuelve lentísimo.
+Pensá en un escritorio (la RAM) y un archivo en el sótano (el disco). Lo que estás usando va en el escritorio. Si se llena, mandás al sótano lo que hace rato no tocás, para hacer lugar. Funciona, pero si tenés que bajar al sótano a cada rato, todo se vuelve lentísimo.
 
 Para un servidor, un poco de swap es un colchón: evita que, ante un pico de memoria, el kernel tenga que matar procesos (el *OOM killer*). Pero si el servidor la usa todo el tiempo, el problema es que le falta RAM, y la swap no lo resuelve.
 
@@ -62,8 +62,8 @@ No hay un número mágico. Para un servidor común, entre 1 y 4 GiB suele alcanz
 
 Es la alerta más común en cualquier equipo de operaciones. El método:
 
-1. **¿Qué sistema de archivos?** `df -h`. Mira el porcentaje y dónde está montado.
-2. **¿Qué carpeta?** `sudo du -xh --max-depth=1 / | sort -h` (cambia `/` por el punto de montaje). La `-x` evita entrar en otros discos. Repite en la carpeta más grande, bajando un nivel por vez.
+1. **¿Qué sistema de archivos?** `df -h`. Mirá el porcentaje y dónde está montado.
+2. **¿Qué carpeta?** `sudo du -xh --max-depth=1 / | sort -h` (cambia `/` por el punto de montaje). La `-x` evita entrar en otros discos. Repetí en la carpeta más grande, bajando un nivel por vez.
 3. **¿Qué archivos?** `sudo find / -xdev -type f -size +500M -exec ls -lh {} +` encuentra los grandes directamente.
 4. **¿Se puede borrar?** Mira de quién es (`ls -l`), de qué paquete (`rpm -qf` o `dpkg -S`) y pregunta. Ante la duda, mover a otro disco.
 
@@ -72,7 +72,7 @@ Es la alerta más común en cualquier equipo de operaciones. El método:
 Dos lugares que suelen crecer sin que nadie lo note: los logs (lección 1.3.5, con logrotate y `journalctl --vacuum-size`) y el caché de paquetes (`dnf clean all`, `apt clean`).
 
 <Advertencia titulo="No borres un log que se está escribiendo">
-Si borras con `rm` un log que una aplicación tiene abierto, el nombre desaparece pero el espacio **no** se libera: la aplicación sigue escribiendo en el archivo borrado. Para vaciar un log en uso, trúncalo: `sudo sh -c ': > /var/log/app/app.log'` (o `sudo truncate -s 0 archivo`). Y después arregla la causa con logrotate.
+Si borrás con `rm` un log que una aplicación tiene abierto, el nombre desaparece pero el espacio **no** se libera: la aplicación sigue escribiendo en el archivo borrado. Para vaciar un log en uso, trúncalo: `sudo sh -c ': > /var/log/app/app.log'` (o `sudo truncate -s 0 archivo`). Y después arreglá la causa con logrotate.
 </Advertencia>
 
 ## Cuando df y du no coinciden
@@ -100,7 +100,7 @@ A veces `df` dice que el disco está lleno y `du` no encuentra nada grande. No e
     Se agotaron los inodos. `df -i` lo confirma; busca carpetas con muchísimos archivos chicos (`sudo find /ruta -xdev -type f | cut -d/ -f2-4 | sort | uniq -c | sort -n | tail`).
   </ErrorComun>
   <ErrorComun titulo="du tarda muchísimo o muestra cosas de otros discos">
-    Sin `-x`, du entra en todos los discos montados debajo (incluidos los de red). Usa `-x` y `--max-depth=1`.
+    Sin `-x`, du entra en todos los discos montados debajo (incluidos los de red). Usá `-x` y `--max-depth=1`.
   </ErrorComun>
 </ErroresComunes>
 

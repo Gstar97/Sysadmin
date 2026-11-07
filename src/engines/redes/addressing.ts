@@ -78,7 +78,7 @@ export function checkVlsm(base: string, needs: VlsmNeed[], answers: string[]): V
     const problemas: string[] = []
     const p = parsed[i]
     if (!answers[i]?.trim()) return { nombre: n.nombre, ok: false, problemas: ['Falta la subred.'] }
-    if (!p) return { nombre: n.nombre, ok: false, problemas: ['Escríbela como red/prefijo, por ejemplo 192.168.20.0/26.'] }
+    if (!p) return { nombre: n.nombre, ok: false, problemas: ['Escribila como red/prefijo, por ejemplo 192.168.20.0/26.'] }
     const size = 2 ** (32 - p.prefix)
     const capacidad = p.prefix >= 31 ? size : size - 2
     const net = networkOf(p.ip, p.prefix)

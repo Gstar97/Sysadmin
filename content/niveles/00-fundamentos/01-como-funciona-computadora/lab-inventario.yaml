@@ -2,7 +2,7 @@ tipo: pasos
 titulo: Inventario de hardware de tu equipo
 descripcion: >-
   Cada paso tiene los comandos para Windows, Linux y macOS. Ve completando la ficha técnica a
-  medida que avanzas. En Windows, abre **PowerShell como administrador** (clic derecho en el
+  medida que avanzás. En Windows, abre **PowerShell como administrador** (clic derecho en el
   menú Inicio, *Terminal (Administrador)*).
 pasos:
   - titulo: Equipo, fabricante y número de serie
@@ -24,17 +24,17 @@ pasos:
         detalle: 'En la Terminal (el número de serie aparece como *Serial Number*):'
         comandos:
           - system_profiler SPHardwareDataType
-    comprobar: Tienes fabricante, modelo, número de serie y versión del firmware anotados en la ficha.
+    comprobar: Tenés fabricante, modelo, número de serie y versión del firmware anotados en la ficha.
     si_falla: En equipos armados a medida el modelo puede decir *To Be Filled By O.E.M.* o similar. En ese caso anota el fabricante y el modelo de la **placa madre** (`Get-CimInstance Win32_BaseBoard` en Windows, `sudo dmidecode -t baseboard` en Linux).
   - titulo: Procesador y arquitectura
-    detalle: Anota el modelo, los núcleos, los hilos, la frecuencia y la arquitectura. En x86-64, averigua además el nivel (v2, v3 o v4).
+    detalle: Anotá el modelo, los núcleos, los hilos, la frecuencia y la arquitectura. En x86-64, averigua además el nivel (v2, v3 o v4).
     variantes:
       - nombre: Windows
         detalle: "Modelo, núcleos, CPU lógicas y frecuencia máxima en MHz:"
         comandos:
           - Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
       - nombre: Linux
-        detalle: 'Con `lscpu` tienes todo; la segunda línea muestra qué niveles de x86-64 soporta el procesador:'
+        detalle: 'Con `lscpu` tenés todo; la segunda línea muestra qué niveles de x86-64 soporta el procesador:'
         comandos:
           - lscpu
           - /lib64/ld-linux-x86-64.so.2 --help | grep supported
@@ -44,11 +44,11 @@ pasos:
           - sysctl -n machdep.cpu.brand_string
           - sysctl -n hw.physicalcpu hw.logicalcpu
           - uname -m
-    comprobar: Sabes cuántos núcleos físicos y CPU lógicas tiene tu equipo, y si es x86-64 (con su nivel) o ARM64.
+    comprobar: Sabés cuántos núcleos físicos y CPU lógicas tiene tu equipo, y si es x86-64 (con su nivel) o ARM64.
     si_falla: >-
       En Windows, si `NumberOfLogicalProcessors` es el doble de `NumberOfCores`, el procesador tiene SMT activo. Para saber el nivel de x86-64 en Windows, busca el modelo en la página del fabricante: si tiene AVX2, cumple v3.
   - titulo: Memoria
-    detalle: Anota la memoria total, cuántos módulos hay y de qué tamaño, la velocidad, cuántas ranuras quedan libres y si es ECC.
+    detalle: Anotá la memoria total, cuántos módulos hay y de qué tamaño, la velocidad, cuántas ranuras quedan libres y si es ECC.
     variantes:
       - nombre: Windows
         detalle: 'Cada módulo instalado y la cantidad de ranuras. En la tercera línea, *MemoryErrorCorrection* vale 3 si no hay ECC y 5 o 6 si la hay:'
@@ -65,9 +65,9 @@ pasos:
         detalle: En las Mac con Apple Silicon la memoria está integrada en el chip y no se puede ampliar.
         comandos:
           - system_profiler SPMemoryDataType
-    comprobar: Tienes memoria total, módulos (cantidad × tamaño), velocidad, ranuras libres y ECC sí o no.
+    comprobar: Tenés memoria total, módulos (cantidad × tamaño), velocidad, ranuras libres y ECC sí o no.
   - titulo: Discos y su estado de salud
-    detalle: Anota cada disco con su tipo (HDD, SSD SATA o NVMe), su capacidad y su estado.
+    detalle: Anotá cada disco con su tipo (HDD, SSD SATA o NVMe), su capacidad y su estado.
     variantes:
       - nombre: Windows
         detalle: '*MediaType* dice HDD o SSD y *BusType* si es SATA o NVMe. La segunda línea muestra datos de desgaste y errores (necesita PowerShell como administrador):'
@@ -88,10 +88,10 @@ pasos:
     comprobar: Cada disco tiene anotados tipo, capacidad y salud. En SSD, el porcentaje de desgaste; en HDD, los sectores reubicados y pendientes.
     si_falla: Si `smartctl` responde que el dispositivo no existe, usa el nombre que aparece en `lsblk` (por ejemplo `/dev/nvme0n1` o `/dev/sdb`). En Windows, si el contador de desgaste aparece vacío, el disco o su controlador no lo informa; prueba con CrystalDiskInfo.
   - titulo: Firmware, modo de arranque y Secure Boot
-    detalle: Averigua si el equipo arranca con UEFI o BIOS heredado, qué tabla de particiones tiene el disco del sistema y si Secure Boot está activo.
+    detalle: Averiguá si el equipo arranca con UEFI o BIOS heredado, qué tabla de particiones tiene el disco del sistema y si Secure Boot está activo.
     variantes:
       - nombre: Windows
-        detalle: 'Abre **Información del sistema** (`msinfo32`) y busca *Modo de BIOS* y *Estado de arranque seguro*. En PowerShell como administrador:'
+        detalle: 'Abrí **Información del sistema** (`msinfo32`) y buscá *Modo de BIOS* y *Estado de arranque seguro*. En PowerShell como administrador:'
         comandos:
           - Confirm-SecureBootUEFI
           - Get-Disk | Select-Object Number, FriendlyName, PartitionStyle
@@ -117,7 +117,7 @@ pasos:
           - lscpu | grep -i virtualization
       - nombre: macOS
         detalle: Todas las Mac actuales soportan virtualización. En Apple Silicon solo se pueden virtualizar sistemas ARM64.
-    comprobar: Sabes si la virtualización está activa.
+    comprobar: Sabés si la virtualización está activa.
     si_falla: Si está desactivada, reinicia, entra al firmware (suele ser con F2, Supr o F10 al encender) y activa **Intel Virtualization Technology (VT-x)** o **SVM Mode** en AMD. Está en menús como *Advanced* o *CPU Configuration*.
   - titulo: Sistema operativo y red
     variantes:

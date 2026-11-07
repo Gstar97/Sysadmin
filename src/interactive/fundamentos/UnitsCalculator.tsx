@@ -33,7 +33,7 @@ function Capacity() {
         </select>
       </div>
       {bytes === undefined ? (
-        <p className="mt-3 text-sm text-bad">Escribe un número.</p>
+        <p className="mt-3 text-sm text-bad">Escribí un número.</p>
       ) : (
         <>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -119,7 +119,7 @@ function Transfer() {
           </ol>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-bad">Escribe un tamaño y una velocidad mayor que 0.</p>
+        <p className="mt-3 text-sm text-bad">Escribí un tamaño y una velocidad mayor que 0.</p>
       )}
     </div>
   )
@@ -210,7 +210,7 @@ function Practice() {
         <Button type="submit">{checked === undefined ? 'Comprobar' : 'Siguiente'}</Button>
         <Score {...score} />
       </form>
-      <p className="mt-1 text-xs text-muted">Se acepta un margen del 1%. Puedes usar coma o punto para los decimales.</p>
+      <p className="mt-1 text-xs text-muted">Se acepta un margen del 1%. Podés usar coma o punto para los decimales.</p>
       {checked !== undefined && <Feedback ok={checked} titulo={checked ? 'Correcto' : `La respuesta es ${formatNumber(q.respuesta)} ${q.unidad}`} pasos={q.pasos} />}
     </div>
   )

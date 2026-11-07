@@ -27,7 +27,7 @@ estado_inicial:
       - { a: "PC1:eth0", b: "ACC1:Fa0/1" }
       - { a: "PC2:eth0", b: "ACC2:Fa0/1" }
 pasos:
-  - consigna: Averigua quién es hoy el puente raíz de la VLAN 1.
+  - consigna: Averiguá quién es hoy el puente raíz de la VLAN 1.
     verificar:
       - { comando_usado: show spanning-tree }
     pistas: ["enable y show spanning-tree (o show spanning-tree vlan 1)."]
@@ -36,7 +36,7 @@ pasos:
       En "Root ID" la MAC no es la de este switch, y su puerto raíz es Gi0/2: la raíz es ACC2,
       un switch de acceso que ganó solo por tener la MAC más baja. El tráfico entre ACC1 y el
       núcleo podría terminar dando la vuelta por él.
-  - consigna: Haz que SW-NUCLEO sea el puente raíz de la VLAN 1.
+  - consigna: Hacé que SW-NUCLEO sea el puente raíz de la VLAN 1.
     verificar:
       - { stp_raiz: true, vlan: 1 }
     pistas: ["En configuración global: spanning-tree vlan 1 root primary, o spanning-tree vlan 1 priority 4096."]
@@ -45,13 +45,13 @@ pasos:
       Con prioridad 4096 (más 1 por la VLAN), SWN le gana a cualquier switch con la prioridad de
       fábrica (32768). root primary hace lo mismo calculando un valor; fijar el número a mano es
       más predecible.
-  - consigna: Cambia el modo a Rapid PVST+, que converge en segundos y no en casi un minuto.
+  - consigna: Cambiá el modo a Rapid PVST+, que converge en segundos y no en casi un minuto.
     verificar:
       - { config_contiene: "spanning-tree mode rapid-pvst" }
     pistas: ["spanning-tree mode rapid-pvst, en configuración global."]
     solucion: [spanning-tree mode rapid-pvst]
     explicacion: Rapid PVST+ es RSTP (802.1w) con un árbol por VLAN; es lo que se usa hoy en redes Cisco.
-  - consigna: El puerto del servidor (Gi0/3) es de un equipo final. Activa PortFast y BPDU Guard en él.
+  - consigna: El puerto del servidor (Gi0/3) es de un equipo final. Activá PortFast y BPDU Guard en él.
     verificar:
       - { interfaz: Gi0/3, portfast: true, bpduguard: true }
     pistas: ["interface gi0/3, spanning-tree portfast y spanning-tree bpduguard enable."]
@@ -60,7 +60,7 @@ pasos:
       PortFast lo pasa a reenviar enseguida (el servidor no espera 30 segundos al arrancar), y
       BPDU Guard lo apaga si alguien enchufa ahí un switch: así no se puede armar un bucle por
       ese puerto.
-  - consigna: Comprueba el árbol y guarda la configuración.
+  - consigna: Comprobá el árbol y guardá la configuración.
     verificar:
       - { salida_contiene: "This bridge is the root" }
       - { guardado: true }

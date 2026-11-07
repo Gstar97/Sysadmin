@@ -16,7 +16,7 @@ estado_inicial:
     internet: false
     alcanzables: [ntp.empresa.local]
 pasos:
-  - consigna: Mira el estado de la hora del servidor.
+  - consigna: Mirá el estado de la hora del servidor.
     verificar:
       - { comando_usado: 'timedatectl(\s+status)?\s*$' }
       - { salida_contiene: "synchronized: no" }
@@ -24,14 +24,14 @@ pasos:
       - "`timedatectl`"
     solucion: [timedatectl]
     explicacion: El servicio NTP está activo, pero el reloj no está sincronizado. Algo impide llegar a las fuentes.
-  - consigna: Pregúntale a chrony con qué fuentes está intentando sincronizar.
+  - consigna: Preguntale a chrony con qué fuentes está intentando sincronizar.
     verificar:
       - { comando_usado: 'chronyc\s+sources' }
     pistas:
       - "`chronyc sources`"
     solucion: [chronyc sources]
     explicacion: '"^?" quiere decir que no responde: sin internet, el pool público no se alcanza.'
-  - consigna: Mira cuánto se desvió el reloj.
+  - consigna: Mirá cuánto se desvió el reloj.
     verificar:
       - { comando_usado: 'chronyc\s+tracking' }
       - { salida_contiene: "slow of NTP time" }
@@ -50,7 +50,7 @@ pasos:
       - "`sudo sed -i 's/^pool .*/server ntp.empresa.local iburst/' /etc/chrony.conf`"
     solucion: ["sudo sed -i 's/^pool .*/server ntp.empresa.local iburst/' /etc/chrony.conf"]
     explicacion: iburst manda varias consultas seguidas al arrancar, así sincroniza en segundos y no en minutos.
-  - consigna: Reinicia chronyd y comprueba que ahora sincroniza con el servidor de la empresa.
+  - consigna: Reiniciá chronyd y comprobá que ahora sincroniza con el servidor de la empresa.
     verificar:
       - { servicio: chronyd, activo: true }
       - { comando_usado: 'chronyc\s+sources' }
@@ -61,7 +61,7 @@ pasos:
     explicacion: >-
       "^*" marca la fuente que está usando. Como chrony.conf tiene makestep 1.0 3, en las primeras
       actualizaciones corrige de un salto los 7 minutos en lugar de ir de a poco.
-  - consigna: Pon la zona horaria de Bogotá y verifica que la hora local y la sincronización quedaron bien.
+  - consigna: Poné la zona horaria de Bogotá y verificá que la hora local y la sincronización quedaron bien.
     verificar:
       - { comando_usado: 'timedatectl\s+set-timezone\s+America/Bogota' }
       - { comando_usado: 'timedatectl(\s+status)?\s*$' }
