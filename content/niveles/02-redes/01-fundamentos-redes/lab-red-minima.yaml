@@ -4,22 +4,22 @@ descripcion: >-
   Vas a conectar rocky01 y ubuntu01 por una red interna del hipervisor (un switch virtual que
   solo ven ellas dos) y a mirar, con tus propios ojos, el ARP y las tramas.
 pasos:
-  - titulo: Toma instantáneas y agrega una placa en red interna
+  - titulo: Toma instantáneas y agrega una tarjeta en red interna
     detalle: >-
       Con las dos máquinas apagadas, toma una instantánea de cada una (antes-de-redes). Después
-      agrega a cada una una segunda placa de red conectada a una red interna con el mismo
+      agrega a cada una una segunda tarjeta de red conectada a una red interna con el mismo
       nombre, por ejemplo "labred". Esa red interna funciona como un switch al que solo están
       conectadas las dos máquinas.
     variantes:
       - nombre: VirtualBox
         detalle: Configuración → Red → Adaptador 2 → Habilitar → Conectado a "Red interna" → Nombre "labred". En las dos máquinas.
       - nombre: virt-manager (KVM)
-        detalle: Crea primero una red aislada (Editar → Detalles de la conexión → Redes virtuales → + , modo "aislada", sin DHCP) y agrégala como segunda placa en las dos máquinas.
-    comprobar: Al encender, ip -br link muestra una placa nueva en cada máquina (en VirtualBox suele ser enp0s8), en estado UP o DOWN.
+        detalle: Crea primero una red aislada (Editar → Detalles de la conexión → Redes virtuales → + , modo "aislada", sin DHCP) y agrégala como segunda tarjeta en las dos máquinas.
+    comprobar: Al encender, ip -br link muestra una tarjeta nueva en cada máquina (en VirtualBox suele ser enp0s8), en estado UP o DOWN.
   - titulo: Ponle una IP a cada máquina en la red nueva
     detalle: >-
       Usa la red 10.10.10.0/24, que no se superpone con las que ya tienes. Reemplaza enp0s8 por
-      el nombre de tu placa. Con ip addr la configuración dura hasta reiniciar, que para este
+      el nombre de tu tarjeta. Con ip addr la configuración dura hasta reiniciar, que para este
       laboratorio alcanza.
     variantes:
       - nombre: rocky01
@@ -33,7 +33,7 @@ pasos:
           - sudo ip link set enp0s8 up
           - sudo ip addr add 10.10.10.2/24 dev enp0s8
     comprobar: ip -br a muestra 10.10.10.1/24 en rocky01 y 10.10.10.2/24 en ubuntu01.
-  - titulo: Mira las MAC de las dos placas
+  - titulo: Mira las MAC de las dos tarjetas
     comandos:
       - ip -br link
     detalle: >-
@@ -42,7 +42,7 @@ pasos:
     comprobar: Tienes anotadas las dos MAC.
   - titulo: Prepara una captura de ARP en ubuntu01
     detalle: >-
-      tcpdump muestra el tráfico que pasa por una placa (lo verás a fondo en el módulo 2.7).
+      tcpdump muestra el tráfico que pasa por una tarjeta (lo verás a fondo en el módulo 2.7).
       Con -e muestra las MAC y con "arp" filtra solo ARP. Déjalo corriendo en ubuntu01.
     comandos:
       - sudo apt install -y tcpdump

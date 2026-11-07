@@ -1,0 +1,108 @@
+---
+id: n2-m4-l5
+titulo: Spanning Tree
+minutos: 180
+objetivos:
+  - Explicar por qué un bucle en capa 2 tumba una red entera (tormenta de broadcast).
+  - Predecir el puente raíz, los puertos raíz, designados y bloqueados en una topología simple.
+  - Configurar la prioridad, Rapid PVST+, PortFast y BPDU Guard, y leer show spanning-tree.
+glosario: [stp, puente-raiz, rstp, portfast, bpdu-guard, tormenta-broadcast]
+verificado: 2026-11
+---
+
+import tormenta from './tormenta.svg?raw'
+import ejStp from './ej-stp.yaml'
+
+En una red seria, los switches se conectan con más de un camino: si se corta un cable o se apaga un switch, el tráfico sigue por el otro. Pero en capa 2 eso tiene una trampa enorme. Un broadcast que entra en un círculo de switches da vueltas para siempre, y en segundos la red entera deja de funcionar. **Spanning Tree** (STP) es el protocolo que permite tener caminos de repuesto sin que se forme ese círculo.
+
+<AntesDeEmpezar>
+- Cómo un switch inunda los broadcast y las tramas que no sabe a dónde mandar (lección 2.1.4).
+- VLAN y troncales (lecciones anteriores).
+</AntesDeEmpezar>
+
+## La tormenta de broadcast
+
+Piensa en tres amigos en un grupo de mensajes que tienen la regla de reenviar a los otros dos todo lo que les llega. Alguien manda un mensaje: cada uno lo reenvía a los otros dos, que a su vez lo reenvían... A los pocos segundos tienen miles de copias y el teléfono no responde. Donde la comparación no llega: una persona en algún momento se cansa; un switch no, reenvía a toda velocidad para siempre.
+
+<Diagrama svg={tormenta} alt="Izquierda: tres switches en triángulo sin Spanning Tree; un broadcast da vueltas en los dos sentidos y se multiplica. Ethernet no tiene TTL, así que en segundos la red queda saturada. Derecha: los mismos tres switches con Spanning Tree; SW1 es la raíz y el enlace entre SW2 y SW3 queda bloqueado, con un solo camino entre cada par de switches. Si se corta otro enlace, el bloqueado se activa solo." pie="STP no saca los enlaces de repuesto: los deja en espera." />
+
+Pasa porque las tramas Ethernet **no tienen TTL**. Un paquete IP lleva un contador (el TTL) que baja en cada router y, al llegar a cero, el paquete se descarta; una trama no tiene nada parecido y puede dar vueltas para siempre. Con un bucle, además de la tormenta, las tablas de MAC se vuelven locas (la misma MAC aparece por un puerto y por otro, una y otra vez) y los equipos reciben tramas duplicadas. Los síntomas típicos: todas las luces de los switches parpadean sin parar, la CPU del switch al 100 %, y nadie llega a nada, ni siquiera a la consola por la red.
+
+<EnSimple>
+Si hay dos caminos entre switches, un mensaje para todos da vueltas sin fin y se multiplica hasta tumbar la red. Spanning Tree apaga los caminos sobrantes y los vuelve a encender solo si hacen falta.
+</EnSimple>
+
+## Cómo decide Spanning Tree
+
+Los switches se mandan mensajes llamados **BPDU** cada dos segundos, y con eso arman un árbol: un solo camino entre cualquier par de switches. Lo hacen en tres pasos.
+
+1. **Eligen el puente raíz**: gana el switch con el **identificador de puente** más bajo. Ese identificador es la **prioridad** (32768 de fábrica, más el número de VLAN) y, si empatan, la **MAC** más baja. Todos los puertos de la raíz reenvían.
+2. **Cada switch elige su puerto raíz**: el que le da el camino más barato hasta la raíz. El costo depende de la velocidad: 4 para 1 Gb/s, 19 para 100 Mb/s, 2 para 10 Gb/s.
+3. **En cada enlace hay un puerto designado**: el del lado más cercano a la raíz. Los puertos que no son ni raíz ni designados quedan **bloqueados** (en RSTP se llaman alternativos): no reenvían datos, pero siguen escuchando BPDU por si tienen que entrar en servicio.
+
+Pruébalo: elige quién crees que va a ser la raíz, cambia prioridades y corta enlaces para ver cómo se reacomoda el árbol.
+
+<SimuladorStp />
+
+<Pregunta id="p05" />
+
+### Lo que hay que configurar a mano
+
+Si nadie toca nada, la raíz la decide la MAC, y eso suele significar el switch **más viejo** (las MAC más bajas son de equipos más antiguos), que puede ser uno de acceso en un rincón. Todo el tráfico entre pisos daría la vuelta por él. Por eso la raíz se elige a propósito: el switch del núcleo, con una prioridad baja.
+
+```text
+spanning-tree mode rapid-pvst          ! RSTP, un árbol por VLAN
+spanning-tree vlan 1,10,20 priority 4096
+! o bien: spanning-tree vlan 1,10,20 root primary
+```
+
+La prioridad va de a 4096 (0, 4096, 8192...). Un segundo switch de núcleo con 8192 queda como raíz de respaldo.
+
+**Versiones**: el STP original (802.1D) tarda entre 30 y 50 segundos en reacomodarse. **RSTP** (802.1w) lo hace en uno o dos segundos y es lo que se usa hoy. Cisco usa por defecto **PVST+**, un árbol por VLAN; la versión rápida es **Rapid PVST+**. Otros fabricantes usan RSTP o **MSTP** (varios grupos de VLAN, cada uno con su árbol, que es para más adelante).
+
+## PortFast y BPDU Guard: los puertos de los usuarios
+
+Un puerto que recién se enciende pasa por estados de escucha y aprendizaje antes de reenviar: con STP clásico, una PC espera hasta 30 segundos sin red al arrancar (y a veces el DHCP se rinde antes). En los puertos de **equipos finales** eso no tiene sentido, porque ahí no puede haber un bucle... salvo que alguien enchufe un switch.
+
+- **PortFast**: el puerto reenvía apenas se enciende. Solo en puertos de equipos finales (PC, impresoras, servidores), nunca hacia otro switch.
+- **BPDU Guard**: si por ese puerto llega una BPDU (o sea, alguien conectó un switch), lo apaga en estado **err-disabled**. Es la protección contra el switch de escritorio que alguien trae de su casa y enchufa con dos cables.
+
+```text
+interface range fa0/1 - 24
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+```
+
+Un puerto err-disabled no vuelve solo: se resuelve la causa y se hace `shutdown` y `no shutdown` en ese puerto. `show interfaces status` muestra cuáles están así.
+
+<Terminal ejercicio={ejStp} />
+
+<Consejo titulo="Leer show spanning-tree">
+Arriba, "Root ID" es la raíz y "Bridge ID" es este switch; si son iguales, aparece "This bridge is the root". Abajo, cada puerto con su rol (Root, Desg, Altn) y su estado (FWD reenvía, BLK bloqueado). Si un puerto que esperabas activo está en BLK, el árbol no es el que diseñaste: revisa quién es la raíz.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Apagar Spanning Tree para que &quot;ande más rápido&quot;">
+    Con un solo cable de más, la red se cae entera. La solución a la demora es RSTP y PortFast, no apagar STP.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar que la raíz se elija sola">
+    Gana la MAC más baja, que suele ser el switch más viejo de la red. Fija la prioridad del núcleo (4096) y la de un respaldo (8192).
+  </ErrorComun>
+  <ErrorComun titulo="PortFast en un puerto hacia otro switch">
+    El puerto reenvía antes de saber si hay un bucle. PortFast es solo para equipos finales, y siempre con BPDU Guard.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar que un puerto err-disabled vuelva solo">
+    Queda apagado hasta que alguien lo levanta. Saca el equipo que lo causó, y después shutdown y no shutdown.
+  </ErrorComun>
+  <ErrorComun titulo="Distinto modo de STP en cada switch">
+    Mezclar versiones funciona, pero el reacomodo cae a la velocidad del más lento. Usa el mismo modo en toda la red.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un bucle en capa 2 produce una tormenta de broadcast: las tramas no tienen TTL y se multiplican hasta saturar la red.
+- STP deja un solo camino activo: elige la raíz (prioridad + VLAN y, si empatan, la MAC más baja), un puerto raíz por switch (menor costo: 4 en 1 Gb/s, 19 en 100 Mb/s) y un designado por enlace; el resto queda bloqueado en espera.
+- Elige la raíz a propósito: spanning-tree vlan N priority 4096 en el núcleo (de a 4096). Usa Rapid PVST+ (RSTP): converge en segundos.
+- En puertos de equipos finales: PortFast (reenvía de inmediato) y BPDU Guard (lo pasa a err-disabled si aparece un switch).
+- show spanning-tree: Root ID, Bridge ID, rol y estado de cada puerto. show interfaces status para ver los err-disabled.
+</Resumen>

@@ -1,0 +1,114 @@
+---
+id: n2-m4-l6
+titulo: EtherChannel y redundancia de puerta de enlace
+minutos: 120
+objetivos:
+  - Agrupar varios enlaces en un EtherChannel con LACP y verificarlo.
+  - Explicar para qué sirve un protocolo de redundancia de puerta de enlace (HSRP, VRRP).
+  - Configurar HSRP con prioridad y preempt, y comprobar el cambio de router ante una falla.
+glosario: [etherchannel, lacp, hsrp, vrrp, ip-virtual]
+verificado: 2026-11
+---
+
+import redundancia from './redundancia.svg?raw'
+import ejEtherchannel from './ej-etherchannel.yaml'
+import ejHsrp from './ej-hsrp.yaml'
+
+En la lección anterior viste que Spanning Tree bloquea los enlaces sobrantes. Eso tiene un costo: si conectas dos switches con dos cables para tener el doble de capacidad, STP bloquea uno y usas la mitad. Y queda otro punto débil: todas las PC usan una sola puerta de enlace; si ese router se apaga, nadie sale de su red. Esta lección resuelve las dos cosas.
+
+<AntesDeEmpezar>
+- Spanning Tree, puertos bloqueados y show spanning-tree (lección anterior).
+- Troncales (lección 3) y la puerta de enlace de una red (lección 2.2.2).
+- ARP gratuito: el anuncio que hace un equipo cuando una IP pasa a otra MAC (lección 2.1.5).
+</AntesDeEmpezar>
+
+<Diagrama svg={redundancia} alt="Izquierda: SW1 y SW2 unidos por tres cables de 1 Gb/s agrupados en Po1, que Spanning Tree ve como un solo enlace; si se corta un cable, el canal sigue con los otros, y los dos extremos tienen que coincidir. Derecha: R1 (activo, .2, prioridad 110) y R2 (en espera, .3, prioridad 100) conectados al mismo switch; la PC usa como puerta de enlace la IP virtual 192.168.1.254, que tiene el router activo. Si R1 se cae, R2 toma la IP virtual en segundos y las PC no cambian nada." pie="Las dos ideas tienen el mismo fin: que una falla de un cable o de un equipo no corte a nadie." />
+
+## EtherChannel: sumar cables
+
+Piensa en una autopista con tres carriles: para el tránsito es una sola ruta, pero lleva tres veces más autos, y si se cierra un carril por obras, sigue funcionando con dos. **EtherChannel** hace eso con cables: agrupa de 2 a 8 puertos iguales en una interfaz lógica, **Port-channel**, que para Spanning Tree es **un solo enlace**. Donde la comparación no llega: cada conversación (cada par de origen y destino) viaja siempre por el mismo cable, para que no lleguen tramas desordenadas. Una sola copia de archivos no va al triple de velocidad; muchas conversaciones a la vez sí se reparten.
+
+Los dos extremos negocian el grupo con un protocolo:
+
+- **LACP** (estándar 802.3ad, hoy 802.1AX): modos **active** (propone) y **passive** (acepta). Hace falta al menos un active. Es el que se usa, y funciona entre fabricantes distintos y con servidores (en Linux se llama *bond* o *team* en modo 802.3ad).
+- **PAgP**: la versión propia de Cisco, con modos desirable y auto.
+- **on**: sin negociar. Funciona, pero si un lado está mal configurado no hay protocolo que lo detecte, y puede armar un bucle.
+
+```text
+interface range gi0/1 - 2
+ channel-group 1 mode active
+!
+show etherchannel summary
+```
+
+Todos los puertos del grupo tienen que ser iguales: misma velocidad, mismo modo (acceso o troncal), mismas VLAN permitidas y misma nativa. Si uno no coincide, queda suspendido fuera del grupo. Lo cómodo es configurar luego `interface port-channel 1`, que aplica los cambios a todos sus miembros.
+
+<Terminal ejercicio={ejEtherchannel} />
+
+<Pregunta id="p04" />
+
+<EnSimple>
+EtherChannel junta varios cables entre dos switches para que funcionen como uno solo más grande. Spanning Tree no bloquea ninguno, y si se corta uno, siguen los demás.
+</EnSimple>
+
+## La puerta de enlace también puede fallar
+
+Las PC tienen configurada **una** puerta de enlace. Poner dos routers no alcanza: cada PC seguiría apuntando a uno solo. La solución es una **IP virtual**: los dos routers se ponen de acuerdo para que uno de ellos, el **activo**, responda por una IP (y una MAC virtual) que no es de ninguno en particular. Las PC usan esa IP como puerta de enlace. Si el activo deja de dar señales, el otro toma la IP virtual y manda un ARP gratuito para que los switches aprendan dónde está ahora la MAC virtual.
+
+Es como el número de la guardia de un hospital: siempre es el mismo, y lo atiende el médico de turno. Si ese médico se enferma, el número pasa al teléfono del suplente, y quien llama ni se entera.
+
+Los protocolos que hacen esto se llaman **FHRP** (protocolos de redundancia del primer salto):
+
+| Protocolo | De quién | Qué tener en cuenta |
+| --- | --- | --- |
+| **HSRP** | Cisco | Un activo y uno en espera; prioridad de fábrica 100; gana la más alta |
+| **VRRP** | Estándar (RFC 9568) | Lo mismo, entre fabricantes distintos; en Linux lo implementa keepalived |
+| **GLBP** | Cisco | Además reparte la carga entre los routers (para más adelante) |
+
+Los firewalls OPNsense y pfSense usan **CARP**, una idea equivalente que viene de OpenBSD (lo vas a ver en el módulo 2.6).
+
+```text
+interface gi0/0
+ ip address 192.168.1.2 255.255.255.0
+ standby 1 ip 192.168.1.254
+ standby 1 priority 110
+ standby 1 preempt
+!
+show standby brief
+```
+
+- **Prioridad**: gana la más alta (si empatan, la IP más alta). Al principal se le da más que 100.
+- **Preempt**: sin esta opción, cuando el principal vuelve después de una falla, no recupera su lugar. Con preempt, lo recupera.
+- El número de grupo (1) y la IP virtual tienen que ser los mismos en los dos routers.
+
+<Terminal ejercicio={ejHsrp} />
+
+<Nota titulo="Lo mismo en Linux">
+En servidores Linux, la misma idea se usa con **keepalived** (VRRP) para que dos balanceadores de carga o dos firewalls compartan una IP virtual. Lo vas a ver en el nivel de servicios.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="LACP passive en los dos extremos">
+    Ninguno propone y el canal nunca se forma. Al menos uno tiene que estar en active (lo habitual es active en los dos).
+  </ErrorComun>
+  <ErrorComun titulo="Puertos distintos dentro del mismo canal">
+    Si un miembro tiene otra velocidad, otro modo u otras VLAN, queda suspendido. Configura en interface port-channel para que todos queden iguales.
+  </ErrorComun>
+  <ErrorComun titulo="Usar mode on para &quot;evitar problemas&quot;">
+    Sin negociación, un error de un lado no se detecta y puede armar un bucle. Usa LACP.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar preempt">
+    Después de una falla, el router de respaldo queda activo para siempre, aunque el principal ya volvió. Si quieres que vuelva al principal, preempt.
+  </ErrorComun>
+  <ErrorComun titulo="Poner en las PC la IP real de un router">
+    Si la puerta de enlace es .2 en lugar de la virtual .254, cuando R1 se cae esas PC se quedan sin salida aunque HSRP funcione perfecto.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- EtherChannel agrupa de 2 a 8 puertos iguales en un Port-channel: más capacidad y tolerancia a la caída de un cable; STP lo ve como un enlace.
+- LACP (estándar): active propone, passive acepta; hace falta un active. PAgP es de Cisco; on no negocia y es riesgoso.
+- Cada conversación va por un cable: muchas conversaciones se reparten, una sola no va más rápido.
+- Un FHRP da una IP virtual de puerta de enlace que atiende el router activo; si falla, la toma el otro. HSRP (Cisco), VRRP (estándar), GLBP (Cisco, reparte carga).
+- HSRP: standby N ip, standby N priority (gana la más alta, 100 de fábrica) y standby N preempt; show standby brief.
+</Resumen>

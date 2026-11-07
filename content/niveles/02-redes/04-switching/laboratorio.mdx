@@ -1,0 +1,43 @@
+---
+titulo: Red de oficina con tres VLAN, troncal, enrutamiento entre VLAN y STP
+horas: 4
+verificacion:
+  - Creé las tres VLAN con nombre en los dos switches y asigné los puertos de acceso.
+  - Configuré los troncales solo con las VLAN necesarias, y show interfaces trunk coincide en los dos extremos.
+  - Configuré router-on-a-stick y todas las VLAN se comunican a través de R1.
+  - SW1 es el puente raíz de las tres VLAN, y los puertos de las PC tienen PortFast y BPDU Guard.
+  - En Packet Tracer vi a Spanning Tree bloquear un enlace y reactivarlo al cortar el otro.
+  - Guardé la configuración de todos los equipos.
+---
+
+import lab from './lab-oficina.yaml'
+import pt from './lab-packet-tracer.yaml'
+
+## Objetivo
+
+Armar desde cero la red de una oficina de dos pisos con todo lo del módulo: VLAN por área, troncal entre pisos, un router que une las VLAN y un Spanning Tree elegido a propósito, no por casualidad.
+
+## Qué necesitas
+
+- La plataforma para la parte 1.
+- Para la parte 2: Cisco Packet Tracer (gratis con una cuenta de Cisco Networking Academy) y unas dos horas.
+
+## Parte 1: en la plataforma
+
+Tres equipos de fábrica y seis PC. Configura cada equipo desde su consola (el selector de equipo está arriba de la terminal). Si un ping no funciona, revisa en orden: show vlan brief, show interfaces trunk en los dos extremos y show ip interface brief en R1.
+
+<Terminal ejercicio={lab} />
+
+## Parte 2: en Packet Tracer
+
+<PasosGuiados ejercicio={pt} />
+
+<Advertencia>
+Apagar Spanning Tree solo se hace en un simulador, para verlo. En una red de verdad, aunque sea una prueba de un minuto, un bucle sin STP deja a todos sin red.
+</Advertencia>
+
+## Para pensar
+
+1. Invitados llega a Administración a través de R1. ¿Dónde pondrías la regla para impedirlo y por qué ahí? (Lo vas a hacer en el módulo 2.6.)
+2. Si mañana se agrega la VLAN 40 (Cámaras), ¿qué tienes que cambiar en cada equipo? Haz la lista antes de tocar nada.
+3. Con 300 PC y mucho tráfico entre Ventas y Administración, ¿seguirías con router-on-a-stick? ¿Qué cambiarías?

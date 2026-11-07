@@ -1,0 +1,86 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace una VLAN?
+  opciones:
+    - { texto: "Divide un switch en varios switches lógicos: los equipos de una VLAN no ven a los de otra", correcta: true, explicacion: "Cada VLAN es su propio dominio de broadcast." }
+    - { texto: "Hace más rápido el switch", explicacion: "No cambia la velocidad." }
+    - { texto: "Cifra el tráfico entre equipos", explicacion: "Las VLAN no cifran." }
+    - { texto: "Conecta el switch a internet", explicacion: "Eso lo hace el router." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Dos PC están en el mismo switch, una en la VLAN 10 y otra en la VLAN 20, sin router. ¿Se comunican?
+  opciones:
+    - { texto: "No: el switch no pasa tramas de una VLAN a otra", correcta: true, explicacion: "Hace falta un router (o un switch de capa 3) para unirlas." }
+    - { texto: "Sí, porque están en el mismo switch", explicacion: "Estar en el mismo aparato no alcanza." }
+    - { texto: "Sí, si tienen IP de la misma subred", explicacion: "Ni el ARP cruza de una VLAN a otra." }
+    - { texto: "Solo por broadcast", explicacion: "Los broadcast tampoco cruzan." }
+- id: p03
+  tipo: completar_comando
+  enunciado: En modo interfaz, escribe el comando que pone el puerto en la VLAN 20 (ya en modo acceso).
+  aceptadas: [switchport access vlan 20, sw acc vlan 20, switchport acc vlan 20]
+  explicacion: Antes conviene switchport mode access para fijar el modo.
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué regla de diseño se sigue casi siempre entre VLAN y subredes?
+  opciones:
+    - { texto: "Una VLAN, una subred", correcta: true, explicacion: "VLAN 10 → 192.168.10.0/24, VLAN 20 → 192.168.20.0/24." }
+    - { texto: "Todas las VLAN en la misma subred", explicacion: "Así no podrían comunicarse ni con un router de forma ordenada." }
+    - { texto: "Una VLAN por equipo", explicacion: "Sería inmanejable." }
+    - { texto: "No hay relación", explicacion: "Van de la mano." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC está en la VLAN correcta (20, Ventas) pero tiene una IP de la subred de Administración (192.168.10.x). ¿Qué pasa?
+  opciones:
+    - { texto: "No se comunica directamente con nadie de Ventas: cree que están en otra red y busca la puerta de enlace", correcta: true, explicacion: "Hace falta misma VLAN y misma subred." }
+    - { texto: "Se comunica con Administración", explicacion: "Está en la VLAN de Ventas: sus tramas no llegan a Administración." }
+    - { texto: "Funciona normal", explicacion: "La IP no coincide con la subred de su VLAN." }
+    - { texto: "El switch la cambia de VLAN solo", explicacion: "El switch no mira las IP." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene hacer con los puertos que no se usan?
+  opciones:
+    - { texto: "Ponerlos en una VLAN sin salida y apagarlos (shutdown)", correcta: true, explicacion: "Quien enchufe algo en una boca libre no queda dentro de ninguna red." }
+    - { texto: "Dejarlos en la VLAN 1", explicacion: "Es la VLAN de fábrica: cualquiera que se enchufe quedaría en ella." }
+    - { texto: "Ponerlos como troncales", explicacion: "Es lo más peligroso: verían todas las VLAN." }
+    - { texto: "Nada", explicacion: "Es un riesgo innecesario." }
+- id: p07
+  tipo: interpretar_salida
+  enunciado: ¿En qué VLAN está el puerto Fa0/13?
+  salida: |
+    SW1#show vlan brief
+    VLAN Name                             Status    Ports
+    ---- -------------------------------- --------- -------------------------------
+    1    default                          active    Fa0/21, Fa0/22, Gi0/1, Gi0/2
+    10   ADMIN                            active    Fa0/1, Fa0/2, Fa0/3, Fa0/4
+    20   VENTAS                           active    Fa0/13, Fa0/14, Fa0/15
+    30   IMPRESORAS                       active    Fa0/20
+  opciones:
+    - { texto: "VLAN 20 (VENTAS)", correcta: true, explicacion: "Aparece en la fila de la VLAN 20." }
+    - { texto: "VLAN 1", explicacion: "En la VLAN 1 están Fa0/21, Fa0/22 y los Gigabit." }
+    - { texto: "VLAN 10", explicacion: "En la 10 están Fa0/1 a Fa0/4." }
+    - { texto: "En ninguna", explicacion: "Está en la 20." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no se recomienda usar la VLAN 1 para los equipos de los usuarios?
+  opciones:
+    - { texto: "Porque es la VLAN de fábrica de todos los puertos y de protocolos de administración: mezclar usuarios ahí agranda el riesgo", correcta: true, explicacion: "Lo prolijo es usar VLAN propias para datos y otra para administración." }
+    - { texto: "Porque la VLAN 1 no funciona", explicacion: "Funciona." }
+    - { texto: "Porque no se puede renombrar", explicacion: "Ese no es el problema principal." }
+    - { texto: "Porque es más lenta", explicacion: "No hay diferencia de velocidad." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Dos PC están en la VLAN 10 de dos switches distintos, unidos por un cable. En el segundo switch la VLAN 10 no existe. ¿Qué pasa?
+  opciones:
+    - { texto: "No se comunican: cada switch tiene su propia lista de VLAN y el segundo no conoce la 10", correcta: true, explicacion: "La VLAN tiene que existir en los dos y viajar por el enlace entre ellos (troncal)." }
+    - { texto: "Se comunican: la VLAN es la misma", explicacion: "Si el segundo switch no la tiene, no reenvía esas tramas." }
+    - { texto: "El primer switch la copia al segundo automáticamente siempre", explicacion: "Hay protocolos para eso (VTP), pero no se puede contar con ellos y suelen estar desactivados." }
+    - { texto: "Se comunican solo por broadcast", explicacion: "Tampoco." }

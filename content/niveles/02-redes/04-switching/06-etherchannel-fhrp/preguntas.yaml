@@ -1,0 +1,88 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Conectas dos switches con dos cables para tener el doble de capacidad, sin más configuración. ¿Qué pasa?
+  opciones:
+    - { texto: "Spanning Tree bloquea uno de los dos: usas solo uno", correcta: true, explicacion: "Para STP, dos cables entre los mismos switches son un bucle." }
+    - { texto: "Se suman solos y tienes el doble", explicacion: "Hace falta EtherChannel." }
+    - { texto: "Se cae la red por una tormenta", explicacion: "STP lo evita bloqueando uno." }
+    - { texto: "Un switch se apaga", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué sirve HSRP?
+  opciones:
+    - { texto: "Para que dos routers compartan una IP virtual de puerta de enlace y uno reemplace al otro si falla", correcta: true, explicacion: "Las PC no cambian nada." }
+    - { texto: "Para sumar el ancho de banda de dos routers", explicacion: "HSRP tiene un solo activo." }
+    - { texto: "Para evitar bucles entre switches", explicacion: "Eso es STP." }
+    - { texto: "Para asignar IP a las PC", explicacion: "Eso es DHCP." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un lado del EtherChannel está en LACP passive y el otro también. ¿Se forma el canal?
+  opciones:
+    - { texto: "No: ninguno de los dos propone; hace falta al menos un active", correcta: true, explicacion: "passive solo acepta." }
+    - { texto: "Sí, siempre", explicacion: "Dos passive no negocian." }
+    - { texto: "Sí, pero con PAgP", explicacion: "No cambian de protocolo solos." }
+    - { texto: "Solo si son de distinto fabricante", explicacion: "No tiene relación." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tienes un EtherChannel de dos cables de 1 Gb/s. Copias un solo archivo grande entre dos servidores. ¿A cuánto va, como máximo?
+  opciones:
+    - { texto: "A 1 Gb/s: cada conversación viaja por un solo cable", correcta: true, explicacion: "Muchas conversaciones distintas sí se reparten entre los dos." }
+    - { texto: "A 2 Gb/s", explicacion: "Una sola conversación no se reparte, para no desordenar las tramas." }
+    - { texto: "A 500 Mb/s", explicacion: "No se divide." }
+    - { texto: "Depende de STP", explicacion: "STP ve el canal como un enlace y no lo bloquea." }
+- id: p05
+  tipo: completar_comando
+  enunciado: En un rango de interfaces, escribe el comando que las agrega al canal 2 proponiendo LACP.
+  aceptadas: [channel-group 2 mode active]
+  explicacion: Con active de este lado, el otro puede estar en active o passive.
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: show etherchannel summary muestra Gi0/2(s) dentro del Po1. ¿Qué significa y qué revisas?
+  opciones:
+    - { texto: "Está suspendido: no coincide con los demás miembros (velocidad, modo, VLAN). Compara su configuración", correcta: true, explicacion: "Todos los miembros tienen que ser iguales." }
+    - { texto: "Está funcionando en modo rápido", explicacion: "s es suspendido." }
+    - { texto: "Es el puerto principal del canal", explicacion: "No hay puerto principal." }
+    - { texto: "Lo bloqueó STP", explicacion: "STP actúa sobre el Po, no sobre los miembros." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En HSRP, R1 tiene prioridad 110 y R2 la de fábrica. ¿Quién es el activo?
+  opciones:
+    - { texto: "R1: gana la prioridad más alta, y la de fábrica es 100", correcta: true, explicacion: "Si empataran, ganaría la IP más alta." }
+    - { texto: "R2: gana la más baja", explicacion: "En HSRP gana la más alta (al revés que la prioridad de STP)." }
+    - { texto: "Los dos a la vez", explicacion: "Hay un solo activo por grupo." }
+    - { texto: "El que tenga la MAC más baja", explicacion: "Se compara la prioridad y después la IP." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: R1 (prioridad 110) se cayó y R2 quedó activo. R1 volvió hace una hora, pero R2 sigue activo. ¿Por qué?
+  opciones:
+    - { texto: "Falta standby 1 preempt en R1", correcta: true, explicacion: "Sin preempt, R1 no recupera su lugar al volver." }
+    - { texto: "R2 tiene más prioridad", explicacion: "Tiene menos." }
+    - { texto: "HSRP no permite volver", explicacion: "Lo permite con preempt." }
+    - { texto: "Hay que reiniciar las PC", explicacion: "Las PC no intervienen." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una oficina tiene HSRP funcionando, pero cuando R1 se apaga, la mitad de las PC se quedan sin internet. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "Esas PC tienen como puerta de enlace la IP real de R1 y no la IP virtual", correcta: true, explicacion: "Revisa el DHCP (opción routers) y las IP fijas." }
+    - { texto: "HSRP solo protege a la mitad de la red", explicacion: "Protege a quien use la IP virtual." }
+    - { texto: "Falta un EtherChannel", explicacion: "No tiene relación." }
+    - { texto: "STP bloqueó esas PC", explicacion: "STP no bloquea equipos finales." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué usarías para dar redundancia de puerta de enlace entre un router Cisco y un switch de capa 3 de otro fabricante?
+  opciones:
+    - { texto: "VRRP, que es estándar", correcta: true, explicacion: "HSRP y GLBP son propios de Cisco." }
+    - { texto: "HSRP", explicacion: "Es de Cisco: el otro fabricante no lo entiende." }
+    - { texto: "PAgP", explicacion: "Es para EtherChannel, y también es de Cisco." }
+    - { texto: "STP", explicacion: "No da redundancia de puerta de enlace." }

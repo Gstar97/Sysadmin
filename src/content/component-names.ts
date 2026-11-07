@@ -2,7 +2,7 @@
  * Nombres de los componentes que se pueden usar dentro de las lecciones (MDX).
  * El validador usa estas listas para exigir al menos un diagrama y un interactivo por lección.
  */
-export const DIAGRAM_COMPONENTS = ['Diagrama', 'DiagramaInteractivo', 'SimuladorPaquetes', 'Topologia', 'SimuladorSwitch'] as const
+export const DIAGRAM_COMPONENTS = ['Diagrama', 'DiagramaInteractivo', 'SimuladorPaquetes', 'Topologia', 'SimuladorSwitch', 'SimuladorStp'] as const
 
 export const INTERACTIVE_COMPONENTS = [
   'Terminal',
@@ -32,6 +32,7 @@ export const INTERACTIVE_COMPONENTS = [
   'ClasificadorIp',
   'DisenadorVlsm',
   'SimuladorNat',
+  'SimuladorStp',
 ] as const
 
 export const REQUIRED_BLOCKS = [

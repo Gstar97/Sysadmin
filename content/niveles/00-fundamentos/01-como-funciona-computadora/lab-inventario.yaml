@@ -25,7 +25,7 @@ pasos:
         comandos:
           - system_profiler SPHardwareDataType
     comprobar: Tienes fabricante, modelo, número de serie y versión del firmware anotados en la ficha.
-    si_falla: En equipos armados a medida el modelo puede decir *To Be Filled By O.E.M.* o similar. En ese caso anota el fabricante y el modelo de la **placa madre** (`Get-CimInstance Win32_BaseBoard` en Windows, `sudo dmidecode -t baseboard` en Linux).
+    si_falla: En equipos armados a medida el modelo puede decir *To Be Filled By O.E.M.* o similar. En ese caso anota el fabricante y el modelo de la **tarjeta madre** (`Get-CimInstance Win32_BaseBoard` en Windows, `sudo dmidecode -t baseboard` en Linux).
   - titulo: Procesador y arquitectura
     detalle: Anota el modelo, los núcleos, los hilos, la frecuencia y la arquitectura. En x86-64, averigua además el nivel (v2, v3 o v4).
     variantes:
@@ -122,12 +122,12 @@ pasos:
   - titulo: Sistema operativo y red
     variantes:
       - nombre: Windows
-        detalle: 'Versión del sistema y placas de red con su velocidad:'
+        detalle: 'Versión del sistema y tarjetas de red con su velocidad:'
         comandos:
           - Get-ComputerInfo -Property OsName, OsVersion, OsArchitecture
           - Get-NetAdapter | Select-Object Name, InterfaceDescription, Status, LinkSpeed
       - nombre: Linux
-        detalle: 'Versión del sistema y placas de red:'
+        detalle: 'Versión del sistema y tarjetas de red:'
         comandos:
           - cat /etc/os-release
           - uname -r
@@ -136,5 +136,5 @@ pasos:
         comandos:
           - sw_vers
           - networksetup -listallhardwareports
-        detalle: 'Versión del sistema y placas de red:'
+        detalle: 'Versión del sistema y tarjetas de red:'
     comprobar: La ficha está completa, incluido el sistema operativo con su versión.

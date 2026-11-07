@@ -1,0 +1,26 @@
+tipo: topologia
+titulo: Enrutar con un switch de capa 3
+consigna: >-
+  SW-NÚCLEO es un switch de capa 3 con las VLAN 10 y 20 y sus puertos de acceso listos. Falta
+  que enrute: crea las interfaces VLAN (SVI) 10 con 192.168.10.1/24 y 20 con 192.168.20.1/24, y
+  activa el enrutamiento (ip routing). Puedes usar la consola del switch o el formulario.
+editable: { equipos: false, enlaces: false, configuracion: true }
+dispositivos:
+  - id: SWN
+    nombre: SW-NUCLEO
+    tipo: switch_l3
+    x: 260
+    y: 40
+    vlans: [{ id: 10, nombre: ADMIN }, { id: 20, nombre: VENTAS }]
+    interfaces:
+      - { nombre: Gi1/0/1, modo: acceso, vlan: 10 }
+      - { nombre: Gi1/0/2, modo: acceso, vlan: 20 }
+  - { id: A1, nombre: Admin, tipo: pc, x: 80, y: 240, interfaces: [{ nombre: eth0, ip: 192.168.10.11/24 }], puerta_enlace: 192.168.10.1 }
+  - { id: V1, nombre: Ventas, tipo: pc, x: 440, y: 240, interfaces: [{ nombre: eth0, ip: 192.168.20.11/24 }], puerta_enlace: 192.168.20.1 }
+enlaces:
+  - { a: "A1:eth0", b: "SWN:Gi1/0/1" }
+  - { a: "V1:eth0", b: "SWN:Gi1/0/2" }
+objetivos:
+  - { desde: A1, hacia: 192.168.10.1, descripcion: Admin llega a su puerta de enlace }
+  - { desde: V1, hacia: 192.168.20.1, descripcion: Ventas llega a su puerta de enlace }
+  - { desde: A1, hacia: V1, descripcion: Admin y Ventas se comunican a través del switch }

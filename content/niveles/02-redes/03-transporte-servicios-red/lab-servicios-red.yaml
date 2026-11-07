@@ -21,7 +21,7 @@ pasos:
         comandos:
           - sudo nano /etc/netplan/60-labred.yaml
           - sudo netplan try
-    comprobar: rocky01 tiene 192.168.10.53 y ubuntu01 192.168.10.54 en la placa de labred, y se responden ping.
+    comprobar: rocky01 tiene 192.168.10.53 y ubuntu01 192.168.10.54 en la tarjeta de labred, y se responden ping.
   - titulo: BIND en ubuntu01
     detalle: >-
       Instala bind9 y crea las zonas directa e inversa como en la lección 2.3.6 y en la parte 1
@@ -60,7 +60,7 @@ pasos:
     detalle: >-
       Instala Kea y escribe su configuración para labred (rango .100 a .199, puerta de enlace
       .1, DNS .53, dominio empresa.internal). La reserva la agregas en el paso siguiente, cuando
-      sepas la MAC del cliente. Usa el nombre real de la placa de labred en interfaces-config.
+      sepas la MAC del cliente. Usa el nombre real de la tarjeta de labred en interfaces-config.
     comandos:
       - sudo dnf install -y kea
       - sudo nano /etc/kea/kea-dhcp4.conf
@@ -70,7 +70,7 @@ pasos:
     comprobar: kea-dhcp4 -t dice Syntax check OK, el servicio está activo y sudo ss -ulnp muestra el puerto 67 en 192.168.10.53.
   - titulo: Un cliente
     detalle: >-
-      Apaga rocky01 un momento y haz un clon enlazado (cliente01). En el clon, deja solo la placa
+      Apaga rocky01 un momento y haz un clon enlazado (cliente01). En el clon, deja solo la tarjeta
       de labred y genera una MAC nueva (el hipervisor lo ofrece al clonar). Vuelve a encender
       rocky01. En cliente01, pon esa conexión en DHCP y levántala.
     comandos:

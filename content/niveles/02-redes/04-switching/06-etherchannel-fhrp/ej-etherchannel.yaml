@@ -1,0 +1,59 @@
+tipo: terminal
+shell: ios
+titulo: Dos cables, un solo enlace
+descripcion: >-
+  SW1 y SW2 están unidos por dos cables (Gi0/1 y Gi0/2) para tener más ancho de banda. Pero
+  Spanning Tree bloquea uno, así que solo se usa la mitad. En SW1 ya está armado el canal LACP
+  1 en modo passive. Estás en la consola de SW2.
+estado_inicial:
+  consola: SW2
+  topologia:
+    dispositivos:
+      - id: SW1
+        tipo: switch
+        interfaces:
+          - { nombre: Gi0/1, modo: troncal, canal: { grupo: 1, modo: passive } }
+          - { nombre: Gi0/2, modo: troncal, canal: { grupo: 1, modo: passive } }
+      - id: SW2
+        tipo: switch
+        interfaces:
+          - { nombre: Gi0/1, modo: troncal }
+          - { nombre: Gi0/2, modo: troncal }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.21/24 }] }
+      - { id: PC2, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.22/24 }] }
+    enlaces:
+      - { a: "SW1:Gi0/1", b: "SW2:Gi0/1" }
+      - { a: "SW1:Gi0/2", b: "SW2:Gi0/2" }
+      - { a: "PC1:eth0", b: "SW1:Fa0/1" }
+      - { a: "PC2:eth0", b: "SW2:Fa0/1" }
+pasos:
+  - consigna: Comprueba que Spanning Tree tiene bloqueado uno de los dos cables.
+    verificar:
+      - { comando_usado: show spanning-tree }
+    pistas: ["enable y show spanning-tree. Busca un puerto en estado BLK."]
+    solucion: [enable, show spanning-tree]
+    explicacion: >-
+      Uno de los dos puertos aparece como Altn BLK: para Spanning Tree, dos cables entre los
+      mismos switches son un bucle. Tienes 2 Gb/s de cable y usas 1.
+  - consigna: Agrupa Gi0/1 y Gi0/2 en el canal 1 con LACP, de forma que negocie con SW2.
+    verificar:
+      - { interfaz: Gi0/1, canal: 1 }
+      - { interfaz: Gi0/2, canal: 1 }
+    pistas: ["configure terminal, interface range gi0/1 - 2 y channel-group 1 mode active (SW1 está en passive: alguno de los dos tiene que ser active)."]
+    solucion: [configure terminal, interface range gi0/1 - 2, channel-group 1 mode active, end]
+    explicacion: >-
+      Con active de un lado y passive del otro, LACP arma el grupo con SW1. Si los dos estuvieran en
+      passive, ninguno empezaría la negociación y el canal no se formaría.
+  - consigna: Revisa el estado del canal.
+    verificar:
+      - { salida_contiene: "Po1(SU)" }
+    pistas: ["show etherchannel summary. (SU) quiere decir capa 2 y en uso; (P) junto a cada puerto, que está dentro del grupo."]
+    solucion: [show etherchannel summary]
+    explicacion: >-
+      Po1 está en uso con los dos puertos adentro. Para Spanning Tree ahora es un solo enlace
+      lógico: ya no bloquea nada, y el tráfico se reparte entre los dos cables.
+  - consigna: Guarda la configuración.
+    verificar:
+      - { guardado: true }
+    pistas: ["copy running-config startup-config o write memory."]
+    solucion: [copy running-config startup-config]

@@ -1,6 +1,7 @@
 /** Consola estilo Cisco IOS sobre el modelo de red simulado. */
 import { classfulPrefix, formatIpv4, maskToPrefix, networkOf, parseIpv4, prefixToMask, sameSubnet, wildcardToPrefix } from './ip'
 import { defaultVlanName, isRouting, isSwitch, Network, newPort, normalizeIfName, shortIfName, type Device, type Port, type Route } from './model'
+import { bridgeId, computeStp } from './stp'
 
 export interface IosChunk {
   text: string
@@ -324,7 +325,11 @@ export function runningConfig(d: Device): string {
   if (m.users.size) L.push('!')
   if (m.rsaBits && m.sshVersion) L.push(`ip ssh version ${m.sshVersion}`, '!')
   if (d.type === 'switch_l3' && d.ipRouting) L.push('ip routing', '!')
-  if (isSwitch(d)) L.push('spanning-tree mode pvst', '!')
+  if (isSwitch(d)) {
+    L.push(`spanning-tree mode ${stpModeOf(d)}`)
+    for (const [v, prio] of [...d.stpPriority].sort((a, b) => a[0] - b[0])) if (v > 0) L.push(`spanning-tree vlan ${v} priority ${prio}`)
+    L.push('!')
+  }
   const ordered = orderedPorts(d)
   for (const p of ordered) {
     L.push(`interface ${p.name}`)
@@ -337,11 +342,19 @@ export function runningConfig(d: Device): string {
         if (p.nativeVlan !== 1) L.push(` switchport trunk native vlan ${p.nativeVlan}`)
         if (p.allowed !== 'all') L.push(` switchport trunk allowed vlan ${p.allowed.length ? vlanRanges(p.allowed) : 'none'}`)
         if (p.mode) L.push(` switchport mode ${p.mode}`)
+        if (p.channel) L.push(` channel-group ${p.channel.group} mode ${p.channel.mode}`)
+        if (p.portfast) L.push(' spanning-tree portfast')
+        if (p.bpduGuard) L.push(' spanning-tree bpduguard enable')
       }
     }
     if (p.ip) L.push(` ip address ${formatIpv4(p.ip.ip)} ${formatIpv4(prefixToMask(p.ip.prefix))}`)
     else if (!(p.kind === 'phys' && isSwitch(d) && p.switchport)) L.push(' no ip address')
     for (const h of d.helpers.get(p.name) ?? []) L.push(` ip helper-address ${formatIpv4(h)}`)
+    for (const g of p.standby ?? []) {
+      if (g.ip !== undefined) L.push(` standby ${g.group} ip ${formatIpv4(g.ip)}`)
+      if (g.priority !== 100) L.push(` standby ${g.group} priority ${g.priority}`)
+      if (g.preempt) L.push(` standby ${g.group} preempt`)
+    }
     if (p.kind === 'phys' && d.type === 'router') L.push(' duplex auto', ' speed auto')
     if (p.shutdown) L.push(' shutdown')
     L.push('!')
@@ -384,6 +397,11 @@ export function runningConfig(d: Device): string {
   return L.join('\n') + '\n'
 }
 
+const stpModes = new WeakMap<Device, string>()
+function stpModeOf(d: Device) {
+  return stpModes.get(d) ?? 'pvst'
+}
+
 function orderedPorts(d: Device): Port[] {
   const phys = d.ports.filter((p) => p.kind === 'phys')
   const out: Port[] = []
@@ -398,7 +416,7 @@ function orderedPorts(d: Device): Port[] {
 
 /** Copia profunda de la parte configurable de un equipo (para startup-config y reload). */
 function snapshot(d: Device) {
-  return structuredClone({ hostname: d.hostname, ports: d.ports, gateway: d.gateway, routes: d.routes, ipRouting: d.ipRouting, ospf: d.ospf, mgmt: { ...d.mgmt, startup: undefined }, helpers: d.helpers })
+  return structuredClone({ hostname: d.hostname, ports: d.ports, gateway: d.gateway, routes: d.routes, ipRouting: d.ipRouting, ospf: d.ospf, mgmt: { ...d.mgmt, startup: undefined }, helpers: d.helpers, stpPriority: d.stpPriority })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -408,6 +426,12 @@ function snapshot(d: Device) {
 export class IosSession {
   net: Network
   dev: Device
+  get stpMode() {
+    return stpModeOf(this.dev)
+  }
+  set stpMode(m: string) {
+    stpModes.set(this.dev, m)
+  }
   mode: IosMode = 'user'
   ports: Port[] = []
   vlanCtx: number[] = []
@@ -807,7 +831,7 @@ export class IosSession {
     out += 'Proceed with reload? [confirm]\n%SYS-5-RELOAD: Reload requested by console. Reload Reason: Reload Command.\n\n'
     const saved = this.saved.get(this.dev.id)
     const snap = structuredClone(saved?.snap ?? factorySnapshot(this.dev))
-    Object.assign(this.dev, { hostname: snap.hostname, ports: snap.ports, gateway: snap.gateway, routes: snap.routes, ipRouting: snap.ipRouting, ospf: snap.ospf, helpers: snap.helpers })
+    Object.assign(this.dev, { hostname: snap.hostname, ports: snap.ports, gateway: snap.gateway, routes: snap.routes, ipRouting: snap.ipRouting, ospf: snap.ospf, helpers: snap.helpers, stpPriority: snap.stpPriority ?? new Map() })
     this.dev.mgmt = { ...snap.mgmt, startup: undefined }
     this.dev.arp.clear()
     this.mode = 'user'
@@ -837,6 +861,12 @@ export class IosSession {
       { pattern: 'show vlan brief', run: () => this.showVlanBrief(), when: () => isSwitch(this.dev) },
       { pattern: 'show vlan', run: () => this.showVlanBrief(), when: () => isSwitch(this.dev) },
       { pattern: 'show interfaces trunk', run: () => this.showTrunk(), when: () => isSwitch(this.dev) },
+      { pattern: 'show interfaces status', run: () => this.showIfStatus(), when: () => isSwitch(this.dev) },
+      { pattern: 'show spanning-tree', run: () => this.showStp(), when: () => isSwitch(this.dev) },
+      { pattern: 'show spanning-tree vlan <num>', run: (a) => this.showStp(Number(a[0])), when: () => isSwitch(this.dev) },
+      { pattern: 'show etherchannel summary', run: () => this.showEtherchannel(), when: () => isSwitch(this.dev) },
+      { pattern: 'show standby brief', run: () => this.showStandby(), when: () => this.dev.type !== 'pc' },
+      { pattern: 'show standby', run: () => this.showStandby(), when: () => this.dev.type !== 'pc' },
       { pattern: 'show interfaces <if>', run: (a) => this.showInterface(a[0]) },
       { pattern: 'show cdp neighbors', run: () => this.showCdp() },
       { pattern: 'show arp', run: () => this.showArp() },
@@ -865,6 +895,87 @@ export class IosSession {
     const s = this.saved.get(this.dev.id)
     if (!s?.config) return 'startup-config is not present\n'
     return `Using ${s.config.length} bytes\n${s.config}\n`
+  }
+
+  private showIfStatus(): string {
+    let out = '\nPort      Name               Status       Vlan       Duplex  Speed Type\n'
+    for (const p of this.dev.ports.filter((x) => x.kind === 'phys')) {
+      const po = /^Port-channel/.test(p.name)
+      const up = this.net.physUp(this.dev, p)
+      const status = p.errDisabled ? 'err-disabled' : p.shutdown ? 'disabled' : up ? 'connected' : 'notconnect'
+      const vlan = !p.switchport ? 'routed' : this.net.effectiveMode(this.dev, p) === 'trunk' ? 'trunk' : String(p.accessVlan)
+      const type = po ? '' : /^Gigabit/.test(p.name) ? '10/100/1000BaseTX' : '10/100BaseTX'
+      out += `${shortIfName(p.name).padEnd(10)}${(p.description ?? '').slice(0, 18).padEnd(19)}${status.padEnd(13)}${vlan.padEnd(11)}${(up ? 'a-full' : 'auto').padEnd(8)}${(up ? (/^Gigabit/.test(p.name) ? 'a-1000' : 'a-100') : 'auto').padEnd(7)}${type}\n`
+    }
+    return out
+  }
+
+  private showStp(only?: number): string {
+    const d = this.dev
+    const vlans = [...d.vlans.keys()].filter((v) => v < 1002 && (only === undefined || v === only)).sort((a, b) => a - b)
+    if (only !== undefined && !vlans.length) return `Spanning tree instance(s) for vlan ${only} does not exist.\n`
+    let out = ''
+    const proto = this.stpMode === 'rapid-pvst' ? 'rstp' : 'ieee'
+    for (const v of vlans) {
+      const stp = computeStp(this.net, v)
+      const me = stp.switches.get(d.id)
+      if (!me || !me.ports.size) continue
+      const vname = `VLAN${String(v).padStart(4, '0')}`
+      const myRoot = stp.rootOf?.get(d.id)
+      const isRoot = myRoot?.dev.id === d.id
+      const root = myRoot?.bridge ?? stp.root!
+      const rp = me.rootPort ? this.net.port(d, me.rootPort) : undefined
+      out += `\n${vname}\n  Spanning tree enabled protocol ${proto}\n  Root ID    Priority    ${root.priority}\n             Address     ${root.mac}\n`
+      out += isRoot ? '             This bridge is the root\n' : `             Cost        ${me.rootCost}\n             Port        ${rp ? me.ports.get(rp.name)?.portId.split('.')[1] : '?'} (${me.rootPort})\n`
+      out += '             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec\n\n'
+      const b = bridgeId(d, v)
+      out += `  Bridge ID  Priority    ${b.priority}  (priority ${b.priority - v} sys-id-ext ${v})\n             Address     ${b.mac}\n             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec\n             Aging Time  300 sec\n\n`
+      out += 'Interface           Role Sts Cost      Prio.Nbr Type\n------------------- ---- --- --------- -------- --------------------------------\n'
+      const ports = [...me.ports.values()].filter((p) => !(this.net.port(d, p.name)?.channel && this.net.bundled(d, this.net.port(d, p.name)!)))
+      for (const p of ports) {
+        const role = p.role === 'root' ? 'Root' : p.role === 'designated' ? 'Desg' : 'Altn'
+        const sts = p.forwarding ? 'FWD' : 'BLK'
+        out += `${shortIfName(p.name).padEnd(20)}${role} ${sts} ${String(p.cost).padEnd(10)}${p.portId.padEnd(9)}P2p${p.edge ? ' Edge' : ''}\n`
+      }
+    }
+    return out || 'No spanning tree instance exists.\n'
+  }
+
+  private showEtherchannel(): string {
+    const d = this.dev
+    const groups = [...new Set(d.ports.filter((p) => p.channel).map((p) => p.channel!.group))].sort((a, b) => a - b)
+    let out = 'Flags:  D - down        P - bundled in port-channel\n        I - stand-alone s - suspended\n        H - Hot-standby (LACP only)\n        R - Layer3      S - Layer2\n        U - in use      N - not in use, no aggregation\n        f - failed to allocate aggregator\n\n        M - not in use, minimum links not met\n        m - not in use, port not aggregated due to minimum links not met\n        u - unsuitable for bundling\n        w - waiting to be aggregated\n        d - default port\n\n\n'
+    out += `Number of channel-groups in use: ${groups.length}\nNumber of aggregators:           ${groups.length}\n\nGroup  Port-channel  Protocol    Ports\n------+-------------+-----------+-----------------------------------------------\n`
+    for (const g of groups) {
+      const members = d.ports.filter((p) => p.channel?.group === g)
+      const mode = members[0].channel!.mode
+      const proto = mode === 'on' ? '-' : ['active', 'passive'].includes(mode) ? 'LACP' : 'PAgP'
+      const anyBundled = members.some((m) => this.net.bundled(d, m))
+      const flags = members.map((m) => `${shortIfName(m.name)}(${this.net.bundled(d, m) ? 'P' : !this.net.physUp(d, m) ? 'D' : 'I'})`).join('   ')
+      out += `${String(g).padEnd(7)}${`Po${g}(S${anyBundled ? 'U' : 'D'})`.padEnd(14)}${proto.padEnd(12)}${flags}\n`
+    }
+    return out
+  }
+
+  private showStandby(): string {
+    const d = this.dev
+    let out = '                     P indicates configured to preempt.\n                     |\nInterface   Grp  Pri P State   Active          Standby         Virtual IP\n'
+    for (const p of d.ports) {
+      for (const g of p.standby ?? []) {
+        if (g.ip === undefined) continue
+        const active = this.net.hsrpActiveFor(g.group, g.ip)
+        const up = this.net.isUp(d, p)
+        const others: Port[] = []
+        for (const o of this.net.devices.values()) for (const q of o.ports) if (q !== p && q.standby?.some((x) => x.group === g.group && x.ip === g.ip) && this.net.isUp(o, q)) others.push(q)
+        const standby = others.filter((q) => q !== active?.port).sort((a, b) => (b.standby!.find((x) => x.group === g.group)!.priority - a.standby!.find((x) => x.group === g.group)!.priority))[0]
+        const isActive = active?.dev === d && active.port === p
+        const state = !up ? 'Init' : isActive ? 'Active' : standby === undefined || active?.port === standby ? 'Standby' : 'Listen'
+        const act = !up ? 'unknown' : isActive ? 'local' : formatIpv4(active!.port.ip!.ip)
+        const sby = !up ? 'unknown' : isActive ? (standby ? formatIpv4(standby.ip!.ip) : 'unknown') : 'local'
+        out += `${shortIfName(p.name).padEnd(12)}${String(g.group).padEnd(5)}${String(g.priority).padEnd(4)}${g.preempt ? 'P' : ' '} ${state.padEnd(8)}${act.padEnd(16)}${sby.padEnd(16)}${formatIpv4(g.ip)}\n`
+      }
+    }
+    return out
   }
 
   private showIpIntBrief(): string {
@@ -1240,7 +1351,50 @@ export class IosSession {
           d().mgmt.sshVersion = v
         },
       },
-      { pattern: 'spanning-tree mode <word>', when: sw, run: () => '' },
+      {
+        pattern: 'spanning-tree mode <word>',
+        when: sw,
+        run: (a) => {
+          if (!['pvst', 'rapid-pvst', 'mst'].includes(a[0])) throw new Invalid(2)
+          this.stpMode = a[0]
+        },
+      },
+      {
+        pattern: 'spanning-tree vlan <word> priority <num>',
+        when: sw,
+        run: (a) => {
+          const prio = Number(a[1])
+          if (prio % 4096 !== 0 || prio > 61440) return '% Bridge Priority must be in increments of 4096.\n% Allowed values are:\n  0     4096  8192  12288 16384 20480 24576 28672\n  32768 36864 40960 45056 49152 53248 57344 61440\n'
+          const ids = parseVlanList(a[0])
+          if (!ids) throw new Invalid(2)
+          for (const v of ids) d().stpPriority.set(v, prio)
+        },
+      },
+      {
+        pattern: 'spanning-tree vlan <word> root <word>',
+        when: sw,
+        run: (a) => {
+          const ids = parseVlanList(a[0])
+          if (!ids || !['primary', 'secondary'].includes(a[1])) throw new Invalid(3)
+          for (const v of ids) {
+            if (a[1] === 'secondary') d().stpPriority.set(v, 28672)
+            else {
+              // primary: 24576, o 4096 menos que la raíz actual si ya es más baja.
+              const stp = computeStp(this.net, v)
+              const r = stp.rootOf?.get(d().id)
+              const rootPrio = r ? r.bridge.priority - v : 32768
+              d().stpPriority.set(v, r && r.dev.id !== d().id && rootPrio <= 24576 ? Math.max(0, rootPrio - 4096) : 24576)
+            }
+          }
+        },
+      },
+      {
+        pattern: 'no spanning-tree vlan <word> priority',
+        when: sw,
+        run: (a) => {
+          for (const v of parseVlanList(a[0]) ?? []) d().stpPriority.delete(v)
+        },
+      },
     ]
   }
 
@@ -1299,13 +1453,17 @@ export class IosSession {
         if (vlan < 1 || vlan > 4094) throw new Invalid(tokenIndex)
         p = { ...newPort(norm, 'svi', false, false), vlan }
         d.ports.push(p)
+      } else if (/^Port-channel\d+$/.test(norm) && isSwitch(d)) {
+        p = newPort(norm, 'phys', true, false)
+        d.ports.push(p)
       } else if (/\.\d+$/.test(norm)) {
         const parent = this.net.port(d, norm.replace(/\.\d+$/, ''))
         if (!parent || parent.kind !== 'phys' || parent.switchport) throw new Invalid(tokenIndex)
         p = this.net.ensurePort(d, norm)
       } else throw new Invalid(tokenIndex)
     }
-    this.ports = [p]
+    // La configuración de un Port-channel se copia a sus puertos, como en IOS.
+    this.ports = /^Port-channel/.test(p.name) ? [p, ...this.net.channelMembers(d, p)] : [p]
     this.mode = p.kind === 'subif' ? 'subif' : 'if'
   }
 
@@ -1344,7 +1502,13 @@ export class IosSession {
       { pattern: 'ip address <ip> <mask>', when: canIp, run: (a) => this.setIp(a[0], a[1]) },
       { pattern: 'no ip address', when: canIp, run: each((p) => void (p.ip = undefined)) },
       { pattern: 'shutdown', run: each((p) => void (p.shutdown = true)) },
-      { pattern: 'no shutdown', run: each((p) => void (p.shutdown = false)) },
+      {
+        pattern: 'no shutdown',
+        run: each((p) => {
+          p.shutdown = false
+          p.errDisabled = false
+        }),
+      },
       { pattern: 'description <rest>', run: (a) => each((p) => void (p.description = a[0]))() },
       { pattern: 'no description', run: each((p) => void (p.description = undefined)) },
       {
@@ -1436,10 +1600,55 @@ export class IosSession {
       {
         pattern: 'spanning-tree portfast',
         when: l2,
-        run: () =>
-          '%Warning: portfast should only be enabled on ports connected to a single\n host. Connecting hubs, concentrators, switches, bridges, etc... to this\n interface  when portfast is enabled, can cause temporary bridging loops.\n Use with CAUTION\n\n',
+        run: () => {
+          for (const p of this.ports) p.portfast = true
+          return '%Warning: portfast should only be enabled on ports connected to a single\n host. Connecting hubs, concentrators, switches, bridges, etc... to this\n interface  when portfast is enabled, can cause temporary bridging loops.\n Use with CAUTION\n\n%Portfast has been configured on ' + this.ports.map((p) => p.name).join(', ') + ' but will only\n have effect when the interface is in a non-trunking mode.\n'
+        },
       },
+      { pattern: 'no spanning-tree portfast', when: l2, run: each((p) => void (p.portfast = false)) },
+      { pattern: 'spanning-tree bpduguard enable', when: l2, run: each((p) => void (p.bpduGuard = true)) },
+      { pattern: 'spanning-tree bpduguard disable', when: l2, run: each((p) => void (p.bpduGuard = false)) },
+      { pattern: 'no spanning-tree bpduguard', when: l2, run: each((p) => void (p.bpduGuard = false)) },
+      {
+        pattern: 'channel-group <num> mode <word>',
+        when: () => switchPort() && this.ports.every((p) => !/^Port-channel/.test(p.name)),
+        run: (a) => {
+          const g = Number(a[0])
+          if (!['active', 'passive', 'on', 'desirable', 'auto'].includes(a[1])) throw new Invalid(3)
+          let out = ''
+          if (!this.net.port(this.dev, `Port-channel${g}`)) {
+            const po = newPort(`Port-channel${g}`, 'phys', true, false)
+            const first = this.ports[0]
+            Object.assign(po, { mode: first.mode, accessVlan: first.accessVlan, allowed: first.allowed, nativeVlan: first.nativeVlan })
+            this.dev.ports.push(po)
+            out = `Creating a port-channel interface Port-channel ${g}\n\n`
+          }
+          for (const p of this.ports) p.channel = { group: g, mode: a[1] }
+          return out
+        },
+      },
+      { pattern: 'no channel-group', when: switchPort, run: each((p) => void (p.channel = undefined)) },
+      {
+        pattern: 'standby <num> ip <ip>',
+        when: canIp,
+        run: (a) => each((p) => void (this.standbyFor(p, Number(a[0])).ip = parseIpv4(a[1])))(),
+      },
+      {
+        pattern: 'standby <num> priority <num>',
+        when: canIp,
+        run: (a) => each((p) => void (this.standbyFor(p, Number(a[0])).priority = Number(a[1])))(),
+      },
+      { pattern: 'standby <num> preempt', when: canIp, run: (a) => each((p) => void (this.standbyFor(p, Number(a[0])).preempt = true))() },
+      { pattern: 'no standby <num> preempt', when: canIp, run: (a) => each((p) => void (this.standbyFor(p, Number(a[0])).preempt = false))() },
+      { pattern: 'no standby <num>', when: canIp, run: (a) => each((p) => void (p.standby = p.standby?.filter((g) => g.group !== Number(a[0]))))() },
     ]
+  }
+
+  private standbyFor(p: Port, group: number) {
+    p.standby ??= []
+    let g = p.standby.find((x) => x.group === group)
+    if (!g) p.standby.push((g = { group, priority: 100, preempt: false }))
+    return g
   }
 
   private setIp(ipText: string, maskText: string): string | void {
@@ -1582,7 +1791,7 @@ export class IosSession {
 }
 
 function factorySnapshot(d: Device) {
-  const copy = structuredClone({ hostname: d.type === 'router' ? 'Router' : 'Switch', ports: d.ports.filter((p) => p.kind === 'phys').map((p) => ({ ...newPort(p.name, 'phys', isSwitch(d), d.type === 'router') })), gateway: undefined, routes: [], ipRouting: d.type === 'router', ospf: undefined, mgmt: { passwordEncryption: false, domainLookup: true, users: new Map<string, string>(), lines: { con: { login: 'none' as const }, vty: { login: 'none' as const } }, startup: undefined }, helpers: new Map<string, number[]>() })
+  const copy = structuredClone({ hostname: d.type === 'router' ? 'Router' : 'Switch', ports: d.ports.filter((p) => p.kind === 'phys').map((p) => ({ ...newPort(p.name, 'phys', isSwitch(d), d.type === 'router') })), gateway: undefined, routes: [], ipRouting: d.type === 'router', ospf: undefined, mgmt: { passwordEncryption: false, domainLookup: true, users: new Map<string, string>(), lines: { con: { login: 'none' as const }, vty: { login: 'none' as const } }, startup: undefined }, helpers: new Map<string, number[]>(), stpPriority: new Map<number, number>() })
   if (isSwitch(d)) copy.ports.push({ ...newPort('Vlan1', 'svi', false, true), vlan: 1 })
   return copy as ReturnType<typeof snapshot>
 }

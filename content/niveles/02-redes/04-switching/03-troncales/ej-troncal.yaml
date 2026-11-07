@@ -1,0 +1,69 @@
+tipo: terminal
+shell: ios
+titulo: Un troncal a medio configurar
+descripcion: >-
+  Administración (VLAN 10) y Ventas (VLAN 20) están repartidas en dos switches unidos por
+  Gi0/1. Los de Administración se ven entre pisos, pero los de Ventas no. SW2 está bien
+  configurado (troncal con VLAN 10 y 20, nativa 99). Estás en la consola de SW1.
+estado_inicial:
+  consola: SW1
+  topologia:
+    dispositivos:
+      - id: SW1
+        tipo: switch
+        vlans: [{ id: 10, nombre: ADMIN }, { id: 20, nombre: VENTAS }, { id: 99, nombre: NATIVA }]
+        interfaces:
+          - { nombre: Fa0/1, modo: acceso, vlan: 10 }
+          - { nombre: Fa0/13, modo: acceso, vlan: 20 }
+          - { nombre: Gi0/1, modo: troncal, vlans_permitidas: [10] }
+      - id: SW2
+        tipo: switch
+        vlans: [{ id: 10, nombre: ADMIN }, { id: 20, nombre: VENTAS }, { id: 99, nombre: NATIVA }]
+        interfaces:
+          - { nombre: Fa0/1, modo: acceso, vlan: 10 }
+          - { nombre: Fa0/13, modo: acceso, vlan: 20 }
+          - { nombre: Gi0/1, modo: troncal, vlans_permitidas: [10, 20], vlan_nativa: 99 }
+      - { id: A1, nombre: Admin-PB, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.11/24 }] }
+      - { id: V1, nombre: Ventas-PB, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.20.11/24 }] }
+      - { id: A2, nombre: Admin-P1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.12/24 }] }
+      - { id: V2, nombre: Ventas-P1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.20.12/24 }] }
+    enlaces:
+      - { a: "A1:eth0", b: "SW1:Fa0/1" }
+      - { a: "V1:eth0", b: "SW1:Fa0/13" }
+      - { a: "A2:eth0", b: "SW2:Fa0/1" }
+      - { a: "V2:eth0", b: "SW2:Fa0/13" }
+      - { a: "SW1:Gi0/1", b: "SW2:Gi0/1" }
+pasos:
+  - consigna: Mira cómo está el troncal de SW1.
+    verificar:
+      - { comando_usado: show interfaces trunk }
+    pistas: ["enable y show interfaces trunk."]
+    solucion: [enable, show interfaces trunk]
+    explicacion: >-
+      Dos problemas a la vista: en "Vlans allowed on trunk" solo figura la 10, y la VLAN nativa
+      es la 1 (SW2 usa la 99).
+  - consigna: Deja pasar también la VLAN 20 por el troncal, sin sacar la 10.
+    verificar:
+      - { ping: { desde: V1, hacia: V2 } }
+      - { ping: { desde: A1, hacia: A2 } }
+    pistas: ["En Gi0/1: switchport trunk allowed vlan add 20 (con add se suma a la lista; sin add, la reemplaza)."]
+    solucion: [configure terminal, interface gi0/1, switchport trunk allowed vlan add 20]
+    explicacion: >-
+      Ventas ya cruza. Cuidado con escribir switchport trunk allowed vlan 20 sin add: dejaría
+      solo la 20 y cortaría Administración.
+  - consigna: Iguala la VLAN nativa con la de SW2 (99) y desactiva la negociación DTP en el troncal.
+    verificar:
+      - { config_contiene: "switchport trunk native vlan 99" }
+      - { comando_usado: switchport nonegotiate }
+    pistas: ["switchport trunk native vlan 99 y switchport nonegotiate, en Gi0/1."]
+    solucion: [switchport trunk native vlan 99, switchport nonegotiate, end]
+    explicacion: >-
+      Con la misma nativa en los dos extremos, las tramas sin etiqueta no cambian de VLAN al
+      cruzar. Usar una nativa que no lleva datos (la 99) en lugar de la 1 cierra un tipo de
+      ataque (el salto de VLAN por doble etiqueta).
+  - consigna: Comprueba el troncal otra vez y guarda la configuración.
+    verificar:
+      - { salida_contiene: "10,20" }
+      - { guardado: true }
+    pistas: ["show interfaces trunk y después copy running-config startup-config (o write memory). Hazlo en ese orden: la verificación mira la salida del primero."]
+    solucion: [copy running-config startup-config, show interfaces trunk]

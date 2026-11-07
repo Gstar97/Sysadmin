@@ -47,6 +47,7 @@ const PoeCalculatorView = lazy(() => import('@/interactive/redes/PoeCalculator')
 const MacTableSimView = lazy(() => import('@/interactive/redes/MacTableSim').then((m) => ({ default: m.MacTableSim })))
 const AddressClassifierView = lazy(() => import('@/interactive/redes/AddressClassifier').then((m) => ({ default: m.AddressClassifier })))
 const VlsmDesignerView = lazy(() => import('@/interactive/redes/VlsmDesigner').then((m) => ({ default: m.VlsmDesigner })))
+const StpSimView = lazy(() => import('@/interactive/redes/StpSim').then((m) => ({ default: m.StpSim })))
 const NatSimView = lazy(() => import('@/interactive/redes/NatSim').then((m) => ({ default: m.NatSim })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
@@ -360,6 +361,14 @@ export function DisenadorVlsm(props: ComponentProps<typeof VlsmDesignerView>) {
   )
 }
 
+export function SimuladorStp() {
+  return (
+    <Island>
+      <StpSimView />
+    </Island>
+  )
+}
+
 export function SimuladorNat() {
   return (
     <Island>
@@ -553,6 +562,7 @@ export const mdxComponents = {
   ClasificadorIp,
   DisenadorVlsm,
   SimuladorNat,
+  SimuladorStp,
   ErroresComunes,
   ErrorComun,
   Resumen,

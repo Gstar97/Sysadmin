@@ -12,19 +12,19 @@
   alias: [memoria, memoria principal]
   definicion: Memoria rápida donde están los programas y datos en uso. Es volátil, se borra al apagar el equipo.
   leccion: n0-m1-l1
-- id: placa-madre
-  termino: Placa madre
-  alias: [motherboard, placa base]
-  definicion: Placa principal donde se conectan el procesador, la memoria, los discos y las placas de expansión. Define qué componentes son compatibles.
+- id: tarjeta-madre
+  termino: Tarjeta madre
+  alias: [motherboard, tarjeta base]
+  definicion: Tarjeta principal donde se conectan el procesador, la memoria, los discos y las tarjetas de expansión. Define qué componentes son compatibles.
   leccion: n0-m1-l1
 - id: chipset
   termino: Chipset
-  definicion: Circuito de la placa madre que concentra los dispositivos más lentos (SATA, USB, red integrada) y los comunica con la CPU por un único enlace compartido.
+  definicion: Circuito de la tarjeta madre que concentra los dispositivos más lentos (SATA, USB, red integrada) y los comunica con la CPU por un único enlace compartido.
   leccion: n0-m1-l1
 - id: pcie
   termino: PCIe (PCI Express)
   alias: [PCI Express]
-  definicion: Bus de las placas de expansión y los discos NVMe. Se mide en generaciones (3.0, 4.0, 5.0) y líneas (x1, x4, x8, x16); cada generación duplica la velocidad por línea.
+  definicion: Bus de las tarjetas de expansión y los discos NVMe. Se mide en generaciones (3.0, 4.0, 5.0) y líneas (x1, x4, x8, x16); cada generación duplica la velocidad por línea.
   leccion: n0-m1-l1
 - id: bmc
   termino: BMC
@@ -116,7 +116,7 @@
 - id: firmware
   termino: Firmware
   alias: [BIOS]
-  definicion: Programa guardado en un chip de la placa madre que se ejecuta al encender, prueba el hardware y busca el sistema operativo. Puede ser BIOS heredado o UEFI.
+  definicion: Programa guardado en un chip de la tarjeta madre que se ejecuta al encender, prueba el hardware y busca el sistema operativo. Puede ser BIOS heredado o UEFI.
   leccion: n0-m1-l5
 - id: post
   termino: POST
@@ -326,7 +326,7 @@
 - id: direccion-mac
   termino: Dirección MAC
   alias: [MAC, OUI]
-  definicion: Identificador de 6 bytes de una placa de red, escrito en hexadecimal (52:54:00:4e:66:a1). Los tres primeros bytes identifican al fabricante.
+  definicion: Identificador de 6 bytes de una tarjeta de red, escrito en hexadecimal (52:54:00:4e:66:a1). Los tres primeros bytes identifican al fabricante.
   leccion: n0-m3-l2
 - id: prefijos-binarios
   termino: Prefijos binarios
@@ -1103,7 +1103,7 @@
 - id: oui
   termino: OUI
   alias: [identificador de fabricante]
-  definicion: Los tres primeros bytes de una dirección MAC, que identifican al fabricante de la placa. Por ejemplo, 08:00:27 es VirtualBox.
+  definicion: Los tres primeros bytes de una dirección MAC, que identifican al fabricante de la tarjeta. Por ejemplo, 08:00:27 es VirtualBox.
   leccion: n2-m1-l4
 - id: tabla-mac
   termino: Tabla de direcciones MAC
@@ -1396,3 +1396,128 @@
   alias: []
   definicion: Programa liviano que hace DHCP y DNS con caché con una configuración de pocas líneas. Lo usan routers hogareños, libvirt y laboratorios.
   leccion: n2-m3-l7
+- id: cisco-ios
+  termino: Cisco IOS
+  alias: [IOS, modo privilegiado, configure terminal]
+  definicion: Sistema de los routers y switches Cisco. Se maneja por línea de comandos con modos (usuario, privilegiado, configuración global y de interfaz).
+  leccion: n2-m4-l1
+- id: running-config
+  termino: running-config
+  alias: [configuración activa]
+  definicion: Configuración que está funcionando en un equipo de red, en memoria. Los cambios se aplican al instante y se pierden al reiniciar si no se guardan.
+  leccion: n2-m4-l1
+- id: startup-config
+  termino: startup-config
+  alias: [configuración de arranque, NVRAM]
+  definicion: Configuración guardada que carga el equipo al arrancar. Se actualiza con copy running-config startup-config.
+  leccion: n2-m4-l1
+- id: svi
+  termino: SVI
+  alias: [interfaz VLAN, interface vlan]
+  definicion: Interfaz virtual de un switch asociada a una VLAN. En un switch de capa 2 lleva la IP de administración; en uno de capa 3, la puerta de enlace de esa VLAN.
+  leccion: n2-m4-l1
+- id: cable-consola
+  termino: Cable de consola
+  alias: [puerto de consola, console]
+  definicion: Cable (RJ45 a USB o a serie) para conectarse directamente a un equipo de red sin usar la red. Es la entrada para equipos nuevos y para emergencias.
+  leccion: n2-m4-l1
+- id: vlan
+  termino: VLAN
+  alias: [red local virtual, VLAN de acceso]
+  definicion: Grupo de puertos de un switch que se comporta como un switch aparte. Cada VLAN es su propio dominio de broadcast; entre VLAN solo se pasa con un router.
+  leccion: n2-m4-l2
+- id: puerto-acceso
+  termino: Puerto de acceso
+  alias: [switchport mode access, access port]
+  definicion: Puerto de switch que pertenece a una sola VLAN y se conecta a un equipo final. Sus tramas salen sin etiqueta de VLAN.
+  leccion: n2-m4-l2
+- id: troncal
+  termino: Troncal
+  alias: [trunk, enlace troncal, switchport mode trunk]
+  definicion: Enlace entre switches (o hacia un router) que lleva varias VLAN a la vez, marcando cada trama con su VLAN mediante 802.1Q.
+  leccion: n2-m4-l3
+- id: ieee-8021q
+  termino: 802.1Q
+  alias: [dot1Q, etiqueta de VLAN]
+  definicion: Estándar que agrega a la trama una etiqueta de 4 bytes con el número de VLAN (de 1 a 4094) para que viaje por un troncal.
+  leccion: n2-m4-l3
+- id: vlan-nativa
+  termino: VLAN nativa
+  alias: [native VLAN]
+  definicion: VLAN cuyas tramas viajan sin etiqueta por un troncal 802.1Q. Tiene que coincidir en los dos extremos; se recomienda una sin equipos.
+  leccion: n2-m4-l3
+- id: dtp
+  termino: DTP
+  alias: [Dynamic Trunking Protocol, switchport nonegotiate]
+  definicion: Protocolo de Cisco que negocia troncales automáticamente. Por seguridad se fijan los modos a mano y se desactiva con switchport nonegotiate.
+  leccion: n2-m4-l3
+- id: router-on-a-stick
+  termino: Router-on-a-stick
+  alias: [router en un palo, enrutamiento con subinterfaces]
+  definicion: Enrutamiento entre VLAN con un router conectado a un troncal por una sola interfaz física, con una subinterfaz por VLAN.
+  leccion: n2-m4-l4
+- id: subinterfaz
+  termino: Subinterfaz
+  alias: [Gi0/0.10, interfaz lógica]
+  definicion: Interfaz lógica de un router sobre una física. Con encapsulation dot1Q N atiende las tramas de la VLAN N y lleva la IP de su puerta de enlace.
+  leccion: n2-m4-l4
+- id: switch-capa3
+  termino: Switch de capa 3
+  alias: [switch multicapa, ip routing]
+  definicion: Switch que además enruta entre VLAN en su hardware, usando una SVI por VLAN y el comando ip routing.
+  leccion: n2-m4-l4
+- id: stp
+  termino: Spanning Tree (STP)
+  alias: [802.1D, árbol de expansión]
+  definicion: Protocolo que evita bucles en capa 2 dejando un solo camino activo entre switches y bloqueando los enlaces sobrantes, que se activan si falla otro.
+  leccion: n2-m4-l5
+- id: puente-raiz
+  termino: Puente raíz
+  alias: [root bridge, raíz de STP]
+  definicion: El switch que Spanning Tree elige como centro del árbol, el de identificador más bajo (prioridad y, si empatan, MAC).
+  leccion: n2-m4-l5
+- id: rstp
+  termino: RSTP
+  alias: [802.1w, Rapid PVST+, Spanning Tree rápido]
+  definicion: Versión rápida de Spanning Tree que se reacomoda en uno o dos segundos. Rapid PVST+ es la variante de Cisco con un árbol por VLAN.
+  leccion: n2-m4-l5
+- id: portfast
+  termino: PortFast
+  alias: [spanning-tree portfast, puerto de borde]
+  definicion: Opción de un puerto de equipo final para que reenvíe apenas se enciende, sin esperar los estados de Spanning Tree.
+  leccion: n2-m4-l5
+- id: bpdu-guard
+  termino: BPDU Guard
+  alias: [err-disabled, spanning-tree bpduguard]
+  definicion: Protección que apaga un puerto (err-disabled) si recibe mensajes de Spanning Tree, o sea, si alguien conectó un switch donde debía haber un equipo final.
+  leccion: n2-m4-l5
+- id: tormenta-broadcast
+  termino: Tormenta de broadcast
+  alias: [bucle de capa 2, broadcast storm]
+  definicion: Saturación de la red causada por un bucle entre switches, donde los broadcast dan vueltas sin fin y se multiplican.
+  leccion: n2-m4-l5
+- id: etherchannel
+  termino: EtherChannel
+  alias: [Port-channel, agregación de enlaces, bonding]
+  definicion: Grupo de 2 a 8 puertos iguales que funcionan como un solo enlace lógico, con más capacidad y tolerancia a la caída de un cable.
+  leccion: n2-m4-l6
+- id: lacp
+  termino: LACP
+  alias: [802.3ad, 802.1AX, channel-group mode active]
+  definicion: Protocolo estándar que negocia un EtherChannel entre dos equipos. Un extremo en active propone; uno en passive acepta.
+  leccion: n2-m4-l6
+- id: hsrp
+  termino: HSRP
+  alias: [standby, redundancia de puerta de enlace, FHRP]
+  definicion: Protocolo de Cisco que permite que dos o más routers compartan una IP virtual de puerta de enlace; el activo la atiende y otro lo reemplaza si falla.
+  leccion: n2-m4-l6
+- id: vrrp
+  termino: VRRP
+  alias: [keepalived, RFC 9568]
+  definicion: Protocolo estándar de redundancia de puerta de enlace, equivalente a HSRP y compatible entre fabricantes.
+  leccion: n2-m4-l6
+- id: ip-virtual
+  termino: IP virtual
+  alias: [VIP, IP flotante]
+  definicion: Dirección IP que no pertenece a un equipo fijo sino al que está activo en ese momento (por ejemplo, el router activo de HSRP o el nodo principal de un clúster).
+  leccion: n2-m4-l6

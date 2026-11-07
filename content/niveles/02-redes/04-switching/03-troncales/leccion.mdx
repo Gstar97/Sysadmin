@@ -1,0 +1,92 @@
+---
+id: n2-m4-l3
+titulo: Enlaces troncales 802.1Q
+minutos: 150
+objetivos:
+  - Explicar el etiquetado 802.1Q y la VLAN nativa.
+  - Configurar troncales y la lista de VLAN permitidas.
+  - Diagnosticar una VLAN nativa distinta en cada extremo y una VLAN que no está permitida en el troncal.
+glosario: [troncal, ieee-8021q, vlan-nativa, dtp]
+verificado: 2026-11
+---
+
+import etiqueta from './etiqueta.svg?raw'
+import ejTroncal from './ej-troncal.yaml'
+import sintomas from './sintomas.yaml'
+
+En la lección anterior cada VLAN vivía en un solo switch. Pero Ventas tiene gente en la planta baja y en el primer piso, cada piso con su switch. ¿Un cable entre switches por cada VLAN? Con tres VLAN, quizás; con veinte, imposible. La solución es un **troncal**: un solo enlace que lleva todas las VLAN, marcando cada trama con la VLAN a la que pertenece.
+
+<AntesDeEmpezar>
+- VLAN, puertos de acceso y show vlan brief (lección anterior).
+- La trama Ethernet y sus campos (lección 2.1.4).
+</AntesDeEmpezar>
+
+## La etiqueta 802.1Q
+
+Piensa en un camión que lleva paquetes de varias empresas desde un depósito a otro. Cada paquete lleva una etiqueta de color con el nombre de su empresa; al llegar, se reparten según la etiqueta y se le saca antes de entregarlo. El cliente final recibe su paquete sin etiqueta y nunca supo que viajó mezclado. Eso es un troncal **802.1Q**: el switch le agrega a cada trama una etiqueta de 4 bytes con el número de VLAN al mandarla por el troncal, y el switch del otro lado la lee, la saca y entrega la trama solo a los puertos de esa VLAN.
+
+<Diagrama svg={etiqueta} alt="Dos switches unidos por un troncal 802.1Q que lleva las VLAN 10, 20 y 99. La trama tiene la MAC de destino, la de origen, la etiqueta 802.1Q de 4 bytes con la VLAN 20, el tipo, los datos y la FCS. La etiqueta se agrega al salir por el troncal y se quita al llegar; tiene 12 bits para la VLAN (1 a 4094); la VLAN nativa viaja sin etiqueta; y solo pasan las VLAN permitidas." pie="Un troncal lleva muchas VLAN por el mismo cable, cada trama con su etiqueta." />
+
+Dos ideas que generan casi todos los problemas:
+
+- **VLAN nativa**: las tramas de **una** VLAN, la nativa, viajan **sin** etiqueta (la 1, de fábrica). Si cada extremo tiene una nativa distinta, una trama sin etiqueta sale de la VLAN 1 de un lado y entra en la 99 del otro: las VLAN se "cruzan". Se recomienda usar como nativa una VLAN que no lleve datos (por ejemplo, la 99) y que sea la misma en los dos extremos.
+- **VLAN permitidas**: un troncal deja pasar todas las VLAN, salvo que lo limites con `switchport trunk allowed vlan`. Limitarlo es buena práctica (solo lo que hace falta), pero una VLAN que falta en la lista **no cruza**, aunque exista en los dos switches.
+
+<EnSimple>
+Un troncal es un cable entre switches por el que viajan todas las VLAN juntas, cada trama con su número de VLAN pegado. Hay que configurar los dos extremos igual: modo troncal, las mismas VLAN permitidas y la misma VLAN nativa.
+</EnSimple>
+
+## Configurar un troncal
+
+```text
+interface gi0/1
+ description TRONCAL hacia SW2
+ switchport mode trunk
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,99
+ switchport nonegotiate
+!
+do show interfaces trunk
+```
+
+- En switches más viejos o de capa 3 a veces hace falta antes `switchport trunk encapsulation dot1q`.
+- **DTP** (protocolo de troncales dinámicos de Cisco) puede formar troncales solo si un extremo pide serlo. Es cómodo y peligroso: un equipo que se haga pasar por switch podría negociar un troncal y ver todas las VLAN. Por eso se fijan los modos a mano (`switchport mode trunk` o `access`) y se apaga la negociación con `switchport nonegotiate`.
+- Para sumar o sacar VLAN sin rehacer la lista: `switchport trunk allowed vlan add 30` o `remove 30`. **Sin** `add`, el comando reemplaza la lista entera.
+
+`show interfaces trunk` te dice todo lo que importa: modo, encapsulación, VLAN nativa, VLAN permitidas y VLAN activas.
+
+<Pregunta id="p06" />
+
+## Diagnosticar un troncal
+
+<Terminal ejercicio={ejTroncal} />
+
+<Emparejar ejercicio={sintomas} />
+
+Un método que no falla: corre `show interfaces trunk` en **los dos** extremos y compara línea por línea. La mayoría de las fallas de troncal son una diferencia entre lo que tiene un lado y lo que tiene el otro.
+
+<ErroresComunes>
+  <ErrorComun titulo="Reemplazar la lista sin querer">
+    switchport trunk allowed vlan 30 deja pasar solo la 30. Para sumar, add: switchport trunk allowed vlan add 30.
+  </ErrorComun>
+  <ErrorComun titulo="VLAN nativa distinta en cada extremo">
+    Las tramas sin etiqueta cambian de VLAN al cruzar. Iguálalas y usa una nativa sin equipos (la 99 o similar).
+  </ErrorComun>
+  <ErrorComun titulo="Un extremo troncal y el otro de acceso">
+    El de acceso recibe tramas etiquetadas que no entiende y las descarta. Revisa el modo en los dos lados.
+  </ErrorComun>
+  <ErrorComun titulo="La VLAN no existe en el otro switch">
+    Aunque el troncal la permita, si el switch de destino no tiene la VLAN creada, no la reenvía.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar la negociación automática">
+    DTP puede formar troncales donde no querías. Fija el modo y usa switchport nonegotiate.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un troncal lleva muchas VLAN por un enlace; 802.1Q agrega una etiqueta de 4 bytes con la VLAN (1 a 4094) y se quita al llegar.
+- La VLAN nativa viaja sin etiqueta: tiene que ser la misma en los dos extremos; mejor una sin datos (99) que la 1.
+- switchport mode trunk, switchport trunk native vlan, switchport trunk allowed vlan (con add/remove para modificar) y switchport nonegotiate.
+- show interfaces trunk en los dos extremos: modo, nativa, permitidas y activas.
+- Fallas típicas: VLAN fuera de la lista, nativa distinta, troncal contra acceso, VLAN que no existe del otro lado.
+</Resumen>

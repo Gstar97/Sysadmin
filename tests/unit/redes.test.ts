@@ -114,3 +114,96 @@ describe('archivos de BIND y Kea', () => {
     expect(msgs).toContain("dhcp4.router' does not exist")
   })
 })
+
+import { Network } from '@/engines/network/model'
+import { topologySpecSchema } from '@/engines/network/schema'
+import { computeStp } from '@/engines/network/stp'
+
+describe('switching: STP, BPDU Guard, EtherChannel y HSRP', () => {
+  const tri = (extra: Record<string, unknown> = {}) =>
+    new Network(
+      topologySpecSchema.parse({
+        dispositivos: [
+          { id: 'SW1', tipo: 'switch', stp_prioridad: 4096 },
+          { id: 'SW2', tipo: 'switch' },
+          { id: 'SW3', tipo: 'switch' },
+          { id: 'PC1', tipo: 'pc', interfaces: [{ nombre: 'eth0', ip: '10.0.0.1/24' }] },
+          { id: 'PC2', tipo: 'pc', interfaces: [{ nombre: 'eth0', ip: '10.0.0.2/24' }] },
+          ...((extra.dispositivos as unknown[]) ?? []),
+        ],
+        enlaces: [
+          { a: 'SW1:Gi0/1', b: 'SW2:Gi0/1' },
+          { a: 'SW1:Gi0/2', b: 'SW3:Gi0/1' },
+          { a: 'SW2:Gi0/2', b: 'SW3:Gi0/2' },
+          { a: 'PC1:eth0', b: 'SW2:Fa0/1' },
+          { a: 'PC2:eth0', b: 'SW3:Fa0/1' },
+          ...((extra.enlaces as unknown[]) ?? []),
+        ],
+      }),
+    )
+  it('elige la raíz por prioridad y bloquea un solo puerto del triángulo', () => {
+    const net = tri()
+    const stp = computeStp(net, 1)
+    expect(stp.rootDev).toBe('SW1')
+    const blocked = [...stp.switches.values()].flatMap((s) => [...s.ports.values()].filter((p) => !p.forwarding))
+    expect(blocked).toHaveLength(1)
+    expect(net.ping('PC1', 'PC2').ok).toBe(true)
+  })
+  it('BPDU Guard apaga el puerto al que se conecta un switch', () => {
+    const net = new Network(
+      topologySpecSchema.parse({
+        dispositivos: [{ id: 'SW1', tipo: 'switch', interfaces: [{ nombre: 'Fa0/5', modo: 'acceso', portfast: true, bpduguard: true }] }, { id: 'MINI', tipo: 'switch' }],
+        enlaces: [{ a: 'MINI:Fa0/1', b: 'SW1:Fa0/5' }],
+      }),
+    )
+    const sw = net.device('SW1')!
+    const p = net.port(sw, 'Fa0/5')!
+    expect(net.physUp(sw, p)).toBe(false)
+    expect(p.errDisabled).toBe(true)
+  })
+  it('EtherChannel solo se forma con modos compatibles', () => {
+    const spec = (ma: string, mb: string) =>
+      new Network(
+        topologySpecSchema.parse({
+          dispositivos: [
+            { id: 'A', tipo: 'switch', interfaces: [{ nombre: 'Gi0/1', canal: { grupo: 1, modo: ma } }, { nombre: 'Gi0/2', canal: { grupo: 1, modo: ma } }] },
+            { id: 'B', tipo: 'switch', interfaces: [{ nombre: 'Gi0/1', canal: { grupo: 1, modo: mb } }, { nombre: 'Gi0/2', canal: { grupo: 1, modo: mb } }] },
+          ],
+          enlaces: [
+            { a: 'A:Gi0/1', b: 'B:Gi0/1' },
+            { a: 'A:Gi0/2', b: 'B:Gi0/2' },
+          ],
+        }),
+      )
+    const ok = spec('active', 'passive')
+    expect(ok.bundled(ok.device('A')!, ok.port(ok.device('A')!, 'Gi0/1')!)).toBe(true)
+    const stp = computeStp(ok, 1)
+    expect([...stp.switches.values()].every((s) => [...s.ports.values()].every((p) => p.forwarding))).toBe(true)
+    const bad = spec('passive', 'passive')
+    expect(bad.bundled(bad.device('A')!, bad.port(bad.device('A')!, 'Gi0/1')!)).toBe(false)
+    const stp2 = computeStp(bad, 1)
+    expect([...stp2.switches.values()].flatMap((s) => [...s.ports.values()]).some((p) => !p.forwarding)).toBe(true)
+  })
+  it('HSRP: si cae el router activo, el otro toma la IP virtual', () => {
+    const net = new Network(
+      topologySpecSchema.parse({
+        dispositivos: [
+          { id: 'SW', tipo: 'switch' },
+          { id: 'PC', tipo: 'pc', interfaces: [{ nombre: 'eth0', ip: '10.0.0.11/24' }], puerta_enlace: '10.0.0.1' },
+          { id: 'R1', tipo: 'router', interfaces: [{ nombre: 'Gi0/0', ip: '10.0.0.2/24', hsrp: { grupo: 1, ip: '10.0.0.1', prioridad: 110, preempt: true } }] },
+          { id: 'R2', tipo: 'router', interfaces: [{ nombre: 'Gi0/0', ip: '10.0.0.3/24', hsrp: { grupo: 1, ip: '10.0.0.1' } }] },
+        ],
+        enlaces: [
+          { a: 'PC:eth0', b: 'SW:Fa0/1' },
+          { a: 'R1:Gi0/0', b: 'SW:Fa0/2' },
+          { a: 'R2:Gi0/0', b: 'SW:Fa0/3' },
+        ],
+      }),
+    )
+    expect(net.hsrpActiveFor(1, 0x0a000001)?.dev.id).toBe('R1')
+    expect(net.ping('PC', '10.0.0.1').ok).toBe(true)
+    net.port(net.device('R1')!, 'Gi0/0')!.shutdown = true
+    expect(net.hsrpActiveFor(1, 0x0a000001)?.dev.id).toBe('R2')
+    expect(net.ping('PC', '10.0.0.1').ok).toBe(true)
+  })
+})

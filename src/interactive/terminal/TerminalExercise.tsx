@@ -145,7 +145,7 @@ export function TerminalExercise({ exercise, onComplete }: Props) {
                 )}
                 {showSolution && (
                   <pre className="mt-3 overflow-x-auto rounded-lg p-3 font-mono text-sm" style={{ background: 'var(--term-bg)', color: 'var(--term-fg)' }}>
-                    {current.solucion.join('\n')}
+                    {current.solucion.map((c) => c.replace(/^@consola\s+(\S+)$/, '! (cambia la consola a $1 con el selector de equipo)')).join('\n')}
                   </pre>
                 )}
               </>

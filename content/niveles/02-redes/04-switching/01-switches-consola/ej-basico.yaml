@@ -1,0 +1,76 @@
+tipo: terminal
+shell: ios
+titulo: Un switch nuevo, listo para administrar
+descripcion: >-
+  Llegó un switch de fábrica para el primer piso. Vas a dejarle nombre, contraseñas, una IP
+  de administración, acceso por SSH y la configuración guardada.
+estado_inicial:
+  consola: SW1
+  topologia:
+    dispositivos:
+      - { id: SW1, tipo: switch, nombre: Switch }
+      - { id: PC1, nombre: PC-Admin, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.50/24 }], puerta_enlace: 192.168.1.1 }
+    enlaces:
+      - { a: "PC1:eth0", b: "SW1:Fa0/24" }
+pasos:
+  - consigna: Entra al modo privilegiado, después al de configuración global, y ponle al switch el nombre SW-PISO1.
+    verificar:
+      - { config_contiene: "hostname SW-PISO1" }
+    pistas: ["enable, configure terminal (o conf t) y hostname SW-PISO1."]
+    solucion: [enable, configure terminal, hostname SW-PISO1]
+    explicacion: Fíjate cómo cambia el prompt en cada paso; el nombre nuevo aparece enseguida.
+  - consigna: >-
+      Protege el modo privilegiado con la clave secreta Piso1.2026 (enable secret), pon la
+      clave Consola.2026 en la consola con login, y cifra las claves que quedan a la vista.
+    verificar:
+      - { config_contiene: "enable secret 5" }
+      - { config_contiene: "service password-encryption" }
+      - { config_contiene: "line con 0" }
+    pistas:
+      - "enable secret Piso1.2026"
+      - "line console 0, password Consola.2026, login, exit"
+      - "service password-encryption"
+    solucion: [enable secret Piso1.2026, line console 0, password Consola.2026, login, exit, service password-encryption]
+    explicacion: >-
+      enable secret se guarda con un hash (tipo 5). La clave de la consola, en cambio, queda
+      en texto plano salvo que actives service password-encryption, que la ofusca (tipo 7):
+      es un cifrado muy débil, sirve solo para que no se lea por encima del hombro.
+  - consigna: >-
+      Dale al switch una IP de administración: 192.168.1.2/24 en la interfaz VLAN 1 (y
+      enciéndela), y la puerta de enlace 192.168.1.1.
+    verificar:
+      - { interfaz: Vlan1, ip: 192.168.1.2/24, apagada: false }
+      - { config_contiene: "ip default-gateway 192.168.1.1" }
+      - { ping: { desde: PC1, hacia: 192.168.1.2 } }
+    pistas:
+      - "interface vlan 1, ip address 192.168.1.2 255.255.255.0, no shutdown, exit"
+      - "ip default-gateway 192.168.1.1 (en configuración global)"
+    solucion: [interface vlan 1, ip address 192.168.1.2 255.255.255.0, no shutdown, exit, ip default-gateway 192.168.1.1]
+    explicacion: >-
+      Un switch de capa 2 no enruta: la IP es solo para administrarlo, y vive en una interfaz
+      VLAN (SVI). La puerta de enlace la necesita para responder a administradores que están
+      en otras redes.
+  - consigna: >-
+      Habilita SSH: dominio empresa.internal, usuario admin con clave secreta Admin.2026,
+      claves RSA de 2048 bits, SSH versión 2, y que las líneas vty 0 a 15 acepten solo SSH con
+      usuarios locales.
+    verificar:
+      - { config_contiene: "ip ssh version 2" }
+      - { config_contiene: "login local" }
+      - { config_contiene: "transport input ssh" }
+    pistas:
+      - "ip domain-name empresa.internal, username admin secret Admin.2026"
+      - "crypto key generate rsa general-keys modulus 2048, ip ssh version 2"
+      - "line vty 0 15, login local, transport input ssh"
+    solucion: [ip domain-name empresa.internal, username admin secret Admin.2026, crypto key generate rsa general-keys modulus 2048, ip ssh version 2, line vty 0 15, login local, transport input ssh, end]
+    explicacion: >-
+      Para generar las claves RSA hacen falta el hostname y el dominio. Con transport input ssh,
+      Telnet queda rechazado.
+  - consigna: Guarda la configuración para que sobreviva a un reinicio.
+    verificar:
+      - { guardado: true }
+    pistas: ["copy running-config startup-config (o write memory)."]
+    solucion: [copy running-config startup-config]
+    explicacion: >-
+      Todo lo que configuraste estaba en la running-config (en memoria). Si se cortaba la luz,
+      se perdía. Ahora está también en la startup-config, la que se carga al arrancar.

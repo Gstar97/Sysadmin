@@ -1,0 +1,63 @@
+tipo: terminal
+shell: ios
+titulo: Una puerta de enlace que no se cae
+descripcion: >-
+  La oficina sale por dos routers, R1 y R2, conectados al mismo switch. Las PC usan como puerta
+  de enlace 192.168.1.254, una IP virtual de HSRP. R2 ya está configurado en el grupo 1 con la
+  prioridad de fábrica. Quieres que R1 sea el principal y que, si se cae, R2 tome su lugar. Estás
+  en la consola de R1.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: R1
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.2/24 }
+      - id: R2
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.3/24, hsrp: { grupo: 1, ip: 192.168.1.254, prioridad: 100, preempt: true } }
+      - { id: SW1, tipo: switch }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.21/24 }], puerta_enlace: 192.168.1.254 }
+    enlaces:
+      - { a: "R1:Gi0/0", b: "SW1:Gi0/1" }
+      - { a: "R2:Gi0/0", b: "SW1:Gi0/2" }
+      - { a: "PC1:eth0", b: "SW1:Fa0/1" }
+pasos:
+  - consigna: Mira el estado de HSRP antes de tocar nada.
+    verificar:
+      - { comando_usado: show standby }
+    pistas: ["enable y show standby brief (en R1 todavía no hay nada: prueba igual, y fíjate que no aparece ningún grupo)."]
+    solucion: [enable, show standby brief]
+  - consigna: >-
+      Suma R1 al grupo 1 con la IP virtual 192.168.1.254, prioridad 110 y preempt, para que sea el
+      router activo.
+    verificar:
+      - { hsrp_activo: R1, ip: 192.168.1.254 }
+    pistas: ["En interface gi0/0: standby 1 ip 192.168.1.254, standby 1 priority 110 y standby 1 preempt."]
+    solucion: [configure terminal, interface gi0/0, standby 1 ip 192.168.1.254, standby 1 priority 110, standby 1 preempt]
+    explicacion: >-
+      Gana el de prioridad más alta (110 contra 100). Sin preempt, R1 no le quitaría el lugar a R2
+      si R2 ya estaba activo: con preempt, lo toma en cuanto puede.
+  - consigna: Simula una falla de R1 apagando su Gi0/0. La IP virtual tiene que pasar a R2.
+    verificar:
+      - { hsrp_activo: R2, ip: 192.168.1.254 }
+      - { ping: { desde: PC1, hacia: 192.168.1.254 } }
+    pistas: ["shutdown en interface gi0/0."]
+    solucion: [shutdown]
+    explicacion: >-
+      R2 deja de oír a R1 y toma la IP virtual en unos segundos. La PC sigue usando la misma
+      puerta de enlace sin enterarse: no hubo que cambiar nada en ella.
+  - consigna: Vuelve a levantar Gi0/0 y comprueba que R1 recupera el rol de activo.
+    verificar:
+      - { hsrp_activo: R1, ip: 192.168.1.254 }
+      - { salida_contiene: "Active" }
+    pistas: ["no shutdown, end y show standby brief."]
+    solucion: [no shutdown, end, show standby brief]
+    explicacion: Gracias a preempt, R1 vuelve a ser el activo. Sin preempt, R2 seguiría activo hasta su próxima falla.
+  - consigna: Guarda la configuración.
+    verificar:
+      - { guardado: true }
+    pistas: ["copy running-config startup-config."]
+    solucion: [copy running-config startup-config]

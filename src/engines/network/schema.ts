@@ -14,6 +14,12 @@ export const interfaceSpecSchema = z.strictObject({
   vlans_permitidas: z.union([z.literal('todas'), z.array(z.number().int().min(1).max(4094))]).optional(),
   vlan_nativa: z.number().int().min(1).max(4094).optional(),
   descripcion: z.string().optional(),
+  portfast: z.boolean().optional(),
+  bpduguard: z.boolean().optional(),
+  /** EtherChannel: channel-group N mode MODO. */
+  canal: z.strictObject({ grupo: z.number().int().min(1).max(48), modo: z.enum(['active', 'passive', 'on', 'desirable', 'auto']) }).optional(),
+  /** HSRP: standby GRUPO ip IP, con prioridad y preempt. */
+  hsrp: z.strictObject({ grupo: z.number().int().min(0).max(255), ip: ipv4, prioridad: z.number().int().min(0).max(255).default(100), preempt: z.boolean().default(false) }).optional(),
   subinterfaces: z
     .array(z.strictObject({ nombre: z.string(), vlan: z.number().int().min(1).max(4094), ip: cidr }))
     .default([]),
@@ -31,6 +37,8 @@ export const deviceSpecSchema = z.strictObject({
   svis: z.array(z.strictObject({ vlan: z.number().int().min(1).max(4094), ip: cidr })).default([]),
   rutas: z.array(z.strictObject({ destino: cidr, via: ipv4 })).default([]),
   enrutamiento: z.boolean().optional(),
+  /** Prioridad de STP del switch para todas sus VLAN (de fábrica, 32768). */
+  stp_prioridad: z.number().int().min(0).max(61440).multipleOf(4096).optional(),
   ospf: z
     .strictObject({
       proceso: z.number().int().default(1),
@@ -91,7 +99,16 @@ export const iosCheckSchema = z.union([
     vlan: z.number().int().optional(),
     apagada: z.boolean().optional(),
     ip: z.string().optional(),
+    portfast: z.boolean().optional(),
+    bpduguard: z.boolean().optional(),
+    err_disabled: z.boolean().optional(),
+    /** El puerto quedó dentro de ese EtherChannel. */
+    canal: z.number().int().optional(),
   }),
+  /** El equipo es (o no) el puente raíz de la VLAN. */
+  z.strictObject({ equipo: z.string().optional(), stp_raiz: z.boolean(), vlan: z.number().int().default(1) }),
+  /** Router activo de HSRP para esa IP virtual. */
+  z.strictObject({ hsrp_activo: z.string(), ip: z.string() }),
   z.strictObject({ equipo: z.string().optional(), ruta: z.string(), via: z.string().optional() }),
   z.strictObject({ ping: objectiveSpecSchema }),
   z.strictObject({ equipo: z.string().optional(), guardado: z.boolean() }),

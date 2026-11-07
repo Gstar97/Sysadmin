@@ -1,0 +1,26 @@
+tipo: topologia
+titulo: Separar Administración y Ventas
+consigna: >-
+  En el switch ya existen las VLAN 10 (ADMIN) y 20 (VENTAS), pero todos los puertos siguen en
+  la VLAN 1. Pon los puertos de Contable y RR. HH. en la VLAN 10 y los de los dos vendedores en
+  la VLAN 20 (modo acceso). Cada área ya tiene direcciones de su propia subred.
+editable: { equipos: false, enlaces: false, configuracion: true }
+dispositivos:
+  - id: SW1
+    tipo: switch
+    x: 300
+    y: 40
+    vlans: [{ id: 10, nombre: ADMIN }, { id: 20, nombre: VENTAS }]
+  - { id: PC1, nombre: Contable, tipo: pc, x: 0, y: 240, interfaces: [{ nombre: eth0, ip: 192.168.10.11/24 }] }
+  - { id: PC2, nombre: RRHH, tipo: pc, x: 180, y: 240, interfaces: [{ nombre: eth0, ip: 192.168.10.12/24 }] }
+  - { id: PC3, nombre: Vendedor1, tipo: pc, x: 420, y: 240, interfaces: [{ nombre: eth0, ip: 192.168.20.11/24 }] }
+  - { id: PC4, nombre: Vendedor2, tipo: pc, x: 600, y: 240, interfaces: [{ nombre: eth0, ip: 192.168.20.12/24 }] }
+enlaces:
+  - { a: "PC1:eth0", b: "SW1:Fa0/1" }
+  - { a: "PC2:eth0", b: "SW1:Fa0/2" }
+  - { a: "PC3:eth0", b: "SW1:Fa0/13" }
+  - { a: "PC4:eth0", b: "SW1:Fa0/14" }
+objetivos:
+  - { desde: PC1, hacia: PC2, descripcion: Contable y RR. HH. se ven (VLAN 10) }
+  - { desde: PC3, hacia: PC4, descripcion: Los vendedores se ven (VLAN 20) }
+  - { desde: PC1, hacia: 192.168.20.11, resultado: falla, descripcion: "Administración no llega a Ventas (no hay router)" }

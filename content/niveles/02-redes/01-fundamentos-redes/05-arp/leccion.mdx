@@ -36,7 +36,7 @@ Recórrelo paso a paso:
 <SimuladorPaquetes escenario={arp} />
 
 <EnSimple>
-ARP traduce una IP de la red local en la MAC de la placa que la tiene: pregunta a todos y contesta solo el dueño. La respuesta se guarda un rato para no preguntar todo el tiempo.
+ARP traduce una IP de la red local en la MAC de la tarjeta que la tiene: pregunta a todos y contesta solo el dueño. La respuesta se guarda un rato para no preguntar todo el tiempo.
 </EnSimple>
 
 ## Y si el destino está en otra red
@@ -92,7 +92,7 @@ Con `-D` (detección de direcciones duplicadas), el código de salida es 0 si na
 
 ### El ARP gratuito
 
-Un **ARP gratuito** es un anuncio que nadie pidió: un equipo manda un broadcast diciendo "192.168.10.20 soy yo, esta es mi MAC". Se usa al encender una placa (para avisar y, de paso, detectar si otro tiene la misma IP), al cambiar de placa y, sobre todo, cuando una IP "se muda" de un equipo a otro: en un clúster, si el servidor principal falla, el de respaldo toma la IP y manda un ARP gratuito para que todos actualicen su tabla de inmediato.
+Un **ARP gratuito** es un anuncio que nadie pidió: un equipo manda un broadcast diciendo "192.168.10.20 soy yo, esta es mi MAC". Se usa al encender una tarjeta (para avisar y, de paso, detectar si otro tiene la misma IP), al cambiar de tarjeta y, sobre todo, cuando una IP "se muda" de un equipo a otro: en un clúster, si el servidor principal falla, el de respaldo toma la IP y manda un ARP gratuito para que todos actualicen su tabla de inmediato.
 
 <Terminal ejercicio={ejArp} />
 
@@ -107,7 +107,7 @@ Como cualquiera puede contestar, un atacante en la misma red puede responder "la
   <ErrorComun titulo="Dar por buena una conexión que &quot;a veces&quot; anda">
     Una falla intermitente con un único equipo es la firma de una IP duplicada. Prueba con `arping` desde otro equipo antes de cambiar cables o reiniciar.
   </ErrorComun>
-  <ErrorComun titulo="Cambiar la placa de un servidor y que nadie llegue durante un rato">
+  <ErrorComun titulo="Cambiar la tarjeta de un servidor y que nadie llegue durante un rato">
     Los demás tienen la MAC vieja en su tabla. Se resuelve solo en minutos, o al instante con un ARP gratuito (muchos sistemas lo mandan al levantar la interfaz) o vaciando la tabla en los clientes.
   </ErrorComun>
   <ErrorComun titulo="Ver FAILED para la puerta de enlace y revisar las rutas">
@@ -120,5 +120,5 @@ Como cualquiera puede contestar, un atacante en la misma red puede responder "la
 - Para otras redes se pregunta por la MAC de la puerta de enlace. La IP de destino no cambia en el camino; la MAC cambia en cada salto.
 - `ip neigh` (Linux) o `arp -a` (Windows). REACHABLE, STALE y FAILED (nadie contestó). `sudo ip neigh flush all` la vacía.
 - IP duplicada: fallas intermitentes, avisos de clave SSH cambiada. Se detecta con `arping` (dos MAC para la misma IP) y se previene con `arping -D` antes de usar una IP.
-- ARP gratuito: anuncio sin pregunta; se usa al levantar una placa y cuando una IP pasa de un equipo a otro.
+- ARP gratuito: anuncio sin pregunta; se usa al levantar una tarjeta y cuando una IP pasa de un equipo a otro.
 </Resumen>

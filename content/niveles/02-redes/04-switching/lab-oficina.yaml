@@ -1,0 +1,160 @@
+tipo: terminal
+shell: ios
+titulo: La red de una oficina de dos pisos
+descripcion: >-
+  SW1 está en la planta baja y SW2 en el primer piso, unidos por Gi0/1. En cada piso hay una PC
+  de Administración (Fa0/1, VLAN 10), una de Ventas (Fa0/2, VLAN 20) y una de Invitados (Fa0/3,
+  VLAN 30). R1 está conectado a Gi0/2 de SW1 y va a enrutar entre las VLAN. Las PC ya tienen su
+  IP (192.168.10.0/24, 192.168.20.0/24 y 192.168.30.0/24) y como puerta de enlace la .1 de su
+  red. Los tres equipos están de fábrica. Empiezas en la consola de SW1; para pasar a otro
+  equipo, usa el selector de equipo de la terminal.
+estado_inicial:
+  consola: SW1
+  topologia:
+    dispositivos:
+      - { id: SW1, tipo: switch }
+      - { id: SW2, tipo: switch }
+      - { id: R1, tipo: router }
+      - { id: A1, nombre: Admin-PB, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.11/24 }], puerta_enlace: 192.168.10.1 }
+      - { id: V1, nombre: Ventas-PB, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.20.11/24 }], puerta_enlace: 192.168.20.1 }
+      - { id: I1, nombre: Invitados-PB, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.30.11/24 }], puerta_enlace: 192.168.30.1 }
+      - { id: A2, nombre: Admin-P1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.12/24 }], puerta_enlace: 192.168.10.1 }
+      - { id: V2, nombre: Ventas-P1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.20.12/24 }], puerta_enlace: 192.168.20.1 }
+      - { id: I2, nombre: Invitados-P1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.30.12/24 }], puerta_enlace: 192.168.30.1 }
+    enlaces:
+      - { a: "SW1:Gi0/1", b: "SW2:Gi0/1" }
+      - { a: "R1:Gi0/0", b: "SW1:Gi0/2" }
+      - { a: "A1:eth0", b: "SW1:Fa0/1" }
+      - { a: "V1:eth0", b: "SW1:Fa0/2" }
+      - { a: "I1:eth0", b: "SW1:Fa0/3" }
+      - { a: "A2:eth0", b: "SW2:Fa0/1" }
+      - { a: "V2:eth0", b: "SW2:Fa0/2" }
+      - { a: "I2:eth0", b: "SW2:Fa0/3" }
+pasos:
+  - consigna: En SW1, crea las VLAN 10 (ADMIN), 20 (VENTAS) y 30 (INVITADOS) y asigna Fa0/1, Fa0/2 y Fa0/3 a cada una como puertos de acceso.
+    verificar:
+      - { equipo: SW1, vlan: 10, nombre: ADMIN }
+      - { equipo: SW1, vlan: 20, nombre: VENTAS }
+      - { equipo: SW1, vlan: 30, nombre: INVITADOS }
+      - { equipo: SW1, interfaz: Fa0/1, modo: acceso, vlan: 10 }
+      - { equipo: SW1, interfaz: Fa0/2, modo: acceso, vlan: 20 }
+      - { equipo: SW1, interfaz: Fa0/3, modo: acceso, vlan: 30 }
+    pistas:
+      - "vlan 10 y name ADMIN, y lo mismo con la 20 y la 30."
+      - "En cada puerto: switchport mode access y switchport access vlan N."
+    solucion:
+      - enable
+      - configure terminal
+      - vlan 10
+      - name ADMIN
+      - vlan 20
+      - name VENTAS
+      - vlan 30
+      - name INVITADOS
+      - interface fa0/1
+      - switchport mode access
+      - switchport access vlan 10
+      - interface fa0/2
+      - switchport mode access
+      - switchport access vlan 20
+      - interface fa0/3
+      - switchport mode access
+      - switchport access vlan 30
+  - consigna: En SW1, convierte en troncales Gi0/1 (hacia SW2) y Gi0/2 (hacia R1), dejando pasar solo las VLAN 10, 20 y 30.
+    verificar:
+      - { equipo: SW1, interfaz: Gi0/1, modo: troncal }
+      - { equipo: SW1, interfaz: Gi0/2, modo: troncal }
+      - { equipo: SW1, config_contiene: "switchport trunk allowed vlan 10,20,30" }
+    pistas: ["interface range gi0/1 - 2, switchport mode trunk y switchport trunk allowed vlan 10,20,30."]
+    solucion: [interface range gi0/1 - 2, switchport mode trunk, "switchport trunk allowed vlan 10,20,30", end]
+  - consigna: Pasa a la consola de SW2 y configúralo igual (las tres VLAN, los tres puertos de acceso y Gi0/1 como troncal). Los equipos del mismo área se tienen que ver entre pisos.
+    verificar:
+      - { ping: { desde: A1, hacia: A2 } }
+      - { ping: { desde: V1, hacia: V2 } }
+      - { ping: { desde: I1, hacia: I2 } }
+      - { ping: { desde: A1, hacia: V1, resultado: falla } }
+    pistas:
+      - "Cambia la consola a SW2 con el selector de equipo."
+      - "Los mismos comandos que en SW1; el troncal es solo Gi0/1."
+    solucion:
+      - "@consola SW2"
+      - enable
+      - configure terminal
+      - vlan 10
+      - name ADMIN
+      - vlan 20
+      - name VENTAS
+      - vlan 30
+      - name INVITADOS
+      - interface fa0/1
+      - switchport mode access
+      - switchport access vlan 10
+      - interface fa0/2
+      - switchport mode access
+      - switchport access vlan 20
+      - interface fa0/3
+      - switchport mode access
+      - switchport access vlan 30
+      - interface gi0/1
+      - switchport mode trunk
+      - switchport trunk allowed vlan 10,20,30
+      - end
+    explicacion: >-
+      Cada área se ve entre pisos gracias al troncal, pero Administración y Ventas siguen
+      separadas: falta quien enrute.
+  - consigna: Pasa a R1 y configura router-on-a-stick en Gi0/0, con las subinterfaces .10, .20 y .30 y la .1 de cada red.
+    verificar:
+      - { ping: { desde: A1, hacia: V2 } }
+      - { ping: { desde: I2, hacia: A1 } }
+      - { equipo: R1, ruta: 192.168.30.0/24 }
+    pistas:
+      - "En R1: interface gi0/0 y no shutdown."
+      - "Por cada VLAN: interface gi0/0.10, encapsulation dot1Q 10 e ip address 192.168.10.1 255.255.255.0."
+    solucion:
+      - "@consola R1"
+      - enable
+      - configure terminal
+      - interface gi0/0
+      - no shutdown
+      - interface gi0/0.10
+      - encapsulation dot1Q 10
+      - ip address 192.168.10.1 255.255.255.0
+      - interface gi0/0.20
+      - encapsulation dot1Q 20
+      - ip address 192.168.20.1 255.255.255.0
+      - interface gi0/0.30
+      - encapsulation dot1Q 30
+      - ip address 192.168.30.1 255.255.255.0
+      - end
+    explicacion: >-
+      Ahora todas las VLAN se comunican a través de R1. Ojo: Invitados también llega a
+      Administración. Eso se corta con una lista de acceso en R1 o con un firewall (módulo 2.6).
+  - consigna: >-
+      Fija Spanning Tree: SW1 tiene que ser la raíz de las tres VLAN (prioridad 4096) y, en SW2,
+      los puertos de las PC (Fa0/1 a Fa0/3) tienen que tener PortFast y BPDU Guard.
+    verificar:
+      - { equipo: SW1, stp_raiz: true, vlan: 10 }
+      - { equipo: SW1, stp_raiz: true, vlan: 30 }
+      - { equipo: SW2, interfaz: Fa0/1, portfast: true, bpduguard: true }
+      - { equipo: SW2, interfaz: Fa0/3, portfast: true, bpduguard: true }
+    pistas:
+      - "En SW1: spanning-tree vlan 10,20,30 priority 4096."
+      - "En SW2: interface range fa0/1 - 3, spanning-tree portfast y spanning-tree bpduguard enable."
+    solucion:
+      - "@consola SW1"
+      - configure terminal
+      - spanning-tree vlan 10,20,30 priority 4096
+      - end
+      - "@consola SW2"
+      - configure terminal
+      - interface range fa0/1 - 3
+      - spanning-tree portfast
+      - spanning-tree bpduguard enable
+      - end
+  - consigna: Guarda la configuración de los tres equipos.
+    verificar:
+      - { equipo: SW1, guardado: true }
+      - { equipo: SW2, guardado: true }
+      - { equipo: R1, guardado: true }
+    pistas: ["copy running-config startup-config en cada uno."]
+    solucion: [copy running-config startup-config, "@consola SW1", copy running-config startup-config, "@consola R1", copy running-config startup-config]

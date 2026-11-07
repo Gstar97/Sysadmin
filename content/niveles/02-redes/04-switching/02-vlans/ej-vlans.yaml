@@ -1,0 +1,62 @@
+tipo: terminal
+shell: ios
+titulo: VLAN por consola
+descripcion: >-
+  Lo mismo, desde la consola, en el switch del segundo piso. Además vas a crear una VLAN para
+  las impresoras.
+estado_inicial:
+  consola: SW2
+  topologia:
+    dispositivos:
+      - { id: SW2, tipo: switch, nombre: SW-PISO2 }
+      - { id: PC1, nombre: Contable, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.21/24 }] }
+      - { id: PC2, nombre: Vendedor, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.20.21/24 }] }
+      - { id: IMP, nombre: Impresora, tipo: servidor, interfaces: [{ nombre: eth0, ip: 192.168.30.5/24 }] }
+    enlaces:
+      - { a: "PC1:eth0", b: "SW2:Fa0/1" }
+      - { a: "PC2:eth0", b: "SW2:Fa0/13" }
+      - { a: "IMP:eth0", b: "SW2:Fa0/20" }
+pasos:
+  - consigna: Crea las VLAN 10 (ADMIN), 20 (VENTAS) y 30 (IMPRESORAS).
+    verificar:
+      - { vlan: 10, nombre: ADMIN }
+      - { vlan: 20, nombre: VENTAS }
+      - { vlan: 30, nombre: IMPRESORAS }
+    pistas: ["enable, conf t, y para cada una: vlan 10 y después name ADMIN."]
+    solucion: [enable, configure terminal, vlan 10, name ADMIN, vlan 20, name VENTAS, vlan 30, name IMPRESORAS, exit]
+  - consigna: >-
+      Pon los puertos Fa0/1 a Fa0/12 en modo acceso en la VLAN 10, los Fa0/13 a Fa0/19 en la
+      20, y el Fa0/20 (impresora) en la 30. Usa interface range para no repetir.
+    verificar:
+      - { interfaz: Fa0/1, modo: acceso, vlan: 10 }
+      - { interfaz: Fa0/12, modo: acceso, vlan: 10 }
+      - { interfaz: Fa0/13, modo: acceso, vlan: 20 }
+      - { interfaz: Fa0/20, modo: acceso, vlan: 30 }
+    pistas:
+      - "interface range fa0/1 - 12, switchport mode access, switchport access vlan 10"
+      - "Lo mismo con fa0/13 - 19 (VLAN 20) e interface fa0/20 (VLAN 30)."
+    solucion:
+      - interface range fa0/1 - 12
+      - switchport mode access
+      - switchport access vlan 10
+      - interface range fa0/13 - 19
+      - switchport mode access
+      - switchport access vlan 20
+      - interface fa0/20
+      - switchport mode access
+      - switchport access vlan 30
+      - end
+    explicacion: >-
+      switchport mode access fija el puerto como de acceso (sin negociar troncales), y
+      switchport access vlan dice a qué VLAN pertenece. Con interface range configuras muchos
+      a la vez.
+  - consigna: Revisa la tabla de VLAN con sus puertos.
+    verificar:
+      - { comando_usado: show vlan }
+      - { salida_contiene: "IMPRESORAS" }
+    pistas: ["show vlan brief"]
+    solucion: [show vlan brief]
+    explicacion: >-
+      Cada VLAN con sus puertos. La VLAN 1 se quedó con los puertos que no tocaste (los
+      Gigabit y Fa0/21 a Fa0/24). Una buena práctica es mover los que no se usan a una VLAN
+      sin salida y apagarlos.

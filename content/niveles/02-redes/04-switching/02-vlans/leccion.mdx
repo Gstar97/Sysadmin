@@ -1,0 +1,112 @@
+---
+id: n2-m4-l2
+titulo: VLANs
+minutos: 180
+objetivos:
+  - Explicar para qué sirven las VLAN (seguridad, dominios de broadcast más chicos, organización).
+  - Crear VLAN y asignar puertos de acceso en un switch.
+  - Predecir qué equipos se comunican según su VLAN y su subred.
+glosario: [vlan, puerto-acceso]
+verificado: 2026-11
+---
+
+import vlans from './vlans.svg?raw'
+import topoVlans from './topo-vlans.yaml'
+import ejVlans from './ej-vlans.yaml'
+
+En el módulo 2.2 dividiste una red en subredes, y viste que cada subred es su propio dominio de broadcast. Pero si todos los equipos están enchufados al mismo switch, ¿cómo se separan de verdad? Comprar un switch por área sería caro y poco flexible. La solución es la **VLAN** (red local virtual): dividir un switch físico en varios switches lógicos.
+
+<AntesDeEmpezar>
+- Dominio de broadcast: lo que un switch inunda llega a todos los equipos conectados (lección 2.1.4).
+- Subredes: cada área con su red (lecciones 2.2.3 y 2.2.5).
+- Los modos de IOS y cómo configurar un puerto (lección anterior).
+</AntesDeEmpezar>
+
+## Un switch, varias redes
+
+Imagina un edificio de oficinas compartido por dos empresas que usan el mismo sistema de cables y la misma central telefónica. La central está programada para que los internos de una empresa solo se comuniquen entre sí, y los de la otra también, aunque los cables pasen por el mismo lugar. Para llamar de una empresa a la otra, hay que salir por la línea externa. Una VLAN hace lo mismo en un switch: cada puerto pertenece a una VLAN, y el switch solo reenvía tramas entre puertos de la **misma** VLAN. Donde la comparación no llega: entre VLAN no hay "línea externa" automática; para unirlas hace falta un router, y es una decisión de diseño (lección 4).
+
+<Diagrama svg={vlans} alt="Un switch con los puertos Fa0/1 a Fa0/12 en la VLAN 10 (ADMIN) y Fa0/13 a Fa0/24 en la VLAN 20 (VENTAS). Contable y RR. HH. están en la VLAN 10; los dos vendedores, en la 20. Cada VLAN se comporta como un switch aparte." pie="Cada VLAN es un switch lógico: su propio dominio de broadcast y, por convención, su propia subred." />
+
+Por qué se usan:
+
+- **Seguridad**: los invitados, las cámaras o los equipos de producción quedan aislados del resto. Para cruzar, el tráfico tiene que pasar por un router o firewall, donde se ponen reglas.
+- **Dominios de broadcast más chicos**: los ARP y DHCP de Ventas no molestan a Administración.
+- **Organización**: un vendedor que se muda de piso sigue en la VLAN de Ventas, sin recablear.
+
+Regla de diseño que vas a usar siempre: **una VLAN, una subred**. VLAN 10 → 192.168.10.0/24, VLAN 20 → 192.168.20.0/24. Así es fácil saber de un vistazo a qué área pertenece cada IP.
+
+<EnSimple>
+Una VLAN es un grupo de puertos del switch que se comporta como un switch aparte. Los equipos de una VLAN no ven a los de otra, aunque estén enchufados al mismo aparato.
+</EnSimple>
+
+## Crear VLAN y asignar puertos
+
+```text
+vlan 10
+ name ADMIN
+vlan 20
+ name VENTAS
+!
+interface range fa0/1 - 12
+ switchport mode access
+ switchport access vlan 10
+interface range fa0/13 - 24
+ switchport mode access
+ switchport access vlan 20
+!
+do show vlan brief
+```
+
+- Un **puerto de acceso** pertenece a **una sola** VLAN y lo usa un equipo final (PC, impresora, teléfono). Las tramas que salen por él van sin ninguna marca: la PC no sabe que existe una VLAN.
+- `switchport mode access` fija el modo; sin eso, el puerto puede negociar ser troncal con otro switch (lección siguiente).
+- Si asignas un puerto a una VLAN que no existe, IOS la crea y te avisa.
+- **VLAN 1** es la de fábrica: todos los puertos empiezan ahí. Por seguridad, no se usa para datos de usuarios.
+
+Prueba primero con el armador de topologías: asigna las VLAN con el formulario o la consola de SW1, y mira cómo cambian los pings.
+
+<Topologia ejercicio={topoVlans} />
+
+<Pregunta id="p05" />
+
+Ahora con la consola, en otro switch:
+
+<Terminal ejercicio={ejVlans} />
+
+## Predecir quién se comunica
+
+Para que dos equipos conectados a switches se hablen **directamente** hacen falta dos cosas a la vez: estar en la **misma VLAN** (capa 2) y en la **misma subred** (capa 3). Con una sola de las dos no alcanza:
+
+| Situación | ¿Se comunican? | Por qué |
+| --- | --- | --- |
+| Misma VLAN, misma subred | Sí | Es el caso normal |
+| Misma VLAN, distinta subred | No (directo) | Las tramas llegan, pero cada equipo piensa que el otro está en otra red y busca la puerta de enlace |
+| Distinta VLAN, misma subred | No | El switch no pasa tramas entre VLAN: el ARP nunca llega |
+| Distinta VLAN, distinta subred | Solo con un router | Es el diseño correcto; el router une y filtra |
+
+<Consejo titulo="Buenas prácticas con los puertos">
+Los puertos que no se usan van a una VLAN "sin salida" (por ejemplo, la 999, que no se usa en ningún otro lado) y apagados con shutdown. Así, quien enchufe algo en una boca libre del piso no queda dentro de ninguna red.
+</Consejo>
+
+<ErroresComunes>
+  <ErrorComun titulo="Poner la PC en la VLAN correcta y con IP de otra subred">
+    Las tramas llegan, pero la PC busca la puerta de enlace para hablar con sus compañeros. Una VLAN, una subred: revisa las dos cosas.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar todo en la VLAN 1">
+    Es la VLAN de fábrica de todos los puertos y de muchos protocolos de administración. Usa VLAN propias para los datos y mueve la administración a otra.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar switchport mode access">
+    Sin fijar el modo, un puerto puede negociar un troncal si del otro lado hay un switch (o algo que lo imite), y pasar a ver todas las VLAN.
+  </ErrorComun>
+  <ErrorComun titulo="Crear la VLAN en un switch y no en el otro">
+    Cada switch tiene su propia lista de VLAN. Si Ventas está en dos switches, la VLAN 20 tiene que existir en los dos (y viajar por el troncal: lección siguiente).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una VLAN divide un switch en switches lógicos: cada una es su propio dominio de broadcast. Entre VLAN solo se pasa con un router.
+- Para qué: seguridad (aislar), broadcast más chico, organización. Regla: una VLAN, una subred.
+- Configuración: vlan N y name; en los puertos, switchport mode access y switchport access vlan N; revisar con show vlan brief.
+- Un puerto de acceso pertenece a una VLAN y sus tramas salen sin marca.
+- Para hablar directo hace falta misma VLAN y misma subred. VLAN 1 no se usa para datos; los puertos libres, a una VLAN sin salida y apagados.
+</Resumen>

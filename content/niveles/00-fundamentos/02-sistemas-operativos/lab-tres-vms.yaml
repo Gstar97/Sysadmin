@@ -8,7 +8,7 @@ pasos:
   - titulo: Arma la red de solo anfitrión
     detalle: >-
       Crea (o revisa que exista) una red de solo anfitrión en tu hipervisor. Todas las VMs del
-      laboratorio van a tener dos placas: la primera en **NAT** (internet) y la segunda en esa red
+      laboratorio van a tener dos tarjetas: la primera en **NAT** (internet) y la segunda en esa red
       de **solo anfitrión** (para conectarte desde tu PC y para que se vean entre ellas).
     variantes:
       - nombre: VirtualBox
@@ -22,13 +22,13 @@ pasos:
           en esa red vas a tener que ponerles IP fija (lo aprenderás en el nivel de redes; mientras
           tanto, conéctate usando la IP del Default Switch).
       - nombre: virt-manager
-        detalle: 'La red **default** ya es NAT y permite conectarse desde el anfitrión, así que con una sola placa alcanza.'
+        detalle: 'La red **default** ya es NAT y permite conectarse desde el anfitrión, así que con una sola tarjeta alcanza.'
     comprobar: Sabes qué red es NAT y cuál es de solo anfitrión en tu hipervisor.
-  - titulo: Agrega la segunda placa a ubuntu01 y conéctate por SSH
+  - titulo: Agrega la segunda tarjeta a ubuntu01 y conéctate por SSH
     detalle: >-
-      Con la VM apagada, agrega una segunda placa de red conectada a la red de solo anfitrión y
-      enciéndela. Ubuntu configura la placa nueva automáticamente si recibe IP por DHCP; si no
-      aparece con IP, lo resolverás en el nivel de Linux, y por ahora usa la otra placa. Mira las
+      Con la VM apagada, agrega una segunda tarjeta de red conectada a la red de solo anfitrión y
+      enciéndela. Ubuntu configura la tarjeta nueva automáticamente si recibe IP por DHCP; si no
+      aparece con IP, lo resolverás en el nivel de Linux, y por ahora usa la otra tarjeta. Mira las
       IP con:
     comandos:
       - ip -br address
@@ -39,11 +39,11 @@ pasos:
       Si no responde, revisa que estés usando la IP de la red de solo anfitrión.
   - titulo: Instala Rocky Linux 10 (o AlmaLinux 10)
     detalle: |-
-      Descarga la imagen **minimal** para tu arquitectura desde rockylinux.org (o almalinux.org). Si tu procesador no cumple x86-64-v3, usa AlmaLinux 10 en su versión **x86_64_v2**. Crea la VM `rocky01` con 2 CPU, 2 GB de RAM, 25 GB de disco, UEFI y las dos placas de red. En el instalador:
+      Descarga la imagen **minimal** para tu arquitectura desde rockylinux.org (o almalinux.org). Si tu procesador no cumple x86-64-v3, usa AlmaLinux 10 en su versión **x86_64_v2**. Crea la VM `rocky01` con 2 CPU, 2 GB de RAM, 25 GB de disco, UEFI y las dos tarjetas de red. En el instalador:
 
       - Idioma y teclado.
       - *Destino de la instalación*: el disco virtual, con particionado automático.
-      - *Red y nombre de equipo*: activa las dos placas y pon como nombre `rocky01`.
+      - *Red y nombre de equipo*: activa las dos tarjetas y pon como nombre `rocky01`.
       - *Cuenta root*: déjala deshabilitada.
       - *Creación de usuario*: tu usuario, marcando que sea **administrador** (lo agrega al grupo wheel).
       - *Selección de software*: **Instalación mínima**.
@@ -53,12 +53,12 @@ pasos:
       - cat /etc/os-release
       - ip -br address
       - sudo dnf upgrade
-    comprobar: Inicias sesión, `os-release` dice Rocky (o AlmaLinux) 10, las dos placas tienen IP y la actualización termina bien. También te puedes conectar por SSH desde tu PC.
+    comprobar: Inicias sesión, `os-release` dice Rocky (o AlmaLinux) 10, las dos tarjetas tienen IP y la actualización termina bien. También te puedes conectar por SSH desde tu PC.
     si_falla: >-
       Si el instalador se detiene con *CPU does not support x86-64-v3*, tu procesador (o tu hipervisor) no tiene AVX2: usa AlmaLinux 10 x86_64_v2 o revisa lo que viste sobre Hyper-V en la lección del procesador.
   - titulo: Instala Windows Server 2025 de evaluación
     detalle: |-
-      Descarga la ISO desde el **Microsoft Evaluation Center** (pide completar un formulario). La evaluación dura 180 días. Crea la VM `win2025` con 2 CPU, **4 GB de RAM**, **60 GB** de disco, UEFI y las dos placas de red. En Hyper-V usa Generación 2 (aquí sí sirve la plantilla de arranque seguro de Windows). En el instalador:
+      Descarga la ISO desde el **Microsoft Evaluation Center** (pide completar un formulario). La evaluación dura 180 días. Crea la VM `win2025` con 2 CPU, **4 GB de RAM**, **60 GB** de disco, UEFI y las dos tarjetas de red. En Hyper-V usa Generación 2 (aquí sí sirve la plantilla de arranque seguro de Windows). En el instalador:
 
       - Elige **Windows Server 2025 Standard Evaluation (Experiencia de escritorio)**: la versión con interfaz gráfica.
       - Tipo de instalación: personalizada, sobre el disco vacío.
@@ -87,7 +87,7 @@ pasos:
       En tu cuaderno técnico (o en un archivo de texto), arma una tabla con:
 
       - El nombre de cada VM, su sistema operativo y su versión.
-      - Las IP de cada placa (NAT y solo anfitrión).
+      - Las IP de cada tarjeta (NAT y solo anfitrión).
       - Los usuarios que creaste (sin las contraseñas, que van en un gestor de contraseñas).
       - Las instantáneas que existen y qué representa cada una.
 

@@ -35,7 +35,7 @@ El cable de red de toda la vida es **par trenzado**: ocho hilos de cobre agrupad
 Los **100 metros** son el límite del cobre en Ethernet, y se cuentan de punta a punta: el cable que pasa por la pared más los dos cables cortos de cada extremo. Más allá, la señal se degrada y aparecen errores.
 
 <Nota titulo="Las categorías nuevas no aceleran los equipos viejos">
-Una placa de 1 Gb/s no va más rápido con un cable Cat6A. La velocidad la negocian los equipos; el cable solo tiene que aguantarla. Cablear en Cat6A hoy es pensar en los equipos de los próximos diez años.
+Una tarjeta de 1 Gb/s no va más rápido con un cable Cat6A. La velocidad la negocian los equipos; el cable solo tiene que aguantarla. Cablear en Cat6A hoy es pensar en los equipos de los próximos diez años.
 </Nota>
 
 ## Fibra óptica
@@ -90,11 +90,11 @@ Cuando conectas un cable, los dos extremos se ponen de acuerdo en dos cosas:
 
 Ese acuerdo se llama **autonegociación** y funciona solo, siempre que esté activada en los dos extremos. El problema clásico aparece cuando alguien fija la velocidad a mano en un extremo y deja el otro en automático: el automático no puede negociar, asume half dúplex y queda un extremo en full y el otro en half. La red **anda, pero lenta**, con errores y retransmisiones. Es una de las fallas más difíciles de ver, porque nada se cae.
 
-En Linux, `ethtool` muestra lo que negoció cada placa. Practícalo:
+En Linux, `ethtool` muestra lo que negoció cada tarjeta. Practícalo:
 
 <Terminal ejercicio={ejEthtool} />
 
-Otras pistas de un problema físico: la luz del puerto que se prende y se apaga (el enlace "flapea"), una placa de 1 Gb/s que negocia 100 Mb/s (casi siempre un cable con un par cortado: 100 Mb/s usa dos pares, 1 Gb/s los cuatro) y contadores de errores que suben en el switch.
+Otras pistas de un problema físico: la luz del puerto que se prende y se apaga (el enlace "flapea"), una tarjeta de 1 Gb/s que negocia 100 Mb/s (casi siempre un cable con un par cortado: 100 Mb/s usa dos pares, 1 Gb/s los cuatro) y contadores de errores que suben en el switch.
 
 <Pregunta id="p07" />
 
@@ -111,7 +111,7 @@ Otras pistas de un problema físico: la luz del puerto que se prende y se apaga 
   <ErrorComun titulo="Calcular el PoE con el consumo real y no con lo que reserva el switch">
     Si el switch reserva por clase, un punto de acceso que consume 20 W le "cuesta" 30 W de presupuesto. Revisa la hoja de datos del switch y deja margen.
   </ErrorComun>
-  <ErrorComun titulo="Una placa de 1 Gb/s que negocia 100 Mb/s">
+  <ErrorComun titulo="Una tarjeta de 1 Gb/s que negocia 100 Mb/s">
     Casi siempre es el cable o el conector (un par dañado). Cambia el cable antes de tocar la configuración.
   </ErrorComun>
 </ErroresComunes>
@@ -121,5 +121,5 @@ Otras pistas de un problema físico: la luz del puerto que se prende y se apaga 
 - Fibra: multimodo (cientos de metros, dentro de edificios) y monomodo (kilómetros). Se conecta con módulos SFP/SFP+ (conector LC) que tienen que coincidir con la fibra y la distancia. DAC para distancias cortas dentro del rack.
 - PoE lleva electricidad por el cable: af 15,4 W, at 30 W, bt 60 y 90 W por puerto (lo que llega al equipo es algo menos). El switch tiene además un presupuesto total.
 - Velocidad y dúplex se negocian solos: autonegociación activada en los dos extremos. Si uno queda en full y otro en half, la red anda pero lenta.
-- `ethtool placa`: velocidad, dúplex, autonegociación y si hay enlace.
+- `ethtool tarjeta`: velocidad, dúplex, autonegociación y si hay enlace.
 </Resumen>

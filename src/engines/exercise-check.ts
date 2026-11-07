@@ -38,7 +38,12 @@ export async function checkTerminalExercise(ex: TerminalExercise): Promise<Exerc
   } else {
     const s = createIosSession(ex.estado_inicial)
     const consola = ex.estado_inicial.consola
-    run = async (c) => void (await s.run(c))
+    // "@consola SW2" en una solución equivale a cambiar el cable de consola a otro equipo.
+    run = async (c) => {
+      const m = /^@consola\s+(\S+)$/.exec(c.trim())
+      if (m) s.attach(m[1])
+      else await s.run(c)
+    }
     verify = (c) => verifyIos(s, c as IosCheck, consola)
   }
   for (const [i, paso] of ex.pasos.entries()) {

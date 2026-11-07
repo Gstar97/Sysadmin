@@ -1,6 +1,7 @@
 import { formatIpv4, maskToPrefix, networkOf, parseCidr, parseIpv4 } from './ip'
 import { IosSession, runningConfig } from './ios'
 import { Network } from './model'
+import { computeStp } from './stp'
 import { iosCheckSchema, iosStateSchema, type IosCheckInput, type ObjectiveSpec, type TopologySpec } from './schema'
 
 export { Network } from './model'
@@ -52,6 +53,13 @@ export function verifyIos(s: IosSession, raw: IosCheckInput, defaultDevice?: str
     }
     return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
   }
+  if ('hsrp_activo' in check) {
+    const vip = parseIpv4(check.ip)
+    let active: string | undefined
+    for (const dev of s.net.devices.values()) for (const p of dev.ports) for (const g of p.standby ?? []) if (vip !== undefined && g.ip === vip) active ??= s.net.hsrpActiveFor(g.group, vip)?.dev.id
+    const want = s.net.device(check.hsrp_activo)?.id
+    return { ok: !!want && active === want, label: `${check.hsrp_activo} es el router activo de HSRP para ${check.ip}` }
+  }
   if (!d) return { ok: false, label: `no existe el equipo ${devName}` }
   if ('guardado' in check) return { ok: s.isSaved(d) === check.guardado, label: check.guardado ? `la configuración de ${d.hostname} está guardada` : `la configuración de ${d.hostname} no está guardada` }
   if ('config_contiene' in check) {
@@ -75,6 +83,23 @@ export function verifyIos(s: IosSession, raw: IosCheckInput, defaultDevice?: str
       ok &&= p.shutdown === check.apagada
       parts.push(check.apagada ? 'apagada' : 'encendida')
     }
+    if (check.portfast !== undefined) {
+      ok &&= !!p.portfast === check.portfast
+      parts.push(check.portfast ? 'con PortFast' : 'sin PortFast')
+    }
+    if (check.bpduguard !== undefined) {
+      ok &&= !!p.bpduGuard === check.bpduguard
+      parts.push(check.bpduguard ? 'con BPDU Guard' : 'sin BPDU Guard')
+    }
+    if (check.err_disabled !== undefined) {
+      s.net.physUp(d, p)
+      ok &&= !!p.errDisabled === check.err_disabled
+      parts.push(check.err_disabled ? 'err-disabled' : 'no err-disabled')
+    }
+    if (check.canal !== undefined) {
+      ok &&= p.channel?.group === check.canal && s.net.bundled(d, p)
+      parts.push(`dentro del EtherChannel ${check.canal}`)
+    }
     if (check.ip) {
       const c = parseCidr(check.ip)
       const ip = c?.ip ?? parseIpv4(check.ip)
@@ -82,6 +107,11 @@ export function verifyIos(s: IosSession, raw: IosCheckInput, defaultDevice?: str
       parts.push(`IP ${check.ip}`)
     }
     return { ok, label: `${p.name} de ${d.hostname}: ${parts.join(', ') || 'existe'}` }
+  }
+  if ('stp_raiz' in check) {
+    const stp = computeStp(s.net, check.vlan)
+    const isRoot = stp.rootOf?.get(d.id)?.dev.id === d.id
+    return { ok: isRoot === check.stp_raiz, label: `${d.hostname} ${check.stp_raiz ? 'es' : 'no es'} el puente raíz de la VLAN ${check.vlan}` }
   }
   if ('vlan' in check) {
     const exists = d.vlans.has(check.vlan)

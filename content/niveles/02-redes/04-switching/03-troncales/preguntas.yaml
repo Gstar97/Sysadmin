@@ -1,0 +1,88 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué sirve un enlace troncal?
+  opciones:
+    - { texto: "Para llevar varias VLAN por un mismo enlace entre switches", correcta: true, explicacion: "Cada trama viaja con una etiqueta que dice a qué VLAN pertenece." }
+    - { texto: "Para conectar una PC a varias VLAN a la vez", explicacion: "Las PC se conectan a puertos de acceso, en una VLAN." }
+    - { texto: "Para unir dos VLAN en una sola", explicacion: "El troncal las lleva separadas." }
+    - { texto: "Para conectar el switch a internet", explicacion: "Eso lo hace el router." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué tienen de especial las tramas de la VLAN nativa en un troncal 802.1Q?
+  opciones:
+    - { texto: "Viajan sin etiqueta", correcta: true, explicacion: "Por eso la nativa tiene que coincidir en los dos extremos." }
+    - { texto: "Viajan cifradas", explicacion: "802.1Q no cifra." }
+    - { texto: "Tienen prioridad", explicacion: "La prioridad es otro campo y no depende de ser nativa." }
+    - { texto: "No pueden cruzar el troncal", explicacion: "Cruzan, sin etiqueta." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cuántos bytes agrega la etiqueta 802.1Q a una trama?
+  opciones:
+    - { texto: "4", correcta: true, explicacion: "Incluyen 12 bits para el número de VLAN." }
+    - { texto: "12", explicacion: "12 son los bits del número de VLAN." }
+    - { texto: "1", explicacion: "Es más." }
+    - { texto: "Ninguno: va en el paquete IP", explicacion: "Va en la trama, entre la MAC de origen y el tipo." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El troncal tiene allowed 10,20 y escribes switchport trunk allowed vlan 30. ¿Qué queda permitido?
+  opciones:
+    - { texto: "Solo la VLAN 30: sin add, la lista se reemplaza", correcta: true, explicacion: "Para sumar: switchport trunk allowed vlan add 30." }
+    - { texto: "10, 20 y 30", explicacion: "Eso sería con add." }
+    - { texto: "Todas", explicacion: "No." }
+    - { texto: "Ninguna", explicacion: "Queda la 30." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Los equipos de la VLAN 10 se ven entre los dos pisos, pero los de la VLAN 20 no. La VLAN 20 existe en los dos switches. ¿Qué revisas primero?
+  opciones:
+    - { texto: "La lista de VLAN permitidas del troncal en los dos extremos", correcta: true, explicacion: "Si la 20 falta en un lado, no cruza." }
+    - { texto: "Los cables de las PC de Ventas", explicacion: "Fallarían todas a la vez por motivos distintos; lo común es el troncal." }
+    - { texto: "El DNS", explicacion: "No interviene." }
+    - { texto: "La VLAN 1", explicacion: "No tiene relación con la 20." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué pasa si un extremo del troncal tiene nativa 1 y el otro nativa 99?
+  opciones:
+    - { texto: "Las tramas sin etiqueta que salen de la VLAN 1 llegan a la VLAN 99 del otro lado: las VLAN se mezclan", correcta: true, explicacion: "Además de cortar la conectividad de esas VLAN, es un problema de seguridad." }
+    - { texto: "El troncal se apaga", explicacion: "Sigue funcionando, mal." }
+    - { texto: "Nada", explicacion: "Es una falla real." }
+    - { texto: "Se cifran las tramas", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué se recomienda switchport nonegotiate en los troncales?
+  opciones:
+    - { texto: "Para que DTP no negocie troncales solo: un equipo que imite a un switch podría ver todas las VLAN", correcta: true, explicacion: "Se fijan los modos a mano y se apaga la negociación." }
+    - { texto: "Para que el troncal sea más rápido", explicacion: "No cambia la velocidad." }
+    - { texto: "Porque sin eso no pasa la VLAN nativa", explicacion: "No tiene relación." }
+    - { texto: "Para cifrar el troncal", explicacion: "No cifra." }
+- id: p08
+  tipo: interpretar_salida
+  enunciado: ¿Qué problema muestra esta salida de SW1, si SW2 usa nativa 99?
+  salida: |
+    SW1#show interfaces trunk
+    Port        Mode         Encapsulation  Status        Native vlan
+    Gig0/1      on           802.1q         trunking      1
+    Port        Vlans allowed on trunk
+    Gig0/1      10,20,99
+  opciones:
+    - { texto: "La VLAN nativa no coincide con la de SW2 (1 contra 99)", correcta: true, explicacion: "Hay que configurar switchport trunk native vlan 99 en SW1." }
+    - { texto: "Falta la VLAN 20", explicacion: "La 20 está permitida." }
+    - { texto: "No es un troncal", explicacion: "Dice trunking." }
+    - { texto: "Ninguno", explicacion: "La nativa difiere." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un puerto del switch hacia otro switch quedó en modo acceso VLAN 10, mientras el otro extremo es troncal. ¿Qué pasa con la VLAN 20?
+  opciones:
+    - { texto: "No cruza: el puerto de acceso descarta las tramas etiquetadas", correcta: true, explicacion: "Además, las tramas sin etiqueta (nativa) del otro lado entran en la VLAN 10: otra mezcla." }
+    - { texto: "Cruza sin problema", explicacion: "Un puerto de acceso no acepta etiquetas." }
+    - { texto: "El switch convierte el puerto en troncal solo", explicacion: "Con switchport mode access fijo, no negocia." }
+    - { texto: "Cruza solo la 20", explicacion: "Es al revés." }

@@ -1,9 +1,9 @@
 tipo: terminal
 shell: bash
-titulo: Velocidad y dúplex de las placas
+titulo: Velocidad y dúplex de las tarjetas
 descripcion: >-
   Desde que movieron el servidor de rack, las copias de seguridad que van por la segunda
-  placa (enp0s8) tardan cuatro veces más. Revisa cómo negoció cada placa.
+  tarjeta (enp0s8) tardan cuatro veces más. Revisa cómo negoció cada tarjeta.
 estado_inicial:
   distro: rocky
   hostname: backup01
@@ -14,13 +14,13 @@ estado_inicial:
       - { nombre: enp0s3, ip: 192.168.10.30/24 }
       - { nombre: enp0s8, ip: 10.10.0.30/24, velocidad: 100, duplex: half, autonegociacion: false }
 pasos:
-  - consigna: Mira la velocidad y el dúplex de la placa principal, enp0s3.
+  - consigna: Mira la velocidad y el dúplex de la tarjeta principal, enp0s3.
     verificar:
       - { comando_usado: ethtool enp0s3 }
-    pistas: ["ethtool seguido del nombre de la placa."]
+    pistas: ["ethtool seguido del nombre de la tarjeta."]
     solucion: [ethtool enp0s3]
-    explicacion: 1000Mb/s, Full y autonegociación activada. Así tiene que estar una placa de 1 Gb/s.
-  - consigna: Ahora mira la placa de las copias, enp0s8. ¿Qué tiene de raro?
+    explicacion: 1000Mb/s, Full y autonegociación activada. Así tiene que estar una tarjeta de 1 Gb/s.
+  - consigna: Ahora mira la tarjeta de las copias, enp0s8. ¿Qué tiene de raro?
     verificar:
       - { comando_usado: ethtool enp0s8 }
       - { salida_contiene: "Half" }

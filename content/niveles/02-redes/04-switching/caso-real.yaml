@@ -1,0 +1,125 @@
+tipo: troubleshooting
+titulo: Se cayó toda la red a las 9:40
+descripcion: >-
+  Incidente simulado en una oficina de dos pisos con 60 personas, dos switches Cisco (SW1 en la
+  planta baja, SW2 en el primer piso) y un router. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:40. De golpe, nadie tiene red en ningún piso: ni internet, ni impresoras, ni el
+      servidor de archivos. Los teléfonos IP se reinician solos. Cuando bajas a la sala de
+      equipos, las luces de todos los puertos de SW1 y SW2 parpadean sin parar, todas a la vez.
+    opciones:
+      - { texto: "Esto parece un bucle: entrar por consola a SW1 y mirar qué pasa", ir_a: n_consola, minutos: 4 }
+      - texto: Reiniciar los dos switches
+        ir_a: n_reinicio
+        minutos: 8
+      - texto: Llamar al proveedor de internet
+        ir_a: n_proveedor
+        minutos: 20
+  n_proveedor:
+    situacion: >-
+      El proveedor dice que tu enlace está bien. Y no podría explicar por qué tampoco anda la
+      impresora del mismo piso: eso no pasa por internet.
+    opciones:
+      - { texto: "Ir a la consola de SW1", ir_a: n_consola, minutos: 4 }
+  n_reinicio:
+    situacion: >-
+      Los switches tardan unos minutos en arrancar. Durante un minuto todo parece andar... y
+      vuelve a caerse igual. Lo que causa el problema sigue conectado.
+    opciones:
+      - { texto: "Ir a la consola de SW1 y mirar", ir_a: n_consola, minutos: 4 }
+  n_consola:
+    situacion: >-
+      La consola responde lento, pero responde (por SSH no se puede: la red está saturada).
+    evidencia:
+      - titulo: SW1
+        contenido: |
+          SW1# show processes cpu | include CPU
+          CPU utilization for five seconds: 99%/91%; one minute: 97%; five minutes: 64%
+          SW1# show interfaces gi0/1 | include rate
+            5 minute input rate 812403000 bits/sec, 1203455 packets/sec
+          SW1# show logging | include MACFLAP
+          %SW_MATM-4-MACFLAP_NOTIF: Host 00e0.4c68.1a02 in vlan 20 is flapping between port Gi0/1 and port Fa0/12
+          %SW_MATM-4-MACFLAP_NOTIF: Host 0050.56b1.33cf in vlan 20 is flapping between port Gi0/1 and port Fa0/12
+    opciones:
+      - { texto: "Las MAC saltan entre Gi0/1 (el troncal a SW2) y Fa0/12: hay un bucle en la VLAN 20. Ver Spanning Tree", ir_a: n_stp, minutos: 3 }
+      - texto: Apagar el troncal Gi0/1 para cortar el bucle
+        ir_a: n_troncal
+        minutos: 2
+  n_troncal:
+    situacion: >-
+      La planta baja vuelve a andar, pero el primer piso queda aislado del todo: sin troncal no
+      llega a nada. Y en el primer piso la red sigue caída: el bucle está de aquel lado. Cortaste
+      el síntoma en el lugar equivocado.
+    opciones:
+      - { texto: "Levantar Gi0/1 y mirar Spanning Tree en SW2", ir_a: n_stp, minutos: 4 }
+  n_stp:
+    situacion: Miras la VLAN 20 en SW2.
+    evidencia:
+      - titulo: SW2
+        contenido: |
+          SW2# show spanning-tree vlan 20 | begin Interface
+          Interface           Role Sts Cost      Prio.Nbr Type
+          ------------------- ---- --- --------- -------- ----------------
+          Gi0/1               Root FWD 4         128.25   P2p
+          Fa0/12              Desg FWD 19        128.12   P2p Edge
+          Fa0/14              Desg FWD 19        128.14   P2p Edge
+          SW2# show running-config interface fa0/12
+          interface FastEthernet0/12
+           switchport access vlan 20
+           switchport mode access
+           spanning-tree portfast
+           spanning-tree bpdufilter enable
+          SW2# show running-config | include bpduguard
+          SW2#
+    opciones:
+      - { texto: "Fa0/12 ignora los mensajes de STP (bpdufilter) y no tiene BPDU Guard: algo une esas bocas. Ir a ver qué hay conectado", ir_a: n_escritorio, minutos: 5 }
+      - texto: Apagar Spanning Tree en la VLAN 20 para que deje de interferir
+        ir_a: n_sin_stp
+        minutos: 2
+  n_sin_stp:
+    situacion: >-
+      Spanning Tree no estaba causando el problema: era lo único que podía evitarlo, y el
+      bpdufilter de esos puertos no lo dejaba ver el bucle. Sin STP en la VLAN, la tormenta
+      empeora y ahora también golpea a SW1 con más fuerza.
+    opciones:
+      - { texto: "Volver a activarlo y buscar qué hay en Fa0/12 y Fa0/14", ir_a: n_escritorio, minutos: 6 }
+  n_escritorio:
+    situacion: >-
+      Las bocas 12 y 14 del primer piso están en la sala de reuniones. Ahí encuentras un switch
+      de escritorio de cinco puertos que alguien trajo para conectar el proyector y su
+      computadora. Tiene dos cables a la pared: uno a la boca 12 y otro a la 14 ("por las dudas").
+      Ese switch no habla Spanning Tree: los mensajes de STP que manda SW2 por la boca 12 lo
+      atraviesan y vuelven por la 14. SW2 los habría visto y bloqueado un puerto, pero alguien
+      había puesto bpdufilter en esos puertos hace meses "para que no mande mensajes de más".
+    opciones:
+      - { texto: "Desconectar uno de los dos cables, sacar el bpdufilter y proteger los puertos de usuario con BPDU Guard", ir_a: n_fin, minutos: 6 }
+      - texto: Desconectar el switch y listo
+        ir_a: n_solo_desconectar
+        minutos: 2
+  n_solo_desconectar:
+    situacion: >-
+      La red vuelve. Pero mañana alguien puede hacer lo mismo en cualquier otra boca: los puertos
+      de usuario siguen con bpdufilter y sin ninguna protección.
+    opciones:
+      - { texto: "Sacar el bpdufilter y activar BPDU Guard en los puertos de usuario de los dos switches", ir_a: n_fin, minutos: 5 }
+  n_fin:
+    final: exito
+    situacion: >-
+      Con un solo cable, el proyector funciona y la tormenta para en segundos. Sacas el
+      bpdufilter de los puertos, activas spanning-tree portfast bpduguard default en los dos
+      switches (BPDU Guard en todos los puertos con PortFast) y pruebas: al conectar el switch
+      de escritorio con dos cables, la boca 14 pasa a err-disabled y nadie se entera. En la
+      reunión de cierre acuerdan que nadie conecta equipos de red propios sin avisar.
+    resumen: >-
+      Toda la red caída de golpe, luces parpadeando a la vez, CPU al 99 % y MAC que saltan entre
+      dos puertos (MACFLAP) son la firma de un bucle de capa 2. El método: consola (la red no
+      sirve para administrar), los mensajes de MAC que saltan para saber entre qué puertos está
+      el bucle, y Spanning Tree para ver qué puertos no lo estaban frenando. La causa fue un
+      switch de escritorio con dos cables en puertos con bpdufilter, que le tapaba los ojos a
+      STP. La prevención es BPDU Guard en todos los puertos de usuario: ante la primera BPDU, el
+      puerto pasa a err-disabled y el bucle no llega a formarse. Ojo: algunos switches baratos
+      descartan las BPDU en vez de reenviarlas, y ahí ni STP ni BPDU Guard ven el bucle; para eso
+      existe storm control, que limita el broadcast por puerto (para más adelante).

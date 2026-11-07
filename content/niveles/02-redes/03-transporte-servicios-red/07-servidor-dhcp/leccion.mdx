@@ -33,15 +33,15 @@ Durante veinte años, el servidor DHCP de Linux por excelencia fue ISC DHCP (`dh
   </Distro>
 </Distros>
 
-Las dos instalaciones traen un archivo de ejemplo con comentarios, que **no escucha en ninguna placa**: hasta que no configures `interfaces-config`, Kea arranca pero no atiende a nadie. Es a propósito: un servidor DHCP mal configurado en la red equivocada puede dejar sin servicio a toda una oficina.
+Las dos instalaciones traen un archivo de ejemplo con comentarios, que **no escucha en ninguna tarjeta**: hasta que no configures `interfaces-config`, Kea arranca pero no atiende a nadie. Es a propósito: un servidor DHCP mal configurado en la red equivocada puede dejar sin servicio a toda una oficina.
 
 ## La configuración, por partes
 
-<Diagrama svg={kea} alt="Un archivo kea-dhcp4.conf comentado: interfaces-config con la placa enp0s8, valid-lifetime 3600, opciones globales con el DNS, y en subnet4 una subred con id 1, la red 192.168.10.0/24, el rango de .100 a .199, la opción routers con .1 y una reserva de la MAC 52:54:00:aa:10:30 a la IP .30." pie="Interfaces, duración del préstamo, opciones globales y una subred con su id, rango, opciones y reservas." />
+<Diagrama svg={kea} alt="Un archivo kea-dhcp4.conf comentado: interfaces-config con la tarjeta enp0s8, valid-lifetime 3600, opciones globales con el DNS, y en subnet4 una subred con id 1, la red 192.168.10.0/24, el rango de .100 a .199, la opción routers con .1 y una reserva de la MAC 52:54:00:aa:10:30 a la IP .30." pie="Interfaces, duración del préstamo, opciones globales y una subred con su id, rango, opciones y reservas." />
 
 Lo que vale la pena recordar:
 
-- **`interfaces-config`**: en qué placas escucha. Solo en la de la red de clientes, nunca "en todas" por las dudas.
+- **`interfaces-config`**: en qué tarjetas escucha. Solo en la de la red de clientes, nunca "en todas" por las dudas.
 - **`subnet4`**: una entrada por red. Cada una con su **`id`** numérico único (obligatorio desde Kea 2.6: los préstamos se guardan con ese número), su `subnet`, sus `pools` y sus opciones.
 - **`option-data`**: los nombres de las opciones son fijos: `routers` (puerta de enlace), `domain-name-servers`, `domain-name`, `ntp-servers`. Las que pones fuera de `subnet4` valen para todas las subredes.
 - **`reservations`**: por MAC (`hw-address`) o por identificador del cliente. Conviene dejarlas fuera del rango dinámico.
@@ -52,7 +52,7 @@ Corrige una configuración que no arranca:
 <EditorConfig ejercicio={ejKea} />
 
 <EnSimple>
-En el archivo de Kea dices en qué placa atender, qué red y qué rango prestar, qué datos entregar con cada dirección (puerta de enlace, DNS) y qué equipos tienen dirección reservada. Antes de arrancar, siempre `kea-dhcp4 -t`.
+En el archivo de Kea dices en qué tarjeta atender, qué red y qué rango prestar, qué datos entregar con cada dirección (puerta de enlace, DNS) y qué equipos tienen dirección reservada. Antes de arrancar, siempre `kea-dhcp4 -t`.
 </EnSimple>
 
 ## Arrancar, probar y mirar los préstamos
@@ -60,7 +60,7 @@ En el archivo de Kea dices en qué placa atender, qué red y qué rango prestar,
 ```bash
 sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf   # revisar: "Syntax check OK"
 sudo systemctl enable --now kea-dhcp4       # en Ubuntu: kea-dhcp4-server
-sudo ss -ulnp | grep :67                    # ¿escucha en la placa correcta?
+sudo ss -ulnp | grep :67                    # ¿escucha en la tarjeta correcta?
 sudo cat /var/lib/kea/kea-leases4.csv       # los préstamos
 journalctl -u kea-dhcp4                     # DHCP4_LEASE_ALLOC por cada préstamo
 ```
@@ -76,7 +76,7 @@ ipconfig /renew                     # Windows
 <Terminal ejercicio={ejDhcp} />
 
 <Consejo titulo="El firewall del servidor">
-Abre el servicio en el firewall: `sudo firewall-cmd --permanent --add-service=dhcp` y `sudo firewall-cmd --reload` en Rocky, o `sudo ufw allow 67/udp` en Ubuntu. Según cómo reciba Kea los pedidos de cada placa, algunos pueden llegarle aunque el firewall esté cerrado, y eso confunde al diagnosticar: deja abierto lo que el servicio necesita y no dependas de esa casualidad.
+Abre el servicio en el firewall: `sudo firewall-cmd --permanent --add-service=dhcp` y `sudo firewall-cmd --reload` en Rocky, o `sudo ufw allow 67/udp` en Ubuntu. Según cómo reciba Kea los pedidos de cada tarjeta, algunos pueden llegarle aunque el firewall esté cerrado, y eso confunde al diagnosticar: deja abierto lo que el servicio necesita y no dependas de esa casualidad.
 </Consejo>
 
 <Pregunta id="p06" />
@@ -96,7 +96,7 @@ Lo usan muchos routers hogareños, libvirt (las redes virtuales de KVM) y herram
 
 <ErroresComunes>
   <ErrorComun titulo="Kea arranca pero nadie recibe dirección">
-    Revisa interfaces-config: si está vacío o con otra placa, Kea no escucha donde están los clientes. Mira con ss -ulnp en qué IP está el puerto 67.
+    Revisa interfaces-config: si está vacío o con otra tarjeta, Kea no escucha donde están los clientes. Mira con ss -ulnp en qué IP está el puerto 67.
   </ErrorComun>
   <ErrorComun titulo="Error de sintaxis por una coma">
     JSON no admite comas faltantes ni sobrantes. kea-dhcp4 -t te dice la línea; revísalo siempre antes de reiniciar el servicio.
@@ -115,7 +115,7 @@ Lo usan muchos routers hogareños, libvirt (las redes virtuales de KVM) y herram
 <Resumen>
 - ISC DHCP llegó a su fin de vida en 2022; su reemplazo es Kea (Rocky: kea, servicio kea-dhcp4; Ubuntu: kea-dhcp4-server).
 - /etc/kea/kea-dhcp4.conf en JSON: interfaces-config, valid-lifetime, option-data (routers, domain-name-servers, domain-name), subnet4 con id, subnet, pools y reservations.
-- De fábrica no escucha en ninguna placa. Revisar con kea-dhcp4 -t antes de arrancar; comprobar con ss -ulnp.
+- De fábrica no escucha en ninguna tarjeta. Revisar con kea-dhcp4 -t antes de arrancar; comprobar con ss -ulnp.
 - Préstamos en /var/lib/kea/kea-leases4.csv y en journalctl (DHCP4_LEASE_ALLOC).
 - Clientes: nmcli connection up, netplan apply, ipconfig /renew.
 - dnsmasq: DHCP y DNS en pocas líneas para redes chicas y laboratorios.

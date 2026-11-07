@@ -1,0 +1,113 @@
+---
+id: n2-m4-l4
+titulo: Enrutamiento entre VLANs
+minutos: 150
+objetivos:
+  - Configurar router-on-a-stick con subinterfaces 802.1Q.
+  - Configurar un switch de capa 3 con interfaces SVI y ip routing.
+  - Elegir entre las dos opciones según el tamaño y el tráfico de la red.
+glosario: [router-on-a-stick, subinterfaz, switch-capa3]
+verificado: 2026-11
+---
+
+import opciones from './opciones.svg?raw'
+import ejStick from './ej-stick.yaml'
+import topoL3 from './topo-l3.yaml'
+
+Separaste Administración y Ventas en VLAN distintas: ya no se ven entre sí. Pero alguna comunicación sí hace falta: Ventas tiene que imprimir en la impresora de Administración, y todos tienen que llegar al servidor de archivos. Como cada VLAN es una red distinta, para unirlas hace falta un **router**. La gracia es que ahora, en el router, puedes decidir qué pasa y qué no (lo vas a hacer con listas de acceso en el módulo 2.6).
+
+<AntesDeEmpezar>
+- VLAN y troncales 802.1Q (lecciones anteriores).
+- Un router une redes distintas y es la puerta de enlace de cada una (lección 2.1.1).
+- Una VLAN, una subred (lección 2.4.2).
+</AntesDeEmpezar>
+
+## Dos formas de unir VLAN
+
+<Diagrama svg={opciones} alt="A la izquierda, router-on-a-stick: R1 con las subinterfaces Gi0/0.10 (192.168.10.1) y Gi0/0.20 (192.168.20.1) conectado a SW1 por un solo troncal; las VLAN 10 y 20 cuelgan de SW1. A la derecha, un switch de capa 3 con ip routing y las interfaces Vlan10 (192.168.10.1) y Vlan20 (192.168.20.1), con las VLAN conectadas directamente. Router-on-a-stick es barato pero el troncal es un cuello de botella; el switch de capa 3 enruta a velocidad de cable." pie="Las dos hacen lo mismo: cada VLAN tiene su puerta de enlace en el equipo que enruta." />
+
+### Router-on-a-stick
+
+Es como una oficina de correo de un pueblo con una sola ventanilla: todos los vecinos hacen fila en la misma, el empleado recibe el sobre de un barrio y se lo da al cartero del otro barrio, por la misma ventanilla. Donde la comparación no llega: el router atiende miles de paquetes por segundo, pero todos pasan por ese único cable, que se satura si el tráfico entre VLAN es mucho.
+
+El router tiene **una** interfaz física conectada a un **troncal**, y sobre ella crea una **subinterfaz** por VLAN. Cada subinterfaz recibe las tramas con la etiqueta de su VLAN y tiene la IP que usan como puerta de enlace los equipos de esa VLAN:
+
+```text
+interface gi0/0
+ no shutdown
+interface gi0/0.10
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+interface gi0/0.20
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+```
+
+La interfaz física va sin IP y encendida; el puerto del switch hacia el router, en modo troncal con esas VLAN permitidas.
+
+<Terminal ejercicio={ejStick} />
+
+### Switch de capa 3
+
+Un **switch de capa 3** (multicapa) enruta dentro de su propio hardware, a la velocidad de sus puertos. En lugar de subinterfaces usa **SVI**, una interfaz VLAN por cada VLAN con la IP de la puerta de enlace, y hay que activar el enrutamiento con `ip routing` (viene desactivado):
+
+```text
+ip routing
+interface vlan 10
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+interface vlan 20
+ ip address 192.168.20.1 255.255.255.0
+ no shutdown
+```
+
+Una SVI está "up" solo si la VLAN existe y hay al menos un puerto activo en ella (de acceso o troncal que la lleve).
+
+<Topologia ejercicio={topoL3} />
+
+<EnSimple>
+Para que dos VLAN se hablen, cada una necesita su puerta de enlace en un equipo que enrute. Con router-on-a-stick, es una subinterfaz del router por cada VLAN, todas por el mismo cable. Con un switch de capa 3, es una interfaz VLAN dentro del switch, y además hay que encender ip routing.
+</EnSimple>
+
+<Pregunta id="p06" />
+
+## Cuál elegir
+
+| | Router-on-a-stick | Switch de capa 3 |
+| --- | --- | --- |
+| Costo | Bajo: sirve casi cualquier router | Mayor (aunque hoy son comunes) |
+| Rendimiento | Limitado por un solo enlace | Velocidad de cable entre VLAN |
+| Dónde se ve | Oficinas pequeñas, laboratorios, sucursales | El núcleo de casi cualquier red mediana o grande |
+| Filtrar entre VLAN | ACL en el router (o un firewall en su lugar) | ACL en el switch; para reglas complejas, firewall |
+
+En muchas empresas el rol del "router" entre VLAN lo cumple un **firewall** (como el OPNsense del módulo 2.6), justamente para poder poner reglas entre áreas.
+
+<Nota titulo="El relay de DHCP, otra vez">
+Con un servidor DHCP en otra VLAN, cada SVI o subinterfaz necesita su `ip helper-address` hacia el servidor (lección 2.3.4). Es lo primero que se olvida al agregar una VLAN.
+</Nota>
+
+<ErroresComunes>
+  <ErrorComun titulo="La interfaz física del router apagada">
+    Las subinterfaces dependen de la física: si Gi0/0 está en shutdown (como viene de fábrica), todas están caídas. no shutdown en la física.
+  </ErrorComun>
+  <ErrorComun titulo="encapsulation dot1Q con la VLAN equivocada">
+    La subinterfaz .20 con encapsulation dot1Q 10 recibe las tramas de la VLAN 10. El número de la subinterfaz es solo un nombre; lo que manda es la encapsulación.
+  </ErrorComun>
+  <ErrorComun titulo="El puerto del switch hacia el router en modo acceso">
+    El router recibe tramas sin etiqueta y no sabe a qué subinterfaz van. Ese puerto tiene que ser troncal.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar ip routing en el switch de capa 3">
+    Las SVI responden ping desde su propia VLAN, pero no se enruta entre ellas. Sin ip routing, el switch de capa 3 se comporta como uno de capa 2.
+  </ErrorComun>
+  <ErrorComun titulo="Las PC con otra puerta de enlace">
+    Cada equipo tiene que tener como puerta de enlace la IP de la subinterfaz o SVI de su VLAN. Revisa también el DHCP (opción routers).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Para unir VLAN hace falta un equipo que enrute, con una puerta de enlace por VLAN.
+- Router-on-a-stick: una interfaz física (sin IP, encendida) en un troncal y una subinterfaz por VLAN con encapsulation dot1Q N e IP. Barato; el troncal es cuello de botella.
+- Switch de capa 3: ip routing y una SVI (interface vlan N) por VLAN con IP. Enruta a velocidad de cable; es lo común en el núcleo.
+- Cada VLAN con DHCP en otra red necesita ip helper-address en su SVI o subinterfaz.
+- Fallas típicas: física apagada, encapsulación equivocada, puerto hacia el router en acceso, falta ip routing, puerta de enlace mal en las PC.
+</Resumen>

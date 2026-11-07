@@ -1,0 +1,88 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Por qué un bucle entre switches puede tumbar toda la red?
+  opciones:
+    - { texto: "Porque los broadcast dan vueltas sin fin y se multiplican: las tramas Ethernet no tienen TTL", correcta: true, explicacion: "Es la tormenta de broadcast." }
+    - { texto: "Porque los switches se recalientan", explicacion: "La CPU se satura, pero la causa es el bucle de tramas." }
+    - { texto: "Porque se duplican las IP", explicacion: "No hay IP duplicadas: hay tramas duplicadas." }
+    - { texto: "No puede: los switches cortan los bucles solos sin ningún protocolo", explicacion: "Para eso existe STP." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace Spanning Tree con los enlaces redundantes?
+  opciones:
+    - { texto: "Bloquea los que formarían un bucle y los activa si se corta un camino", correcta: true, explicacion: "Quedan de repuesto." }
+    - { texto: "Los apaga para siempre", explicacion: "Siguen escuchando BPDU para entrar en servicio." }
+    - { texto: "Reparte el tráfico entre todos", explicacion: "Eso hace EtherChannel, en un mismo grupo de cables." }
+    - { texto: "Los convierte en troncales", explicacion: "No tiene relación." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "SW1 tiene prioridad 32769 y MAC 00d2.0000.0001; SW2, prioridad 32769 y MAC 00a1.0000.0009; SW3, prioridad 24577 y MAC 00ff.0000.0005. ¿Quién es la raíz de la VLAN 1?"
+  opciones:
+    - { texto: "SW3: la prioridad se compara antes que la MAC", correcta: true, explicacion: "24577 es la más baja; la MAC solo desempata." }
+    - { texto: "SW2: tiene la MAC más baja", explicacion: "La MAC solo cuenta si las prioridades empatan." }
+    - { texto: "SW1", explicacion: "No tiene ni la prioridad ni la MAC más baja." }
+    - { texto: "Ninguno: tienen que ser iguales", explicacion: "Siempre hay un ganador." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un switch tiene dos caminos a la raíz, uno por un enlace de 1 Gb/s directo (costo 4) y otro por dos enlaces de 1 Gb/s (costo 8). ¿Cuál será su puerto raíz?
+  opciones:
+    - { texto: "El del enlace directo: menor costo acumulado hasta la raíz", correcta: true, explicacion: "El puerto raíz es el camino más barato." }
+    - { texto: "El de dos enlaces, por ser más redundante", explicacion: "Se elige por costo." }
+    - { texto: "Los dos", explicacion: "Hay un solo puerto raíz por switch." }
+    - { texto: "El de número de puerto más alto", explicacion: "El número solo desempata a igual costo." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Si nadie configuró Spanning Tree, ¿qué switch suele terminar como raíz?
+  opciones:
+    - { texto: "El de MAC más baja, que muchas veces es el más viejo de la red", correcta: true, explicacion: "Por eso se fija la prioridad del núcleo." }
+    - { texto: "El más rápido", explicacion: "La velocidad no interviene en la elección de la raíz." }
+    - { texto: "El primero que se encendió", explicacion: "No: se recalcula entre todos." }
+    - { texto: "El que tiene más puertos", explicacion: "No interviene." }
+- id: p06
+  tipo: completar_comando
+  enunciado: Escribe el comando de configuración global que le da prioridad 4096 al switch en la VLAN 10.
+  aceptadas: [spanning-tree vlan 10 priority 4096]
+  explicacion: La prioridad va de a 4096; también existe spanning-tree vlan 10 root primary.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve PortFast?
+  opciones:
+    - { texto: "Para que un puerto de equipo final reenvíe apenas se enciende, sin esperar los estados de STP", correcta: true, explicacion: "Evita la espera al arrancar una PC." }
+    - { texto: "Para que el puerto vaya a más velocidad", explicacion: "No cambia la velocidad." }
+    - { texto: "Para usar en los enlaces entre switches", explicacion: "Ahí es peligroso: podría formar un bucle." }
+    - { texto: "Para apagar STP en todo el switch", explicacion: "Solo afecta ese puerto." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Alguien conectó un switch de escritorio en un puerto con BPDU Guard. ¿Qué pasa?
+  opciones:
+    - { texto: "El puerto pasa a err-disabled y queda apagado hasta que alguien lo levante", correcta: true, explicacion: "Así no se puede armar un bucle por ese puerto." }
+    - { texto: "El puerto sigue funcionando y STP bloquea otro", explicacion: "BPDU Guard apaga ese puerto." }
+    - { texto: "Se reinicia el switch", explicacion: "No." }
+    - { texto: "El switch nuevo pasa a ser la raíz", explicacion: "BPDU Guard lo impide." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un puerto está en err-disabled por BPDU Guard. Ya retiraste el switch que lo causó. ¿Qué haces?
+  opciones:
+    - { texto: "shutdown y no shutdown en ese puerto", correcta: true, explicacion: "No vuelve solo (salvo que se configure errdisable recovery)." }
+    - { texto: "Esperar unos minutos", explicacion: "Sin recuperación automática configurada, no vuelve." }
+    - { texto: "Desactivar BPDU Guard", explicacion: "Perderías la protección." }
+    - { texto: "Reiniciar todos los switches", explicacion: "Innecesario." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Por qué hoy se usa RSTP (o Rapid PVST+) y no el STP original?
+  opciones:
+    - { texto: "Porque se reacomoda en uno o dos segundos, en lugar de 30 a 50", correcta: true, explicacion: "La red casi no nota el cambio." }
+    - { texto: "Porque no bloquea enlaces", explicacion: "También bloquea." }
+    - { texto: "Porque no necesita raíz", explicacion: "También elige una raíz." }
+    - { texto: "Porque reparte el tráfico entre enlaces", explicacion: "Eso no lo hace ninguno de los dos." }

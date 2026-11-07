@@ -1,0 +1,61 @@
+tipo: terminal
+shell: ios
+titulo: Router-on-a-stick para Administración y Ventas
+descripcion: >-
+  SW1 ya tiene las VLAN 10 y 20 y un troncal en Gi0/1 hacia R1 (que permite 10 y 20). Las PC
+  tienen como puerta de enlace la .1 de su red. Estás en la consola de R1, que viene de
+  fábrica.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: SW1
+        tipo: switch
+        vlans: [{ id: 10, nombre: ADMIN }, { id: 20, nombre: VENTAS }]
+        interfaces:
+          - { nombre: Fa0/1, modo: acceso, vlan: 10 }
+          - { nombre: Fa0/2, modo: acceso, vlan: 20 }
+          - { nombre: Gi0/1, modo: troncal, vlans_permitidas: [10, 20] }
+      - { id: R1, tipo: router }
+      - { id: A1, nombre: Admin, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.10.11/24 }], puerta_enlace: 192.168.10.1 }
+      - { id: V1, nombre: Ventas, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.20.11/24 }], puerta_enlace: 192.168.20.1 }
+    enlaces:
+      - { a: "A1:eth0", b: "SW1:Fa0/1" }
+      - { a: "V1:eth0", b: "SW1:Fa0/2" }
+      - { a: "SW1:Gi0/1", b: "R1:Gi0/0" }
+pasos:
+  - consigna: Enciende la interfaz física Gi0/0 de R1 (los routers traen las interfaces apagadas). No le pongas IP.
+    verificar:
+      - { interfaz: Gi0/0, apagada: false }
+    pistas: ["enable, conf t, interface gi0/0, no shutdown."]
+    solucion: [enable, configure terminal, interface gi0/0, no shutdown, exit]
+  - consigna: >-
+      Crea la subinterfaz Gi0/0.10 para la VLAN 10 con la IP 192.168.10.1/24, y la Gi0/0.20
+      para la VLAN 20 con la 192.168.20.1/24.
+    verificar:
+      - { interfaz: Gi0/0.10, ip: 192.168.10.1/24 }
+      - { interfaz: Gi0/0.20, ip: 192.168.20.1/24 }
+      - { ping: { desde: A1, hacia: 192.168.10.1 } }
+      - { ping: { desde: A1, hacia: V1 } }
+    pistas:
+      - "interface gi0/0.10, encapsulation dot1Q 10, ip address 192.168.10.1 255.255.255.0"
+      - "Lo mismo con .20. El número de subinterfaz puede ser cualquiera, pero por claridad se usa el de la VLAN."
+    solucion:
+      - interface gi0/0.10
+      - encapsulation dot1Q 10
+      - ip address 192.168.10.1 255.255.255.0
+      - interface gi0/0.20
+      - encapsulation dot1Q 20
+      - ip address 192.168.20.1 255.255.255.0
+      - end
+    explicacion: >-
+      Cada subinterfaz recibe las tramas etiquetadas con su VLAN y es la puerta de enlace de esa
+      red. Una trama de Administración hacia Ventas sube por el troncal con etiqueta 10, el
+      router la enruta y la baja por el mismo cable con etiqueta 20.
+  - consigna: Mira la tabla de rutas de R1.
+    verificar:
+      - { comando_usado: show ip route }
+      - { salida_contiene: "192.168.20.0" }
+    pistas: ["show ip route"]
+    solucion: [show ip route]
+    explicacion: Las dos redes aparecen como conectadas (C), cada una por su subinterfaz.

@@ -4,6 +4,7 @@
  */
 import { broadcastOf, formatIpv4, networkOf, parseCidr, parseIpv4, prefixToMask, sameSubnet } from './ip'
 import type { DeviceSpec, DeviceType, TopologySpec } from './schema'
+import { channelCompatible, computeStp, stpForwarding, type StpResult } from './stp'
 
 export interface IpAddr {
   ip: number
@@ -30,6 +31,14 @@ export interface Port {
   encapVlan?: number
   /** Interfaces VLAN (SVI). */
   vlan?: number
+  /** spanning-tree portfast y bpduguard; un puerto con BPDU Guard que recibe BPDU queda err-disabled. */
+  portfast?: boolean
+  bpduGuard?: boolean
+  errDisabled?: boolean
+  /** EtherChannel: grupo y modo (active, passive, on, desirable, auto). */
+  channel?: { group: number; mode: string }
+  /** HSRP: grupos de redundancia de puerta de enlace en esta interfaz. */
+  standby?: { group: number; ip?: number; priority: number; preempt: boolean }[]
 }
 
 export interface StaticRoute {
@@ -63,6 +72,8 @@ export interface Device {
   routes: StaticRoute[]
   ipRouting: boolean
   ospf?: OspfConfig
+  /** Prioridad de STP por VLAN (0 = todas las VLAN). */
+  stpPriority: Map<number, number>
   blocked: boolean
   /** IP aprendida por ARP → id del equipo que respondió. */
   arp: Map<number, string>
@@ -223,6 +234,8 @@ function cidr(text: string): IpAddr {
 export class Network {
   devices = new Map<string, Device>()
   links: Link[] = []
+  /** Router activo de cada grupo HSRP (para que el que ya es activo no ceda sin preempt). */
+  hsrpActive = new Map<string, string>()
 
   constructor(spec: TopologySpec) {
     for (const d of spec.dispositivos) this.addDevice(d)
@@ -255,7 +268,8 @@ export class Network {
         const c = cidr(r.destino)
         return { net: networkOf(c.ip, c.prefix), prefix: c.prefix, via: parseIpv4(r.via), distance: 1 }
       }),
-      ipRouting: spec.tipo === 'router' || (spec.tipo === 'switch_l3' && spec.enrutamiento === true),
+      ipRouting: spec.tipo === 'router' || (spec.tipo === 'switch_l3' && spec.enrutamiento === true) || (spec.tipo === 'servidor' && spec.enrutamiento === true),
+      stpPriority: new Map(spec.stp_prioridad !== undefined ? [[0, spec.stp_prioridad]] : []),
       blocked: spec.bloqueado,
       arp: new Map(),
       helpers: new Map(),
@@ -281,6 +295,10 @@ export class Network {
       if (i.vlans_permitidas) p.allowed = i.vlans_permitidas === 'todas' ? 'all' : [...i.vlans_permitidas].sort((a, b) => a - b)
       if (i.vlan_nativa) p.nativeVlan = i.vlan_nativa
       if (i.descripcion) p.description = i.descripcion
+      if (i.portfast) p.portfast = true
+      if (i.bpduguard) p.bpduGuard = true
+      if (i.canal) p.channel = { group: i.canal.grupo, mode: i.canal.modo }
+      if (i.hsrp) p.standby = [{ group: i.hsrp.grupo, ip: parseIpv4(i.hsrp.ip), priority: i.hsrp.prioridad, preempt: i.hsrp.preempt }]
       for (const s of i.subinterfaces) {
         const subName = normalizeIfName(s.nombre, spec.tipo) ?? s.nombre
         d.ports.push({ ...newPort(subName, 'subif', false, false), parent: name, encapVlan: s.vlan, ip: cidr(s.ip) })
@@ -387,9 +405,60 @@ export class Network {
   }
 
   physUp(d: Device, p: Port): boolean {
-    if (p.shutdown) return false
+    if (/^Port-channel/.test(p.name)) return !p.shutdown && this.channelMembers(d, p).some((m) => this.bundled(d, m))
+    if (p.shutdown || p.errDisabled) return false
     const peer = this.linkOf(d.id, p.name)
-    return !!peer && !peer.port.shutdown
+    if (!peer || peer.port.shutdown || peer.port.errDisabled) return false
+    // BPDU Guard: si del otro lado hay un switch (que manda BPDU), el puerto se desactiva.
+    if (p.bpduGuard && isSwitch(d) && isSwitch(peer.dev) && peer.port.switchport) {
+      p.errDisabled = true
+      return false
+    }
+    if (peer.port.bpduGuard && isSwitch(peer.dev) && isSwitch(d) && p.switchport) {
+      peer.port.errDisabled = true
+      return false
+    }
+    return true
+  }
+
+  /** Puertos físicos de un EtherChannel. */
+  channelMembers(d: Device, po: Port): Port[] {
+    const n = Number(/(\d+)$/.exec(po.name)?.[1])
+    return d.ports.filter((p) => p.kind === 'phys' && p.channel?.group === n)
+  }
+
+  /** Si un puerto de un EtherChannel quedó dentro del canal (los modos de los dos extremos son compatibles). */
+  bundled(d: Device, p: Port): boolean {
+    const peer = this.linkOf(d.id, p.name)
+    return !!p.channel && !!peer?.port.channel && this.physUp(d, p) && channelCompatible(p.channel.mode, peer.port.channel.mode)
+  }
+
+  /** Grupos HSRP: quién es el router activo de cada IP virtual. */
+  hsrpActiveFor(group: number, vip: number): { dev: Device; port: Port } | undefined {
+    const cands: { dev: Device; port: Port; prio: number; preempt: boolean }[] = []
+    for (const d of this.devices.values()) {
+      for (const p of d.ports) {
+        const g = p.standby?.find((x) => x.group === group && x.ip === vip)
+        if (g && p.ip && this.isUp(d, p)) cands.push({ dev: d, port: p, prio: g.priority, preempt: g.preempt })
+      }
+    }
+    if (!cands.length) return undefined
+    cands.sort((a, b) => b.prio - a.prio || b.port.ip!.ip - a.port.ip!.ip)
+    const key = `${group}|${vip}`
+    const cur = cands.find((c) => `${c.dev.id}/${c.port.name}` === this.hsrpActive.get(key))
+    let active = cands[0]
+    // Sin preempt, el que ya está activo sigue aunque vuelva uno de mayor prioridad.
+    if (cur && cur !== cands[0] && !cands[0].preempt) active = cur
+    this.hsrpActive.set(key, `${active.dev.id}/${active.port.name}`)
+    return active
+  }
+
+  /** IP virtual de HSRP que atiende este puerto (si es el activo). */
+  servesVip(d: Device, p: Port, ip: number): boolean {
+    const g = p.standby?.find((x) => x.ip === ip)
+    if (!g) return false
+    const a = this.hsrpActiveFor(g.group, ip)
+    return !!a && a.dev === d && a.port === p
   }
 
   isUp(d: Device, p: Port): boolean {
@@ -417,7 +486,7 @@ export class Network {
   }
 
   ownsIp(d: Device, ip: number): boolean {
-    return d.ports.some((p) => p.ip?.ip === ip && this.isUp(d, p))
+    return d.ports.some((p) => (p.ip?.ip === ip && this.isUp(d, p)) || this.servesVip(d, p, ip))
   }
 
   // -------------------------------------------------------------------------------------
@@ -431,6 +500,12 @@ export class Network {
     type Frame = { dev: Device; port: Port; tag?: number; trail: string[] }
     const queue: Frame[] = []
 
+    const stpCache = new Map<number, StpResult>()
+    const stpFor = (vlan: number) => {
+      let r = stpCache.get(vlan)
+      if (!r) stpCache.set(vlan, (r = computeStp(this, vlan)))
+      return r
+    }
     const emit = (dev: Device, port: Port, tag: number | undefined, trail: string[]) => {
       if (port.shutdown) {
         drops.push(`la interfaz ${shortIfName(port.name)} de ${dev.hostname} está apagada (shutdown)`)
@@ -440,6 +515,11 @@ export class Network {
       if (!peer) return
       if (peer.port.shutdown) {
         drops.push(`la interfaz ${shortIfName(peer.port.name)} de ${peer.dev.hostname} está apagada (shutdown)`)
+        return
+      }
+      if (!this.physUp(dev, port)) {
+        const ed = port.errDisabled ? { d: dev, p: port } : peer.port.errDisabled ? { d: peer.dev, p: peer.port } : undefined
+        if (ed) drops.push(`el puerto ${shortIfName(ed.p.name)} de ${ed.d.hostname} está err-disabled: BPDU Guard lo apagó porque del otro lado hay un switch (se reactiva con shutdown y no shutdown, después de sacar ese switch)`)
         return
       }
       queue.push({ dev: peer.dev, port: peer.port, tag, trail: [...trail, peer.dev.id] })
@@ -455,6 +535,8 @@ export class Network {
       for (const p of dev.ports) {
         if (p.kind !== 'phys' || !p.switchport || p === except || !this.linkOf(dev.id, p.name)) continue
         const mode = this.effectiveMode(dev, p)
+        // Spanning Tree: los puertos en bloqueo no reenvían.
+        if (!stpForwarding(stpFor(vlan), dev, p)) continue
         if (mode === 'access' && p.accessVlan === vlan) {
           emit(dev, p, undefined, trail)
           exits++
@@ -695,7 +777,7 @@ export class Network {
       if ('error' in r) return { ok: false, hops, reason: r.error, failedAt: dev.id, source, unreachable: dev !== start }
       source ??= r.port.ip!.ip
       const { endpoints, drops } = this.l2Reach(dev, r.port)
-      const next = endpoints.find((e) => e.port.ip?.ip === r.nextHop)
+      const next = endpoints.find((e) => e.port.ip?.ip === r.nextHop) ?? endpoints.find((e) => this.servesVip(e.dev, e.port, r.nextHop))
       if (!next) {
         const where = `${dev.hostname} (${shortIfName(r.port.name)})`
         const hint = drops.length ? ` Posible causa: ${drops.join('; ')}.` : r.port.kind === 'phys' && !this.linkOf(dev.id, r.port.name) ? ' La interfaz no tiene cable conectado.' : ''

@@ -1,0 +1,79 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace falta para que dos VLAN se comuniquen?
+  opciones:
+    - { texto: "Un equipo que enrute (router o switch de capa 3) con una puerta de enlace en cada VLAN", correcta: true, explicacion: "Cada VLAN es una red distinta." }
+    - { texto: "Un troncal entre los switches", explicacion: "El troncal lleva las VLAN separadas, no las une." }
+    - { texto: "Ponerlas con la misma VLAN nativa", explicacion: "Eso sería un error de configuración." }
+    - { texto: "Nada: se comunican solas", explicacion: "Están aisladas por diseño." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En router-on-a-stick, ¿qué es Gi0/0.20?
+  opciones:
+    - { texto: "Una subinterfaz de Gi0/0 que atiende una VLAN según su encapsulation dot1Q", correcta: true, explicacion: "Es la puerta de enlace de esa VLAN." }
+    - { texto: "El puerto 20 del router", explicacion: "Es una interfaz lógica sobre Gi0/0." }
+    - { texto: "Una VLAN del switch", explicacion: "Es una interfaz del router." }
+    - { texto: "Una IP", explicacion: "Es una interfaz, que lleva su IP." }
+- id: p03
+  tipo: completar_comando
+  enunciado: En una subinterfaz, escribe el comando que la asocia a la VLAN 30.
+  aceptadas: [encapsulation dot1Q 30, encapsulation dot1q 30, encap dot1q 30, encapsulation dot1Q 30]
+  explicacion: Después va su ip address.
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Configuraste las subinterfaces del router y nada funciona. show ip interface brief muestra Gi0/0 "administratively down". ¿Qué falta?
+  opciones:
+    - { texto: "no shutdown en la interfaz física Gi0/0", correcta: true, explicacion: "Las subinterfaces dependen de la física." }
+    - { texto: "Una IP en Gi0/0", explicacion: "La física va sin IP en router-on-a-stick." }
+    - { texto: "ip routing", explicacion: "Los routers enrutan de fábrica." }
+    - { texto: "Borrar las subinterfaces", explicacion: "No." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿En qué modo tiene que estar el puerto del switch conectado al router en router-on-a-stick?
+  opciones:
+    - { texto: "Troncal, con las VLAN que enruta permitidas", correcta: true, explicacion: "El router necesita las etiquetas para saber a qué subinterfaz va cada trama." }
+    - { texto: "Acceso en la VLAN 1", explicacion: "Llegarían solo tramas sin etiqueta." }
+    - { texto: "Apagado", explicacion: "No." }
+    - { texto: "Da igual", explicacion: "Tiene que ser troncal." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un switch de capa 3 creaste las SVI de las VLAN 10 y 20 con sus IP. Cada PC llega a su puerta de enlace, pero no a la otra VLAN. ¿Qué falta?
+  opciones:
+    - { texto: "ip routing en configuración global", correcta: true, explicacion: "Sin eso, el switch no enruta entre sus SVI." }
+    - { texto: "Un troncal", explicacion: "Con todo en el mismo switch no hace falta." }
+    - { texto: "Subinterfaces", explicacion: "Las subinterfaces son de router-on-a-stick." }
+    - { texto: "Cambiar la VLAN nativa", explicacion: "No interviene." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué un switch de capa 3 suele rendir mucho más que router-on-a-stick?
+  opciones:
+    - { texto: "Porque enruta en su propio hardware, a velocidad de cable, sin pasar todo por un único enlace", correcta: true, explicacion: "En router-on-a-stick todo el tráfico entre VLAN sube y baja por el mismo troncal." }
+    - { texto: "Porque usa IPv6", explicacion: "No tiene relación." }
+    - { texto: "Porque no usa VLAN", explicacion: "Usa VLAN igual." }
+    - { texto: "Porque cifra el tráfico", explicacion: "No cifra." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: La subinterfaz Gi0/0.20 tiene encapsulation dot1Q 10 por error. ¿Qué pasa?
+  opciones:
+    - { texto: "Atiende las tramas de la VLAN 10, no de la 20: el número de subinterfaz es solo un nombre", correcta: true, explicacion: "Lo que manda es la encapsulación; probablemente choque con la subinterfaz .10." }
+    - { texto: "Atiende la VLAN 20 igual", explicacion: "La encapsulación define la VLAN." }
+    - { texto: "El router corrige solo", explicacion: "No." }
+    - { texto: "Atiende las dos", explicacion: "Una subinterfaz atiende una VLAN." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Agregaste la VLAN 30 (Invitados) con su SVI, pero los equipos de esa VLAN reciben 169.254.x.x. El DHCP está en la VLAN de Servidores. ¿Qué te olvidaste?
+  opciones:
+    - { texto: "ip helper-address hacia el servidor DHCP en la SVI de la VLAN 30", correcta: true, explicacion: "El broadcast de DHCP no cruza el router sin relay." }
+    - { texto: "ip routing", explicacion: "Si faltara, tampoco andarían las otras VLAN." }
+    - { texto: "La VLAN nativa", explicacion: "No interviene." }
+    - { texto: "Un CNAME", explicacion: "No tiene relación." }

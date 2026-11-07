@@ -11,6 +11,7 @@ import {
   ComparadorDiscos,
   DisenadorVlsm,
   SimuladorNat,
+  SimuladorStp,
   SimuladorSwitch,
   Consejo,
   ConversorBases,
@@ -147,6 +148,7 @@ export default function GalleryPage() {
         <ClasificadorIp />
         <DisenadorVlsm />
         <SimuladorNat />
+        <SimuladorStp />
       </Section>
 
       <Section id="topologia" titulo="Armador de topologías" descripcion="Arrastra equipos, conecta cables y configúralos con formularios o con la consola. El ping muestra el recorrido sobre el diagrama y, si falla, explica dónde y por qué.">
