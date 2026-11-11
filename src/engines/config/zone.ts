@@ -289,7 +289,7 @@ export function parseZone(text: string, zoneName: string, fileName = 'zona'): Pa
         if (records.some((o) => o.name === target && o.type === 'CNAME')) problems.push({ line: r.line, severity: 'warning', bind: `zone ${zoneOrigin.replace(/\.$/, '')}/IN: ${r.name.replace(/\.$/, '')}/${r.type} '${target.replace(/\.$/, '')}' is a CNAME (illegal)`, explicacion: `Un ${r.type} tiene que apuntar a un nombre con registro A, no a un alias (CNAME).` })
       }
       if (['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR'].includes(r.type) && !r.name.endsWith(zoneOrigin)) {
-        problems.push({ line: r.line, severity: 'warning', bind: `${fileName}:${r.line}: ignoring out-of-zone data (${r.name.replace(/\.$/, '')})`, explicacion: `"${r.name}" no pertenece a la zona ${zoneOrigin}: BIND lo ignora. Si lo escribiste con punto final, quizá sobra; si no, revisa $ORIGIN.` })
+        problems.push({ line: r.line, severity: 'warning', bind: `${fileName}:${r.line}: ignoring out-of-zone data (${r.name.replace(/\.$/, '')})`, explicacion: `"${r.name}" no pertenece a la zona ${zoneOrigin}: BIND lo ignora. Si lo escribiste con punto final, quizá sobra; si no, revisá $ORIGIN.` })
       }
     }
   }

@@ -208,6 +208,10 @@ const stateShape = {
        * (si sale por la puerta de enlace por defecto, se pierde).
        */
       redes_remotas: z.array(z.strictObject({ red: z.string(), via: z.string() })).default([]),
+      /** Escenario de tráfico que ve tcpdump en vivo (los de src/engines/captura). */
+      trafico: z.string().optional(),
+      /** Saltos que muestra mtr hacia un destino: IP, pérdida en % y demora en ms. */
+      saltos: z.record(z.string(), z.array(z.strictObject({ ip: z.string(), perdida: z.number().default(0), ms: z.number().default(1) }))).default({}),
     })
     .default({
       interfaces: [{ nombre: 'enp0s3', ip: '192.168.1.10/24', estado: 'UP', ipv6: [], dhcp: false, velocidad: 1000, duplex: 'full', autonegociacion: true, mtu: 1500 }],
@@ -220,6 +224,7 @@ const stateShape = {
       dns_caidos: [],
       rutas: [],
       redes_remotas: [],
+      saltos: {},
     }),
   /** Intentos fallidos de inicio de sesión registrados por pam_faillock, por usuario. */
   faillock: z.record(z.string(), z.number().int().min(0)).default({}),

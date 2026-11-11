@@ -258,6 +258,10 @@ export class System {
   routes: { net: string; via: string; dev: string; nm: boolean }[] = []
   /** Redes de otras sedes, alcanzables solo por un router determinado. */
   remoteNets: { net: string; via: string }[] = []
+  /** Escenario de tráfico para tcpdump en vivo. */
+  traffic?: string
+  /** Saltos de mtr declarados por el ejercicio, por destino. */
+  hops: Record<string, { ip: string; perdida: number; ms: number }[]> = {}
   dns: string[] = []
   reachable = new Set<string>()
   /** Los otros servidores de la red del ejercicio (para ssh y scp). */
@@ -473,6 +477,8 @@ export class System {
       this.reachable.add(r.via)
     }
     this.remoteNets = state.red.redes_remotas.map((r) => ({ net: r.red, via: r.via }))
+    this.traffic = state.red.trafico
+    this.hops = state.red.saltos
     this.dns = state.red.dns
     this.initialDns = [...state.red.dns]
     this.dnsDown = state.red.dns_caidos

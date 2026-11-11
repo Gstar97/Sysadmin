@@ -16,6 +16,7 @@ import {
   SimuladorConvergencia,
   SimuladorFirewall,
   PlanificadorWifi,
+  VisorCapturas,
   SimuladorSwitch,
   Consejo,
   ConversorBases,
@@ -146,7 +147,7 @@ export default function GalleryPage() {
         <Subnetting />
       </Section>
 
-      <Section id="redes" titulo="Redes: PoE, tabla MAC, direcciones, VLSM, NAT, STP y rutas" descripcion="Presupuesto PoE de un switch, cómo aprende direcciones un switch (con predicción), clasificador de direcciones IPv4, diseñador VLSM con revisión de solapamientos, la tabla de traducciones NAT/PAT, la elección de raíz de Spanning Tree cómo decide un router (prefijo más largo y distancia administrativa) la convergencia de vector distancia contra estado de enlace un firewall con estado (¿pasa este paquete?) y la planificación de canales Wi-Fi.">
+      <Section id="redes" titulo="Redes: PoE, tabla MAC, direcciones, VLSM, NAT, STP, rutas, firewall, Wi-Fi y capturas" descripcion="Presupuesto PoE de un switch, cómo aprende direcciones un switch (con predicción), clasificador de direcciones IPv4, diseñador VLSM con revisión de solapamientos, la tabla de traducciones NAT/PAT, la elección de raíz de Spanning Tree, cómo decide un router (prefijo más largo y distancia administrativa), la convergencia de vector distancia contra estado de enlace, un firewall con estado (¿pasa este paquete?), la planificación de canales Wi-Fi y un visor de capturas al estilo Wireshark.">
         <CalculadoraPoe />
         <SimuladorSwitch />
         <ClasificadorIp />
@@ -157,6 +158,7 @@ export default function GalleryPage() {
         <SimuladorConvergencia />
         <SimuladorFirewall />
         <PlanificadorWifi />
+        <VisorCapturas />
       </Section>
 
       <Section id="topologia" titulo="Armador de topologías" descripcion="Arrastrá equipos, conectá cables y configuralos con formularios o con la consola. El ping muestra el recorrido sobre el diagrama y, si falla, explica dónde y por qué.">

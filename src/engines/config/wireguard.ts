@@ -67,7 +67,7 @@ export function validateWireguard(text: string): { diagnostics: Diagnostic[]; en
     const allowed = section === 'interface' ? INTERFACE_KEYS : PEER_KEYS
     if (!allowed.includes(key)) {
       const other = section === 'interface' ? PEER_KEYS.includes(key) : INTERFACE_KEYS.includes(key)
-      err(n, other ? `${kv[1]} va en la sección [${section === 'interface' ? 'Peer' : 'Interface'}], no en [${section === 'interface' ? 'Interface' : 'Peer'}].` : `Line unrecognized: '${kv[1]}' (revisa cómo está escrito).`)
+      err(n, other ? `${kv[1]} va en la sección [${section === 'interface' ? 'Peer' : 'Interface'}], no en [${section === 'interface' ? 'Interface' : 'Peer'}].` : `Line unrecognized: '${kv[1]}' (revisá cómo está escrito).`)
       return
     }
     entries.push({ key: `${section === 'interface' ? 'Interface' : 'Peer'}.${kv[1]}`, value, line: n })

@@ -52,6 +52,7 @@ const ConvergenceSimView = lazy(() => import('@/interactive/redes/ConvergenceSim
 const FirewallSimView = lazy(() => import('@/interactive/redes/FirewallSim').then((m) => ({ default: m.FirewallSim })))
 const WifiPlannerView = lazy(() => import('@/interactive/redes/WifiPlanner').then((m) => ({ default: m.WifiPlanner })))
 const RouteDecisionView = lazy(() => import('@/interactive/redes/RouteDecision').then((m) => ({ default: m.RouteDecision })))
+const CaptureViewerView = lazy(() => import('@/interactive/redes/CaptureViewer').then((m) => ({ default: m.CaptureViewer })))
 const NatSimView = lazy(() => import('@/interactive/redes/NatSim').then((m) => ({ default: m.NatSim })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
@@ -389,6 +390,18 @@ export function SimuladorFirewall() {
   )
 }
 
+/** Visor de capturas: libre (elegís el escenario) o con un ejercicio de tipo captura. */
+const CAPTURA_LIBRE = { tipo: 'captura', escenario: 'visita-web' }
+export function VisorCapturas({ ejercicio }: { ejercicio?: unknown }) {
+  const { value, error } = useExercise('captura', ejercicio ?? CAPTURA_LIBRE)
+  if (error) return <ExerciseError error={error} />
+  return (
+    <Island>
+      <CaptureViewerView ejercicio={ejercicio ? value : undefined} />
+    </Island>
+  )
+}
+
 export function PlanificadorWifi() {
   return (
     <Island>
@@ -602,6 +615,7 @@ export const mdxComponents = {
   EjercicioRutas,
   SimuladorConvergencia,
   SimuladorFirewall,
+  VisorCapturas,
   PlanificadorWifi,
   ErroresComunes,
   ErrorComun,

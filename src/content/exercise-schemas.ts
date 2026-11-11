@@ -114,6 +114,41 @@ export const diagramSchema = z.strictObject({
     .min(1),
 })
 
+/** Un ejercicio sobre una captura de tráfico simulada (src/engines/captura), para el visor. */
+export const capturaTaskSchema = z.discriminatedUnion('tipo', [
+  z.strictObject({
+    tipo: z.literal('filtro'),
+    consigna: z.string().min(1),
+    /** Un filtro de visualización que muestra exactamente los paquetes pedidos; vale cualquier otro equivalente. */
+    solucion: z.string().min(1),
+    pista: z.string().optional(),
+    explicacion: z.string().optional(),
+  }),
+  z.strictObject({
+    tipo: z.literal('paquete'),
+    consigna: z.string().min(1),
+    /** Número del paquete que hay que marcar en la lista. */
+    paquete: z.number().int().positive(),
+    pista: z.string().optional(),
+    explicacion: z.string().optional(),
+  }),
+  z.strictObject({
+    tipo: z.literal('pregunta'),
+    consigna: z.string().min(1),
+    opciones: z.array(z.string().min(1)).min(2),
+    correcta: z.number().int().nonnegative(),
+    explicacion: z.string().min(1),
+  }),
+])
+
+export const capturaExerciseSchema = z.strictObject({
+  tipo: z.literal('captura'),
+  titulo: z.string().optional(),
+  escenario: z.string().min(1),
+  introduccion: z.string().optional(),
+  tareas: z.array(capturaTaskSchema).default([]),
+})
+
 export const orderExerciseSchema = z.strictObject({
   tipo: z.literal('ordenar'),
   consigna: z.string().min(1),
@@ -279,6 +314,7 @@ export const exerciseSchemas = {
   configuracion: configExerciseSchema,
   pasos: guidedStepsSchema,
   vim: vimExerciseSchema,
+  captura: capturaExerciseSchema,
 } as const
 
 export type ExerciseKind = keyof typeof exerciseSchemas
@@ -295,4 +331,6 @@ export type TroubleshootingScenario = z.infer<typeof troubleshootingSchema>
 export type ConfigExercise = z.infer<typeof configExerciseSchema>
 export type ConfigRule = z.infer<typeof configRuleSchema>
 export type GuidedSteps = z.infer<typeof guidedStepsSchema>
+export type CapturaExercise = z.infer<typeof capturaExerciseSchema>
+export type CapturaTask = z.infer<typeof capturaTaskSchema>
 export type ConfigLanguage = (typeof configLanguages)[number]

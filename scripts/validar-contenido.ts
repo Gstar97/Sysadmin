@@ -7,8 +7,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse } from 'yaml'
 import { scanContent } from '../build/content-scan'
-import { configExerciseSchema, terminalExerciseSchema, vimExerciseSchema } from '../src/content/exercise-schemas'
-import { checkConfigExercise, checkTerminalExercise, checkTopologyExercise, checkVimExercise, type ExerciseProblem } from '../src/engines/exercise-check'
+import { capturaExerciseSchema, configExerciseSchema, terminalExerciseSchema, vimExerciseSchema } from '../src/content/exercise-schemas'
+import { checkCapturaExercise, checkConfigExercise, checkTerminalExercise, checkTopologyExercise, checkVimExercise, type ExerciseProblem } from '../src/engines/exercise-check'
 import { topologyExerciseSchema } from '../src/engines/network/schema'
 
 const contentDir = path.resolve(process.env.CONTENT_DIR ?? 'content')
@@ -46,6 +46,9 @@ async function main() {
     } else if (data?.tipo === 'vim') {
       const ex = vimExerciseSchema.safeParse(data)
       if (ex.success) problems = checkVimExercise(ex.data)
+    } else if (data?.tipo === 'captura') {
+      const ex = capturaExerciseSchema.safeParse(data)
+      if (ex.success) problems = checkCapturaExercise(ex.data)
     } else if (data?.tipo === 'topologia') {
       const ex = topologyExerciseSchema.safeParse(data)
       if (ex.success) problems = checkTopologyExercise(ex.data)
@@ -61,7 +64,7 @@ async function main() {
   for (const w of warnings) console.log(color(33, `aviso: ${w}`))
   for (const e of errors) console.log(color(31, `error: ${e}`))
   if (errors.length) {
-    console.log(color(31, `\n${errors.length} ${errors.length === 1 ? 'error' : 'errores'}: corrígelos antes de compilar.`))
+    console.log(color(31, `\n${errors.length} ${errors.length === 1 ? 'error' : 'errores'}: corregilos antes de compilar.`))
     process.exit(1)
   }
   console.log(color(32, `Todo en orden${warnings.length ? ` (${warnings.length} ${warnings.length === 1 ? 'aviso' : 'avisos'})` : ''}.`))

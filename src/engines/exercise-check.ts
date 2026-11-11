@@ -4,7 +4,9 @@
  * corregido pase sus reglas y que una topología no tenga referencias rotas.
  * Lo usan el validador de contenido (npm run validar) y las pruebas automáticas.
  */
-import type { ConfigExercise, TerminalExercise, VimExercise } from '@/content/exercise-schemas'
+import type { CapturaExercise, ConfigExercise, TerminalExercise, VimExercise } from '@/content/exercise-schemas'
+import { escenario } from './captura/model'
+import { compileDisplay } from './captura/filtros'
 import { evaluateRules, validateConfig } from './config'
 import { createIosSession, verifyIos } from './network'
 import { parseIpv4 } from './network/ip'
@@ -126,5 +128,28 @@ export function checkTopologyExercise(ex: TopologyExercise): ExerciseProblem[] {
       problems.push({ level: 'error', message: `la topología no se puede construir: ${(e as Error).message}` })
     }
   }
+  return problems
+}
+
+/** Una captura: que el escenario exista, que cada filtro de solución compile y muestre algo, y que las respuestas existan. */
+export function checkCapturaExercise(ex: CapturaExercise): ExerciseProblem[] {
+  const problems: ExerciseProblem[] = []
+  const esc = escenario(ex.escenario)
+  if (!esc) return [{ level: 'error', message: `el escenario de captura "${ex.escenario}" no existe` }]
+  ex.tareas.forEach((t, i) => {
+    const n = `tarea ${i + 1}`
+    if (t.tipo === 'filtro') {
+      try {
+        const f = compileDisplay(t.solucion)
+        const k = esc.paquetes.filter(f).length
+        if (!k) problems.push({ level: 'error', message: `${n}: el filtro "${t.solucion}" no muestra ningún paquete` })
+        if (k === esc.paquetes.length) problems.push({ level: 'warning', message: `${n}: el filtro "${t.solucion}" muestra todos los paquetes` })
+      } catch (e) {
+        problems.push({ level: 'error', message: `${n}: el filtro "${t.solucion}" no compila: ${(e as Error).message}` })
+      }
+    } else if (t.tipo === 'paquete') {
+      if (t.paquete > esc.paquetes.length) problems.push({ level: 'error', message: `${n}: la captura tiene ${esc.paquetes.length} paquetes, no existe el ${t.paquete}` })
+    } else if (t.correcta >= t.opciones.length) problems.push({ level: 'error', message: `${n}: la respuesta correcta (${t.correcta}) no es una de las opciones` })
+  })
   return problems
 }

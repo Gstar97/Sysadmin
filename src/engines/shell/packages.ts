@@ -426,6 +426,7 @@ const common: Record<string, PackageInfo> = {
   rsync: { summary: 'A program for synchronizing files over a network', version: '3.3.0', commands: ['rsync'] },
   lsof: { summary: 'A utility which lists open files on a Linux/UNIX system', version: '4.98.0', commands: ['lsof'] },
   tcpdump: { summary: 'Command-line tool for monitoring network traffic', version: '4.99.5', commands: ['tcpdump'] },
+  mtr: { summary: 'Network diagnostic tool combining traceroute and ping', version: '0.95', commands: ['mtr'] },
   nmap: { summary: 'Network exploration tool and security scanner', version: '7.92', commands: ['nmap'] },
   python3: { summary: 'Python 3 interpreter', version: '3.12.8', commands: ['python3'] },
   tar: { summary: 'GNU file archiving program', version: '1.35', commands: ['tar'] },

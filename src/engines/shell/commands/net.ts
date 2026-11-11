@@ -73,6 +73,11 @@ function canReach(ctx: CommandContext, ip: string): boolean {
 }
 
 /** Para las verificaciones: si desde ese servidor se llega a la IP siguiendo su tabla de rutas. */
+/** Cómo saldría un paquete hacia esa IP (para mtr y tcpdump). */
+export function routeFor(sys: System, ip: string) {
+  return route({ sys } as CommandContext, ip)
+}
+
 export function reaches(sys: System, ip: string): boolean {
   return canReach({ sys } as CommandContext, ip)
 }
