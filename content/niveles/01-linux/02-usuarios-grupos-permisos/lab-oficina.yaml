@@ -43,7 +43,7 @@ pasos:
       - ls -l /srv/ventas
     comprobar: Carlos pudo escribir, marta recibió "Permission denied" y el archivo es del grupo ventas.
     si_falla: >-
-      Si carlos no puede escribir, revisa que el archivo tenga `rw-` para el grupo. Un detalle que
+      Si carlos no puede escribir, revisá que el archivo tenga `rw-` para el grupo. Un detalle que
       confunde: si lo creás con `sudo -u laura`, nace con 644, porque sudo suma la umask 022 a la
       del usuario. `su - laura` abre una sesión igual a la de ella, con su umask 002 (comprobalo
       con `sudo su - laura -c umask`).
@@ -64,14 +64,14 @@ pasos:
     comprobar: "`sudo -l -U sofia` muestra solo `/usr/bin/systemctl restart chronyd` y `/usr/bin/journalctl -u chronyd`."
     si_falla: >-
       La línea a escribir es `%soporte ALL=(root) /usr/bin/systemctl restart chronyd, /usr/bin/journalctl -u chronyd`.
-      Si visudo marca un error, elige (e) para volver a editar.
+      Si visudo marca un error, elegí (e) para volver a editar.
   - titulo: Aplicá la política de contraseñas y el bloqueo
     comandos:
       - printf 'minlen = 12\nminclass = 3\n' | sudo tee /etc/security/pwquality.conf.d/10-empresa.conf
       - sudo authselect enable-feature with-faillock
       - sudo sed -i 's/^# deny = 3/deny = 5/' /etc/security/faillock.conf
     comprobar: "Desde tu PC, fallar 5 veces la contraseña de auditor por SSH hace que `sudo faillock --user auditor` muestre los intentos y que la cuenta quede bloqueada."
-    si_falla: Antes de este paso, deja abierta una sesión con `sudo -i`. Si algo falla, desactiva el cambio con `sudo authselect disable-feature with-faillock`.
+    si_falla: Antes de este paso, dejá abierta una sesión con `sudo -i`. Si algo falla, desactivá el cambio con `sudo authselect disable-feature with-faillock`.
   - titulo: Repetí lo que cambia en ubuntu01
     detalle: |-
       En ubuntu01, crea al menos un área completa (grupo, dos cuentas y carpeta compartida). Tené en cuenta:

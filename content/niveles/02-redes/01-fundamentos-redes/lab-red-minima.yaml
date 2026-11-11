@@ -4,7 +4,7 @@ descripcion: >-
   Vas a conectar rocky01 y ubuntu01 por una red interna del hipervisor (un switch virtual que
   solo ven ellas dos) y a mirar, con tus propios ojos, el ARP y las tramas.
 pasos:
-  - titulo: Tomá instantáneas y agrega una placa en red interna
+  - titulo: Tomá instantáneas y agregá una placa en red interna
     detalle: >-
       Con las dos máquinas apagadas, toma una instantánea de cada una (antes-de-redes). Después
       agrega a cada una una segunda placa de red conectada a una red interna con el mismo
@@ -48,7 +48,7 @@ pasos:
       - sudo apt install -y tcpdump
       - sudo tcpdump -e -n -i enp0s8 arp
     comprobar: tcpdump dice "listening on enp0s8" y espera.
-  - titulo: Hacé ping desde rocky01 y mira la captura
+  - titulo: Hacé ping desde rocky01 y mirá la captura
     comandos:
       - ip neigh show dev enp0s8
       - ping -c 3 10.10.10.2
@@ -59,7 +59,7 @@ pasos:
       ff:ff:ff:ff:ff:ff, y después la respuesta ("Reply 10.10.10.2 is-at ..."), ya dirigida a
       la MAC de rocky01.
     comprobar: La tabla de vecinos de rocky01 muestra 10.10.10.2 con la MAC que anotaste de ubuntu01.
-  - titulo: Vaciá la tabla y repite
+  - titulo: Vaciá la tabla y repetí
     comandos:
       - sudo ip neigh flush dev enp0s8
       - ping -c 1 10.10.10.2
@@ -67,7 +67,7 @@ pasos:
       Al vaciar la tabla, el siguiente ping vuelve a necesitar ARP, y en la captura aparece de
       nuevo el par solicitud y respuesta.
     comprobar: Ves una segunda solicitud y respuesta ARP en tcpdump.
-  - titulo: Provoca una IP duplicada
+  - titulo: Provocá una IP duplicada
     detalle: >-
       En ubuntu01 corta tcpdump (Ctrl+C) y agregale también la IP de rocky01. Después, desde
       ubuntu01, pregunta quién tiene esa IP. Verás que contesta la otra máquina: la IP está
@@ -85,6 +85,6 @@ pasos:
     comandos:
       - sudo ip addr del 10.10.10.1/24 dev enp0s8
     detalle: >-
-      En ubuntu01 quita la IP repetida. Si preferís, vuelve a las instantáneas: la
+      En ubuntu01 quita la IP repetida. Si preferís, volvé a las instantáneas: la
       configuración con ip addr se borra igual al reiniciar.
     comprobar: ip -br a en ubuntu01 muestra solo 10.10.10.2/24 en enp0s8.

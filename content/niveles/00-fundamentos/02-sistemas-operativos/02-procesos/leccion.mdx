@@ -70,7 +70,7 @@ En la columna STAT de `ps` y en la S de `top`:
 
 Si hay más procesos listos que núcleos, alguien tiene que decidir quién usa la CPU en cada momento: es el **<Termino id="planificador">planificador</Termino>** del kernel. Da a cada proceso un turno muy corto (milisegundos) y lo cambia por otro. Cambiar de proceso se llama **cambio de contexto** y tiene un pequeño costo: guardar los registros de uno y cargar los del siguiente.
 
-Como los turnos son tan cortos, parece que todo corre a la vez: eso es la **multitarea**. Probá los tres algoritmos clásicos con el mismo grupo de procesos y compara los resultados:
+Como los turnos son tan cortos, parece que todo corre a la vez: eso es la **multitarea**. Probá los tres algoritmos clásicos con el mismo grupo de procesos y compará los resultados:
 
 <PlanificadorCpu />
 
@@ -118,10 +118,10 @@ La regla de oro: **primero SIGTERM y, solo si el proceso no responde, SIGKILL**.
 
 <ErroresComunes>
   <ErrorComun titulo="Usar kill -9 como primera opción">
-    SIGKILL no deja que el proceso guarde nada: una base de datos o un programa que estaba escribiendo un archivo pueden quedar con datos corruptos. Enviá primero SIGTERM (`kill PID`), espera unos segundos y solo si sigue vivo usa `kill -9`. Para servicios, lo correcto es directamente `systemctl stop servicio`.
+    SIGKILL no deja que el proceso guarde nada: una base de datos o un programa que estaba escribiendo un archivo pueden quedar con datos corruptos. Enviá primero SIGTERM (`kill PID`), esperá unos segundos y solo si sigue vivo usá `kill -9`. Para servicios, lo correcto es directamente `systemctl stop servicio`.
   </ErrorComun>
   <ErrorComun titulo='"Operation not permitted" al intentar terminar un proceso'>
-    Un usuario común solo puede enviar señales a sus propios procesos. Para los de otros usuarios hace falta `sudo`. Antes de usarlo, confirma de quién es y qué hace ese proceso, y si es posible avisa al dueño.
+    Un usuario común solo puede enviar señales a sus propios procesos. Para los de otros usuarios hace falta `sudo`. Antes de usarlo, confirmá de quién es y qué hace ese proceso, y si es posible avisa al dueño.
   </ErrorComun>
   <ErrorComun titulo="Un proceso zombie que no se puede matar">
     Un zombie ya está muerto: solo queda su entrada en la tabla de procesos hasta que el padre la recoja, así que `kill` no tiene efecto. Unos pocos no hacen daño. Si se acumulan, el problema es el proceso padre: hay que reiniciarlo o terminarlo, y los zombies desaparecen con él.
@@ -130,7 +130,7 @@ La regla de oro: **primero SIGTERM y, solo si el proceso no responde, SIGKILL**.
     En Linux el load average también cuenta a los procesos en estado D, que esperan al disco o a un almacenamiento de red. Si `top` muestra la CPU ociosa y un valor alto en *wa* (espera de E/S), el problema está en el disco o en el almacenamiento, no en la CPU.
   </ErrorComun>
   <ErrorComun titulo="Terminar el proceso equivocado">
-    Con `ps aux | grep nombre`, una de las líneas suele ser el propio `grep`. Leé siempre la línea de comandos completa y el usuario antes de enviar una señal, o usa `pgrep -a nombre`, que no se lista a sí mismo.
+    Con `ps aux | grep nombre`, una de las líneas suele ser el propio `grep`. Leé siempre la línea de comandos completa y el usuario antes de enviar una señal, o usá `pgrep -a nombre`, que no se lista a sí mismo.
   </ErrorComun>
 </ErroresComunes>
 

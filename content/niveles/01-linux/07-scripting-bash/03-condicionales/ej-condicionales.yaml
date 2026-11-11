@@ -30,7 +30,7 @@ pasos:
       - "La estructura: if (( uso >= critico )); then ... exit 2; elif (( uso >= aviso )); then ... exit 1; else ... exit 0; fi"
     solucion: ["cat > ~/espacio.sh <<'FIN'\n#!/bin/bash\n# espacio.sh: controla el uso de una partición.\n# Uso: espacio.sh [PARTICIÓN] [AVISO] [CRÍTICO]   (0 OK, 1 AVISO, 2 CRÍTICO, 3 error)\nparticion=\"${1:-/}\"\naviso=\"${2:-80}\"\ncritico=\"${3:-90}\"\nif [ ! -d \"$particion\" ]; then\n  echo \"No existe: $particion\" >&2\n  exit 3\nfi\nuso=$(df --output=pcent \"$particion\" | tail -1 | tr -dc '0-9')\nif (( uso >= critico )); then\n  echo \"CRÍTICO: $particion al $uso %\"\n  exit 2\nelif (( uso >= aviso )); then\n  echo \"AVISO: $particion al $uso %\"\n  exit 1\nelse\n  echo \"OK: $particion al $uso %\"\n  exit 0\nfi\nFIN", chmod +x ~/espacio.sh]
     explicacion: Primero se valida lo que entra (que la partición exista), después se decide. Solo una de las ramas se ejecuta.
-  - consigna: Ejecutalo con los valores por defecto y mira el código de salida.
+  - consigna: Ejecutalo con los valores por defecto y mirá el código de salida.
     verificar:
       - { comando_usado: 'espacio\.sh' }
       - { salida_contiene: "OK: / al" }

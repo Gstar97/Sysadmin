@@ -19,7 +19,7 @@ pasos:
     comandos:
       - lsblk
     comprobar: lsblk muestra sdb y sdc de 5G, sin particiones.
-    si_falla: Si no aparecen, revisa que los discos estén conectados al mismo controlador que sda y reinicia la VM.
+    si_falla: Si no aparecen, revisá que los discos estén conectados al mismo controlador que sda y reiniciá la VM.
   - titulo: Particioná los dos discos para LVM
     comandos:
       - sudo parted -s /dev/sdb mklabel gpt mkpart lvm 1MiB 100% set 1 lvm on
@@ -33,7 +33,7 @@ pasos:
       - sudo lvcreate -n logs -L 2G datos
       - sudo vgs; sudo lvs
     comprobar: "`vgs` muestra el grupo datos de casi 10 GiB con unos 5 GiB libres, y `lvs` los dos volúmenes."
-  - titulo: Creá los sistemas de archivos y monta /srv/datos por UUID
+  - titulo: Creá los sistemas de archivos y montá /srv/datos por UUID
     comandos:
       - sudo mkfs.xfs /dev/datos/srv
       - sudo mkfs.xfs /dev/datos/logs
@@ -60,10 +60,10 @@ pasos:
       - sudo reboot
     comprobar: Después del reinicio, `findmnt /var/log` muestra /dev/mapper/datos-logs y `journalctl -b` funciona.
     si_falla: >-
-      Si el servidor arranca en modo de emergencia, entra con la contraseña de root, revisa
-      `journalctl -xb`, comenta la línea nueva de fstab, `systemctl daemon-reload` y
-      `systemctl default`. Si no podés entrar, vuelve a la instantánea.
-  - titulo: Agranda /srv/datos en caliente
+      Si el servidor arranca en modo de emergencia, entrá con la contraseña de root, revisá
+      `journalctl -xb`, comentá la línea nueva de fstab, `systemctl daemon-reload` y
+      `systemctl default`. Si no podés entrar, volvé a la instantánea.
+  - titulo: Agrandá /srv/datos en caliente
     detalle: Mientras escribís un archivo en /srv/datos, agranda el volumen con el espacio libre del grupo.
     comandos:
       - sudo fallocate -l 2G /srv/datos/relleno
@@ -72,7 +72,7 @@ pasos:
       - df -h /srv/datos
       - sudo rm /srv/datos/relleno
     comprobar: df pasa de unos 3 GiB a unos 5 GiB sin desmontar nada.
-  - titulo: Agranda un disco virtual y aprovecha el espacio
+  - titulo: Agrandá un disco virtual y aprovechá el espacio
     detalle: >-
       En el hipervisor, agranda el disco sdc de 5 a 8 GiB con la VM encendida (si tu hipervisor
       no lo permite, apagala, agrandalo y encendela). Después, Linux tiene que enterarse en tres
@@ -85,7 +85,7 @@ pasos:
       - sudo vgs
     comprobar: vgs muestra 3 GiB más libres en el grupo datos.
     si_falla: >-
-      Si parted pregunta por la copia de la tabla GPT ("Fix/Ignore?"), responde Fix: la tabla de
+      Si parted pregunta por la copia de la tabla GPT ("Fix/Ignore?"), respondé Fix: la tabla de
       respaldo tiene que estar al final del disco, que se movió.
   - titulo: Agregá 1 GiB de swap en un archivo
     comandos:

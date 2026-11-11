@@ -104,7 +104,7 @@ Achicar es lo contrario y es riesgoso, porque si el volumen queda más chico que
 - **XFS no se puede achicar.** `lvreduce` lo rechaza. La única forma es copiar los datos a otro lado, borrar el volumen, crearlo más chico y volver a copiar.
 - **ext4 sí**, pero desmontado: `sudo umount /var/log/app` y `sudo lvreduce -r -L 3G datos/logs` (el `-r` achica primero el sistema de archivos y después el volumen, en el orden correcto).
 
-Antes de achicar algo con datos importantes, haz una copia de seguridad. Siempre.
+Antes de achicar algo con datos importantes, hacé una copia de seguridad. Siempre.
 
 <Nota titulo="Para más adelante: instantáneas">
 LVM puede sacar **instantáneas** (snapshots) de un volumen: una foto del momento, útil para hacer una copia de seguridad consistente o para probar una actualización y volver atrás. Las vas a ver en el nivel de respaldos.
@@ -119,7 +119,7 @@ LVM puede sacar **instantáneas** (snapshots) de un volumen: una foto del moment
     Faltó agrandar el sistema de archivos: usaste lvextend sin `-r`. Completalo con `sudo xfs_growfs /punto/de/montaje` o `sudo resize2fs /dev/vg/lv`.
   </ErrorComun>
   <ErrorComun titulo='"Insufficient free space" o "insufficient free space (N extents)"'>
-    El grupo no tiene ese espacio libre. Mirá `sudo vgs` (VFree) y suma un disco con `vgextend` o pide menos.
+    El grupo no tiene ese espacio libre. Mirá `sudo vgs` (VFree) y sumá un disco con `vgextend` o pedí menos.
   </ErrorComun>
   <ErrorComun titulo='"Cannot use /dev/sdb: device is partitioned"'>
     El disco tiene una tabla de particiones. Usá la partición (`/dev/sdb1`) o, si el disco es nuevo y está vacío, borrá la tabla con `wipefs -a /dev/sdb` (confirmando antes con lsblk).

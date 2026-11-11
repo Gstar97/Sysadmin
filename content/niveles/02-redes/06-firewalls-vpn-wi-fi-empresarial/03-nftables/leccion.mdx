@@ -63,7 +63,7 @@ sudo nft list ruleset                         # lo que está cargado ahora
 sudo systemctl enable --now nftables          # cargarlo en cada arranque
 ```
 
-En Rocky el archivo que carga el servicio es `/etc/sysconfig/nftables.conf`; en Ubuntu y Debian, `/etc/nftables.conf`. Y si usás nftables a mano, desactiva firewalld (o ufw): dos herramientas escribiendo reglas a la vez terminan pisándose.
+En Rocky el archivo que carga el servicio es `/etc/sysconfig/nftables.conf`; en Ubuntu y Debian, `/etc/nftables.conf`. Y si usás nftables a mano, desactivá firewalld (o ufw): dos herramientas escribiendo reglas a la vez terminan pisándose.
 
 <EnSimple>
 En nftables escribís una cadena por cada punto que querés controlar (input para lo que llega al equipo, forward para lo que lo atraviesa), con una política que bloquea todo, una línea que deja volver las respuestas y una línea por cada cosa que sí querés permitir.
@@ -88,7 +88,7 @@ table ip nat {
 }
 ```
 
-**masquerade** es NAT de origen con la IP que tenga la interfaz en ese momento (ideal si la WAN la recibe por DHCP). Si la IP pública es fija, `snat to 203.0.113.10` hace lo mismo un poco más eficiente. Y si publicás un servidor con `dnat`, recuerda permitirlo también en **forward**.
+**masquerade** es NAT de origen con la IP que tenga la interfaz en ese momento (ideal si la WAN la recibe por DHCP). Si la IP pública es fija, `snat to 203.0.113.10` hace lo mismo un poco más eficiente. Y si publicás un servidor con `dnat`, recordá permitirlo también en **forward**.
 
 <EditorConfig ejercicio={ejNft} />
 
@@ -98,7 +98,7 @@ iptables fue la herramienta durante veinte años, y vas a encontrar scripts y do
 
 <ErroresComunes>
   <ErrorComun titulo="Cargar policy drop en input sin permitir SSH, por SSH">
-    Te quedás afuera en el instante. Probá primero con nft -c, y si estás conectado a distancia, programa un "seguro" (por ejemplo, un at que haga nft flush ruleset en 5 minutos) antes de aplicar.
+    Te quedás afuera en el instante. Probá primero con nft -c, y si estás conectado a distancia, programá un "seguro" (por ejemplo, un at que haga nft flush ruleset en 5 minutos) antes de aplicar.
   </ErrorComun>
   <ErrorComun titulo="Olvidar ct state established,related">
     Con política drop, el equipo no recibe ni las respuestas del DNS ni de las actualizaciones. Es la primera línea de cada cadena.

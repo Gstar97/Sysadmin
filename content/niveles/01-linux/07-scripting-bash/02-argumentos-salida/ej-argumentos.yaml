@@ -22,7 +22,7 @@ pasos:
       - "`cat > ~/revisar-servicio.sh <<'FIN'` con el contenido de la solución, y `chmod +x ~/revisar-servicio.sh`."
     solucion: ["cat > ~/revisar-servicio.sh <<'FIN'\n#!/bin/bash\n# revisar-servicio.sh: dice si un servicio está funcionando.\n# Uso: revisar-servicio.sh SERVICIO   (sale con 0 si funciona, 1 si no, 2 si se usó mal)\nif [ $# -ne 1 ]; then\n  echo \"Uso: $0 SERVICIO\" >&2\n  exit 2\nfi\nservicio=\"$1\"\nif systemctl is-active --quiet \"$servicio\"; then\n  echo \"$servicio: funcionando\"\n  exit 0\nelse\n  echo \"$servicio: DETENIDO\" >&2\n  exit 1\nfi\nFIN", chmod +x ~/revisar-servicio.sh]
     explicacion: El if lo vas a ver en detalle en la próxima lección; por ahora, fijate en $#, $1, >&2 y exit.
-  - consigna: Ejecutalo sin argumentos y mira el código de salida.
+  - consigna: Ejecutalo sin argumentos y mirá el código de salida.
     verificar:
       - { comando_usado: 'revisar-servicio\.sh\s*;\s*echo\s+\$\?|revisar-servicio\.sh\s*$' }
       - { salida_contiene: "Uso:" }

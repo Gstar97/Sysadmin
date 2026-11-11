@@ -14,7 +14,7 @@ pasos:
       - sudo systemctl enable --now sysstat
       - nproc; uptime
     comprobar: systemctl status sysstat dice active y anotaste cuántas CPU tiene cada servidor.
-  - titulo: Provoca un proceso que consume toda una CPU
+  - titulo: Provocá un proceso que consume toda una CPU
     detalle: >-
       yes escribe "y" sin parar; mandando la salida a /dev/null, solo consume CPU. Es un
       reemplazo seguro de "el informe que se colgó".
@@ -61,7 +61,7 @@ pasos:
     comprobar: En /var/log/reporte-uso hay un archivo con la fecha de hoy y su contenido se lee bien.
   - titulo: Programalo con cron y probalo
     detalle: >-
-      Primero lo programas para dentro de 2 o 3 minutos (mira la hora con date) y, cuando
+      Primero lo programas para dentro de 2 o 3 minutos (mirá la hora con date) y, cuando
       compruebes que funcionó, le ponés el horario de verdad: de lunes a viernes a las 7:45.
     comandos:
       - date
@@ -75,10 +75,10 @@ pasos:
         45 7 * * 1-5  root  /usr/local/bin/reporte-uso.sh >> /var/log/reporte-uso/cron.log 2>&1
     comprobar: /var/log/cron muestra la línea CMD con reporte-uso.sh y cron.log quedó vacío (sin errores).
     si_falla: >-
-      Si no aparece en el registro, revisa que la línea tenga la columna de usuario (root) y que el
-      archivo de /etc/cron.d no tenga punto en el nombre. Si aparece pero no hay reporte, mira
+      Si no aparece en el registro, revisá que la línea tenga la columna de usuario (root) y que el
+      archivo de /etc/cron.d no tenga punto en el nombre. Si aparece pero no hay reporte, mirá
       cron.log.
-  - titulo: Convierte ubuntu01 en el servidor de hora del laboratorio
+  - titulo: Convertí ubuntu01 en el servidor de hora del laboratorio
     detalle: >-
       En ubuntu01. Ubuntu 24.04 usa systemd-timesyncd: al instalar chrony, lo reemplaza. Buscá la
       IP de ubuntu01 en la red solo-anfitrión con ip -4 addr (la de 192.168.56.x).
@@ -91,7 +91,7 @@ pasos:
     comprobar: chronyc sources muestra una fuente con ^* (ubuntu01 tiene internet por la otra placa) y anotaste su IP.
   - titulo: Hacé que rocky01 tome la hora de ubuntu01
     detalle: >-
-      En rocky01. Reemplazá la línea pool por la IP de ubuntu01 (usa la tuya en lugar de
+      En rocky01. Reemplazá la línea pool por la IP de ubuntu01 (usá la tuya en lugar de
       192.168.56.102) y poné la zona horaria de tu ciudad.
     comandos:
       - sudo cp /etc/chrony.conf /etc/chrony.conf.bak
@@ -104,11 +104,11 @@ pasos:
       - timedatectl
     comprobar: chronyc sources muestra la IP de ubuntu01 con ^*, y timedatectl dice System clock synchronized yes con tu zona.
     si_falla: >-
-      Si queda en ^?, revisa desde rocky01 que llegás a ubuntu01 (ping) y que el archivo de
+      Si queda en ^?, revisá desde rocky01 que llegás a ubuntu01 (ping) y que el archivo de
       ubuntu01 tiene la red correcta en allow. Si ubuntu01 tuviera activo el firewall (ufw), haría
       falta abrir el puerto 123/udp (módulo 1.6).
   - titulo: Mirá el historial al día siguiente
-    detalle: Después de unas horas (o al otro día), consulta lo que guardó sar.
+    detalle: Después de unas horas (o al otro día), consultá lo que guardó sar.
     comandos:
       - sar -u | head -20
       - sar -q | tail -5

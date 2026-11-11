@@ -43,7 +43,7 @@ pasos:
         comandos:
           - type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh tu_usuario@192.168.56.102 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
     comprobar: ssh tu_usuario@192.168.56.102 y ssh tu_usuario@192.168.56.103 entran sin pedir la contraseña del servidor.
-    si_falla: Si en rocky01 sigue pidiendo contraseña, entra y ejecuta restorecon -Rv ~/.ssh (etiqueta de SELinux) y revisa los permisos de ~/.ssh (700) y authorized_keys (600).
+    si_falla: Si en rocky01 sigue pidiendo contraseña, entrá y ejecutá restorecon -Rv ~/.ssh (etiqueta de SELinux) y revisá los permisos de ~/.ssh (700) y authorized_keys (600).
   - titulo: Guardá las conexiones en ~/.ssh/config de tu PC
     detalle: Con ProxyJump, ssh rocky01 va a pasar solo por el bastión.
     archivo:
@@ -95,7 +95,7 @@ pasos:
       - sudo firewall-cmd --reload
       - sudo firewall-cmd --list-all
     comprobar: Desde tu PC, ssh tu_usuario@192.168.56.103 (directo) ya no entra (No route to host), y ssh rocky01 (por el bastión) sí.
-    si_falla: Si te quedaste afuera de rocky01, entra por la consola del hipervisor y ejecuta sudo firewall-cmd --permanent --add-service=ssh && sudo firewall-cmd --reload.
+    si_falla: Si te quedaste afuera de rocky01, entrá por la consola del hipervisor y ejecutá sudo firewall-cmd --permanent --add-service=ssh && sudo firewall-cmd --reload.
   - titulo: Prepará el sitio en /srv/sitio, puerto 8090
     comandos:
       - sudo dnf install -y nginx policycoreutils-python-utils

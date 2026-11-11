@@ -51,7 +51,7 @@ crontab -r              # borrarla entera, sin preguntar: cuidado
 sudo crontab -u ana -l  # la lista de otro usuario
 ```
 
-Las tareas corren con los permisos de ese usuario. El archivo queda en `/var/spool/cron/USUARIO` (Rocky) o en `/var/spool/cron/crontabs/USUARIO` (Ubuntu). La `-r` está al lado de la `-e` en el teclado, y no pide confirmación: antes de tocar un crontab importante, guarda una copia con `crontab -l > crontab.bak`.
+Las tareas corren con los permisos de ese usuario. El archivo queda en `/var/spool/cron/USUARIO` (Rocky) o en `/var/spool/cron/crontabs/USUARIO` (Ubuntu). La `-r` está al lado de la `-e` en el teclado, y no pide confirmación: antes de tocar un crontab importante, guardá una copia con `crontab -l > crontab.bak`.
 
 ## Las tareas del sistema: /etc/cron.d y compañía
 
@@ -71,7 +71,7 @@ Un archivo por tarea, con un comentario arriba, hace que cualquiera entienda qu�
 
 "A mano funciona y desde cron no" es casi un clásico. Casi siempre es una de estas tres cosas:
 
-1. **La PATH es mínima.** cron ejecuta con muy pocas variables; la PATH de las tareas de usuario es solo `/usr/bin:/bin`. Lo que está en `/usr/local/bin` o `/usr/sbin` no se encuentra. Usá rutas completas o define `PATH=` arriba del crontab o dentro del script. Tampoco carga tu `.bashrc`, y el directorio de trabajo es tu home.
+1. **La PATH es mínima.** cron ejecuta con muy pocas variables; la PATH de las tareas de usuario es solo `/usr/bin:/bin`. Lo que está en `/usr/local/bin` o `/usr/sbin` no se encuentra. Usá rutas completas o definí `PATH=` arriba del crontab o dentro del script. Tampoco carga tu `.bashrc`, y el directorio de trabajo es tu home.
 2. **El % tiene un significado especial.** En una línea de crontab, `%` es un salto de línea. `date +%F` corta el comando a la mitad; hay que escribirlo `date +\%F` (o, mejor, llevar el comando a un script).
 3. **La salida se pierde.** Si no la redirigís, cron intenta mandarla por correo al usuario, y en casi todos los servidores ese correo no llega a nadie. Terminá siempre las líneas con `>> /ruta/al.log 2>&1`.
 
