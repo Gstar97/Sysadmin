@@ -1,0 +1,102 @@
+tipo: troubleshooting
+titulo: "\"No anda el ERP\""
+descripcion: >-
+  Una distribuidora con 40 puestos. El ERP corre en erp01 (192.168.10.30, HTTPS). Son las 8:40
+  de un lunes y te llega un mensaje: "No anda el ERP". Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: El mensaje es de Laura, de Compras. No dice nada más.
+    opciones:
+      - { texto: "Preguntarle qué ve exactamente, desde cuándo y si a sus compañeros también les pasa", ir_a: n_definir, minutos: 3 }
+      - texto: Reiniciar el servicio del ERP en erp01, por las dudas
+        ir_a: n_reinicio
+        minutos: 8
+      - texto: Revisar los registros de erp01 de toda la noche
+        ir_a: n_logs
+        minutos: 15
+  n_reinicio:
+    situacion: >-
+      Cortaste a las 25 personas que ya estaban trabajando en el ERP. Laura dice que sigue igual.
+      Reiniciar no es un diagnóstico: borra evidencia y molesta a los que andaban bien.
+    opciones:
+      - { texto: "Preguntarle a Laura qué ve exactamente y a quién le pasa", ir_a: n_definir, minutos: 3 }
+  n_logs:
+    situacion: >-
+      Hay miles de líneas y nada evidente. Sin saber qué buscar ni desde cuándo, los registros son
+      una pila de papeles. Conviene primero definir el problema.
+    opciones:
+      - { texto: "Preguntarle a Laura qué ve exactamente y a quién le pasa", ir_a: n_definir, minutos: 3 }
+  n_definir:
+    situacion: >-
+      Laura: "Desde que llegué, a las 8:30, el navegador dice que no encuentra la página. A los
+      de Ventas les anda. En Compras no le anda a nadie". El viernes a la tarde se cambió el
+      switch de Compras por uno nuevo.
+    evidencia:
+      - titulo: Lo que sabés
+        contenido: |
+          Qué:       el navegador no encuentra erp.empresa.internal
+          A quién:   todo Compras (6 puestos); Ventas anda
+          Desde:     el lunes a primera hora
+          Cambio:    switch nuevo en Compras el viernes
+    opciones:
+      - { texto: "Entrar a una PC de Compras y probar por la mitad: ping a la IP de erp01", ir_a: n_mitad, minutos: 4 }
+      - texto: Cambiar el switch nuevo por el viejo
+        ir_a: n_switch
+        minutos: 25
+  n_switch:
+    situacion: >-
+      Es una hipótesis razonable (lo único que cambió), pero la estás probando con el cambio más
+      caro: el viejo está en el depósito y hay que recablear. Antes conviene una prueba que no
+      cambie nada.
+    opciones:
+      - { texto: "Volver a dejar el nuevo y probar desde una PC de Compras", ir_a: n_mitad, minutos: 4 }
+  n_mitad:
+    situacion: Desde la PC de Laura, con el navegador cerrado.
+    evidencia:
+      - titulo: Pruebas desde la PC de Laura
+        contenido: |
+          > ping 192.168.10.30
+          Respuesta desde 192.168.10.30: bytes=32 tiempo=1ms TTL=63
+          > ping erp.empresa.internal
+          La solicitud de ping no pudo encontrar el host erp.empresa.internal.
+          > ipconfig /all
+          Dirección IPv4. . . . . . : 192.168.30.21
+          Puerta de enlace  . . . . : 192.168.30.1
+          Servidores DNS. . . . . . : 192.168.30.1
+    opciones:
+      - { texto: "La red llega (la IP responde); falla el nombre. Revisar de dónde sale ese DNS 192.168.30.1", ir_a: n_dns, minutos: 5 }
+      - texto: El switch nuevo filtra el tráfico; llamar al proveedor
+        ir_a: n_proveedor
+        minutos: 30
+  n_proveedor:
+    situacion: >-
+      El proveedor contesta a media mañana: el switch no filtra nada. Y el ping a la IP de erp01
+      ya había mostrado que el tráfico pasa. La evidencia apuntaba al nombre.
+    opciones:
+      - { texto: "Revisar de dónde sale el DNS 192.168.30.1", ir_a: n_dns, minutos: 5 }
+  n_dns:
+    situacion: >-
+      En Ventas, las PC tienen como DNS 192.168.10.53 (el servidor de la empresa). En Compras,
+      192.168.30.1, que es el router: no conoce los nombres internos. Las PC de Compras se
+      renovaron su IP el lunes y recibieron ese DNS por DHCP.
+    evidencia:
+      - titulo: El ámbito de Compras en el servidor DHCP
+        contenido: |
+          subnet 192.168.30.0/24
+            routers           192.168.30.1
+            domain-name-servers 192.168.30.1     # cambiado el viernes 18:10
+    opciones:
+      - { texto: "Corregir el ámbito (DNS 192.168.10.53), pedir a Compras que renueven la IP (ipconfig /renew) y verificar con Laura", ir_a: n_fin, minutos: 6 }
+  n_fin:
+    final: exito
+    situacion: >-
+      Laura abre el ERP. El viernes, quien instaló el switch también "acomodó" el DHCP de Compras y
+      puso el router como DNS. Las PC recién lo tomaron el lunes, al renovar la IP. Lo anotás en
+      el registro de cambios y en el ticket.
+    resumen: >-
+      Definir el problema (qué, a quién, desde cuándo, qué cambió) ya achicó la búsqueda a una sola
+      red. Después, una prueba por la mitad (ping a la IP contra ping al nombre) separó red de DNS
+      sin tocar nada. Lo que había cambiado era el switch, pero también el DHCP: "qué cambió" no
+      es solo lo que te contaron. Y los cambios de DHCP aparecen recién cuando los equipos renuevan
+      su IP, a veces días después.

@@ -262,6 +262,9 @@ export class System {
   traffic?: string
   /** Saltos de mtr declarados por el ejercicio, por destino. */
   hops: Record<string, { ip: string; perdida: number; ms: number }[]> = {}
+  pathMtu: { net: string; mtu: number; router: string }[] = []
+  serverDelay: Record<string, number> = {}
+  openPorts: Record<string, number[]> = {}
   dns: string[] = []
   reachable = new Set<string>()
   /** Los otros servidores de la red del ejercicio (para ssh y scp). */
@@ -479,6 +482,9 @@ export class System {
     this.remoteNets = state.red.redes_remotas.map((r) => ({ net: r.red, via: r.via }))
     this.traffic = state.red.trafico
     this.hops = state.red.saltos
+    this.serverDelay = state.red.demora_servidor
+    this.openPorts = state.red.puertos_abiertos
+    this.pathMtu = state.red.mtu_camino.map((m) => ({ net: m.red, mtu: m.mtu, router: m.router }))
     this.dns = state.red.dns
     this.initialDns = [...state.red.dns]
     this.dnsDown = state.red.dns_caidos

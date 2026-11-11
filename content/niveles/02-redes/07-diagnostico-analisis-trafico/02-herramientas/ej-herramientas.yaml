@@ -1,0 +1,91 @@
+tipo: terminal
+shell: bash
+titulo: "\"La intranet anda lenta y la sucursal se corta\""
+descripcion: >-
+  Dos reclamos el mismo día: la intranet (intranet.empresa.internal) tarda en abrir, y desde la
+  sucursal Norte dicen que la conexión con la central "se corta". Estás en pc-soporte (Rocky
+  Linux, 192.168.10.100), en la central, con sudo. Vas a usar una herramienta por pregunta.
+estado_inicial:
+  distro: rocky
+  hostname: pc-soporte
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  paquetes: { instalados: [mtr, nmap-ncat, bind-utils] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.100/24 }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.53]
+    alcanzables: [192.168.10.53, 192.168.10.80]
+    registros_dns: { intranet.empresa.internal: 192.168.10.80 }
+    redes_remotas:
+      - { red: 10.2.0.0/24, via: 192.168.10.1 }
+    saltos:
+      10.2.0.50:
+        - { ip: 192.168.10.1, ms: 0.5 }
+        - { ip: 10.99.0.1, perdida: 40, ms: 19 }
+        - { ip: 10.2.0.1, ms: 20.1 }
+        - { ip: 10.2.0.50, ms: 21.2 }
+    demora_servidor: { intranet.empresa.internal: 1.8 }
+    puertos_abiertos: { 192.168.10.80: [80, 443], 10.2.0.50: [22, 3389] }
+pasos:
+  - consigna: >-
+      Empezá por tu propio equipo: mirá tus direcciones (una línea por placa) y preguntale al
+      sistema por dónde saldría un paquete hacia 10.2.0.50, una PC de la sucursal.
+    verificar:
+      - { comando_usado: "^ip (-br|-brief) a" }
+      - { comando_usado: "ip route get 10\\.2\\.0\\.50" }
+    pistas: ["ip -br a muestra cada placa en una línea.", "ip route get 10.2.0.50 dice el próximo salto y la IP de origen."]
+    solucion: [ip -br a, ip route get 10.2.0.50]
+    explicacion: >-
+      La placa está UP con 192.168.10.100/24 y el camino a la sucursal sale por la puerta de
+      enlace 192.168.10.1. Nada raro de este lado.
+  - consigna: >-
+      Ahora el camino hasta la sucursal: un informe de mtr hacia 10.2.0.50 con 50 ciclos, sin
+      pantalla interactiva y con los nombres completos.
+    verificar:
+      - { comando_usado: "^mtr .*-[a-z]*r" }
+      - { salida_contiene: "10.99.0.1" }
+    pistas: ["mtr -rwc 50 10.2.0.50 (r: reporte, w: ancho, c: ciclos)."]
+    solucion: [mtr -rwc 50 10.2.0.50]
+    explicacion: >-
+      El salto 2 (10.99.0.1, el router de la VPN) muestra 40 % de pérdida, pero los saltos 3 y 4,
+      incluido el destino, tienen 0 %. Si se perdiera de verdad ahí, la pérdida seguiría hasta el
+      final. Ese router limita cuántos avisos ICMP contesta: no es la causa de los cortes. Hay que
+      seguir buscando (por ejemplo, en el Wi-Fi de la sucursal).
+  - consigna: >-
+      Pasemos a la intranet. Probá que el nombre se resuelva y mostrá solo la respuesta.
+    verificar:
+      - { salida_contiene: "192.168.10.80" }
+      - { comando_usado: "^(dig|host|nslookup|getent)" }
+    pistas: ["dig +short intranet.empresa.internal."]
+    solucion: [dig +short intranet.empresa.internal]
+    explicacion: El DNS responde al instante con la IP del servidor web. El nombre no es el problema.
+  - consigna: >-
+      Comprobá que el puerto 443 de 192.168.10.80 acepte conexiones, sin mandar datos.
+    verificar:
+      - { salida_regex: "succeeded|Connected to" }
+      - { comando_usado: "^nc .*-[a-z]*z.* 192\\.168\\.10\\.80 443" }
+    pistas: ["nc -zv 192.168.10.80 443 (z: solo probar, v: mostrar el resultado)."]
+    solucion: [nc -zv 192.168.10.80 443]
+    explicacion: >-
+      Ncat dice Connected: la conexión TCP se abre, así que hay un servicio escuchando y ningún firewall en el medio lo bloquea.
+      Con Connection refused sabrías que no hay nada en ese puerto; con un timeout, que algo
+      descarta el paquete.
+  - consigna: >-
+      Medí con curl en qué parte se va el tiempo al pedir https://intranet.empresa.internal: el
+      código de respuesta, el tiempo de DNS, de conexión, de TLS, hasta el primer byte y el total.
+      Descartá el contenido de la página.
+    verificar:
+      - { comando_usado: "^curl .*-w" }
+      - { salida_regex: "1\\.8\\d{4}" }
+    pistas:
+      - "curl -s -o /dev/null -w con las variables %{http_code}, %{time_namelookup}, %{time_connect}, %{time_appconnect}, %{time_starttransfer} y %{time_total}."
+      - "curl -s -o /dev/null -w '%{http_code} dns=%{time_namelookup} con=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\\n' https://intranet.empresa.internal"
+    solucion:
+      - "curl -s -o /dev/null -w '%{http_code} dns=%{time_namelookup} con=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\\n' https://intranet.empresa.internal"
+    explicacion: >-
+      DNS, conexión y TLS tardan milésimas; el primer byte llega recién a los 1,8 segundos. La red
+      entrega rápido: lo lento es el servidor armando la página (la aplicación, su base de datos o
+      su disco). Ese es el reclamo que hay que pasarle a quien administra la intranet, con estos
+      números.

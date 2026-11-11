@@ -1,0 +1,107 @@
+---
+id: n2-m7-l1
+titulo: Método de troubleshooting de redes
+minutos: 90
+objetivos:
+  - Convertir un reclamo vago en un problema bien definido (qué, a quién, desde cuándo, qué cambió).
+  - Elegir cómo recorrer las capas (de abajo hacia arriba, de arriba hacia abajo o por la mitad).
+  - Probar una hipótesis por vez, sin cambiar nada hasta tener evidencia, y documentar la causa.
+glosario: [troubleshooting, causa-raiz]
+verificado: 2026-11
+---
+
+import metodo from './metodo-red.svg?raw'
+import orden from './orden-metodo.yaml'
+import sintomas from './sintomas.yaml'
+import caso from './caso-erp.yaml'
+
+"No anda internet" no es un diagnóstico: es el punto de partida. En este módulo vas a juntar todo lo que aprendiste de redes para encontrar fallas con método, y después vas a mirar el tráfico de verdad, paquete por paquete. Esta primera lección es la más corta y la que más tiempo te va a ahorrar: cómo pensar un problema antes de tocar nada.
+
+<AntesDeEmpezar>
+- El método general para resolver problemas (lección 0.4.4).
+- Diagnosticar por capas con el modelo OSI (lección 2.1.2).
+- Troubleshooting de routing: seguir el paquete de ida y de vuelta (lección 2.5.5).
+</AntesDeEmpezar>
+
+## Primero, definir el problema
+
+Pensá en una consulta médica. "Me siento mal" no le sirve al médico; "me duele acá desde el martes, empeora cuando como y empezó después de un viaje" sí. Lo mismo con una red. Antes de abrir una terminal, respondé cinco preguntas:
+
+1. **¿Qué, exactamente?** ¿No abre una página, un programa, nada? ¿Qué mensaje aparece? "Se queda cargando" y "dice que no encuentra la página" son fallas distintas.
+2. **¿A quién le pasa?** ¿A una persona, a un sector, a todos? ¿A los de Wi-Fi y no a los del cable? Si le pasa a uno solo, mirá su equipo y su conexión. Si le pasa a todos, mirá lo que comparten.
+3. **¿Hacia dónde?** ¿Un solo destino (el ERP) o todos (internet entero)? ¿Por nombre y por IP?
+4. **¿Desde cuándo, y siempre o a veces?** Un "desde esta mañana" te da una hora para buscar en los registros. Un "a veces" suele ser una carga, una IP duplicada o un enlace que se cae.
+5. **¿Qué cambió?** Casi todas las fallas nuevas vienen de un cambio: un equipo nuevo, una actualización, una regla, un cable movido. Preguntalo siempre, y no te quedes con la primera respuesta: el que cambió algo no siempre lo cuenta, o no sabe que fue eso.
+
+Donde la comparación con el médico no llega: en una red casi siempre podés reproducir el síntoma vos mismo, en el momento, y comparar con un equipo que anda. Aprovechalo.
+
+<EnSimple>
+Antes de buscar la falla, averiguá bien qué falla, a quién, hacia dónde, desde cuándo y qué cambió. Con eso ya descartaste la mitad de las causas posibles.
+</EnSimple>
+
+<Pregunta id="p01" />
+
+## Juntar evidencia sin tocar nada
+
+Con el problema definido, mirá antes de cambiar:
+
+- **Reproducilo.** Desde el equipo afectado (o uno igual) y con la misma prueba que hace el usuario. Si no se reproduce, quizás ya pasó, o le pasa solo a ese equipo.
+- **Compará con uno que anda.** Dos PC de la misma red, una anda y otra no: ¿qué tienen distinto? IP, máscara, puerta de enlace, DNS, VLAN del puerto. Es una de las pruebas más rápidas que existen.
+- **Mirá los registros** del momento en que empezó: del equipo, del firewall, del servidor DHCP, del switch.
+- **Anotá la línea de tiempo.** Hora del primer reclamo, de cada prueba, de cada cambio. Te sirve para el informe y para no repetir pruebas.
+
+Reiniciar "por las dudas" va en contra de todo esto: borra la evidencia (el estado de la memoria, las tablas, las conexiones), corta a los que andaban bien y, si el problema vuelve, no sabés por qué.
+
+## Recorrer las capas
+
+<Diagrama svg={metodo} alt="Arriba, el ciclo en seis pasos: 1 definir (qué, a quién, desde cuándo, qué cambió), 2 evidencia (reproducirlo, comparar con uno que anda, registros), 3 hipótesis (una sola, la más probable o la más fácil de descartar), 4 probar (una prueba que diga sí o no, sin cambiar nada), 5 arreglar (un cambio a la vez y verificar con el usuario), 6 documentar (causa, arreglo y cómo evitar que se repita). Si la prueba dice que no era eso, se vuelve a la hipótesis. Abajo, tres formas de recorrer las capas con sus herramientas (capa 1: ip link, ethtool y las luces; capa 2: ip neigh y arping; capa 3: ip a, ip route y ping; capa 4: ss, nc y curl; capa 7: dig, curl -v y el programa): de abajo hacia arriba si sospechás del cable, de arriba hacia abajo si falla un solo programa, y por la mitad, con un ping a la IP, que dice para qué lado seguir." pie="Cada prueba que pasa descarta todas las capas de abajo." />
+
+Ya conocés las capas desde el módulo 2.1. En el diagnóstico, se usan para elegir el orden de las pruebas:
+
+- **De abajo hacia arriba**: cable, luces, `ip link`, después IP, rutas, puertos y aplicación. Conviene cuando sospechás de algo físico (un puesto nuevo, un cable movido, "no tengo red").
+- **De arriba hacia abajo**: empezás por el programa que falla (`curl -v`, el mensaje de error) y vas bajando. Conviene cuando falla un solo servicio y todo lo demás anda.
+- **Por la mitad**: un ping a la IP del destino. Si responde, las capas 1 a 3 están bien en todo el camino y seguís hacia arriba (puerto, DNS, aplicación). Si no responde, seguís hacia abajo. Es el que más se usa, porque divide el problema en dos con una sola prueba.
+
+<Emparejar ejercicio={sintomas} />
+
+Una aclaración sobre el ping: que **no** responda no siempre es una falla. Muchos firewalls bloquean el ping (ICMP) a propósito, sobre todo en internet. Si el ping falla pero el servicio anda (`curl` responde), la red está bien. Lo vas a ver en la lección que viene.
+
+## Una hipótesis por vez
+
+Con la evidencia, elegí **una** hipótesis y una prueba que la confirme o la descarte. Si tenés varias, empezá por la más probable (lo que cambió) o por la más fácil de descartar (un ping). Recién cuando la prueba la confirma, hacé **un** cambio, verificá y, si no sirvió, deshacelo antes de probar otro. Dos cambios a la vez te dejan sin saber cuál fue, y la configuración termina llena de "arreglos" que nadie entiende.
+
+Y verificá con quien reportó el problema, con la misma prueba que hacía: "a mí me anda" desde tu PC no prueba nada si la falla era en otra VLAN.
+
+<Ordenar ejercicio={orden} />
+
+## Cerrar: causa, arreglo y prevención
+
+Cuando se arregla, anotá en el ticket o en el cuaderno técnico tres cosas: la **causa raíz** (no "se cayó el DNS", sino "el ámbito DHCP de Compras tenía el router como DNS desde un cambio del viernes"), el **arreglo** y qué hacer para que **no se repita** (un registro de cambios, una revisión, un monitoreo). Distinguí también un arreglo de un parche: si cambiaste el DNS a mano en una PC para que la persona trabaje, el problema sigue en el DHCP.
+
+<Troubleshooting escenario={caso} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Arrancar cambiando cosas">
+    "Reinicio el router y vemos." Sin definir el problema, cualquier cambio es al azar, borra evidencia y puede cortar a quien andaba bien.
+  </ErrorComun>
+  <ErrorComun titulo="Quedarse con lo que dice el usuario">
+    "No anda internet" puede ser que no abre una sola página, o que falla el DNS. Pedí el mensaje exacto y reproducilo vos.
+  </ErrorComun>
+  <ErrorComun titulo="Concluir que la red está caída porque no responde el ping">
+    Muchos equipos y firewalls bloquean ICMP. Probá también el servicio (curl, nc) antes de decidir.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar varias cosas a la vez">
+    Si se arregla, no sabés por qué; si empeora, no sabés qué deshacer. Un cambio, una prueba.
+  </ErrorComun>
+  <ErrorComun titulo="Cerrar sin la causa">
+    Si el ticket dice "se solucionó solo" o "se reinició", va a volver. Buscá qué lo causó, aunque ya ande.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Definí el problema: qué exactamente, a quién, hacia dónde, desde cuándo (y si es siempre o a veces) y qué cambió.
+- Juntá evidencia sin tocar nada: reproducilo, compará con un equipo que anda, mirá los registros y anotá la línea de tiempo.
+- Recorré las capas: de abajo hacia arriba (físico), de arriba hacia abajo (un solo programa) o por la mitad, con un ping a la IP.
+- Una hipótesis, una prueba, un cambio; si no era eso, deshacé antes de probar otro.
+- Verificá con quien reportó, con su misma prueba, y documentá la causa raíz, el arreglo y cómo evitar que se repita.
+</Resumen>

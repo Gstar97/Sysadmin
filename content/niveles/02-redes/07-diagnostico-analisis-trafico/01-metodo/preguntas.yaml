@@ -1,0 +1,101 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Te escriben "no anda internet". ¿Qué hacés primero?
+  opciones:
+    - { texto: "Preguntar qué ve exactamente, a quién le pasa, hacia dónde, desde cuándo y qué cambió", correcta: true, explicacion: "Con eso el problema deja de ser vago y ya sabés dónde buscar." }
+    - { texto: "Reiniciar el router", explicacion: "Borra evidencia y corta a todos; además, todavía no sabés si es el router." }
+    - { texto: "Llamar al proveedor de internet", explicacion: "Puede ser un problema interno (DNS, una PC, una VLAN)." }
+    - { texto: "Cambiar el cable de la PC", explicacion: "Es una hipótesis entre muchas; primero definí el problema." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una sola PC de Ventas no entra al ERP; a las otras de Ventas les anda. ¿Dónde conviene buscar primero?
+  opciones:
+    - { texto: "En esa PC y su conexión: IP, puerta de enlace, DNS, cable o Wi-Fi, puerto del switch", correcta: true, explicacion: "Lo que comparten las demás (switch, router, servidor) anda." }
+    - { texto: "En el servidor del ERP", explicacion: "A las demás les anda: el servidor responde." }
+    - { texto: "En el firewall de internet", explicacion: "El ERP es interno y a los compañeros les anda." }
+    - { texto: "En el proveedor", explicacion: "No tiene relación." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Desde una PC, el ping a la IP del servidor responde. ¿Qué podés descartar?
+  opciones:
+    - { texto: "Problemas de capas 1 a 3 en todo el camino entre los dos equipos", correcta: true, explicacion: "Si el ping va y vuelve, cables, VLAN, IP y rutas funcionan en los dos sentidos." }
+    - { texto: "Todo: el servicio tiene que andar", explicacion: "El servicio puede estar caído o bloqueado en su puerto." }
+    - { texto: "Problemas de DNS", explicacion: "Si hiciste el ping a la IP, el DNS no intervino." }
+    - { texto: "Nada", explicacion: "Descarta todas las capas de abajo." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El ping a www.ejemplo.com.ar no responde, pero curl https://www.ejemplo.com.ar devuelve la página. ¿Qué pasa?
+  opciones:
+    - { texto: "Nada grave: el sitio (o un firewall en el camino) bloquea el ping, pero la conexión anda", correcta: true, explicacion: "Muchos equipos descartan ICMP a propósito. Lo que importa es el servicio." }
+    - { texto: "El DNS falla", explicacion: "curl resolvió el nombre." }
+    - { texto: "El sitio está caído", explicacion: "curl recibió la página." }
+    - { texto: "La puerta de enlace está mal", explicacion: "curl salió a internet sin problema." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué preguntas ayudan a definir el problema? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "¿Desde cuándo pasa?", correcta: true, explicacion: "Te da una hora para buscar en los registros." }
+    - { texto: "¿Le pasa a alguien más?", correcta: true, explicacion: "Separa un equipo de algo compartido." }
+    - { texto: "¿Cambió algo?", correcta: true, explicacion: "La mayoría de las fallas nuevas viene de un cambio." }
+    - { texto: "¿Qué mensaje aparece, exactamente?", correcta: true, explicacion: "Cada mensaje apunta a una capa distinta." }
+    - { texto: "¿Ya probó reiniciar todo?", explicacion: "Reiniciar no define nada y puede borrar evidencia." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Probaste dos arreglos a la vez (cambiaste el DNS y la puerta de enlace) y ahora anda. ¿Cuál es el problema de haberlo hecho así?
+  opciones:
+    - { texto: "No sabés cuál de los dos lo arregló, y quizás dejaste un cambio que no hacía falta", correcta: true, explicacion: "Un cambio, una prueba; si no sirve, se deshace." }
+    - { texto: "Ninguno: lo importante es que anda", explicacion: "La causa queda sin documentar y el cambio sobrante puede romper otra cosa." }
+    - { texto: "Que tarda más", explicacion: "El problema es la falta de evidencia." }
+    - { texto: "Que hay que reiniciar", explicacion: "No tiene que ver." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Todo el sector Compras dejó de entrar a los sistemas internos el lunes a la mañana; el viernes se cambió su switch. ¿Cuál es la mejor primera prueba?
+  opciones:
+    - { texto: "Desde una PC de Compras, ping a la IP de un servidor y después a su nombre", correcta: true, explicacion: "Divide el problema en dos sin cambiar nada." }
+    - { texto: "Volver a poner el switch viejo", explicacion: "Es la prueba más cara; primero una que no cambie nada." }
+    - { texto: "Reiniciar los servidores", explicacion: "Al resto de la empresa le andan." }
+    - { texto: "Reinstalar las PC de Compras", explicacion: "Desproporcionado y sin evidencia." }
+- id: p08
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Desde una PC que no entra a la intranet. ¿Qué capa falla?
+  salida: |
+    $ ping -c 2 192.168.10.80
+    64 bytes from 192.168.10.80: icmp_seq=1 ttl=64 time=0.52 ms
+    64 bytes from 192.168.10.80: icmp_seq=2 ttl=64 time=0.48 ms
+    $ curl http://intranet.empresa.internal
+    curl: (6) Could not resolve host: intranet.empresa.internal
+    $ curl http://192.168.10.80
+    <html><head><title>Intranet</title>...
+  opciones:
+    - { texto: "El DNS: la red y el servidor web andan, pero el nombre no se resuelve", correcta: true, explicacion: "Por IP anda todo; con el nombre, no." }
+    - { texto: "La capa 3: no hay ruta", explicacion: "El ping responde." }
+    - { texto: "El servidor web", explicacion: "Responde por IP." }
+    - { texto: "El cable", explicacion: "Hay ping." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un usuario dice que "a veces" no puede guardar archivos en el servidor, sin patrón claro. ¿Qué causa se parece más a ese síntoma?
+  opciones:
+    - { texto: "Una IP duplicada: a veces la MAC que gana en la tabla ARP es la del otro equipo", correcta: true, explicacion: "Las fallas intermitentes suelen ser conflictos, enlaces que se caen o saturación en ciertos horarios." }
+    - { texto: "Un cable desconectado", explicacion: "Fallaría siempre." }
+    - { texto: "Una ruta que falta", explicacion: "Fallaría siempre hacia esa red." }
+    - { texto: "El DNS mal configurado en la PC", explicacion: "Fallaría siempre con el nombre." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es la causa raíz en un ticket bien cerrado?
+  opciones:
+    - { texto: "Lo que originó la falla, por ejemplo: el ámbito DHCP tenía un DNS equivocado desde un cambio del viernes", correcta: true, explicacion: "Con la causa raíz se puede evitar que se repita." }
+    - { texto: "El síntoma: no andaba el ERP", explicacion: "Eso es lo que se vio, no lo que lo causó." }
+    - { texto: "Lo que se hizo para que ande", explicacion: "Eso es el arreglo." }
+    - { texto: "El nombre de quien reportó", explicacion: "No." }

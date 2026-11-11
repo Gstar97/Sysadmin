@@ -1,0 +1,165 @@
+---
+id: n2-m7-l2
+titulo: Herramientas esenciales
+minutos: 150
+objetivos:
+  - Interpretar bien ping y mtr, incluidos los resultados que parecen fallas y no lo son.
+  - Usar ip, ss, dig, curl y nc para responder una pregunta concreta en cada capa.
+  - Medir con curl en qué etapa se va el tiempo (DNS, conexión, TLS o el servidor).
+glosario: [icmp, mtr, latencia]
+verificado: 2026-11
+---
+
+import mtr from './mtr-lectura.svg?raw'
+import ejercicio from './ej-herramientas.yaml'
+import preguntas from './pregunta-herramienta.yaml'
+
+Ya usaste casi todas estas herramientas por separado. Ahora toca usarlas como un juego de herramientas de diagnóstico: cada una responde una pregunta, y lo importante es saber qué pregunta hacerle y cómo leer la respuesta. Muchas veces el error no es la herramienta, sino concluir de más con lo que muestra.
+
+<AntesDeEmpezar>
+- ip, ping y ss en Linux (lección 1.6.1).
+- TCP, UDP y puertos (lecciones 2.3.1 y 2.3.2).
+- DNS y dig (lección 2.3.3).
+- traceroute (lección 2.5.5).
+</AntesDeEmpezar>
+
+## ping, leído con cuidado
+
+ping manda mensajes **ICMP** de tipo "eco" (echo request) y espera la respuesta (echo reply). Es como tocar el timbre: si alguien abre, sabés que hay gente y cuánto tardó. Donde la comparación no llega: que nadie abra no prueba que la casa esté vacía; muchos equipos tienen el timbre desconectado a propósito (un firewall que descarta ICMP).
+
+```text
+$ ping -c 4 10.2.0.50
+PING 10.2.0.50 (10.2.0.50) 56(84) bytes of data.
+64 bytes from 10.2.0.50: icmp_seq=1 ttl=62 time=21.3 ms
+...
+--- 10.2.0.50 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+rtt min/avg/max/mdev = 20.911/21.204/21.630/0.270 ms
+```
+
+- **packet loss**: el porcentaje perdido. Con 4 paquetes, un 25 % es un solo paquete; para medir pérdida en serio, mandá 100 (`-c 100 -i 0.2`).
+- **time** y **rtt**: el tiempo de ida y vuelta. En una LAN, menos de 1 ms; a otra sede, decenas; a otro continente, más de 100. Lo que importa es compararlo con lo normal de ese camino, y la **variación** (mdev): una red que va de 20 a 300 ms está saturada.
+- **ttl**: arranca en 64 (Linux), 128 (Windows) o 255 (equipos de red) y baja uno por router. Un ttl=62 desde un Linux dice que hay dos routers en el medio.
+
+Y los mensajes de error dicen dónde está el corte:
+
+| Mensaje | Qué significa |
+| --- | --- |
+| `Destination Host Unreachable` (desde tu propia IP) | El destino está en tu red y no contesta el ARP: apagado, otra VLAN o una IP mal puesta. |
+| `Destination Host Unreachable` (desde la IP de un router) | Ese router no llega al destino (no contesta el ARP en su red). |
+| Nada, solo el resumen con 100 % de pérdida | El paquete salió y no volvió: un firewall lo descarta, falta la ruta de vuelta, o el equipo no responde ping. |
+| `Network is unreachable` | Tu equipo no tiene ninguna ruta hacia ese destino (falta la puerta de enlace). |
+| `Name or service not known` | No se pudo resolver el nombre: ni siquiera se mandó un paquete. Es un problema de DNS. |
+
+<Pregunta id="p01" />
+
+## mtr: traceroute que no para
+
+**mtr** combina traceroute y ping: descubre los saltos del camino y les manda paquetes una y otra vez, así que muestra la pérdida y la demora de **cada tramo**. En el modo informe (`-r`), corre una cantidad de ciclos y muestra el resultado, ideal para pegar en un ticket:
+
+```bash
+mtr -rwc 100 10.2.0.50     # r: informe, w: nombres completos, c: 100 ciclos
+mtr -rwnc 100 1.1.1.1      # n: sin resolver nombres (más rápido)
+```
+
+<Diagrama svg={mtr} alt="Dos informes de mtr. A, pérdida en un salto que no sigue: los saltos 1 y 2 con 0 %, el salto 3 (198.51.100.17) con 60 %, el 4 y el destino con 0 %; el router 3 solo limita sus respuestas ICMP y no es una falla. B, pérdida que sigue hasta el destino: el 3 con 30 %, el 4 con 31 % y el destino con 30 %; se pierde de verdad en el tramo del 2 al 3. Con la demora pasa lo mismo: un salto con más milisegundos que los siguientes no importa; uno que sube la demora y todos los siguientes la mantienen, sí. Mandá al menos 100 ciclos y, si podés, hacé el mtr también desde el otro extremo." pie="Lo que cuenta es la última fila: si el destino no pierde, el camino no pierde." />
+
+El error más común con mtr es asustarse por un salto intermedio con pérdida. Los routers contestan los avisos ICMP con baja prioridad y con un límite por segundo (el trabajo de reenviar paquetes va primero), así que es normal que uno muestre pérdida y los siguientes no. La pérdida real **empieza en un salto y sigue hasta el destino**.
+
+## ip: lo que tu equipo cree
+
+`ip` muestra la configuración y las tablas de tu propio equipo, que es por donde empieza cualquier diagnóstico:
+
+```bash
+ip -br a                    # una línea por placa: estado y direcciones
+ip route get 10.2.0.50      # por dónde saldría un paquete a esa IP, y con qué IP de origen
+ip neigh                    # la tabla de vecinos (ARP): FAILED = alguien que no contesta
+ip -s link show enp0s3      # contadores: errores, descartes y colisiones de la placa
+```
+
+`ip route get` es más útil que mirar la tabla entera: aplica el prefijo más largo por vos y te dice la ruta que se va a usar. Y los contadores de `ip -s link` delatan problemas físicos: errores que suben, o colisiones en una red conmutada (que no debería tenerlas), suelen ser un cable malo o un dúplex mal negociado (lo vas a ver en la lección 5).
+
+## ss: lo que escucha y lo que está conectado
+
+```bash
+sudo ss -tulpn                       # qué escucha (TCP y UDP), en qué IP y qué programa
+ss -tn state established             # conexiones abiertas ahora
+ss -tn dst 192.168.10.30             # solo las conexiones hacia esa IP
+```
+
+Lo que más se mira en un diagnóstico:
+
+- **Local Address**: un servicio que escucha en `127.0.0.1:5432` solo acepta conexiones del propio equipo; en `0.0.0.0:5432`, de cualquier IP. Es la causa de muchos "anda en el servidor pero no desde afuera".
+- **Estados que se quedan**: conexiones en `SYN-SENT` que no avanzan significan que el saludo de TCP no tiene respuesta (un firewall descarta, o falta la ruta de vuelta). Muchas en `CLOSE-WAIT`, un programa que no cierra bien sus conexiones.
+- **Recv-Q y Send-Q** distintas de cero de forma sostenida: datos que el programa no lee (Recv-Q) o que la red no logra mandar (Send-Q).
+
+## dig: qué contesta el DNS, y quién
+
+```bash
+dig www.ejemplo.com.ar               # la respuesta completa: status, respuestas, servidor y tiempo
+dig +short www.ejemplo.com.ar        # solo la IP
+dig @192.168.10.53 erp.empresa.internal   # preguntarle a un servidor en particular
+dig -x 192.168.10.30                 # la búsqueda inversa: qué nombre tiene esa IP
+```
+
+En la respuesta completa mirá tres cosas: el **status** (NOERROR: respondió; NXDOMAIN: ese nombre no existe; SERVFAIL: el servidor no pudo averiguarlo), la **ANSWER SECTION** (qué IP devolvió) y la línea **SERVER** (a quién le preguntaste). Si `dig` resuelve pero un programa no, revisá `/etc/hosts` y el orden de `/etc/nsswitch.conf`: los programas usan esa cadena, y `getent hosts nombre` la prueba igual que ellos.
+
+## curl: el servicio de punta a punta
+
+curl hace el pedido completo, como un navegador, y con `-v` muestra cada etapa: a qué IP resolvió, si conectó, el certificado TLS y los encabezados HTTP. Para saber **dónde se va el tiempo**, se usa `-w` con los tiempos de cada etapa:
+
+```bash
+curl -s -o /dev/null -w 'código=%{http_code} dns=%{time_namelookup} conexión=%{time_connect} tls=%{time_appconnect} primer_byte=%{time_starttransfer} total=%{time_total}\n' https://intranet.empresa.internal
+```
+
+Los tiempos son acumulados (cada uno incluye los anteriores). Si el DNS tarda, el problema es el resolvedor; si la conexión tarda, la red (o un servidor saturado de conexiones); si el TLS tarda, el certificado o la CPU del servidor; y si todo es rápido hasta el **primer byte** (time_starttransfer), lo lento es la aplicación armando la respuesta. Dos opciones más que vas a usar mucho:
+
+- `curl -I`: solo los encabezados (el código de respuesta, el servidor, las redirecciones).
+- `curl --resolve intranet.empresa.internal:443:192.168.10.81 https://intranet.empresa.internal`: probar un servidor en particular con el nombre correcto, sin tocar el DNS. Ideal para probar el servidor nuevo antes de cambiar el registro.
+
+## nc: ¿está abierto ese puerto?
+
+Para un servicio que no es web (una base de datos, SSH, SMTP), alcanza con saber si el puerto acepta conexiones:
+
+```bash
+nc -zv 192.168.10.30 5432      # z: solo probar, sin mandar datos; v: mostrar el resultado
+```
+
+La respuesta tiene tres formas posibles, y cada una apunta a un lugar distinto: **conecta** (hay un servicio escuchando y nada lo bloquea), **Connection refused** (llegaste al equipo y no hay nada en ese puerto, o un firewall que rechaza) o **timeout** (algo en el camino descarta el paquete sin avisar). En Rocky, `nc` es `ncat` (del paquete nmap-ncat), con otro formato de salida; en Windows, lo mismo se prueba con `Test-NetConnection 192.168.10.30 -Port 5432`.
+
+<EnSimple>
+ping dice si un equipo responde; mtr, en qué tramo se pierde; ip, qué cree tu equipo; ss, qué escucha; dig, qué contesta el DNS; nc, si un puerto está abierto; y curl, si el servicio entero anda y dónde se va el tiempo.
+</EnSimple>
+
+<Emparejar ejercicio={preguntas} />
+
+## En la práctica
+
+<Terminal ejercicio={ejercicio} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Concluir que hay pérdida por un salto intermedio de mtr">
+    Si el destino tiene 0 %, el camino no pierde: ese router solo limita sus respuestas ICMP. La pérdida real sigue hasta el final.
+  </ErrorComun>
+  <ErrorComun titulo="Medir pérdida con 4 pings">
+    Un paquete perdido son 25 %. Para medir de verdad, 100 paquetes o un mtr con -c 100.
+  </ErrorComun>
+  <ErrorComun titulo="Probar el DNS con ping">
+    Si ping dice "Name or service not known", el problema es el nombre, pero ping no te dice qué servidor respondió ni qué. Usá dig.
+  </ErrorComun>
+  <ErrorComun titulo="Culpar a la red por una aplicación lenta">
+    Medí con curl -w: si DNS, conexión y TLS tardan milésimas y el primer byte tarda segundos, la red ya entregó.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de dónde escucha el servicio">
+    Escuchando en 127.0.0.1 anda desde el propio servidor y desde ningún otro lado. Miralo con sudo ss -tlnp.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- ping: pérdida, demora y su variación, y ttl; cada mensaje de error apunta a un lugar (ARP, ruta, firewall o DNS). Que no responda no siempre es una falla.
+- mtr -rwc 100: pérdida y demora por tramo; cuenta la pérdida que sigue hasta el destino, no la de un salto suelto.
+- ip -br a, ip route get, ip neigh e ip -s link: la configuración, la ruta elegida, los vecinos y los errores de la placa.
+- sudo ss -tulpn: qué escucha y dónde (127.0.0.1 o 0.0.0.0); estados que se quedan (SYN-SENT, CLOSE-WAIT).
+- dig: status (NOERROR, NXDOMAIN, SERVFAIL), la respuesta y el servidor que contestó; getent hosts prueba como los programas.
+- curl -v y curl -w: el servicio de punta a punta y en qué etapa se va el tiempo; nc -zv: conecta, refused o timeout.
+</Resumen>

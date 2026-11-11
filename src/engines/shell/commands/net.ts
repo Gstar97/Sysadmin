@@ -142,6 +142,7 @@ register('ip', {
   path: '/usr/sbin',
   run(ctx) {
     const brief = ctx.args.includes('-br') || ctx.args.includes('-brief')
+    const stats = ctx.args.includes('-s') || ctx.args.includes('-stats') || ctx.args.includes('-statistics')
     const only6 = ctx.args.includes('-6')
     const only4 = ctx.args.includes('-4')
     const args = ctx.args.filter((a) => !a.startsWith('-'))
@@ -232,16 +233,16 @@ register('ip', {
         return 0
       }
       const devFilter = devArg() ?? (cmd === 'show' && args[2] ? args[2] : undefined)
-      type Row = { name: string; ip?: string; mac: string; up: boolean; mtu: number; v6: string[]; dhcp: boolean }
+      type Row = { ix: number; name: string; ip?: string; mac: string; up: boolean; mtu: number; v6: string[]; dhcp: boolean; half: boolean }
       const rows: Row[] = [
-        { name: 'lo', ip: '127.0.0.1/8', mac: '00:00:00:00:00:00', up: true, mtu: 65536, v6: ['::1/128'], dhcp: false },
-        ...sys.interfaces.map((i) => ({ name: i.name, ip: i.ip, mac: i.mac, up: i.up, mtu: i.mtu, v6: ipv6List(sys, i), dhcp: i.dhcp })),
+        { ix: 1, name: 'lo', ip: '127.0.0.1/8', mac: '00:00:00:00:00:00', up: true, mtu: 65536, v6: ['::1/128'], dhcp: false, half: false },
+        ...sys.interfaces.map((i, n) => ({ ix: n + 2, name: i.name, ip: i.ip, mac: i.mac, up: i.up, mtu: i.mtu, v6: ipv6List(sys, i), dhcp: i.dhcp, half: i.duplex === 'half' })),
       ].filter((i) => !devFilter || i.name === devFilter)
       if (devFilter && !rows.length) {
         ctx.err(`Device "${devFilter}" does not exist.\n`)
         return 1
       }
-      rows.forEach((i, idx) => {
+      rows.forEach((i) => {
         const state = i.name === 'lo' ? 'UNKNOWN' : i.up ? 'UP' : 'DOWN'
         if (brief) {
           const fl = i.name === 'lo' ? '<LOOPBACK,UP,LOWER_UP>' : i.up ? '<BROADCAST,MULTICAST,UP,LOWER_UP>' : '<BROADCAST,MULTICAST>'
@@ -252,8 +253,17 @@ register('ip', {
         if (objName === 'addr' && only6 && !i.v6.length) return
         if (objName === 'addr' && only4 && !i.ip) return
         const flags = i.name === 'lo' ? '<LOOPBACK,UP,LOWER_UP>' : i.up ? '<BROADCAST,MULTICAST,UP,LOWER_UP>' : '<BROADCAST,MULTICAST>'
-        ctx.out(`${idx + 1}: ${i.name}: ${flags} mtu ${i.mtu} qdisc ${i.name === 'lo' ? 'noqueue' : 'fq_codel'} state ${state} group default qlen 1000\n`)
+        ctx.out(`${i.ix}: ${i.name}: ${flags} mtu ${i.mtu} qdisc ${i.name === 'lo' ? 'noqueue' : 'fq_codel'} state ${state} group default qlen 1000\n`)
         if (!only6 && !only4) ctx.out(`    link/${i.name === 'lo' ? 'loopback' : 'ether'} ${i.mac} brd ${i.name === 'lo' ? '00:00:00:00:00:00' : 'ff:ff:ff:ff:ff:ff'}\n`)
+        if (stats && objName === 'link') {
+          // Contadores de la placa. Con dúplex mal negociado (half) aparecen colisiones y errores.
+          const lo = i.name === 'lo'
+          const rx = lo ? [184_330, 1_912] : [48_215_930, 61_234]
+          const tx = lo ? [184_330, 1_912] : [5_873_121, 35_201]
+          const c = (v: number, w: number) => String(v).padStart(w)
+          ctx.out(`    RX:  bytes packets errors dropped  missed   mcast           \n${c(rx[0], 14)}${c(rx[1], 8)}${c(i.half ? 412 : 0, 7)}${c(0, 8)}${c(0, 8)}${c(lo ? 0 : 112, 8)} \n`)
+          ctx.out(`    TX:  bytes packets errors dropped carrier collsns           \n${c(tx[0], 14)}${c(tx[1], 8)}${c(i.half ? 2311 : 0, 7)}${c(0, 8)}${c(0, 8)}${c(i.half ? 2311 : 0, 8)} \n`)
+        }
         if (objName !== 'addr') return
         if (i.ip && !only6) {
           if (i.name === 'lo') ctx.out('    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n')
@@ -420,7 +430,7 @@ function ping6(ctx: CommandContext, host: string, count: number, quiet: boolean)
 register(['ping', 'ping6'], {
   usage: 'ping [-4|-6] [-c count] [-i interval] destination',
   async run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { q: ['q'], n: ['n'], '4': ['4'], '6': ['6'] }, values: { c: ['c'], i: ['i'], W: ['W'], w: ['w'] } })
+    const a = parseArgs(ctx.args, { flags: { q: ['q'], n: ['n'], '4': ['4'], '6': ['6'] }, values: { c: ['c'], i: ['i'], W: ['W'], w: ['w'], s: ['s'], M: ['M'] } })
     const host = a.rest[0]
     if (!host) {
       ctx.err('ping: usage error: Destination address required\n')
@@ -440,7 +450,32 @@ register(['ping', 'ping6'], {
       return 2
     }
     const ok = canReach(ctx, ip)
-    ctx.out(`PING ${host} (${ip}) 56(84) bytes of data.\n`)
+    const size = a.values.has('s') ? Number(a.values.get('s')) : 56
+    if (!Number.isInteger(size) || size < 0 || size > 65507) {
+      ctx.err(`ping: invalid argument: '${a.values.get('s')}': out of range: 0 <= value <= 65507\n`)
+      return 2
+    }
+    const pmtu = a.values.get('M')
+    if (pmtu !== undefined && !['do', 'want', 'dont', 'probe'].includes(pmtu)) {
+      ctx.err(`ping: invalid -M argument: ${pmtu}\n`)
+      return 2
+    }
+    const df = pmtu === 'do' || pmtu === 'probe'
+    const ifMtu = ctx.sys.interfaces.find((x) => x.ip?.split('/')[0] === r.src)?.mtu ?? 1500
+    ctx.out(`PING ${host} (${ip}) ${size}(${size + 28}) bytes of data.\n`)
+    // Con "no fragmentar": si no entra en la placa, error local; si no entra en un tramo del camino, el router de ese tramo avisa.
+    if (df && size + 28 > ifMtu) {
+      for (let i = 1; i <= count; i++) ctx.err(`ping: local error: message too long, mtu=${ifMtu}\n`)
+      ctx.out(`\n--- ${host} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss, time ${(count - 1) * 1001}ms\n\n`)
+      return 1
+    }
+    const narrow = ok && df ? ctx.sys.pathMtu.find((m) => inSubnet(ip, m.net) && size + 28 > m.mtu) : undefined
+    if (narrow) {
+      ctx.out(`From ${narrow.router} icmp_seq=1 Frag needed and DF set (mtu = ${narrow.mtu})\n`)
+      for (let i = 2; i <= count; i++) ctx.err(`ping: local error: message too long, mtu=${narrow.mtu}\n`)
+      ctx.out(`\n--- ${host} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss, time ${(count - 1) * 1001}ms\n\n`)
+      return 1
+    }
     const times: number[] = []
     const base = ip.startsWith('127.') || ctx.sys.ownIps().includes(ip) ? 0.04 : r.via ? 12 : 0.6
     for (let i = 1; i <= count; i++) {
@@ -449,7 +484,7 @@ register(['ping', 'ping6'], {
         times.push(t)
         // Un equipo de otra sede está a dos routers (ttl 64 - 2); internet, a muchos más.
         const ttl = !r.via ? 64 : ctx.sys.remoteNets.some((n) => inSubnet(ip, n.net)) ? 62 : 116
-        if (!a.flags.has('q')) ctx.out(`64 bytes from ${ip}: icmp_seq=${i} ttl=${ttl} time=${t} ms\n`)
+        if (!a.flags.has('q')) ctx.out(`${size + 8} bytes from ${ip}: icmp_seq=${i} ttl=${ttl} time=${t} ms\n`)
       } else if (!r.via && !a.flags.has('q')) {
         ctx.out(`From ${r.src} icmp_seq=${i} Destination Host Unreachable\n`)
       }
@@ -545,7 +580,7 @@ register(['curl', 'wget'], {
   usage: 'curl [options] <url>',
   summary: '  -I  only headers  -s  silent  -o FILE  write output to FILE  -v  verbose  -L  follow redirects',
   run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { I: ['I', 'head'], s: ['s', 'silent'], v: ['v', 'verbose'], L: ['L', 'location'], k: ['k', 'insecure'], f: ['f', 'fail'], q: ['q'], O: ['O'] }, values: { o: ['o', 'output'], m: ['m', 'max-time'] } })
+    const a = parseArgs(ctx.args, { flags: { I: ['I', 'head'], s: ['s', 'silent'], v: ['v', 'verbose'], L: ['L', 'location'], k: ['k', 'insecure'], f: ['f', 'fail'], q: ['q'], O: ['O'] }, values: { o: ['o', 'output'], m: ['m', 'max-time'], w: ['w', 'write-out'] } })
     const url = a.rest[0]
     if (!url) {
       ctx.err(ctx.name === 'wget' ? 'wget: missing URL\n' : "curl: try 'curl --help' for more information\n")
@@ -591,6 +626,18 @@ register(['curl', 'wget'], {
       ctx.err(ctx.name === 'wget' ? `Connecting to ${host}|${ip}|:${port}... failed: Connection timed out.\n` : `curl: (28) Failed to connect to ${host} port ${port} after 3002 ms: Timeout was reached\n`)
       return ctx.name === 'wget' ? 4 : 28
     }
+    // -w: los tiempos de cada etapa (resolver el nombre, conectar, TLS, primer byte, total), acumulados como en curl.
+    const rtt = ip.startsWith('127.') || ctx.sys.ownIps().includes(ip) ? 0.00005 : route(ctx, ip).via ? (ctx.sys.remoteNets.some((n) => inSubnet(ip, n.net)) ? 0.012 : 0.024) : 0.0006
+    const tn = /^\d+\.\d+\.\d+\.\d+$/.test(host) ? 0.00002 : 0.0021
+    const tc = tn + rtt
+    const ta = scheme === 'https' ? tc + 2 * rtt + 0.003 : 0
+    const ts = (ta || tc) + rtt + 0.0042 + (ctx.sys.serverDelay[host] ?? ctx.sys.serverDelay[ip] ?? 0)
+    const writeOut = (code: number) => {
+      const w = a.values.get('w')
+      if (w === undefined) return
+      const vars: Record<string, string> = { http_code: String(code).padStart(3, '0'), response_code: String(code).padStart(3, '0'), time_namelookup: tn.toFixed(6), time_connect: tc.toFixed(6), time_appconnect: ta.toFixed(6), time_pretransfer: (ta || tc).toFixed(6), time_starttransfer: ts.toFixed(6), time_total: (ts + 0.0004).toFixed(6), remote_ip: ip, remote_port: String(port), size_download: String(res?.body.length ?? 0), url_effective: url }
+      ctx.out(w.replace(/%\{(\w+)\}/g, (m0, k) => vars[k] ?? m0).replace(/\\n/g, '\n').replace(/\\t/g, '\t'))
+    }
     const statusText = res.status === 200 ? 'OK' : res.status === 403 ? 'Forbidden' : 'Not Found'
     const headers = `HTTP/1.1 ${res.status} ${statusText}\nServer: ${res.server}\nDate: ${new Date().toUTCString()}\nContent-Type: text/html\nContent-Length: ${res.body.length}\nConnection: keep-alive\n\n`
     if (ctx.name === 'wget') {
@@ -611,6 +658,7 @@ register(['curl', 'wget'], {
     }
     if (a.flags.has('I')) {
       ctx.out(headers.replace(/\n/g, '\r\n').replace(/\r\n\r\n$/, '\r\n\r\n'))
+      writeOut(res.status)
       return 0
     }
     if (a.flags.has('f') && res.status >= 400) {
@@ -620,9 +668,11 @@ register(['curl', 'wget'], {
     if (a.values.has('o')) {
       ctx.sys.vfs.writeFile(ctx.sh.resolve(a.values.get('o')!), res.body, ctx.sh.cred, { mode: 0o666, umask: ctx.sh.umask })
       if (!a.flags.has('s')) ctx.err(`  % Total    % Received % Xferd  Average Speed   Time\n100  ${res.body.length}  100  ${res.body.length}    0     0   ${res.body.length * 10}      0 --:--:--\n`)
+      writeOut(res.status)
       return 0
     }
     ctx.out(res.body)
+    writeOut(res.status)
     return 0
   },
 })
@@ -1002,7 +1052,24 @@ register(['nc', 'ncat'], {
       open = fw === 'ok' && [...remote.services.values()].some((s) => s.active && s.ports.includes(port))
       if (fw === 'reject') why = 'No route to host'
       if (fw === 'drop') why = 'Connection timed out'
-    } else open = canReach(ctx, ip)
+    } else if (!canReach(ctx, ip)) {
+      // Nadie contesta: en la propia red falla el ARP (No route to host); afuera, el SYN se pierde.
+      open = false
+      why = route(ctx, ip).via ? 'Connection timed out' : 'No route to host'
+    } else {
+      // Un equipo que responde: si el ejercicio declara sus puertos, solo esos están abiertos.
+      const ports = ctx.sys.openPorts[ip] ?? (host ? ctx.sys.openPorts[host] : undefined)
+      open = ports ? ports.includes(port) : true
+    }
+    if (ctx.sys.distro === 'rocky') {
+      // En Rocky, nc es ncat (del proyecto Nmap), con otro formato de salida.
+      const verbose = ctx.args.some((a) => /^-[a-z]*v/.test(a))
+      if (verbose) ctx.err('Ncat: Version 7.92 ( https://nmap.org/ncat )\n')
+      if (open) {
+        if (verbose) ctx.err(`Ncat: Connected to ${ip}:${port}.\nNcat: 0 bytes sent, 0 bytes received in 0.01 seconds.\n`)
+      } else ctx.err(`Ncat: ${why === 'Connection timed out' ? 'TIMEOUT' : why}.\n`)
+      return open ? 0 : 1
+    }
     if (open) ctx.err(`Connection to ${host} (${ip}) ${port} port [tcp/*] succeeded!\n`)
     else ctx.err(`nc: connect to ${host} (${ip}) port ${port} (tcp) failed: ${why}\n`)
     return open ? 0 : 1

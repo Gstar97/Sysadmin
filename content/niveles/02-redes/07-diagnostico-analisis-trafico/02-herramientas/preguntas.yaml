@@ -1,0 +1,104 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Hacés ping a una PC de tu misma red y aparece "From 192.168.10.100 icmp_seq=1 Destination Host Unreachable", con 192.168.10.100 tu propia IP. ¿Qué significa?
+  opciones:
+    - { texto: "Tu equipo preguntó por ARP quién tiene esa IP y nadie contestó: está apagada, en otra VLAN o con otra IP", correcta: true, explicacion: "El aviso lo genera tu propio equipo porque no consiguió la MAC del destino." }
+    - { texto: "Falta la puerta de enlace", explicacion: "Para tu propia red no se usa; además sería Network is unreachable." }
+    - { texto: "Un firewall en internet bloquea el ping", explicacion: "El destino está en tu red local." }
+    - { texto: "El DNS no responde", explicacion: "Hiciste ping a una IP." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué protocolo usa ping?
+  opciones:
+    - { texto: "ICMP (mensajes de eco)", correcta: true, explicacion: "Echo request y echo reply." }
+    - { texto: "TCP", explicacion: "ping no abre conexiones." }
+    - { texto: "UDP al puerto 7", explicacion: "No: ICMP no tiene puertos." }
+    - { texto: "ARP", explicacion: "ARP se usa antes, para averiguar la MAC en la red local." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Un usuario manda este informe y dice que "el router 2 pierde 60 % de los paquetes". ¿Tiene razón?
+  salida: |
+    HOST: pc01               Loss%   Snt   Last   Avg  Best  Wrst StDev
+      1.|-- 192.168.1.1       0.0%   100    0.6   0.5   0.4   0.9   0.1
+      2.|-- 203.0.113.1      60.0%   100    4.3   4.1   3.6   6.0   0.4
+      3.|-- 198.51.100.17     0.0%   100    6.9   6.8   5.9   8.1   0.5
+      4.|-- 1.1.1.1           0.0%   100   10.4  10.4   9.1  12.2   0.6
+  opciones:
+    - { texto: "No: el destino tiene 0 % de pérdida; ese router solo limita cuántos ICMP contesta", correcta: true, explicacion: "La pérdida real sigue hasta el último salto." }
+    - { texto: "Sí: hay que llamar al proveedor", explicacion: "Si perdiera el 60 %, los saltos siguientes también perderían." }
+    - { texto: "Sí, pero solo para el tráfico web", explicacion: "mtr no distingue tipos de tráfico así." }
+    - { texto: "No se puede saber con mtr", explicacion: "Sí se puede: mirando la última fila." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que muestra por dónde saldría un paquete hacia 10.2.0.50 (la ruta elegida y la IP de origen).
+  aceptadas: [ip route get 10.2.0.50, ip r get 10.2.0.50, ip ro get 10.2.0.50]
+  explicacion: Aplica el prefijo más largo por vos y muestra el próximo salto, la placa y la IP de origen.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En el servidor, PostgreSQL anda con psql local, pero desde la aplicación en otro equipo no conecta. sudo ss -tlnp muestra "LISTEN 0 244 127.0.0.1:5432". ¿Qué pasa?
+  opciones:
+    - { texto: "Escucha solo en 127.0.0.1: acepta conexiones del propio servidor y de ningún otro", correcta: true, explicacion: "Hay que configurarlo para escuchar en la IP de la red (o en 0.0.0.0) y permitirlo en el firewall." }
+    - { texto: "El puerto está mal: tendría que ser 3306", explicacion: "3306 es MySQL; PostgreSQL usa 5432." }
+    - { texto: "La cola está llena", explicacion: "Recv-Q 0 es normal en LISTEN." }
+    - { texto: "Falta la ruta de vuelta", explicacion: "Ni siquiera escucha en la IP de la red." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: nc -zv 10.2.0.30 5432 responde "Connection refused". ¿Qué podés concluir?
+  opciones:
+    - { texto: "Llegaste al equipo, pero no hay nada escuchando en ese puerto (o un firewall que rechaza)", correcta: true, explicacion: "Refused es una respuesta: alguien contestó que no. Un timeout sería un paquete descartado." }
+    - { texto: "No hay camino hasta el equipo", explicacion: "Eso daría timeout o No route to host." }
+    - { texto: "El DNS falla", explicacion: "Usaste una IP." }
+    - { texto: "El puerto está abierto", explicacion: "Abierto diría succeeded o Connected." }
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: La web interna "anda lenta". ¿Dónde se va el tiempo?
+  salida: |
+    $ curl -s -o /dev/null -w 'dns=%{time_namelookup} con=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n' https://web.empresa.internal
+    dns=4.012833 con=4.013410 tls=4.019022 ttfb=4.031558 total=4.031950
+  opciones:
+    - { texto: "En el DNS: la resolución tardó 4 segundos y todo lo demás, milésimas", correcta: true, explicacion: "Los tiempos son acumulados. 4 s es típico de un primer resolvedor que no contesta y el reintento con el segundo." }
+    - { texto: "En el servidor web", explicacion: "Del primer byte al total, todo es rápido." }
+    - { texto: "En el TLS", explicacion: "Entre con y tls hay 6 ms." }
+    - { texto: "En la red", explicacion: "La conexión tardó medio milisegundo después de resolver." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que le pregunta al servidor 192.168.10.53 la IP de erp.empresa.internal y muestra solo la respuesta.
+  aceptadas: [dig @192.168.10.53 +short erp.empresa.internal, dig +short @192.168.10.53 erp.empresa.internal, dig @192.168.10.53 erp.empresa.internal +short, dig +short erp.empresa.internal @192.168.10.53, dig erp.empresa.internal @192.168.10.53 +short]
+  explicacion: Con @ elegís el servidor; con +short ves solo la respuesta.
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un ping a otra sede responde con ttl=62. ¿Qué te dice ese número, si del otro lado hay un Linux?
+  opciones:
+    - { texto: "Que la respuesta pasó por dos routers (Linux arranca en 64)", correcta: true, explicacion: "Cada router le resta uno." }
+    - { texto: "Que tardó 62 ms", explicacion: "Eso es time." }
+    - { texto: "Que se perdieron 2 paquetes", explicacion: "No tiene que ver." }
+    - { texto: "Que el equipo tiene 62 saltos de distancia", explicacion: "64 menos 62: dos saltos." }
+- id: p10
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ping -c 4 a un servidor web de internet muestra 100 % de pérdida. ¿Qué puede estar pasando? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "El servidor o un firewall en el camino descarta ICMP a propósito", correcta: true, explicacion: "Muy común: probá con curl." }
+    - { texto: "No tenés salida a internet", correcta: true, explicacion: "También es posible: probá otro destino conocido." }
+    - { texto: "Falta la ruta de vuelta en algún router", correcta: true, explicacion: "El pedido llega y la respuesta se pierde." }
+    - { texto: "El nombre no se pudo resolver", explicacion: "En ese caso ping no manda nada y dice Name or service not known." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En un cliente, ss -tn muestra varias conexiones al servidor 10.2.0.20:445 en estado SYN-SENT que no cambian. ¿Qué sugiere?
+  opciones:
+    - { texto: "El saludo de TCP no tiene respuesta: un firewall descarta el SYN o falta la ruta de vuelta", correcta: true, explicacion: "SYN-SENT es esperar la respuesta al primer paso del saludo." }
+    - { texto: "Las conexiones están funcionando bien", explicacion: "Una conexión que anda está en ESTAB." }
+    - { texto: "El servidor rechazó la conexión", explicacion: "Un rechazo (RST) la cierra enseguida." }
+    - { texto: "El cliente no cerró bien las conexiones", explicacion: "Eso se ve como CLOSE-WAIT del lado de quien no cierra." }

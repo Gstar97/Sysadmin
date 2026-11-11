@@ -212,6 +212,12 @@ const stateShape = {
       trafico: z.string().optional(),
       /** Saltos que muestra mtr hacia un destino: IP, pérdida en % y demora en ms. */
       saltos: z.record(z.string(), z.array(z.strictObject({ ip: z.string(), perdida: z.number().default(0), ms: z.number().default(1) }))).default({}),
+      /** MTU menor en el camino hacia una red (un túnel, por ejemplo) y el router que avisa "hay que fragmentar". */
+      mtu_camino: z.array(z.strictObject({ red: z.string(), mtu: z.number().int(), router: z.string() })).default([]),
+      /** Segundos que tarda un servidor web en empezar a responder (por nombre o IP); lo muestra curl -w. */
+      demora_servidor: z.record(z.string(), z.number()).default({}),
+      /** Puertos TCP abiertos de un equipo alcanzable (por IP o nombre); si no se declara, responde en todos. */
+      puertos_abiertos: z.record(z.string(), z.array(z.number().int())).default({}),
     })
     .default({
       interfaces: [{ nombre: 'enp0s3', ip: '192.168.1.10/24', estado: 'UP', ipv6: [], dhcp: false, velocidad: 1000, duplex: 'full', autonegociacion: true, mtu: 1500 }],
@@ -225,6 +231,9 @@ const stateShape = {
       rutas: [],
       redes_remotas: [],
       saltos: {},
+      mtu_camino: [],
+      demora_servidor: {},
+      puertos_abiertos: {},
     }),
   /** Intentos fallidos de inicio de sesión registrados por pam_faillock, por usuario. */
   faillock: z.record(z.string(), z.number().int().min(0)).default({}),
