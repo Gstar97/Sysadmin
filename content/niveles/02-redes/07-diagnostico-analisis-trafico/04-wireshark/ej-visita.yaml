@@ -1,0 +1,58 @@
+tipo: captura
+titulo: "Captura: una PC que arranca y abre dos páginas"
+escenario: visita-web
+introduccion: >-
+  Una PC recién encendida (192.168.10.100) pide su IP por DHCP, averigua MACs por ARP, resuelve
+  nombres por DNS y abre https://www.ejemplo.com.ar; al final, consulta la intranet por HTTP sin
+  cifrar. Usá el filtro, el detalle de cada paquete y "Seguir la conversación TCP".
+tareas:
+  - tipo: filtro
+    consigna: Mostrá solo lo que pasa antes de que la PC pueda hablar con nadie más que su red local, es decir, DHCP y ARP.
+    solucion: "dhcp || arp"
+    pista: Se unen dos protocolos con || (o con or).
+    explicacion: >-
+      Primero el saludo DHCP en cuatro pasos (Discover, Offer, Request, ACK), todo por broadcast
+      porque la PC todavía no tiene IP; después, ARP para encontrar la MAC del servidor DNS y la
+      de la puerta de enlace.
+  - tipo: pregunta
+    consigna: Mirando el detalle del DHCP ACK, ¿qué servidor DNS le asignó el DHCP a la PC?
+    opciones: ["192.168.10.53", "192.168.10.1", "192.168.10.100", "8.8.8.8"]
+    correcta: 0
+    explicacion: >-
+      En el ACK están la IP para la PC (Your client IP: 192.168.10.100), el router (192.168.10.1),
+      el DNS (192.168.10.53) y el tiempo de préstamo (3600 s).
+  - tipo: filtro
+    consigna: Mostrá solo las preguntas DNS, sin las respuestas.
+    solucion: "dns.flags.response == 0"
+    pista: El campo dns.flags.response vale 0 en las preguntas y 1 en las respuestas.
+    explicacion: >-
+      Tres preguntas: A y AAAA para www.ejemplo.com.ar (IPv4 e IPv6) y A para la intranet. Los
+      sistemas actuales preguntan por las dos direcciones a la vez.
+  - tipo: paquete
+    consigna: Marcá en la lista el paquete en el que el navegador le dice al servidor HTTPS a qué sitio quiere entrar.
+    paquete: 16
+    pista: Es el primer paquete TLS de la conversación; el nombre va en la extensión SNI.
+    explicacion: >-
+      El Client Hello lleva el nombre del sitio sin cifrar (Server Name Indication), para que el
+      servidor elija el certificado. Por eso, aun con HTTPS, se ve a qué sitio entra cada equipo.
+  - tipo: pregunta
+    consigna: Con la hora de los paquetes 13 (SYN) y 14 (SYN-ACK), ¿cuánto tarda ir y volver hasta el servidor del sitio?
+    opciones: ["Unos 24 ms", "Unos 0,3 ms", "Unos 240 ms", "Unos 2,4 segundos"]
+    correcta: 0
+    explicacion: >-
+      0,441100 − 0,417100 = 0,024 s. El tiempo entre el SYN y su SYN-ACK es una buena medida del
+      ida y vuelta (RTT) de la red, sin que intervenga la aplicación.
+  - tipo: filtro
+    consigna: Quedate solo con la conversación TCP de la intranet (la segunda conexión de la captura).
+    solucion: "tcp.stream == 1"
+    pista: Wireshark numera cada conversación TCP desde 0 en el campo tcp.stream.
+    explicacion: >-
+      tcp.stream junta los dos sentidos de una conexión. También sale con el botón "Filtrar esta
+      conversación" sobre cualquier paquete de la intranet.
+  - tipo: pregunta
+    consigna: Seguí la conversación TCP con la intranet. ¿Qué programa es el servidor web?
+    opciones: ["nginx", "Apache", "IIS", "No se puede saber"]
+    correcta: 0
+    explicacion: >-
+      La respuesta HTTP dice "Server: nginx". Como va sin cifrar, se lee todo: el pedido, los
+      encabezados y la página. Con HTTPS, la misma conversación mostraría solo tamaños.

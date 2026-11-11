@@ -1,0 +1,141 @@
+---
+id: n2-m7-l3
+titulo: Captura de tráfico con tcpdump
+minutos: 150
+objetivos:
+  - Decidir dónde capturar (cliente, servidor, los dos extremos o un puerto espejo) para responder una pregunta.
+  - Capturar con tcpdump usando filtros BPF y leer cada campo de su salida.
+  - Guardar capturas en archivos pcap, leerlas filtradas y manejarlas como datos sensibles.
+glosario: [captura-trafico, filtro-bpf, puerto-espejo]
+verificado: 2026-11
+---
+
+import linea from './tcpdump-linea.svg?raw'
+import ejercicio from './ej-tcpdump.yaml'
+import banderas from './banderas.yaml'
+
+Hasta acá le preguntaste a las herramientas qué pasa. Con una captura vas a ver qué pasa de verdad: cada paquete que entra y sale de una placa, con sus direcciones, sus puertos y sus banderas. Es la prueba que termina las discusiones del tipo "el firewall no bloquea nada" o "la aplicación sí manda la respuesta". **tcpdump** es la herramienta de captura de la terminal: está en todos los Linux y en muchos equipos de red, y no necesita pantalla.
+
+<AntesDeEmpezar>
+- Encapsulación: trama, paquete y segmento (lección 2.1.2).
+- ARP (lección 2.1.5).
+- El saludo de TCP y la diferencia con UDP (lección 2.3.1).
+- DNS (lección 2.3.3).
+</AntesDeEmpezar>
+
+## Dónde capturar
+
+Una captura es como una cámara de seguridad: graba lo que pasa por el lugar donde la ponés, nada más. Si querés saber si un paquete sale de la PC, la cámara va en la PC; si querés saber si llega al servidor, en el servidor. Donde la comparación no llega: una cámara no cambia lo que filma, y capturar tampoco cambia el tráfico, pero sí le suma trabajo al equipo (por eso se filtra y se corta a tiempo).
+
+- **En el cliente**: ¿sale el pedido? ¿vuelve algo?
+- **En el servidor**: ¿llega el pedido? ¿el servidor contesta?
+- **En los dos extremos a la vez**: la prueba más fuerte. Si el paquete sale de uno y no llega al otro, el problema está en el medio (un firewall, una ruta, un enlace).
+- **En un router o firewall Linux**: capturando en la placa de entrada y en la de salida ves si lo reenvía, lo traduce (NAT) o lo descarta.
+- **Con un puerto espejo** (SPAN, en Cisco): un switch solo le manda a cada puerto el tráfico de ese puerto, así que conectar una notebook a un puerto libre no muestra nada de los demás. Para ver el tráfico de un equipo que no podés tocar (una impresora, un teléfono IP), se configura el switch para que copie lo de ese puerto a otro, y ahí se conecta la notebook que captura.
+
+## Lo básico
+
+```bash
+sudo tcpdump -D                       # en qué interfaces se puede capturar
+sudo tcpdump -i enp0s3 -n             # capturar en enp0s3, sin resolver nombres
+sudo tcpdump -i any -n -c 20          # en todas las interfaces, y cortar a los 20 paquetes
+```
+
+- Capturar necesita **root** (o la capacidad CAP_NET_RAW): sin sudo, tcpdump dice "Operation not permitted".
+- **-n** evita que convierta cada IP en un nombre (lo que hace consultas DNS y ensucia la captura) y cada puerto en el nombre de su servicio. Vas a ver **-nn** en muchos ejemplos: en versiones viejas hacía falta para los puertos, y hoy hace lo mismo que -n.
+- tcpdump corre hasta que lo cortás con **Ctrl+C**, o hasta juntar los paquetes de **-c**. Al terminar dice cuántos capturó y si el kernel descartó alguno ("dropped by kernel"): si descarta, la captura está incompleta y conviene filtrar más.
+
+## Leer una línea
+
+<Diagrama svg={linea} alt="La línea 09:41:02.520612 IP 192.168.10.100.51544 > 93.184.215.14.443: Flags [S], seq 2001361477, win 64240, options [mss 1460,sackOK,TS val 1209 ecr 0,nop,wscale 7], length 0, con cada parte señalada: la hora con microsegundos, IPv4, el origen (IP y puerto, separados por un punto), el destino, las banderas TCP, el número de secuencia, la ventana, las opciones (entre ellas el MSS que anuncia) y los bytes de datos. Debajo, las banderas: [S] SYN, que abre; [S.] SYN-ACK, que acepta; [.] ACK; [P.] datos; [F.] FIN, que cierra; [R] o [R.] RST, que corta. Sin -n, tcpdump cambia las IP por nombres y los puertos por servicios. Desde el segundo paquete de una conexión, seq y ack aparecen relativos." pie="El punto separa la IP del puerto; la flecha va de quien manda a quien recibe." />
+
+En las banderas, el punto es el ACK: `[S.]` es SYN más ACK. Para UDP la línea es más corta, y tcpdump entiende algunos protocolos y te los traduce: en una consulta DNS muestra `A? www.ejemplo.com.ar.` (qué se preguntó) y en la respuesta `1/0/0 A 93.184.215.14` (cuántas respuestas y cuáles).
+
+<Emparejar ejercicio={banderas} />
+
+## Filtros: capturar solo lo que importa
+
+En un servidor pasan miles de paquetes por segundo; sin filtro, lo que buscás se pierde entre todo lo demás. tcpdump usa **filtros BPF**, que el kernel aplica antes de copiar cada paquete, así que además de ordenar, ahorran trabajo:
+
+| Filtro | Qué deja pasar |
+| --- | --- |
+| `host 192.168.10.30` | lo que va o viene de esa IP |
+| `src host 192.168.10.30` / `dst host ...` | solo lo que sale de ella, o solo lo que va hacia ella |
+| `net 10.2.0.0/24` | lo de una red entera |
+| `port 53` / `src port 53` / `portrange 8000-8100` | por puerto (de origen, de destino o los dos) |
+| `tcp`, `udp`, `icmp`, `arp` | por protocolo |
+| `'tcp[tcpflags] & tcp-syn != 0'` | paquetes con la bandera SYN (los que abren conexiones) |
+
+Y se combinan con `and`, `or` y `not`, con paréntesis:
+
+```bash
+sudo tcpdump -i enp0s3 -nn 'host 192.168.10.30 and port 5432'
+sudo tcpdump -i enp0s3 -nn 'icmp or arp'
+sudo tcpdump -i enp0s3 -nn 'not port 22'            # todo menos tu propia sesión SSH
+sudo tcpdump -i enp0s3 -nn 'tcp port 443 and (host 10.2.0.50 or host 10.2.0.51)'
+```
+
+Escribí el filtro entre comillas simples: los paréntesis, los corchetes y el `&` tienen significado para bash. Y si capturás por SSH en un servidor, agregá siempre `not port 22`: si no, cada línea que tcpdump te muestra genera tráfico SSH, que se captura, que genera más líneas.
+
+<Pregunta id="p05" />
+
+## Guardar y leer archivos
+
+Para analizar con calma, o abrir la captura en Wireshark (la próxima lección), se guarda en un archivo **pcap**:
+
+```bash
+sudo tcpdump -i enp0s3 -nn -w /tmp/caso.pcap 'host 192.168.10.30'   # guarda, no muestra nada
+tcpdump -nn -r /tmp/caso.pcap                       # leer (no hace falta sudo)
+tcpdump -nn -r /tmp/caso.pcap 'tcp port 443'        # leer filtrando más
+scp servidor:/tmp/caso.pcap .                       # traerlo a tu equipo
+```
+
+Con `-w` se guarda el paquete completo, no la línea de texto, así que después se puede leer con cualquier filtro o abrir en Wireshark. En Rocky (y en Fedora y RHEL) tcpdump deja de ser root apenas arranca y sigue como el usuario `tcpdump`, por eso conviene escribir en `/tmp`: en `/root` o en tu carpeta personal puede dar "Permission denied".
+
+Para capturas largas, *para más adelante*: `-C 100 -W 10` rota archivos de 100 MB y se queda con los últimos 10, así una captura que espera un problema intermitente no llena el disco.
+
+## Ver el contenido
+
+`-A` muestra la carga de cada paquete como texto y `-X`, en hexadecimal y texto. Sirve para todo lo que viaja sin cifrar (HTTP, DNS, SMTP sin TLS, SNMP v2): ves el pedido, los encabezados, las respuestas. Con TLS (HTTPS, SSH, VPN) solo ves el tamaño y el momento de cada paquete; el contenido está cifrado y así tiene que ser.
+
+<Advertencia>
+Una captura puede tener contraseñas, documentos y datos personales de lo que viaja sin cifrar. Capturá solo en equipos y redes que administrás y con autorización, filtrá lo mínimo necesario, guardá los archivos en un lugar protegido y borralos cuando termine el caso. Mandar un pcap por correo es mandar todo lo que tiene adentro.
+</Advertencia>
+
+<EnSimple>
+tcpdump muestra los paquetes que pasan por una placa. Lo ponés donde está la pregunta (cliente, servidor o los dos), le pasás un filtro para ver solo lo que importa y, si hace falta, lo guardás en un archivo para mirarlo con calma.
+</EnSimple>
+
+## En la práctica
+
+<Terminal ejercicio={ejercicio} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Capturar sin filtro en un servidor con tráfico">
+    La pantalla se llena, el equipo trabaja de más y el kernel descarta paquetes. Filtrá por host y puerto desde el principio.
+  </ErrorComun>
+  <ErrorComun titulo="Capturar por SSH sin excluir el 22">
+    Cada línea en pantalla genera tráfico SSH que también se captura. Agregá not port 22.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de -n">
+    tcpdump hace búsquedas DNS por cada IP: tarda, ensucia la captura con su propio DNS y te esconde las IP reales.
+  </ErrorComun>
+  <ErrorComun titulo="Escribir el filtro sin comillas">
+    bash interpreta los paréntesis, los corchetes y el &. Poné el filtro entre comillas simples.
+  </ErrorComun>
+  <ErrorComun titulo="Capturar en el lugar equivocado">
+    Desde un puerto común de un switch no se ve el tráfico de los demás. Capturá en el equipo, en los dos extremos o con un puerto espejo.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar capturas olvidadas">
+    Un tcpdump -w sin -c ni rotación puede llenar el disco, y el archivo tiene datos sensibles. Cortalo, y borrá el pcap al cerrar el caso.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Capturá donde está la pregunta: en el cliente, en el servidor, en los dos extremos (lo más fuerte), en un router o firewall, o con un puerto espejo del switch.
+- sudo tcpdump -i PLACA -nn, con -c para cortar; -D lista las interfaces; -i any captura en todas.
+- Cada línea: hora, origen IP.puerto > destino IP.puerto, banderas ([S] [S.] [.] [P.] [F.] [R]), seq, ack, ventana, opciones (MSS) y largo.
+- Filtros BPF: host, src/dst, net, port, tcp/udp/icmp/arp, banderas, con and/or/not y entre comillas simples; por SSH, not port 22.
+- -w guarda un pcap (en /tmp, en Rocky) y -r lo lee con cualquier filtro; -A muestra el contenido de lo que no va cifrado.
+- Las capturas son datos sensibles: con autorización, filtradas, protegidas y borradas al terminar.
+</Resumen>

@@ -1,0 +1,79 @@
+tipo: terminal
+shell: bash
+titulo: Capturar una visita web con tcpdump
+descripcion: >-
+  En pc01 (Rocky Linux, 192.168.10.100) alguien abre https://www.ejemplo.com.ar y después la
+  intranet (http://intranet.empresa.internal). Vas a mirar ese tráfico con tcpdump: primero en
+  vivo, después guardándolo en un archivo para analizarlo con calma. Entraste como admin, con sudo.
+estado_inicial:
+  distro: rocky
+  hostname: pc01
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  paquetes: { instalados: [tcpdump] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.100/24 }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.53]
+    trafico: visita-web
+pasos:
+  - consigna: Probá capturar sin sudo, para ver qué pasa, y después listá las interfaces en las que tcpdump puede capturar.
+    verificar:
+      - { comando_usado: "^(sudo )?tcpdump .*-D|^(sudo )?tcpdump -D" }
+      - { salida_contiene: "enp0s3" }
+    pistas: ["tcpdump -n (sin sudo) y después tcpdump -D."]
+    solucion: [tcpdump -n, tcpdump -D]
+    explicacion: >-
+      Capturar necesita privilegios (root, o la capacidad CAP_NET_RAW): sin sudo da "Operation not
+      permitted". Listar las interfaces, en cambio, no. Además de enp0s3 aparece any, que captura
+      en todas a la vez.
+  - consigna: >-
+      Capturá en enp0s3 solo las consultas y respuestas DNS, sin resolver nombres, y cortá
+      después de 4 paquetes.
+    verificar:
+      - { comando_usado: "sudo tcpdump .*-c ?4" }
+      - { salida_contiene: "A? www.ejemplo.com.ar." }
+    pistas: ["El DNS usa el puerto 53: el filtro es port 53.", "sudo tcpdump -i enp0s3 -n -c 4 port 53"]
+    solucion: [sudo tcpdump -i enp0s3 -n -c 4 port 53]
+    explicacion: >-
+      Ves la pregunta (A? www.ejemplo.com.ar.) y la respuesta con la IP, y lo mismo para AAAA
+      (IPv6), que vuelve sin respuestas: el sitio no tiene dirección IPv6. El número al principio
+      (6699+) es el identificador de la consulta, que se repite en su respuesta.
+  - consigna: >-
+      Guardá en /tmp/web.pcap todo el tráfico con 93.184.215.14 (el servidor del sitio), sin
+      mostrarlo en pantalla.
+    verificar:
+      - { archivo: /tmp/web.pcap, contenido_incluye: "PCAP:" }
+      - { comando_usado: "sudo tcpdump .*-w /tmp/web\\.pcap.*host 93\\.184\\.215\\.14|sudo tcpdump .*host 93\\.184\\.215\\.14.*-w /tmp/web\\.pcap" }
+    pistas: ["-w archivo guarda los paquetes en vez de mostrarlos.", "sudo tcpdump -i enp0s3 -n -w /tmp/web.pcap host 93.184.215.14"]
+    solucion: [sudo tcpdump -i enp0s3 -n -w /tmp/web.pcap host 93.184.215.14]
+    explicacion: >-
+      Con -w no se ve nada: los paquetes van al archivo, completos, para leerlos después con
+      tcpdump -r o abrirlos en Wireshark. En Rocky conviene guardar en /tmp: tcpdump deja de ser
+      root apenas arranca y puede no tener permiso para escribir en otras carpetas.
+  - consigna: >-
+      Leé el archivo (para leer no hace falta sudo) y mostrá solo los paquetes con la bandera SYN:
+      los que abren conexiones.
+    verificar:
+      - { comando_usado: "tcpdump .*-r /tmp/web\\.pcap" }
+      - { salida_contiene: "Flags [S.]" }
+      - { salida_no_contiene: "Flags [P.]" }
+    pistas: ["El filtro de banderas es 'tcp[tcpflags] & tcp-syn != 0' (con comillas, por los corchetes y el &)."]
+    solucion: ["tcpdump -n -r /tmp/web.pcap 'tcp[tcpflags] & tcp-syn != 0'"]
+    explicacion: >-
+      Quedan los dos primeros pasos del saludo: [S] del cliente y [S.] (SYN-ACK) del servidor. Los
+      dos anuncian su MSS (1460): el tamaño máximo de datos que aceptan por segmento. El filtro al
+      leer se suma al que usaste al guardar.
+  - consigna: >-
+      Por último, mirá el contenido de la consulta a la intranet, que va sin cifrar por el puerto 80.
+    verificar:
+      - { comando_usado: "sudo tcpdump .*-A" }
+      - { salida_contiene: "GET / HTTP/1.1" }
+    pistas: ["-A muestra la carga de cada paquete como texto.", "sudo tcpdump -i enp0s3 -n -A port 80"]
+    solucion: [sudo tcpdump -i enp0s3 -n -A port 80]
+    explicacion: >-
+      Por HTTP se lee todo: el pedido, los encabezados y la página. Eso es exactamente lo que
+      evita HTTPS: si probás -A con el puerto 443, vas a ver bytes sin sentido. Por eso las
+      capturas son datos sensibles: pueden tener contraseñas y documentos de lo que viaja sin
+      cifrar.

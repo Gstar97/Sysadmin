@@ -289,25 +289,27 @@ export function compileDisplay(expr: string): Pred {
 
   function cmp(field: string, op: string, v: string | number): Pred {
     const get = FIELDS[field]
+    const match = (x: string | number | boolean, o: string): boolean => {
+      if (o === 'contains') return String(x).toLowerCase().includes(String(v).toLowerCase())
+      if (typeof v === 'string' && /\/\d+$/.test(v) && typeof x === 'string') return o === '==' ? inNet(x, v) : false
+      const a = typeof x === 'boolean' ? (x ? 1 : 0) : x
+      if (o === '==') return String(a) === String(v)
+      const na = Number(a)
+      const nb = Number(v)
+      if (o === '>') return na > nb
+      if (o === '<') return na < nb
+      if (o === '>=') return na >= nb
+      if (o === '<=') return na <= nb
+      return false
+    }
     return (p) => {
       const got = get(p)
       if (got === undefined || got === false) return false
       const list = Array.isArray(got) ? got : [got]
-      return list.some((x) => {
-        if (op === 'contains') return String(x).toLowerCase().includes(String(v).toLowerCase())
-        if (typeof v === 'string' && /\/\d+$/.test(v) && typeof x === 'string') return op === '==' ? inNet(x, v) : op === '!=' ? !inNet(x, v) : false
-        const a = typeof x === 'boolean' ? (x ? 1 : 0) : x
-        const b = v
-        if (op === '==') return String(a) === String(b)
-        if (op === '!=') return String(a) !== String(b)
-        const na = Number(a)
-        const nb = Number(b)
-        if (op === '>') return na > nb
-        if (op === '<') return na < nb
-        if (op === '>=') return na >= nb
-        if (op === '<=') return na <= nb
-        return false
-      })
+      // Desde Wireshark 3.6, "a != b" es lo mismo que "!(a == b)": con campos de varios valores
+      // (ip.addr, tcp.port) tienen que ser distintos todos. Para el resto, alcanza con uno.
+      if (op === '!=') return !list.some((x) => match(x, '=='))
+      return list.some((x) => match(x, op))
     }
   }
 

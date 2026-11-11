@@ -1,0 +1,135 @@
+---
+id: n2-m7-l4
+titulo: Wireshark
+minutos: 180
+objetivos:
+  - Moverte por la ventana de Wireshark y leer un paquete capa por capa.
+  - Usar filtros de visualización y distinguirlos de los filtros de captura.
+  - Seguir una conversación TCP y encontrar los problemas que Wireshark detecta solo (retransmisiones, ACK duplicados, RST).
+glosario: [wireshark, filtro-visualizacion]
+verificado: 2026-11
+---
+
+import paneles from './paneles.svg?raw'
+import visita from './ej-visita.yaml'
+import retrans from './ej-retrans.yaml'
+import equivalentes from './filtros-equivalentes.yaml'
+
+tcpdump muestra una línea por paquete. **Wireshark** abre los mismos paquetes y los desarma capa por capa, con nombres para cada campo, colores para cada protocolo, filtros muy precisos y un análisis automático que te avisa cuando algo anduvo mal. Es el analizador de protocolos más usado del mundo, gratuito y de código abierto, para Windows, macOS y Linux. La forma de trabajo más común: capturar con tcpdump en el servidor y abrir el archivo en Wireshark en tu computadora.
+
+<AntesDeEmpezar>
+- tcpdump, filtros BPF y archivos pcap (lección 3).
+- El saludo de TCP, puertos y estados (lecciones 2.3.1 y 2.3.2).
+- DHCP, DNS y ARP (lecciones 2.3.4, 2.3.3 y 2.1.5).
+</AntesDeEmpezar>
+
+## Instalarlo
+
+- **Windows y macOS**: el instalador oficial de wireshark.org (en Windows, aceptá instalar Npcap, que es lo que captura).
+- **Linux**: el paquete `wireshark` de la distribución. Para capturar sin ser root, agregá tu usuario al grupo `wireshark` (`sudo usermod -aG wireshark $USER`) y volvé a iniciar sesión. Nunca lo abras con sudo: es un programa enorme que desarma datos que vienen de la red, y no conviene darle permisos de root.
+- Con Wireshark viene **tshark**, su versión de terminal (lo vas a ver al final).
+
+En un servidor no hace falta instalar nada gráfico: capturás con tcpdump, traés el pcap y lo abrís en tu equipo.
+
+## La ventana
+
+<Diagrama svg={paneles} alt="La ventana de Wireshark con cuatro partes: arriba, la barra del filtro de visualización (verde si es válido, roja si tiene un error), con tcp.stream == 0; debajo, la lista de paquetes, una fila por paquete con número, origen, destino, protocolo e información, coloreada por protocolo; el paquete 16, un Client Hello de TLS, está elegido. Más abajo, el detalle por capas de ese paquete: Frame, Ethernet II, Internet Protocol Version 4, Transmission Control Protocol y Transport Layer Security, abierto, con el nombre del sitio www.ejemplo.com.ar. Al final, los bytes del paquete en hexadecimal y en texto." pie="Lista, detalle y bytes: el mismo paquete visto de tres formas." />
+
+Es como una radiografía con zoom: la lista es la vista de lejos (qué pasó y en qué orden), el detalle muestra cada capa del paquete elegido con sus campos y los bytes son el paquete tal cual viajó. Donde la comparación no llega: lo que el paquete no trae (por ejemplo, el contenido cifrado de HTTPS), Wireshark no lo puede mostrar.
+
+En la lista, el **color** te orienta antes de leer: celeste para UDP y DNS, violeta claro para TCP, verde para HTTP, amarillo para ARP, gris para los SYN y FIN, y **negro con letras rojas** (o rojo) para los problemas: retransmisiones, ACK duplicados, RST. Al hacer clic derecho sobre cualquier campo del detalle, "Aplicar como filtro" arma el filtro por vos.
+
+## Filtros de visualización
+
+Wireshark tiene **dos** clases de filtro y conviene no confundirlas:
+
+- El **filtro de captura** se pone antes de empezar, usa la misma sintaxis que tcpdump (BPF) y decide qué se guarda. Lo que no pasó el filtro, no está.
+- El **filtro de visualización** se escribe en la barra de arriba, usa la sintaxis propia de Wireshark y solo esconde: podés cambiarlo cuantas veces quieras sobre la misma captura.
+
+La barra se pone **verde** si el filtro es válido y **roja** si tiene un error. Los que más vas a usar:
+
+| Filtro | Qué muestra |
+| --- | --- |
+| `ip.addr == 192.168.10.30` | lo que va o viene de esa IP (`ip.src`, `ip.dst` para un sentido) |
+| `tcp.port == 443`, `udp.port == 53` | por puerto, en cualquier sentido |
+| `dns`, `dhcp`, `arp`, `icmp`, `http`, `tls` | por protocolo |
+| `tcp.flags.syn == 1 && tcp.flags.ack == 0` | los intentos de conexión |
+| `tcp.flags.reset == 1` | las conexiones cortadas o rechazadas |
+| `tcp.analysis.flags` | todo lo que el análisis de TCP marca como problema |
+| `dns.flags.rcode != 0` | respuestas DNS con error (NXDOMAIN, SERVFAIL) |
+| `tls.handshake.type == 1` | los Client Hello (y su nombre de sitio) |
+| `http.request.method == "POST"` | por un campo de la aplicación |
+| `dns.qry.name contains "empresa"` | campos que contienen un texto |
+| `ip.addr != 192.168.10.53` | lo que no tiene esa IP ni de origen ni de destino |
+| `!(arp or dns)` | todo menos eso |
+
+Se combinan con `&&` (o `and`), `||` (o `or`) y `!` (o `not`), con paréntesis. El error clásico es comparar con un solo `=` (es `==`). Y si leés guías viejas: hasta Wireshark 3.4, `ip.addr != X` no excluía esa IP (alcanzaba con que una de las dos direcciones fuera distinta), y por eso vas a ver `!(ip.addr == X)` en muchos ejemplos. Desde la 3.6, las dos formas hacen lo mismo, salvo un detalle: `ip.addr != X` solo muestra paquetes que tienen IP, y `!(ip.addr == X)` también los que no la tienen, como ARP.
+
+<Emparejar ejercicio={equivalentes} />
+
+## Seguir una conversación
+
+Clic derecho sobre un paquete TCP, **Seguir, Flujo TCP** (Follow, TCP Stream): Wireshark junta los dos sentidos de esa conexión y muestra lo que se dijeron, en rojo lo que mandó el cliente y en azul lo que contestó el servidor. Con HTTP, SMTP o cualquier protocolo sin cifrar, se lee la conversación entera. Además, aplica el filtro `tcp.stream == N`, que deja solo esa conexión en la lista.
+
+## El tiempo
+
+La columna de tiempo arranca en 0 al principio de la captura. Para encontrar demoras, cambiá el formato a "segundos desde el paquete anterior mostrado" (Ver, Formato de visualización de tiempo) o usá el filtro `frame.time_delta_displayed > 1`: aparecen los huecos donde alguien esperó. Y para medir la red sin que intervenga la aplicación, mirá el tiempo entre un SYN y su SYN-ACK: es el ida y vuelta (RTT) puro.
+
+## Lo que Wireshark detecta solo
+
+Wireshark sigue cada conexión TCP y marca lo que no está bien. Lo más común:
+
+- **TCP Retransmission**: un segmento se mandó de nuevo porque no llegó (o no llegó su confirmación). Algunas son normales; muchas indican pérdida en la red.
+- **TCP Dup ACK**: el receptor repite el último ACK porque le falta un segmento y le llegaron los siguientes. Suele venir antes de una retransmisión.
+- **TCP Zero Window**: el receptor avisa que no puede recibir más (su programa no lee lo que llega). Es un problema del equipo, no de la red.
+- **RST**: la conexión se cortó o se rechazó.
+
+Todo eso aparece en **Analizar, Información experta** y con el filtro `tcp.analysis.flags`. En el menú **Estadísticas** hay más vistas útiles, *para más adelante*: Conversaciones (quién habló con quién y cuánto), Jerarquía de protocolos y el gráfico de E/S.
+
+<EnSimple>
+Wireshark abre una captura y te la muestra ordenada: una lista de paquetes, el detalle de cada capa y los bytes. Con los filtros de visualización te quedás con lo que importa, y con "Seguir flujo TCP" leés una conversación entera.
+</EnSimple>
+
+## En la práctica
+
+Este visor funciona como Wireshark, con dos capturas de ejemplo (y otras dos que vas a usar en la lección que viene). Los filtros usan la misma sintaxis, y los botones de abajo hacen lo de "Seguir flujo TCP" y "Aplicar como filtro".
+
+<VisorCapturas ejercicio={visita} />
+
+<VisorCapturas ejercicio={retrans} />
+
+## TLS y tshark
+
+Con HTTPS ves el saludo (el Client Hello con el nombre del sitio, la versión de TLS) y después solo "Application Data" de distintos tamaños. *Para más adelante*: si el navegador o el programa guardan sus claves en un archivo (la variable `SSLKEYLOGFILE`), Wireshark puede descifrar esa captura; sirve para depurar tus propias aplicaciones, nunca para mirar tráfico ajeno.
+
+**tshark** es Wireshark en la terminal, con los mismos filtros de visualización:
+
+```bash
+tshark -r /tmp/caso.pcap -Y 'tcp.analysis.flags'            # leer filtrando
+tshark -r /tmp/caso.pcap -Y dns -T fields -e dns.qry.name     # solo un campo
+tshark -i enp0s3 -f 'port 53' -c 20                           # capturar (-f: filtro de captura)
+```
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar la sintaxis de tcpdump en la barra de visualización">
+    "host 10.0.0.1" en la barra queda en rojo: ahí es ip.addr == 10.0.0.1. Y al revés en el filtro de captura.
+  </ErrorComun>
+  <ErrorComun titulo="Comparar con un solo =">
+    El filtro queda en rojo. La igualdad es ==.
+  </ErrorComun>
+  <ErrorComun titulo="Abrir Wireshark con sudo">
+    Desarma datos que vienen de la red con todos los permisos. Usá el grupo wireshark, o capturá con tcpdump y abrí el archivo.
+  </ErrorComun>
+  <ErrorComun titulo="Asustarse por una retransmisión suelta">
+    En una captura larga, alguna es normal. Lo que importa es si son muchas, si se repiten en una conversación lenta y dónde se pierden.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Wireshark desarma cada paquete por capas: lista (con colores), detalle y bytes. Lo habitual: capturar con tcpdump y abrir el pcap en tu equipo.
+- Filtro de captura (BPF, antes, decide qué se guarda) contra filtro de visualización (sintaxis propia, después, solo esconde).
+- Visualización: ip.addr, tcp.port, protocolos por nombre, tcp.flags.*, tcp.analysis.flags, dns.flags.rcode, contains; && || !, == y != para comparar.
+- Seguir flujo TCP muestra la conversación entera (si no va cifrada) y aplica tcp.stream == N.
+- Retransmisiones y ACK duplicados: pérdida; Zero Window: el receptor no da abasto; RST: corte o rechazo. Todo en Información experta.
+- tshark: los mismos filtros en la terminal (-r, -Y, -f, -T fields).
+</Resumen>

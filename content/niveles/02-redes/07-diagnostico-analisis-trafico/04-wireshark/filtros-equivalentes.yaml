@@ -1,0 +1,13 @@
+tipo: emparejar
+consigna: Uní cada filtro de captura (el de tcpdump) con su equivalente en el filtro de visualización de Wireshark.
+pares:
+  - { a: "host 192.168.10.30", b: "ip.addr == 192.168.10.30" }
+  - { a: "src host 192.168.10.30", b: "ip.src == 192.168.10.30" }
+  - { a: "port 53", b: "tcp.port == 53 || udp.port == 53" }
+  - { a: "net 10.2.0.0/24", b: "ip.addr == 10.2.0.0/24" }
+  - { a: "tcp and not port 22", b: "tcp && tcp.port != 22" }
+  - { a: "'tcp[tcpflags] & tcp-syn != 0'", b: "tcp.flags.syn == 1" }
+explicacion: >-
+  Son dos lenguajes distintos para lo mismo. El de captura decide qué se guarda (y no se puede
+  cambiar después); el de visualización solo esconde lo que no querés ver y se cambia cuando
+  quieras.

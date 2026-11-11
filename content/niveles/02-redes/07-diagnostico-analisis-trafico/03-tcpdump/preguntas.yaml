@@ -1,0 +1,109 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Conectás tu notebook a un puerto libre de un switch y capturás con tcpdump. ¿Ves el tráfico entre las demás PC?
+  opciones:
+    - { texto: "No: el switch solo te manda tu tráfico, los broadcast y lo que no conoce. Hace falta un puerto espejo", correcta: true, explicacion: "Un switch aprende dónde está cada MAC y no reparte el tráfico ajeno." }
+    - { texto: "Sí, todo", explicacion: "Así funcionaba un hub, no un switch." }
+    - { texto: "Sí, si la placa está en modo promiscuo", explicacion: "El modo promiscuo acepta lo que llega a la placa, pero el switch no lo manda." }
+    - { texto: "Solo el tráfico web", explicacion: "No tiene que ver con el protocolo." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Por qué se usa -n con tcpdump?
+  opciones:
+    - { texto: "Para ver las IP y los puertos como números, sin búsquedas DNS que tardan y ensucian la captura", correcta: true, explicacion: "Sin -n, tcpdump consulta el DNS por cada IP que ve." }
+    - { texto: "Para capturar sin ser root", explicacion: "Sigue haciendo falta sudo." }
+    - { texto: "Para guardar en un archivo", explicacion: "Eso es -w." }
+    - { texto: "Para cortar a los N paquetes", explicacion: "Eso es -c." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Capturaste en la PC mientras un usuario intenta conectarse a un servidor. ¿Qué pasa?
+  salida: |
+    10:02:11.204512 IP 192.168.10.100.50114 > 10.2.0.21.3389: Flags [S], seq 3812045771, win 64240, options [mss 1460], length 0
+    10:02:11.234601 IP 10.2.0.21.3389 > 192.168.10.100.50114: Flags [R.], seq 0, ack 3812045772, win 0, length 0
+  opciones:
+    - { texto: "El servidor responde que en ese puerto no hay nada escuchando (RST): Connection refused", correcta: true, explicacion: "Llegar llega: el problema es el servicio en el 3389." }
+    - { texto: "Un firewall descarta el pedido", explicacion: "Un descarte no responde nada; acá hay respuesta." }
+    - { texto: "La conexión se abrió bien", explicacion: "Para eso tendría que volver [S.]." }
+    - { texto: "Falta la ruta de vuelta", explicacion: "La respuesta volvió." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Ahora intenta SSH a otro servidor. ¿Qué indica esta captura?
+  salida: |
+    10:05:40.110240 IP 192.168.10.100.50116 > 10.2.0.99.22: Flags [S], seq 1290446112, win 64240, length 0
+    10:05:41.130371 IP 192.168.10.100.50116 > 10.2.0.99.22: Flags [S], seq 1290446112, win 64240, length 0
+    10:05:43.170552 IP 192.168.10.100.50116 > 10.2.0.99.22: Flags [S], seq 1290446112, win 64240, length 0
+    10:05:47.250602 IP 192.168.10.100.50116 > 10.2.0.99.22: Flags [S], seq 1290446112, win 64240, length 0
+  opciones:
+    - { texto: "El SYN sale y nunca vuelve nada: algo lo descarta en el camino o no hay ruta de vuelta (timeout)", correcta: true, explicacion: "TCP reintenta con esperas que se duplican: 1, 2, 4 segundos." }
+    - { texto: "El puerto está cerrado", explicacion: "Un puerto cerrado responde con RST." }
+    - { texto: "Son cuatro conexiones distintas", explicacion: "Mismo puerto de origen y mismo seq: es el mismo SYN repetido." }
+    - { texto: "La conexión funciona, pero lenta", explicacion: "No hay ninguna respuesta." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que captura en enp0s3, sin resolver nombres, solo el tráfico con 192.168.10.30 en el puerto 5432.
+  aceptadas:
+    - "sudo tcpdump -i enp0s3 -n 'host 192.168.10.30 and port 5432'"
+    - "sudo tcpdump -i enp0s3 -nn 'host 192.168.10.30 and port 5432'"
+    - "sudo tcpdump -n -i enp0s3 'host 192.168.10.30 and port 5432'"
+    - "sudo tcpdump -nn -i enp0s3 'host 192.168.10.30 and port 5432'"
+    - "sudo tcpdump -i enp0s3 -n host 192.168.10.30 and port 5432"
+    - "sudo tcpdump -i enp0s3 -nn host 192.168.10.30 and port 5432"
+  explicacion: host y port se combinan con and; entre comillas para que bash no toque nada.
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Capturás por SSH en un servidor y la pantalla se llena sin parar de paquetes del puerto 22. ¿Qué conviene hacer?
+  opciones:
+    - { texto: "Agregar not port 22 al filtro: lo que tcpdump muestra genera tráfico SSH que vuelve a capturarse", correcta: true, explicacion: "Es un bucle: cada línea en pantalla es más tráfico SSH." }
+    - { texto: "Capturar con -i any", explicacion: "Captura todavía más." }
+    - { texto: "Usar -A", explicacion: "Muestra más texto, no menos." }
+    - { texto: "Es normal, hay que leer más rápido", explicacion: "No: hay que filtrarlo." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El cliente dice que manda el pedido y "el servidor no contesta". ¿Qué captura te da la respuesta más segura?
+  opciones:
+    - { texto: "Capturar a la vez en el cliente y en el servidor, filtrando por las dos IP", correcta: true, explicacion: "Si sale del cliente y no llega al servidor, está en el medio; si llega y no responde, es el servidor." }
+    - { texto: "Solo en el cliente", explicacion: "Ves que sale, pero no si llega." }
+    - { texto: "En cualquier PC de la red", explicacion: "Un switch no le manda el tráfico ajeno." }
+    - { texto: "Ninguna: hay que mirar los logs", explicacion: "Los logs ayudan, pero la captura muestra lo que pasa en la red." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Tenés /tmp/caso.pcap. Escribí el comando que lo lee sin resolver nombres y muestra solo el tráfico DNS.
+  aceptadas: [tcpdump -n -r /tmp/caso.pcap port 53, tcpdump -nn -r /tmp/caso.pcap port 53, "tcpdump -n -r /tmp/caso.pcap 'port 53'", "tcpdump -nn -r /tmp/caso.pcap 'port 53'", tcpdump -r /tmp/caso.pcap -n port 53, sudo tcpdump -n -r /tmp/caso.pcap port 53]
+  explicacion: -r lee el archivo; el filtro se aplica al leer, igual que al capturar.
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con tcpdump -A ves claramente los pedidos al puerto 80, pero en el 443 solo aparecen caracteres sin sentido. ¿Por qué?
+  opciones:
+    - { texto: "El 443 es HTTPS: el contenido viaja cifrado con TLS, y solo se ven tamaños y momentos", correcta: true, explicacion: "Es lo esperado. Para ver el contenido hace falta la clave, del lado del cliente o del servidor." }
+    - { texto: "tcpdump no entiende el 443", explicacion: "Lo captura igual: lo que no puede es descifrarlo." }
+    - { texto: "Hay que usar -X", explicacion: "Muestra lo mismo en hexadecimal." }
+    - { texto: "Falta -n", explicacion: "No tiene que ver con el cifrado." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En Rocky, sudo tcpdump -w /root/caso.pcap termina con "Permission denied". ¿Qué pasa?
+  opciones:
+    - { texto: "tcpdump deja de ser root al arrancar (sigue como el usuario tcpdump), y ese usuario no puede escribir en /root", correcta: true, explicacion: "Guardá en /tmp, o en una carpeta donde pueda escribir." }
+    - { texto: "Falta instalar tcpdump", explicacion: "Si no estuviera, el comando no existiría." }
+    - { texto: "El disco está lleno", explicacion: "Daría No space left on device." }
+    - { texto: "-w no existe en Rocky", explicacion: "Existe en todas las versiones." }
+- id: p11
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué buenas prácticas corresponden al trabajar con capturas? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Capturar solo con autorización y en equipos que administrás", correcta: true, explicacion: "Una captura puede tener datos personales y contraseñas." }
+    - { texto: "Filtrar lo mínimo necesario", correcta: true, explicacion: "Menos datos sensibles y menos trabajo para el equipo." }
+    - { texto: "Borrar los archivos al cerrar el caso", correcta: true, explicacion: "Un pcap olvidado es una fuga en potencia." }
+    - { texto: "Mandar el pcap completo por correo para que lo vean todos", explicacion: "Compartí solo lo necesario, por un canal seguro." }

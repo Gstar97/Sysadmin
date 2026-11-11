@@ -1,0 +1,49 @@
+tipo: captura
+titulo: "Captura: la copia a la sucursal anda lenta"
+escenario: retransmisiones
+introduccion: >-
+  Una PC de la central (192.168.10.100) copia un archivo a un servidor de la sucursal (10.2.0.20,
+  SMB en el puerto 445). Los usuarios dicen que "anda lento". En la misma captura hay dos
+  intentos de conexión más, a otros equipos de la sucursal.
+tareas:
+  - tipo: filtro
+    consigna: Mostrá solo los paquetes que Wireshark marca con algún problema de TCP.
+    solucion: "tcp.analysis.flags"
+    pista: Todos los avisos del análisis de TCP están bajo tcp.analysis.
+    explicacion: >-
+      Aparecen ACK duplicados (el receptor avisa que le falta un segmento) y retransmisiones
+      (segmentos que se mandan de nuevo), incluidos los SYN repetidos hacia 10.2.0.99. Cada
+      retransmisión es tiempo perdido esperando.
+  - tipo: pregunta
+    consigna: En la copia SMB (tcp.stream == 0), ¿cuántas retransmisiones hay?
+    opciones: ["2", "3", "5", "Ninguna"]
+    correcta: 0
+    explicacion: >-
+      Las retransmisiones de la conversación 0 son dos (los paquetes 12 y 18). La segunda llega
+      después de 210 ms de espera: con pérdidas, una copia que debería tardar segundos tarda mucho
+      más. Hay que buscar dónde se pierden los paquetes (con mtr, o capturando en los dos extremos).
+  - tipo: paquete
+    consigna: Marcá la respuesta del equipo 10.2.0.21, que avisa que en el puerto 3389 no hay nada escuchando.
+    paquete: 23
+    pista: Buscá un paquete con la bandera RST.
+    explicacion: >-
+      [RST, ACK] es la respuesta a un SYN cuando el puerto está cerrado: el equipo existe y llega,
+      pero no tiene ese servicio. Es el "Connection refused".
+  - tipo: pregunta
+    consigna: ¿Qué pasa con la conexión al puerto 22 de 10.2.0.99?
+    opciones:
+      - "Nadie responde: el SYN se repite cada vez más espaciado hasta que el cliente se rinde (timeout)"
+      - "El puerto está cerrado"
+      - "La conexión se abre, pero lenta"
+      - "El servidor la rechaza por la contraseña"
+    correcta: 0
+    explicacion: >-
+      Los reintentos del SYN llegan a 1, 2 y 4 segundos del anterior. Sin respuesta: un equipo
+      apagado, un firewall que descarta o falta la ruta de vuelta.
+  - tipo: filtro
+    consigna: Mostrá solo los paquetes que abren conexiones (SYN), sin los SYN-ACK de respuesta.
+    solucion: "tcp.flags.syn == 1 && tcp.flags.ack == 0"
+    pista: Un SYN-ACK tiene las dos banderas en 1; el SYN que abre, solo la primera.
+    explicacion: >-
+      Es el filtro para ver todos los intentos de conexión de una captura: a quién, a qué puerto y
+      cuántas veces se repitieron.

@@ -1,0 +1,92 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál es la diferencia entre un filtro de captura y uno de visualización en Wireshark?
+  opciones:
+    - { texto: "El de captura decide qué se guarda (sintaxis de tcpdump); el de visualización solo esconde lo que no querés ver y se cambia cuando quieras", correcta: true, explicacion: "Lo que no pasó el filtro de captura no existe en el archivo." }
+    - { texto: "Son lo mismo con distinto nombre", explicacion: "Tienen sintaxis y momentos distintos." }
+    - { texto: "El de visualización borra paquetes del archivo", explicacion: "No borra nada: solo esconde." }
+    - { texto: "El de captura solo sirve para TCP", explicacion: "Sirve para cualquier protocolo." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Escribís "host 192.168.10.30" en la barra de filtro de Wireshark y queda roja. ¿Por qué?
+  opciones:
+    - { texto: "Es sintaxis de captura (tcpdump); en la barra de visualización es ip.addr == 192.168.10.30", correcta: true, explicacion: "Dos lenguajes distintos para cada tipo de filtro." }
+    - { texto: "Esa IP no está en la captura", explicacion: "Con un filtro válido sin resultados, la barra queda verde y la lista vacía." }
+    - { texto: "Falta poner comillas", explicacion: "Las IP van sin comillas." }
+    - { texto: "Wireshark no filtra por IP", explicacion: "Sí: con ip.addr, ip.src o ip.dst." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el filtro de visualización que muestra solo los paquetes que abren conexiones TCP (SYN sin ACK).
+  aceptadas: ["tcp.flags.syn == 1 && tcp.flags.ack == 0", "tcp.flags.syn == 1 and tcp.flags.ack == 0", "tcp.flags.syn==1 && tcp.flags.ack==0", "tcp.flags.syn==1 and tcp.flags.ack==0", "tcp.flags.ack == 0 && tcp.flags.syn == 1"]
+  explicacion: El SYN-ACK de respuesta tiene las dos banderas; el SYN que abre, solo la primera.
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace "Seguir flujo TCP" (Follow TCP Stream)?
+  opciones:
+    - { texto: "Junta los dos sentidos de una conexión, muestra lo que se dijeron y aplica el filtro tcp.stream == N", correcta: true, explicacion: "Si no va cifrado, se lee la conversación entera." }
+    - { texto: "Descifra el tráfico HTTPS", explicacion: "Sin las claves, no se puede." }
+    - { texto: "Captura más paquetes de esa conexión", explicacion: "Trabaja sobre lo que ya está capturado." }
+    - { texto: "Corta la conexión", explicacion: "Wireshark solo mira." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En una copia lenta, Wireshark muestra varios "TCP Dup ACK" seguidos de un "TCP Retransmission". ¿Qué indican?
+  opciones:
+    - { texto: "Se perdió un segmento: el receptor avisa que le falta y el emisor lo vuelve a mandar", correcta: true, explicacion: "Muchas de estas secuencias son pérdida en la red: hay que encontrar dónde." }
+    - { texto: "Que el receptor no da abasto", explicacion: "Eso se ve como Zero Window." }
+    - { texto: "Que la conexión se rechazó", explicacion: "Eso es un RST." }
+    - { texto: "Que todo está bien", explicacion: "Una o dos pueden ser normales; muchas, no." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una aplicación propia anda lenta. En la captura, el servidor manda "TCP Zero Window" una y otra vez. ¿Dónde está el problema?
+  opciones:
+    - { texto: "En el servidor: su programa no lee lo que llega y el buffer se llena, así que le pide al cliente que espere", correcta: true, explicacion: "La red entrega; el que no da abasto es el receptor." }
+    - { texto: "En la red: se pierden paquetes", explicacion: "La pérdida se ve como retransmisiones." }
+    - { texto: "En el DNS", explicacion: "No tiene que ver con una conexión ya abierta." }
+    - { texto: "En el cliente", explicacion: "El aviso lo manda el servidor sobre su propio buffer." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En una captura de HTTPS, ¿qué podés ver sin las claves?
+  opciones:
+    - { texto: "Las IP, los puertos, los tamaños, los tiempos y el nombre del sitio en el Client Hello (SNI)", correcta: true, explicacion: "El contenido (URL completa, encabezados, página) va cifrado." }
+    - { texto: "Todo, igual que con HTTP", explicacion: "Para eso existe TLS." }
+    - { texto: "Nada: ni siquiera las IP", explicacion: "IP y TCP no se cifran." }
+    - { texto: "La URL completa y las cookies", explicacion: "Van dentro de lo cifrado." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el filtro de visualización que muestra las respuestas DNS con algún error (NXDOMAIN, SERVFAIL...).
+  aceptadas: ["dns.flags.rcode != 0", "dns.flags.rcode > 0", "dns.flags.rcode!=0", "dns && dns.flags.rcode != 0"]
+  explicacion: rcode 0 es sin error; 3 es NXDOMAIN y 2 es SERVFAIL.
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la forma recomendada de capturar tráfico de un servidor Linux sin entorno gráfico para analizarlo en Wireshark?
+  opciones:
+    - { texto: "Capturar con tcpdump -w en el servidor, copiar el pcap a tu equipo y abrirlo en Wireshark", correcta: true, explicacion: "No hace falta instalar nada gráfico en el servidor." }
+    - { texto: "Instalar Wireshark en el servidor y abrirlo con sudo", explicacion: "Innecesario y riesgoso." }
+    - { texto: "Capturar desde tu PC conectada a cualquier puerto del switch", explicacion: "El switch no te manda el tráfico ajeno." }
+    - { texto: "No se puede", explicacion: "Sí: con tcpdump y un archivo pcap." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Querés medir cuánto tarda la red hasta un servidor, sin que influya la aplicación. ¿Qué mirás en la captura?
+  opciones:
+    - { texto: "El tiempo entre un SYN y su SYN-ACK", correcta: true, explicacion: "Lo responde el sistema operativo del servidor, sin pasar por la aplicación: es el ida y vuelta puro." }
+    - { texto: "El tiempo entre el pedido HTTP y la respuesta", explicacion: "Ahí se suma lo que tarda la aplicación." }
+    - { texto: "La duración total de la captura", explicacion: "Depende de cuánto capturaste." }
+    - { texto: "El tamaño de los paquetes", explicacion: "No mide tiempo." }
+- id: p11
+  tipo: completar_comando
+  dificultad: 3
+  enunciado: Con tshark, escribí el comando que lee /tmp/caso.pcap y muestra solo los paquetes que el análisis de TCP marca como problema.
+  aceptadas: ["tshark -r /tmp/caso.pcap -Y tcp.analysis.flags", "tshark -r /tmp/caso.pcap -Y 'tcp.analysis.flags'", "tshark -r /tmp/caso.pcap -Y \"tcp.analysis.flags\"", "tshark -Y tcp.analysis.flags -r /tmp/caso.pcap"]
+  explicacion: -r lee el archivo y -Y aplica un filtro de visualización (con -f se pone uno de captura).

@@ -64,6 +64,12 @@ describe('Filtros de visualización (Wireshark)', () => {
     expect(nums(compileDisplay('dns.flags.rcode != 0'), escenario('dns-falla')!)).toHaveLength(3)
     expect(nums(compileDisplay('ip.dst == 10.2.0.0/24 and tcp.flags.syn == 1 and tcp.flags.ack == 0'), escenario('retransmisiones')!)).toHaveLength(6)
   })
+  it('!= es lo contrario de == aun con campos de dos valores (como desde Wireshark 3.6)', () => {
+    const conIp = web.paquetes.filter((p) => p.ip)
+    const sinDns = nums(compileDisplay('ip.addr != 192.168.10.53'))
+    expect(sinDns).toEqual(conIp.filter((p) => p.ip!.src !== '192.168.10.53' && p.ip!.dst !== '192.168.10.53').map((p) => p.n))
+    expect(nums(compileDisplay('!(ip.addr == 192.168.10.53)')).length).toBe(sinDns.length + web.paquetes.filter((p) => !p.ip).length)
+  })
   it('explica los errores típicos', () => {
     expect(() => compileDisplay('ip.addr = 10.0.0.1')).toThrow(/==/)
     expect(() => compileDisplay('ip.adr == 10.0.0.1')).toThrow(/ip\./)
