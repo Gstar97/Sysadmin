@@ -1,0 +1,126 @@
+tipo: terminal
+shell: ios
+titulo: La política de una DMZ, con listas de acceso
+descripcion: >-
+  R1 une la LAN (Gi0/0, 192.168.1.0/24, con PC1 .10 y la PC de sistemas .50), la DMZ (Gi0/1,
+  172.16.0.0/24, con el servidor web .10) y la salida a internet (Gi0/2, hacia el router del
+  proveedor). En internet hay un equipo de prueba, EXT (198.51.100.7). Para concentrarnos en el
+  filtrado, en este laboratorio las redes se enrutan sin NAT. Hoy no hay ninguna ACL: desde
+  internet se llega a todo. Estás en la consola de R1.
+estado_inicial:
+  consola: R1
+  topologia:
+    dispositivos:
+      - id: R1
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 192.168.1.1/24 }
+          - { nombre: Gi0/1, ip: 172.16.0.1/24 }
+          - { nombre: Gi0/2, ip: 203.0.113.2/30 }
+        rutas: [{ destino: 0.0.0.0/0, via: 203.0.113.1 }]
+      - id: ISP
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 203.0.113.1/30 }
+          - { nombre: Gi0/1, ip: 198.51.100.1/24 }
+        rutas:
+          - { destino: 192.168.1.0/24, via: 203.0.113.2 }
+          - { destino: 172.16.0.0/24, via: 203.0.113.2 }
+      - { id: SW1, tipo: switch }
+      - { id: PC1, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.10/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: SIS, nombre: PC-Sistemas, tipo: pc, interfaces: [{ nombre: eth0, ip: 192.168.1.50/24 }], puerta_enlace: 192.168.1.1 }
+      - { id: WEB, tipo: servidor, interfaces: [{ nombre: eth0, ip: 172.16.0.10/24 }], puerta_enlace: 172.16.0.1 }
+      - { id: EXT, tipo: pc, interfaces: [{ nombre: eth0, ip: 198.51.100.7/24 }], puerta_enlace: 198.51.100.1 }
+    enlaces:
+      - { a: "PC1:eth0", b: "SW1:Fa0/1" }
+      - { a: "SIS:eth0", b: "SW1:Fa0/2" }
+      - { a: "R1:Gi0/0", b: "SW1:Gi0/1" }
+      - { a: "R1:Gi0/1", b: "WEB:eth0" }
+      - { a: "R1:Gi0/2", b: "ISP:Gi0/0" }
+      - { a: "ISP:Gi0/1", b: "EXT:eth0" }
+pasos:
+  - consigna: >-
+      Lo que entra desde internet (de entrada en Gi0/2): solo la web del servidor de la DMZ (TCP
+      443) y las respuestas a lo que abrieron la LAN y la DMZ (TCP con established, y las
+      respuestas de ping hacia la LAN).
+      Todo lo demás, bloqueado. Usá una ACL extendida con nombre, WAN-IN.
+    verificar:
+      - { ping: { desde: EXT, hacia: WEB, proto: tcp, puerto: 443 } }
+      - { ping: { desde: EXT, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
+      - { ping: { desde: EXT, hacia: PC1, resultado: falla } }
+      - { ping: { desde: PC1, hacia: EXT, proto: tcp, puerto: 443 } }
+      - { ping: { desde: PC1, hacia: EXT } }
+    pistas:
+      - "ip access-list extended WAN-IN, y adentro: permit tcp any host 172.16.0.10 eq 443."
+      - "Para las respuestas: permit tcp any 192.168.1.0 0.0.0.255 established, lo mismo para 172.16.0.0 0.0.0.255, y permit icmp any 192.168.1.0 0.0.0.255 echo-reply."
+      - "Después, en interface gi0/2: ip access-group WAN-IN in."
+    solucion:
+      - enable
+      - configure terminal
+      - ip access-list extended WAN-IN
+      - permit tcp any host 172.16.0.10 eq 443
+      - permit tcp any 192.168.1.0 0.0.0.255 established
+      - permit tcp any 172.16.0.0 0.0.0.255 established
+      - permit icmp any 192.168.1.0 0.0.0.255 echo-reply
+      - exit
+      - interface gi0/2
+      - ip access-group WAN-IN in
+      - exit
+    explicacion: >-
+      Una ACL no tiene estado: para que vuelvan las respuestas de lo que abrió la LAN, hay que
+      dejarlas pasar a mano. established deja entrar los segmentos TCP de conexiones ya abiertas
+      (los que traen ACK); un SYN nuevo desde internet no coincide y cae en el deny implícito.
+  - consigna: >-
+      La DMZ nunca inicia conexiones hacia la LAN, pero tiene que poder responder (por ejemplo, al
+      SSH de la PC de sistemas) y salir a internet. Armá DMZ-IN, de entrada en Gi0/1.
+    verificar:
+      - { ping: { desde: WEB, hacia: PC1, proto: tcp, puerto: 22, resultado: falla } }
+      - { ping: { desde: SIS, hacia: WEB, proto: tcp, puerto: 22 } }
+      - { ping: { desde: EXT, hacia: WEB, proto: tcp, puerto: 443 } }
+      - { ping: { desde: WEB, hacia: EXT, proto: tcp, puerto: 443 } }
+    pistas:
+      - "Primero lo que sí: permit tcp 172.16.0.0 0.0.0.255 192.168.1.0 0.0.0.255 established."
+      - "Después el bloqueo: deny ip 172.16.0.0 0.0.0.255 192.168.1.0 0.0.0.255. Y al final, permit ip 172.16.0.0 0.0.0.255 any."
+      - "En interface gi0/1: ip access-group DMZ-IN in."
+    solucion:
+      - ip access-list extended DMZ-IN
+      - permit tcp 172.16.0.0 0.0.0.255 192.168.1.0 0.0.0.255 established
+      - deny ip 172.16.0.0 0.0.0.255 192.168.1.0 0.0.0.255
+      - permit ip 172.16.0.0 0.0.0.255 any
+      - exit
+      - interface gi0/1
+      - ip access-group DMZ-IN in
+      - exit
+    explicacion: >-
+      El orden manda: si el deny va primero, también corta las respuestas del servidor a la LAN.
+      Y sin el permit final, el deny implícito cortaría las respuestas de la web a internet.
+  - consigna: >-
+      En la LAN, solo la PC de sistemas (192.168.1.50) puede hacer SSH a la DMZ; el resto de la LAN
+      sale a cualquier lado. Armá LAN-IN, de entrada en Gi0/0.
+    verificar:
+      - { ping: { desde: SIS, hacia: WEB, proto: tcp, puerto: 22 } }
+      - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 22, resultado: falla } }
+      - { ping: { desde: PC1, hacia: WEB, proto: tcp, puerto: 443 } }
+      - { ping: { desde: PC1, hacia: EXT, proto: tcp, puerto: 443 } }
+    pistas:
+      - "permit tcp host 192.168.1.50 172.16.0.0 0.0.0.255 eq 22, después deny tcp 192.168.1.0 0.0.0.255 172.16.0.0 0.0.0.255 eq 22."
+      - "Al final: permit ip 192.168.1.0 0.0.0.255 any. Y en interface gi0/0: ip access-group LAN-IN in."
+    solucion:
+      - ip access-list extended LAN-IN
+      - permit tcp host 192.168.1.50 172.16.0.0 0.0.0.255 eq 22
+      - deny tcp 192.168.1.0 0.0.0.255 172.16.0.0 0.0.0.255 eq 22
+      - permit ip 192.168.1.0 0.0.0.255 any
+      - exit
+      - interface gi0/0
+      - ip access-group LAN-IN in
+      - end
+  - consigna: Revisá los contadores de las tres listas y guardá la configuración.
+    verificar:
+      - { comando_usado: show access-lists }
+      - { equipo: R1, guardado: true }
+    pistas: ["show access-lists y copy running-config startup-config."]
+    solucion: [show access-lists, copy running-config startup-config]
+    explicacion: >-
+      Los contadores muestran qué línea usó cada prueba. Es lo primero que se mira cuando "el
+      firewall no deja pasar algo": si no aumenta ninguna permit, el paquete está cayendo en el
+      deny implícito.

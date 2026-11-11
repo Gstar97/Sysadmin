@@ -1,0 +1,88 @@
+tipo: pasos
+titulo: OPNsense con DMZ, una web publicada y WireGuard
+descripcion: >-
+  Vas a poner un firewall de verdad delante de tu laboratorio: fw01 con OPNsense, la LAN de
+  siempre (labred, 192.168.10.0/24), una DMZ nueva (labdmz, 172.16.0.0/24) con un servidor web, y
+  una VPN WireGuard para entrar desde tu celular o tu computadora. Calculá unas tres horas.
+pasos:
+  - titulo: Instantáneas y la máquina del firewall
+    detalle: >-
+      Tomá una instantánea de rocky01 y ubuntu01 (antes-de-opnsense). Descargá la imagen DVD de
+      OPNsense 26.7 (amd64) desde opnsense.org y verificá su suma, como en el Nivel 0. Creá fw01:
+      FreeBSD 64 bits, 2 vCPU, 2 GiB de memoria, 20 GiB de disco y tres adaptadores de red: el
+      primero en modo puente (la WAN, en la red de tu casa), el segundo en la red interna labred
+      y el tercero en una red interna nueva, labdmz.
+    comprobar: fw01 existe con tres adaptadores y la suma de la imagen coincide con la publicada.
+  - titulo: Instalar y asignar las interfaces
+    detalle: >-
+      Arrancá desde la imagen, entrá como installer (contraseña opnsense) e instalá en el disco
+      con UFS o ZFS. Después del reinicio, entrá como root a la consola: con la opción 1 asigná la
+      primera placa a WAN, la segunda a LAN y la tercera a OPT1; con la opción 2 poné la LAN en
+      192.168.10.1/24 sin servidor DHCP (el DHCP del laboratorio ya lo da Kea en rocky01).
+    comprobar: La consola muestra WAN con una IP de la red de tu casa y LAN 192.168.10.1/24.
+    si_falla: >-
+      Si no sabés qué placa es cuál, compará las MAC que muestra la consola con las de cada
+      adaptador en el hipervisor.
+  - titulo: Que el laboratorio salga por fw01
+    detalle: >-
+      En rocky01 y ubuntu01, cambiá la puerta de enlace de labred por 192.168.10.1 (en el
+      laboratorio 2.3 no tenía una). Desde una de ellas, entrá a la interfaz web, por ejemplo con
+      un navegador en ubuntu01 o con un túnel SSH desde tu PC (ssh -L 8443:192.168.10.1:443
+      admin@ubuntu01). Completá el asistente, cambiá la contraseña de root y actualizá desde
+      System, Firmware.
+    variantes:
+      - nombre: rocky01
+        detalle: Con nmcli, en la conexión de labred.
+        comandos:
+          - sudo nmcli connection modify enp0s8 ipv4.gateway 192.168.10.1
+          - sudo nmcli connection up enp0s8
+      - nombre: ubuntu01
+        detalle: En el archivo de netplan de labred, una ruta por defecto con via 192.168.10.1.
+        comandos:
+          - sudo nano /etc/netplan/60-labred.yaml
+          - sudo netplan try
+    comprobar: Desde rocky01, curl -I https://rockylinux.org responde, y traceroute -n 1.1.1.1 tiene como primer salto 192.168.10.1.
+  - titulo: La DMZ y su servidor
+    detalle: >-
+      En Interfaces, OPT1: activala, renombrala DMZ y dale 172.16.0.1/24. Hacé un clon enlazado de
+      ubuntu01 llamado web01, con una sola placa en labdmz, IP 172.16.0.10/24, puerta de enlace
+      172.16.0.1, y cambiale el nombre (hostnamectl). Instalá nginx en web01 (vas a necesitar una
+      regla de salida, el paso siguiente).
+    comprobar: Desde web01, ping 172.16.0.1 responde.
+  - titulo: Las reglas de la DMZ
+    detalle: >-
+      En Firewall, Aliases, creá RED_LAN (192.168.10.0/24) y PUERTOS_WEB (80, 443). En Firewall,
+      Rules, DMZ, en este orden: bloquear DMZ net hacia RED_LAN; permitir DMZ net hacia This
+      Firewall puerto 53 (DNS); permitir DMZ net hacia cualquiera en PUERTOS_WEB. Aplicá los cambios
+      e instalá nginx en web01.
+    comandos:
+      - sudo apt update && sudo apt install -y nginx
+      - curl -I http://localhost
+    comprobar: nginx se instaló en web01 (la salida a internet por 80 y 443 funciona) y, desde web01, ping 192.168.10.53 falla.
+  - titulo: Publicar la web
+    detalle: >-
+      En Firewall, NAT, Port Forward (o Destination NAT, según la versión): interfaz WAN, TCP,
+      destino WAN address puerto 8080, redirigir a 172.16.0.10 puerto 80, con la regla asociada.
+      Como la WAN está en la red de tu casa, en Interfaces, WAN desmarcá Block private networks.
+      Probá desde tu computadora con la IP de la WAN.
+    comandos:
+      - curl -I http://IP-DE-LA-WAN:8080
+    comprobar: Desde tu computadora, curl -I http://IP-DE-LA-WAN:8080 responde 200 OK con nginx, y en Firewall, Log Files, Live View aparece el paquete permitido por la regla de la redirección.
+  - titulo: WireGuard para entrar desde afuera
+    detalle: >-
+      En VPN, WireGuard: creá una instancia (puerto 51820, dirección del túnel 10.99.0.1/24) y
+      activá el servicio. Creá un peer para tu celular o tu computadora con la dirección
+      10.99.0.2/32; el generador de peers de OPNsense arma la configuración del cliente y un
+      código QR. En Firewall, Rules, WAN, permití UDP 51820 hacia WAN address; en la interfaz de
+      WireGuard, permití 10.99.0.0/24 hacia RED_LAN. Importá la configuración en la aplicación de
+      WireGuard, con AllowedIPs de túnel dividido (10.99.0.0/24 y 192.168.10.0/24).
+    comprobar: Con el túnel activo, desde el celular o la computadora llegás por SSH a ubuntu01 (ssh admin@192.168.10.54) y en VPN, WireGuard, Status aparece el último saludo (handshake) del peer.
+    si_falla: >-
+      Sin handshake: revisá la regla de UDP 51820 en la WAN y que el Endpoint del cliente sea la IP
+      de la WAN. Con handshake pero sin llegar a la LAN: falta la regla en la interfaz de
+      WireGuard, o AllowedIPs del cliente no incluye 192.168.10.0/24.
+  - titulo: Copia de la configuración y documentación
+    detalle: >-
+      En System, Configuration, Backups, descargá el XML. Actualizá el inventario y el diagrama
+      del laboratorio con fw01, la DMZ, la redirección y la VPN.
+    comprobar: Tenés el XML guardado fuera de la máquina virtual y el diagrama muestra las tres zonas.

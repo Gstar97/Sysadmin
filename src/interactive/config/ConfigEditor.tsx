@@ -159,7 +159,9 @@ export function ConfigEditor({ exercise, onComplete }: Props) {
   return (
     <div className="my-6 space-y-3">
       {exercise.titulo && <h3 className="text-lg font-semibold">{exercise.titulo}</h3>}
-      <RichText text={exercise.consigna} />
+      <div className="[overflow-wrap:anywhere]">
+        <RichText text={exercise.consigna} />
+      </div>
       <div className="overflow-hidden rounded-xl border border-line shadow-card">
         <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-3 py-1.5 text-xs text-muted">
           <Icon name="note" className="h-4 w-4" />

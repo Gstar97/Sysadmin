@@ -1,0 +1,127 @@
+tipo: troubleshooting
+titulo: Abrí el puerto y desde afuera no conecta
+descripcion: >-
+  Incidente simulado en un consultorio con OPNsense. El sistema de turnos corre en srv-turnos
+  (Rocky Linux, 192.168.10.40, HTTPS en el 443) y desde hoy los pacientes tienen que poder sacar
+  turno desde internet. Ayer, un técnico "abrió el puerto". Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:00. La recepcionista te avisa: desde la PC del consultorio, el sistema de turnos
+      anda perfecto con https://192.168.10.40. Pero un paciente llamó: desde su casa, en
+      https://turnos.consultorio.com.ar, el navegador se queda esperando y al final dice que no
+      se pudo conectar.
+    opciones:
+      - { texto: "Probar desde afuera de verdad: el celular con datos móviles, sin Wi-Fi", ir_a: n_afuera, minutos: 3 }
+      - texto: Probar desde la PC del consultorio entrando por el nombre público
+        ir_a: n_adentro
+        minutos: 4
+      - texto: Reiniciar el firewall para que tome la regla
+        ir_a: n_reinicio
+        minutos: 10
+  n_adentro:
+    situacion: >-
+      Desde adentro tampoco abre por el nombre público, pero eso no prueba nada: muchos firewalls
+      no dejan entrar por la IP pública desde la propia LAN (hace falta "NAT reflection" o
+      "hairpin"). Hay que probar desde afuera de verdad.
+    opciones:
+      - { texto: "Probar con el celular con datos móviles", ir_a: n_afuera, minutos: 3 }
+  n_reinicio:
+    situacion: >-
+      Diez minutos sin internet en el consultorio. OPNsense aplica las reglas en el momento en
+      que se guardan: reiniciar no cambia nada. Sigue sin andar desde afuera.
+    opciones:
+      - { texto: "Probar con el celular con datos móviles", ir_a: n_afuera, minutos: 3 }
+  n_afuera:
+    situacion: Con el celular con datos móviles, abrís la página mientras mirás el firewall.
+    evidencia:
+      - titulo: Firewall, Log Files, Live View (filtrado por puerto 443)
+        contenido: |
+          WAN  block  190.104.33.17:51544 -> 181.47.220.10:443  TCP  "Bloquear todo lo de internet"
+          WAN  block  190.104.33.17:51546 -> 181.47.220.10:443  TCP  "Bloquear todo lo de internet"
+      - titulo: Firewall, Rules, WAN
+        contenido: |
+          1  Bloquear  cualquiera -> cualquiera          "Bloquear todo lo de internet"
+          2  Permitir  TCP cualquiera -> 192.168.10.40:443  "NAT: turnos"
+    opciones:
+      - { texto: "La regla 1 bloquea todo antes de llegar a la del puerto. Sacarla (la WAN ya bloquea por defecto)", ir_a: n_nat, minutos: 3 }
+      - texto: Mover la regla 2 arriba y dejar la 1
+        ir_a: n_mover
+        minutos: 3
+      - texto: Es un problema del proveedor (CGNAT); llamarlo
+        ir_a: n_cgnat
+        minutos: 25
+  n_mover:
+    situacion: >-
+      También funciona: la del puerto queda primero. Pero la regla 1 no aporta nada (todo lo que
+      no se permite en la WAN ya se bloquea) y la próxima persona que agregue una regla abajo va
+      a tener el mismo problema. La sacás también.
+    opciones:
+      - { texto: "Volver a probar desde el celular", ir_a: n_nat, minutos: 2 }
+  n_cgnat:
+    situacion: >-
+      El proveedor tarda 25 minutos en atender y te dice que tenés IP pública fija: la WAN del
+      firewall es 181.47.220.10, la misma que muestra cualquier página de "cuál es mi IP". No hay
+      CGNAT. Y además, el Live View ya mostraba que los paquetes llegaban al firewall.
+    opciones:
+      - { texto: "Volver al Live View y a las reglas de la WAN", ir_a: n_afuera, minutos: 2 }
+  n_nat:
+    situacion: Sacaste la regla. Probás de nuevo desde el celular y sigue sin abrir, pero ahora el registro dice otra cosa.
+    evidencia:
+      - titulo: Live View
+        contenido: |
+          WAN  pass   190.104.33.17:51602 -> 192.168.10.4:443  TCP  "NAT: turnos"
+      - titulo: Firewall, NAT, Port Forward
+        contenido: |
+          WAN  TCP  WAN address:443  ->  192.168.10.4:443   "turnos"
+    opciones:
+      - { texto: "La redirección apunta a 192.168.10.4, no a .40. Corregirla", ir_a: n_servidor, minutos: 2 }
+      - texto: >-
+          Pasa la regla: es un problema de la página. Revisar el sistema de turnos
+        ir_a: n_app
+        minutos: 15
+  n_app:
+    situacion: >-
+      El sistema de turnos anda desde adentro y no tiene ningún error en sus registros: nunca le
+      llegó nada. Mirando de nuevo el Live View, el destino es 192.168.10.4, que ni siquiera existe.
+    opciones:
+      - { texto: "Corregir la redirección a 192.168.10.40", ir_a: n_servidor, minutos: 2 }
+  n_servidor:
+    situacion: Con la redirección corregida, el firewall deja pasar. Desde el celular, sigue sin abrir. Entrás a srv-turnos.
+    evidencia:
+      - titulo: srv-turnos
+        contenido: |
+          $ sudo ss -tlnp | grep 443
+          LISTEN 0  511  0.0.0.0:443  0.0.0.0:*  users:(("nginx",pid=1203,fd=6))
+          $ sudo firewall-cmd --list-services
+          cockpit dhcpv6-client ssh
+          $ sudo firewall-cmd --list-rich-rules
+          rule family="ipv4" source address="192.168.10.0/24" service name="https" accept
+    opciones:
+      - { texto: "firewalld permite HTTPS solo desde la LAN. Permitirlo para todos (--add-service=https --permanent y --reload)", ir_a: n_fin, minutos: 3 }
+      - texto: Apagar firewalld en el servidor
+        ir_a: n_apagar
+        minutos: 1
+  n_apagar:
+    situacion: >-
+      Anda, pero ahora todo lo que escuche srv-turnos queda expuesto a la LAN (y a quien entre a
+      ella), incluido Cockpit. El firewall del servidor es una segunda capa: se corrige, no se apaga.
+    opciones:
+      - { texto: "Volver a activarlo y permitir solo https", ir_a: n_fin, minutos: 3 }
+  n_fin:
+    final: exito
+    situacion: >-
+      Desde el celular con datos, https://turnos.consultorio.com.ar abre. El paciente saca su
+      turno. Documentás la publicación (puerto, destino, regla, firewall del servidor) en el
+      inventario.
+    resumen: >-
+      "Abrí el puerto y no anda" casi nunca es una sola cosa: hay que seguir el paquete por cada
+      capa. Probar siempre desde afuera de verdad (datos del celular), porque desde adentro la IP
+      pública puede no funcionar aunque todo esté bien. Después, el registro en vivo del firewall
+      dice qué pasa en cada intento: una regla de bloqueo arriba de la del puerto (gana la
+      primera), una redirección a la IP equivocada, y por último el firewall del propio servidor,
+      que solo aceptaba la LAN. Si el Live View no muestra nada, sospechá antes de llegar al
+      firewall: que la WAN tenga una IP privada o de CGNAT (100.64.0.0/10) distinta de la que ve
+      internet, y ahí no hay regla que alcance: hace falta una IP pública del proveedor o una VPN
+      o túnel hacia afuera.

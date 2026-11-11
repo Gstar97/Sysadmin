@@ -1,0 +1,41 @@
+---
+titulo: OPNsense como firewall del laboratorio, con DMZ, una web publicada y WireGuard
+horas: 4
+verificacion:
+  - Armé la política de la DMZ con ACL y comprobé con las pruebas qué pasa y qué se bloquea.
+  - Instalé OPNsense con WAN, LAN y DMZ, y el laboratorio sale a internet a través de él.
+  - La DMZ no llega a la LAN, pero el servidor web puede actualizarse y responder.
+  - Publiqué la web de la DMZ con una redirección de puertos y la vi pasar en el registro en vivo.
+  - Entré a la LAN desde afuera por WireGuard, con un túnel dividido.
+  - Guardé la copia del XML y actualicé la documentación del laboratorio.
+---
+
+import dmz from './lab-dmz.yaml'
+import opn from './lab-opnsense.yaml'
+
+## Objetivo
+
+Poner en práctica todo el módulo en un solo lugar: zonas, reglas que dejan pasar solo lo necesario, una publicación hacia internet y una forma segura de entrar desde afuera. Primero con listas de acceso en un router, donde tenés que pensar vos en las respuestas; después con un firewall con estado, que te resuelve eso solo.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01 y ubuntu01 del laboratorio 2.3, unos 25 GiB libres de disco, la aplicación WireGuard en tu celular o tu computadora y unas tres horas.
+
+## Parte 1: la DMZ con ACL
+
+<Terminal ejercicio={dmz} />
+
+## Parte 2: OPNsense en tu laboratorio
+
+<PasosGuiados ejercicio={opn} />
+
+<Advertencia>
+La redirección de puertos y WireGuard quedan abiertas hacia la red de tu casa, no hacia internet (salvo que abras puertos en tu router, que no hace falta). Cuando termines, apagá fw01 o borrá la redirección: un servidor de laboratorio publicado es una puerta que nadie vigila.
+</Advertencia>
+
+## Para pensar
+
+1. En la parte 1 tuviste que escribir reglas para las respuestas. ¿Cuáles de esas reglas no hicieron falta en OPNsense, y por qué?
+2. Si mañana alguien compromete web01, ¿a qué puede llegar? Recorré las reglas de la DMZ y respondé con precisión.
+3. ¿Qué cambiarías para que la administración de fw01 solo se pueda hacer desde la VPN?
