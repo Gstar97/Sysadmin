@@ -1,0 +1,56 @@
+tipo: captura
+titulo: "Captura: por la VPN, la API anda y la página no carga"
+escenario: mtu
+introduccion: >-
+  Una PC de la central (192.168.10.100) usa una aplicación de la sucursal (10.2.0.50) a través de
+  la VPN. Primero consulta una API que responde poco, por HTTP; después abre la página principal,
+  por HTTPS, que se queda cargando. Al final, alguien prueba dos ping con "no fragmentar".
+tareas:
+  - tipo: filtro
+    consigna: Mostrá solo la conversación de la página que no carga (HTTPS).
+    solucion: "tcp.port == 443"
+    explicacion: >-
+      El saludo de TCP sale bien, el navegador manda su Client Hello y el servidor confirma que lo
+      recibió. Después, 30 segundos de silencio, y el navegador cierra.
+  - tipo: pregunta
+    consigna: En esa conversación, ¿qué es lo último que llega del servidor antes del silencio?
+    opciones:
+      - "Un ACK sin datos: confirma que recibió el Client Hello, y su respuesta (grande) nunca llega"
+      - "El Server Hello"
+      - "Un RST que corta la conexión"
+      - "Nada: ni siquiera el SYN-ACK"
+    correcta: 0
+    explicacion: >-
+      La respuesta del servidor (Server Hello más el certificado) ocupa paquetes de 1500 bytes. Esos
+      no entran en el túnel, y el aviso para que los achique no le llega al servidor. Los paquetes
+      chicos (el ACK) sí pasan.
+  - tipo: paquete
+    consigna: Marcá el paquete que avisa cuál es el tamaño máximo que entra en el camino.
+    paquete: 19
+    pista: Es un ICMP de tipo 3 (destino inalcanzable), código 4.
+    explicacion: >-
+      "Fragmentation needed, MTU 1420": el router de la VPN (10.99.0.1) dice que no puede pasar ese
+      paquete con la marca DF y que el máximo es 1420. A la PC sí le llegó este aviso; lo que falla
+      es el aviso hacia el servidor, del otro lado.
+  - tipo: pregunta
+    consigna: ¿Qué MTU tiene el camino, y qué tamaño de datos (-s) pasa en un ping con "no fragmentar"?
+    opciones:
+      - "1420; -s 1392 (1392 + 8 de ICMP + 20 de IP = 1420)"
+      - "1500; -s 1472"
+      - "1472; -s 1444"
+      - "1392; -s 1364"
+    correcta: 0
+    explicacion: >-
+      Con -s se elige solo la parte de datos; el paquete suma 28 bytes de encabezados. Por eso el
+      clásico ping -M do -s 1472 prueba un MTU de 1500.
+  - tipo: pregunta
+    consigna: ¿Por qué la API (puerto 80) anda y la página no?
+    opciones:
+      - "La respuesta de la API es chica y entra en el túnel; la página necesita paquetes de 1500, que se pierden"
+      - "El puerto 443 está bloqueado en el firewall"
+      - "El certificado del sitio está vencido"
+      - "El DNS devuelve otra IP para la página"
+    correcta: 0
+    explicacion: >-
+      Es el síntoma típico de un problema de MTU: "anda lo chico, se cuelga lo grande". Si el
+      puerto estuviera bloqueado, ni siquiera se abriría la conexión.

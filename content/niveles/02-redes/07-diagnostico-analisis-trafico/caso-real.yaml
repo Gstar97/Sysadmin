@@ -1,0 +1,200 @@
+tipo: troubleshooting
+titulo: La VPN conecta pero algunas páginas no cargan
+descripcion: >-
+  Incidente simulado en una distribuidora con central y sucursal Norte, unidas por una VPN
+  WireGuard entre dos equipos dedicados (vpn-central, 10.99.0.1, y vpn-norte, 10.99.0.2). El ERP
+  corre en erp01 (10.1.0.20, HTTPS), detrás del router de la central (R-CENTRAL, un Cisco). La
+  intranet (http://intranet, 10.1.0.25) es una web chica, sin cifrar. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Martes, 8:20. Llama Sergio, encargado de la sucursal Norte: "Desde que llegamos, el ERP no
+      abre. La VPN dice conectada, la intranet anda y el chat también. Pero el ERP se queda con la
+      página en blanco hasta que el navegador dice que tardó demasiado".
+    opciones:
+      - { texto: "Definir el problema: qué anda, qué no, desde cuándo y qué cambió", ir_a: n_definir, minutos: 4 }
+      - texto: Reiniciar los dos equipos de la VPN
+        ir_a: n_reinicio
+        minutos: 15
+      - texto: Es el ERP; abrir un ticket con el proveedor del software
+        ir_a: n_proveedor
+        minutos: 40
+  n_reinicio:
+    situacion: >-
+      Quince minutos sin VPN para toda la sucursal. Vuelve a conectar y todo sigue igual: la
+      intranet anda, el ERP no. Si la VPN conecta y la intranet pasa por ella, el túnel funciona.
+    opciones:
+      - { texto: "Definir bien el problema", ir_a: n_definir, minutos: 4 }
+  n_proveedor:
+    situacion: >-
+      El proveedor contesta a las 9:00: desde la central el ERP anda perfecto para 30 usuarios, y
+      el servidor no tiene errores. Tiene razón: si desde la central anda, el servidor responde.
+    opciones:
+      - { texto: "Definir bien el problema", ir_a: n_definir, minutos: 4 }
+  n_definir:
+    situacion: >-
+      Con Sergio en el teléfono armás el cuadro. Le pedís también que haga un ping a erp01 desde
+      su PC.
+    evidencia:
+      - titulo: Lo que sabés
+        contenido: |
+          Anda:      VPN conectada, chat, intranet (HTTP, páginas chicas)
+          No anda:   ERP (HTTPS) desde la sucursal; desde la central, sí
+          Ping:      10.1.0.20 no responde desde la sucursal (la semana pasada sí)
+          Desde:     hoy a primera hora; el viernes andaba
+      - titulo: Registro de cambios
+        contenido: |
+          Lunes 22:10  R-CENTRAL  "Endurecimiento": ACL VPN-IN aplicada en Gi0/1
+                                  (la interfaz que va a vpn-central)
+    opciones:
+      - { texto: "Mirar la ACL nueva y probar desde la sucursal qué pasa y qué no", ir_a: n_acl, minutos: 6 }
+      - texto: Sacar la ACL del lunes y listo
+        ir_a: n_revertir
+        minutos: 3
+  n_revertir:
+    situacion: >-
+      Sacás la ACL y el ERP vuelve a andar. Pero ahora la sucursal llega a toda la central sin
+      filtro, que es justo lo que el endurecimiento quería evitar, y no sabés qué de la ACL rompía
+      el ERP: el próximo que la vuelva a poner va a tener el mismo problema. Volvés a aplicarla
+      (avisando a la sucursal) para entender la causa.
+    opciones:
+      - { texto: "Mirar la ACL y probar desde la sucursal", ir_a: n_acl, minutos: 6 }
+  n_acl:
+    situacion: >-
+      La ACL deja pasar justo lo que la sucursal usa. Y desde una PC de la sucursal, las pruebas
+      muestran algo raro.
+    evidencia:
+      - titulo: R-CENTRAL, show access-lists VPN-IN
+        contenido: |
+          Extended IP access list VPN-IN
+              10 permit tcp 10.2.0.0 0.0.0.255 host 10.1.0.20 eq 443 (1290 matches)
+              20 permit tcp 10.2.0.0 0.0.0.255 host 10.1.0.25 eq www (512 matches)
+              30 permit udp 10.2.0.0 0.0.0.255 host 10.1.0.53 eq domain (2210 matches)
+              40 deny ip any any log (318 matches)
+      - titulo: Desde una PC de la sucursal
+        contenido: |
+          $ curl -s -o /dev/null -w '%{http_code} %{time_total}\n' http://intranet
+          200 0.041
+          $ curl -sv https://erp.empresa.internal -o /dev/null
+          *   Trying 10.1.0.20:443...
+          * Connected to erp.empresa.internal (10.1.0.20) port 443
+          * TLSv1.3 (OUT), TLS handshake, Client hello (1):
+          (... y se queda ahí ...)
+    opciones:
+      - { texto: "La conexión se abre y se traba justo cuando el servidor tiene que mandar algo grande (su certificado): sospechar del MTU", ir_a: n_mtu, minutos: 5 }
+      - texto: El certificado del ERP está vencido
+        ir_a: n_certificado
+        minutos: 10
+      - texto: La ACL no deja pasar el 443; agregar una regla para el ERP
+        ir_a: n_mascara
+        minutos: 5
+  n_certificado:
+    situacion: >-
+      Desde la central, el navegador muestra el certificado vigente hasta marzo. Y un certificado
+      vencido da un error enseguida, no una espera infinita.
+    opciones:
+      - { texto: "Volver a la pista del tamaño: medir el MTU", ir_a: n_mtu, minutos: 5 }
+  n_mascara:
+    situacion: >-
+      La línea 10 ya permite el 443 hacia erp01 y tiene 1290 coincidencias; además, curl dice
+      "Connected": la conexión TCP se abre. Lo que no llega es lo que viene después.
+    opciones:
+      - { texto: "Volver a la pista del tamaño: medir el MTU", ir_a: n_mtu, minutos: 5 }
+  n_mtu:
+    situacion: >-
+      Desde la PC de la sucursal medís el camino hasta vpn-central con pings que no se pueden
+      fragmentar.
+    evidencia:
+      - titulo: Desde una PC de la sucursal
+        contenido: |
+          $ ping -M do -s 1472 -c 2 10.99.0.1
+          PING 10.99.0.1 (10.99.0.1) 1472(1500) bytes of data.
+          From 10.99.0.2 icmp_seq=1 Frag needed and DF set (mtu = 1420)
+          ping: local error: message too long, mtu=1420
+          $ ping -M do -s 1392 -c 2 10.99.0.1
+          1400 bytes from 10.99.0.1: icmp_seq=1 ttl=63 time=18.4 ms
+          1400 bytes from 10.99.0.1: icmp_seq=2 ttl=63 time=18.1 ms
+    opciones:
+      - { texto: "El túnel tiene MTU 1420. Capturar en erp01 mientras alguien abre el ERP desde la sucursal", ir_a: n_captura, minutos: 8 }
+      - texto: Bajar el MTU de todas las PC de la sucursal a 1400
+        ir_a: n_parche
+        minutos: 20
+  n_parche:
+    situacion: >-
+      Con el MTU en 1400 el ERP anda en esas PC... porque ahora anuncian un MSS más chico y el
+      servidor les manda segmentos que entran. Pero es un parche: cada equipo nuevo, cada
+      celular por Wi-Fi y cada servidor que hable con la sucursal va a tener el mismo problema.
+      Y la causa sigue sin aparecer.
+    opciones:
+      - { texto: "Volver los MTU a 1500 y capturar en erp01", ir_a: n_captura, minutos: 8 }
+  n_captura:
+    situacion: >-
+      En erp01 capturás el tráfico con la PC de Sergio (10.2.0.31) y, en otra terminal, cualquier
+      ICMP que llegue.
+    evidencia:
+      - titulo: erp01, sudo tcpdump -nn host 10.2.0.31
+        contenido: |
+          10:14:02.101 IP 10.2.0.31.51544 > 10.1.0.20.443: Flags [S], seq 1203, win 64240, options [mss 1460], length 0
+          10:14:02.101 IP 10.1.0.20.443 > 10.2.0.31.51544: Flags [S.], seq 8812, ack 1204, win 65160, options [mss 1460], length 0
+          10:14:02.120 IP 10.2.0.31.51544 > 10.1.0.20.443: Flags [P.], seq 1:518, ack 1, length 517
+          10:14:02.121 IP 10.1.0.20.443 > 10.2.0.31.51544: Flags [.], seq 1:1449, ack 518, length 1448
+          10:14:02.121 IP 10.1.0.20.443 > 10.2.0.31.51544: Flags [P.], seq 1449:2897, ack 518, length 1448
+          10:14:02.345 IP 10.1.0.20.443 > 10.2.0.31.51544: Flags [.], seq 1:1449, ack 518, length 1448
+          10:14:02.801 IP 10.1.0.20.443 > 10.2.0.31.51544: Flags [.], seq 1:1449, ack 518, length 1448
+          10:14:03.713 IP 10.1.0.20.443 > 10.2.0.31.51544: Flags [.], seq 1:1449, ack 518, length 1448
+      - titulo: erp01, sudo tcpdump -nn icmp
+        contenido: |
+          (nada)
+      - titulo: R-CENTRAL, show logging | include VPN-IN
+        contenido: |
+          %SEC-6-IPACCESSLOGDP: list VPN-IN denied icmp 10.99.0.1 -> 10.1.0.20 (3/4), 37 packets
+    opciones:
+      - { texto: "vpn-central avisa 'hay que fragmentar' (ICMP 3/4) y la ACL lo descarta: el servidor nunca achica sus segmentos. Corregir la ACL y ajustar el MSS en el túnel", ir_a: n_arreglo, minutos: 10 }
+      - texto: El servidor tiene un problema de red; reiniciar su placa
+        ir_a: n_placa
+        minutos: 10
+  n_placa:
+    situacion: >-
+      Reiniciar la placa de erp01 corta a los 30 usuarios de la central por un minuto, y el
+      problema sigue. La captura ya mostraba la causa: los segmentos de 1448 bytes se retransmiten
+      sin respuesta, y el aviso ICMP muere en la ACL.
+    opciones:
+      - { texto: "Corregir la ACL y ajustar el MSS en el túnel", ir_a: n_arreglo, minutos: 10 }
+  n_arreglo:
+    situacion: >-
+      En R-CENTRAL agregás a VPN-IN, antes del deny, el aviso de "hay que fragmentar" (y, ya que
+      estás, el ping desde la sucursal para diagnosticar). En vpn-central y vpn-norte agregás MSS
+      clamping, para que las conexiones que cruzan el túnel arranquen con un MSS que entra.
+    evidencia:
+      - titulo: R-CENTRAL
+        contenido: |
+          ip access-list extended VPN-IN
+           35 permit icmp any 10.1.0.0 0.0.0.255 packet-too-big
+           36 permit icmp 10.2.0.0 0.0.0.255 10.1.0.0 0.0.0.255 echo
+      - titulo: vpn-central y vpn-norte (nftables)
+        contenido: |
+          table inet mss {
+            chain forward {
+              type filter hook forward priority mangle; policy accept;
+              oifname "wg0" tcp flags syn tcp option maxseg size set rt mtu
+            }
+          }
+    opciones:
+      - { texto: "Probar desde la sucursal con Sergio y documentar", ir_a: n_fin, minutos: 5 }
+  n_fin:
+    final: exito
+    situacion: >-
+      El ERP abre en la sucursal. El ping a erp01 vuelve a responder y, capturando de nuevo, el SYN
+      que llega al servidor ya anuncia MSS 1380. En el registro de cambios anotás la causa y la
+      regla nueva, y agregás a la plantilla de ACL del equipo una nota: "no bloquear ICMP
+      packet-too-big".
+    resumen: >-
+      "La VPN conecta pero algunas páginas no cargan" es la firma de un agujero negro de MTU: anda
+      lo chico (el chat, una intranet liviana) y se traba lo grande (el certificado de TLS, los
+      reportes). El túnel tiene MTU 1420; el servidor manda paquetes de 1500 y vpn-central le avisa
+      por ICMP que no entran, pero una ACL nueva, sin estado, descartaba todo lo que no fuera TCP o
+      UDP, incluido ese aviso. Se confirma con ping -M do y con una captura en el servidor
+      (retransmisiones de segmentos grandes, ningún ICMP). El arreglo va donde está la causa: dejar
+      pasar el ICMP packet-too-big y hacer MSS clamping en el túnel; bajar el MTU de cada PC es un
+      parche que deja el problema para todos los demás.

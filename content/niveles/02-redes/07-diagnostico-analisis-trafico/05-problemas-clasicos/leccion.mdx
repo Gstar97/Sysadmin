@@ -1,0 +1,129 @@
+---
+id: n2-m7-l5
+titulo: Problemas clásicos de red
+minutos: 150
+objetivos:
+  - Reconocer por su síntoma los problemas que más se repiten (MTU, DNS, puerta de enlace, IP duplicada, dúplex y bucles).
+  - Confirmar cada uno con la prueba justa, con herramientas y capturas.
+  - Aplicar el arreglo correcto, y no solo el que lo esquiva.
+glosario: [mtu, mss, pmtud, ip-duplicada, duplex]
+verificado: 2026-11
+---
+
+import mtu from './mtu-tunel.svg?raw'
+import sintomas from './sintomas.yaml'
+import ejMtu from './ej-mtu.yaml'
+import ejDns from './ej-dns.yaml'
+import ejClasicos from './ej-clasicos.yaml'
+
+Con los años, vas a ver que muchas fallas de red se repiten con distinta ropa. Esta lección junta las seis más comunes, cada una con su síntoma típico, la prueba que la confirma y el arreglo. No es para saltear el método de la lección 1: es para que, cuando aparezca el síntoma, se te ocurra la hipótesis correcta primero.
+
+<AntesDeEmpezar>
+- Velocidad, dúplex y autonegociación (lección 2.1.3).
+- ARP e IP duplicada (lección 2.1.5).
+- DNS (lección 2.3.3).
+- Spanning Tree y BPDU Guard (lección 2.4.5).
+- VPN y WireGuard (lección 2.6.5).
+- tcpdump y Wireshark (lecciones 3 y 4).
+</AntesDeEmpezar>
+
+<Emparejar ejercicio={sintomas} />
+
+## 1. MTU: anda lo chico, se cuelga lo grande
+
+El **MTU** es el tamaño máximo de paquete que entra en un enlace: 1500 bytes en Ethernet. Mientras todo el camino tenga 1500, nadie se entera. El problema aparece cuando un tramo tiene menos: un túnel VPN (que le agrega su propio sobre a cada paquete), una conexión PPPoE (1492) o un enlace con etiquetas extra.
+
+Pensá en un camión de mudanza que entra a un túnel con un cartel de altura máxima. Si el cartel está, el chofer lo ve, baja la carga y pasa. Si alguien sacó el cartel, el camión se queda trabado y los autos chicos siguen pasando como si nada. Donde la comparación no llega: en la red, el "cartel" es un aviso que manda el router recién cuando el paquete no entra, y lo que se traba no es el paquete sino toda la conexión, que espera una respuesta que no llega nunca.
+
+<Diagrama svg={mtu} alt="Un servidor (10.2.0.50, MTU 1500) en la sucursal y una PC (MTU 1500) en la central, unidos por dos routers de VPN con un túnel WireGuard. Dentro del túnel cada paquete lleva un sobre extra de hasta 80 bytes, así que el paquete original puede tener como mucho 1420 bytes: 80 más 1420 da 1500, lo máximo del enlace de internet. Lo que debería pasar: el servidor manda 1500 bytes con la marca no fragmentar (DF), el router de la VPN le avisa por ICMP que el máximo es 1420 y el servidor achica sus paquetes. Si un firewall bloquea todo el ICMP, el aviso no llega, los paquetes grandes desaparecen y lo chico sigue andando: es un agujero negro." pie="El aviso de 'hay que fragmentar' es ICMP: bloquear todo el ICMP rompe el descubrimiento del MTU." />
+
+Los equipos mandan sus paquetes con la marca **DF** (no fragmentar) y descubren el MTU del camino con esos avisos (*Path MTU Discovery*). Si el aviso no llega, se forma un **agujero negro de MTU**: la conexión se abre (los paquetes del saludo son chicos), el pedido sale (chico) y la respuesta grande nunca llega.
+
+**Cómo se confirma**: un ping con la marca "no fragmentar" y un tamaño conocido. Con `-s` se elige solo la parte de datos; los encabezados suman 28 bytes:
+
+```bash
+ping -M do -s 1472 -c 2 10.2.0.50    # 1472 + 28 = 1500
+ping -M do -s 1392 -c 2 10.2.0.50    # 1392 + 28 = 1420
+```
+
+Si el de 1500 falla (con "Frag needed", o sin respuesta) y uno más chico anda, encontraste el MTU del camino. En Windows: `ping -f -l 1472 10.2.0.50`.
+
+**El arreglo**:
+
+- No bloquear el ICMP "destino inalcanzable, hay que fragmentar" (tipo 3, código 4). Bloquear todo el ICMP "por seguridad" es justamente lo que crea el problema.
+- **MSS clamping** en los routers del túnel: el **MSS** es cuántos datos acepta cada lado por segmento TCP, y se anuncia en el SYN. El router lo reescribe al pasar (MTU del túnel menos 40), así nadie manda segmentos que no entran. En nftables: `tcp flags syn tcp option maxseg size set rt mtu`; en OPNsense, el campo MSS de la interfaz.
+- Bajar el MTU de la interfaz del túnel (WireGuard ya usa 1420 por defecto) o, como último recurso, el de los equipos.
+
+<VisorCapturas ejercicio={ejMtu} />
+
+## 2. DNS: por IP anda, por nombre no
+
+Es tan común que entre sysadmins hay un chiste: "siempre es el DNS". El síntoma: el ping a una IP anda, pero el navegador dice que no encuentra la página, o todo tarda unos segundos de más al empezar.
+
+- **NXDOMAIN**: el servidor responde que el nombre no existe. Casi siempre, un nombre mal escrito (en el pedido o en la configuración de un programa) o una zona sin el registro.
+- **SERVFAIL**: el servidor no pudo averiguarlo. Si es un resolvedor de la empresa, suele ser que no llega a sus reenviadores o que la salida al puerto 53 está bloqueada.
+- **Sin respuesta**: el resolvedor está apagado, o un firewall lo bloquea. Con dos resolvedores configurados y el primero caído, cada consulta espera unos 5 segundos antes de probar el segundo: "anda, pero lento al principio".
+- **Respuesta vieja**: un registro cambió y los equipos siguen con la IP anterior en caché hasta que vence su TTL. Se vacía con `resolvectl flush-caches` (Linux con systemd-resolved) o `ipconfig /flushdns` (Windows).
+
+**Cómo se confirma**: `dig nombre` contra cada resolvedor (`dig @IP nombre`) y mirando el status, o una captura con el filtro `dns`.
+
+<VisorCapturas ejercicio={ejDns} />
+
+## 3. La puerta de enlace: llego a mi red y a nada más
+
+Si un equipo llega a todo lo de su red y a nada de las otras, el problema está en su salida: no tiene puerta de enlace, tiene una equivocada (una IP de otro router, o una que no existe), o tiene la **máscara mal**. Con una máscara /16 en lugar de /24, el equipo cree que 192.168.20.5 está en su misma red, pregunta por ARP en vez de mandarlo al router, y nadie contesta.
+
+**Cómo se confirma**: `ip route` (¿hay una ruta default, y hacia dónde?), `ip -br a` (¿la máscara es la de la red?) e `ip route get` hacia una IP de afuera. Del otro lado, un router sin la ruta de vuelta produce el mismo síntoma (lo viste en la lección 2.5.5).
+
+## 4. IP duplicada: se corta a ratos
+
+Dos equipos con la misma IP se pelean: cada uno que habla le hace creer a los demás (por ARP) que la IP está en su MAC. El resultado es intermitente: a veces anda uno, a veces el otro. Windows suele avisar ("conflicto de direcciones IP"); Linux, no.
+
+**Cómo se confirma**: `sudo arping -D -I enp0s3 192.168.10.53` (si alguien contesta, la IP está en uso), o mirar `ip neigh` en otro equipo y ver que la MAC de esa IP cambia. **El arreglo**: las IP fijas, fuera del rango del DHCP y anotadas; mejor todavía, reservas DHCP para los equipos que necesitan siempre la misma.
+
+## 5. Dúplex mal negociado: lento y con errores
+
+Si un lado del cable está en automático y el otro fijo (por ejemplo, alguien fijó 100 Mb/s full dúplex en la placa), el lado automático no recibe la negociación, detecta la velocidad y supone **half dúplex**. Cada uno habla distinto: el enlace anda, pero lento, con errores y colisiones que no deberían existir en una red conmutada. Es el problema más difícil de ver, porque "anda".
+
+**Cómo se confirma**: `ethtool enp0s3` (velocidad, dúplex y si la negociación está encendida) e `ip -s link show enp0s3` (errores que suben). En el switch, `show interfaces` con "late collision" o errores de CRC. **El arreglo**: los dos lados en automático (lo normal hoy) o los dos fijos con lo mismo, nunca uno de cada uno. Y si negocia una velocidad más baja de lo esperado (100 en vez de 1000), sospechá del cable: a gigabit le hacen falta los cuatro pares.
+
+## 6. Bucles: la red entera se cae
+
+Un cable conectado entre dos bocas del mismo switch (o un switch chico de escritorio con un cable de más) arma un bucle: los broadcast dan vueltas para siempre y se multiplican, y en segundos la red se satura. Todo se pone lentísimo o deja de andar, y las luces del switch parpadean sin parar. Lo viste en el módulo 2.4.
+
+**Cómo se confirma**: los contadores de broadcast se disparan, una captura muestra el mismo broadcast repetido cientos de veces por segundo, y el switch registra MAC que saltan de un puerto a otro ("MAC flapping"). **El arreglo**: desconectar el cable del bucle y, para que no vuelva a pasar, Spanning Tree activo con BPDU Guard en los puertos de los usuarios.
+
+<EnSimple>
+Seis problemas que se repiten: el MTU (anda lo chico, lo grande no), el DNS (por IP sí, por nombre no), la puerta de enlace (la red propia sí, las demás no), la IP duplicada (se corta a ratos), el dúplex (lento y con errores) y los bucles (se cae todo de golpe). Cada uno tiene su prueba y su arreglo.
+</EnSimple>
+
+## En la práctica
+
+<Terminal ejercicio={ejClasicos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Bloquear todo el ICMP por seguridad">
+    Rompe el descubrimiento del MTU y crea agujeros negros. Se puede limitar el ping, pero "destino inalcanzable" tiene que pasar.
+  </ErrorComun>
+  <ErrorComun titulo="Bajar el MTU de todas las PC">
+    Esquiva el problema en esas PC y lo deja en todas las demás. El arreglo va en el túnel: MSS clamping y el ICMP permitido.
+  </ErrorComun>
+  <ErrorComun titulo="Poner el DNS público en una PC para que ande">
+    Anda internet, pero se pierden los nombres internos, y el resolvedor de la empresa sigue roto para los demás. Arreglá el resolvedor.
+  </ErrorComun>
+  <ErrorComun titulo="Fijar velocidad y dúplex de un solo lado">
+    Es la receta del dúplex mal negociado. Los dos en automático, o los dos fijos con lo mismo.
+  </ErrorComun>
+  <ErrorComun titulo="Poner una IP fija sin comprobar">
+    Puede estar en uso o dentro del rango del DHCP. Probá con arping -D y anotala en el inventario.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- MTU: anda lo chico, se cuelga lo grande (sobre todo por VPN). ping -M do -s 1472 y más chico; arreglo: dejar pasar el ICMP tipo 3 código 4, MSS clamping en el túnel.
+- DNS: NXDOMAIN (no existe, casi siempre mal escrito), SERVFAIL (el resolvedor no puede averiguarlo), sin respuesta (caído o bloqueado; 5 s de espera por consulta). dig @IP para probar cada uno.
+- Puerta de enlace: la red propia anda y las demás no; revisá la ruta default y la máscara (y la ruta de vuelta del otro lado).
+- IP duplicada: cortes intermitentes; arping -D antes de poner una IP fija, e IP fijas fuera del rango del DHCP.
+- Dúplex: un lado automático y el otro fijo da half en uno de los dos; ethtool e ip -s link; los dos en automático.
+- Bucles: tormenta de broadcast; desconectar y prevenir con STP y BPDU Guard.
+</Resumen>

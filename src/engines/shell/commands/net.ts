@@ -233,10 +233,10 @@ register('ip', {
         return 0
       }
       const devFilter = devArg() ?? (cmd === 'show' && args[2] ? args[2] : undefined)
-      type Row = { ix: number; name: string; ip?: string; mac: string; up: boolean; mtu: number; v6: string[]; dhcp: boolean; half: boolean }
+      type Row = { ix: number; name: string; ip?: string; mac: string; up: boolean; mtu: number; v6: string[]; dhcp: boolean; half: boolean; forced: boolean }
       const rows: Row[] = [
-        { ix: 1, name: 'lo', ip: '127.0.0.1/8', mac: '00:00:00:00:00:00', up: true, mtu: 65536, v6: ['::1/128'], dhcp: false, half: false },
-        ...sys.interfaces.map((i, n) => ({ ix: n + 2, name: i.name, ip: i.ip, mac: i.mac, up: i.up, mtu: i.mtu, v6: ipv6List(sys, i), dhcp: i.dhcp, half: i.duplex === 'half' })),
+        { ix: 1, name: 'lo', ip: '127.0.0.1/8', mac: '00:00:00:00:00:00', up: true, mtu: 65536, v6: ['::1/128'], dhcp: false, half: false, forced: false },
+        ...sys.interfaces.map((i, n) => ({ ix: n + 2, name: i.name, ip: i.ip, mac: i.mac, up: i.up, mtu: i.mtu, v6: ipv6List(sys, i), dhcp: i.dhcp, half: i.duplex === 'half', forced: !i.autoneg })),
       ].filter((i) => !devFilter || i.name === devFilter)
       if (devFilter && !rows.length) {
         ctx.err(`Device "${devFilter}" does not exist.\n`)
@@ -256,13 +256,16 @@ register('ip', {
         ctx.out(`${i.ix}: ${i.name}: ${flags} mtu ${i.mtu} qdisc ${i.name === 'lo' ? 'noqueue' : 'fq_codel'} state ${state} group default qlen 1000\n`)
         if (!only6 && !only4) ctx.out(`    link/${i.name === 'lo' ? 'loopback' : 'ether'} ${i.mac} brd ${i.name === 'lo' ? '00:00:00:00:00:00' : 'ff:ff:ff:ff:ff:ff'}\n`)
         if (stats && objName === 'link') {
-          // Contadores de la placa. Con dúplex mal negociado (half) aparecen colisiones y errores.
+          // Contadores de la placa. Con la negociación apagada (el switch queda en automático y cae a
+          // half dúplex) hay errores: CRC al recibir del lado full, colisiones tardías del lado half.
+          const rxErr = i.forced ? (i.half ? 412 : 1873) : 0
+          const coll = i.forced && i.half ? 2311 : 0
           const lo = i.name === 'lo'
           const rx = lo ? [184_330, 1_912] : [48_215_930, 61_234]
           const tx = lo ? [184_330, 1_912] : [5_873_121, 35_201]
           const c = (v: number, w: number) => String(v).padStart(w)
-          ctx.out(`    RX:  bytes packets errors dropped  missed   mcast           \n${c(rx[0], 14)}${c(rx[1], 8)}${c(i.half ? 412 : 0, 7)}${c(0, 8)}${c(0, 8)}${c(lo ? 0 : 112, 8)} \n`)
-          ctx.out(`    TX:  bytes packets errors dropped carrier collsns           \n${c(tx[0], 14)}${c(tx[1], 8)}${c(i.half ? 2311 : 0, 7)}${c(0, 8)}${c(0, 8)}${c(i.half ? 2311 : 0, 8)} \n`)
+          ctx.out(`    RX:  bytes packets errors dropped  missed   mcast           \n${c(rx[0], 14)}${c(rx[1], 8)}${c(rxErr, 7)}${c(0, 8)}${c(0, 8)}${c(lo ? 0 : 112, 8)} \n`)
+          ctx.out(`    TX:  bytes packets errors dropped carrier collsns           \n${c(tx[0], 14)}${c(tx[1], 8)}${c(coll, 7)}${c(0, 8)}${c(0, 8)}${c(coll, 8)} \n`)
         }
         if (objName !== 'addr') return
         if (i.ip && !only6) {

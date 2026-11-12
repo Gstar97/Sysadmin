@@ -1,0 +1,41 @@
+---
+titulo: Capturar y analizar el tráfico de una visita web completa
+horas: 3
+verificacion:
+  - Armé la línea de tiempo de la visita de ejemplo con el visor de capturas.
+  - Capturé en cliente01 y en rocky01 a la vez, sin mi propia sesión SSH, y corté a tiempo.
+  - Encontré en Wireshark el DHCP, el ARP, el DNS, el saludo TCP y el Client Hello de TLS, con sus horas.
+  - Medí el ida y vuelta hasta un sitio externo y uno interno, y seguí una conversación HTTP.
+  - Vi en la captura del resolvedor cómo resuelve los nombres internos y los externos.
+  - Guardé la línea de tiempo en el cuaderno técnico y borré las capturas.
+---
+
+import linea from './lab-linea-tiempo.yaml'
+import pasos from './lab-visita.yaml'
+
+## Objetivo
+
+Ver con tus propios ojos todo lo que pasa en la red cuando alguien "abre una página": una docena de protocolos y una centena de paquetes en medio segundo. Lo vas a hacer primero con una captura de ejemplo y después en tu laboratorio, para quedarte con una foto de cómo se ve tu red cuando anda bien.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01, ubuntu01, cliente01 y fw01 de los laboratorios anteriores, Wireshark en tu computadora y unas dos horas y media.
+
+## Parte 1: la captura de ejemplo
+
+<VisorCapturas ejercicio={linea} />
+
+## Parte 2: tu propia captura
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Capturá solo en tus máquinas virtuales. En la red de tu casa o de tu trabajo, capturar el tráfico de otras personas sin autorización puede ser ilegal, además de una falta de respeto. Y las capturas pueden tener datos sensibles: borralas cuando termines.
+</Advertencia>
+
+## Para pensar
+
+1. En tu captura, ¿cuánto tiempo se fue en el DNS y cuánto en la conexión al sitio externo? Si los usuarios dijeran "internet anda lenta", ¿qué mirarías primero con esa información?
+2. ¿Qué datos de tu visita viajaron sin cifrar, aun usando HTTPS?
+3. Si cliente01 tuviera configurado un segundo DNS que no responde, ¿cómo se vería en la captura y cuánto tardaría la visita?

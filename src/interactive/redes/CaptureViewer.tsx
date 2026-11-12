@@ -4,7 +4,8 @@ import { ESCENARIOS, escenario, info, protocolo, type Pkt } from '@/engines/capt
 import { DISPLAY_FIELDS, FilterError, compileDisplay } from '@/engines/captura/filtros'
 import { detalle, seguirTcp } from '@/engines/captura/salida'
 import { cn } from '@/lib/cn'
-import { Button, RichText } from '@/ui'
+import { createRng, shuffle } from '@/lib/random'
+import { Button, RichText, renderInline } from '@/ui'
 import { Chip, Feedback, Frame } from '../fundamentos/Frame'
 
 /** Colores de fila parecidos a las reglas por defecto de Wireshark. */
@@ -33,6 +34,8 @@ type Estado = 'ok' | 'mal' | undefined
 
 function Tarea({ t, i, pkts, aplicado, seleccion, estado, setEstado }: { t: CapturaTask; i: number; pkts: Pkt[]; aplicado: string; seleccion?: number; estado: Estado; setEstado: (e: Estado) => void }) {
   const [elegida, setElegida] = useState<number>()
+  // Las opciones se muestran mezcladas (en los datos, la correcta suele ir primera).
+  const orden = useMemo(() => (t.tipo === 'pregunta' ? shuffle(createRng(), t.opciones.map((_, k) => k)) : []), [t])
   const [mensaje, setMensaje] = useState<string>()
   const comprobar = () => {
     if (t.tipo === 'filtro') {
@@ -56,11 +59,11 @@ function Tarea({ t, i, pkts, aplicado, seleccion, estado, setEstado }: { t: Capt
   return (
     <div className="space-y-2 rounded-lg border border-line p-3 text-sm">
       <div className="font-semibold">
-        Tarea {i + 1}: <RichText text={t.consigna} className="inline font-normal" />
+        Tarea {i + 1}: <span className="font-normal">{renderInline(t.consigna)}</span>
       </div>
       {t.tipo === 'pregunta' ? (
         <div className="flex flex-col gap-1.5">
-          {t.opciones.map((o, k) => (
+          {orden.map((k) => ({ o: t.opciones[k], k })).map(({ o, k }) => (
             <button
               key={k}
               type="button"
@@ -71,7 +74,7 @@ function Tarea({ t, i, pkts, aplicado, seleccion, estado, setEstado }: { t: Capt
               }}
               className={cn('min-h-9 rounded-lg border px-3 py-1.5 text-left', elegida === k ? (k === t.correcta ? 'border-ok bg-ok-soft' : 'border-bad bg-bad-soft') : 'border-line hover:bg-surface-2')}
             >
-              <RichText text={o} className="inline" />
+              {renderInline(o)}
             </button>
           ))}
         </div>
@@ -134,9 +137,7 @@ export function CaptureViewer({ ejercicio }: { ejercicio?: CapturaExercise }) {
       }
     >
       <div className="space-y-3">
-        <p className="text-sm text-muted">
-          <RichText text={ejercicio?.introduccion ?? esc.descripcion} className="inline" />
-        </p>
+        <RichText text={ejercicio?.introduccion ?? esc.descripcion} className="text-sm text-muted" />
         <form
           className="flex flex-wrap gap-2"
           onSubmit={(e) => {

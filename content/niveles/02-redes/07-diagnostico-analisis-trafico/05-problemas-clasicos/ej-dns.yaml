@@ -1,0 +1,41 @@
+tipo: captura
+titulo: "Captura: hay internet, pero no resuelve"
+escenario: dns-falla
+introduccion: >-
+  Una PC (192.168.10.100) tiene configurados dos resolvedores: 192.168.10.53 y 192.168.10.54.
+  Los usuarios dicen que "no anda internet", pero el ping a 1.1.1.1 responde.
+tareas:
+  - tipo: filtro
+    consigna: Mostrá solo las respuestas DNS que vienen con error.
+    solucion: "dns.flags.rcode != 0"
+    explicacion: Tres respuestas con error, de dos tipos distintos. Mirá el detalle de cada una.
+  - tipo: pregunta
+    consigna: ¿Qué dice la respuesta a erp.empresa.internl?
+    opciones:
+      - "NXDOMAIN: ese nombre no existe (está mal escrito: internl)"
+      - "SERVFAIL: el servidor no pudo resolverlo"
+      - "No hubo respuesta"
+      - "Devolvió una IP equivocada"
+    correcta: 0
+    explicacion: >-
+      NXDOMAIN es una respuesta válida: el DNS anda y dice que ese nombre no existe. Casi siempre
+      es un error de escritura, en el pedido o en la configuración del programa.
+  - tipo: filtro
+    consigna: Mostrá solo el tráfico con el segundo resolvedor, 192.168.10.54.
+    solucion: "ip.addr == 192.168.10.54"
+    explicacion: >-
+      Dos preguntas, iguales, con 5 segundos de diferencia, y ninguna respuesta. Ese resolvedor no
+      contesta: o está apagado, o un firewall lo bloquea. Esos 5 segundos son los que el usuario
+      espera cada vez.
+  - tipo: pregunta
+    consigna: Las consultas por www.google.com a 192.168.10.53 vuelven con SERVFAIL, y el ping a 1.1.1.1 anda. ¿Dónde está el problema más probable?
+    opciones:
+      - "En el resolvedor 192.168.10.53: no logra averiguar nombres de afuera (sus reenviadores o su salida al puerto 53)"
+      - "En la salida a internet de la PC"
+      - "En el nombre, que está mal escrito"
+      - "En la placa de red de la PC"
+    correcta: 0
+    explicacion: >-
+      La PC sale a internet (el ping lo prueba) y llega a su resolvedor (que contesta). Lo que
+      falla es lo que hace ese resolvedor para buscar los nombres de afuera. Los internos
+      (intranet.empresa.internal) los resuelve bien porque son de su propia zona.

@@ -1,0 +1,91 @@
+tipo: pasos
+titulo: Capturar una visita web completa en tus máquinas virtuales
+descripcion: >-
+  Vas a capturar en cliente01 todo lo que pasa desde que pide su IP hasta que abre dos páginas, y
+  a la vez en rocky01 lo que hace su resolvedor. Después lo analizás en Wireshark, en tu
+  computadora. Necesitás rocky01 (Kea y Unbound, 192.168.10.53), ubuntu01 (BIND, 192.168.10.54),
+  cliente01 y fw01 (OPNsense, la salida a internet) de los laboratorios anteriores. Calculá unas
+  dos horas y media.
+pasos:
+  - titulo: Instantáneas y herramientas
+    detalle: >-
+      Tomá una instantánea de las cuatro máquinas (antes-de-capturas). Instalá tcpdump en
+      cliente01 y en rocky01, e instalá Wireshark en tu computadora (en Linux, agregá tu usuario al
+      grupo wireshark y volvé a iniciar sesión).
+    comandos:
+      - sudo dnf install -y tcpdump
+      - tcpdump --version
+    comprobar: tcpdump --version responde en las dos máquinas y Wireshark abre en tu computadora.
+  - titulo: Preparar las dos capturas
+    detalle: >-
+      En cliente01, abrí una segunda terminal (o una segunda sesión SSH) y dejá corriendo la
+      captura de la placa de labred, sin tu propia sesión SSH. En rocky01, otra captura solo de
+      DHCP y DNS, en sus dos sentidos (lo que le preguntan y lo que él pregunta).
+    variantes:
+      - nombre: cliente01
+        detalle: Si no sabés el nombre de la placa de labred, mirá ip -br a (la que tiene 192.168.10.x).
+        comandos:
+          - sudo tcpdump -i enp0s8 -nn -w /tmp/visita.pcap 'not port 22'
+      - nombre: rocky01
+        detalle: Unbound le pregunta a ubuntu01 (zona interna) y a internet (lo externo).
+        comandos:
+          - sudo tcpdump -i any -nn -w /tmp/resolvedor.pcap 'port 53 or port 67 or port 68'
+    comprobar: Las dos terminales muestran "listening on ..." y se quedan esperando.
+  - titulo: La visita
+    detalle: >-
+      Desde la primera terminal de cliente01, forzá que empiece todo de cero: soltá y volvé a pedir
+      la IP (DHCP), vaciá la tabla de vecinos (ARP) y abrí un sitio externo por HTTPS y uno interno
+      por HTTP. Si armaste la DMZ del módulo 2.6, usá web01 (172.16.0.10) como sitio interno; si
+      no, cualquier servidor web del laboratorio.
+    comandos:
+      - sudo nmcli connection down enp0s8 && sudo nmcli connection up enp0s8
+      - sudo ip neigh flush dev enp0s8
+      - curl -sI https://rockylinux.org
+      - curl -s http://172.16.0.10 | head -5
+    comprobar: Los dos curl responden (HTTP/2 200 o una redirección, y el HTML de la página interna).
+    si_falla: >-
+      Si curl dice "Could not resolve host", revisá con dig @192.168.10.53 rockylinux.org desde
+      cliente01; si dice timeout, revisá la puerta de enlace (ip route) y las reglas de fw01. Es un
+      buen momento para usar el método de la lección 1.
+  - titulo: Cortar y traer las capturas
+    detalle: >-
+      Cortá las dos capturas con Ctrl+C y anotá cuántos paquetes capturó cada una (y que el kernel
+      no haya descartado ninguno). Copialas a tu computadora por la red de solo anfitrión (la
+      192.168.56.x de cada máquina, como en el Nivel 1) y después borralas de las máquinas.
+    comandos:
+      - scp admin@IP-DE-CLIENTE01:/tmp/visita.pcap .
+      - scp admin@IP-DE-ROCKY01:/tmp/resolvedor.pcap .
+      - ssh admin@IP-DE-CLIENTE01 sudo rm /tmp/visita.pcap
+    comprobar: Tenés los dos archivos .pcap en tu computadora.
+  - titulo: La línea de tiempo en Wireshark
+    detalle: >-
+      Abrí visita.pcap y armá, en tu cuaderno, una tabla con una fila por etapa: hora, paquetes,
+      quién habla con quién y qué se averiguó. Usá los mismos filtros que en la parte 1: dhcp
+      (¿qué IP, puerta de enlace, DNS y préstamo recibiste?), arp (¿a quién le preguntó la MAC?),
+      dns (¿qué nombres, qué tipos, qué respuestas y cuánto tardaron?), tcp.flags.syn == 1 (¿a qué
+      IP y puerto se conectó cada vez?) y tls.handshake.type == 1 (¿qué nombre de sitio viaja sin
+      cifrar?).
+    comprobar: La tabla tiene las cinco etapas en orden, con sus horas.
+  - titulo: Medir y seguir conversaciones
+    detalle: >-
+      Medí el ida y vuelta hasta el sitio externo (del SYN al SYN-ACK) y hasta el interno, y
+      comparalos. Seguí el flujo TCP de la conexión HTTP interna y después intentá lo mismo con la
+      de HTTPS. Mirá también Estadísticas, Conversaciones, y Analizar, Información experta.
+    comprobar: >-
+      Anotaste los dos RTT (el externo, decenas de milisegundos; el interno, menos de uno), leíste
+      la conversación HTTP completa y viste que la de HTTPS solo muestra datos cifrados.
+  - titulo: El otro lado, el resolvedor
+    detalle: >-
+      Abrí resolvedor.pcap con el filtro dns. Buscá la pregunta de cliente01 por rockylinux.org:
+      ¿qué hizo rocky01 antes de contestarle? Buscá también la pregunta por un nombre interno:
+      ¿a quién se lo preguntó? Compará los tiempos con lo que viste en visita.pcap.
+    comprobar: >-
+      Viste que Unbound resuelve lo externo preguntándole a otros servidores (o a sus reenviadores)
+      y lo interno, a ubuntu01; y que, si la respuesta ya estaba en su caché, contesta enseguida
+      sin preguntarle a nadie.
+  - titulo: Documentar y limpiar
+    detalle: >-
+      Guardá la tabla de la línea de tiempo y los RTT en el cuaderno técnico, como referencia de
+      "cómo se ve la red cuando anda bien": el día que falle, vas a tener con qué comparar.
+      Borrá los pcap de tu computadora si no los vas a usar.
+    comprobar: El cuaderno tiene la línea de tiempo, los RTT y los filtros que usaste.

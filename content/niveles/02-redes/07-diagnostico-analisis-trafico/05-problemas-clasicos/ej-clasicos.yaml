@@ -1,0 +1,92 @@
+tipo: terminal
+shell: bash
+titulo: Tres problemas clásicos en una misma PC
+descripcion: >-
+  pc-ventas (Rocky Linux, 192.168.10.100) tiene dos reclamos: las copias grandes a la sucursal
+  (10.2.0.0/24, por VPN) se cuelgan, y en la red local "todo anda lento". Además, te piden que le
+  pongas a una impresora nueva la IP fija 192.168.10.53. Entraste como admin, con sudo.
+estado_inicial:
+  distro: rocky
+  hostname: pc-ventas
+  usuario: admin
+  usuarios: [{ nombre: admin, sudo: true }]
+  paquetes: { instalados: [iputils, ethtool] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.100/24, velocidad: 100, duplex: full, autonegociacion: false }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.53]
+    alcanzables: [192.168.10.53]
+    redes_remotas:
+      - { red: 10.2.0.0/24, via: 192.168.10.1 }
+    mtu_camino:
+      - { red: 10.2.0.0/24, mtu: 1420, router: 10.99.0.1 }
+pasos:
+  - consigna: >-
+      Probá si un paquete de 1500 bytes llega a 10.2.0.50 sin fragmentarse: un ping con la marca
+      "no fragmentar" y 1472 bytes de datos (1472 + 28 de encabezados = 1500), 2 veces.
+    verificar:
+      - { comando_usado: "ping .*-M do" }
+      - { comando_usado: "ping .*-s 1472" }
+      - { salida_contiene: "Frag needed" }
+    pistas: ["ping -M do -s 1472 -c 2 10.2.0.50"]
+    solucion: [ping -M do -s 1472 -c 2 10.2.0.50]
+    explicacion: >-
+      "Frag needed and DF set (mtu = 1420)": el router de la VPN dice que no entra y que el máximo
+      del camino es 1420. A la PC el aviso le llega; si un firewall lo bloqueara, el ping se
+      perdería sin explicación.
+  - consigna: >-
+      Confirmalo con el tamaño que debería pasar justo: 1420 − 28 = 1392 bytes de datos.
+    verificar:
+      - { comando_usado: "ping .*-s 1392" }
+      - { salida_contiene: "1400 bytes from 10.2.0.50" }
+    pistas: ["ping -M do -s 1392 -c 2 10.2.0.50"]
+    solucion: [ping -M do -s 1392 -c 2 10.2.0.50]
+    explicacion: >-
+      Pasa. El camino tiene un MTU de 1420, por el túnel. El arreglo va en los routers de la VPN:
+      dejar pasar el ICMP "hay que fragmentar" y ajustar el MSS de las conexiones que cruzan el
+      túnel (MSS clamping), para que nadie mande segmentos que no entran.
+  - consigna: Pasemos a la lentitud en la red local. Mirá los contadores de errores de la placa enp0s3.
+    verificar:
+      - { comando_usado: "ip (-s|-stats|-statistics) l" }
+      - { salida_contiene: "RX:" }
+    pistas: ["ip -s link show enp0s3"]
+    solucion: [ip -s link show enp0s3]
+    explicacion: >-
+      1873 errores de recepción en una red conmutada, donde no debería haber ninguno. Errores que
+      suben suelen ser un cable malo o un dúplex mal negociado.
+  - consigna: Revisá la velocidad, el dúplex y la negociación de enp0s3.
+    verificar:
+      - { comando_usado: "ethtool enp0s3" }
+      - { salida_contiene: "Auto-negotiation: off" }
+    pistas: ["ethtool enp0s3"]
+    solucion: [ethtool enp0s3]
+    explicacion: >-
+      Alguien fijó la placa en 100 Mb/s full dúplex y apagó la negociación. El switch, en
+      automático, no recibe la negociación: detecta 100 Mb/s y supone half dúplex. Cada lado habla
+      distinto: la PC transmite mientras recibe y el switch lo toma como colisión. Anda, pero lento
+      y con errores.
+  - consigna: >-
+      El puerto del switch está en automático. Volvé a encender la negociación automática en
+      enp0s3 y mirá el resultado con ethtool.
+    verificar:
+      - { comando_usado: "ethtool -s enp0s3 .*autoneg on" }
+      - { salida_contiene: "Duplex: Full" }
+    pistas: ["sudo ethtool -s enp0s3 autoneg on y después ethtool enp0s3."]
+    solucion: [sudo ethtool -s enp0s3 autoneg on, ethtool enp0s3]
+    explicacion: >-
+      Con los dos lados en automático negocian 1000 Mb/s full dúplex. La regla: los dos extremos
+      en automático, o los dos fijos con lo mismo; nunca uno de cada uno. Para que quede después
+      de un reinicio, va en la conexión de NetworkManager (802-3-ethernet.auto-negotiate yes).
+  - consigna: >-
+      Por último, antes de darle a la impresora la IP fija 192.168.10.53, comprobá desde enp0s3 si
+      alguien ya la usa.
+    verificar:
+      - { comando_usado: "arping .*-D" }
+      - { salida_contiene: "Unicast reply" }
+    pistas: ["sudo arping -D -I enp0s3 -c 2 192.168.10.53 (D: detectar duplicados)."]
+    solucion: [sudo arping -D -I enp0s3 -c 2 192.168.10.53]
+    explicacion: >-
+      Alguien responde: esa IP ya está en uso (es el servidor DNS). Si se la ponías a la impresora,
+      la mitad de la red la iba a confundir con el DNS según qué MAC le quedara anotada. Las IP
+      fijas van fuera del rango del DHCP y anotadas en el inventario.

@@ -1,0 +1,116 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Desde la sucursal, por la VPN, el ping al servidor anda y una API que responde poco también, pero la intranet se queda cargando. ¿Qué problema clásico es el primer sospechoso?
+  opciones:
+    - { texto: "El MTU: los paquetes grandes no entran en el túnel y el aviso no llega", correcta: true, explicacion: "Anda lo chico, se cuelga lo grande: es su síntoma típico." }
+    - { texto: "El DNS", explicacion: "La conexión se abre: el nombre se resolvió." }
+    - { texto: "Una IP duplicada", explicacion: "Daría cortes intermitentes, no solo con lo grande." }
+    - { texto: "Un bucle", explicacion: "Afectaría a toda la red, no a un tipo de tráfico." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ping 192.168.10.80 responde, pero ping intranet.empresa.internal dice "Name or service not known". ¿Qué falla?
+  opciones:
+    - { texto: "La resolución de nombres (DNS)", correcta: true, explicacion: "La red llega; el nombre no se traduce." }
+    - { texto: "La puerta de enlace", explicacion: "La IP responde." }
+    - { texto: "El cable", explicacion: "La IP responde." }
+    - { texto: "El servidor web", explicacion: "Ni siquiera se llegó a contactarlo por nombre." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el ping (Linux) que manda 2 paquetes de 1500 bytes en total a 10.2.0.50 con la marca "no fragmentar".
+  aceptadas: [ping -M do -s 1472 -c 2 10.2.0.50, ping -c 2 -M do -s 1472 10.2.0.50, ping -M do -c 2 -s 1472 10.2.0.50, ping -s 1472 -M do -c 2 10.2.0.50, ping -c 2 -s 1472 -M do 10.2.0.50]
+  explicacion: -M do pone la marca DF y -s elige los datos; 1472 + 28 de encabezados = 1500.
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es el MSS clamping que se configura en los routers de una VPN?
+  opciones:
+    - { texto: "Reescribir el MSS que anuncian los SYN al pasar, para que nadie mande segmentos TCP que no entran en el túnel", correcta: true, explicacion: "Se calcula como el MTU del túnel menos 40 (20 de IP y 20 de TCP)." }
+    - { texto: "Cifrar los paquetes grandes", explicacion: "El cifrado lo hace la VPN, no tiene que ver." }
+    - { texto: "Bloquear los paquetes de más de 1500 bytes", explicacion: "Eso no los achica." }
+    - { texto: "Agrandar el MTU de internet", explicacion: "No se puede: depende del enlace." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un firewall bloquea todo el ICMP "por seguridad". ¿Qué problema puede causar?
+  opciones:
+    - { texto: "Agujeros negros de MTU: los avisos de 'hay que fragmentar' no llegan y las conexiones grandes se cuelgan", correcta: true, explicacion: "El descubrimiento del MTU del camino depende de ICMP tipo 3 código 4." }
+    - { texto: "Ninguno: ICMP solo es el ping", explicacion: "ICMP lleva avisos que la red necesita." }
+    - { texto: "Que el DNS deje de andar", explicacion: "DNS usa UDP y TCP, no ICMP." }
+    - { texto: "Que se dupliquen las IP", explicacion: "No tiene relación." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Una PC tarda unos 5 segundos en abrir cada sitio nuevo, y después anda bien. ¿Qué muestra esta captura?
+  salida: |
+    09:12:01.004 IP 192.168.10.100.40211 > 192.168.10.54.53: 2005+ A? www.ejemplo.com.ar. (36)
+    09:12:06.009 IP 192.168.10.100.40211 > 192.168.10.53.53: 2005+ A? www.ejemplo.com.ar. (36)
+    09:12:06.011 IP 192.168.10.53.53 > 192.168.10.100.40211: 2005 1/0/0 A 93.184.215.14 (52)
+  opciones:
+    - { texto: "El primer resolvedor (192.168.10.54) no contesta; a los 5 segundos la PC le pregunta al segundo, que responde enseguida", correcta: true, explicacion: "Hay que arreglar o sacar de la configuración el resolvedor caído." }
+    - { texto: "El sitio tarda en responder", explicacion: "La demora es antes de conectarse al sitio." }
+    - { texto: "El nombre está mal escrito", explicacion: "La respuesta trae una IP." }
+    - { texto: "La red está saturada", explicacion: "El segundo resolvedor responde en 2 ms." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC con IP 192.168.10.50 y máscara 255.255.0.0 (en una red /24) no llega a 192.168.20.5, de otra VLAN. ¿Por qué?
+  opciones:
+    - { texto: "Con /16 cree que 192.168.20.5 está en su misma red: pregunta por ARP en vez de mandarlo al router", correcta: true, explicacion: "La máscara define qué es local y qué va a la puerta de enlace." }
+    - { texto: "Le falta el DNS", explicacion: "Se probó con una IP." }
+    - { texto: "La VLAN 20 no existe", explicacion: "El problema está en cómo decide la PC." }
+    - { texto: "La puerta de enlace está apagada", explicacion: "Ni siquiera la usa." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que comprueba, por la placa enp0s3, si alguien ya usa la IP 192.168.10.60 antes de asignarla.
+  aceptadas: [sudo arping -D -I enp0s3 192.168.10.60, sudo arping -D -I enp0s3 -c 2 192.168.10.60, sudo arping -I enp0s3 -D 192.168.10.60, sudo arping -D -c 2 -I enp0s3 192.168.10.60, sudo arping -D -c 3 -I enp0s3 192.168.10.60]
+  explicacion: -D es el modo de detección de duplicados; si alguien contesta, la IP está en uso.
+- id: p09
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Un puesto anda lento en la red local. ¿Qué indica esta salida?
+  salida: |
+    $ ethtool enp0s3 | grep -E 'Speed|Duplex|Auto-neg'
+    	Speed: 100Mb/s
+    	Duplex: Full
+    	Auto-negotiation: off
+    $ ip -s link show enp0s3 | grep -A1 RX
+        RX:  bytes packets errors dropped  missed   mcast
+          48215930   61234   1873       0       0     112
+  opciones:
+    - { texto: "La placa está fija en 100 full con la negociación apagada; si el switch está en automático, cae en half y hay un dúplex mal negociado", correcta: true, explicacion: "Los errores que suben lo confirman. Los dos lados en automático." }
+    - { texto: "Todo está bien: 100 Mb/s full es correcto", explicacion: "El número de errores dice otra cosa." }
+    - { texto: "El DNS está lento", explicacion: "Son errores de la placa, de capa 1 y 2." }
+    - { texto: "Hay un bucle", explicacion: "Un bucle afectaría a todos los equipos." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: De golpe, toda la oficina se queda sin red y las luces del switch parpadean sin parar. Una hora antes alguien conectó un switch chico debajo de su escritorio. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "Un bucle de capa 2 (tormenta de broadcast) armado con el switch chico", correcta: true, explicacion: "Se resuelve desconectando el cable del bucle; se previene con STP y BPDU Guard." }
+    - { texto: "Se cayó el proveedor de internet", explicacion: "Fallaría solo la salida, no la red interna, y no explica las luces." }
+    - { texto: "Un problema de DNS", explicacion: "No dejaría la red local sin funcionar." }
+    - { texto: "Una IP duplicada", explicacion: "Afecta a uno o dos equipos." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una PC se conecta a 1 Gb/s con un cable nuevo, pero con el cable viejo de la pared negocia solo 100 Mb/s. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "Al cable viejo le falta algún par o tiene uno dañado: gigabit necesita los cuatro pares y 100 Mb/s solo dos", correcta: true, explicacion: "La autonegociación baja a lo que el cable soporta." }
+    - { texto: "El switch está mal configurado", explicacion: "Con el cable nuevo anda a 1 Gb/s." }
+    - { texto: "Es un problema de dúplex", explicacion: "Es de velocidad, y depende del cable." }
+    - { texto: "La placa está rota", explicacion: "Con el otro cable anda bien." }
+- id: p12
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: Desde la central no abre la intranet de la sucursal (por VPN), pero el ping anda. ¿Qué arreglos son correctos para un problema de MTU? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Permitir ICMP tipo 3 código 4 en los firewalls del camino", correcta: true, explicacion: "Para que el descubrimiento del MTU funcione." }
+    - { texto: "MSS clamping en los routers de la VPN", correcta: true, explicacion: "Achica los segmentos TCP desde el saludo." }
+    - { texto: "Ajustar el MTU de la interfaz del túnel", correcta: true, explicacion: "Por ejemplo, 1420 en WireGuard." }
+    - { texto: "Bloquear el ping para que no moleste", explicacion: "Bloquear ICMP es parte del problema." }

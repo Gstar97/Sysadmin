@@ -1,0 +1,55 @@
+tipo: captura
+titulo: "Parte 1: la línea de tiempo de una visita web"
+escenario: visita-web
+introduccion: >-
+  La misma captura de la lección 4, ahora para armar la línea de tiempo completa: desde que la
+  PC pide una IP hasta que termina de bajar las dos páginas. Anotá cada respuesta: la vas a
+  comparar con tu propia captura en la parte 2.
+tareas:
+  - tipo: pregunta
+    consigna: En el DHCP ACK, ¿por cuánto tiempo le prestan la IP a la PC?
+    opciones: ["3600 segundos (una hora)", "86 400 segundos (un día)", "Para siempre", "No lo dice"]
+    correcta: 0
+    explicacion: >-
+      IP Address Lease Time: 3600 s. A la mitad de ese tiempo, la PC intenta renovarla con el
+      mismo servidor, ya sin broadcast.
+  - tipo: pregunta
+    consigna: Antes de conectarse a 93.184.215.14, la PC pregunta por ARP quién tiene 192.168.10.1. ¿Por qué esa IP y no la del sitio?
+    opciones:
+      - "Porque el sitio está en otra red: el paquete se le entrega a la puerta de enlace, y para eso hace falta su MAC"
+      - "Porque 192.168.10.1 es el sitio web"
+      - "Porque el DNS se lo pidió"
+      - "Por un error de la PC"
+    correcta: 0
+    explicacion: >-
+      La IP de destino sigue siendo la del sitio, pero la trama va a la MAC del router. ARP solo
+      sirve dentro de la propia red.
+  - tipo: pregunta
+    consigna: La respuesta a la pregunta AAAA por www.ejemplo.com.ar vuelve sin ninguna dirección, y sin error. ¿Qué significa?
+    opciones:
+      - "El nombre existe, pero no tiene dirección IPv6; la PC usa la IPv4"
+      - "El DNS falló"
+      - "El nombre no existe"
+      - "La PC no tiene IPv6 y por eso no le responden"
+    correcta: 0
+    explicacion: >-
+      NOERROR sin respuestas es distinto de NXDOMAIN: el nombre existe y simplemente no tiene
+      registros de ese tipo.
+  - tipo: filtro
+    consigna: Armá un solo filtro que muestre la línea de tiempo resumida, una línea por cada etapa del DHCP, el DNS y el SYN de cada conexión.
+    solucion: "dhcp || dns || (tcp.flags.syn == 1 && tcp.flags.ack == 0)"
+    pista: Tres condiciones unidas con ||; la tercera, entre paréntesis.
+    explicacion: >-
+      Quedan 4 de DHCP, 6 de DNS y 2 SYN: el esqueleto de toda la visita. Este tipo de filtro es
+      el que conviene guardar como botón en Wireshark.
+  - tipo: paquete
+    consigna: Marcá la respuesta del servidor de la intranet con la página.
+    paquete: 44
+    explicacion: HTTP/1.1 200 OK, con el contenido a la vista porque va sin cifrar.
+  - tipo: pregunta
+    consigna: Mirando la columna de tiempo, ¿cuánto pasó desde el DHCP Discover hasta que terminó la conexión HTTPS (el último ACK de la conversación 0)?
+    opciones: ["Algo más de medio segundo", "Unos 5 segundos", "Unos 50 ms", "Más de un minuto"]
+    correcta: 0
+    explicacion: >-
+      Del paquete 1 (0,0001 s) al 35 (0,5404 s). La mayor parte es la pausa entre el DHCP y la
+      primera consulta (unos 350 ms): la PC configurando su placa antes de usarla.

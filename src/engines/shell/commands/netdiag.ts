@@ -55,6 +55,12 @@ register('arping', {
         received++
         if (dad) break
       }
+      // Un equipo "alcanzable" del ejercicio (sin máquina propia) también contesta, con una MAC fija.
+      if (!owners.length && sys.reachable.has(target) && !sys.ownIps().includes(target)) {
+        const tail = target.split('.').map((x) => Number(x).toString(16).padStart(2, '0'))
+        ctx.out(`Unicast reply from ${target} [52:54:00:${tail[1]}:${tail[2]}:${tail[3]}]  ${(0.5 + n / 10).toFixed(3)}ms\n`.replace(/\[([^\]]+)\]/, (m) => m.toUpperCase()))
+        received++
+      }
       if (dad && received) break
     }
     ctx.out(`Sent ${dad && received ? 1 : count} probes (${dad && received ? 1 : count} broadcast(s))\nReceived ${received} response(s)\n`)
@@ -76,6 +82,31 @@ register('ethtool', {
     if (!iface) {
       ctx.err(`netlink error: no device matches name (offset 24)\nnetlink error: No such device\n`)
       return 1
+    }
+    if (ctx.args.includes('-s')) {
+      // ethtool -s DEV [speed N] [duplex half|full] [autoneg on|off]: cambia la negociación (sin salida si anda).
+      if (ctx.sh.user !== 'root') {
+        ctx.err('netlink error: Operation not permitted\n')
+        return 1
+      }
+      const val = (k: string) => {
+        const i = ctx.args.indexOf(k)
+        return i >= 0 ? ctx.args[i + 1] : undefined
+      }
+      const speed = val('speed')
+      const duplex = val('duplex')
+      const autoneg = val('autoneg')
+      if (autoneg === 'on') {
+        // Con los dos lados en automático, negocian lo mejor que tienen en común.
+        iface.autoneg = true
+        iface.speed = 1000
+        iface.duplex = 'full'
+      } else {
+        if (autoneg === 'off') iface.autoneg = false
+        if (speed) iface.speed = Number(speed)
+        if (duplex === 'half' || duplex === 'full') iface.duplex = duplex
+      }
+      return 0
     }
     const up = iface.up
     const modes = ['10baseT/Half 10baseT/Full', '100baseT/Half 100baseT/Full', '1000baseT/Full']
