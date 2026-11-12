@@ -1,0 +1,105 @@
+tipo: pasos
+titulo: Verificación final antes de entregar
+descripcion: >-
+  Recorré estos pasos con todo encendido y, si podés, después de reiniciar los firewalls y los
+  servidores: una red que anda hasta el primer corte de luz no está terminada. Cada paso comprueba
+  un entregable con comandos que viste en el nivel.
+pasos:
+  - titulo: El plan de direcciones no se pisa
+    detalle: >-
+      Con tu tabla de direccionamiento, comprobá cada red con ipcalc y revisá que ninguna
+      empiece antes de que termine la anterior, y que el bloque de cada sede las contenga a todas.
+    comandos:
+      - ipcalc 10.20.0.128/26
+      - ipcalc 10.20.0.0/22
+    comprobar: >-
+      Cada red tiene la cantidad de equipos pedida más un margen, ninguna se superpone y la ruta
+      resumida de cada sede (por ejemplo 10.20.0.0/22) las incluye a todas.
+  - titulo: Switching (Packet Tracer)
+    comandos:
+      - show vlan brief
+      - show interfaces trunk
+      - show etherchannel summary
+      - show spanning-tree root
+      - show interfaces status | include disabled
+    comprobar: >-
+      Las VLAN tienen nombre y los puertos correctos; los troncales llevan solo las VLAN
+      necesarias, con una nativa sin uso; los EtherChannel están en uso (SU, con los puertos en P);
+      el switch central es la raíz de todas las VLAN; los puertos sin usar están apagados.
+    si_falla: >-
+      Si un EtherChannel no se arma, revisá que los dos lados tengan el mismo modo (active o
+      passive, al menos uno active) y la misma configuración de troncal en los puertos.
+  - titulo: STP protegido
+    detalle: >-
+      En Packet Tracer, conectá un switch nuevo a un puerto de usuario de un piso.
+    comandos:
+      - show interfaces status err-disabled
+    comprobar: El puerto queda en err-disabled por BPDU Guard y el resto de la red sigue andando.
+  - titulo: Routing y OSPF
+    comandos:
+      - show ip ospf neighbor
+      - show ip route ospf
+      - show ipv6 route
+      - ping 10.20.4.70 source 10.20.0.129
+    comprobar: >-
+      Los vecinos están en FULL, cada router aprende las redes de la otra sede por OSPF (mejor si
+      llega una sola ruta resumida por sede) y la ruta por defecto llega a todos; IPv6 también
+      enruta entre las VLAN.
+  - titulo: El túnel y el perímetro
+    variantes:
+      - nombre: fw-s con Linux
+        detalle: El túnel, las rutas y las reglas.
+        comandos:
+          - sudo wg show
+          - ip route | grep wg0
+          - sudo nft list ruleset
+      - nombre: OPNsense
+        detalle: En VPN, WireGuard, Status; en Firewall, Rules, cada interfaz; en Firewall, Log Files, Live View, lo que se bloquea.
+    comprobar: >-
+      El último saludo (latest handshake) es de hace menos de dos minutos, cada lado tiene la ruta a
+      la red del otro por el túnel, y las reglas son las del diseño (y nada de "permitir todo").
+    si_falla: >-
+      Si el túnel no levanta, revisá las claves públicas cruzadas, el puerto UDP permitido en la
+      WAN y que AllowedIPs incluya la red del otro lado (lección 2.6.5).
+  - titulo: Lo que tiene que fallar, falla
+    detalle: Desde una máquina en la red de invitados, y desde web01, en la DMZ.
+    comandos:
+      - nc -zv -w 3 10.20.0.140 445
+      - dig @10.20.1.10 srv-infra.empresa.internal
+      - curl -sI https://rockylinux.org
+    comprobar: >-
+      Desde invitados, la conexión interna da timeout, el DNS interno no responde los nombres de la
+      empresa y internet anda. Desde web01, nada de la LAN responde.
+  - titulo: El portal desde afuera
+    detalle: Desde tu celular con datos móviles (sin Wi-Fi), abrí la dirección pública del portal mientras capturás en web01.
+    comandos:
+      - sudo tcpdump -i enp0s3 -nn -c 10 'tcp port 443'
+    comprobar: El portal abre y la captura muestra la IP pública de tu celular como origen.
+  - titulo: DNS y DHCP en las dos sedes
+    detalle: Desde una PC nueva de cada sede (un clon enlazado recién creado).
+    comandos:
+      - sudo nmcli connection up enp0s8
+      - ip -br a && ip route
+      - dig +short srv-infra.empresa.internal
+      - dig +short -x 10.20.1.10
+      - dig +short rockylinux.org
+    comprobar: >-
+      La PC recibe una dirección de su red, la puerta de enlace, el DNS y el dominio correctos, y
+      resuelve nombres internos, inversos y externos.
+  - titulo: MTU y MSS a través del túnel
+    detalle: Desde la PC de la sucursal hacia el servidor de la central, mientras capturás en el servidor.
+    comandos:
+      - ping -M do -s 1472 -c 2 10.20.1.10
+      - ping -M do -s 1392 -c 2 10.20.1.10
+      - sudo tcpdump -i enp0s3 -nn -c 2 'tcp[tcpflags] & tcp-syn != 0'
+    comprobar: >-
+      El ping de 1500 bytes no pasa (o avisa "Frag needed"), el de 1420 sí, y los SYN que llegan al
+      servidor desde la sucursal anuncian un MSS de 1380 o menos.
+  - titulo: El plan de pruebas y los documentos
+    detalle: >-
+      Revisá que cada fila del plan tenga su resultado y su evidencia, y que cada captura abra en
+      Wireshark con el filtro que anotaste. Pedile a alguien que, leyendo solo el documento, te
+      explique cómo agregaría una VLAN nueva en las dos sedes.
+    comprobar: >-
+      Por lo menos quince pruebas con evidencia (incluidas las que tienen que fallar), los dos
+      diagramas actualizados y una persona que entendió el procedimiento sin preguntarte nada.

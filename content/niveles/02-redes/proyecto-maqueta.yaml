@@ -1,0 +1,212 @@
+tipo: terminal
+shell: ios
+titulo: "Maqueta: la red de las dos sedes"
+descripcion: >-
+  Antes de tocar equipos reales, armás la red en la maqueta con el plan de direcciones de
+  referencia. En la central, SWC (un switch) y RC (el router, conectado al troncal Gi0/1 de SWC);
+  en la sucursal, RS, con su LAN de Operaciones directa en Gi0/0. RC y RS se unen por Gi0/1, un
+  enlace 10.20.255.0/30 que representa el túnel WireGuard entre las sedes. Las PC y el servidor
+  ya tienen su IP y su puerta de enlace; los switches y routers están de fábrica, salvo las IP de
+  RS. Empezás en la consola de SWC; para pasar a otro equipo, usá el selector.
+estado_inicial:
+  consola: SWC
+  topologia:
+    dispositivos:
+      - { id: SWC, tipo: switch }
+      - id: RC
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/1, ip: 10.20.255.1/30 }
+      - id: RS
+        tipo: router
+        interfaces:
+          - { nombre: Gi0/0, ip: 10.20.4.65/27 }
+          - { nombre: Gi0/1, ip: 10.20.255.2/30 }
+      - { id: PCC, nombre: PC-Contabilidad, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.20.0.140/26 }], puerta_enlace: 10.20.0.129 }
+      - { id: PCA, nombre: PC-Administracion, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.20.0.200/27 }], puerta_enlace: 10.20.0.193 }
+      - { id: INV, nombre: Notebook-Invitado, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.20.0.50/25 }], puerta_enlace: 10.20.0.1 }
+      - { id: SRV, nombre: srv-infra, tipo: servidor, interfaces: [{ nombre: eth0, ip: 10.20.1.10/28 }], puerta_enlace: 10.20.1.1 }
+      - { id: PCS, nombre: PC-Sucursal, tipo: pc, interfaces: [{ nombre: eth0, ip: 10.20.4.70/27 }], puerta_enlace: 10.20.4.65 }
+    enlaces:
+      - { a: "RC:Gi0/0", b: "SWC:Gi0/1" }
+      - { a: "RC:Gi0/1", b: "RS:Gi0/1" }
+      - { a: "PCC:eth0", b: "SWC:Fa0/1" }
+      - { a: "PCA:eth0", b: "SWC:Fa0/2" }
+      - { a: "INV:eth0", b: "SWC:Fa0/3" }
+      - { a: "SRV:eth0", b: "SWC:Fa0/4" }
+      - { a: "PCS:eth0", b: "RS:Gi0/0" }
+pasos:
+  - consigna: >-
+      En SWC, creá las VLAN 10 (CONTABILIDAD), 20 (ADMINISTRACION), 30 (INVITADOS) y 40
+      (SERVIDORES), y poné Fa0/1 a Fa0/4 como puertos de acceso de la 10, 20, 30 y 40,
+      respectivamente.
+    verificar:
+      - { equipo: SWC, vlan: 10, nombre: CONTABILIDAD }
+      - { equipo: SWC, vlan: 20, nombre: ADMINISTRACION }
+      - { equipo: SWC, vlan: 30, nombre: INVITADOS }
+      - { equipo: SWC, vlan: 40, nombre: SERVIDORES }
+      - { equipo: SWC, interfaz: Fa0/1, modo: acceso, vlan: 10 }
+      - { equipo: SWC, interfaz: Fa0/2, modo: acceso, vlan: 20 }
+      - { equipo: SWC, interfaz: Fa0/3, modo: acceso, vlan: 30 }
+      - { equipo: SWC, interfaz: Fa0/4, modo: acceso, vlan: 40 }
+    pistas: ["vlan N y name NOMBRE; en cada puerto, switchport mode access y switchport access vlan N."]
+    solucion:
+      - enable
+      - configure terminal
+      - vlan 10
+      - name CONTABILIDAD
+      - vlan 20
+      - name ADMINISTRACION
+      - vlan 30
+      - name INVITADOS
+      - vlan 40
+      - name SERVIDORES
+      - interface fa0/1
+      - switchport mode access
+      - switchport access vlan 10
+      - interface fa0/2
+      - switchport mode access
+      - switchport access vlan 20
+      - interface fa0/3
+      - switchport mode access
+      - switchport access vlan 30
+      - interface fa0/4
+      - switchport mode access
+      - switchport access vlan 40
+      - end
+  - consigna: >-
+      Gi0/1 de SWC va al router: configuralo como troncal que lleve solo las VLAN 10, 20, 30 y 40.
+      Después protegé el árbol: que SWC sea la raíz de esas cuatro VLAN (prioridad 4096) y que los
+      puertos de los usuarios (Fa0/1 a Fa0/4) tengan PortFast y BPDU Guard.
+    verificar:
+      - { equipo: SWC, interfaz: Gi0/1, modo: troncal }
+      - { equipo: SWC, config_contiene: "switchport trunk allowed vlan 10,20,30,40" }
+      - { equipo: SWC, stp_raiz: true, vlan: 10 }
+      - { equipo: SWC, stp_raiz: true, vlan: 40 }
+      - { equipo: SWC, interfaz: Fa0/1, portfast: true, bpduguard: true }
+      - { equipo: SWC, interfaz: Fa0/3, portfast: true, bpduguard: true }
+    pistas:
+      - "interface gi0/1, switchport mode trunk y switchport trunk allowed vlan 10,20,30,40."
+      - "spanning-tree vlan 10,20,30,40 priority 4096; en interface range fa0/1 - 4: spanning-tree portfast y spanning-tree bpduguard enable."
+    solucion:
+      - configure terminal
+      - interface gi0/1
+      - switchport mode trunk
+      - switchport trunk allowed vlan 10,20,30,40
+      - exit
+      - spanning-tree vlan 10,20,30,40 priority 4096
+      - interface range fa0/1 - 4
+      - spanning-tree portfast
+      - spanning-tree bpduguard enable
+      - end
+    explicacion: >-
+      Con la raíz elegida a propósito, el árbol no depende de qué switch tenga la MAC más baja el
+      día que se agregue uno nuevo. Y con BPDU Guard, un switch chico conectado en un puesto apaga
+      ese puerto en lugar de armar un bucle.
+  - consigna: >-
+      En RC, el enrutamiento entre VLAN: una subinterfaz de Gi0/0 por VLAN con la primera IP de
+      cada red (10: 10.20.0.129/26, 20: 10.20.0.193/27, 30: 10.20.0.1/25, 40: 10.20.1.1/28).
+      Contabilidad, Administración y el servidor se tienen que ver.
+    verificar:
+      - { ping: { desde: PCC, hacia: SRV } }
+      - { ping: { desde: PCA, hacia: PCC } }
+      - { equipo: RC, ruta: 10.20.1.0/28, origen: conectada }
+    pistas:
+      - "interface gi0/0.10, encapsulation dot1Q 10 e ip address 10.20.0.129 255.255.255.192; lo mismo para la 20, la 30 y la 40."
+      - "No te olvides de no shutdown en gi0/0 (la interfaz física)."
+    solucion:
+      - "@consola RC"
+      - enable
+      - configure terminal
+      - interface gi0/0
+      - no shutdown
+      - interface gi0/0.10
+      - encapsulation dot1Q 10
+      - ip address 10.20.0.129 255.255.255.192
+      - interface gi0/0.20
+      - encapsulation dot1Q 20
+      - ip address 10.20.0.193 255.255.255.224
+      - interface gi0/0.30
+      - encapsulation dot1Q 30
+      - ip address 10.20.0.1 255.255.255.128
+      - interface gi0/0.40
+      - encapsulation dot1Q 40
+      - ip address 10.20.1.1 255.255.255.240
+      - interface gi0/1
+      - no shutdown
+      - end
+  - consigna: >-
+      Ahora las dos sedes, con OSPF: proceso 1, área 0, router-id 1.1.1.1 en RC y 2.2.2.2 en RS,
+      todas las redes 10.20.x y las interfaces de usuarios como pasivas (en RC, las subinterfaces;
+      en RS, Gi0/0). La PC de la sucursal tiene que llegar al servidor.
+    verificar:
+      - { equipo: RC, ruta: 10.20.4.64/27, origen: ospf }
+      - { equipo: RS, ruta: 10.20.1.0/28, origen: ospf }
+      - { ping: { desde: PCS, hacia: SRV } }
+      - { equipo: RC, config_contiene: "passive-interface" }
+    pistas:
+      - "router ospf 1, router-id N.N.N.N y network 10.20.0.0 0.0.255.255 area 0 alcanza para todo."
+      - "En RC: passive-interface default y no passive-interface gi0/1 deja pasiva cada subinterfaz y activo solo el enlace a RS."
+    solucion:
+      - configure terminal
+      - router ospf 1
+      - router-id 1.1.1.1
+      - network 10.20.0.0 0.0.255.255 area 0
+      - passive-interface default
+      - no passive-interface gi0/1
+      - end
+      - "@consola RS"
+      - enable
+      - configure terminal
+      - interface gi0/0
+      - no shutdown
+      - interface gi0/1
+      - no shutdown
+      - router ospf 1
+      - router-id 2.2.2.2
+      - network 10.20.0.0 0.0.255.255 area 0
+      - passive-interface gi0/0
+      - end
+    explicacion: >-
+      Con passive-interface default, una VLAN nueva queda pasiva sin que nadie se acuerde: los
+      equipos de los usuarios no reciben ni pueden inyectar saludos de OSPF.
+  - consigna: >-
+      La red de invitados solo puede usar el DNS del servidor (UDP 53 a 10.20.1.10) y salir a
+      internet: nada interno de la empresa. Armá en RC la ACL extendida INVITADOS y aplicala de
+      entrada en la subinterfaz de la VLAN 30.
+    verificar:
+      - { ping: { desde: INV, hacia: PCC, resultado: falla } }
+      - { ping: { desde: INV, hacia: SRV, resultado: falla } }
+      - { ping: { desde: INV, hacia: PCS, resultado: falla } }
+      - { ping: { desde: INV, hacia: SRV, proto: udp, puerto: 53 } }
+      - { ping: { desde: PCC, hacia: SRV } }
+    pistas:
+      - "Primero el permiso del DNS, después el bloqueo de 10.20.0.0 0.0.255.255 y al final permit ip any any (internet)."
+      - "ip access-list extended INVITADOS; permit udp any host 10.20.1.10 eq domain; deny ip any 10.20.0.0 0.0.255.255; permit ip any any. En interface gi0/0.30: ip access-group INVITADOS in."
+    solucion:
+      - "@consola RC"
+      - configure terminal
+      - ip access-list extended INVITADOS
+      - permit udp any host 10.20.1.10 eq domain
+      - deny ip any 10.20.0.0 0.0.255.255
+      - permit ip any any
+      - exit
+      - interface gi0/0.30
+      - ip access-group INVITADOS in
+      - end
+    explicacion: >-
+      El orden importa: la excepción (el DNS) antes del bloqueo general, y el permiso a internet al
+      final; sin él, el deny implícito cortaría también la salida. En la red real, este filtro lo
+      hace OPNsense, con estado; acá lo practicás con una ACL.
+  - consigna: Guardá la configuración en los tres equipos.
+    verificar:
+      - { equipo: SWC, guardado: true }
+      - { equipo: RC, guardado: true }
+      - { equipo: RS, guardado: true }
+    pistas: ["copy running-config startup-config (o write memory) en cada uno."]
+    solucion:
+      - copy running-config startup-config
+      - "@consola RS"
+      - copy running-config startup-config
+      - "@consola SWC"
+      - copy running-config startup-config

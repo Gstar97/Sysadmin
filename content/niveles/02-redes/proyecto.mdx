@@ -1,0 +1,164 @@
+---
+titulo: Red de una empresa con dos sedes
+horas: 24
+entregables:
+  - Plan de direccionamiento VLSM en IPv4 y de prefijos IPv6, documentado.
+  - VLANs por área, troncales, enrutamiento entre VLANs y STP protegido.
+  - OSPF entre sedes, OPNsense con DMZ y VPN WireGuard sitio a sitio.
+  - DNS y DHCP en Linux.
+  - Diagramas lógico y físico y pruebas de conectividad respaldadas con capturas.
+---
+
+import maqueta from './proyecto-maqueta.yaml'
+import verificacion from './proyecto-verificacion.yaml'
+
+## El pedido
+
+Este proyecto cierra el Nivel 2. El estudio que te contrató en el Nivel 1 creció, y ahora te pide la red entera:
+
+```text
+De: Lucía Ríos <lucia@estudioriosyasoc.example>
+Asunto: Mudanza y sucursal
+
+Hola. Te cuento novedades: en marzo nos mudamos a una oficina de dos pisos y abrimos
+una sucursal en otra ciudad. Vamos a ser:
+
+- En la central: 45 en contabilidad, 20 en administración y 5 en la gerencia, más los
+  servidores (el que nos armaste y alguno más que viene).
+- En la sucursal: 18 personas de operaciones.
+- En las dos, Wi-Fi para clientes que vienen a reuniones (en la central llegan a ser
+  casi 100 los días de vencimientos; en la sucursal, unos 30).
+
+Necesitamos:
+- Que la sucursal use los mismos sistemas que la central, como si estuviera al lado.
+- Que los clientes del Wi-Fi tengan internet y nada más.
+- Un portal web para que los clientes descarguen sus papeles desde su casa.
+- Que si se rompe algo, sepamos qué pasó y lo arreglemos rápido.
+- Que quede todo dibujado y por escrito, como la otra vez.
+
+¡Gracias!
+```
+
+Vas a trabajar en tres lugares: el **papel** (el diseño), la **plataforma** y **Cisco Packet Tracer** (la red de switches y routers) y tus **máquinas virtuales** (el firewall, la VPN y los servicios en Linux), como en los laboratorios del nivel.
+
+| Fase | Se apoya en | Tiempo estimado |
+| --- | --- | --- |
+| 1. Relevamiento y diseño | Módulos 2.1 y 2.2 | 3 h |
+| 2. Maqueta en la plataforma | Módulos 2.4, 2.5 y 2.6 | 2 h |
+| 3. Switching y routing en Packet Tracer | Módulos 2.4 y 2.5 | 5 h |
+| 4. Perímetro y VPN en tus máquinas virtuales | Módulo 2.6 | 5 h |
+| 5. DNS y DHCP en Linux | Módulo 2.3 | 3 h |
+| 6. Pruebas con capturas y documentación | Módulo 2.7 | 6 h |
+
+## 1. Relevamiento y diseño
+
+Antes de configurar nada, el diseño en tu cuaderno. Es la parte que más se nota cuando falta: una red sin plan funciona hasta el día en que hay que agregarle algo.
+
+- **Las VLAN**: una por área y por función, en cada sede. Como mínimo: Contabilidad, Administración, Gerencia, Servidores, Invitados y Gestión (las IP de los switches, puntos de acceso e impresoras de red) en la central; Operaciones, Invitados y Gestión en la sucursal. Más una **DMZ** para el portal web. Anotá número, nombre y para qué es cada una; usá los mismos números para lo mismo en las dos sedes (Invitados es la 30 en las dos).
+- **IPv4 con VLSM**: la empresa usa el bloque **10.20.0.0/16**. Calculá cada red para la cantidad de equipos que pide el mail, con un margen para crecer (por lo menos un 30 %), ordenadas de la más grande a la más chica (lección 2.2.5). Dos reglas más: todas las redes de una sede dentro de un bloque que se pueda resumir en una sola ruta (por ejemplo, la central en 10.20.0.0/22 y la sucursal en 10.20.4.0/22), y un bloque aparte para los enlaces entre routers y el túnel (por ejemplo, 10.20.255.0/24, con /30 o /31).
+- **IPv6**: usá el prefijo de documentación **2001:db8:20::/48** como si te lo hubiera asignado el proveedor. Un /56 por sede y un /64 por VLAN, con una regla que se lea sola: por ejemplo, el cuarto grupo es la sede (0 o 1) seguida del número de VLAN, así Contabilidad de la central es 2001:db8:20:10::/64 e Invitados de la sucursal, 2001:db8:20:130::/64.
+- **La tabla de direccionamiento**: por cada red, el prefijo, la puerta de enlace (la primera IP útil), el rango del DHCP y las IP fijas reservadas (servidores, impresoras, equipos de red).
+- **Nombres**: una convención para equipos (sw-c-core, sw-c-p1, fw-c, fw-s...) y para el dominio interno (empresa.internal).
+- **Borradores de los diagramas**: el físico (qué equipo va en cada piso, qué puerto va a qué) y el lógico (redes, VLAN, routers, el túnel).
+
+**Criterio de calidad:** ninguna red se superpone con otra (comprobalo con `ipcalc`), cada sede se resume en una sola ruta, cada VLAN tiene lugar para crecer y otra persona puede configurar un equipo solo con tu tabla.
+
+## 2. Maqueta en la plataforma
+
+Con un plan de referencia (el de la maqueta usa 10.20.0.0/16 como el tuyo), armás la red básica de las dos sedes: VLAN, troncal, STP protegido, enrutamiento entre VLAN, OSPF entre las sedes y una ACL para los invitados. Sirve para ensayar la secuencia de comandos antes de hacerlo con tu propio plan.
+
+<Terminal ejercicio={maqueta} />
+
+## 3. Switching y routing en Packet Tracer
+
+Ahora con tu plan, en Packet Tracer (lección 2.4, laboratorio), una red más parecida a la real:
+
+- **Central**: un switch central (sw-c-core, de capa 3 o un router con subinterfaces) y un switch por piso (sw-c-p1 y sw-c-p2), cada uno unido al central por **dos cables en EtherChannel** (LACP). En cada piso, PC de las distintas áreas y un punto de acceso. Los servidores en el switch central.
+- **Sucursal**: un router (r-s) y un switch con las VLAN de la sucursal.
+- **Entre sedes**: un enlace entre los routers de borde que representa el túnel de la VPN (en la fase 4 lo vas a hacer de verdad con WireGuard).
+- **Switching**: VLAN con nombre, troncales con solo las VLAN necesarias y una VLAN nativa que no use nadie, el switch central como raíz de todas las VLAN, PortFast y BPDU Guard en todos los puertos de usuarios, y los puertos sin usar apagados y en una VLAN sin uso.
+- **Routing**: enrutamiento entre VLAN, **OSPF** entre las sedes con interfaces pasivas hacia los usuarios, una ruta por defecto hacia internet distribuida por OSPF, y **IPv6** en todas las VLAN (direcciones fijas en los routers y SLAAC en las PC).
+- **Gestión**: SSH en todos los equipos (con usuario local y sin Telnet), contraseñas cifradas, un banner y la configuración guardada.
+- **DHCP**: en Packet Tracer, con `ip helper-address` apuntando a la IP que va a tener tu servidor DHCP (lección 2.3.7), aunque el servidor de verdad esté en las máquinas virtuales.
+
+**Criterio de calidad:** todas las PC de todas las VLAN se ven entre sí por IPv4 y por IPv6 (salvo Invitados), `show ip ospf neighbor` muestra a los vecinos en FULL, cortar un cable del EtherChannel no corta nada, y un switch conectado en un puesto deja ese puerto en err-disabled.
+
+## 4. Perímetro y VPN en tus máquinas virtuales
+
+Con las máquinas virtuales de los laboratorios, armás las dos salidas a internet y el túnel entre ellas:
+
+- **fw-c**: el OPNsense del laboratorio 2.6 (fw01), con WAN, LAN y DMZ. En la DMZ, el servidor del portal (web01), publicado hacia afuera con una redirección del puerto 443 (lección 2.6.2).
+- **fw-s**: el firewall de la sucursal. Puede ser otro OPNsense o, si tu computadora no da para tanto, un Linux chico (1 GiB de memoria) con **nftables** como router y firewall (lección 2.6.3), con su LAN en una red interna nueva (labsucursal) y una PC de prueba (un clon enlazado).
+- **WireGuard sitio a sitio** entre fw-c y fw-s (lección 2.6.5): cada lado con la red del otro en AllowedIPs, las rutas hacia la otra sede, y el túnel que se levanta solo después de un reinicio.
+- **Las reglas**: Invitados solo DNS e internet; la sucursal a los servidores de la central solo con los puertos que hacen falta; la DMZ sin acceso a la LAN; la administración de los firewalls solo desde la VLAN de Gestión o la VPN.
+- **MSS clamping** en el túnel (lección 2.7.5), para que las páginas grandes no se cuelguen.
+
+**Criterio de calidad:** desde la PC de la sucursal, el servidor de la central responde por nombre; desde la red de invitados no se llega a nada interno; el portal abre desde afuera (desde tu celular con datos móviles) y su servidor no llega a la LAN; `wg show` muestra un saludo (handshake) de hace menos de dos minutos.
+
+## 5. DNS y DHCP en Linux
+
+Sobre lo que armaste en el laboratorio 2.3:
+
+- **BIND** (ubuntu01) como autoritativo de empresa.internal, con todos los equipos fijos de las dos sedes, las zonas inversas de cada red y registros AAAA para los servidores.
+- **Unbound** (rocky01) como resolvedor para toda la empresa, que reenvía empresa.internal a BIND y solo responde a tus redes. La sucursal le pregunta por el túnel.
+- **Kea**: un ámbito por red, con reservas para lo que necesita IP fija (impresoras, puntos de acceso) y las opciones correctas (puerta de enlace, DNS, dominio de búsqueda). Decidí dónde corre el DHCP de la sucursal: en la central (con un relay en fw-s) o en la propia sucursal, para que siga dando direcciones aunque se caiga el túnel. Anotá en el documento por qué elegiste una u otra.
+
+**Criterio de calidad:** una PC nueva en cualquier red recibe dirección, puerta de enlace, DNS y dominio correctos; `dig` resuelve nombres internos, inversos y externos desde las dos sedes; Invitados no puede consultar los nombres internos.
+
+## 6. Pruebas con capturas y documentación
+
+Lo que separa una red "que anda" de una red entregada es la prueba documentada. Armá un **plan de pruebas** en tu cuaderno, con una fila por prueba:
+
+```text
+ID   Prueba                                 Desde -> hacia            Comando                         Esperado        Obtenido   Evidencia
+P01  La sucursal llega al servidor          pc-s -> srv-infra         ping -c 4 srv-infra             responde        ...        p01-wg0.pcap (captura en fw-s, interfaz wg0)
+P02  Invitados no llega a Contabilidad      notebook-inv -> pc-cont   nc -zv 10.20.0.140 445          timeout         ...        registro del firewall (captura de pantalla)
+P03  DHCP en la sucursal                    pc-s nueva                nmcli connection up             DORA completo   ...        p03-dhcp.pcap (filtro: dhcp)
+P04  DNS interno desde la sucursal          pc-s -> rocky01           dig srv-infra.empresa.internal  la IP correcta  ...        p04-dns.pcap (filtro: dns)
+P05  El portal desde internet               celular con datos         https://portal...               abre            ...        p05-dmz.pcap (en web01: IP pública del cliente)
+P06  MTU del túnel                          pc-s -> srv-infra         ping -M do -s 1472 / -s 1392    falla / pasa    ...        p06-mss.pcap (el SYN anuncia MSS 1380)
+```
+
+Agregá las tuyas hasta cubrir cada requisito del mail (por lo menos quince pruebas, incluidas las que tienen que **fallar**). Para cada captura, anotá dónde la tomaste y con qué filtro se ve lo importante (lecciones 2.7.3 y 2.7.4).
+
+Y la documentación, en texto plano y con los diagramas como imágenes:
+
+```text
+RED ESTUDIO RÍOS Y ASOCIADOS — DOCUMENTO DE ENTREGA
+Fecha: ...   Preparado por: ...
+
+1. RESUMEN: qué se armó, en qué sedes, qué NO incluye.
+2. DIAGRAMAS: físico (equipos, puertos, cables, pisos) y lógico (redes, VLAN, routers, túnel).
+3. DIRECCIONAMIENTO: tabla IPv4 e IPv6 completa, IP fijas, rangos de DHCP.
+4. SWITCHING: VLAN, troncales, EtherChannel, STP (quién es raíz y por qué).
+5. ROUTING: OSPF (áreas, router-id, pasivas), ruta por defecto, resúmenes.
+6. PERÍMETRO Y VPN: reglas por zona, publicación del portal, túnel WireGuard, MSS.
+7. SERVICIOS: DNS (zonas, resolvedor) y DHCP (ámbitos, reservas, dónde corre).
+8. PLAN DE PRUEBAS: la tabla completa, con los resultados y las capturas.
+9. PROCEDIMIENTOS: agregar una VLAN, dar de alta un punto de acceso, rotar las claves
+   del túnel, qué hacer si la sucursal se queda sin conexión.
+10. PENDIENTES Y RECOMENDACIONES.
+```
+
+Para los diagramas alcanza con **diagrams.net** (gratuito, también como aplicación de escritorio), con los íconos de red que trae.
+
+**Criterio de calidad:** cada requisito del mail tiene al menos una prueba con evidencia, y otra persona puede agregar una VLAN nueva en las dos sedes siguiendo solo el documento.
+
+## Verificación final
+
+<PasosGuiados ejercicio={verificacion} />
+
+## Revisión antes de entregar
+
+| Criterio | Falta | Bien | Muy bien |
+| --- | --- | --- | --- |
+| Direccionamiento | Redes superpuestas o sin margen | VLSM sin superposiciones, con IPv6 por VLAN | Bloques resumibles por sede y una regla de numeración que se lee sola |
+| Switching | Todo en la VLAN 1 o sin troncales filtrados | VLAN por área, troncales con las VLAN justas, raíz elegida | EtherChannel, BPDU Guard en todos los puestos y puertos sin usar apagados |
+| Routing | Rutas estáticas sueltas | OSPF entre sedes con vecinos estables | Interfaces pasivas, ruta por defecto por OSPF y resúmenes por sede |
+| Perímetro y VPN | Todo permitido entre zonas | DMZ, invitados aislados y túnel sitio a sitio | Reglas mínimas por servicio, MSS clamping y administración solo desde Gestión |
+| Servicios | IP fijas a mano en las PC | DHCP por red y DNS interno funcionando en las dos sedes | Zonas inversas, AAAA, invitados sin DNS interno y la decisión del DHCP de la sucursal justificada |
+| Pruebas y documentos | "Anda" sin evidencia | Plan de pruebas con resultados y diagramas | Cada requisito con su captura y procedimientos probados por otra persona |
+
+<Consejo>
+Tomá una instantánea `entrega-nivel-2` de todas las máquinas y guardá el archivo de Packet Tracer y los pcap del plan de pruebas junto al documento. En el Nivel 3 vas a sumar Windows Server y Active Directory a esta misma red, y en el Nivel 4, los servicios de archivos y correo.
+</Consejo>

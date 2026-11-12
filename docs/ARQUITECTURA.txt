@@ -1,7 +1,7 @@
 ############################################################################################
 #                                                                                          #
 #          ARQUITECTURA TÉCNICA DE LA PLATAFORMA                                           #
-#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 5a                      #
+#          Aprobada en la Etapa 1 y actualizada al cerrar la Etapa 5b                      #
 #                                                                                          #
 ############################################################################################
 
@@ -492,6 +492,15 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     running-config, ip interface brief, vlan brief, interfaces trunk, ip route, ip ospf
     neighbor, ip protocols, cdp neighbors, arp, mac address-table, version. Conectada al
     motor de red: el ping desde la consola usa las mismas VLAN y rutas que el diagrama.
+    Con la Etapa 5b: spanning-tree (prioridad, root primary, PortFast, BPDU Guard,
+    bpdufilter y err-disabled), EtherChannel (channel-group con LACP, PAgP y on),
+    HSRP (standby con prioridad y preempt), rutas estáticas con distancia (flotantes),
+    show ip route IP y los filtros de show ip route (con la línea de "Gateway of last
+    resort" siempre), ACL estándar y extendidas, con nombre o número (established,
+    contadores de coincidencias, deny implícito, ip access-group in/out, show
+    access-lists, show ip interface), y verificaciones de ping con protocolo y puerto
+    (pasan por las ACL). En las soluciones de referencia, "@consola EQUIPO" cambia de
+    equipo.
   - Inventario y arranque (Etapa 3): lscpu, /proc/cpuinfo, free, lsblk, df -h/-H/-T,
     dmidecode (-t y -s, solo con root), lspci, fdisk -l, efibootmgr, mokutil y
     /sys/firmware/efi. El estado inicial elige firmware bios o uefi y Secure Boot; las
@@ -615,6 +624,23 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       dnsmasq, ipcalc, iputils (arping) y ethtool, con sus archivos y permisos reales.
     · Verificaciones nuevas: { resuelve: nombre, tipo, servidor, responde, estado } y
       { interfaz: placa, ip_en: red, ipv6: dirección, activa }.
+  - Nivel 2, parte 2 (módulos 2.4 a 2.7):
+    · Rutas en Linux (commands/net.ts): ip route add/del/replace/get con rutas estáticas
+      de verdad, rutas permanentes en nmcli (ipv4.routes) y redes de otras sedes que
+      solo responden si el tráfico sale por su router (redes_remotas). Verificaciones
+      { alcanza: IP } y { ruta: red, via, persistente }.
+    · Capturas (commands/capture.ts, sobre src/engines/captura): tcpdump con -i, -n, -c,
+      -e, -v, -A, -D, filtros BPF completos, -w (guarda un pcap del simulador) y -r
+      (lo lee con otro filtro, sin root); capturar en vivo pide root y muestra el
+      escenario de tráfico del ejercicio (red.trafico). mtr -r con saltos declarados
+      (red.saltos) o calculados con las rutas.
+    · Diagnóstico: ping con -s y -M do (MTU del camino con red.mtu_camino: "Frag needed"
+      del router del túnel o "message too long"), curl -w con los tiempos de cada etapa
+      (DNS, conexión, TLS, primer byte; red.demora_servidor), ip -s link con contadores
+      de errores y colisiones según la negociación, ethtool -s (speed, duplex, autoneg),
+      arping -D que detecta equipos "alcanzables", nc con puertos abiertos por equipo
+      (red.puertos_abiertos) y la salida de ncat en Rocky.
+    · Validadores nuevos del editor (ver 6.7): FRR, nftables y WireGuard.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -640,6 +666,9 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     equivocada, interfaz apagada, falta de ruta, respuesta que no vuelve...).
   - Se suman con las lecciones que los usan: firewall y punto de acceso como equipos,
     ACL y NAT (Nivel 2) y reglas de firewall (Nivel 8).
+  - Desde la Etapa 5b: Spanning Tree (elección de raíz por VLAN, costos, puertos
+    bloqueados y tormentas si se apaga), EtherChannel, HSRP, ACL de IOS (evaluadas en
+    cada salto, en el sentido correcto) y sondas TCP/UDP a un puerto (net.probe).
   - Un ping produce una traza salto por salto; el constructor la muestra sobre el diagrama
     y el simulador de paquetes la anima capa por capa (qué encabezados se agregan y
     quitan en cada equipo).
@@ -682,8 +711,12 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     subred, opciones inexistentes, puerta de enlace de otra red o dentro del rango,
     reservas). El nombre de la zona sale del nombre del archivo (db.empresa.internal,
     db.192.168.10 para la inversa).
+    Etapa 5b: frr.conf (OSPF de FRR, como vtysh), nftables (como "nft -c": tablas,
+    cadenas base con hook y policy, NAT fuera de su cadena, policy drop sin respuestas)
+    y WireGuard (secciones, claves en base64, la clave propia en un peer, AllowedIPs
+    que se pisan).
   - Se suman con el nivel que los usa: manifiestos de Kubernetes, inventarios de Ansible,
-    smb.conf, zonas DNS, nftables, WireGuard, cloud-init y HCL.
+    smb.conf, cloud-init y HCL.
   - Cada ejercicio agrega sus propias reglas (por ejemplo, "debe escuchar en 443 con
     TLS").
 
@@ -705,10 +738,19 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     las trampas de 172.x y 100.x), diseñador VLSM (revisa alineación, tamaño,
     solapamientos y espacio, con caso fijo o al azar y una solución de referencia) y
     tabla NAT/PAT (puertos que se cambian, redirección y CGNAT).
-  - Pendientes, con el nivel que los usa: simuladores de RAID, STP, quórum y migración; consolas de Python
+  - Hechos en la Etapa 5b (Nivel 2): simulador de Spanning Tree, cómo decide un router
+    (prefijo más largo y distancia administrativa), convergencia de vector distancia
+    contra estado de enlace, firewall con estado (¿pasa este paquete? y ordenar
+    reglas), planificador de canales Wi-Fi y visor de capturas al estilo Wireshark
+    (VisorCapturas): lista coloreada, filtros de visualización con la sintaxis de
+    Wireshark (incluido != como desde la versión 3.6), detalle por capas, seguir la
+    conversación TCP y ejercicios de tipo "captura" con tareas de filtro (vale
+    cualquier filtro equivalente), de marcar un paquete y de pregunta. Los escenarios
+    de tráfico (visita web, retransmisiones, MTU y DNS) viven en src/engines/captura y
+    los usan también tcpdump y mtr.
+  - Pendientes, con el nivel que los usa: simuladores de RAID, quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
-    simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; visor de capturas de
-    tráfico; constructor de rack y calculadoras (UPS, disponibilidad, cron, costos).
+    simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; constructor de rack y calculadoras (UPS, disponibilidad, cron, costos).
   - Los componentes pesados se cargan solo cuando una lección los usa.
 
 
@@ -939,9 +981,17 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       preguntas, 114 tarjetas, 79 términos de glosario nuevos, 14 ejercicios de
       terminal, 2 de editor de configuración y 6 escenarios de paquetes. La terminal
       sumó lo descripto en 6.1 (Nivel 2, parte 1) y hay cinco interactivos nuevos (6.9).
-    - 5b (pendiente): módulos 2.4 Switching, 2.5 Routing, 2.6 Firewalls, VPN y Wi-Fi
-      empresarial y 2.7 Diagnóstico y análisis de tráfico, y el proyecto "Red de una
-      empresa con dos sedes".
+    - 5b (HECHA, en revisión): módulos 2.4 Switching, 2.5 Routing, 2.6 Firewalls, VPN y
+      Wi-Fi empresarial y 2.7 Diagnóstico y análisis de tráfico, y el proyecto "Red de
+      una empresa con dos sedes" (diseño, maqueta en la plataforma, Packet Tracer,
+      máquinas virtuales, plan de pruebas con capturas y documento de entrega). 22
+      lecciones, cada módulo con laboratorio, examen y caso real; 212 preguntas, 125
+      tarjetas, 84 términos de glosario nuevos, 15 ejercicios de consola IOS (incluida la
+      maqueta del proyecto), 4 de terminal Linux, 4 topologías, 3 de editor de
+      configuración y 5 de visor de capturas. El simulador sumó lo descripto en 6.1
+      (Nivel 2, parte 2) y 6.3, y hay seis interactivos nuevos (6.9).
+    - Durante la 5b, todo el contenido pasó a español rioplatense con voseo (decisión 4
+      de la sección 14), con dos pasadas de revisión sobre los imperativos ambiguos.
 
   Etapa 6 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
 
