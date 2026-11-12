@@ -75,13 +75,13 @@ Un archivo por tarea, con un comentario arriba, hace que cualquiera entienda qu�
 2. **El % tiene un significado especial.** En una línea de crontab, `%` es un salto de línea. `date +%F` corta el comando a la mitad; hay que escribirlo `date +\%F` (o, mejor, llevar el comando a un script).
 3. **La salida se pierde.** Si no la redirigís, cron intenta mandarla por correo al usuario, y en casi todos los servidores ese correo no llega a nadie. Terminá siempre las líneas con `>> /ruta/al.log 2>&1`.
 
-Para saber si cron lanzó la tarea: en Rocky, `/var/log/cron` (o `journalctl -u crond`); en Ubuntu, `journalctl -u cron`. Y para probar una línea nueva, programala para dentro de dos o tres minutos, mira el log, y recién después ponele el horario de verdad.
+Para saber si cron lanzó la tarea: en Rocky, `/var/log/cron` (o `journalctl -u crond`); en Ubuntu, `journalctl -u cron`. Y para probar una línea nueva, programala para dentro de dos o tres minutos, mirá el log, y recién después ponele el horario de verdad.
 
 <Troubleshooting escenario={noCorre} />
 
 ## Una sola vez: at
 
-Para algo que tiene que pasar una vez ("reinicia el servicio esta noche a las 23:30"), cron no es lo adecuado: tendrías que acordarte de borrar la línea. Para eso está **at**:
+Para algo que tiene que pasar una vez ("reiniciá el servicio esta noche a las 23:30"), cron no es lo adecuado: tendrías que acordarte de borrar la línea. Para eso está **at**:
 
 ```bash
 echo "systemctl restart nginx" | sudo at 23:30     # hoy a las 23:30
@@ -123,7 +123,7 @@ Una regla práctica: para algo nuevo e importante en el servidor (un respaldo, p
     Quisiste escribir -e. No hay papelera: guarda copias con `crontab -l > archivo` antes de cambios grandes.
   </ErrorComun>
   <ErrorComun titulo="echo 'línea' | crontab - borró las otras tareas">
-    Reemplazá la lista entera. Para agregar: `(crontab -l; echo 'línea nueva') | crontab -`, o usa `crontab -e`.
+    Reemplazá la lista entera. Para agregar: `(crontab -l; echo 'línea nueva') | crontab -`, o usá `crontab -e`.
   </ErrorComun>
   <ErrorComun titulo="Editar /var/spool/cron a mano">
     cron puede no enterarse y no se valida nada. Usá siempre `crontab -e`.

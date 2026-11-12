@@ -41,7 +41,7 @@ Hay dos formatos de tabla:
 
 <Diagrama svg={tablas} alt="Comparación: MBR tiene una sola tabla de un sector, hasta 4 particiones primarias y discos de hasta 2 TiB, y si la tabla se daña se pierde. GPT tiene una tabla principal al principio y una copia al final, hasta 128 particiones y discos de cualquier tamaño actual; es la que usan los equipos con UEFI." pie="Para un disco nuevo, GPT es la opción por defecto." />
 
-MBR (que las herramientas llaman `msdos` o `dos`) sigue apareciendo en servidores viejos y en máquinas virtuales que arrancan con BIOS; por ejemplo, el disco del sistema de rocky01 lo usa. Para todo disco nuevo, usa **GPT**.
+MBR (que las herramientas llaman `msdos` o `dos`) sigue apareciendo en servidores viejos y en máquinas virtuales que arrancan con BIOS; por ejemplo, el disco del sistema de rocky01 lo usa. Para todo disco nuevo, usá **GPT**.
 
 ## Las herramientas
 
@@ -51,7 +51,7 @@ MBR (que las herramientas llaman `msdos` o `dos`) sigue apareciendo en servidore
 | `fdisk` | Interactiva, con un menú de letras | Lo más común para trabajar a mano; maneja MBR y GPT |
 | `gdisk` | Interactiva, solo GPT | Para quien viene de fdisk y trabaja solo con GPT |
 
-Las tres escriben lo mismo en el disco: elige una y usala bien. En esta lección practicás con parted, porque se puede escribir todo en una línea:
+Las tres escriben lo mismo en el disco: elegí una y usala bien. En esta lección practicás con parted, porque se puede escribir todo en una línea:
 
 ```bash
 sudo parted -s /dev/sdb mklabel gpt                 # tabla nueva (borra la anterior)
@@ -88,7 +88,7 @@ Command (m for help): w                         ← escribir y salir
 <Ordenar ejercicio={pasos} />
 
 <Advertencia titulo="El disco equivocado no avisa">
-Ni parted ni fdisk preguntan "¿estás seguro de que este es el disco nuevo?". Antes de escribir una tabla, mirá `lsblk` y confirmá: el tamaño es el esperado, no tiene particiones y no está montado. En un servidor con varios discos iguales, compara también el número de serie con `lsblk -o NAME,SIZE,SERIAL` si tu hipervisor lo muestra.
+Ni parted ni fdisk preguntan "¿estás seguro de que este es el disco nuevo?". Antes de escribir una tabla, mirá `lsblk` y confirmá: el tamaño es el esperado, no tiene particiones y no está montado. En un servidor con varios discos iguales, compará también el número de serie con `lsblk -o NAME,SIZE,SERIAL` si tu hipervisor lo muestra.
 </Advertencia>
 
 ## Cuando el kernel no ve el cambio
@@ -101,7 +101,7 @@ Al escribir la tabla, la herramienta le avisa al kernel para que vea las partici
 
 <ErroresComunes>
   <ErrorComun titulo='"Error: /dev/sdb: unrecognised disk label"'>
-    El disco no tiene tabla de particiones. No es un error: es un disco nuevo. Créala con `mklabel gpt`.
+    El disco no tiene tabla de particiones. No es un error: es un disco nuevo. Creala con `mklabel gpt`.
   </ErrorComun>
   <ErrorComun titulo='"Error: Partition(s) on /dev/sdb are being used."'>
     Alguna partición del disco está montada, es swap o es parte de LVM. Nunca cambies la tabla de un disco en uso: desmontá o liberá primero, o revisá si de verdad es el disco que querías.

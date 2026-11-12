@@ -6,7 +6,7 @@ descripcion: >-
   Sur (R3, LAN 10.3.0.0/24) están unidas en triángulo: R1-R2 por 10.0.12.0/30, R1-R3 por
   10.0.13.0/30 y R2-R3 por 10.0.23.0/30 (en cada enlace, el router de número menor tiene la .1).
   Las interfaces ya tienen sus IP; no hay ninguna ruta. Empezás en la consola de R1; para
-  pasar a otro router, usa el selector de equipo.
+  pasar a otro router, usá el selector de equipo.
 estado_inicial:
   consola: R1
   topologia:
@@ -46,7 +46,7 @@ pasos:
       - { equipo: R1, ruta: 10.3.0.0/24, via: 10.0.13.2 }
     pistas: ["ip route 10.2.0.0 255.255.255.0 10.0.12.2 e ip route 10.3.0.0 255.255.255.0 10.0.13.2."]
     solucion: [enable, configure terminal, ip route 10.2.0.0 255.255.255.0 10.0.12.2, ip route 10.3.0.0 255.255.255.0 10.0.13.2, end]
-  - consigna: "En R2 y en R3, pon una ruta por defecto hacia R1. Las tres LAN se tienen que ver entre sí."
+  - consigna: "En R2 y en R3, poné una ruta por defecto hacia R1. Las tres LAN se tienen que ver entre sí."
     verificar:
       - { ping: { desde: PC1, hacia: PC2 } }
       - { ping: { desde: PC1, hacia: PC3 } }
@@ -65,14 +65,14 @@ pasos:
       - ip route 0.0.0.0 0.0.0.0 10.0.13.1
       - end
     explicacion: >-
-      Funciona, pero mira el tráfico entre las sucursales: Norte manda todo a R1 y R1 lo pasa a
+      Funciona, pero mirá el tráfico entre las sucursales: Norte manda todo a R1 y R1 lo pasa a
       Sur. El enlace directo R2-R3 no se usa, y si se cae el enlace R1-R2, la sucursal Norte
       queda aislada aunque tenga otro camino.
-  - consigna: Desde R2, haz un traceroute a la PC de la sucursal Sur para confirmar por dónde va.
+  - consigna: Desde R2, hacé un traceroute a la PC de la sucursal Sur para confirmar por dónde va.
     verificar:
       - { comando_usado: traceroute 10.3.0.10 }
       - { salida_contiene: "10.0.12.1" }
-    pistas: ["Ve a R2 y escribe traceroute 10.3.0.10."]
+    pistas: ["Andá a R2 y escribe traceroute 10.3.0.10."]
     solucion: ["@consola R2", traceroute 10.3.0.10]
     explicacion: El primer salto es 10.0.12.1 (R1). Con rutas estáticas, el camino es el que escribiste, aunque haya uno mejor.
   - consigna: >-

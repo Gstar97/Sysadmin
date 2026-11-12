@@ -25,8 +25,8 @@ pasos:
     comprobar: ip -br addr muestra lan-sur (10.3.0.1/24) en rocky01 y lan-norte (10.2.0.1/24) en ubuntu01, en estado UNKNOWN o UP.
   - titulo: Instalar FRRouting y activar OSPF
     detalle: >-
-      Instalá FRR en las dos máquinas. En /etc/frr/daemons, cambia ospfd=no por ospfd=yes y
-      reinicia el servicio.
+      Instalá FRR en las dos máquinas. En /etc/frr/daemons, cambiá ospfd=no por ospfd=yes y
+      reiniciá el servicio.
     variantes:
       - nombre: rocky01
         detalle: El paquete está en AppStream.
@@ -46,14 +46,14 @@ pasos:
   - titulo: Permitir el reenvío
     detalle: >-
       Para que cada máquina pueda pasar tráfico entre sus interfaces (como un router de verdad),
-      activa net.ipv4.ip_forward de forma permanente en las dos.
+      activá net.ipv4.ip_forward de forma permanente en las dos.
     comandos:
       - echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/90-router.conf
       - sudo sysctl --system
     comprobar: sysctl net.ipv4.ip_forward responde 1 en las dos.
   - titulo: Configurar OSPF con vtysh
     detalle: >-
-      Entrá a vtysh y configurá OSPF como en IOS, pero con prefijos. En ubuntu01, usa router-id
+      Entrá a vtysh y configurá OSPF como en IOS, pero con prefijos. En ubuntu01, usá router-id
       2.2.2.2 y la red 10.2.0.0/24; en rocky01, 3.3.3.3 y 10.3.0.0/24. La red del laboratorio
       (192.168.10.0/24) va en las dos. La interfaz dummy es pasiva (no hay routers ahí).
     archivo:
@@ -84,11 +84,11 @@ pasos:
     si_falla: >-
       Si el vecino no aparece: revisá que las dos estén en 192.168.10.0/24 por la misma red
       interna, el firewall (protocolo 89) y que los router-id sean distintos (si clonaste una
-      máquina, revisa también que no tengan la misma MAC). sudo vtysh -c "show ip ospf interface"
+      máquina, revisá también que no tengan la misma MAC). sudo vtysh -c "show ip ospf interface"
       te dice si OSPF está activo en la interfaz correcta.
   - titulo: Romper y mirar
     detalle: >-
-      En ubuntu01, apaga la interfaz de la sucursal y mira cómo desaparece la ruta en rocky01.
+      En ubuntu01, apagá la interfaz de la sucursal y mira cómo desaparece la ruta en rocky01.
       Después, volvé a levantarla.
     comandos:
       - sudo ip link set lan-norte down

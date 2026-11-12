@@ -29,13 +29,13 @@ pasos:
       - curl -I http://localhost
     comprobar: "`curl -I` responde `HTTP/1.1 200 OK` y `is-enabled` dice enabled."
     si_falla: >-
-      Si nginx no arranca, sigue el método de la lección 1.3.3: `systemctl status nginx`,
+      Si nginx no arranca, seguí el método de la lección 1.3.3: `systemctl status nginx`,
       `sudo journalctl -xeu nginx` y `sudo nginx -t`. Si otro programa usa el puerto 80,
       `sudo ss -tlnp` te dice cuál.
   - titulo: Poné una página propia
     detalle: >-
       En Rocky, nginx sirve los archivos de /usr/share/nginx/html. Opcional: si querés verla
-      desde el navegador de tu PC, abre el puerto en el firewall (lo vas a ver en detalle en el
+      desde el navegador de tu PC, abrí el puerto en el firewall (lo vas a ver en detalle en el
       módulo 1.6).
     comandos:
       - echo "<h1>rocky01 funciona</h1>" | sudo tee /usr/share/nginx/html/index.html
@@ -44,7 +44,7 @@ pasos:
     comprobar: "`curl http://localhost` muestra tu título; desde la PC, http://IP-de-rocky01 también."
   - titulo: Hacé que nginx se recupere solo
     detalle: >-
-      Con un drop-in, agrega `Restart=on-failure` y `RestartSec=5` a nginx, sin tocar el
+      Con un drop-in, agregá `Restart=on-failure` y `RestartSec=5` a nginx, sin tocar el
       archivo del paquete. Después simula una caída matando el proceso principal.
     comandos:
       - sudo systemctl edit nginx
@@ -56,7 +56,7 @@ pasos:
       `show` dice on-failure, y después de matarlo, el status muestra un Main PID nuevo y en el
       journal aparece "Scheduled restart job".
     si_falla: >-
-      En el editor de systemctl edit, escribe las líneas entre los dos comentarios de arriba:
+      En el editor de systemctl edit, escribí las líneas entre los dos comentarios de arriba:
       `[Service]`, `Restart=on-failure` y `RestartSec=5`. Si lo escribiste debajo de "Edits below
       this comment will be discarded", se descarta.
   - titulo: Creá el script de control
@@ -111,7 +111,7 @@ pasos:
       ejecución anterior: `sudo systemctl reset-failed estado-web` lo limpia.
   - titulo: Revisá los logs de nginx y su rotación
     detalle: >-
-      Genera algo de tráfico, mira el log de accesos y la configuración de logrotate que trajo el
+      Generá algo de tráfico, mirá el log de accesos y la configuración de logrotate que trajo el
       paquete, y probala.
     comandos:
       - for i in $(seq 1 20); do curl -s -o /dev/null http://localhost; done

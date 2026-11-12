@@ -34,7 +34,7 @@ falta no encontramos nada. Necesitamos:
 Ya tenemos una máquina con dos discos de 500 GB y uno de 1 TB. ¡Gracias!
 ```
 
-Lo vas a hacer en una máquina virtual nueva (`oficina01`), con tres discos virtuales chicos que representan los de la oficina: uno para el sistema, uno para los datos y otro para los respaldos. Puede ser Rocky o Ubuntu; si tenés tiempo, hacelo en uno y después repite lo básico en el otro.
+Lo vas a hacer en una máquina virtual nueva (`oficina01`), con tres discos virtuales chicos que representan los de la oficina: uno para el sistema, uno para los datos y otro para los respaldos. Puede ser Rocky o Ubuntu; si tenés tiempo, hacelo en uno y después repetí lo básico en el otro.
 
 | Fase | Se apoya en | Tiempo estimado |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ Antes de tocar la máquina, escribí en tu cuaderno las decisiones. Cambiarlas e
 
 - Instalá el sistema en el disco 1 con LVM y un hostname con criterio (`oficina01`).
 - Actualizá, configurá la zona horaria y comprobá que chrony sincroniza.
-- Armá el grupo `datos` en el disco 2, el volumen `compartido` (XFS en Rocky, ext4 en Ubuntu) y montalo por UUID en `/srv/compartido`. No uses todo el espacio: deja al menos un tercio libre.
+- Armá el grupo `datos` en el disco 2, el volumen `compartido` (XFS en Rocky, ext4 en Ubuntu) y montalo por UUID en `/srv/compartido`. No uses todo el espacio: dejá al menos un tercio libre.
 - Formateá el disco 3 y montalo por UUID en `/backup`.
 - Revisá con `findmnt --verify`, reiniciá, y comprobá que todo vuelve.
 
@@ -87,7 +87,7 @@ Antes de tocar la máquina, escribí en tu cuaderno las decisiones. Cambiarlas e
 
 ## 5. Respaldos y tareas automáticas
 
-- Instalá tu `respaldo.sh` (lección 1.7.7) en `/usr/local/sbin`, con dueño root y permisos 755, y adáptalo: que respalde `/srv/compartido` y `/etc`, guarde 14 días y deje todo en el journal con `logger -t respaldo`.
+- Instalá tu `respaldo.sh` (lección 1.7.7) en `/usr/local/sbin`, con dueño root y permisos 755, y adaptalo: que respalde `/srv/compartido` y `/etc`, guarde 14 días y deje todo en el journal con `logger -t respaldo`.
 - Programalo con un **timer de systemd** (lección 1.3.4) todas las noches a las 2:30, con `Persistent=true` (si la máquina estaba apagada, corre al encender). El servicio es `Type=oneshot` y llama al script con ruta completa.
 - Agregá el reporte de salud (`salud.sh`) los días hábiles a las 7:30, guardando cada reporte en `/var/log/salud/`, y una regla de logrotate (o la limpieza del laboratorio 1.7) para que esos archivos no crezcan para siempre.
 - Hacé una restauración de prueba completa y anotá cuánto tardó.
