@@ -5,7 +5,7 @@
 import { stableGuid } from './ad'
 import { activeProfile, networkCategory, ruleObject } from './machine'
 import { connect } from './remoting'
-import { asArray, cmdlet, PsError, PsSession, psEquals, wildcardToRegex, type CmdletContext } from './session'
+import { asArray, BOOT_HOOKS, cmdlet, PsError, PsSession, psEquals, wildcardToRegex, type CmdletContext } from './session'
 import { disks, type DiskPartition, type DiskState } from './verify-system'
 import { psObject, toText, VIEWS, type PsObject } from './values'
 
@@ -288,8 +288,7 @@ function renderIpconfig(s: PsSession, all: boolean): string {
 }
 
 cmdlet('ipconfig', {
-  params: ['all'],
-  switches: ['all'],
+  native: true,
   synopsis: 'Displays all current TCP/IP network configuration values (ipconfig.exe).',
   run(ctx) {
     const args = ctx.positional.map((p) => toText(p).toLowerCase())
@@ -527,6 +526,9 @@ export function restart(ctx: CmdletContext) {
   for (const fn of pend ?? []) fn()
   s.data.onRestart = []
   s.data.bootTime = [new Date()]
+  // Al reiniciar, el equipo pide un ticket nuevo de Kerberos con sus grupos actuales.
+  delete s.data.tokenGroups
+  for (const hook of BOOT_HOOKS) hook(s)
   ctx.host(`[simulador] ${s.state.equipo} se reinició y ya está de vuelta.\n`)
 }
 
@@ -604,6 +606,7 @@ cmdlet('Set-TimeZone', {
 })
 
 cmdlet('tzutil', {
+  native: true,
   synopsis: 'tzutil.exe',
   run(ctx) {
     const a = ctx.positional.map(toText)
@@ -662,6 +665,7 @@ cmdlet('Get-ComputerInfo', {
 }, ['gin'])
 
 cmdlet('systeminfo', {
+  native: true,
   synopsis: 'systeminfo.exe',
   run(ctx) {
     const st = ctx.s.state
@@ -671,6 +675,7 @@ cmdlet('systeminfo', {
 })
 
 cmdlet('sconfig', {
+  native: true,
   synopsis: 'Server Configuration tool.',
   run(ctx) {
     const st = ctx.s.state
@@ -1235,3 +1240,70 @@ cmdlet('pwsh', {
     return [psObject('System.Management.Automation.PSCustomObject', { PSVersion: '7.6.0', PSEdition: 'Core', OS: 'Microsoft Windows 10.0.26100' })]
   },
 })
+
+// ---------------------------------------------------------------------------------------
+// Select-String: buscar texto en la salida o en archivos (el "grep" de PowerShell)
+// ---------------------------------------------------------------------------------------
+
+cmdlet('Select-String', {
+  params: ['Pattern', 'Path', 'InputObject', 'Context', 'Encoding'],
+  switches: ['SimpleMatch', 'CaseSensitive', 'NotMatch', 'Quiet', 'List', 'AllMatches', 'Raw'],
+  positional: ['Pattern', 'Path'],
+  synopsis: 'Finds text in strings and files.',
+  module: 'Microsoft.PowerShell.Utility',
+  run(ctx) {
+    const patterns = list(ctx, 'Pattern').map(toText)
+    if (!patterns.length) throw new PsError("Cannot process command because of one or more missing mandatory parameters: Pattern.", 'InvalidArgument', 'MissingMandatoryParameter,Microsoft.PowerShell.Commands.SelectStringCommand')
+    const flags = has(ctx, 'CaseSensitive') ? '' : 'i'
+    const res = patterns.map((p) => {
+      try {
+        return new RegExp(has(ctx, 'SimpleMatch') ? p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : p, flags)
+      } catch {
+        throw new PsError(`The string ${p} is not a valid regular expression.`, 'InvalidArgument', 'InvalidRegex,Microsoft.PowerShell.Commands.SelectStringCommand', p)
+      }
+    })
+    const test = (line: string) => res.some((r) => r.test(line)) !== has(ctx, 'NotMatch')
+    // Origen: archivos (-Path) o lo que llega por la tubería (cada línea por separado).
+    const sources: { file?: string; lines: string[] }[] = []
+    if (has(ctx, 'Path')) {
+      for (const p of list(ctx, 'Path').map(toText)) {
+        const dir = ctx.s.resolvePath(p.replace(/[^\\]*[*?][^\\]*$/, '') || '.')
+        const mask = /[*?]/.test(p) ? wildcardToRegex(p.split('\\').pop()!) : undefined
+        const files = mask ? ctx.s.fs.children(dir).filter((c) => c.node.type === 'file' && mask.test(c.node.name)).map((c) => c.path) : [ctx.s.resolvePath(p)]
+        for (const f of files) {
+          const node = ctx.s.fs.get(f)
+          if (!node || node.type !== 'file') {
+            ctx.writeError(`Cannot find path '${f}' because it does not exist.`, 'ObjectNotFound', f)
+            continue
+          }
+          sources.push({ file: f, lines: node.content.replace(/\r/g, '').split('\n').filter((l, i, a) => i < a.length - 1 || l !== '') })
+        }
+      }
+    } else {
+      const items = has(ctx, 'InputObject') ? list(ctx, 'InputObject') : ctx.input
+      const lines: string[] = []
+      for (const it of items) {
+        const text = (it as PsObject)?.__type === '__formatted' ? toText((it as PsObject).text) : typeof it === 'string' ? it : ctx.s.render([it]).replace(/^\n+|\n+$/g, '')
+        lines.push(...text.replace(/\r/g, '').split('\n'))
+      }
+      sources.push({ lines })
+    }
+    const out: unknown[] = []
+    for (const src of sources) {
+      for (let i = 0; i < src.lines.length; i++) {
+        const line = src.lines[i]
+        if (!test(line)) continue
+        if (has(ctx, 'Quiet')) return [true]
+        if (has(ctx, 'Raw')) out.push(line)
+        else {
+          const name = src.file?.split('\\').pop()
+          out.push(psObject('Microsoft.PowerShell.Commands.MatchInfo', { LineNumber: i + 1, Line: line, Path: src.file ?? 'InputStream', Filename: name ?? 'InputStream', Pattern: patterns[0], __toString: src.file ? `${src.file}:${i + 1}:${line}` : line }))
+        }
+        if (has(ctx, 'List')) break
+      }
+    }
+    if (has(ctx, 'Quiet')) return [false]
+    return out
+  },
+}, ['sls'])
+VIEWS['Microsoft.PowerShell.Commands.MatchInfo'] = { kind: 'lines', columns: [] }

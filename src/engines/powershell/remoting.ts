@@ -51,6 +51,8 @@ export function connect(from: PsSession, target: string): PsSession | PsError {
 /** Los objetos que vuelven de otro equipo llegan "deserializados": con PSComputerName y sin métodos. */
 function tag(item: unknown, computer: string, hide: boolean): unknown {
   if (!isPsObject(item)) return item
+  // La salida de un programa clásico (ipconfig, gpresult...) vuelve como texto.
+  if (item.__type === '__formatted') return item
   const copy: PsObject = { ...item }
   for (const k of Object.keys(copy)) if (k.startsWith('__method_')) delete copy[k]
   copy.__type = item.__type.startsWith('Deserialized.') ? item.__type : `Deserialized.${item.__type}`
@@ -311,6 +313,7 @@ cmdlet('Disable-PSRemoting', {
 })
 
 cmdlet('winrm', {
+  native: true,
   synopsis: 'winrm.cmd',
   run(ctx) {
     const a = ctx.positional.map((x) => toText(x).toLowerCase())

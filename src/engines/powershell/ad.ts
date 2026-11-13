@@ -2,8 +2,25 @@
 import { asArray, cmdlet, PsError, PsSession, wildcardToRegex, type CmdletContext, type CmdletDef } from './session'
 import { getProp, isPsObject, psObject, toText, type PsObject } from './values'
 
+import type { GpLink, GpoDef } from '../gpo/rsop'
+
 const AD_MODULE = 'ActiveDirectory'
-const NS = 'Microsoft.ActiveDirectory.Management'
+export const NS = 'Microsoft.ActiveDirectory.Management'
+
+export type FsmoRole = 'SchemaMaster' | 'DomainNamingMaster' | 'PDCEmulator' | 'RIDMaster' | 'InfrastructureMaster'
+export const FSMO_ROLES: FsmoRole[] = ['SchemaMaster', 'DomainNamingMaster', 'PDCEmulator', 'RIDMaster', 'InfrastructureMaster']
+
+/** GPO guardada en el dominio: la definición que usa el cálculo de RSoP más los datos que muestra Get-GPO. */
+export interface StoredGpo extends GpoDef {
+  description: string
+  created: Date
+  modified: Date
+  userVersion: number
+  computerVersion: number
+  /** Quiénes pueden leerla (además de los que la aplican). */
+  readers: string[]
+  editors: string[]
+}
 
 export interface AdStore {
   domain: string
@@ -14,6 +31,21 @@ export interface AdStore {
   ous: PsObject[]
   computers: PsObject[]
   nextRid: number
+  forestMode?: string
+  domainMode?: string
+  /** Dueño de cada rol FSMO (nombre del equipo). */
+  fsmo?: Record<FsmoRole, string>
+  recycleBin?: boolean
+  /** Objetos borrados (en "Deleted Objects"). */
+  deleted?: PsObject[]
+  gpos?: StoredGpo[]
+  links?: GpLink[]
+  blocked?: string[]
+  gpoBackups?: { id: string; gpo: StoredGpo; path: string; created: Date; comment: string }[]
+  passwordPolicy?: Record<string, unknown>
+  fgpp?: PsObject[]
+  serviceAccounts?: PsObject[]
+  kdsKeys?: { id: string; effective: Date; created: Date }[]
 }
 
 export const DOMAIN_SID = 'S-1-5-21-3623811015-3361044348-30300820'
@@ -71,23 +103,29 @@ export function dnOf(o: PsObject): string {
   return `${prefix}=${toText(o.Name)},${toText(o.__parent)}`
 }
 
-function sameDn(a: string, b: string) {
+export function sameDn(a: string, b: string) {
   return a.replace(/\s*,\s*/g, ',').toLowerCase() === b.replace(/\s*,\s*/g, ',').toLowerCase()
 }
 
 /** Existe el contenedor (dominio, CN=Users, CN=Computers, una OU...). */
-function containerExists(st: AdStore, dn: string): boolean {
+export function containerExists(st: AdStore, dn: string): boolean {
   if (sameDn(dn, st.domainDn)) return true
-  if (['CN=Users', 'CN=Computers', 'CN=Builtin', 'OU=Domain Controllers'].some((c) => sameDn(dn, `${c},${st.domainDn}`))) return true
+  if (['CN=Users', 'CN=Computers', 'CN=Builtin', 'OU=Domain Controllers', 'CN=Managed Service Accounts'].some((c) => sameDn(dn, `${c},${st.domainDn}`))) return true
   return st.ous.some((o) => sameDn(dnOf(o), dn))
 }
 
-function allObjects(st: AdStore): PsObject[] {
-  return [...st.users, ...st.groups, ...st.ous, ...st.computers]
+export function allObjects(st: AdStore): PsObject[] {
+  return [...st.users, ...st.groups, ...st.ous, ...st.computers, ...(st.serviceAccounts ?? [])]
 }
 
 export function newSid(st: AdStore) {
   return `${DOMAIN_SID}-${st.nextRid++}`
+}
+
+/** Al borrar, el objeto pasa a "Deleted Objects". Con la papelera activa conserva todo (se puede restaurar entero). */
+export function tombstone(st: AdStore, o: PsObject) {
+  const groups = st.groups.filter((g) => asArray(g.__members).some((m) => sameIdentity(st, toText(m), o))).map((g) => toText(g.Name))
+  ;(st.deleted ??= []).push({ ...o, __deletedAt: new Date(), __lastParent: o.__parent, __groups: groups, __recyclable: !!st.recycleBin })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -99,6 +137,7 @@ const DEFAULTS: Record<string, string[]> = {
   group: ['DistinguishedName', 'GroupCategory', 'GroupScope', 'Name', 'ObjectClass', 'ObjectGUID', 'SamAccountName', 'SID'],
   organizationalUnit: ['City', 'Country', 'DistinguishedName', 'LinkedGroupPolicyObjects', 'ManagedBy', 'Name', 'ObjectClass', 'ObjectGUID', 'PostalCode', 'State', 'StreetAddress'],
   computer: ['DistinguishedName', 'DNSHostName', 'Enabled', 'Name', 'ObjectClass', 'ObjectGUID', 'SamAccountName', 'SID', 'UserPrincipalName'],
+  'msDS-GroupManagedServiceAccount': ['DistinguishedName', 'Enabled', 'Name', 'ObjectClass', 'ObjectGUID', 'SamAccountName', 'SID', 'UserPrincipalName'],
 }
 
 const EXTENDED: Record<string, string[]> = {
@@ -106,6 +145,7 @@ const EXTENDED: Record<string, string[]> = {
   group: ['CanonicalName', 'Created', 'Description', 'ManagedBy', 'Members', 'MemberOf', 'Modified'],
   organizationalUnit: ['CanonicalName', 'Created', 'Description', 'Modified', 'ProtectedFromAccidentalDeletion'],
   computer: ['CanonicalName', 'Created', 'Description', 'IPv4Address', 'LastLogonDate', 'Modified', 'OperatingSystem', 'OperatingSystemVersion'],
+  'msDS-GroupManagedServiceAccount': ['CanonicalName', 'Created', 'DNSHostName', 'KerberosEncryptionType', 'ManagedPasswordIntervalInDays', 'Modified', 'PrincipalsAllowedToRetrieveManagedPassword'],
 }
 
 const TYPE_BY_CLASS: Record<string, string> = {
@@ -113,6 +153,7 @@ const TYPE_BY_CLASS: Record<string, string> = {
   group: `${NS}.ADGroup`,
   organizationalUnit: `${NS}.ADOrganizationalUnit`,
   computer: `${NS}.ADComputer`,
+  'msDS-GroupManagedServiceAccount': `${NS}.ADServiceAccount`,
 }
 
 function canonicalName(st: AdStore, dn: string): string {
@@ -121,7 +162,7 @@ function canonicalName(st: AdStore, dn: string): string {
   return `${st.domain}/${rdns.reverse().join('/')}`
 }
 
-function computed(st: AdStore, o: PsObject, prop: string): unknown {
+export function computed(st: AdStore, o: PsObject, prop: string): unknown {
   const dn = dnOf(o)
   switch (prop) {
     case 'DistinguishedName':
@@ -135,8 +176,13 @@ function computed(st: AdStore, o: PsObject, prop: string): unknown {
         .map((m) => resolveAny(st, toText(m)))
         .filter((x): x is PsObject => !!x)
         .map(dnOf)
+    case 'PrincipalsAllowedToRetrieveManagedPassword':
+      return asArray(o.__principals)
+        .map((m) => resolveAny(st, toText(m)))
+        .filter((x): x is PsObject => !!x)
+        .map(dnOf)
     case 'LinkedGroupPolicyObjects':
-      return []
+      return (st.links ?? []).filter((l) => sameDn(l.target, dn)).sort((a, b) => a.order - b.order).map((l) => `cn={${l.gpoId.toUpperCase()}},cn=policies,cn=system,${st.domainDn}`)
     case 'City':
     case 'Country':
     case 'ManagedBy':
@@ -168,12 +214,12 @@ export function present(st: AdStore, o: PsObject, requested: unknown[] = []): Ps
 // Búsqueda por identidad y por filtro
 // ---------------------------------------------------------------------------------------
 
-function identityText(id: unknown): string {
+export function identityText(id: unknown): string {
   if (isPsObject(id)) return toText(getProp(id, 'SamAccountName') ?? getProp(id, 'DistinguishedName') ?? getProp(id, 'Name'))
   return toText(id)
 }
 
-function sameIdentity(_st: AdStore, id: string, o: PsObject): boolean {
+export function sameIdentity(_st: AdStore, id: string, o: PsObject): boolean {
   const lower = id.toLowerCase()
   return (
     toText(o.SamAccountName).toLowerCase() === lower ||
@@ -184,15 +230,15 @@ function sameIdentity(_st: AdStore, id: string, o: PsObject): boolean {
   )
 }
 
-function resolveAny(st: AdStore, id: string): PsObject | undefined {
+export function resolveAny(st: AdStore, id: string): PsObject | undefined {
   return allObjects(st).find((o) => sameIdentity(st, id, o))
 }
 
-function notFound(st: AdStore, id: string, cmd: string): PsError {
+export function notFound(st: AdStore, id: string, cmd: string): PsError {
   return new PsError(`Cannot find an object with identity: '${id}' under: '${st.domainDn}'.`, 'ObjectNotFound', `ActiveDirectoryCmdlet:${NS}.ADIdentityNotFoundException,${NS}.Commands.${cmd}`, id)
 }
 
-function resolve(st: AdStore, list: PsObject[], idValue: unknown, cmd: string): PsObject {
+export function resolve(st: AdStore, list: PsObject[], idValue: unknown, cmd: string): PsObject {
   const id = identityText(idValue)
   const found = list.find((o) => sameIdentity(st, id, o))
   if (!found) throw notFound(st, id, cmd)
@@ -233,9 +279,9 @@ function tokenizeFilter(src: string): Tok[] {
   return out
 }
 
-type Pred = (o: PsObject) => boolean
+export type Pred = (o: PsObject) => boolean
 
-function compileFilter(st: AdStore, s: PsSession, src: string): Pred {
+export function compileFilter(st: AdStore, s: PsSession, src: string): Pred {
   if (src.trim() === '*') return () => true
   const toks = tokenizeFilter(src)
   let pos = 0
@@ -343,7 +389,7 @@ function compileFilter(st: AdStore, s: PsSession, src: string): Pred {
 }
 
 /** Filtro LDAP básico: (attr=valor), (&...), (|...), (!...). */
-function compileLdap(st: AdStore, src: string): Pred {
+export function compileLdap(st: AdStore, src: string): Pred {
   let pos = 0
   const parse = (): Pred => {
     if (src[pos] !== '(') throw new Error(`se esperaba '(' en la posición ${pos + 1}`)
@@ -372,11 +418,11 @@ function compileLdap(st: AdStore, src: string): Pred {
   return parse()
 }
 
-function filterError(src: string, msg: string, cmd: string) {
+export function filterError(src: string, msg: string, cmd: string) {
   return new PsError(`Error parsing query: '${src}' Error Message: '${msg}'.`, 'ParserError', `ActiveDirectoryCmdlet:${NS}.ADFilterParsingException,${NS}.Commands.${cmd}`, src)
 }
 
-function search(ctx: CmdletContext, list: PsObject[], cmd: string, noun: string): PsObject[] {
+export function search(ctx: CmdletContext, list: PsObject[], cmd: string, noun: string): PsObject[] {
   const st = store(ctx.s)
   const props = asArray(ctx.params.get('properties'))
   if (ctx.params.has('identity')) return [present(st, resolve(st, list, ctx.params.get('identity'), cmd), props)]
@@ -409,7 +455,7 @@ function search(ctx: CmdletContext, list: PsObject[], cmd: string, noun: string)
 }
 
 /** Registra un cmdlet del módulo ActiveDirectory (solo existe si el ejercicio define un dominio). */
-function adCmdlet(name: string, def: CmdletDef) {
+export function adCmdlet(name: string, def: CmdletDef) {
   cmdlet(name, {
     ...def,
     module: AD_MODULE,
@@ -429,7 +475,7 @@ function adCmdlet(name: string, def: CmdletDef) {
 
 const SEARCH_PARAMS = ['Identity', 'Filter', 'LDAPFilter', 'Properties', 'SearchBase', 'SearchScope', 'Server', 'ResultSetSize']
 
-function str(ctx: CmdletContext, name: string): string | undefined {
+export function str(ctx: CmdletContext, name: string): string | undefined {
   const v = ctx.params.get(name.toLowerCase())
   return v === undefined || v === null ? undefined : toText(v)
 }
@@ -446,14 +492,14 @@ function secureError(param: string, v: unknown) {
   )
 }
 
-function confirmPrompt(ctx: CmdletContext, op: string, target: string): boolean {
+export function confirmPrompt(ctx: CmdletContext, op: string, target: string): boolean {
   const c = ctx.params.get('confirm')
   if (c === false) return true
   ctx.host(`\nConfirm\nAre you sure you want to perform this action?\nPerforming the operation "${op}" on target "${target}".\n[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "Y"): Y\n`)
   return true
 }
 
-function stamp(o: PsObject) {
+export function stamp(o: PsObject) {
   o.Modified = new Date()
 }
 
@@ -569,6 +615,7 @@ adCmdlet('Remove-ADUser', {
     for (const t of targets) {
       const u = resolve(st, st.users, t, 'RemoveADUser')
       if (!confirmPrompt(ctx, 'Remove', dnOf(u))) continue
+      tombstone(st, u)
       st.users.splice(st.users.indexOf(u), 1)
       for (const g of st.groups) g.__members = asArray(g.__members).filter((m) => !sameIdentity(st, toText(m), u))
     }
@@ -732,7 +779,10 @@ adCmdlet('Remove-ADGroup', {
   run(ctx) {
     const st = store(ctx.s)
     const g = resolve(st, st.groups, ctx.params.get('identity') ?? ctx.input[0], 'RemoveADGroup')
-    if (confirmPrompt(ctx, 'Remove', dnOf(g))) st.groups.splice(st.groups.indexOf(g), 1)
+    if (confirmPrompt(ctx, 'Remove', dnOf(g))) {
+      tombstone(st, g)
+      st.groups.splice(st.groups.indexOf(g), 1)
+    }
     return []
   },
 })
@@ -880,6 +930,7 @@ adCmdlet('Remove-ADOrganizationalUnit', {
       throw new PsError('The directory service can perform the requested operation only on a leaf object.', 'NotSpecified', `ActiveDirectoryServer:8213,${NS}.Commands.RemoveADOrganizationalUnit`, dn)
     }
     if (!confirmPrompt(ctx, 'Remove', dn)) return []
+    for (const o of [ou, ...children]) tombstone(st, o)
     for (const key of ['users', 'groups', 'ous', 'computers'] as const) st[key] = st[key].filter((o) => o !== ou && !inside(o))
     return []
   },
@@ -918,21 +969,24 @@ adCmdlet('Get-ADDomain', {
   synopsis: 'Gets an Active Directory domain.',
   run(ctx) {
     const st = store(ctx.s)
-    const dc = `${ctx.s.state.equipo}.${st.domain}`
+    const f = fsmoOf(st, ctx.s.state.equipo)
+    const fq = (n: string) => `${n}.${st.domain}`.toUpperCase().replace(`.${st.domain.toUpperCase()}`, `.${st.domain}`)
+    const dcs = st.computers.filter((c) => sameDn(toText(c.__parent), `OU=Domain Controllers,${st.domainDn}`)).map((c) => fq(toText(c.Name)))
     return [
       psObject(`${NS}.ADDomain`, {
         ComputersContainer: `CN=Computers,${st.domainDn}`,
         DistinguishedName: st.domainDn,
         DNSRoot: st.domain,
         DomainControllersContainer: `OU=Domain Controllers,${st.domainDn}`,
-        DomainMode: 'Windows2016Domain',
+        DomainMode: st.domainMode ?? 'Windows2025Domain',
         DomainSID: DOMAIN_SID,
         Forest: st.domain,
-        InfrastructureMaster: dc,
+        InfrastructureMaster: fq(f.InfrastructureMaster),
         Name: st.domain.split('.')[0],
         NetBIOSName: st.netbios,
-        PDCEmulator: dc,
-        RIDMaster: dc,
+        PDCEmulator: fq(f.PDCEmulator),
+        ReplicaDirectoryServers: dcs,
+        RIDMaster: fq(f.RIDMaster),
         UsersContainer: `CN=Users,${st.domainDn}`,
         __toString: st.domainDn,
       }),
@@ -946,21 +1000,57 @@ adCmdlet('Get-ADDefaultDomainPasswordPolicy', {
   run(ctx) {
     const st = store(ctx.s)
     return [
-      psObject(`${NS}.ADDefaultDomainPasswordPolicy`, {
-        ComplexityEnabled: true,
-        DistinguishedName: st.domainDn,
-        LockoutDuration: '00:10:00',
-        LockoutObservationWindow: '00:10:00',
-        LockoutThreshold: 0,
-        MaxPasswordAge: '42.00:00:00',
-        MinPasswordAge: '1.00:00:00',
-        MinPasswordLength: 7,
-        PasswordHistoryCount: 24,
-        ReversibleEncryptionEnabled: false,
-      }),
+      psObject(`${NS}.ADDefaultDomainPasswordPolicy`, { ...passwordPolicy(st), DistinguishedName: st.domainDn }),
     ]
   },
 })
+
+export const DEFAULT_PASSWORD_POLICY = {
+  ComplexityEnabled: true,
+  LockoutDuration: '00:10:00',
+  LockoutObservationWindow: '00:10:00',
+  LockoutThreshold: 0,
+  MaxPasswordAge: '42.00:00:00',
+  MinPasswordAge: '1.00:00:00',
+  MinPasswordLength: 7,
+  PasswordHistoryCount: 24,
+  ReversibleEncryptionEnabled: false,
+}
+
+export function passwordPolicy(st: AdStore): Record<string, unknown> {
+  return (st.passwordPolicy ??= { ...DEFAULT_PASSWORD_POLICY })
+}
+
+/** Dueños de los roles FSMO (por defecto, el primer controlador del dominio). */
+export function fsmoOf(st: AdStore, fallback: string): Record<FsmoRole, string> {
+  return (st.fsmo ??= Object.fromEntries(FSMO_ROLES.map((r) => [r, fallback])) as Record<FsmoRole, string>)
+}
+
+export const DEFAULT_DOMAIN_POLICY_ID = '31b2f340-016d-11d2-945f-00c04fb984f9'
+export const DEFAULT_DC_POLICY_ID = '6ac1786c-016f-11d2-945f-00c04fb984f9'
+
+/** Las dos GPO que trae todo dominio nuevo. */
+export function defaultGpos(st: AdStore, when: Date) {
+  const pol = passwordPolicy(st)
+  const mk = (id: string, name: string, settings: GpoDef['settings']): StoredGpo => ({ id, name, status: 'AllSettingsEnabled', settings, apply: ['Authenticated Users'], readers: ['ENTERPRISE DOMAIN CONTROLLERS'], editors: ['Domain Admins', 'Enterprise Admins', 'SYSTEM'], description: '', created: when, modified: when, userVersion: 0, computerVersion: 3 })
+  const sec = (valueName: string, value: string | number, label: string) => ({ scope: 'Computer' as const, key: 'Security\\Account Policies', valueName, value, label })
+  st.gpos = [
+    mk(DEFAULT_DOMAIN_POLICY_ID, 'Default Domain Policy', [
+      sec('MinimumPasswordLength', toText(pol.MinPasswordLength), 'Computer Configuration > Policies > Windows Settings > Security Settings > Account Policies > Password Policy > Minimum password length'),
+      sec('PasswordComplexity', pol.ComplexityEnabled ? 1 : 0, 'Computer Configuration > Policies > Windows Settings > Security Settings > Account Policies > Password Policy > Password must meet complexity requirements'),
+      sec('MaximumPasswordAge', 42, 'Computer Configuration > Policies > Windows Settings > Security Settings > Account Policies > Password Policy > Maximum password age'),
+      sec('LockoutBadCount', toText(pol.LockoutThreshold), 'Computer Configuration > Policies > Windows Settings > Security Settings > Account Policies > Account Lockout Policy > Account lockout threshold'),
+    ]),
+    mk(DEFAULT_DC_POLICY_ID, 'Default Domain Controllers Policy', [
+      { scope: 'Computer', key: 'Security\\Local Policies\\User Rights Assignment', valueName: 'SeInteractiveLogonRight', value: 'Administrators, Backup Operators, Account Operators, Server Operators, Print Operators, ENTERPRISE DOMAIN CONTROLLERS', label: 'Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Allow log on locally' },
+    ]),
+  ]
+  st.links = [
+    { gpoId: DEFAULT_DOMAIN_POLICY_ID, target: st.domainDn, enabled: true, enforced: false, order: 1 },
+    { gpoId: DEFAULT_DC_POLICY_ID, target: `OU=Domain Controllers,${st.domainDn}`, enabled: true, enforced: false, order: 1 },
+  ]
+  st.blocked = []
+}
 
 /** Crea el dominio simulado a partir del estado del ejercicio. */
 export function buildAdStore(s: PsSession): AdStore | undefined {
@@ -1055,9 +1145,71 @@ export function buildAdStore(s: PsSession): AdStore | undefined {
     }
   }
 
-  const computer = (name: string, parent: string, os: string) =>
-    psObject(`${NS}.ADComputer`, { Name: name, SamAccountName: `${name}$`, DNSHostName: `${name.toLowerCase()}.${domain}`, Enabled: true, OperatingSystem: os, OperatingSystemVersion: os.includes('Server') ? '10.0 (26100)' : '10.0 (22631)', IPv4Address: null, LastLogonDate: new Date(), Description: null, UserPrincipalName: null, ObjectClass: 'computer', ObjectGUID: stableGuid(`computer:${name}`), SID: newSid(st), Created: created, Modified: created, __parent: parent })
-  st.computers.push(computer(s.state.equipo, `OU=Domain Controllers,${domainDn}`, 'Windows Server 2025 Standard'))
-  for (const c of ad.equipos) st.computers.push(computer(c.nombre, c.ou ? ensureOu(c.ou) : `CN=Computers,${domainDn}`, c.so ?? 'Windows 11 Pro'))
+  st.computers.push(computerObject(st, s.state.equipo, `OU=Domain Controllers,${domainDn}`, 'Windows Server 2025 Standard', created))
+  for (const c of ad.equipos) st.computers.push(computerObject(st, c.nombre, c.ou ? ensureOu(c.ou) : `CN=Computers,${domainDn}`, c.so ?? 'Windows 11 Pro', created))
+
+  st.forestMode = `${ad.nivel_funcional}Forest`
+  st.domainMode = `${ad.nivel_funcional}Domain`
+  st.recycleBin = ad.papelera
+  fsmoOf(st, s.state.equipo)
+  defaultGpos(st, created)
+  st.blocked = ad.bloquear_herencia.map((p) => ouPathToDn(p, domainDn))
+  const target = (a: string) => (a.toLowerCase() === 'dominio' ? domainDn : ouPathToDn(a, domainDn))
+  for (const g of ad.gpos) {
+    const id = stableGuid(`gpo:${g.nombre}`)
+    st.gpos!.push({
+      id,
+      name: g.nombre,
+      status: g.estado,
+      settings: g.configuracion.map((c) => ({ scope: /^HKCU|^HKEY_CURRENT_USER|^User/i.test(c.clave) ? 'User' : 'Computer', key: fullRegistryKey(c.clave), valueName: c.valor_nombre, value: c.valor, label: c.nombre_visible ?? policyLabel(c.clave, c.valor_nombre) })),
+      apply: g.aplicar_a,
+      readers: g.lectura ?? [...g.aplicar_a],
+      editors: ['Domain Admins', 'Enterprise Admins', 'SYSTEM'],
+      description: '',
+      created,
+      modified: created,
+      userVersion: 1,
+      computerVersion: 1,
+      wmi: g.wmi ? { name: g.wmi.nombre, matches: g.wmi.cumple } : undefined,
+    })
+    for (const v of g.vinculos) {
+      const t = target(v.a)
+      if (!sameDn(t, domainDn)) ensureOu(v.a)
+      const order = st.links!.filter((l) => sameDn(l.target, t)).length + 1
+      st.links!.push({ gpoId: id, target: t, enabled: v.habilitado, enforced: v.exigido, order })
+    }
+  }
   return st
+}
+
+/** Cuenta de equipo de AD. */
+export function computerObject(st: AdStore, name: string, parent: string, os: string, created = new Date()): PsObject {
+  return psObject(`${NS}.ADComputer`, { Name: name, SamAccountName: `${name}$`, DNSHostName: `${name.toLowerCase()}.${st.domain}`, Enabled: true, OperatingSystem: os, OperatingSystemVersion: os.includes('Server') ? '10.0 (26100)' : '10.0 (26100)', IPv4Address: null, LastLogonDate: new Date(), Description: null, UserPrincipalName: null, ObjectClass: 'computer', ObjectGUID: stableGuid(`computer:${name}`), SID: newSid(st), Created: created, Modified: created, __parent: parent })
+}
+
+/** Nombre de la directiva, como aparece en el editor, para las claves de registro más usadas. */
+export const POLICY_LABELS: Record<string, string> = {
+  'software\\microsoft\\windows\\currentversion\\policies\\system|disabletaskmgr': 'User Configuration > Policies > Administrative Templates > System > Ctrl+Alt+Del Options > Remove Task Manager',
+  'software\\microsoft\\windows\\currentversion\\policies\\system|disablecmd': 'User Configuration > Policies > Administrative Templates > System > Prevent access to the command prompt',
+  'software\\policies\\microsoft\\windows\\system|disablecmd': 'User Configuration > Policies > Administrative Templates > System > Prevent access to the command prompt',
+  'software\\microsoft\\windows\\currentversion\\policies\\explorer|nocontrolpanel': 'User Configuration > Policies > Administrative Templates > Control Panel > Prohibit access to Control Panel and PC settings',
+  'software\\policies\\microsoft\\windows\\control panel\\desktop|screensavetimeout': 'User Configuration > Policies > Administrative Templates > Control Panel > Personalization > Screen saver timeout',
+  'software\\policies\\microsoft\\windows\\control panel\\desktop|screensaverissecure': 'User Configuration > Policies > Administrative Templates > Control Panel > Personalization > Password protect the screen saver',
+  'software\\policies\\microsoft\\windows\\control panel\\desktop|scrnsave.exe': 'User Configuration > Policies > Administrative Templates > Control Panel > Personalization > Force specific screen saver',
+  'software\\policies\\microsoft\\windows\\windowsupdate\\au|noautoupdate': 'Computer Configuration > Policies > Administrative Templates > Windows Components > Windows Update > Manage end user experience > Configure Automatic Updates',
+  'software\\policies\\microsoft\\windows\\windowsupdate\\au|auoptions': 'Computer Configuration > Policies > Administrative Templates > Windows Components > Windows Update > Manage end user experience > Configure Automatic Updates',
+  'software\\policies\\microsoft\\windows\\windowsupdate|wuserver': 'Computer Configuration > Policies > Administrative Templates > Windows Components > Windows Update > Manage updates offered from Windows Server Update Service > Specify intranet Microsoft update service location',
+  'software\\policies\\microsoft\\windows\\removablestoragedevices|deny_all': 'Computer Configuration > Policies > Administrative Templates > System > Removable Storage Access > All Removable Storage classes: Deny all access',
+  'software\\policies\\microsoft\\windows nt\\terminal services|fdenytsconnections': 'Computer Configuration > Policies > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Connections > Allow users to connect remotely by using Remote Desktop Services',
+  'software\\policies\\microsoft\\windows\\personalization|nolockscreen': 'Computer Configuration > Policies > Administrative Templates > Control Panel > Personalization > Do not display the lock screen',
+}
+
+/** HKLM\\... → HKEY_LOCAL_MACHINE\\... (como lo guarda Set-GPRegistryValue). */
+export function fullRegistryKey(key: string): string {
+  return key.replace(/^HKLM\\/i, 'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i, 'HKEY_CURRENT_USER\\')
+}
+
+export function policyLabel(key: string, valueName: string): string | undefined {
+  const k = key.replace(/^(HKLM|HKCU|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\/i, '').toLowerCase()
+  return POLICY_LABELS[`${k}|${valueName.toLowerCase()}`]
 }

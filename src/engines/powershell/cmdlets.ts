@@ -733,7 +733,8 @@ cmdlet('Get-Date', {
   positional: ['Date'],
   synopsis: 'Gets the current date and time.',
   run(ctx) {
-    const d = has(ctx, 'Date') ? new Date(toText(param(ctx, 'Date'))) : new Date()
+    // El reloj del equipo puede estar corrido (desfase_reloj_min), como en los casos de Kerberos.
+    const d = has(ctx, 'Date') ? new Date(toText(param(ctx, 'Date'))) : new Date(Date.now() + ctx.s.state.desfase_reloj_min * 60_000)
     if (has(ctx, 'Format')) return [formatDotnetDate(d, str(ctx, 'Format')!)]
     return [d]
   },
@@ -1554,15 +1555,25 @@ cmdlet('Test-Connection', {
 })
 
 cmdlet('ping', {
+  native: true,
   synopsis: 'ping.exe',
   run(ctx) {
-    const target = toText(ctx.positional.find((p) => !toText(p).startsWith('-')) ?? '')
+    // Las opciones -n, -l, -w y -i llevan un valor detrás; el destino es lo que queda.
+    const args = ctx.positional.map(toText)
+    let target = ''
+    let count = 4
+    for (let i = 0; i < args.length; i++) {
+      if (/^[-/]n$/i.test(args[i])) count = Math.max(1, Number(args[++i]) || 4)
+      else if (/^[-/][lwi]$/i.test(args[i])) i++
+      else if (/^[-/]t$/i.test(args[i])) count = 6
+      else if (!/^[-/]/.test(args[i])) target = args[i]
+    }
     const ok = reachable(ctx.s, target)
     const ip = addressOf(ctx.s, target)
     if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ctx.s.lab?.find(target) && !reachable(ctx.s, target)) return [formatted(`Ping request could not find host ${target}. Please check the name and try again.\n`)]
     let text = `\nPinging ${ip === target ? target : `${target} [${ip}]`} with 32 bytes of data:\n`
-    for (let i = 0; i < 4; i++) text += ok ? `Reply from ${ip}: bytes=32 time<1ms TTL=128\n` : 'Request timed out.\n'
-    text += `\nPing statistics for ${ip}:\n    Packets: Sent = 4, Received = ${ok ? 4 : 0}, Lost = ${ok ? 0 : 4} (${ok ? 0 : 100}% loss),\n`
+    for (let i = 0; i < count; i++) text += ok ? `Reply from ${ip}: bytes=32 time<1ms TTL=128\n` : 'Request timed out.\n'
+    text += `\nPing statistics for ${ip}:\n    Packets: Sent = ${count}, Received = ${ok ? count : 0}, Lost = ${ok ? 0 : count} (${ok ? 0 : 100}% loss),\n`
     if (ok) text += 'Approximate round trip times in milli-seconds:\n    Minimum = 0ms, Maximum = 1ms, Average = 0ms\n'
     return [formatted(text)]
   },
@@ -1591,38 +1602,12 @@ cmdlet('Test-NetConnection', {
   },
 }, ['tnc'])
 
-cmdlet('Resolve-DnsName', {
-  params: ['Name', 'Type', 'Server'],
-  positional: ['Name'],
-  synopsis: 'Performs a DNS name query resolution for the specified name.',
-  module: 'DnsClient',
-  run(ctx) {
-    const name = str(ctx, 'Name') ?? ''
-    const records = (ctx.s.data.dnsRecords ?? []) as PsObject[]
-    const type = (str(ctx, 'Type') ?? 'A').toUpperCase()
-    const found = records.filter((r) => psEquals(r.Name, name) && psEquals(r.Type, type))
-    if (!found.length) throw new PsError(`${name} : DNS name does not exist`, 'ResourceUnavailable', 'DNS_ERROR_RCODE_NAME_ERROR,Microsoft.DnsClient.Commands.ResolveDnsName', name)
-    return found
-  },
-})
-
 cmdlet('hostname', { synopsis: 'hostname.exe', run: (ctx) => [ctx.s.state.equipo] })
 cmdlet('whoami', {
+  native: true,
   synopsis: 'whoami.exe',
   run: (ctx) => [`${(ctx.s.state.dominio?.split('.')[0] ?? ctx.s.state.equipo).toLowerCase()}\\${ctx.s.state.usuario.toLowerCase()}`],
 })
-
-for (const n of ['Restart-Computer', 'Stop-Computer']) {
-  cmdlet(n, {
-    params: ['ComputerName'],
-    switches: ['Force'],
-    synopsis: n === 'Restart-Computer' ? 'Restarts the operating system on local and remote computers.' : 'Stops (shuts down) local and remote computers.',
-    run(ctx) {
-      ctx.host('[simulador] El servidor no se reinicia ni se apaga en el simulador.\n')
-      return []
-    },
-  })
-}
 
 // ---------------------------------------------------------------------------------------
 // Eventos

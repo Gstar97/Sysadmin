@@ -139,7 +139,8 @@ function cellText(v: unknown): string {
 }
 
 export interface View {
-  kind: 'table' | 'list'
+  /** 'lines': cada objeto se muestra como su texto (MatchInfo de Select-String). */
+  kind: 'table' | 'list' | 'lines'
   columns: { label: string; value: (o: PsObject) => unknown; align?: 'left' | 'right' }[]
   /** Encabezado de grupo (por ejemplo "Directory: C:\..."). */
   groupBy?: (o: PsObject) => string
@@ -221,7 +222,8 @@ export function formatDefault(items: unknown[]): string {
           out += header
           out += view.kind === 'table' ? formatTable(members, view.columns as never).replace(/^\n/, '') : formatList(members, (o) => view.columns.map((c) => ({ label: c.label, value: c.value(o as PsObject) })))
         }
-      } else if (view.kind === 'table') out += formatTable(group, view.columns as never)
+      } else if (view.kind === 'lines') out += `\n${group.map((o) => toText(o)).join('\n')}\n\n`
+      else if (view.kind === 'table') out += formatTable(group, view.columns as never)
       else out += formatList(group, (o) => view.columns.map((c) => ({ label: c.label, value: c.value(o as PsObject) })))
       continue
     }

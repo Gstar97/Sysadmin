@@ -180,7 +180,12 @@ export interface CmdletDef {
   displayName?: string
   /** Cambia algo: con -WhatIf muestra qué haría (el texto) y no lo hace. */
   whatIf?: (ctx: CmdletContext) => string
+  /** Programa clásico (.exe): recibe todo como texto ("-n", "/all", "-type=srv"), sin parámetros de PowerShell. */
+  native?: boolean
 }
+
+/** Lo que corre cada vez que un equipo arranca (por ejemplo, aplicar las GPO de equipo). */
+export const BOOT_HOOKS: ((s: PsSession) => void)[] = []
 
 /** Parámetros comunes que aceptan todos los cmdlets. */
 const COMMON_PARAMS = ['ErrorAction', 'ErrorVariable', 'WarningAction', 'WarningVariable', 'OutVariable', 'InformationAction', 'Credential']
@@ -755,6 +760,16 @@ export class PsSession {
       if (a.k === 'splat') continue
       if (a.k === 'value') {
         positional.push(this.eval(a.e))
+        continue
+      }
+      if (def.native) {
+        // "-type=srv" llega partido en "-type" y "=srv": se vuelve a juntar.
+        const next = args[i + 1]
+        const nextText = !a.value && next?.k === 'value' ? toText(this.eval(next.e)) : undefined
+        if (nextText?.startsWith('=')) {
+          positional.push(`-${a.name}${nextText}`)
+          i++
+        } else positional.push(`-${a.name}${a.value ? `:${toText(this.eval(a.value))}` : ''}`)
         continue
       }
       const lower = a.name.toLowerCase()

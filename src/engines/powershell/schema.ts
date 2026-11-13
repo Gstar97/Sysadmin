@@ -129,6 +129,30 @@ const stateShape = {
       equipos: z
         .array(z.strictObject({ nombre: z.string(), ou: z.string().optional(), so: z.string().optional() }))
         .default([]),
+      /** Nivel funcional del bosque y del dominio. */
+      nivel_funcional: z.enum(['Windows2016', 'Windows2025']).default('Windows2025'),
+      /** Papelera de reciclaje de AD activada. */
+      papelera: z.boolean().default(false),
+      /** OUs con la herencia de directivas bloqueada. */
+      bloquear_herencia: z.array(z.string()).default([]),
+      gpos: z
+        .array(
+          z.strictObject({
+            nombre: z.string(),
+            estado: z.enum(['AllSettingsEnabled', 'UserSettingsDisabled', 'ComputerSettingsDisabled', 'AllSettingsDisabled']).default('AllSettingsEnabled'),
+            /** "dominio" o la ruta de una OU ("Empresa/Ventas"). */
+            vinculos: z.array(z.strictObject({ a: z.string(), exigido: z.boolean().default(false), habilitado: z.boolean().default(true) })).default([]),
+            configuracion: z
+              .array(z.strictObject({ clave: z.string(), valor_nombre: z.string(), valor: z.union([z.string(), z.number()]), nombre_visible: z.string().optional() }))
+              .default([]),
+            /** Quiénes tienen "Aplicar directiva de grupo". */
+            aplicar_a: z.array(z.string()).default(['Authenticated Users']),
+            /** Quiénes pueden leerla; si falta, los mismos de aplicar_a. */
+            lectura: z.array(z.string()).optional(),
+            wmi: z.strictObject({ nombre: z.string(), cumple: z.boolean() }).optional(),
+          }),
+        )
+        .default([]),
     })
     .optional(),
   dns: z.array(z.strictObject({ nombre: z.string(), tipo: z.enum(['A', 'AAAA', 'CNAME', 'MX']).default('A'), valor: z.string() })).default([]),
@@ -202,6 +226,30 @@ const psSingleCheckSchema = z.union([
   z.strictObject({ escritorio_remoto: z.boolean() }),
   z.strictObject({ variable: z.string(), valor: z.string().optional(), existe: z.boolean().default(true) }),
   z.strictObject({ funcion: z.string(), existe: z.boolean().default(true) }),
+  z.strictObject({
+    gpo: z.string(),
+    existe: z.boolean().default(true),
+    /** "dominio" o la ruta de una OU. */
+    vinculada_a: z.string().optional(),
+    exigida: z.boolean().optional(),
+    vinculo_habilitado: z.boolean().optional(),
+    configura: z.strictObject({ clave: z.string(), valor_nombre: z.string(), valor: z.union([z.string(), z.number()]).optional() }).optional(),
+    aplica_a_grupo: z.string().optional(),
+  }),
+  z.strictObject({ herencia_bloqueada: z.string(), bloqueada: z.boolean().default(true) }),
+  /** La GPO se aplica (según el RSoP actual) al usuario o equipo "a". */
+  z.strictObject({ gpo_aplicada: z.string(), a: z.string(), aplicada: z.boolean().default(true) }),
+  /** En el RSoP de "a", la configuración la gana esa GPO. */
+  z.strictObject({ gpo_ganadora: z.string(), a: z.string(), clave: z.string(), valor_nombre: z.string() }),
+  z.strictObject({ es_controlador: z.boolean() }),
+  z.strictObject({ unido_a: z.string() }),
+  z.strictObject({ papelera_ad: z.boolean() }),
+  z.strictObject({ reloj_desfase_max: z.number() }),
+  z.strictObject({ dns_cliente: z.array(z.string()) }),
+  z.strictObject({ fsmo: z.enum(['SchemaMaster', 'DomainNamingMaster', 'PDCEmulator', 'RIDMaster', 'InfrastructureMaster']), en_equipo: z.string() }),
+  z.strictObject({ cuenta_servicio: z.string(), existe: z.boolean().default(true), instalada: z.boolean().optional() }),
+  z.strictObject({ politica_contrasenas: z.strictObject({ longitud_minima: z.number().optional(), umbral_bloqueo: z.number().optional(), complejidad: z.boolean().optional() }) }),
+  z.strictObject({ politica_resultante: z.string(), politica: z.string() }),
 ])
 
 export const psCheckSchema = z.union([psSingleCheckSchema, z.strictObject({ en: z.string(), verificar: psSingleCheckSchema })])

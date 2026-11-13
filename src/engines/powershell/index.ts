@@ -1,10 +1,14 @@
 import './cmdlets'
 import './remoting'
 import './system'
-import { buildAdStore, ouPathToDn, store, type AdStore } from './ad'
+import './dns'
+import './ad-ops'
+import { initialGroupPolicy } from './gpo'
+import { buildAdStore, computerObject, ouPathToDn, sameDn, store, type AdStore } from './ad'
 import { BASE_RULES, DC_RULES, Lab, ruleObject } from './machine'
 import { psCheckSchema, psStateSchema, type PsCheckInput, type PsServerState, type PsStateInput } from './schema'
 import { asArray, PsSession } from './session'
+import { verifyAd } from './verify-ad'
 import { verifySystem } from './verify-system'
 import { psObject, toText, type PsObject } from './values'
 
@@ -102,7 +106,20 @@ export function createPsSession(input: PsStateInput = {}): PsSession {
     if (st.ad && st.dominio && !lab.adStores.has(st.dominio.toLowerCase())) lab.adStores.set(st.dominio.toLowerCase(), buildAdStore({ state: st } as PsSession))
   }
   for (const srv of servidores) lab.register(srv)
-  return buildComputer(own, lab)
+  // Cada miembro del dominio tiene su cuenta de equipo (los DC en "Domain Controllers").
+  for (const st of [own, ...servidores]) {
+    const ad = st.dominio ? (lab.adStores.get(st.dominio.toLowerCase()) as AdStore | undefined) : undefined
+    if (!ad) continue
+    const dcOu = `OU=Domain Controllers,${ad.domainDn}`
+    const dc = isDomainController(st, lab)
+    const c = ad.computers.find((x) => toText(x.Name).toLowerCase() === st.equipo.toLowerCase())
+    if (c && dc && !sameDn(toText(c.__parent), dcOu)) c.__parent = dcOu
+    if (!c) ad.computers.push(computerObject(ad, st.equipo, dc ? dcOu : `CN=Computers,${ad.domainDn}`, st.experiencia === 'core' || dc || !/^PC|^NB|^WS/i.test(st.equipo) ? `Windows Server 2025 ${st.edicion}` : 'Windows 11 Pro'))
+  }
+  const root = buildComputer(own, lab)
+  // Los demás equipos se arman ya, con las GPO que tienen aplicadas al empezar el ejercicio.
+  for (const srv of servidores) lab.find(srv.equipo)
+  return root
 }
 
 /** Es controlador de dominio: trae la base de AD en su estado o es otro DC de un dominio que existe. */
@@ -266,6 +283,7 @@ function buildComputer(state: PsServerState, lab: Lab): PsSession {
   s.executionPolicy = state.politica_ejecucion
   // Sin servidor DHCP la placa queda con una dirección automática 169.254.x.x (/16).
   if (state.red.ip.startsWith('169.254.')) state.red.prefijo = 16
+  initialGroupPolicy(s)
   return s
 }
 
@@ -367,7 +385,7 @@ export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
     const re = safeRegex(check.comando_usado, 'i')
     return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
   }
-  return verifySystem(s, check)
+  return verifyAd(s, check) ?? verifySystem(s, check)
 }
 
 function safeRegex(pattern: string, flags: string): RegExp | undefined {
