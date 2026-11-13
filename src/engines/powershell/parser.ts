@@ -21,18 +21,46 @@ export type Expr =
   | { k: 'static'; type: string; member: string; call?: Expr[] }
   | { k: 'range'; from: Expr; to: Expr }
 
-export type Arg = { k: 'param'; name: string; value?: Expr } | { k: 'value'; e: Expr }
+export type Arg = { k: 'param'; name: string; value?: Expr } | { k: 'value'; e: Expr } | { k: 'splat'; name: string }
+
+/** Un parámetro de una función o un script (param(...)). */
+export interface ParamSpec {
+  name: string
+  type?: string
+  def?: Expr
+  mandatory: boolean
+  pipeline: boolean
+  validateSet?: string[]
+}
+
+/** Redirección al final de un pipeline: > archivo, >> archivo, 2> archivo, 2>&1, *> archivo. */
+export interface Redirect {
+  stream: 'out' | 'err' | 'all'
+  append: boolean
+  target?: Expr
+  merge?: boolean
+}
 
 export type Element = { k: 'cmd'; name: string; args: Arg[]; src: string } | { k: 'expr'; e: Expr }
 
 export type Stmt =
-  | { k: 'pipe'; elements: Element[]; src: string }
-  | { k: 'assign'; target: Expr; op: '=' | '+=' | '-='; value: Stmt }
+  | { k: 'pipe'; elements: Element[]; src: string; redirects?: Redirect[] }
+  | { k: 'assign'; target: Expr; op: '=' | '+=' | '-=' | '*=' | '/='; value: Stmt; cast?: string }
+  | { k: 'incr'; target: Expr; delta: 1 | -1 }
   | { k: 'if'; clauses: { cond: Stmt; body: Stmt[] }[]; elseBody?: Stmt[] }
   | { k: 'foreach'; varName: string; coll: Stmt; body: Stmt[] }
   | { k: 'while'; cond: Stmt; body: Stmt[] }
-  | { k: 'function'; name: string; params: string[]; body: Stmt[] }
+  | { k: 'function'; name: string; params: ParamSpec[]; body: Stmt[]; blocks?: { begin?: Stmt[]; process?: Stmt[]; end?: Stmt[] } }
+  | { k: 'param'; params: ParamSpec[] }
   | { k: 'return'; value?: Stmt }
+  | { k: 'try'; body: Stmt[]; catches: { types: string[]; body: Stmt[] }[]; fin?: Stmt[] }
+  | { k: 'throw'; value?: Stmt }
+  | { k: 'switch'; value: Stmt; flags: { wildcard: boolean; regex: boolean; cs: boolean }; cases: { pattern: Expr | 'default'; body: Stmt[] }[] }
+  | { k: 'for'; init?: Stmt; cond?: Stmt; step?: Stmt; body: Stmt[] }
+  | { k: 'do'; body: Stmt[]; cond: Stmt; until: boolean }
+  | { k: 'break' }
+  | { k: 'continue' }
+  | { k: 'exit'; value?: Stmt }
 
 export class PsIncomplete extends Error {}
 export class PsParseError extends Error {}
@@ -57,7 +85,11 @@ export function parsePs(src: string): Stmt[] {
       const c = peek()
       if (c === ' ' || c === '\t' || c === '\r' || (newlines && c === '\n')) pos++
       else if (c === '`' && peek(1) === '\n') pos += 2
-      else if (c === '#') {
+      else if (c === '<' && peek(1) === '#') {
+        const end = src.indexOf('#>', pos + 2)
+        if (end < 0) throw new PsIncomplete()
+        pos = end + 2
+      } else if (c === '#') {
         while (!eof() && peek() !== '\n') pos++
       } else break
     }
@@ -71,6 +103,82 @@ export function parsePs(src: string): Stmt[] {
   const word = (): string => {
     const m = /^[A-Za-z_][A-Za-z0-9_-]*/.exec(src.slice(pos))
     return m ? m[0] : ''
+  }
+
+  /** Lee desde un '[' hasta su ']' (respetando paréntesis y comillas) y devuelve el texto completo. */
+  const readBracket = (): string => {
+    const start = pos
+    let depth = 0
+    let quote = ''
+    while (true) {
+      if (eof()) throw new PsIncomplete()
+      const c = peek()
+      if (quote) {
+        if (c === quote) quote = ''
+      } else if (c === "'" || c === '"') quote = c
+      else if (c === '[' || c === '(') depth++
+      else if (c === ']' || c === ')') {
+        depth--
+        if (depth === 0) {
+          pos++
+          break
+        }
+      }
+      pos++
+    }
+    return src.slice(start, pos)
+  }
+
+  /** Lista de parámetros: [Parameter(Mandatory)][string]$Nombre = 'valor', [switch]$Force */
+  function parseParamList(): ParamSpec[] {
+    expect('(')
+    const out: ParamSpec[] = []
+    let cur: ParamSpec = { name: '', mandatory: false, pipeline: false }
+    while (true) {
+      skipWs(true)
+      if (eof()) throw new PsIncomplete()
+      const c = peek()
+      if (c === ')') {
+        pos++
+        if (cur.name) out.push(cur)
+        break
+      }
+      if (c === ',') {
+        pos++
+        if (cur.name) out.push(cur)
+        cur = { name: '', mandatory: false, pipeline: false }
+        continue
+      }
+      if (c === '[') {
+        const inner = readBracket().slice(1, -1).trim()
+        if (/^[A-Za-z0-9_.]+(\[\])?$/.test(inner)) cur.type = inner
+        else {
+          const attr = (/^([A-Za-z.]+)/.exec(inner)?.[1] ?? '').toLowerCase()
+          if (attr === 'parameter') {
+            cur.mandatory = /\bMandatory\b(?!\s*=\s*\$false)/i.test(inner)
+            cur.pipeline = /\bValueFromPipeline\b(?!ByPropertyName)(?!\s*=\s*\$false)/i.test(inner)
+          }
+          if (attr === 'validateset') cur.validateSet = [...inner.matchAll(/'([^']*)'|"([^"]*)"/g)].map((m) => m[1] ?? m[2])
+        }
+        continue
+      }
+      if (c === '$') {
+        pos++
+        const n = word()
+        if (!n) throw new PsParseError('Missing variable name in parameter list.')
+        pos += n.length
+        cur.name = n
+        skipWs()
+        if (peek() === '=' && peek(1) !== '=') {
+          pos++
+          skipWs(true)
+          cur.def = parseUnary()
+        }
+        continue
+      }
+      throw new PsParseError(`Unexpected token '${c}' in parameter list.`)
+    }
+    return out
   }
 
   function parseStatements(endChar?: string): Stmt[] {
@@ -108,7 +216,146 @@ export function parsePs(src: string): Stmt[] {
 
   function parseStatement(): Stmt {
     skipWs()
+    // [CmdletBinding()] antes del param(...) de un script o función: no cambia nada acá.
+    const attrLine = /^\[(CmdletBinding|OutputType)\b/i.exec(src.slice(pos))
+    if (attrLine) {
+      readBracket()
+      skipWs(true)
+      return parseStatement()
+    }
+    // Asignación con tipo: [int]$x = 5
+    const typed = /^\[([A-Za-z0-9_.]+(\[\])?)\]\s*(?=\$)/.exec(src.slice(pos))
+    if (typed) {
+      const save = pos
+      pos += typed[0].length
+      const target = parsePostfix()
+      skipWs()
+      if (peek() === '=' && peek(1) !== '=') {
+        pos++
+        skipWs(true)
+        return { k: 'assign', target, op: '=', value: parseStatement(), cast: typed[1] }
+      }
+      pos = save
+    }
     const kw = word().toLowerCase()
+    const rest = src.slice(pos)
+    if (kw === 'param' && /^param\s*\(/i.test(rest)) {
+      pos += 5
+      skipWs()
+      return { k: 'param', params: parseParamList() }
+    }
+    if (kw === 'try' && /^try\s*\{/i.test(rest)) {
+      pos += 3
+      const body = parseBlock()
+      const catches: { types: string[]; body: Stmt[] }[] = []
+      let fin: Stmt[] | undefined
+      while (true) {
+        const save = pos
+        skipWs(true)
+        const w = word().toLowerCase()
+        if (w === 'catch') {
+          pos += 5
+          skipWs()
+          const types: string[] = []
+          while (peek() === '[') {
+            const m = /^\[([A-Za-z0-9_.]+)\]/.exec(src.slice(pos))
+            if (!m) throw new PsParseError('Unexpected token in catch type.')
+            types.push(m[1])
+            pos += m[0].length
+            skipWs()
+            if (peek() === ',') {
+              pos++
+              skipWs(true)
+            }
+          }
+          catches.push({ types, body: parseBlock() })
+        } else if (w === 'finally') {
+          pos += 7
+          fin = parseBlock()
+          break
+        } else {
+          pos = save
+          break
+        }
+      }
+      if (!catches.length && !fin) throw new PsParseError('The Try statement is missing its Catch or Finally block.')
+      return { k: 'try', body, catches, fin }
+    }
+    if (kw === 'throw') {
+      pos += 5
+      skipWs()
+      if (eof() || peek() === '\n' || peek() === ';' || peek() === '}') return { k: 'throw' }
+      return { k: 'throw', value: parsePipeline() }
+    }
+    if (kw === 'switch' && /^switch\s*[-(]/i.test(rest)) {
+      pos += 6
+      const flags = { wildcard: false, regex: false, cs: false }
+      while (true) {
+        skipWs()
+        const m = /^-(wildcard|regex|exact|casesensitive)\b/i.exec(src.slice(pos))
+        if (!m) break
+        pos += m[0].length
+        const f = m[1].toLowerCase()
+        if (f === 'wildcard') flags.wildcard = true
+        if (f === 'regex') flags.regex = true
+        if (f === 'casesensitive') flags.cs = true
+      }
+      const value = parseCondition()
+      expect('{')
+      const cases: { pattern: Expr | 'default'; body: Stmt[] }[] = []
+      while (true) {
+        skipWs(true)
+        while (peek() === ';') {
+          pos++
+          skipWs(true)
+        }
+        if (eof()) throw new PsIncomplete()
+        if (peek() === '}') {
+          pos++
+          break
+        }
+        let pattern: Expr | 'default'
+        if (/^default\s*\{/i.test(src.slice(pos))) {
+          pos += 7
+          pattern = 'default'
+        } else pattern = peek() === '{' ? parsePrimary() : parsePostfix()
+        cases.push({ pattern, body: parseBlock() })
+      }
+      return { k: 'switch', value, flags, cases }
+    }
+    if (kw === 'for' && /^for\s*\(/i.test(rest)) {
+      pos += 3
+      expect('(')
+      skipWs(true)
+      const init = peek() === ';' ? undefined : parseStatement()
+      expect(';')
+      skipWs(true)
+      const cond = peek() === ';' ? undefined : parseStatement()
+      expect(';')
+      skipWs(true)
+      const step = peek() === ')' ? undefined : parseStatement()
+      expect(')')
+      return { k: 'for', init, cond, step, body: parseBlock() }
+    }
+    if (kw === 'do' && /^do\s*\{/i.test(rest)) {
+      pos += 2
+      const body = parseBlock()
+      skipWs(true)
+      const w = word().toLowerCase()
+      if (w !== 'while' && w !== 'until') throw new PsParseError("Missing while or until keyword in do loop.")
+      pos += w.length
+      return { k: 'do', body, cond: parseCondition(), until: w === 'until' }
+    }
+    if ((kw === 'break' || kw === 'continue') && /^(break|continue)\b/i.test(rest)) {
+      pos += kw.length
+      return { k: kw }
+    }
+    if (kw === 'exit' && /^exit\b/i.test(rest)) {
+      pos += 4
+      skipWs()
+      if (eof() || peek() === '\n' || peek() === ';' || peek() === '}') return { k: 'exit' }
+      return { k: 'exit', value: parsePipeline() }
+    }
     if (kw === 'if') {
       pos += 2
       const clauses = [{ cond: parseCondition(), body: parseBlock() }]
@@ -151,32 +398,31 @@ export function parsePs(src: string): Stmt[] {
       pos += 5
       return { k: 'while', cond: parseCondition(), body: parseBlock() }
     }
-    if (kw === 'function') {
-      pos += 8
+    if ((kw === 'function' || kw === 'filter') && /^(function|filter)\s+[A-Za-z_]/i.test(rest)) {
+      pos += kw.length
       skipWs()
-      const name = word()
+      const name = /^[A-Za-z_][A-Za-z0-9_-]*/.exec(src.slice(pos))![0]
       pos += name.length
       skipWs()
-      const params: string[] = []
-      if (peek() === '(') {
-        pos++
-        while (true) {
-          skipWs(true)
-          if (peek() === ')') {
-            pos++
-            break
-          }
-          if (peek() === '$') {
-            pos++
-            const n = word()
-            pos += n.length
-            params.push(n)
-          } else if (peek() === ',') pos++
-          else if (eof()) throw new PsIncomplete()
-          else pos++
-        }
+      let params: ParamSpec[] = peek() === '(' ? parseParamList() : []
+      let body = parseBlock()
+      if (body[0]?.k === 'param') {
+        params = body[0].params
+        body = body.slice(1)
       }
-      return { k: 'function', name, params, body: parseBlock() }
+      // Bloques begin / process / end de una función avanzada.
+      const named = (st: Stmt) => (st.k === 'pipe' && st.elements.length === 1 && st.elements[0].k === 'cmd' && /^(begin|process|end)$/i.test(st.elements[0].name) && st.elements[0].args.length === 1 && st.elements[0].args[0].k === 'value' && st.elements[0].args[0].e.k === 'sb' ? st.elements[0] : undefined)
+      if (body.length && body.every((st) => named(st))) {
+        const blocks: { begin?: Stmt[]; process?: Stmt[]; end?: Stmt[] } = {}
+        for (const st of body) {
+          const el = named(st)!
+          const sb = (el.args[0] as { k: 'value'; e: { k: 'sb'; body: Stmt[] } }).e
+          blocks[el.name.toLowerCase() as 'begin'] = sb.body
+        }
+        return { k: 'function', name, params, body: [], blocks }
+      }
+      if (kw === 'filter') return { k: 'function', name, params, body: [], blocks: { process: body } }
+      return { k: 'function', name, params, body }
     }
     if (kw === 'return') {
       pos += 6
@@ -190,7 +436,12 @@ export function parsePs(src: string): Stmt[] {
       try {
         const target = parsePostfix()
         skipWs()
-        const op = /^(\+=|-=|=(?!=))/.exec(src.slice(pos))?.[0]
+        const incr = /^(\+\+|--)(?![\w$])/.exec(src.slice(pos))?.[0]
+        if (incr && (target.k === 'var' || target.k === 'member' || target.k === 'index')) {
+          pos += 2
+          return { k: 'incr', target, delta: incr === '++' ? 1 : -1 }
+        }
+        const op = /^(\+=|-=|\*=|\/=|=(?!=))/.exec(src.slice(pos))?.[0]
         if (op && (target.k === 'var' || target.k === 'member' || target.k === 'index')) {
           pos += op.length
           skipWs(true)
@@ -207,6 +458,7 @@ export function parsePs(src: string): Stmt[] {
   function parsePipeline(): Stmt {
     const start = pos
     const elements: Element[] = [parseElement()]
+    const redirects: Redirect[] = []
     while (true) {
       skipWs()
       if (peek() === '|' && peek(1) !== '|') {
@@ -214,9 +466,22 @@ export function parsePs(src: string): Stmt[] {
         skipWs(true)
         if (eof()) throw new PsIncomplete()
         elements.push(parseElement())
-      } else break
+        continue
+      }
+      const r = /^([*1-6])?(>>?)(&1)?/.exec(src.slice(pos))
+      if (r && peek() !== '-') {
+        pos += r[0].length
+        const stream = r[1] === '2' ? 'err' : r[1] === '*' ? 'all' : 'out'
+        if (r[3]) redirects.push({ stream, append: false, merge: true })
+        else {
+          skipWs()
+          redirects.push({ stream, append: r[2] === '>>', target: parseArgPrimary() })
+        }
+        continue
+      }
+      break
     }
-    return { k: 'pipe', elements, src: src.slice(start, pos).trim() }
+    return { k: 'pipe', elements, src: src.slice(start, pos).trim(), ...(redirects.length ? { redirects } : {}) }
   }
 
   function parseElement(): Element {
@@ -246,6 +511,14 @@ export function parsePs(src: string): Stmt[] {
       skipWs()
       const c = peek()
       if (eof() || c === '\n' || c === ';' || c === ')' || c === '}' || (c === '|' && peek(1) !== '|')) break
+      if (/^([*1-6])?>/.test(src.slice(pos))) break
+      if (c === '@' && /[A-Za-z_]/.test(peek(1))) {
+        pos++
+        const n = word()
+        pos += n.length
+        args.push({ k: 'splat', name: n })
+        continue
+      }
       if (c === '-' && /[A-Za-z]/.test(peek(1))) {
         pos++
         const m = /^[A-Za-z][A-Za-z0-9_]*/.exec(src.slice(pos))!
@@ -518,7 +791,7 @@ export function parsePs(src: string): Stmt[] {
         pos = end + 1
         return { k: 'var', name }
       }
-      const m = /^\$((?:env|global|script):)?([A-Za-z_?][A-Za-z0-9_]*|_|\?)/i.exec(src.slice(pos))
+      const m = /^\$((?:env|global|script|using|local):)?([A-Za-z_?][A-Za-z0-9_]*|_|\?)/i.exec(src.slice(pos))
       if (!m) {
         pos++
         return { k: 'str', v: '$', expand: false }
@@ -533,6 +806,15 @@ export function parsePs(src: string): Stmt[] {
       expect(')')
       if (st.k === 'pipe' && st.elements.length === 1 && st.elements[0].k === 'expr') return st.elements[0].e
       return { k: 'sub', body: [st] }
+    }
+    if (c === '@' && (peek(1) === '"' || peek(1) === "'") && /^@["'][ \t]*\r?\n/.test(src.slice(pos))) {
+      const q = peek(1)
+      const startBody = src.indexOf('\n', pos) + 1
+      const close = src.indexOf(`\n${q}@`, startBody - 1)
+      if (close < 0) throw new PsIncomplete()
+      const text = src.slice(startBody, close).replace(/\r$/, '')
+      pos = close + 3
+      return q === '"' ? { k: 'str', v: text.replace(/"/g, '`"'), expand: true } : { k: 'str', v: text, expand: false }
     }
     if (c === '@' && peek(1) === '(') {
       pos += 2

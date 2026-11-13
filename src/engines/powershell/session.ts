@@ -1,6 +1,6 @@
 import type { PsState } from './schema'
-import { parsePs, PsIncomplete, PsParseError, type Arg, type Element, type Expr, type Stmt } from './parser'
-import { formatDefault, getProp, isPsObject, isScriptBlock, propNames, psObject, setProp, toText, type PsObject, type ScriptBlock } from './values'
+import { parsePs, PsIncomplete, PsParseError, type Arg, type Element, type Expr, type ParamSpec, type Redirect, type Stmt } from './parser'
+import { formatDefault, getProp, isPsObject, isScriptBlock, propNames, psObject, setProp, toText, typeName, type PsObject, type ScriptBlock } from './values'
 
 export interface OutputChunk {
   text: string
@@ -20,6 +20,46 @@ export class PsError extends Error {
 
 class ReturnSignal {
   constructor(public value: unknown[]) {}
+}
+class BreakSignal {}
+class ContinueSignal {}
+class ExitSignal {
+  constructor(public code: number) {}
+}
+/** Un throw: termina el script (o lo atrapa un try). */
+export class ThrowSignal extends Error {
+  constructor(public record: PsObject) {
+    super(toText(getProp(getProp(record, 'Exception'), 'Message')))
+  }
+}
+
+/** Tipo de la excepción de un error, como lo muestra PowerShell (para catch [Tipo]). */
+function exceptionType(errorId: string): string {
+  const first = errorId.split(',')[0]
+  if (/Exception$/.test(first)) return first.includes('.') ? first : `System.${first}`
+  const map: Record<string, string> = {
+    CommandNotFoundException: 'System.Management.Automation.CommandNotFoundException',
+    ObjectNotFound: 'Microsoft.PowerShell.Commands.ObjectNotFoundException',
+    UnauthorizedAccess: 'System.UnauthorizedAccessException',
+    PathNotFound: 'System.Management.Automation.ItemNotFoundException',
+    NamedParameterNotFound: 'System.Management.Automation.ParameterBindingException',
+    MissingArgument: 'System.Management.Automation.ParameterBindingException',
+    AmbiguousParameter: 'System.Management.Automation.ParameterBindingException',
+    ParameterArgumentValidationError: 'System.Management.Automation.ParameterBindingValidationException',
+  }
+  return map[first] ?? 'System.Management.Automation.RuntimeException'
+}
+
+export function errorRecord(message: string, category = 'NotSpecified', errorId = 'RuntimeException', target: unknown = null, typeName?: string): PsObject {
+  const type = typeName ?? exceptionType(errorId)
+  const exception = psObject(type, { Message: message, __toString: message })
+  return psObject('System.Management.Automation.ErrorRecord', {
+    Exception: exception,
+    TargetObject: target,
+    CategoryInfo: psObject('System.Management.Automation.ErrorCategoryInfo', { Category: category, Reason: type.split('.').pop(), TargetName: toText(target), __toString: `${category}: (${toText(target)}:String) [], ${type.split('.').pop()}` }),
+    FullyQualifiedErrorId: errorId,
+    __toString: message,
+  })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -135,7 +175,13 @@ export interface CmdletDef {
   syntax?: string
   module?: string
   displayName?: string
+  /** Cambia algo: con -WhatIf muestra qué haría (el texto) y no lo hace. */
+  whatIf?: (ctx: CmdletContext) => string
 }
+
+/** Parámetros comunes que aceptan todos los cmdlets. */
+const COMMON_PARAMS = ['ErrorAction', 'ErrorVariable', 'WarningAction', 'WarningVariable', 'OutVariable', 'InformationAction', 'Credential']
+const COMMON_SWITCHES = ['Verbose', 'Debug', 'WhatIf', 'Confirm']
 
 export const CMDLETS = new Map<string, CmdletDef>()
 export const ALIASES = new Map<string, string>()
@@ -184,9 +230,21 @@ export function truthy(v: unknown): boolean {
   return !!v
 }
 
+interface FunctionDef {
+  params: ParamSpec[]
+  body: Stmt[]
+  blocks?: { begin?: Stmt[]; process?: Stmt[]; end?: Stmt[] }
+}
+
 export class PsSession {
-  vars = new Map<string, unknown>()
-  functions = new Map<string, { params: string[]; body: Stmt[] }>()
+  /** Alcances de variables: [0] es el global; las funciones y los scripts apilan el suyo. */
+  scopes: Map<string, unknown>[] = [new Map()]
+  /** Índice del alcance del script que se está ejecutando (para $script:). */
+  scriptScope = 0
+  /** Variables $using: de un Invoke-Command en curso. */
+  usingVars?: Map<string, unknown>
+  functions = new Map<string, FunctionDef>()
+  errors: PsObject[] = []
   fs = new WinFS()
   cwd: string
   home: string
@@ -198,6 +256,10 @@ export class PsSession {
   /** Objetos de la sesión (servicios, procesos, AD...) que usan los cmdlets. */
   data: Record<string, unknown[]> = {}
 
+  get vars(): Map<string, unknown> {
+    return this.scopes[0]
+  }
+
   constructor(state: PsState) {
     this.state = state
     this.home = `C:\\Users\\${state.usuario}`
@@ -208,6 +270,10 @@ export class PsSession {
     this.vars.set('home', this.home)
     this.vars.set('pshome', 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0')
     this.vars.set('psversiontable', new Map<string, unknown>([['PSVersion', '5.1.26100.2161'], ['PSEdition', 'Desktop'], ['BuildVersion', '10.0.26100.2161']]))
+    this.vars.set('error', this.errors)
+    this.vars.set('erroractionpreference', 'Continue')
+    this.vars.set('?', true)
+    this.vars.set('lastexitcode', 0)
   }
 
   prompt() {
@@ -233,12 +299,49 @@ export class PsSession {
       }
       return env[name.slice(4).toLowerCase()] ?? null
     }
-    const v = this.vars.get(name.toLowerCase())
-    return v === undefined ? null : v
+    const lower = name.toLowerCase()
+    const m = /^(global|script|using|local):(.+)$/.exec(lower)
+    if (m) {
+      if (m[1] === 'global') return this.scopes[0].get(m[2]) ?? null
+      if (m[1] === 'script') return this.scopes[this.scriptScope].get(m[2]) ?? null
+      if (m[1] === 'using') return this.usingVars?.get(m[2]) ?? null
+      return this.scopes[this.scopes.length - 1].get(m[2]) ?? null
+    }
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      const v = this.scopes[i].get(lower)
+      if (v !== undefined) return v
+    }
+    return null
   }
 
   setVar(name: string, value: unknown) {
-    this.vars.set(name.toLowerCase(), value)
+    const lower = name.toLowerCase()
+    const m = /^(global|script|local):(.+)$/.exec(lower)
+    if (m) {
+      const scope = m[1] === 'global' ? this.scopes[0] : m[1] === 'script' ? this.scopes[this.scriptScope] : this.scopes[this.scopes.length - 1]
+      scope.set(m[2], value)
+      return
+    }
+    this.scopes[this.scopes.length - 1].set(lower, value)
+  }
+
+  /** Ejecuta algo en un alcance nuevo (función o script) y lo descarta al terminar. */
+  withScope<T>(fn: () => T, script = false): T {
+    this.scopes.push(new Map())
+    const prevScript = this.scriptScope
+    if (script) this.scriptScope = this.scopes.length - 1
+    try {
+      return fn()
+    } finally {
+      this.scopes.pop()
+      this.scriptScope = prevScript
+    }
+  }
+
+  /** Registra un error en $Error (el más reciente primero, como PowerShell). */
+  recordError(rec: PsObject) {
+    this.errors.unshift(rec)
+    if (this.errors.length > 256) this.errors.length = 256
   }
 
   async run(source: string): Promise<{ chunks: OutputChunk[]; incomplete?: boolean }> {
@@ -267,8 +370,13 @@ export class PsSession {
         const result = this.execStmt(st, out('err'), out('out'))
         if (result.length) out('out')(this.render(result))
       } catch (e) {
-        if (e instanceof PsError) out('err')(this.formatError(e, st))
+        if (e instanceof PsError) {
+          this.recordError(errorRecord(e.message, e.category, e.errorId, e.target))
+          out('err')(this.formatError(e, st))
+        } else if (e instanceof ThrowSignal) out('err')(this.throwText(e, st))
         else if (e instanceof ReturnSignal) out('out')(this.render(e.value))
+        else if (e instanceof ExitSignal) break
+        else if (e instanceof BreakSignal || e instanceof ContinueSignal) continue
         else out('err')(`Error interno del simulador: ${(e as Error).message}\n`)
       }
     }
@@ -280,6 +388,13 @@ export class PsSession {
     const formatted = items.filter((i) => isPsObject(i) && i.__type === '__formatted') as PsObject[]
     if (formatted.length === items.length) return formatted.map((f) => f.text as string).join('')
     return formatDefault(items.map((i) => (isPsObject(i) && i.__type === '__formatted' ? (i.text as string) : i)))
+  }
+
+  /** Texto de un throw que nadie atrapó. */
+  throwText(e: ThrowSignal, st: Stmt): string {
+    const src = st.k === 'pipe' ? st.src : st.k === 'throw' ? `throw${st.value?.k === 'pipe' ? ` ${st.value.src}` : ''}` : 'throw'
+    const id = toText(getProp(e.record, 'FullyQualifiedErrorId'))
+    return `${e.message}\nAt line:1 char:1\n+ ${src}\n+ ${'~'.repeat(Math.max(1, src.length))}\n    + CategoryInfo          : OperationStopped: (${e.message}:String) [], RuntimeException\n    + FullyQualifiedErrorId : ${id === 'RuntimeException' ? e.message : id}\n \n`
   }
 
   formatError(e: PsError, st: Stmt): string {
@@ -299,22 +414,41 @@ export class PsSession {
   // Sentencias
   // ---------------------------------------------------------------------------
 
+  /** Profundidad de try en curso: adentro, un error que corta la sentencia sube hasta el catch. */
+  tryDepth = 0
+
   execBlock(body: Stmt[], err: (s: string) => void, host: (s: string) => void): unknown[] {
     const out: unknown[] = []
     for (const st of body) {
       try {
         out.push(...this.execStmt(st, err, host))
+        this.vars.set('?', true)
       } catch (e) {
-        if (e instanceof PsError) err(this.formatError(e, st))
-        else throw e
+        if (e instanceof PsError && this.tryDepth === 0) {
+          this.recordError(errorRecord(e.message, e.category, e.errorId, e.target))
+          this.vars.set('?', false)
+          err(this.formatError(e, st))
+        } else throw e
       }
     }
     return out
   }
 
+  private loopBody(body: Stmt[], err: (s: string) => void, host: (s: string) => void, out: unknown[]): 'break' | 'continue' | undefined {
+    try {
+      out.push(...this.execBlock(body, err, host))
+    } catch (e) {
+      if (e instanceof BreakSignal) return 'break'
+      if (e instanceof ContinueSignal) return 'continue'
+      throw e
+    }
+    return undefined
+  }
+
   execStmt(st: Stmt, err: (s: string) => void, host: (s: string) => void): unknown[] {
     switch (st.k) {
       case 'pipe':
+        if (st.redirects?.length) return this.execRedirected(st, err, host)
         return this.execPipe(st.elements, err, host)
       case 'assign': {
         const value = this.execStmt(st.value, err, host)
@@ -322,10 +456,61 @@ export class PsSession {
         if (st.op !== '=') {
           const current = this.eval(st.target)
           if (st.op === '+=') v = this.add(current, v)
-          else v = Number(current) - Number(v)
+          else if (st.op === '-=') v = Number(current) - Number(v)
+          else if (st.op === '*=') v = Number(current) * Number(v)
+          else v = Number(current) / Number(v)
         }
+        if (st.cast) v = this.cast(st.cast, v)
         this.assign(st.target, v)
         return []
+      }
+      case 'incr': {
+        this.assign(st.target, Number(this.eval(st.target) ?? 0) + st.delta)
+        return []
+      }
+      case 'param':
+        return []
+      case 'try':
+        return this.execTry(st, err, host)
+      case 'throw': {
+        const v = st.value ? this.execStmt(st.value, err, host) : []
+        const val = v.length === 1 ? v[0] : v.length ? v : 'ScriptHalted'
+        const rec = isPsObject(val) && val.__type === 'System.Management.Automation.ErrorRecord' ? val : errorRecord(toText(val), 'OperationStopped', toText(val), val)
+        this.recordError(rec)
+        throw new ThrowSignal(rec)
+      }
+      case 'switch':
+        return this.execSwitch(st, err, host)
+      case 'for': {
+        const out: unknown[] = []
+        if (st.init) this.execStmt(st.init, err, host)
+        let guard = 0
+        while (!st.cond || truthy(this.single(this.execStmt(st.cond, err, host)))) {
+          if (++guard > 5000) throw new PsError('El bucle superó las 5000 vueltas y se detuvo (simulador).')
+          if (this.loopBody(st.body, err, host, out) === 'break') break
+          if (st.step) this.execStmt(st.step, err, host)
+        }
+        return out
+      }
+      case 'do': {
+        const out: unknown[] = []
+        let guard = 0
+        while (true) {
+          if (++guard > 5000) throw new PsError('El bucle superó las 5000 vueltas y se detuvo (simulador).')
+          if (this.loopBody(st.body, err, host, out) === 'break') break
+          const c = truthy(this.single(this.execStmt(st.cond, err, host)))
+          if (st.until ? c : !c) break
+        }
+        return out
+      }
+      case 'break':
+        throw new BreakSignal()
+      case 'continue':
+        throw new ContinueSignal()
+      case 'exit': {
+        const v = st.value ? this.single(this.execStmt(st.value, err, host)) : 0
+        this.vars.set('lastexitcode', Number(v) || 0)
+        throw new ExitSignal(Number(v) || 0)
       }
       case 'if':
         for (const c of st.clauses) {
@@ -338,7 +523,7 @@ export class PsSession {
         const out: unknown[] = []
         for (const item of coll) {
           this.setVar(st.varName, item)
-          out.push(...this.execBlock(st.body, err, host))
+          if (this.loopBody(st.body, err, host, out) === 'break') break
         }
         return out
       }
@@ -347,16 +532,130 @@ export class PsSession {
         let guard = 0
         while (truthy(this.execStmt(st.cond, err, host)[0])) {
           if (++guard > 5000) throw new PsError('El bucle superó las 5000 vueltas y se detuvo (simulador).')
-          out.push(...this.execBlock(st.body, err, host))
+          if (this.loopBody(st.body, err, host, out) === 'break') break
         }
         return out
       }
       case 'function':
-        this.functions.set(st.name.toLowerCase(), { params: st.params, body: st.body })
+        this.functions.set(st.name.toLowerCase(), { params: st.params, body: st.body, blocks: st.blocks })
         return []
       case 'return':
         throw new ReturnSignal(st.value ? this.execStmt(st.value, err, host) : [])
     }
+  }
+
+  single(v: unknown[]): unknown {
+    return v.length === 1 ? v[0] : v
+  }
+
+  private execTry(st: Extract<Stmt, { k: 'try' }>, err: (s: string) => void, host: (s: string) => void): unknown[] {
+    const out: unknown[] = []
+    try {
+      this.tryDepth++
+      try {
+        out.push(...this.execBlock(st.body, err, host))
+      } finally {
+        this.tryDepth--
+      }
+    } catch (e) {
+      let rec: PsObject | undefined
+      if (e instanceof ThrowSignal) rec = e.record
+      else if (e instanceof PsError) {
+        rec = errorRecord(e.message, e.category, e.errorId, e.target)
+        this.recordError(rec)
+      }
+      if (!rec) {
+        if (st.fin) out.push(...this.execBlock(st.fin, err, host))
+        throw e
+      }
+      const type = toText(getProp(rec, 'Exception') && (getProp(rec, 'Exception') as PsObject).__type)
+      const short = (t: string) => t.toLowerCase().split('.').pop()!
+      const handler = st.catches.find((c) => !c.types.length || c.types.some((t) => ['exception', 'system.exception', 'runtimeexception', 'system.management.automation.runtimeexception'].includes(t.toLowerCase()) || short(t) === short(type)))
+      if (!handler) {
+        if (st.fin) out.push(...this.execBlock(st.fin, err, host))
+        throw e
+      }
+      const prev = this.getVar('_')
+      this.setVar('_', rec)
+      this.setVar('PSItem', rec)
+      try {
+        out.push(...this.execBlock(handler.body, err, host))
+      } finally {
+        this.setVar('_', prev)
+        if (st.fin) out.push(...this.execBlock(st.fin, err, host))
+      }
+      return out
+    }
+    if (st.fin) out.push(...this.execBlock(st.fin, err, host))
+    return out
+  }
+
+  private execSwitch(st: Extract<Stmt, { k: 'switch' }>, err: (s: string) => void, host: (s: string) => void): unknown[] {
+    const values = this.execStmt(st.value, err, host).flatMap((x) => asArray(x))
+    const out: unknown[] = []
+    outer: for (const v of values) {
+      let matched = false
+      const prev = this.getVar('_')
+      this.setVar('_', v)
+      try {
+        for (const c of st.cases) {
+          if (c.pattern === 'default') continue
+          let ok: boolean
+          if (c.pattern.k === 'sb') ok = truthy(this.single(this.execBlock(c.pattern.body, err, host)))
+          else {
+            const p = this.eval(c.pattern)
+            const text = toText(v)
+            if (st.flags.regex) {
+              const m = new RegExp(toText(p), st.flags.cs ? '' : 'i').exec(text)
+              ok = !!m
+              if (m) this.setVar('Matches', new Map(m.map((x, i) => [String(i), x])))
+            } else if (st.flags.wildcard) ok = wildcardToRegex(toText(p)).test(text)
+            else ok = psEquals(v, p, st.flags.cs)
+          }
+          if (!ok) continue
+          matched = true
+          const r = this.loopBody(c.body, err, host, out)
+          if (r === 'break') break outer
+          if (r === 'continue') continue outer
+        }
+        if (!matched) {
+          const d = st.cases.find((c) => c.pattern === 'default')
+          if (d && this.loopBody(d.body, err, host, out) === 'break') break
+        }
+      } finally {
+        this.setVar('_', prev)
+      }
+    }
+    return out
+  }
+
+  /** Un pipeline con redirecciones: > archivo, >> archivo, 2> archivo, 2>&1, 2>$null. */
+  private execRedirected(st: Extract<Stmt, { k: 'pipe' }>, err: (s: string) => void, host: (s: string) => void): unknown[] {
+    const rd = (stream: 'out' | 'err') => st.redirects!.find((r: Redirect) => r.stream === stream || r.stream === 'all')
+    const outR = rd('out')
+    const errR = rd('err')
+    const errText: string[] = []
+    const merge = !!errR?.merge
+    const errSink = (t: string) => {
+      if (merge || errR) errText.push(t)
+      else err(t)
+    }
+    const result = this.execPipe(st.elements, errSink, host)
+    const target = (r: Redirect) => (r.target ? this.eval(r.target) : null)
+    const toFile = (r: Redirect, text: string) => {
+      const t = target(r)
+      if (t === null || t === undefined) return // $null: se descarta
+      const full = this.resolvePath(toText(t))
+      this.fs.write(full, text.replace(/\n/g, '\r\n'), r.append)
+    }
+    let output = result
+    if (merge) output = [...result, ...errText.map((t) => t.trimEnd())]
+    else if (errR) toFile(errR, errText.join(''))
+    if (outR && !outR.merge) {
+      toFile(outR, this.render(output).replace(/^\n/, ''))
+      return []
+    }
+    return output
   }
 
   private assign(target: Expr, value: unknown) {
@@ -395,32 +694,11 @@ export class PsSession {
 
   invoke(name: string, args: Arg[], input: unknown[], hasInput: boolean, err: (s: string) => void, host: (s: string) => void, src = name): unknown[] {
     const fn = this.functions.get(name.toLowerCase())
-    if (fn) {
-      // Parámetros: primero los posicionales, después los nombrados (-Nombre valor).
-      for (const p of fn.params) this.setVar(p, null)
-      const positional: unknown[] = []
-      const named: [string, unknown][] = []
-      for (let i = 0; i < args.length; i++) {
-        const a = args[i]
-        if (a.k === 'value') positional.push(this.eval(a.e))
-        else if (a.value) named.push([a.name, this.eval(a.value)])
-        else if (args[i + 1]?.k === 'value') named.push([a.name, this.eval((args[++i] as { e: Expr }).e)])
-        else named.push([a.name, true])
-      }
-      fn.params.forEach((p, i) => positional[i] !== undefined && this.setVar(p, positional[i]))
-      for (const [k, v] of named) this.setVar(k, v)
-      this.setVar('input', input)
-      try {
-        return this.execBlock(fn.body, err, host)
-      } catch (e) {
-        if (e instanceof ReturnSignal) return e.value
-        throw e
-      }
-    }
+    if (fn) return this.callFunction(name, fn, args, input, hasInput, err, host)
     const canonical = canonicalName(name)
     const def = canonical ? CMDLETS.get(canonical.toLowerCase()) : undefined
     if (!def) {
-      if (/\.ps1$/i.test(name)) return this.runScript(name, err, host)
+      if (/\.ps1$/i.test(name)) return this.runScript(name, err, host, args, input, hasInput)
       throw new PsError(
         `The term '${name}' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.`,
         'ObjectNotFound',
@@ -430,9 +708,12 @@ export class PsSession {
     }
     const params = new Map<string, unknown>()
     const positional: unknown[] = []
-    const known = [...(def.params ?? []), ...(def.switches ?? [])]
+    const switches = [...(def.switches ?? []), ...COMMON_SWITCHES.filter((c) => !(def.switches ?? []).includes(c))]
+    const known = [...(def.params ?? []), ...COMMON_PARAMS.filter((c) => !(def.params ?? []).includes(c)), ...switches, 'EA']
+    args = this.expandSplats(args)
     for (let i = 0; i < args.length; i++) {
       const a = args[i]
+      if (a.k === 'splat') continue
       if (a.k === 'value') {
         positional.push(this.eval(a.e))
         continue
@@ -445,7 +726,7 @@ export class PsSession {
         if (matches.length > 1) throw new PsError(`Parameter cannot be processed because the parameter name '${a.name}' is ambiguous. Possible matches include: ${matches.map((m) => `-${m}`).join(' ')}.`, 'InvalidArgument', 'AmbiguousParameter')
         throw new PsError(`A parameter cannot be found that matches parameter name '${a.name}'.`, 'InvalidArgument', 'NamedParameterNotFound', '')
       }
-      if (def.switches?.includes(match)) {
+      if (switches.includes(match)) {
         params.set(match.toLowerCase(), a.value ? truthy(this.eval(a.value)) : true)
         continue
       }
@@ -463,20 +744,149 @@ export class PsSession {
       const pname = posNames[i]
       if (pname && !params.has(pname.toLowerCase())) params.set(pname.toLowerCase(), v)
     })
-    return def.run({
+    if (params.has('ea')) params.set('erroraction', params.get('ea'))
+    const action = toText(params.get('erroraction') ?? this.getVar('ErrorActionPreference') ?? 'Continue').toLowerCase()
+    const errVar = params.get('errorvariable')
+    const ctxBase = { name: canonical!, params, positional, input, hasInput, s: this, host }
+    if (params.get('whatif') && def.whatIf) {
+      host(`What if: ${def.whatIf(ctxBase as unknown as CmdletContext)}\n`)
+      return []
+    }
+    const result = def.run({
       name: canonical!,
       params,
       positional,
       input,
       hasInput,
       s: this,
-      writeError: (message, category = 'ObjectNotFound', target = '', errorId) =>
-        err(this.errorText(new PsError(message, category, errorId ?? `${category},Microsoft.PowerShell.Commands.${canonical!.replace(/-/g, '')}Command`, target), src, canonical!)),
+      writeError: (message, category = 'ObjectNotFound', target = '', errorId) => {
+        const id = errorId ?? `${category},Microsoft.PowerShell.Commands.${canonical!.replace(/-/g, '')}Command`
+        if (action === 'stop') throw new PsError(message, category, id, target)
+        const rec = errorRecord(message, category, id, target)
+        if (action !== 'ignore') this.recordError(rec)
+        if (errVar) this.setVar(toText(errVar).replace(/^\+/, ''), [rec])
+        this.vars.set('?', false)
+        if (action === 'silentlycontinue' || action === 'ignore') return
+        err(this.errorText(new PsError(message, category, id, target), src, canonical!))
+      },
       host,
+    })
+    const outVar = params.get('outvariable')
+    if (outVar) this.setVar(toText(outVar), result.length === 1 ? result[0] : result)
+    return result
+  }
+
+  /** @parametros: una tabla hash se convierte en -Nombre valor; un array, en valores posicionales. */
+  expandSplats(args: Arg[]): Arg[] {
+    if (!args.some((a) => a.k === 'splat')) return args
+    const out: Arg[] = []
+    for (const a of args) {
+      if (a.k !== 'splat') {
+        out.push(a)
+        continue
+      }
+      const v = this.getVar(a.name)
+      if (v instanceof Map) for (const [k, val] of v) out.push({ k: 'param', name: String(k), value: { k: 'lit', v: val } as unknown as Expr })
+      else for (const x of asArray(v)) out.push({ k: 'value', e: { k: 'lit', v: x } as unknown as Expr })
+    }
+    return out
+  }
+
+  /** Llama a una función: arma su alcance, enlaza los parámetros y corre begin/process/end. */
+  callFunction(name: string, fn: FunctionDef, args: Arg[], input: unknown[], hasInput: boolean, err: (s: string) => void, host: (s: string) => void): unknown[] {
+    return this.withScope(() => {
+      const pipelineParam = this.bindParams(name, fn.params, this.expandSplats(args), hasInput)
+      this.setVar('input', input)
+      const runBody = (body: Stmt[]) => {
+        try {
+          return this.execBlock(body, err, host)
+        } catch (e) {
+          if (e instanceof ReturnSignal) return e.value
+          throw e
+        }
+      }
+      if (!fn.blocks) return runBody(fn.body)
+      const out: unknown[] = []
+      if (fn.blocks.begin) out.push(...runBody(fn.blocks.begin))
+      if (fn.blocks.process) {
+        const items = hasInput ? input : [null]
+        for (const item of items) {
+          this.setVar('_', item)
+          this.setVar('PSItem', item)
+          if (pipelineParam && hasInput) this.setVar(pipelineParam, item)
+          out.push(...runBody(fn.blocks.process))
+        }
+      }
+      if (fn.blocks.end) out.push(...runBody(fn.blocks.end))
+      return out
     })
   }
 
-  runScript(path: string, err: (s: string) => void, host: (s: string) => void): unknown[] {
+  /** Enlaza los argumentos con los parámetros declarados; devuelve el que recibe el pipeline. */
+  bindParams(owner: string, specs: ParamSpec[], args: Arg[], hasInput = false): string | undefined {
+    const positional: unknown[] = []
+    const named = new Map<string, unknown>()
+    const bound = new Map<string, unknown>()
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]
+      if (a.k === 'splat') continue
+      if (a.k === 'value') {
+        positional.push(this.eval(a.e))
+        continue
+      }
+      const spec = specs.find((p) => p.name.toLowerCase() === a.name.toLowerCase()) ?? (() => {
+        const ms = specs.filter((p) => p.name.toLowerCase().startsWith(a.name.toLowerCase()))
+        return ms.length === 1 ? ms[0] : undefined
+      })()
+      if (!spec) {
+        if (COMMON_SWITCHES.some((c) => c.toLowerCase() === a.name.toLowerCase()) || COMMON_PARAMS.some((c) => c.toLowerCase() === a.name.toLowerCase())) {
+          if (!a.value && args[i + 1]?.k === 'value' && !COMMON_SWITCHES.some((c) => c.toLowerCase() === a.name.toLowerCase())) i++
+          continue
+        }
+        if (!specs.length) {
+          // Función sin parámetros declarados: queda en $args.
+          positional.push(`-${a.name}`)
+          continue
+        }
+        throw new PsError(`A parameter cannot be found that matches parameter name '${a.name}'.`, 'InvalidArgument', `NamedParameterNotFound,${owner}`)
+      }
+      if (spec.type?.toLowerCase() === 'switch') named.set(spec.name, a.value ? truthy(this.eval(a.value)) : true)
+      else if (a.value) named.set(spec.name, this.eval(a.value))
+      else {
+        const next = args[i + 1]
+        if (!next || next.k !== 'value') throw new PsError(`Missing an argument for parameter '${spec.name}'. Specify a parameter of type '${spec.type ? `System.${spec.type.replace(/^string$/i, 'String').replace(/^int$/i, 'Int32')}` : 'System.Object'}' and try again.`, 'InvalidArgument', `MissingArgument,${owner}`)
+        named.set(spec.name, this.eval(next.e))
+        i++
+      }
+    }
+    const pipelineParam = specs.find((p) => p.pipeline)?.name
+    const rest: unknown[] = []
+    let pi = 0
+    for (const spec of specs) {
+      if (named.has(spec.name)) bound.set(spec.name, named.get(spec.name))
+      else if (spec.type?.toLowerCase() !== 'switch' && pi < positional.length) bound.set(spec.name, positional[pi++])
+    }
+    rest.push(...positional.slice(pi))
+    for (const spec of specs) {
+      let v: unknown
+      if (bound.has(spec.name)) v = bound.get(spec.name)
+      else if (spec.type?.toLowerCase() === 'switch') v = false
+      else if (spec.def) v = this.eval(spec.def)
+      else if (spec.mandatory && !(spec.pipeline && hasInput)) {
+        throw new PsError(`Cannot process command because of one or more missing mandatory parameters: ${spec.name}.`, 'InvalidArgument', `MissingMandatoryParameter,${owner}`)
+      } else v = null
+      if (v !== null && spec.validateSet && !asArray(v).every((x) => spec.validateSet!.some((o) => o.toLowerCase() === toText(x).toLowerCase()))) {
+        throw new PsError(`Cannot validate argument on parameter '${spec.name}'. The argument "${toText(v)}" does not belong to the set "${spec.validateSet.join(',')}" specified by the ValidateSet attribute. Supply an argument that is in the set and then try the command again.`, 'InvalidData', `ParameterArgumentValidationError,${owner}`)
+      }
+      if (v !== null && spec.type && spec.type.toLowerCase() !== 'switch') v = this.cast(spec.type, v)
+      this.setVar(spec.name, v)
+    }
+    this.setVar('args', rest)
+    this.setVar('PSBoundParameters', new Map([...bound.entries()]))
+    return pipelineParam
+  }
+
+  runScript(path: string, err: (s: string) => void, host: (s: string) => void, args: Arg[] = [], input: unknown[] = [], hasInput = false): unknown[] {
     const full = this.resolvePath(path)
     const node = this.fs.get(full)
     if (!node || node.type !== 'file') {
@@ -485,23 +895,44 @@ export class PsSession {
     if (this.executionPolicy === 'Restricted') {
       throw new PsError(`File ${full} cannot be loaded because running scripts is disabled on this system. For more information, see about_Execution_Policies at https:/go.microsoft.com/fwlink/?LinkID=135170.`, 'SecurityError', 'UnauthorizedAccess', '')
     }
+    let stmts: Stmt[]
     try {
-      return this.execBlock(parsePs(node.content), err, host)
+      stmts = parsePs(node.content)
     } catch (e) {
-      if (e instanceof ReturnSignal) return e.value
       if (e instanceof PsParseError || e instanceof PsIncomplete) throw new PsError(`El script tiene un error de sintaxis: ${e.message}`, 'ParserError', 'ParseException')
       throw e
     }
+    return this.withScope(() => {
+      const params = stmts[0]?.k === 'param' ? stmts[0].params : []
+      this.bindParams(full, params, this.expandSplats(args), hasInput)
+      this.setVar('input', input)
+      this.setVar('PSScriptRoot', this.fs.parent(full))
+      this.setVar('PSCommandPath', full)
+      try {
+        return this.execBlock(stmts, err, host)
+      } catch (e) {
+        if (e instanceof ReturnSignal) return e.value
+        if (e instanceof ExitSignal) return []
+        if (e instanceof ThrowSignal && this.tryDepth === 0) {
+          err(`${e.message}\nAt ${full}:1 char:1\n+ throw\n+ ~~~~~\n    + CategoryInfo          : OperationStopped: (${e.message}:String) [], RuntimeException\n    + FullyQualifiedErrorId : ${e.message}\n \n`)
+          return []
+        }
+        throw e
+      }
+    }, true)
   }
 
   invokeScriptBlock(sb: ScriptBlock, item: unknown): unknown[] {
-    const prev = this.vars.get('_')
+    const top = this.scopes[this.scopes.length - 1]
+    const prev = top.get('_')
+    const prevItem = top.get('psitem')
     this.setVar('_', item)
     this.setVar('PSItem', item)
     try {
       return this.execBlock(sb.body as Stmt[], () => undefined, () => undefined)
     } finally {
-      this.vars.set('_', prev)
+      top.set('_', prev)
+      top.set('psitem', prevItem)
     }
   }
 
@@ -549,6 +980,7 @@ export class PsSession {
   }
 
   eval(e: Expr): unknown {
+    if ((e as unknown as { k: string }).k === 'lit') return (e as unknown as { v: unknown }).v
     switch (e.k) {
       case 'str':
         return e.expand ? this.expandString(e.v) : e.v
@@ -641,9 +1073,22 @@ export class PsSession {
         const has = asArray(r).some((x) => psEquals(l, x))
         return op === 'in' ? has : !has
       }
+      case 'f':
+        return formatOperator(toText(l), asArray(r))
       case 'is':
-      case 'isnot':
-        return true
+      case 'isnot': {
+        const want = toText(r).replace(/^\[|\]$/g, '').toLowerCase()
+        const t = typeName(l).toLowerCase()
+        const short: Record<string, string[]> = { string: ['system.string'], int: ['system.int32'], int32: ['system.int32'], double: ['system.double', 'system.int32'], bool: ['system.boolean'], array: ['system.object[]'], hashtable: ['system.collections.hashtable'], datetime: ['system.datetime'], pscustomobject: ['system.management.automation.pscustomobject'] }
+        const ok = (short[want] ?? [want, `system.${want}`]).includes(t) || t.endsWith(`.${want}`)
+        return op === 'is' ? ok : !ok
+      }
+      case 'as':
+        try {
+          return this.cast(toText(r).replace(/^\[|\]$/g, ''), l)
+        } catch {
+          return null
+        }
     }
     // Operadores de comparación: con un array a la izquierda, filtran.
     const test = (x: unknown): boolean => {
@@ -686,7 +1131,16 @@ export class PsSession {
     if (t === 'bool') return truthy(v)
     if (t === 'datetime') return new Date(toText(v))
     if (t === 'array' || t.endsWith('[]')) return asArray(v)
-    if (t === 'pscustomobject' && v instanceof Map) return psObject('System.Management.Automation.PSCustomObject', Object.fromEntries(v))
+    if ((t === 'pscustomobject' || t === 'psobject') && v instanceof Map) return psObject('System.Management.Automation.PSCustomObject', Object.fromEntries(v))
+    if (t === 'void') return null
+    if (t === 'ordered' || t === 'hashtable') return v
+    if (t === 'version') return toText(v)
+    if (t === 'ipaddress') {
+      const text = toText(v)
+      if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(text) || text.split('.').some((o) => Number(o) > 255)) throw new PsError(`Cannot convert value "${text}" to type "System.Net.IPAddress". Error: "An invalid IP address was specified."`, 'InvalidArgument', 'InvalidCastParseTargetInvocation')
+      return text
+    }
+    if (t === 'int' || t === 'int32') return v
     return v
   }
 
@@ -826,4 +1280,35 @@ export function formatDotnetDate(d: Date, fmt: string): string {
     tt: d.getHours() < 12 ? 'AM' : 'PM',
   }
   return fmt.replace(/yyyy|yy|MMMM|MMM|MM|M|dddd|ddd|dd|d|HH|H|hh|h|mm|ss|tt/g, (t) => map[t])
+}
+
+
+/** El operador -f: "{0} tiene {1:N1} GB" -f $nombre, $tamano (con ancho y formatos de .NET). */
+export function formatOperator(fmt: string, args: unknown[]): string {
+  return fmt.replace(/\{\{|\}\}|\{(\d+)(?:,(-?\d+))?(?::([^}]*))?\}/g, (m, idx, width, spec) => {
+    if (m === '{{') return '{'
+    if (m === '}}') return '}'
+    const v = args[Number(idx)]
+    let text: string
+    if (spec && typeof v === 'number') {
+      const kind = spec[0].toUpperCase()
+      const digits = spec.length > 1 ? Number(spec.slice(1)) : undefined
+      if (kind === 'N') text = v.toLocaleString('en-US', { minimumFractionDigits: digits ?? 2, maximumFractionDigits: digits ?? 2 })
+      else if (kind === 'F') text = v.toFixed(digits ?? 2)
+      else if (kind === 'P') text = (v * 100).toFixed(digits ?? 2) + ' %'
+      else if (kind === 'D') text = String(Math.trunc(v)).padStart(digits ?? 0, '0')
+      else if (kind === 'X') text = Math.trunc(v).toString(16).toUpperCase().padStart(digits ?? 0, '0')
+      else if (/^0+(\.0+)?$/.test(spec)) {
+        const dec = spec.includes('.') ? spec.split('.')[1].length : 0
+        text = v.toFixed(dec).padStart(spec.length, '0')
+      } else if (/^#+(\.#+)?$/.test(spec) || /^[#0,]+(\.[#0]+)?$/.test(spec)) text = v.toFixed(spec.includes('.') ? spec.split('.')[1].length : 0)
+      else text = toText(v)
+    } else if (spec && v instanceof Date) text = formatDotnetDate(v, spec)
+    else text = toText(v)
+    if (width) {
+      const w = Number(width)
+      text = w < 0 ? text.padEnd(-w) : text.padStart(w)
+    }
+    return text
+  })
 }
