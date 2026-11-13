@@ -1,0 +1,169 @@
+---
+id: n3-m1-l2
+titulo: Instalación y configuración inicial
+minutos: 150
+objetivos:
+  - Instalar Windows Server 2025 en una máquina virtual eligiendo la imagen y la opción de instalación correctas.
+  - Dejar un servidor nuevo listo para trabajar (IP fija, DNS, nombre, hora, perfil de red, actualizaciones y administración remota).
+  - Hacer cada ajuste con sconfig y con su cmdlet de PowerShell equivalente.
+glosario: [sconfig, perfil-red]
+verificado: 2026-11
+---
+
+import pasos from './pasos-config.svg?raw'
+import orden from './orden-instalacion.yaml'
+import primer from './ej-primer-arranque.yaml'
+
+Instalar Windows Server lleva veinte minutos y casi no tiene decisiones: lo que define si el servidor va a andar bien es la media hora que viene después. En esta lección vas a instalar uno, y después vas a hacer la lista de primeros pasos que conviene repetir en cada servidor nuevo, siempre en el mismo orden.
+
+<AntesDeEmpezar>
+- Ediciones y Server Core contra escritorio (lección anterior).
+- Crear máquinas virtuales (lección 0.2.5).
+- IP fija, máscara, puerta de enlace y DNS (módulos 2.2 y 2.3).
+</AntesDeEmpezar>
+
+## Preparar la máquina virtual
+
+Vas a usar la versión de evaluación de 180 días (el ISO se baja del Centro de evaluación de Microsoft). Para una máquina virtual de laboratorio:
+
+- **Generación 2** (o firmware **UEFI**, según el programa) con **arranque seguro** activado. Windows Server 2025 arranca en UEFI sin problemas; el BIOS antiguo queda para equipos viejos.
+- **2 procesadores virtuales y 4 GB de RAM** para un servidor con escritorio; con Server Core alcanza 2 GB.
+- **Un disco de 60 GB** (el sistema pide 32 como mínimo, pero las actualizaciones lo llenan rápido).
+- **La placa de red conectada a la red del laboratorio**, la misma de tus máquinas Linux. Si querés salir a internet para las actualizaciones, la red tiene que tener salida (por el firewall del módulo 2.6, por ejemplo).
+- Si el programa lo ofrece, un **TPM virtual**: no es obligatorio para Windows Server, pero algunas funciones de seguridad lo usan.
+
+Tomá una instantánea apenas termine la instalación: si te equivocás en la configuración, volvés a un servidor limpio en segundos.
+
+## La instalación
+
+El asistente es corto, pero tiene dos pantallas que importan:
+
+1. **Idioma y teclado.** El idioma del sistema conviene dejarlo en inglés: los mensajes de error, la documentación y lo que vas a buscar en internet están en inglés, y en este curso las salidas aparecen así. El teclado sí, el tuyo (por ejemplo, Español de Latinoamérica).
+2. **La imagen.** Aparecen cuatro: *Windows Server 2025 Standard*, *Standard (Desktop Experience)*, *Datacenter* y *Datacenter (Desktop Experience)*. Las que no dicen "Desktop Experience" son **Server Core**. Esta es la decisión que no se puede cambiar después.
+3. **Tipo de instalación: personalizada** ("Install Windows only"). La otra opción es para actualizar un servidor que ya existe.
+4. **El disco.** Si no aparece ninguno, faltan los controladores del disco (pasa en algunos servidores físicos con controladoras RAID): se cargan desde un pendrive con "Load driver".
+5. **La contraseña del Administrador.** Tiene que cumplir la complejidad: al menos 8 caracteres y tres de estos cuatro tipos: mayúsculas, minúsculas, números y símbolos.
+
+Al terminar, un Server Core muestra una consola negra con **sconfig**, el menú de configuración. Uno con escritorio abre el **Administrador del servidor**. En los dos casos el servidor tiene un nombre al azar (como WIN-7H2K9QJ4LMA), pide IP por DHCP y está en un grupo de trabajo.
+
+<Ordenar ejercicio={orden} />
+
+## Los primeros pasos, siempre en el mismo orden
+
+<Diagrama svg={pasos} alt="Siete pasos en fila, cada uno con su opción de sconfig y su cmdlet de PowerShell. 1 Red: IP fija, puerta de enlace y DNS (sconfig 8; New-NetIPAddress y Set-DnsClientServerAddress). 2 Hora: zona horaria (sconfig 9; Set-TimeZone). 3 Nombre: hasta 15 caracteres (sconfig 2; Rename-Computer, pide reiniciar). 4 Actualizaciones (sconfig 6; o Windows Update). 5 Administración remota y Escritorio remoto (sconfig 4 y 7; Enable-PSRemoting y la regla de firewall). 6 Dominio (sconfig 1; Add-Computer, pide reiniciar; módulo 3.3). 7 Instantánea y documentación. Debajo, una nota: el nombre va antes del dominio para que la cuenta de equipo nazca con el nombre correcto, y la IP antes que todo porque sin red no se puede actualizar ni unirse al dominio." pie="Red, hora y nombre antes que nada; el dominio, al final." />
+
+### 1. Red: IP fija y DNS
+
+Un servidor siempre lleva **IP fija**: los demás equipos lo buscan por esa dirección y un cambio sorpresa (un préstamo de DHCP que se vence) corta los servicios. Si la red no tiene DHCP, el servidor arranca con una dirección **169.254.x.x** (APIPA), que solo sirve para hablar con los vecinos.
+
+```powershell
+Get-NetIPConfiguration                     # cómo se llama la placa y qué tiene
+New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.10.21 -PrefixLength 24 -DefaultGateway 192.168.10.1
+Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.10
+```
+
+El DNS es el que va a usar el servidor para encontrar a los demás. Cuando haya un dominio, es el **controlador de dominio**, nunca un DNS público (por qué, lo vas a ver en el caso real del módulo 3.3).
+
+### 2. La hora
+
+La zona horaria viene en la de Estados Unidos (Pacific). Cambiala antes de que el servidor empiece a escribir registros:
+
+```powershell
+Get-TimeZone -ListAvailable | Where-Object DisplayName -like "*Buenos Aires*"
+Set-TimeZone -Id "Argentina Standard Time"
+```
+
+### 3. El nombre
+
+Hasta 15 caracteres, letras, números y guiones, sin espacios ni puntos. Un nombre que diga qué es y dónde está (SRV-ARCH01, DC01, BA-HV02) te ahorra consultar una planilla cada vez. El cambio se aplica al reiniciar:
+
+```powershell
+Rename-Computer -NewName SRV-ARCH01 -Restart
+```
+
+<Consejo>
+Mientras no reinicies, el nombre nuevo queda "pendiente": `hostname` sigue mostrando el viejo y sconfig muestra los dos. Si tenés que hacer varios cambios que piden reinicio, hacelos juntos y reiniciá una sola vez.
+</Consejo>
+
+### 4. Actualizaciones
+
+Antes de poner el servidor a trabajar, instalá las actualizaciones pendientes (opción 6 de sconfig, o Configuración, Windows Update con escritorio). Un servidor recién instalado desde un ISO de hace meses tiene varios parches de seguridad de atraso. Cómo se administran en una empresa (WSUS, anillos, Hotpatch) lo vas a ver en el módulo 3.5.
+
+### 5. Administración remota
+
+**WinRM** (la administración remota de PowerShell) viene activado y escucha en el puerto 5985, pero en el **perfil de red público** el firewall solo deja entrar conexiones de la misma subred. Mientras el servidor no esté en un dominio, Windows considera la red como **pública**; en el laboratorio podés pasarla a **privada**:
+
+```powershell
+Get-NetConnectionProfile
+Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
+```
+
+Cuando se una al dominio, el perfil pasa solo a **DomainAuthenticated** y no se puede cambiar a mano. El **Escritorio remoto** (RDP) viene apagado; si lo necesitás, opción 7 de sconfig. Lo de la administración remota lo vas a usar a fondo en la lección que viene.
+
+### 6. El dominio, al final
+
+Unir el servidor a un dominio (opción 1 de sconfig o `Add-Computer`) es lo último, porque necesita la red y el DNS bien configurados y conviene que el nombre ya sea el definitivo. Lo vas a hacer en el módulo 3.3.
+
+<EnSimple>
+Red, hora, nombre, actualizaciones, administración remota, dominio. Siempre en ese orden, y cada cambio con su cmdlet, para poder repetirlo igual en el próximo servidor.
+</EnSimple>
+
+<Pregunta id="p04" />
+
+## sconfig y PowerShell
+
+**sconfig** es un menú de texto que viene en Server Core (y también se puede abrir en un servidor con escritorio). Es cómodo para un servidor, pero para diez es lento y no deja rastro de lo que hiciste. Cada opción tiene su cmdlet:
+
+| Opción de sconfig | Qué hace | En PowerShell |
+|---|---|---|
+| 1 | Dominio o grupo de trabajo | `Add-Computer` |
+| 2 | Nombre del equipo | `Rename-Computer` |
+| 4 | Administración remota | `Enable-PSRemoting` |
+| 6 | Instalar actualizaciones | Windows Update (módulo 3.5) |
+| 7 | Escritorio remoto | `Set-ItemProperty` y la regla de firewall |
+| 8 | Red | `New-NetIPAddress`, `Set-DnsClientServerAddress` |
+| 9 | Fecha y hora | `Set-TimeZone` |
+| 13 | Reiniciar | `Restart-Computer` |
+| 15 | Salir a PowerShell | (ya estás) |
+
+En Server Core, si cerrás sin querer la consola, apretá Ctrl+Alt+Supr (Ctrl+Alt+Fin en una sesión remota) y elegí el Administrador de tareas para abrir otra: menú Archivo, Ejecutar nueva tarea, `powershell`.
+
+<Terminal ejercicio={primer} />
+
+## Comprobar y documentar
+
+Al terminar, tres comprobaciones y una nota:
+
+```powershell
+Get-NetIPConfiguration           # IP, puerta de enlace y DNS
+Get-ComputerInfo -Property CsName, WindowsProductName, WindowsInstallationType, TimeZone
+Test-NetConnection 192.168.10.1  # llega a la puerta de enlace
+```
+
+Anotá en el cuaderno técnico el nombre, la IP, la edición, la opción de instalación y la fecha. Y tomá otra instantánea: este es tu servidor "base" para el resto del nivel.
+
+<ErroresComunes>
+  <ErrorComun titulo="Dejar el servidor con DHCP">
+    Hoy anda, pero el día que cambie la IP, los demás lo dejan de encontrar. Un servidor lleva IP fija (o, como mucho, una reserva de DHCP).
+  </ErrorComun>
+  <ErrorComun titulo="Poner un DNS público en un servidor del dominio">
+    Con 8.8.8.8 el servidor no encuentra el dominio: los nombres internos solo los conoce el DNS del controlador de dominio.
+  </ErrorComun>
+  <ErrorComun titulo="Unirse al dominio y después cambiar el nombre">
+    Se puede, pero es un reinicio más y deja la cuenta de equipo vieja dando vueltas. Primero el nombre, después el dominio.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de que el nombre necesita reiniciar">
+    Rename-Computer no cambia nada hasta reiniciar. Si después unís el equipo al dominio sin reiniciar, puede unirse con el nombre viejo.
+  </ErrorComun>
+  <ErrorComun titulo="Configurar todo a mano con sconfig y no anotar nada">
+    Funciona para uno, pero el próximo servidor va a quedar distinto. Con PowerShell, los mismos comandos sirven de documentación y de receta.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Máquina virtual de laboratorio: UEFI con arranque seguro, 2 vCPU, 2 a 4 GB de RAM, 60 GB de disco y la placa en la red del laboratorio.
+- En la instalación, la imagen define Core o escritorio; el idioma del sistema conviene en inglés y el teclado, el tuyo.
+- Primeros pasos en orden: IP fija y DNS, zona horaria, nombre (con reinicio), actualizaciones, administración remota y, al final, el dominio.
+- Sin dominio, la red queda como pública; en el laboratorio, privada; en el dominio, DomainAuthenticated.
+- Cada opción de sconfig tiene su cmdlet: hacelo con PowerShell para poder repetirlo.
+</Resumen>

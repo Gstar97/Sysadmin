@@ -1,7 +1,7 @@
 import { asArray, ALIASES, CMDLETS, cmdlet, formatDotnetDate, moduleAvailable, psEquals, PsError, PsSession, truthy, wildcardToRegex, type CmdletContext } from './session'
 import { formatDefault, formatList, formatTable, getProp, isPsObject, isScriptBlock, propNames, psObject, setProp, toText, typeName, VIEWS, type PsObject } from './values'
 import { reach } from './machine'
-import { setTrustedHosts, wsmanItem } from './remoting'
+import { connect, setTrustedHosts, wsmanItem } from './remoting'
 
 // ---------------------------------------------------------------------------------------
 // Vistas por defecto (como las de Windows PowerShell 5.1)
@@ -1336,7 +1336,8 @@ cmdlet('Get-WindowsFeature', {
   module: 'ServerManager',
   run(ctx) {
     const names = list(ctx, 'Name')
-    return data(ctx.s, 'features').filter((f) => !names.length || matchesAny(toText(f.Name), names) || matchesAny(toText(f.DisplayName), names))
+    const t = featureTarget(ctx)
+    return data(t, 'features').filter((f) => !names.length || matchesAny(toText(f.Name), names) || matchesAny(toText(f.DisplayName), names))
   },
 })
 
@@ -1360,10 +1361,20 @@ const FEATURE_MODULES: Record<string, string> = {
 }
 const NEEDS_RESTART = ['hyper-v', 'failover-clustering', 'fs-data-deduplication']
 
+/** -ComputerName: el cambio se hace en otro servidor (por WinRM, como el Administrador del servidor). */
+function featureTarget(ctx: CmdletContext): PsSession {
+  const name = str(ctx, 'ComputerName')
+  if (!name) return ctx.s
+  const t = connect(ctx.s, name)
+  if (t instanceof PsError) throw new PsError(`The WinRM client cannot process the request for ${name}. ${t.message.replace(/^Connecting to remote server \S+ failed with the following error message : /, '')}`, 'DeviceError', 'UnAuthorizedAccess,Microsoft.Windows.ServerManager.Commands.AddWindowsFeatureCommand', name)
+  return t
+}
+
 function featureChange(ctx: CmdletContext, install: boolean) {
+  const target = featureTarget(ctx)
   const names = list(ctx, 'Name').map(toText)
   if (install && has(ctx, 'IncludeManagementTools')) for (const n of [...names]) names.push(...(MGMT_TOOLS[n.toLowerCase()] ?? []))
-  const features = data(ctx.s, 'features')
+  const features = data(target, 'features')
   const changed: string[] = []
   let restart = false
   for (const n of names) {
@@ -1375,11 +1386,11 @@ function featureChange(ctx: CmdletContext, install: boolean) {
       changed.push(toText(f.DisplayName))
       if (NEEDS_RESTART.includes(n.toLowerCase())) restart = true
       const mod = FEATURE_MODULES[n.toLowerCase()]
-      const mods = (ctx.s.data.modules ??= []) as string[]
+      const mods = (target.data.modules ??= []) as string[]
       if (mod && install && !mods.includes(mod)) mods.push(mod)
-      if (mod && !install) ctx.s.data.modules = mods.filter((m) => m !== mod)
+      if (mod && !install) target.data.modules = mods.filter((m) => m !== mod)
       // Con el módulo de AD, un servidor miembro ya puede consultar el dominio.
-      if (n.toLowerCase() === 'rsat-ad-powershell' && install && ctx.s.data.domainStore?.length) ctx.s.data.ad = ctx.s.data.domainStore
+      if (n.toLowerCase() === 'rsat-ad-powershell' && install && target.data.domainStore?.length) target.data.ad = target.data.domainStore
     }
   }
   if (restart && has(ctx, 'Restart')) ctx.host('[simulador] El servidor se reinicia para terminar la instalación.\n')
@@ -1394,7 +1405,7 @@ function featureChange(ctx: CmdletContext, install: boolean) {
 }
 
 cmdlet('Install-WindowsFeature', { params: ['Name', 'ComputerName', 'Source'], switches: ['IncludeManagementTools', 'IncludeAllSubFeature', 'Restart'], positional: ['Name'], synopsis: 'Installs one or more roles, role services, or features.', module: 'ServerManager', run: (ctx) => featureChange(ctx, true) }, ['Add-WindowsFeature'])
-cmdlet('Uninstall-WindowsFeature', { params: ['Name'], switches: ['IncludeManagementTools', 'Remove', 'Restart'], positional: ['Name'], synopsis: 'Uninstalls specified roles, role services, and features.', module: 'ServerManager', run: (ctx) => featureChange(ctx, false) }, ['Remove-WindowsFeature'])
+cmdlet('Uninstall-WindowsFeature', { params: ['Name', 'ComputerName'], switches: ['IncludeManagementTools', 'Remove', 'Restart'], positional: ['Name'], synopsis: 'Uninstalls specified roles, role services, and features.', module: 'ServerManager', run: (ctx) => featureChange(ctx, false) }, ['Remove-WindowsFeature'])
 
 VIEWS['Microsoft.Windows.ServerManager.Commands.FeatureOperationResult'] = {
   kind: 'table',

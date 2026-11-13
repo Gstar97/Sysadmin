@@ -1,0 +1,64 @@
+tipo: terminal
+shell: powershell
+titulo: Instalar roles en el servidor local y en uno remoto
+descripcion: >-
+  Estás en SRV-ADMIN, el servidor de administración del laboratorio. Te piden dos cosas: dejar
+  SRV-ADMIN con lo necesario para hacer copias de seguridad y para administrar Active Directory, e
+  instalar el servidor web (IIS) en SRV-WEB01, un Server Core de la misma red que ya está en
+  TrustedHosts.
+estado_inicial:
+  equipo: SRV-ADMIN
+  red: { ip: 192.168.10.5, dns: [192.168.10.10] }
+  trusted_hosts: SRV-WEB01
+  servidores:
+    - equipo: SRV-WEB01
+      experiencia: core
+      red: { ip: 192.168.10.30, dns: [192.168.10.10] }
+pasos:
+  - consigna: >-
+      Listá solo lo que ya está instalado en SRV-ADMIN.
+    verificar:
+      - { comando_usado: "get-windowsfeature.*(installed|where|\\?)" }
+    pistas:
+      - "Get-WindowsFeature devuelve objetos con la propiedad Installed: filtralos con Where-Object."
+    solucion: [Get-WindowsFeature | Where-Object Installed]
+    explicacion: >-
+      En la columna Display Name, [X] marca lo instalado. Los nombres de la columna Name son los
+      que se usan con Install-WindowsFeature.
+  - consigna: >-
+      Instalá la característica Copias de seguridad de Windows Server (Windows-Server-Backup).
+    verificar:
+      - { caracteristica: Windows-Server-Backup, instalada: true }
+    pistas:
+      - "Si no sabés el nombre exacto: Get-WindowsFeature *backup*"
+    solucion: [Install-WindowsFeature Windows-Server-Backup]
+  - consigna: >-
+      Instalá las herramientas de administración de Active Directory (la característica RSAT-AD-Tools)
+      con sus subcaracterísticas, sin instalar el rol de AD en este servidor.
+    verificar:
+      - { caracteristica: RSAT-AD-Tools, instalada: true }
+      - { caracteristica: AD-Domain-Services, instalada: false }
+    pistas:
+      - "RSAT-AD-Tools son solo las consolas y el módulo; AD-Domain-Services es el rol de controlador de dominio."
+    solucion: [Install-WindowsFeature RSAT-AD-Tools -IncludeAllSubFeature]
+    explicacion: >-
+      Instalar las herramientas no convierte al servidor en controlador de dominio: solo trae las
+      consolas y el módulo de PowerShell para administrar uno que esté en otro lado.
+  - consigna: >-
+      Instalá el servidor web (Web-Server) en SRV-WEB01 desde acá, con sus herramientas de
+      administración, sin iniciar sesión en él.
+    verificar:
+      - en: SRV-WEB01
+        verificar: { caracteristica: Web-Server, instalada: true }
+    pistas:
+      - "Install-WindowsFeature acepta -ComputerName."
+    solucion: [Install-WindowsFeature Web-Server -IncludeManagementTools -ComputerName SRV-WEB01]
+    explicacion: >-
+      Es lo mismo que hace el asistente "Agregar roles y características" del Administrador del
+      servidor cuando elegís otro servidor de la lista: se conecta por WinRM e instala allá.
+  - consigna: >-
+      Comprobá desde SRV-ADMIN que el rol quedó instalado en SRV-WEB01.
+    verificar:
+      - { comando_usado: "get-windowsfeature.*-computername\\s+srv-web01|invoke-command.*srv-web01" }
+      - { salida_contiene: "Web-Server" }
+    solucion: [Get-WindowsFeature Web-Server -ComputerName SRV-WEB01]

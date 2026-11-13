@@ -1,0 +1,141 @@
+---
+id: n3-m1-l3
+titulo: Herramientas de administración
+minutos: 120
+objetivos:
+  - Elegir la herramienta adecuada para cada tarea entre el Administrador del servidor, Windows Admin Center, RSAT, PowerShell remoto y el Escritorio remoto.
+  - Instalar las herramientas RSAT en Windows 11 y Windows Admin Center en un servidor de administración.
+  - Habilitar la administración remota de un Server Core y saber qué puertos y reglas de firewall usa cada herramienta.
+glosario: [winrm, windows-admin-center, rsat]
+verificado: 2026-11
+---
+
+import mapa from './mapa-herramientas.svg?raw'
+import tareas from './tareas.yaml'
+import remoto from './ej-remoto.yaml'
+
+Un administrador de Windows casi nunca se sienta frente al servidor. Ni siquiera inicia sesión en él: lo maneja desde su propia computadora o desde un servidor dedicado a administrar, con consolas que se conectan a distancia. Así se puede usar Server Core sin extrañar el escritorio, y así un solo equipo maneja decenas de servidores. En esta lección vas a conocer cada herramienta, qué necesita para conectarse y cuándo conviene cada una.
+
+<AntesDeEmpezar>
+- Puertos, TCP y servicios de red (módulo 2.3).
+- Firewalls: reglas que dejan pasar un puerto (módulo 2.6).
+- Primeros pasos de un servidor nuevo (lección anterior).
+</AntesDeEmpezar>
+
+## Administrar a distancia
+
+Pensalo como el home banking: en lugar de ir a la sucursal para cada trámite, lo hacés desde tu casa, y la sucursal ni se entera de que estás sentado en otro lado. Donde no llega la comparación: el banco ya tiene todo preparado para que entres; con un servidor, la administración remota hay que habilitarla, abrir sus puertos en el firewall y tener permisos en el otro equipo.
+
+Lo habitual en una empresa es tener una **estación de administración**: tu notebook con Windows 11 y las herramientas instaladas, o un servidor con escritorio que se usa solo para eso (en este curso, SRV-ADMIN). Desde ahí se manejan todos los demás, que pueden ser Server Core.
+
+<Diagrama svg={mapa} alt="A la izquierda, la estación de administración: una notebook con Windows 11 y RSAT, o un servidor con escritorio. En el medio, las herramientas y por dónde se conectan: el Administrador del servidor y PowerShell remoto usan WinRM (puerto 5985); las consolas MMC de RSAT (Visor de eventos, Servicios, Administración de discos) usan RPC (puerto 135 y puertos dinámicos) y necesitan grupos de reglas de firewall que vienen apagados; Windows Admin Center se abre en el navegador contra un servidor puerta de enlace por HTTPS (443), y la puerta de enlace llega a los servidores por WinRM; el Escritorio remoto usa el puerto 3389. A la derecha, los servidores administrados, muchos de ellos Server Core." pie="Casi todo pasa por WinRM; las consolas clásicas, por RPC, y el Escritorio remoto, por el 3389." />
+
+## El Administrador del servidor
+
+Es la ventana que se abre sola en los servidores con escritorio. Además de mostrar el servidor local, sirve para **agregar otros servidores** (Administrar, Agregar servidores) y verlos todos juntos: su estado, sus eventos, sus roles. Desde ahí se instalan roles en un servidor remoto (lo vas a hacer en la lección que viene) y se abren las consolas de cada rol apuntando al equipo correcto.
+
+Se conecta por **WinRM**, la administración remota de Windows, así que funciona con Server Core sin hacer nada más que lo de la lección anterior. Su límite: es cómodo para mirar y para tareas puntuales, pero no automatiza nada.
+
+## Windows Admin Center
+
+**Windows Admin Center** (WAC) es la herramienta "moderna" de Microsoft: una aplicación web para administrar servidores, clústeres y máquinas virtuales desde el navegador. La versión vigente es la **2606** (de junio de 2026); Microsoft publica una nueva cada pocos meses.
+
+Funciona así:
+
+- Se instala una **puerta de enlace** (*gateway*) en un servidor: lo ideal es uno dedicado a administrar, nunca un controlador de dominio. El instalador pide el puerto (443 por defecto) y un certificado; para el laboratorio alcanza con uno autofirmado.
+- Desde cualquier navegador entrás a `https://srv-admin` y agregás los servidores por nombre.
+- La puerta de enlace se conecta a cada servidor por **WinRM** (5985, o 5986 con HTTPS). Los servidores administrados no necesitan instalar nada.
+
+Tiene herramientas para casi todo: archivos, firewall, eventos, servicios, almacenamiento, certificados, actualizaciones, Hyper-V, y una consola de PowerShell que corre en el servidor. Es la forma más cómoda de manejar un Server Core con el mouse. *Para más adelante*: con Azure Arc, el mismo Windows Admin Center se abre desde el portal de Azure.
+
+<Pregunta id="p03" />
+
+## RSAT: las consolas en tu computadora
+
+Las **Herramientas de administración remota del servidor** (RSAT) son las consolas de siempre (Usuarios y equipos de Active Directory, DNS, DHCP, Administración de directivas de grupo) y los módulos de PowerShell de cada rol, instalados en tu computadora en lugar del servidor.
+
+En Windows 11 Pro o Enterprise se agregan como "características opcionales" (Configuración, Sistema, Características opcionales) o con PowerShell:
+
+```powershell
+Get-WindowsCapability -Online -Name "Rsat*" | Select-Object Name, State
+Add-WindowsCapability -Online -Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0"
+```
+
+En un servidor, en cambio, son características que se instalan con `Install-WindowsFeature` (por ejemplo, `RSAT-AD-Tools`). Lo vas a ver en la lección de roles.
+
+### Las consolas clásicas y el firewall
+
+Las consolas MMC (Visor de eventos, Servicios, Administración de equipos, Administración de discos) **no usan WinRM**: se conectan por **RPC**, el mecanismo de llamadas remotas de Windows (puerto 135 y después un puerto alto elegido en el momento). Y sus reglas de firewall vienen **apagadas**. Si abrís el Visor de eventos contra un Server Core y dice "Access is denied" o "The RPC server is unavailable", casi siempre es eso. Cada consola tiene su grupo de reglas:
+
+```powershell
+# En el servidor administrado (o con Invoke-Command desde tu equipo)
+Enable-NetFirewallRule -DisplayGroup "Remote Event Log Management"   # Visor de eventos
+Enable-NetFirewallRule -DisplayGroup "Remote Service Management"     # Servicios
+Enable-NetFirewallRule -DisplayGroup "Remote Volume Management"      # Administración de discos
+Enable-NetFirewallRule -DisplayGroup "Windows Management Instrumentation (WMI)"
+```
+
+## PowerShell remoto
+
+Es la herramienta que más vas a usar, y la única que escala: el mismo comando en un servidor o en cincuenta. Dos formas básicas:
+
+```powershell
+Enter-PSSession -ComputerName SRV-CORE01        # una sesión interactiva, como SSH
+Invoke-Command -ComputerName SRV-CORE01, SRV-CORE02 -ScriptBlock { Get-Service WinRM }
+```
+
+Usa **WinRM** (5985) y autentica con **Kerberos** cuando los dos equipos están en el mismo dominio. En un **grupo de trabajo** no hay Kerberos, y WinRM exige dos cosas: que el destino esté en la lista **TrustedHosts** de tu equipo, y que pases credenciales del otro equipo con `-Credential`. Para probar antes de intentar:
+
+```powershell
+Test-NetConnection SRV-CORE01 -Port 5985    # ¿llega y el firewall deja pasar?
+Test-WSMan SRV-CORE01                       # ¿WinRM responde?
+```
+
+Todo el detalle (sesiones, variables remotas, errores típicos) lo vas a ver en el módulo de PowerShell.
+
+<EnSimple>
+WinRM es la puerta de entrada para casi todo: el Administrador del servidor, Windows Admin Center y PowerShell. Las consolas viejas entran por otra puerta (RPC) que hay que abrir a mano en el firewall.
+</EnSimple>
+
+<Emparejar ejercicio={tareas} />
+
+## Escritorio remoto
+
+El **Escritorio remoto** (RDP, puerto 3389) abre la pantalla completa del servidor en una ventana. Sirve para servidores con escritorio cuando hace falta un programa gráfico que no se puede usar a distancia. Viene apagado; se activa con la opción 7 de sconfig o así:
+
+```powershell
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+```
+
+Para administrar, Windows permite **dos sesiones a la vez** sin licencias extra; para que lo usen otras personas (un programa compartido por varios usuarios) hacen falta los Servicios de Escritorio remoto y sus CAL. Y una regla que no tiene excepciones: **nunca** se publica el puerto 3389 a internet. Es de lo más atacado que existe; desde afuera se entra por VPN.
+
+<Terminal ejercicio={remoto} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Iniciar sesión en cada servidor para administrarlo">
+    Funciona, pero no escala, deja sesiones abiertas y obliga a tener escritorio. Administrá desde una estación con RSAT, Windows Admin Center o PowerShell.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar Windows Admin Center en un controlador de dominio">
+    La puerta de enlace es un servicio web más que expuesto; va en un servidor de administración, no en el corazón del dominio.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que el firewall está bien porque PowerShell remoto anda">
+    PowerShell usa WinRM; el Visor de eventos o Servicios usan RPC y necesitan sus propias reglas.
+  </ErrorComun>
+  <ErrorComun titulo="Poner TrustedHosts en *">
+    Le dice a tu equipo que confíe en cualquiera, y le mandás tus credenciales al primero que se haga pasar por el servidor. Poné solo los equipos que administrás, o mejor, usá un dominio.
+  </ErrorComun>
+  <ErrorComun titulo="Publicar el Escritorio remoto en internet">
+    Es una de las puertas más atacadas. Desde afuera, siempre por VPN.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Se administra desde una estación (Windows 11 con RSAT o un servidor de administración), no sentado en cada servidor.
+- El Administrador del servidor agrupa varios servidores y usa WinRM.
+- Windows Admin Center (versión 2606) es una aplicación web: una puerta de enlace en un servidor de administración llega a los demás por WinRM.
+- RSAT trae las consolas y los módulos de PowerShell; en Windows 11 se agregan como características opcionales.
+- Las consolas MMC usan RPC y necesitan grupos de reglas de firewall que vienen apagados.
+- PowerShell remoto usa WinRM (5985): Kerberos en un dominio; en un grupo de trabajo, TrustedHosts y -Credential.
+- El Escritorio remoto (3389) viene apagado, admite dos sesiones de administración y nunca se expone a internet.
+</Resumen>

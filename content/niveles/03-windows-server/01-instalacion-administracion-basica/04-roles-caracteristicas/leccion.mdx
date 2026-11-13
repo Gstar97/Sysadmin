@@ -1,0 +1,109 @@
+---
+id: n3-m1-l4
+titulo: Roles y características
+minutos: 90
+objetivos:
+  - Distinguir un rol, un servicio de rol y una característica, y reconocer los más usados.
+  - Instalar y quitar roles y características con PowerShell, en el servidor local y en uno remoto.
+  - Entender que instalar un rol no lo configura, y qué reinicios y herramientas hacen falta.
+glosario: [rol-windows, caracteristica-windows]
+verificado: 2026-11
+---
+
+import capas from './roles-capas.svg?raw'
+import cual from './cual-es.yaml'
+import roles from './ej-roles.yaml'
+
+En Linux, un servidor se vuelve servidor web cuando instalás nginx con `dnf`. En Windows Server la idea es la misma, pero en lugar de paquetes sueltos hay un catálogo cerrado de funciones que trae el propio sistema: los **roles** y las **características**. Saber cuál es cuál y cómo se instalan sin pasar por el asistente gráfico es lo que vas a usar en todo el resto del nivel.
+
+<AntesDeEmpezar>
+- Paquetes y gestores de paquetes en Linux (módulo 1.3), para comparar.
+- Administrar un servidor a distancia (lección anterior).
+</AntesDeEmpezar>
+
+## Tres niveles: rol, servicio de rol y característica
+
+<Diagrama svg={capas} alt="Tres cajas. Rol: la función principal que el servidor le da a la red, por ejemplo Servicios de dominio de Active Directory (AD-Domain-Services), DNS, DHCP, Servidor web IIS (Web-Server), Hyper-V, Servicios de archivos y almacenamiento, Windows Server Update Services. Dentro del rol de archivos, sus servicios de rol: Servidor de archivos (FS-FileServer), Espacios de nombres DFS (FS-DFS-Namespace), Replicación DFS, Administrador de recursos del servidor de archivos, Desduplicación. Aparte, las características: funciones de apoyo que no son el trabajo principal del servidor, como Copias de seguridad de Windows Server, Clústeres de conmutación por error, las herramientas RSAT, el cliente Telnet o .NET Framework. Abajo, una nota: instalar no es configurar; Install-WindowsFeature deja el rol instalado, pero después hay que configurarlo (promover el controlador, autorizar el DHCP, crear el sitio web)." pie="El rol es el trabajo del servidor; las características, sus herramientas." />
+
+- Un **rol** es la función principal que el servidor le da a la red: Active Directory, DNS, DHCP, servidor web (IIS), Hyper-V, servidor de archivos, actualizaciones (WSUS). Un servidor puede tener varios, pero en una empresa ordenada cada servidor tiene uno o dos.
+- Un **servicio de rol** es una parte de un rol que se instala por separado. El rol de archivos, por ejemplo, tiene Servidor de archivos, Espacios de nombres DFS, Replicación DFS y Desduplicación, y se instala solo lo que hace falta.
+- Una **característica** es una función de apoyo que no es "el trabajo" del servidor: las copias de seguridad, los clústeres, las herramientas de administración (RSAT), .NET Framework.
+
+Para PowerShell, los tres son lo mismo: elementos de una lista que se instalan con el mismo cmdlet. La diferencia es de concepto, y aparece en el asistente gráfico, que los muestra en pantallas distintas.
+
+Es como armar una cocina para un local: el rol es lo que va a ser (pizzería, cafetería), los servicios de rol son los equipos de ese rubro (el horno de barro, la máquina de café), y las características son lo que necesita cualquier cocina (la heladera, el matafuego). Donde no llega la comparación: en Windows no podés traer un equipo de otro proveedor; el catálogo es el que viene con el sistema, y lo demás (un antivirus de terceros, una base de datos) se instala como un programa común.
+
+<EnSimple>
+Rol: para qué está el servidor. Característica: algo que le suma una herramienta. Los dos se instalan igual, con Install-WindowsFeature.
+</EnSimple>
+
+<Emparejar ejercicio={cual} />
+
+## Ver qué hay y qué está instalado
+
+```powershell
+Get-WindowsFeature                          # todo el catálogo, con [X] en lo instalado
+Get-WindowsFeature | Where-Object Installed # solo lo instalado
+Get-WindowsFeature *dns*                    # buscar por nombre
+```
+
+La columna **Name** es la que importa: `AD-Domain-Services`, `DNS`, `DHCP`, `Web-Server`, `Hyper-V`, `FS-FileServer`, `RSAT-AD-Tools`. Los nombres para mostrar (Display Name) cambian según el idioma; los de la columna Name, nunca.
+
+## Instalar y quitar
+
+```powershell
+Install-WindowsFeature -Name DNS -IncludeManagementTools
+Install-WindowsFeature -Name FS-DFS-Namespace, FS-DFS-Replication -IncludeManagementTools
+Uninstall-WindowsFeature -Name Telnet-Client
+```
+
+Tres opciones que conviene conocer:
+
+- **`-IncludeManagementTools`** suma las consolas y el módulo de PowerShell del rol. Sin esto, en un servidor con escritorio no aparece la consola del rol, y en ningún servidor queda el módulo para administrarlo con PowerShell. Ponelo siempre.
+- **`-Restart`** reinicia solo si hace falta. La mayoría de los roles no lo necesitan; Hyper-V, los clústeres y algunos otros, sí. El resultado lo dice en la columna *Restart Needed*.
+- **`-ComputerName`** instala en otro servidor por WinRM, sin iniciar sesión. Es lo mismo que hace el asistente del Administrador del servidor cuando elegís otro equipo de la lista.
+
+Y una que te salva de sorpresas: **`-WhatIf`** muestra qué haría sin hacerlo.
+
+<Pregunta id="p04" />
+
+### Instalar no es configurar
+
+`Install-WindowsFeature AD-Domain-Services` deja el rol instalado, pero el servidor **no es** controlador de dominio: falta promoverlo (módulo 3.3). Con el DHCP pasa lo mismo: hay que crear el ámbito y, en un dominio, autorizarlo. Con IIS queda un sitio de ejemplo y nada más. Cada rol tiene su segunda parte, y la vas a ver con cada uno.
+
+### Server Core y las consolas
+
+En Server Core, `-IncludeManagementTools` instala los **módulos de PowerShell** del rol, pero no las consolas gráficas (no hay dónde mostrarlas). Las consolas se usan desde tu estación con RSAT, apuntando al servidor. Para algunos programas de terceros que necesitan piezas gráficas, existe la característica a pedido **Server Core App Compatibility**, que agrega el Explorador, el Visor de eventos y otras consolas a un Core. *Para más adelante*; si un programa la necesita, el proveedor lo va a decir.
+
+## Menos es más
+
+Cada rol y característica instalada es código que hay que actualizar y una puerta más por la que pueden entrar. La regla es la misma que en Linux: **instalá solo lo que el servidor necesita** y sacá lo que dejó de usarse. Un servidor de archivos no necesita IIS "por si algún día"; un controlador de dominio no debería tener nada más que AD, DNS y, como mucho, DHCP.
+
+<Terminal ejercicio={roles} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Instalar sin -IncludeManagementTools">
+    El rol queda instalado pero sin consola ni módulo de PowerShell. Volvé a instalar con la opción: no rompe lo que ya está.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que instalar el rol lo deja funcionando">
+    AD DS hay que promoverlo, el DHCP necesita ámbito y autorización, IIS necesita sitios. Instalar es el primer paso.
+  </ErrorComun>
+  <ErrorComun titulo="Usar el nombre para mostrar">
+    "DNS Server" no es el nombre; el que acepta el cmdlet es DNS. Los nombres de la columna Name no cambian con el idioma.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar roles de más por las dudas">
+    Más código para actualizar y más superficie de ataque. Un servidor, una o dos funciones.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar las herramientas de AD y pensar que el servidor es controlador">
+    RSAT-AD-Tools trae solo las consolas y el módulo. El rol es AD-Domain-Services.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Rol: la función principal (AD DS, DNS, DHCP, IIS, Hyper-V, archivos, WSUS). Servicio de rol: una parte de un rol. Característica: una herramienta de apoyo (backup, clúster, RSAT).
+- Get-WindowsFeature lista el catálogo; la columna Name es la que se usa.
+- Install-WindowsFeature con -IncludeManagementTools siempre; -Restart si hace falta; -ComputerName para otro servidor; -WhatIf para probar.
+- Instalar no es configurar: cada rol tiene su segunda parte.
+- En Server Core se instalan los módulos; las consolas se usan desde tu estación.
+- Instalá solo lo que el servidor necesita.
+</Resumen>

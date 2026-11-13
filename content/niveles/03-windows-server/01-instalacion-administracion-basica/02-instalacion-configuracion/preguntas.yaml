@@ -1,0 +1,101 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En el asistente de instalación aparecen "Windows Server 2025 Standard" y "Windows Server 2025 Standard (Desktop Experience)". ¿Cuál es Server Core?
+  opciones:
+    - { texto: "La que no dice Desktop Experience", correcta: true, explicacion: "Server Core es la opción por defecto; la otra trae el escritorio." }
+    - { texto: "La que dice Desktop Experience", explicacion: "Desktop Experience es la experiencia de escritorio." }
+    - { texto: "Ninguna: Server Core se elige después de instalar", explicacion: "Se elige en la instalación y no se cambia después." }
+    - { texto: "Las dos son iguales hasta que se activa la licencia", explicacion: "La licencia no cambia la forma de instalación." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 1
+  enunciado: Un servidor recién instalado muestra esto. ¿Qué está pasando?
+  salida: |
+    Ethernet adapter Ethernet:
+
+       Connection-specific DNS Suffix  . :
+       Autoconfiguration IPv4 Address. . : 169.254.12.34
+       Subnet Mask . . . . . . . . . . . : 255.255.0.0
+       Default Gateway . . . . . . . . . :
+  opciones:
+    - { texto: "Pidió IP por DHCP, nadie le contestó y se puso una automática (APIPA)", correcta: true, explicacion: "Las 169.254.x.x aparecen cuando no hay DHCP; solo sirven para los vecinos." }
+    - { texto: "Tiene IP fija mal configurada", explicacion: "Dice Autoconfiguration: la eligió Windows." }
+    - { texto: "El cable está desconectado", explicacion: "Con el cable desconectado diría Media disconnected." }
+    - { texto: "Está todo bien", explicacion: "Sin puerta de enlace ni DNS, no llega a ningún lado." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que pone en la placa Ethernet la IP 192.168.10.21/24 con puerta de enlace 192.168.10.1.
+  aceptadas:
+    - New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.10.21 -PrefixLength 24 -DefaultGateway 192.168.10.1
+    - New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 192.168.10.21 -PrefixLength 24 -DefaultGateway 192.168.10.1
+  patrones:
+    - "^new-netipaddress\\s+(?=.*-interfacealias\\s+\"?ethernet\"?)(?=.*-ipaddress\\s+192\\.168\\.10\\.21)(?=.*-prefixlength\\s+24)(?=.*-defaultgateway\\s+192\\.168\\.10\\.1).*$"
+  explicacion: "New-NetIPAddress pone la IP, la máscara (como largo de prefijo) y la puerta de enlace; el DNS va aparte con Set-DnsClientServerAddress."
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene cambiar el nombre del servidor antes de unirlo al dominio?
+  opciones:
+    - { texto: "Para que la cuenta de equipo se cree con el nombre definitivo y no haga falta un reinicio más", correcta: true, explicacion: "Renombrar después también se puede, pero es más trabajo y deja la cuenta vieja." }
+    - { texto: "Porque un equipo del dominio no se puede renombrar nunca", explicacion: "Se puede, con credenciales del dominio." }
+    - { texto: "Porque el dominio exige nombres que empiecen con SRV", explicacion: "No hay una regla así; el nombre lo elige la empresa." }
+    - { texto: "No importa el orden", explicacion: "Importa: cada cambio de nombre pide reiniciar." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Ejecutaste Rename-Computer -NewName SRV-ARCH01 y `hostname` sigue mostrando WIN-7H2K9QJ4LMA. ¿Por qué?
+  opciones:
+    - { texto: "El nombre nuevo queda pendiente hasta reiniciar", correcta: true, explicacion: "Rename-Computer lo avisa; con -Restart reinicia en el momento." }
+    - { texto: "El comando falló", explicacion: "Si fallara, mostraría un error en rojo." }
+    - { texto: "hostname muestra el nombre del dominio", explicacion: "Muestra el nombre del equipo." }
+    - { texto: "Hay que ejecutarlo dos veces", explicacion: "Una vez alcanza; falta reiniciar." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor que todavía no está en un dominio tiene la red como "Public". ¿Qué implica para la administración remota?
+  opciones:
+    - { texto: "El firewall solo deja entrar a WinRM desde la misma subred", correcta: true, explicacion: "En el perfil público las reglas son más estrictas; en el laboratorio se puede pasar a Private." }
+    - { texto: "Que nadie puede conectarse nunca", explicacion: "Desde la misma subred se puede." }
+    - { texto: "Que el servidor está expuesto a internet", explicacion: "El perfil es una categoría del firewall, no dice dónde está el servidor." }
+    - { texto: "Nada", explicacion: "Cambia qué reglas del firewall se aplican." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué DNS tiene que tener un servidor que se va a unir al dominio empresa.local?
+  opciones:
+    - { texto: "El del controlador de dominio", correcta: true, explicacion: "Solo el DNS del dominio conoce los nombres internos y los registros que se usan para encontrar a los controladores." }
+    - { texto: "8.8.8.8, que siempre anda", explicacion: "Un DNS público no conoce empresa.local." }
+    - { texto: "El de la puerta de enlace", explicacion: "El router no conoce el dominio (salvo que reenvíe al DC)." }
+    - { texto: "Ninguno, alcanza con la IP", explicacion: "Sin DNS no encuentra el dominio." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estos son nombres válidos para un equipo Windows? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "SRV-ARCH01", correcta: true, explicacion: "Letras, números y guiones, menos de 15 caracteres." }
+    - { texto: "DC01", correcta: true, explicacion: "Corto y válido." }
+    - { texto: "SERVIDOR DE ARCHIVOS", explicacion: "No admite espacios." }
+    - { texto: "srv.archivos", explicacion: "No admite puntos." }
+    - { texto: "SERVIDOR-ARCHIVOS-CENTRAL", explicacion: "Pasa los 15 caracteres." }
+    - { texto: "12345", explicacion: "No puede ser solo números." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: En un Server Core cerraste sin querer la ventana de PowerShell y quedó la pantalla negra. ¿Cómo abrís otra?
+  opciones:
+    - { texto: "Ctrl+Alt+Supr, Administrador de tareas, Archivo, Ejecutar nueva tarea: powershell", correcta: true, explicacion: "En Core no hay menú Inicio; el Administrador de tareas permite lanzar programas." }
+    - { texto: "Reiniciar el servidor", explicacion: "Funciona, pero no hace falta." }
+    - { texto: "Instalar el escritorio", explicacion: "No se puede sin reinstalar." }
+    - { texto: "Clic derecho en el escritorio", explicacion: "Server Core no tiene escritorio." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene configurar con PowerShell en lugar de sconfig, aunque los dos hagan lo mismo?
+  opciones:
+    - { texto: "Porque los comandos quedan escritos: se pueden documentar y repetir iguales en el próximo servidor", correcta: true, explicacion: "Con diez servidores, la diferencia es enorme." }
+    - { texto: "Porque sconfig no funciona en Server Core", explicacion: "sconfig es justamente el menú de Server Core." }
+    - { texto: "Porque PowerShell no pide reiniciar", explicacion: "Los cambios que piden reinicio lo piden igual." }
+    - { texto: "Porque sconfig está desactualizado", explicacion: "Es una herramienta vigente; solo es más lenta para muchos equipos." }

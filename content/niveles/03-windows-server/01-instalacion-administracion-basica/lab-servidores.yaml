@@ -1,0 +1,120 @@
+tipo: pasos
+titulo: Un Server Core y un servidor con escritorio, administrados a distancia
+descripcion: >-
+  Vas a instalar dos Windows Server 2025 en tu hipervisor: SRV-ADMIN, con escritorio, que va a ser
+  tu estación de administración durante todo el nivel, y SRV-CORE01, un Server Core. Después vas a
+  manejar el Core solo desde SRV-ADMIN, con PowerShell remoto, el Administrador del servidor,
+  Windows Admin Center y las consolas. Usan la red del laboratorio (192.168.10.0/24) que armaste
+  en el Nivel 2. Calculá unas tres horas, la mayor parte esperando instalaciones.
+pasos:
+  - titulo: Bajar el ISO y crear las dos máquinas virtuales
+    detalle: >-
+      Bajá el ISO de evaluación de Windows Server 2025 del Centro de evaluación de Microsoft.
+      Creá dos máquinas virtuales de generación 2 (UEFI) con arranque seguro, conectadas a la red
+      del laboratorio. SRV-ADMIN: 2 vCPU, 4 GB de RAM, 60 GB de disco. SRV-CORE01: 2 vCPU, 2 GB de
+      RAM, 60 GB de disco y un segundo disco de 20 GB (para la parte de almacenamiento).
+    variantes:
+      - nombre: Hyper-V
+        detalle: En PowerShell como administrador, en tu equipo con Hyper-V.
+        comandos:
+          - New-VM -Name SRV-CORE01 -Generation 2 -MemoryStartupBytes 2GB -NewVHDPath D:\VM\SRV-CORE01.vhdx -NewVHDSizeBytes 60GB -SwitchName Labred
+          - New-VHD -Path D:\VM\SRV-CORE01-datos.vhdx -SizeBytes 20GB -Dynamic
+          - Add-VMHardDiskDrive -VMName SRV-CORE01 -Path D:\VM\SRV-CORE01-datos.vhdx
+          - Add-VMDvdDrive -VMName SRV-CORE01 -Path D:\ISO\WindowsServer2025.iso
+      - nombre: VirtualBox
+        detalle: >-
+          Tipo Windows 2025 (64-bit), con EFI activado en Sistema y la placa en la red interna o
+          puente que usaste para el laboratorio. Agregá el segundo disco en Almacenamiento.
+    comprobar: Las dos máquinas arrancan desde el ISO y muestran el asistente de instalación.
+  - titulo: Instalar
+    detalle: >-
+      En SRV-ADMIN elegí "Windows Server 2025 Standard Evaluation (Desktop Experience)"; en
+      SRV-CORE01, la que no dice Desktop Experience. Idioma del sistema en inglés, teclado el tuyo,
+      instalación personalizada en el disco 0. Poné una contraseña de Administrador que cumpla la
+      complejidad y anotala en tu gestor de contraseñas. Al terminar, tomá una instantánea de cada
+      una (recien-instalado).
+    comprobar: SRV-ADMIN muestra el Administrador del servidor y SRV-CORE01, la consola con sconfig.
+  - titulo: Configuración inicial de SRV-ADMIN
+    detalle: >-
+      En SRV-ADMIN, abrí PowerShell como administrador y hacé los primeros pasos de la lección
+      3.1.2: IP fija 192.168.10.5/24, puerta de enlace y DNS de tu laboratorio, zona horaria,
+      perfil de red privado y el nombre SRV-ADMIN (con reinicio).
+    comandos:
+      - New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.10.5 -PrefixLength 24 -DefaultGateway 192.168.10.1
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.53
+      - Set-TimeZone -Id "Argentina Standard Time"
+      - Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
+      - Rename-Computer -NewName SRV-ADMIN -Restart
+    comprobar: Después del reinicio, hostname dice SRV-ADMIN y Test-NetConnection 192.168.10.1 da PingSucceeded True.
+  - titulo: Configuración inicial de SRV-CORE01 con sconfig
+    detalle: >-
+      En SRV-CORE01 hacé lo mismo, pero esta vez con el menú de sconfig: opción 8 para la red
+      (192.168.10.22/24), 9 para la hora y 2 para el nombre. Después salí a PowerShell (opción 15)
+      y pasá el perfil de red a privado, que sconfig no tiene.
+    comandos:
+      - Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
+      - Get-NetIPConfiguration
+    comprobar: sconfig muestra el nombre SRV-CORE01 y la red con IP fija.
+  - titulo: Actualizaciones
+    detalle: >-
+      En los dos servidores, instalá las actualizaciones pendientes: en SRV-ADMIN desde
+      Configuración, Windows Update; en SRV-CORE01, opción 6 de sconfig. Reiniciá si lo piden.
+      Si tu laboratorio no tiene salida a internet, anotalo en el cuaderno técnico y seguí.
+    comprobar: Get-HotFix muestra la actualización acumulativa del mes en los dos.
+  - titulo: Administrar SRV-CORE01 con PowerShell remoto
+    detalle: >-
+      Desde SRV-ADMIN, agregá SRV-CORE01 a TrustedHosts (todavía no hay dominio) y probá la
+      conexión. Usá -Credential con la cuenta Administrador de SRV-CORE01.
+    comandos:
+      - Test-NetConnection 192.168.10.22 -Port 5985
+      - Set-Item WSMan:\localhost\Client\TrustedHosts -Value "SRV-CORE01,192.168.10.22" -Force
+      - $cred = Get-Credential SRV-CORE01\Administrator
+      - Invoke-Command -ComputerName 192.168.10.22 -Credential $cred -ScriptBlock { Get-ComputerInfo -Property CsName, WindowsInstallationType }
+    comprobar: Invoke-Command devuelve CsName SRV-CORE01 y WindowsInstallationType Server Core.
+  - titulo: Abrir el firewall para las consolas
+    detalle: >-
+      Las consolas MMC usan RPC. Habilitá en SRV-CORE01 los grupos de reglas que necesitan (desde
+      SRV-ADMIN, con Invoke-Command) y, en SRV-ADMIN, el de administración de volúmenes, que la
+      consola de discos necesita en los dos lados.
+    comandos:
+      - Invoke-Command -ComputerName 192.168.10.22 -Credential $cred -ScriptBlock { Enable-NetFirewallRule -DisplayGroup "Remote Event Log Management", "Remote Service Management", "Remote Volume Management", "Windows Management Instrumentation (WMI)" }
+      - Enable-NetFirewallRule -DisplayGroup "Remote Volume Management"
+    comprobar: >-
+      En SRV-ADMIN, el Visor de eventos (Acción, Conectar a otro equipo) abre los registros de
+      SRV-CORE01. Para que las consolas usen la cuenta de SRV-CORE01, guardala antes con
+      cmdkey /add:SRV-CORE01 /user:SRV-CORE01\Administrator /pass.
+  - titulo: Agregarlo al Administrador del servidor
+    detalle: >-
+      En el Administrador del servidor de SRV-ADMIN: Administrar, Agregar servidores, pestaña DNS
+      (o por IP), SRV-CORE01. Como no hay dominio, clic derecho en el servidor, Administrar como,
+      y la cuenta de SRV-CORE01. Desde ahí, instalá en SRV-CORE01 la característica
+      Windows-Server-Backup con el asistente, y comprobalo con PowerShell.
+    comandos:
+      - Get-WindowsFeature Windows-Server-Backup -ComputerName 192.168.10.22 -Credential $cred
+    comprobar: SRV-CORE01 aparece en Todos los servidores con estado Online y la característica figura instalada.
+  - titulo: Windows Admin Center
+    detalle: >-
+      En SRV-ADMIN, bajá Windows Admin Center (la versión vigente, 2606) del sitio de Microsoft e
+      instalalo con la puerta de enlace en el puerto 443 y un certificado autofirmado. Abrí
+      https://srv-admin en el navegador, agregá SRV-CORE01 con sus credenciales y recorré
+      Información general, Eventos, Servicios y Firewall.
+    comprobar: Windows Admin Center muestra el uso de CPU y memoria de SRV-CORE01 en tiempo real.
+  - titulo: El segundo disco del Core
+    detalle: >-
+      Con Windows Admin Center (Almacenamiento) o con PowerShell remoto, poné en servicio el disco
+      de 20 GB de SRV-CORE01 como D:, NTFS, etiqueta Datos.
+    comandos:
+      - Enter-PSSession -ComputerName 192.168.10.22 -Credential $cred
+      - Get-Disk
+      - Set-Disk -Number 1 -IsOffline $false
+      - Initialize-Disk -Number 1 -PartitionStyle GPT
+      - New-Partition -DiskNumber 1 -UseMaximumSize -DriveLetter D | Format-Volume -FileSystem NTFS -NewFileSystemLabel Datos -Confirm:$false
+      - exit
+    comprobar: >-
+      Get-Volume en SRV-CORE01 muestra D: con la etiqueta Datos.
+  - titulo: Documentar y guardar
+    detalle: >-
+      Anotá en el cuaderno técnico los dos servidores (nombre, IP, edición, Core o escritorio,
+      versión de las actualizaciones) y cómo se administra SRV-CORE01. Tomá una instantánea de
+      cada uno (base-configurada): los vas a usar en el resto del nivel.
+    comprobar: Tenés las dos instantáneas y la ficha de cada servidor en el cuaderno.

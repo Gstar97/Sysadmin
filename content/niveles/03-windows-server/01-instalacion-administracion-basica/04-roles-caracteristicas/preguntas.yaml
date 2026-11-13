@@ -1,0 +1,97 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál de estos es un rol y no una característica?
+  opciones:
+    - { texto: "DHCP", correcta: true, explicacion: "Repartir direcciones es un trabajo que el servidor le da a la red." }
+    - { texto: "Copias de seguridad de Windows Server", explicacion: "Es una característica: una herramienta para el propio servidor." }
+    - { texto: "RSAT-AD-Tools", explicacion: "Son herramientas de administración: una característica." }
+    - { texto: ".NET Framework", explicacion: "Es una característica de apoyo." }
+- id: p02
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que instala el rol DNS con sus herramientas de administración.
+  aceptadas:
+    - Install-WindowsFeature DNS -IncludeManagementTools
+    - Install-WindowsFeature -Name DNS -IncludeManagementTools
+    - Add-WindowsFeature DNS -IncludeManagementTools
+  patrones: ["^(install|add)-windowsfeature\\s+(-name\\s+)?dns\\s+-includemanagementtools$"]
+  explicacion: "El nombre del rol es DNS (no DNS Server); -IncludeManagementTools suma la consola y el módulo DnsServer."
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Instalaste AD-Domain-Services en un servidor nuevo. ¿Ya es controlador de dominio?
+  opciones:
+    - { texto: "No: el rol está instalado, pero falta promoverlo (crear el bosque o sumarse a uno)", correcta: true, explicacion: "Instalar y configurar son dos pasos." }
+    - { texto: "Sí, al reiniciar", explicacion: "Sin la promoción, sigue siendo un servidor común." }
+    - { texto: "Sí, inmediatamente", explicacion: "Falta la promoción." }
+    - { texto: "Solo si tenía DNS", explicacion: "Con o sin DNS, falta promoverlo." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Instalaste el rol DHCP sin -IncludeManagementTools en un servidor con escritorio. ¿Qué vas a notar?
+  opciones:
+    - { texto: "Que no aparece la consola DHCP ni el módulo DhcpServer de PowerShell", correcta: true, explicacion: "Las herramientas se instalan aparte; se pueden agregar después sin romper nada." }
+    - { texto: "Que el rol no funciona", explicacion: "El rol funciona; falta cómo administrarlo." }
+    - { texto: "Que el servidor pide reiniciar", explicacion: "No tiene relación." }
+    - { texto: "Nada: las herramientas vienen siempre", explicacion: "Sin la opción, no vienen." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cómo instalás el rol Web-Server en SRV-WEB01 sin iniciar sesión en él?
+  opciones:
+    - { texto: "Install-WindowsFeature Web-Server -IncludeManagementTools -ComputerName SRV-WEB01", correcta: true, explicacion: "Install-WindowsFeature se conecta por WinRM al otro servidor." }
+    - { texto: "No se puede: hay que entrar por Escritorio remoto", explicacion: "Se puede a distancia, por PowerShell o el Administrador del servidor." }
+    - { texto: "Copiando los archivos de IIS por la red", explicacion: "Los roles se instalan con el cmdlet o el asistente." }
+    - { texto: "dnf install iis", explicacion: "Eso sería Linux (y no existe ese paquete)." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Instalaste Hyper-V y apareció esto. ¿Qué significa?
+  salida: |
+    Success Restart Needed Exit Code              Feature Result
+    ------- -------------- ---------              --------------
+    True    Yes            SuccessRestartRequired {Hyper-V}
+    WARNING: You must restart this server to finish the installation process.
+  opciones:
+    - { texto: "Se instaló, pero termina de aplicarse al reiniciar el servidor", correcta: true, explicacion: "Hyper-V cambia cómo arranca el equipo; con -Restart reinicia solo." }
+    - { texto: "Falló la instalación", explicacion: "Success dice True." }
+    - { texto: "Hay que instalarlo otra vez", explicacion: "Alcanza con reiniciar." }
+    - { texto: "Faltan las herramientas de administración", explicacion: "La salida no dice nada de eso." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace cada opción de Install-WindowsFeature? Marcá las afirmaciones correctas.
+  opciones:
+    - { texto: "-WhatIf muestra qué instalaría sin hacerlo", correcta: true, explicacion: "Sirve para revisar antes." }
+    - { texto: "-Restart reinicia solo si hace falta", correcta: true, explicacion: "Si el rol no lo necesita, no reinicia." }
+    - { texto: "-ComputerName instala en otro servidor", correcta: true, explicacion: "Por WinRM." }
+    - { texto: "-IncludeManagementTools configura el rol", explicacion: "Suma las herramientas; la configuración es aparte." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un Server Core instalaste DNS con -IncludeManagementTools. ¿Dónde está la consola gráfica de DNS?
+  opciones:
+    - { texto: "En ningún lado del servidor: se usa desde tu estación con RSAT, apuntando a él; en el Core queda el módulo de PowerShell", correcta: true, explicacion: "Core no tiene dónde mostrar consolas." }
+    - { texto: "En el menú Inicio del Core", explicacion: "Server Core no tiene menú Inicio." }
+    - { texto: "En sconfig", explicacion: "sconfig no tiene consolas de roles." }
+    - { texto: "Hay que instalar el escritorio", explicacion: "No hace falta ni se puede sin reinstalar." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Por qué no conviene instalar en un servidor roles que no se usan?
+  opciones:
+    - { texto: "Porque son más código para actualizar y más lugares por donde atacar", correcta: true, explicacion: "Lo mismo que en Linux: lo que no está instalado no se puede explotar." }
+    - { texto: "Porque se cobran aparte", explicacion: "Los roles vienen con la licencia." }
+    - { texto: "Porque Windows deja de andar con más de tres roles", explicacion: "No hay un límite así." }
+    - { texto: "No hay problema en instalar todo", explicacion: "Lo hay: superficie de ataque y mantenimiento." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés buscar cómo se llama el rol de actualizaciones de Windows para instalarlo. ¿Qué comando usás?
+  opciones:
+    - { texto: "Get-WindowsFeature *update*", correcta: true, explicacion: "Acepta comodines y busca en el nombre y en el nombre para mostrar: aparece UpdateServices." }
+    - { texto: "Get-Command *update*", explicacion: "Busca comandos, no roles." }
+    - { texto: "Get-Service *update*", explicacion: "Busca servicios ya instalados." }
+    - { texto: "Find-Module *update*", explicacion: "Busca módulos en la galería de PowerShell." }

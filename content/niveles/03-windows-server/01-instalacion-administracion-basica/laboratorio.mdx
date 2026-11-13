@@ -1,0 +1,36 @@
+---
+titulo: Un Server Core y un servidor con escritorio, administrados a distancia
+horas: 3
+verificacion:
+  - Instalé SRV-ADMIN con escritorio y SRV-CORE01 como Server Core, en UEFI con arranque seguro.
+  - Los dos tienen IP fija, DNS, zona horaria, perfil privado, su nombre y las actualizaciones al día.
+  - Administré SRV-CORE01 desde SRV-ADMIN con PowerShell remoto, sin iniciar sesión en él.
+  - Abrí los registros de SRV-CORE01 con el Visor de eventos de SRV-ADMIN, después de habilitar sus reglas de firewall.
+  - Agregué SRV-CORE01 al Administrador del servidor y le instalé una característica desde ahí.
+  - Instalé Windows Admin Center en SRV-ADMIN y vi SRV-CORE01 desde el navegador.
+  - Puse en servicio el segundo disco de SRV-CORE01 y documenté los dos servidores con sus instantáneas.
+---
+
+import pasos from './lab-servidores.yaml'
+
+## Objetivo
+
+Armar las dos piezas que vas a usar durante todo el nivel: un servidor con escritorio que hace de estación de administración (SRV-ADMIN) y un Server Core que se maneja solo a distancia (SRV-CORE01). Al terminar, vas a haber usado las cuatro herramientas del módulo sobre el mismo servidor, y vas a saber qué puertos y reglas necesita cada una.
+
+## Qué necesitás
+
+- Un hipervisor (Hyper-V, VirtualBox o VMware) con unos 6 GB de RAM libres y 140 GB de disco.
+- El ISO de evaluación de Windows Server 2025 (180 días, gratis).
+- La red del laboratorio del Nivel 2 (192.168.10.0/24), con salida a internet si querés instalar las actualizaciones. Si todavía no la tenés, alcanza con una red interna del hipervisor: usá las mismas direcciones y saltate el paso de actualizaciones.
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+La versión de evaluación dura 180 días y, cuando vence, el servidor se apaga solo cada una hora. Para un laboratorio alcanza de sobra; para algo que va a quedar en uso, hace falta una licencia. Y no uses la contraseña del laboratorio en ningún otro lado.
+</Advertencia>
+
+## Para pensar
+
+1. ¿Qué tareas te resultaron más cómodas con Windows Admin Center y cuáles con PowerShell? ¿Cuál usarías si tuvieras que hacer lo mismo en 20 servidores?
+2. Las consolas MMC necesitaron reglas de firewall que PowerShell no necesitaba. ¿Qué te dice eso sobre por dónde se conecta cada herramienta?
+3. Pusiste SRV-CORE01 en TrustedHosts porque no hay dominio. ¿Qué riesgo tiene eso, y qué cambia cuando los dos servidores se unan al dominio del módulo 3.3?

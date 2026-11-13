@@ -1,0 +1,78 @@
+tipo: terminal
+shell: powershell
+titulo: Primer arranque de un Server Core
+descripcion: >-
+  Acabás de instalar Windows Server 2025 Standard (Server Core) en una máquina virtual. La placa
+  de red está conectada a la red del laboratorio (192.168.10.0/24, puerta de enlace 192.168.10.1,
+  DNS 192.168.10.10), pero no hay DHCP. Vas a dejarlo listo para trabajar: IP fija, DNS, nombre,
+  hora y perfil de red. El nombre que tiene que quedar es SRV-ARCH01 y la IP, 192.168.10.21.
+estado_inicial:
+  equipo: WIN-7H2K9QJ4LMA
+  experiencia: core
+  zona_horaria: Pacific Standard Time
+  red: { ip: 169.254.12.34, dhcp: true, puerta_enlace: "", dns: [] }
+pasos:
+  - consigna: >-
+      Mirá cómo quedó la red. Usá `ipconfig` o `Get-NetIPConfiguration` y fijate qué dirección
+      tiene la placa y cómo se llama.
+    verificar:
+      - { comando_usado: "ipconfig|get-netipconfiguration|gip|get-netipaddress|get-netadapter" }
+    pistas:
+      - "Una dirección 169.254.x.x quiere decir que la placa pidió IP por DHCP y nadie le contestó."
+    solucion: [Get-NetIPConfiguration]
+    explicacion: >-
+      La placa se llama Ethernet y tiene una dirección automática (APIPA): sin DHCP, Windows se
+      inventa una para hablar solo con los vecinos. Un servidor siempre lleva IP fija.
+  - consigna: >-
+      Asigná la IP fija 192.168.10.21/24 con puerta de enlace 192.168.10.1 y el DNS
+      192.168.10.10.
+    verificar:
+      - { ip: 192.168.10.21, prefijo: 24, puerta_enlace: 192.168.10.1, dns: [192.168.10.10] }
+    pistas:
+      - "New-NetIPAddress pone la IP y la puerta de enlace; Set-DnsClientServerAddress, el DNS."
+      - "Las dos piden -InterfaceAlias Ethernet."
+    solucion:
+      - New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.10.21 -PrefixLength 24 -DefaultGateway 192.168.10.1
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.10
+    explicacion: >-
+      Con la primera IP fija, la placa deja de pedir por DHCP. En sconfig es la opción 8, pero
+      con PowerShell queda escrito y lo podés repetir en el próximo servidor.
+  - consigna: >-
+      Cambiá la zona horaria a la de Buenos Aires (Argentina Standard Time) y comprobala.
+    verificar:
+      - { zona_horaria: Argentina Standard Time }
+    pistas:
+      - "Get-TimeZone -ListAvailable muestra todas; Set-TimeZone -Id la cambia."
+    solucion:
+      - Set-TimeZone -Id "Argentina Standard Time"
+      - Get-TimeZone
+    explicacion: >-
+      Con la zona equivocada, los registros quedan con horas corridas y cuesta cruzarlos con los
+      de otros equipos. Más adelante, en un dominio, la hora la sincroniza el controlador.
+  - consigna: >-
+      La red figura como pública porque el servidor todavía no está en un dominio. Pasala a
+      privada, que es lo correcto para la red del laboratorio.
+    verificar:
+      - { perfil_red: Private }
+    pistas:
+      - "Get-NetConnectionProfile muestra la categoría; Set-NetConnectionProfile la cambia."
+    solucion:
+      - Get-NetConnectionProfile
+      - Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
+    explicacion: >-
+      En el perfil público el firewall es más estricto (por ejemplo, la administración remota
+      solo acepta equipos de la misma subred). Cuando el servidor se una al dominio, el perfil
+      pasa solo a DomainAuthenticated.
+  - consigna: >-
+      Cambiale el nombre a SRV-ARCH01 y reiniciá para que tome efecto. Después comprobá el
+      nombre con `hostname`.
+    verificar:
+      - { nombre_equipo: SRV-ARCH01 }
+    pistas:
+      - "Rename-Computer avisa que el cambio se aplica al reiniciar; podés usar -Restart o Restart-Computer."
+    solucion:
+      - Rename-Computer -NewName SRV-ARCH01 -Restart
+      - hostname
+    explicacion: >-
+      El nombre se cambia antes de unirlo al dominio: así la cuenta de equipo nace con el nombre
+      correcto. Los nombres de Windows tienen hasta 15 caracteres, sin espacios ni puntos.

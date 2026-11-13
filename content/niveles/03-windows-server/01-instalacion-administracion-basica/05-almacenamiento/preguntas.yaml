@@ -1,0 +1,98 @@
+- id: p01
+  tipo: interpretar_salida
+  diagnostico: true
+  dificultad: 1
+  enunciado: Agregaste un disco a un servidor y Get-Disk muestra esto. ¿Qué tenés que hacer primero?
+  salida: |
+    Number Friendly Name     Serial Number HealthStatus OperationalStatus Total Size Partition Style
+    ------ -------------     ------------- ------------ ----------------- ---------- ---------------
+         0 Msft Virtual Disk               Healthy      Online                 60 GB GPT
+         1 Msft Virtual Disk               Healthy      Offline               200 GB RAW
+  opciones:
+    - { texto: "Ponerlo en línea (Set-Disk -Number 1 -IsOffline $false) e inicializarlo", correcta: true, explicacion: "Está fuera de línea y RAW: los dos pasos que faltan antes de particionar." }
+    - { texto: "Formatearlo directamente", explicacion: "No se puede formatear un disco sin partición ni estilo de partición." }
+    - { texto: "Cambiarlo: está roto", explicacion: "HealthStatus dice Healthy; fuera de línea es lo normal para un disco nuevo en un servidor." }
+    - { texto: "Reiniciar el servidor", explicacion: "No hace falta." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué Windows Server deja fuera de línea los discos nuevos?
+  opciones:
+    - { texto: "Para no escribir por error en un disco que podría estar usando otro equipo, como un disco compartido de una SAN", correcta: true, explicacion: "Es una protección: el administrador decide cuándo usarlo." }
+    - { texto: "Porque está dañado", explicacion: "El estado de salud es otra cosa." }
+    - { texto: "Para ahorrar energía", explicacion: "No tiene relación." }
+    - { texto: "Porque falta el controlador", explicacion: "Si faltara, el disco no aparecería en Get-Disk." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Vas a inicializar un disco de datos de 4 TB. ¿Qué estilo de partición elegís?
+  opciones:
+    - { texto: "GPT", correcta: true, explicacion: "MBR no pasa de 2 TB." }
+    - { texto: "MBR", explicacion: "Solo usaría 2 TB." }
+    - { texto: "RAW", explicacion: "RAW es justamente no tener estilo." }
+    - { texto: "ReFS", explicacion: "Es un sistema de archivos, no un estilo de partición." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    Agrandaste el disco virtual de D: de 200 a 300 GB desde el hipervisor, pero D: sigue mostrando 200 GB. ¿Qué falta?
+  opciones:
+    - { texto: "Agrandar la partición con Resize-Partition hasta el SizeMax de Get-PartitionSupportedSize", correcta: true, explicacion: "El disco creció, pero la partición sigue del tamaño anterior; se agranda sin apagar." }
+    - { texto: "Formatear D: otra vez", explicacion: "Borraría todo y no hace falta." }
+    - { texto: "Crear un disco nuevo", explicacion: "El espacio ya está; falta asignarlo a la partición." }
+    - { texto: "Reinstalar el servidor", explicacion: "Para nada." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Vas a crear un volumen para guardar las máquinas virtuales de un host Hyper-V. ¿Qué sistema de archivos conviene?
+  opciones:
+    - { texto: "ReFS", correcta: true, explicacion: "Está pensado para archivos grandes como los discos de VM, detecta daños y acelera operaciones de Hyper-V." }
+    - { texto: "FAT32", explicacion: "No admite archivos de más de 4 GB." }
+    - { texto: "MBR", explicacion: "No es un sistema de archivos." }
+    - { texto: "exFAT", explicacion: "Es para medios extraíbles." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas afirmaciones sobre NTFS y ReFS son correctas? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Windows solo arranca desde NTFS", correcta: true, explicacion: "ReFS no sirve para el disco del sistema." }
+    - { texto: "NTFS tiene cuotas, compresión y cifrado de archivos", correcta: true, explicacion: "Por eso es el elegido para los servidores de archivos." }
+    - { texto: "ReFS es bueno para copias de seguridad y máquinas virtuales", correcta: true, explicacion: "Es para lo que fue pensado." }
+    - { texto: "ReFS reemplazó a NTFS en todos los casos", explicacion: "Conviven: cada uno tiene su lugar." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 3
+  enunciado: >-
+    El disco 1 ya está en línea y en GPT. Escribí un comando que cree una partición con todo el espacio como E: y la formatee en NTFS con la etiqueta Datos (sin que pregunte).
+  aceptadas:
+    - New-Partition -DiskNumber 1 -UseMaximumSize -DriveLetter E | Format-Volume -FileSystem NTFS -NewFileSystemLabel Datos -Confirm:$false
+  patrones:
+    - "^new-partition\\s+(?=[^|]*-disknumber\\s+1)(?=[^|]*-usemaximumsize)(?=[^|]*-driveletter\\s+e)[^|]+\\|\\s*format-volume\\s+(?=.*-filesystem\\s+ntfs)(?=.*-newfilesystemlabel\\s+\"?datos\"?)(?=.*-confirm:\\$false).*$"
+  explicacion: "New-Partition devuelve la partición y Format-Volume la recibe por la tubería; -Confirm:$false evita la pregunta."
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Armaste un espacio de almacenamiento "Simple" con tres discos para los datos de contabilidad. ¿Qué riesgo tiene?
+  opciones:
+    - { texto: "Si se rompe un disco cualquiera, se pierde todo el volumen", correcta: true, explicacion: "Simple suma capacidad sin protección. Para datos importantes, espejo o paridad (y copias de seguridad)." }
+    - { texto: "Ninguno: Storage Spaces siempre protege", explicacion: "Solo espejo y paridad protegen." }
+    - { texto: "Que es lento para leer", explicacion: "El problema es la falta de protección." }
+    - { texto: "Que solo funciona en Datacenter", explicacion: "Storage Spaces viene también en Standard." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es la partición EFI de 100 MB del disco del sistema?
+  opciones:
+    - { texto: "La que tiene el cargador de arranque que usa el firmware UEFI; no se toca", correcta: true, explicacion: "Sin ella, el servidor no arranca." }
+    - { texto: "Un espacio libre que se puede usar", explicacion: "Es necesaria para arrancar." }
+    - { texto: "La papelera del sistema", explicacion: "No tiene relación." }
+    - { texto: "Una copia de seguridad", explicacion: "La de recuperación es otra." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre Storage Spaces y Storage Spaces Direct?
+  opciones:
+    - { texto: "Storage Spaces usa los discos de un servidor; Storage Spaces Direct reparte los discos entre varios servidores y es solo de Datacenter", correcta: true, explicacion: "S2D es la base de los clústeres hiperconvergentes." }
+    - { texto: "Son lo mismo con otro nombre", explicacion: "Uno es de un servidor; el otro, de varios." }
+    - { texto: "Storage Spaces Direct es la versión gratuita", explicacion: "Es al revés: S2D necesita Datacenter." }
+    - { texto: "Storage Spaces Direct es para discos USB", explicacion: "No tiene relación." }

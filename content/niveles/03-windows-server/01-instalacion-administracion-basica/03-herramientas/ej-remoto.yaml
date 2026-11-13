@@ -1,0 +1,73 @@
+tipo: terminal
+shell: powershell
+titulo: Administrar un Server Core desde otro servidor
+descripcion: >-
+  Estás en SRV-ADMIN (192.168.10.5), un servidor con escritorio que usás para administrar. Querés
+  manejar desde acá a SRV-CORE01 (192.168.10.22), un Server Core recién instalado. Todavía no hay
+  dominio: los dos están en un grupo de trabajo.
+estado_inicial:
+  equipo: SRV-ADMIN
+  red: { ip: 192.168.10.5, dns: [192.168.10.10] }
+  servidores:
+    - equipo: SRV-CORE01
+      experiencia: core
+      red: { ip: 192.168.10.22, dns: [192.168.10.10] }
+pasos:
+  - consigna: >-
+      Antes de intentar conectarte, comprobá que el puerto de WinRM (5985) de SRV-CORE01 responde.
+    verificar:
+      - { comando_usado: "test-netconnection.*(5985|winrm)|tnc.*(5985|winrm)|test-wsman" }
+      - { salida_contiene: "True" }
+    pistas:
+      - "Test-NetConnection 192.168.10.22 -Port 5985 (o -CommonTCPPort WINRM)."
+    solucion: [Test-NetConnection 192.168.10.22 -Port 5985]
+    explicacion: >-
+      TcpTestSucceeded True quiere decir que la red y el firewall dejan pasar. Si diera False, no
+      tendría sentido seguir probando credenciales: el problema estaría antes.
+  - consigna: >-
+      Probá ejecutar `hostname` en SRV-CORE01 con Invoke-Command. Va a fallar: leé el error y
+      agregá SRV-CORE01 a la lista de equipos de confianza (TrustedHosts) de este servidor.
+    verificar:
+      - { comando_usado: "set-item.*trustedhosts" }
+    pistas:
+      - "Sin dominio no hay Kerberos: WinRM pide que el destino esté en TrustedHosts."
+      - "Set-Item WSMan:\\localhost\\Client\\TrustedHosts -Value 192.168.10.22 -Force"
+    solucion:
+      - Invoke-Command -ComputerName 192.168.10.22 -ScriptBlock { hostname }
+      - Set-Item WSMan:\localhost\Client\TrustedHosts -Value 192.168.10.22 -Force
+    explicacion: >-
+      En un dominio, los dos equipos se reconocen con Kerberos. En un grupo de trabajo, WinRM no
+      tiene cómo saber que el otro es quien dice ser, y te pide que lo declares de confianza a
+      mano. Por eso conviene limitar TrustedHosts a los equipos que administrás, nunca usar *.
+  - consigna: >-
+      Ahora sí, ejecutá `hostname` en SRV-CORE01 con Invoke-Command (en un grupo de trabajo,
+      agregá -Credential SRV-CORE01\Administrator).
+    verificar:
+      - { salida_contiene: "SRV-CORE01" }
+    solucion:
+      - Invoke-Command -ComputerName 192.168.10.22 -Credential SRV-CORE01\Administrator -ScriptBlock { hostname }
+  - consigna: >-
+      Para que la consola Visor de eventos de SRV-ADMIN pueda abrir los registros de SRV-CORE01,
+      habilitá en SRV-CORE01 el grupo de reglas de firewall "Remote Event Log Management".
+    verificar:
+      - en: SRV-CORE01
+        verificar: { regla_firewall: "Remote Event Log Management (RPC)", habilitada: true }
+    pistas:
+      - "Enable-NetFirewallRule -DisplayGroup \"Remote Event Log Management\", ejecutado en SRV-CORE01."
+    solucion:
+      - Invoke-Command -ComputerName 192.168.10.22 -ScriptBlock { Enable-NetFirewallRule -DisplayGroup "Remote Event Log Management" }
+    explicacion: >-
+      Las consolas gráficas (MMC) no usan WinRM sino RPC, y sus reglas vienen apagadas. Cada
+      consola tiene su grupo: Remote Event Log Management, Remote Service Management, Remote
+      Volume Management y Windows Management Instrumentation (WMI).
+  - consigna: >-
+      Entrá a una sesión interactiva en SRV-CORE01, mirá qué versión de Windows tiene y salí.
+    verificar:
+      - { comando_usado: "enter-pssession|etsn" }
+      - { comando_usado: "^exit|exit-pssession" }
+    pistas:
+      - "Enter-PSSession cambia el prompt a [192.168.10.22]: PS ...>; exit vuelve."
+    solucion:
+      - Enter-PSSession -ComputerName 192.168.10.22
+      - Get-ComputerInfo -Property WindowsProductName, WindowsInstallationType
+      - exit

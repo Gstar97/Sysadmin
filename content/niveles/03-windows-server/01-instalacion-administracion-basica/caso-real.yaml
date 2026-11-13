@@ -1,0 +1,185 @@
+tipo: troubleshooting
+titulo: El servidor recién instalado no responde en la red
+descripcion: >-
+  Incidente simulado en una distribuidora. Lucas, del equipo de soporte, instaló ayer SRV-APP01,
+  un Server Core con Windows Server 2025 para el nuevo sistema de stock, en la red de servidores
+  (192.168.10.0/24, puerta de enlace 192.168.10.1). Vos administrás desde SRV-ADMIN, que está en
+  la red de IT (192.168.20.0/24). Todavía no hay dominio en esa red. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Miércoles, 9:10. Lucas te escribe: "Te dejé SRV-APP01 listo con la IP 192.168.10.40, ¿lo
+      podés sumar al Administrador del servidor? A mí no me responde el ping desde mi notebook,
+      pero seguro es el firewall". Probás desde SRV-ADMIN y el Administrador del servidor lo
+      muestra como "Online - Cannot be contacted".
+    opciones:
+      - { texto: "Juntar evidencia: qué responde y qué no, desde dónde, y cómo quedó configurado", ir_a: n_evidencia, minutos: 5 }
+      - texto: Desactivar el firewall de SRV-APP01 desde la consola de la máquina virtual
+        ir_a: n_sin_firewall
+        minutos: 6
+      - texto: Reinstalar el servidor, que total es nuevo
+        ir_a: n_reinstalar
+        minutos: 60
+  n_reinstalar:
+    situacion: >-
+      Una hora después tenés un SRV-APP01 nuevo, configurado a mano con los datos que te pasó
+      Lucas. Y se comporta exactamente igual: no responde desde SRV-ADMIN. Reinstalar no arregla
+      lo que no sabés qué es.
+    opciones:
+      - { texto: "Juntar evidencia antes de cambiar nada más", ir_a: n_evidencia, minutos: 5 }
+  n_sin_firewall:
+    situacion: >-
+      Con Set-NetFirewallProfile -All -Enabled False, nada cambia: desde SRV-ADMIN sigue sin
+      responder el ping ni el puerto 5985. Y ahora tenés un servidor sin firewall. Lo volvés a
+      activar: sea lo que sea, no es (solo) el firewall.
+    opciones:
+      - { texto: "Juntar evidencia de a una prueba por vez", ir_a: n_evidencia, minutos: 5 }
+  n_evidencia:
+    situacion: >-
+      Desde SRV-ADMIN hacés dos pruebas, y le pedís a Lucas que haga las mismas desde
+      SRV-DB01 (192.168.10.30), un servidor de la misma red que SRV-APP01.
+    evidencia:
+      - titulo: Desde SRV-ADMIN (192.168.20.5, otra red)
+        contenido: |
+          PS> Test-NetConnection 192.168.10.40
+          WARNING: Ping to 192.168.10.40 failed with status: TimedOut
+          PingSucceeded    : False
+
+          PS> Test-NetConnection 192.168.10.40 -Port 5985
+          WARNING: TCP connect to (192.168.10.40 : 5985) failed
+          TcpTestSucceeded : False
+      - titulo: Desde SRV-DB01 (192.168.10.30, la misma red)
+        contenido: |
+          PS> Test-NetConnection 192.168.10.40
+          WARNING: Ping to 192.168.10.40 failed with status: TimedOut
+          PingSucceeded    : False
+
+          PS> Test-NetConnection 192.168.10.40 -Port 5985
+          TcpTestSucceeded : True
+    opciones:
+      - { texto: "Desde la misma red el 5985 responde y desde otra no: mirar la configuración de red de SRV-APP01", ir_a: n_config, minutos: 4 }
+      - texto: El ping no responde desde ningún lado, así que la placa está mal; cambiarla en el hipervisor
+        ir_a: n_placa
+        minutos: 15
+  n_placa:
+    situacion: >-
+      Cambiás la placa virtual y reconfigurás la IP. Todo igual. Y mirando de nuevo la evidencia:
+      desde SRV-DB01 el puerto 5985 respondía, así que la placa andaba. El ping falla en todos
+      lados por otro motivo: Windows Server bloquea el eco de ICMP por defecto.
+    opciones:
+      - { texto: "Volver a la evidencia y mirar la configuración de red", ir_a: n_config, minutos: 4 }
+  n_config:
+    situacion: >-
+      Desde SRV-DB01, que sí llega, Lucas abre una sesión en SRV-APP01 y te pasa la configuración.
+    evidencia:
+      - titulo: Get-NetIPConfiguration en SRV-APP01
+        contenido: |
+          InterfaceAlias       : Ethernet
+          InterfaceIndex       : 6
+          InterfaceDescription : Microsoft Hyper-V Network Adapter
+          NetProfile.Name      : Network
+          IPv4Address          : 192.168.10.40
+          IPv4DefaultGateway   :
+          DNSServer            : 192.168.10.53
+      - titulo: Get-NetConnectionProfile
+        contenido: |
+          Name             : Network
+          InterfaceAlias   : Ethernet
+          NetworkCategory  : Public
+          IPv4Connectivity : LocalNetwork
+    opciones:
+      - { texto: "Falta la puerta de enlace: sin ella, SRV-APP01 no puede contestarle a otra red", ir_a: n_gateway, minutos: 3 }
+      - texto: El perfil público es el problema; pasarlo a privado y listo
+        ir_a: n_solo_perfil
+        minutos: 3
+  n_solo_perfil:
+    situacion: >-
+      Pasás el perfil a privado. Desde SRV-DB01 todo sigue andando, y desde SRV-ADMIN, nada.
+      Tiene sentido: los paquetes de SRV-ADMIN llegan, pero SRV-APP01 no sabe por dónde
+      devolverlos a 192.168.20.0/24, porque no tiene puerta de enlace. El perfil importa, pero no
+      es lo primero.
+    opciones:
+      - { texto: "Agregar la puerta de enlace", ir_a: n_gateway, minutos: 3 }
+  n_gateway:
+    situacion: >-
+      Lucas agrega la puerta de enlace (New-NetRoute para la ruta por defecto, o quitando la IP y
+      volviendo a ponerla con -DefaultGateway). Probás otra vez desde SRV-ADMIN.
+    evidencia:
+      - titulo: En SRV-APP01
+        contenido: |
+          PS> New-NetRoute -InterfaceAlias Ethernet -DestinationPrefix 0.0.0.0/0 -NextHop 192.168.10.1
+      - titulo: Desde SRV-ADMIN
+        contenido: |
+          PS> Test-NetConnection 192.168.10.40 -Port 5985
+          WARNING: TCP connect to (192.168.10.40 : 5985) failed
+          TcpTestSucceeded : False
+    opciones:
+      - { texto: "Mirar las reglas de WinRM en el perfil público", ir_a: n_reglas, minutos: 4 }
+      - texto: Si sigue fallando, era el firewall nomás; desactivarlo
+        ir_a: n_sin_firewall_2
+        minutos: 2
+  n_sin_firewall_2:
+    situacion: >-
+      Con el firewall apagado, SRV-ADMIN conecta. Confirmaste que ahora el bloqueo es del firewall,
+      pero dejar un servidor sin firewall no es un arreglo. Lo volvés a activar para ver qué regla
+      es la que frena.
+    opciones:
+      - { texto: "Mirar las reglas de WinRM", ir_a: n_reglas, minutos: 4 }
+  n_reglas:
+    situacion: >-
+      Lucas te pasa las reglas de WinRM de SRV-APP01.
+    evidencia:
+      - titulo: Get-NetFirewallRule -DisplayGroup "Windows Remote Management" | Get-NetFirewallAddressFilter
+        contenido: |
+          Name                      Profile          Enabled  RemoteAddress
+          ----                      -------          -------  -------------
+          WINRM-HTTP-In-TCP         Domain, Private  True     Any
+          WINRM-HTTP-In-TCP-PUBLIC  Public           True     LocalSubnet
+    opciones:
+      - { texto: "En el perfil público, WinRM solo acepta la misma subred: pasar la red a privada (y planificar unirlo al dominio)", ir_a: n_arreglo, minutos: 3 }
+      - texto: Cambiar la regla pública para que acepte cualquier dirección
+        ir_a: n_regla_publica
+        minutos: 3
+  n_regla_publica:
+    situacion: >-
+      Funcionaría, pero dejarías WinRM abierto a cualquier red cada vez que Windows considere la
+      red como pública (por ejemplo, si un día ese servidor queda conectado a otra red). La red de
+      servidores es de confianza: lo que está mal es la categoría, no la regla.
+    opciones:
+      - { texto: "Pasar la red a privada", ir_a: n_arreglo, minutos: 3 }
+  n_arreglo:
+    situacion: >-
+      Lucas pasa la red a privada. Ahora SRV-ADMIN llega al 5985 y el Administrador del servidor
+      muestra SRV-APP01 como Online (con TrustedHosts y sus credenciales, porque todavía no hay
+      dominio). El ping sigue sin responder: es la regla de eco, apagada por defecto. Como el
+      monitoreo de la empresa usa ping, la habilitás, solo para la red de IT.
+    evidencia:
+      - titulo: En SRV-APP01
+        contenido: |
+          PS> Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
+          PS> Set-NetFirewallRule -Name FPS-ICMP4-ERQ-In -Enabled True -RemoteAddress 192.168.20.0/24
+      - titulo: Desde SRV-ADMIN
+        contenido: |
+          PS> Test-NetConnection 192.168.10.40 -Port 5985 -InformationLevel Quiet
+          True
+          PS> Test-NetConnection 192.168.10.40 -InformationLevel Quiet
+          True
+    opciones:
+      - { texto: "Documentar y ajustar la lista de primeros pasos del equipo", ir_a: n_fin, minutos: 5 }
+  n_fin:
+    final: exito
+    situacion: >-
+      SRV-APP01 queda administrable desde la red de IT y responde al monitoreo. En el ticket
+      anotás las dos causas y le proponés a Lucas sumar a la lista de primeros pasos del equipo:
+      "comprobar Get-NetIPConfiguration (puerta de enlace incluida) y probar el 5985 desde otra
+      red antes de entregar un servidor".
+    resumen: >-
+      Fueron dos fallas encadenadas y una pista falsa. La pista falsa: el ping no respondía desde
+      ningún lado porque Windows Server bloquea el eco de ICMP por defecto; no decía nada de la
+      red. La primera falla: la IP se cargó sin puerta de enlace, así que el servidor le contestaba
+      a su propia red pero no a otras. La segunda: sin dominio, la red quedó como pública, y en ese
+      perfil la regla de WinRM solo acepta equipos de la misma subred. Comparar desde dos lugares
+      (la misma red y otra) y probar el puerto del servicio, no solo el ping, fue lo que separó
+      una cosa de la otra. Apagar el firewall o abrir la regla pública a todo el mundo habría
+      "andado" dejando el servidor expuesto.

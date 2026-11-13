@@ -1,0 +1,127 @@
+---
+id: n3-m1-l5
+titulo: Almacenamiento en Windows
+minutos: 120
+objetivos:
+  - Reconocer las capas del almacenamiento en Windows (disco, estilo de partición, partición, volumen y sistema de archivos).
+  - Poner en servicio un disco nuevo con PowerShell, de fuera de línea a volumen formateado, y agrandar un volumen.
+  - Elegir entre NTFS y ReFS, y saber cuándo conviene un espacio de almacenamiento.
+glosario: [refs, espacios-almacenamiento]
+verificado: 2026-11
+---
+
+import capas from './capas-disco.svg?raw'
+import orden from './orden-disco.yaml'
+import discos from './ej-discos.yaml'
+
+En el módulo 1.4 sumaste discos a un servidor Linux con particiones, LVM y `mkfs`. En Windows las ideas son las mismas y cambian los nombres y las herramientas: en lugar de `/dev/sdb` hay un "disco 1", en lugar de montar en una carpeta se le da una letra, y en lugar de ext4 o XFS se elige entre NTFS y ReFS. Lo vas a hacer con el módulo **Storage** de PowerShell, que es lo que se usa en un Server Core.
+
+<AntesDeEmpezar>
+- Discos, particiones, GPT y sistemas de archivos en Linux (módulo 1.4).
+- HDD, SSD e IOPS (lección 0.1.4).
+- Roles y características (lección anterior).
+</AntesDeEmpezar>
+
+## Las capas
+
+<Diagrama svg={capas} alt="A la izquierda, las cinco capas de arriba hacia abajo: disco (físico o virtual, se ve con Get-Disk), estilo de partición (GPT o MBR, Initialize-Disk), partición (un pedazo del disco, New-Partition), volumen (la partición con un sistema de archivos y una letra o carpeta, Format-Volume y Get-Volume) y sistema de archivos (NTFS o ReFS). A la derecha, el disco 0 de un servidor recién instalado: partición del sistema EFI de 100 MB en FAT32, partición reservada de Microsoft (MSR) de 16 MB sin letra, C: en NTFS con casi todo el espacio, y la partición de recuperación de unos 600 MB al final. Debajo, el disco 1 nuevo: fuera de línea y RAW, sin estilo de partición, hasta que se pone en línea y se inicializa." pie="Un disco nuevo pasa por todas las capas, de abajo hacia arriba." />
+
+- **Disco**: físico o virtual, como lo ve Windows. Tiene un número (0, 1, 2…) y un estado: en línea o fuera de línea.
+- **Estilo de partición**: **GPT** (el actual, obligatorio para arrancar con UEFI, discos de más de 2 TB y hasta 128 particiones) o **MBR** (el antiguo, hasta 2 TB y 4 particiones primarias). Un disco recién agregado está **RAW**: todavía no tiene ninguno.
+- **Partición**: un pedazo del disco.
+- **Volumen**: una partición con un sistema de archivos y un lugar donde verla: una **letra** (D:) o una **carpeta** de otro volumen (un punto de montaje, como en Linux).
+- **Sistema de archivos**: **NTFS** o **ReFS**.
+
+El disco del sistema ya viene con cuatro particiones que no se tocan: la **EFI** (100 MB en FAT32, con el cargador de arranque), la **reservada de Microsoft** (MSR, 16 MB, sin letra), **C:** y la de **recuperación** al final.
+
+Es como un edificio: el terreno es el disco, el plano de loteo es el estilo de partición, cada lote es una partición, la casa construida es el volumen y la forma de organizar los ambientes es el sistema de archivos. Donde no llega la comparación: en un disco se puede "demoler" una partición y volver a construir en segundos, y con eso se pierde todo lo que tenía. Por eso los comandos que formatean piden confirmación.
+
+## Poner en servicio un disco nuevo
+
+En un servidor, Windows deja los discos nuevos **fuera de línea**. No es un error: es una protección para no escribir en un disco que podría estar siendo usado por otro equipo (pasa con los discos compartidos de una SAN). El recorrido completo:
+
+```powershell
+Get-Disk                                            # el nuevo aparece Offline y RAW
+Set-Disk -Number 1 -IsOffline $false                # en línea
+Initialize-Disk -Number 1 -PartitionStyle GPT       # estilo de partición
+New-Partition -DiskNumber 1 -UseMaximumSize -DriveLetter D |
+    Format-Volume -FileSystem NTFS -NewFileSystemLabel Datos -Confirm:$false
+Get-Volume -DriveLetter D
+```
+
+`New-Partition` devuelve la partición, que pasa por la tubería a `Format-Volume`: es el pipeline de objetos que vas a estudiar en el módulo 3.2. `-Confirm:$false` evita la pregunta de "¿seguro que querés borrar todo?", así que usalo solo cuando sabés qué disco estás tocando. Una costumbre sana es mirar `Get-Disk` antes de cada comando que borra.
+
+<Ordenar ejercicio={orden} />
+
+### Agrandar un volumen
+
+Si agrandaste el disco virtual desde el hipervisor, el espacio nuevo aparece al final del disco, sin usar. Se le suma al volumen sin apagar nada:
+
+```powershell
+Update-HostStorageCache                       # que Windows vuelva a leer el tamaño de los discos
+$max = (Get-PartitionSupportedSize -DriveLetter D).SizeMax
+Resize-Partition -DriveLetter D -Size $max
+```
+
+Achicar también se puede (Resize-Partition con un tamaño menor), hasta lo que dice `SizeMin`, pero es mucho menos común y más riesgoso.
+
+<Pregunta id="p04" />
+
+### La consola gráfica y diskpart
+
+En un servidor con escritorio está la **Administración de discos** (`diskmgmt.msc`), que hace lo mismo con el mouse, y se puede abrir desde tu estación contra un Server Core (con la regla de firewall Remote Volume Management habilitada en los dos lados). También vas a ver en tutoriales viejos a **diskpart**, la herramienta de texto de siempre. Funciona, pero los cmdlets del módulo Storage se pueden combinar, filtrar y poner en scripts.
+
+## NTFS o ReFS
+
+- **NTFS** es el sistema de archivos de siempre y el que va por defecto. Tiene todo lo que necesita un servidor de archivos: permisos detallados por carpeta (los vas a ver en el módulo 3.4), cuotas, compresión, cifrado de archivos, y es el único desde el que arranca Windows.
+- **ReFS** (sistema de archivos resiliente) está pensado para volúmenes grandes con archivos grandes: máquinas virtuales de Hyper-V y repositorios de copias de seguridad. Detecta y corrige datos dañados (sobre todo cuando está sobre espacios de almacenamiento con espejo) y puede copiar bloques sin mover los datos, lo que hace muchísimo más rápidas algunas operaciones de Hyper-V y de los programas de backup. No sirve para el disco del sistema y no tiene algunas funciones de NTFS, como el cifrado de archivos.
+
+La regla práctica: **NTFS para el sistema y las carpetas de la gente; ReFS para máquinas virtuales y copias de seguridad**.
+
+<EnSimple>
+Un disco nuevo pasa por cuatro pasos: en línea, GPT, partición y formato. NTFS para todo lo de siempre; ReFS para máquinas virtuales y copias.
+</EnSimple>
+
+## Espacios de almacenamiento
+
+Un **espacio de almacenamiento** (*Storage Spaces*) junta varios discos en un **grupo** (*pool*) y crea encima **discos virtuales** con la protección que elijas, parecido a lo que hacías en Linux con RAID por software o LVM:
+
+- **Simple**: suma la capacidad de los discos, sin protección. Si se rompe uno, se pierde todo.
+- **Espejo** (*mirror*): guarda dos o tres copias de cada dato. Aguanta que se rompa un disco (o dos, con tres copias). Es el más rápido para escribir.
+- **Paridad** (*parity*): guarda datos más información para reconstruirlos, como un RAID 5. Aprovecha mejor el espacio, pero escribe más lento: va bien para archivos que se leen mucho y se escriben poco.
+
+```powershell
+$discos = Get-PhysicalDisk -CanPool $true
+New-StoragePool -FriendlyName Pool01 -StorageSubSystemFriendlyName "Windows Storage*" -PhysicalDisks $discos
+New-VirtualDisk -StoragePoolFriendlyName Pool01 -FriendlyName Datos -ResiliencySettingName Mirror -UseMaximumSize
+```
+
+Con los discos de un solo servidor, Storage Spaces viene en Standard y en Datacenter. La versión que reparte los discos entre varios servidores (**Storage Spaces Direct**) es solo de Datacenter. *Para más adelante*: los niveles de rendimiento (SSD y HDD juntos) y la desduplicación de datos, que vas a ver con el servidor de archivos.
+
+<Terminal ejercicio={discos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Pensar que el disco nuevo no anda porque está fuera de línea">
+    En un servidor es lo normal: Windows lo deja así para no escribir en un disco ajeno. Set-Disk -IsOffline $false.
+  </ErrorComun>
+  <ErrorComun titulo="Inicializar en MBR por costumbre">
+    MBR no pasa de 2 TB ni de cuatro particiones primarias. Para discos de datos, GPT.
+  </ErrorComun>
+  <ErrorComun titulo="Formatear el disco equivocado">
+    Format-Volume con -Confirm:$false no pregunta. Mirá Get-Disk y Get-Volume antes y usá el número de disco o la letra correctos.
+  </ErrorComun>
+  <ErrorComun titulo="Usar ReFS para las carpetas compartidas de la gente">
+    Funciona, pero NTFS tiene todo lo que necesita un servidor de archivos (cuotas, compresión, cifrado). ReFS brilla con máquinas virtuales y copias.
+  </ErrorComun>
+  <ErrorComun titulo="Armar un espacio simple con datos importantes">
+    Simple no tiene protección: un disco que falla se lleva todo el volumen. Espejo o paridad, y además copias de seguridad.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Capas: disco, estilo de partición (GPT o MBR), partición, volumen (letra o carpeta) y sistema de archivos.
+- Un disco nuevo en un servidor llega fuera de línea y RAW: Set-Disk, Initialize-Disk, New-Partition y Format-Volume.
+- Para agrandar: Get-PartitionSupportedSize y Resize-Partition, sin apagar.
+- NTFS para el sistema y los archivos de la gente; ReFS para máquinas virtuales y copias de seguridad.
+- Los espacios de almacenamiento juntan discos en un grupo con protección simple, espejo o paridad; Storage Spaces Direct es de Datacenter.
+</Resumen>

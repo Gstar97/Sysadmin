@@ -801,7 +801,7 @@ function usedLetters(s: PsSession) {
 }
 
 function partitionObject(d: DiskState, p: DiskPartition, i: number): PsObject {
-  return psObject('MSFT_Partition', { DiskNumber: d.numero, PartitionNumber: i + 1, DriveLetter: p.letra ?? '', Offset: 1048576 + i * 104857600, Size: p.tamano_gb * GB, Type: p.tipo, __disk: d.numero })
+  return psObject('MSFT_Partition', { DiskNumber: d.numero, PartitionNumber: i + 1, DriveLetter: p.letra ?? '', Offset: 1048576 + i * 104857600, Size: Math.round(p.tamano_gb * GB), Type: p.tipo, __disk: d.numero })
 }
 VIEWS['MSFT_Partition'] = {
   kind: 'table',
@@ -871,7 +871,7 @@ function findPartition(ctx: CmdletContext, cmd: string): { d: DiskState; p: Disk
 }
 
 function volumeObject(p: DiskPartition): PsObject {
-  return psObject('MSFT_Volume', { DriveLetter: p.letra ?? '', FriendlyName: p.etiqueta, FileSystemType: p.sistema ?? 'Unknown', DriveType: 'Fixed', HealthStatus: 'Healthy', OperationalStatus: 'OK', SizeRemaining: Math.max(0, p.tamano_gb - p.usado_gb) * GB, Size: p.tamano_gb * GB })
+  return psObject('MSFT_Volume', { DriveLetter: p.letra ?? '', FriendlyName: p.etiqueta, FileSystemLabel: p.etiqueta, FileSystemType: p.sistema ?? 'Unknown', DriveType: 'Fixed', HealthStatus: 'Healthy', OperationalStatus: 'OK', SizeRemaining: Math.round(Math.max(0, p.tamano_gb - p.usado_gb) * GB), Size: Math.round(p.tamano_gb * GB) })
 }
 VIEWS['MSFT_Volume'] = {
   kind: 'table',

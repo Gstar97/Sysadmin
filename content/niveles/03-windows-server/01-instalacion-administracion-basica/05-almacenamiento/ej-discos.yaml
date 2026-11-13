@@ -1,0 +1,65 @@
+tipo: terminal
+shell: powershell
+titulo: Sumar dos discos a un servidor de archivos
+descripcion: >-
+  A SRV-ARCH01 le agregaron dos discos virtuales: uno de 200 GB para las carpetas compartidas y
+  otro de 500 GB para guardar copias de seguridad de máquinas virtuales. Los dos llegaron sin
+  inicializar y fuera de línea. El de datos tiene que quedar como D:, en NTFS y con la etiqueta
+  Datos; el de copias, como R:, en ReFS y con la etiqueta Copias.
+estado_inicial:
+  equipo: SRV-ARCH01
+  experiencia: core
+  red: { ip: 192.168.10.21 }
+  discos:
+    - { numero: 1, tamano_gb: 200, modelo: Msft Virtual Disk, estilo: RAW, offline: true, bus: SCSI, particiones: [] }
+    - { numero: 2, tamano_gb: 500, modelo: Msft Virtual Disk, estilo: RAW, offline: true, bus: SCSI, particiones: [] }
+pasos:
+  - consigna: Mirá los discos que ve el sistema y en qué estado están.
+    verificar:
+      - { comando_usado: "get-disk" }
+    solucion: [Get-Disk]
+    explicacion: >-
+      Los dos nuevos aparecen Offline y con Partition Style RAW: nadie los tocó todavía. En un
+      servidor, Windows deja los discos nuevos fuera de línea para no escribir por error en uno
+      que podría ser de otro equipo (por ejemplo, un disco compartido de una SAN).
+  - consigna: Poné en línea el disco 1 e inicializalo con el estilo GPT.
+    verificar:
+      - { disco: 1, estilo: GPT, offline: false }
+    pistas:
+      - "Set-Disk -Number 1 -IsOffline $false, y después Initialize-Disk."
+    solucion:
+      - Set-Disk -Number 1 -IsOffline $false
+      - Initialize-Disk -Number 1 -PartitionStyle GPT
+  - consigna: >-
+      Creá en el disco 1 una partición con todo el espacio, con la letra D, y formateala en NTFS
+      con la etiqueta Datos.
+    verificar:
+      - { volumen: D, sistema: NTFS, etiqueta: Datos, tamano_min_gb: 190 }
+    pistas:
+      - "New-Partition -DiskNumber 1 -UseMaximumSize -DriveLetter D, y por la tubería a Format-Volume."
+    solucion:
+      - New-Partition -DiskNumber 1 -UseMaximumSize -DriveLetter D | Format-Volume -FileSystem NTFS -NewFileSystemLabel Datos -Confirm:$false
+  - consigna: >-
+      Ahora el disco 2: en línea, GPT, una partición con todo el espacio como R:, formateada en
+      ReFS con la etiqueta Copias.
+    verificar:
+      - { disco: 2, estilo: GPT, offline: false }
+      - { volumen: R, sistema: ReFS, etiqueta: Copias }
+    solucion:
+      - Set-Disk -Number 2 -IsOffline $false
+      - Initialize-Disk -Number 2 -PartitionStyle GPT
+      - New-Partition -DiskNumber 2 -UseMaximumSize -DriveLetter R | Format-Volume -FileSystem ReFS -NewFileSystemLabel Copias -Confirm:$false
+    explicacion: >-
+      ReFS es el sistema pensado para volúmenes grandes de máquinas virtuales y copias: detecta y
+      corrige datos dañados y copia bloques sin moverlos. Para las carpetas de los usuarios, NTFS
+      sigue siendo la opción.
+  - consigna: >-
+      Armá un informe con la letra, la etiqueta, el sistema de archivos y el espacio libre de
+      cada volumen con letra.
+    verificar:
+      - { comando_usado: "get-volume|get-ciminstance.*logicaldisk|get-psdrive" }
+      - { salida_contiene: "Copias" }
+    pistas:
+      - "Get-Volume muestra todo; con Where-Object DriveLetter te quedás con los que tienen letra."
+    solucion:
+      - Get-Volume | Where-Object DriveLetter | Select-Object DriveLetter, FileSystemLabel, FileSystemType, SizeRemaining, Size

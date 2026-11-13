@@ -1,0 +1,99 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál es la forma recomendada de administrar diez servidores Server Core?
+  opciones:
+    - { texto: "Desde una estación de administración, con PowerShell remoto, Windows Admin Center y RSAT", correcta: true, explicacion: "Server Core está pensado para administrarse a distancia." }
+    - { texto: "Iniciando sesión en cada uno con Escritorio remoto", explicacion: "Server Core no tiene escritorio para mostrar, y no escala." }
+    - { texto: "Instalándoles el escritorio", explicacion: "No se puede sin reinstalar, y se pierden las ventajas de Core." }
+    - { texto: "Yendo a la sala de servidores con un monitor", explicacion: "Solo para emergencias." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué protocolo y puerto usan PowerShell remoto, el Administrador del servidor y Windows Admin Center para llegar a los servidores?
+  opciones:
+    - { texto: "WinRM, puerto 5985 (5986 con HTTPS)", correcta: true, explicacion: "Es la administración remota de Windows." }
+    - { texto: "RDP, puerto 3389", explicacion: "Ese es el Escritorio remoto." }
+    - { texto: "SMB, puerto 445", explicacion: "Es para compartir archivos." }
+    - { texto: "SSH, puerto 22", explicacion: "Windows trae OpenSSH, pero estas herramientas usan WinRM." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde conviene instalar la puerta de enlace de Windows Admin Center?
+  opciones:
+    - { texto: "En un servidor dedicado a administrar", correcta: true, explicacion: "Así no le sumás un servicio web expuesto a un servidor crítico." }
+    - { texto: "En el controlador de dominio, que ya tiene todo", explicacion: "El DC es lo último donde conviene sumar servicios." }
+    - { texto: "En cada servidor administrado", explicacion: "Los servidores administrados no necesitan instalar nada." }
+    - { texto: "En el firewall", explicacion: "No es un equipo Windows." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: PowerShell remoto contra SRV-CORE01 funciona, pero el Visor de eventos no puede abrir sus registros ("The RPC server is unavailable"). ¿Qué falta?
+  opciones:
+    - { texto: "Habilitar en SRV-CORE01 el grupo de reglas Remote Event Log Management", correcta: true, explicacion: "Las consolas MMC usan RPC, no WinRM, y sus reglas vienen apagadas." }
+    - { texto: "Reinstalar WinRM", explicacion: "WinRM anda: PowerShell remoto funciona." }
+    - { texto: "Agregar SRV-CORE01 a TrustedHosts", explicacion: "TrustedHosts es de WinRM." }
+    - { texto: "Instalar el escritorio en SRV-CORE01", explicacion: "No hace falta: la consola corre en tu equipo." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Desde un servidor en un grupo de trabajo, Invoke-Command contra 192.168.10.22 responde esto. ¿Qué tenés que hacer?
+  salida: |
+    Connecting to remote server 192.168.10.22 failed with the following error message : The WinRM client
+    cannot process the request. If the authentication scheme is different from Kerberos, or if the client
+    computer is not joined to a domain, then HTTPS transport must be used or the destination machine must
+    be added to the TrustedHosts configuration setting.
+  opciones:
+    - { texto: "Agregar 192.168.10.22 a TrustedHosts y conectarte con -Credential", correcta: true, explicacion: "Sin dominio no hay Kerberos: WinRM pide declarar el destino de confianza." }
+    - { texto: "Abrir el puerto 3389", explicacion: "Es el del Escritorio remoto." }
+    - { texto: "Reiniciar el servidor remoto", explicacion: "El servidor responde; el problema es la autenticación." }
+    - { texto: "Poner TrustedHosts en * para que no vuelva a pasar", explicacion: "Confiarías en cualquier equipo; se pone solo el que administrás." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que comprueba si el puerto de WinRM (5985) de SRV-CORE01 responde.
+  aceptadas:
+    - Test-NetConnection SRV-CORE01 -Port 5985
+    - Test-NetConnection -ComputerName SRV-CORE01 -Port 5985
+    - tnc SRV-CORE01 -Port 5985
+    - Test-NetConnection SRV-CORE01 -CommonTCPPort WINRM
+  patrones: ["^(test-netconnection|tnc)\\s+(-computername\\s+)?srv-core01\\s+(-port\\s+5985|-commontcpport\\s+winrm)$"]
+  explicacion: "Test-NetConnection con -Port prueba una conexión TCP; TcpTestSucceeded True quiere decir que llega y el firewall deja pasar."
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué son las RSAT?
+  opciones:
+    - { texto: "Las consolas y módulos de PowerShell de cada rol, instalados en tu computadora para administrar servidores a distancia", correcta: true, explicacion: "En Windows 11 se agregan como características opcionales." }
+    - { texto: "Un rol que se instala en el servidor para permitir conexiones", explicacion: "Los servidores no necesitan RSAT para ser administrados." }
+    - { texto: "El nombre viejo del Escritorio remoto", explicacion: "Son herramientas distintas." }
+    - { texto: "Una licencia", explicacion: "Son gratuitas." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un proveedor pide publicar el Escritorio remoto del servidor a internet "para conectarse cuando haga falta". ¿Qué hacés?
+  opciones:
+    - { texto: "No: que entre por la VPN de la empresa y, desde ahí, al Escritorio remoto", correcta: true, explicacion: "El 3389 expuesto es de lo más atacado que existe." }
+    - { texto: "Publicarlo en otro puerto para que no lo encuentren", explicacion: "Los escáneres prueban todos los puertos." }
+    - { texto: "Publicarlo con una contraseña larga", explicacion: "Ayuda, pero sigue siendo un blanco constante." }
+    - { texto: "Publicarlo solo de día", explicacion: "Sigue expuesto." }
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace falta para usar PowerShell remoto entre dos servidores que no están en un dominio? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Que el destino esté en la lista TrustedHosts del equipo desde el que te conectás", correcta: true, explicacion: "Sin Kerberos, WinRM pide confiar explícitamente." }
+    - { texto: "Pasar credenciales del otro equipo con -Credential", correcta: true, explicacion: "Tu usuario no existe en el otro servidor." }
+    - { texto: "Que el firewall del destino deje pasar el 5985", correcta: true, explicacion: "En el perfil público, solo desde la misma subred." }
+    - { texto: "Que el destino tenga escritorio", explicacion: "Funciona igual con Server Core." }
+    - { texto: "Abrir el 3389", explicacion: "Es del Escritorio remoto." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cuántas sesiones de Escritorio remoto para administrar permite un Windows Server sin licencias extra?
+  opciones:
+    - { texto: "Dos a la vez", correcta: true, explicacion: "Para más, o para usuarios comunes, hacen falta los Servicios de Escritorio remoto y sus CAL." }
+    - { texto: "Una", explicacion: "Son dos." }
+    - { texto: "Ilimitadas", explicacion: "Más de dos necesita RDS y licencias." }
+    - { texto: "Ninguna", explicacion: "Para administrar vienen dos incluidas." }
