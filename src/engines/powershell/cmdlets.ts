@@ -1,5 +1,7 @@
-import { asArray, ALIASES, CMDLETS, cmdlet, formatDotnetDate, psEquals, PsError, PsSession, truthy, wildcardToRegex, type CmdletContext } from './session'
+import { asArray, ALIASES, CMDLETS, cmdlet, formatDotnetDate, moduleAvailable, psEquals, PsError, PsSession, truthy, wildcardToRegex, type CmdletContext } from './session'
 import { formatDefault, formatList, formatTable, getProp, isPsObject, isScriptBlock, propNames, psObject, setProp, toText, typeName, VIEWS, type PsObject } from './values'
+import { reach } from './machine'
+import { setTrustedHosts, wsmanItem } from './remoting'
 
 // ---------------------------------------------------------------------------------------
 // Vistas por defecto (como las de Windows PowerShell 5.1)
@@ -153,6 +155,7 @@ cmdlet(
       const out: PsObject[] = []
       for (const def of CMDLETS.values()) {
         const n = def.displayName!
+        if (!moduleAvailable(ctx.s, def.module)) continue
         if (name.length && !matchesAny(n, name) && !matchesAny(n.split('-')[0], name)) continue
         if (verb && !wildcardToRegex(verb).test(n.split('-')[0])) continue
         if (noun && !wildcardToRegex(noun).test(n.split('-').slice(1).join('-'))) continue
@@ -809,11 +812,37 @@ cmdlet('ConvertTo-SecureString', {
   },
 })
 
+const EP_SCOPES = ['MachinePolicy', 'UserPolicy', 'Process', 'CurrentUser', 'LocalMachine'] as const
+const EP_VALUES = ['Restricted', 'AllSigned', 'RemoteSigned', 'Unrestricted', 'Bypass', 'Undefined']
+
+/** Política por ámbito; LocalMachine es la que se usa cuando los demás quedan en Undefined. */
+function epScopes(s: PsSession): Record<string, string> {
+  const m = ((s.data.epScopes ??= [{}]) as Record<string, string>[])[0]
+  if (!s.data.epLocalMachine) s.data.epLocalMachine = [s.executionPolicy]
+  m.LocalMachine = toText(s.data.epLocalMachine[0])
+  return m
+}
+
+function effectivePolicy(s: PsSession): string {
+  const m = epScopes(s)
+  for (const sc of EP_SCOPES) if (m[sc] && m[sc] !== 'Undefined') return m[sc]
+  return 'Restricted'
+}
+
 cmdlet('Get-ExecutionPolicy', {
   switches: ['List'],
   params: ['Scope'],
   synopsis: 'Gets the execution policies for the current session.',
-  run: (ctx) => [ctx.s.executionPolicy],
+  run(ctx) {
+    const m = epScopes(ctx.s)
+    if (has(ctx, 'List')) return EP_SCOPES.map((sc) => psObject('System.Management.Automation.PSCustomObject', { Scope: sc, ExecutionPolicy: m[sc] ?? 'Undefined' }))
+    if (has(ctx, 'Scope')) {
+      const sc = EP_SCOPES.find((x) => x.toLowerCase() === (str(ctx, 'Scope') ?? '').toLowerCase())
+      if (!sc) throw new PsError(`Cannot bind parameter 'Scope'. Cannot convert value "${str(ctx, 'Scope')}" to type "Microsoft.PowerShell.ExecutionPolicyScope".`, 'InvalidArgument', 'CannotConvertArgumentNoMessage')
+      return [m[sc] ?? 'Undefined']
+    }
+    return [effectivePolicy(ctx.s)]
+  },
 })
 
 cmdlet('Set-ExecutionPolicy', {
@@ -823,11 +852,16 @@ cmdlet('Set-ExecutionPolicy', {
   synopsis: 'Sets the PowerShell execution policies for Windows computers.',
   run(ctx) {
     const p = str(ctx, 'ExecutionPolicy') ?? ''
-    const valid = ['Restricted', 'AllSigned', 'RemoteSigned', 'Unrestricted', 'Bypass', 'Undefined']
-    const match = valid.find((v) => v.toLowerCase() === p.toLowerCase())
+    const match = EP_VALUES.find((v) => v.toLowerCase() === p.toLowerCase())
     if (!match) throw new PsError(`Cannot bind parameter 'ExecutionPolicy'. Cannot convert value "${p}" to type "Microsoft.PowerShell.ExecutionPolicy".`, 'InvalidArgument', 'CannotConvertArgumentNoMessage')
+    const sc = EP_SCOPES.find((x) => x.toLowerCase() === (str(ctx, 'Scope') ?? 'LocalMachine').toLowerCase())
+    if (!sc) throw new PsError(`Cannot bind parameter 'Scope'. Cannot convert value "${str(ctx, 'Scope')}" to type "Microsoft.PowerShell.ExecutionPolicyScope".`, 'InvalidArgument', 'CannotConvertArgumentNoMessage')
+    if (sc === 'MachinePolicy' || sc === 'UserPolicy') throw new PsError('Cannot set execution policy on the MachinePolicy or UserPolicy scopes. These are set by Group Policy.', 'InvalidOperation', 'CantSetGroupPolicy,Microsoft.PowerShell.Commands.SetExecutionPolicyCommand')
     if (!has(ctx, 'Force')) ctx.host('\nExecution Policy Change\nThe execution policy helps protect you from scripts that you do not trust. Changing the execution policy might expose you to the security risks described in the about_Execution_Policies help topic.\nDo you want to change the execution policy?\n[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "N"): Y\n')
-    ctx.s.executionPolicy = match
+    const m = epScopes(ctx.s)
+    m[sc] = match
+    if (sc === 'LocalMachine') ctx.s.data.epLocalMachine = [match]
+    ctx.s.executionPolicy = effectivePolicy(ctx.s)
     return []
   },
 })
@@ -904,10 +938,31 @@ cmdlet(
     positional: ['Path'],
     synopsis: 'Gets the item at the specified location.',
     run(ctx) {
-      return list(ctx, 'Path').map((p) => fileObject(ctx.s, requirePath(ctx, toText(p))))
+      return list(ctx, 'Path').map((p) => wsmanItem(ctx.s, toText(p)) ?? fileObject(ctx.s, requirePath(ctx, toText(p))))
     },
   },
   ['gi'],
+)
+
+cmdlet(
+  'Set-Item',
+  {
+    params: ['Path', 'Value'],
+    switches: ['Force', 'Concatenate', 'PassThru'],
+    positional: ['Path', 'Value'],
+    synopsis: 'Changes the value of an item to the value specified in the command.',
+    run(ctx) {
+      const path = toText(param(ctx, 'Path'))
+      if (wsmanItem(ctx.s, path)) {
+        setTrustedHosts(ctx, toText(param(ctx, 'Value')), has(ctx, 'Concatenate'))
+        return []
+      }
+      const env = /^env:(.+)$/i.exec(path)
+      if (env) return []
+      throw new PsError(`[simulador] Set-Item solo está disponible para WSMan:\\localhost\\Client\\TrustedHosts. Para archivos, usá Set-Content.`, 'NotImplemented', 'NotSupported', path)
+    },
+  },
+  ['si'],
 )
 
 cmdlet(
@@ -1284,10 +1339,32 @@ cmdlet('Get-WindowsFeature', {
   },
 })
 
+/** Herramientas de administración que suma -IncludeManagementTools, y el módulo de PowerShell de cada una. */
+const MGMT_TOOLS: Record<string, string[]> = {
+  'ad-domain-services': ['RSAT-AD-Tools', 'RSAT-AD-PowerShell', 'RSAT-ADDS', 'GPMC'],
+  dns: ['RSAT-DNS-Server'],
+  dhcp: ['RSAT-DHCP'],
+}
+const FEATURE_MODULES: Record<string, string> = {
+  'rsat-ad-powershell': 'ActiveDirectory',
+  gpmc: 'GroupPolicy',
+  'rsat-dns-server': 'DnsServer',
+  'rsat-dhcp': 'DhcpServer',
+  'ad-domain-services': 'ADDSDeployment',
+  updateservices: 'UpdateServices',
+  'windows-server-backup': 'WindowsServerBackup',
+  'fs-dfs-namespace': 'DFSN',
+  'fs-dfs-replication': 'DFSR',
+  'fs-resource-manager': 'FileServerResourceManager',
+}
+const NEEDS_RESTART = ['hyper-v', 'failover-clustering', 'fs-data-deduplication']
+
 function featureChange(ctx: CmdletContext, install: boolean) {
   const names = list(ctx, 'Name').map(toText)
+  if (install && has(ctx, 'IncludeManagementTools')) for (const n of [...names]) names.push(...(MGMT_TOOLS[n.toLowerCase()] ?? []))
   const features = data(ctx.s, 'features')
   const changed: string[] = []
+  let restart = false
   for (const n of names) {
     const f = features.find((x) => toText(x.Name).toLowerCase() === n.toLowerCase())
     if (!f) throw new PsError(`ArgumentNotValid: The role, role service, or feature name is not valid: '${n}'. The name was not found.`, 'InvalidArgument', 'NameDoesNotExist,Microsoft.Windows.ServerManager.Commands.AddWindowsFeatureCommand', n)
@@ -1295,14 +1372,21 @@ function featureChange(ctx: CmdletContext, install: boolean) {
       f.Installed = install
       f.InstallState = install ? 'Installed' : 'Available'
       changed.push(toText(f.DisplayName))
+      if (NEEDS_RESTART.includes(n.toLowerCase())) restart = true
+      const mod = FEATURE_MODULES[n.toLowerCase()]
+      const mods = (ctx.s.data.modules ??= []) as string[]
+      if (mod && install && !mods.includes(mod)) mods.push(mod)
+      if (mod && !install) ctx.s.data.modules = mods.filter((m) => m !== mod)
+      // Con el módulo de AD, un servidor miembro ya puede consultar el dominio.
+      if (n.toLowerCase() === 'rsat-ad-powershell' && install && ctx.s.data.domainStore?.length) ctx.s.data.ad = ctx.s.data.domainStore
     }
   }
-  const restart = changed.some((c) => /Active Directory|Hyper-V/.test(c)) && install
+  if (restart && has(ctx, 'Restart')) ctx.host('[simulador] El servidor se reinicia para terminar la instalación.\n')
   return [
     psObject('Microsoft.Windows.ServerManager.Commands.FeatureOperationResult', {
       Success: true,
       'Restart Needed': restart ? 'Yes' : 'No',
-      'Exit Code': changed.length ? 'Success' : 'NoChangeNeeded',
+      'Exit Code': changed.length ? (restart && !has(ctx, 'Restart') ? 'SuccessRestartRequired' : 'Success') : 'NoChangeNeeded',
       'Feature Result': changed.length ? `{${changed.join(', ')}}` : '{}',
     }),
   ]
@@ -1434,45 +1518,21 @@ function netCfg(s: PsSession) {
   return s.state.red
 }
 
-cmdlet('Get-NetIPAddress', {
-  params: ['AddressFamily', 'InterfaceAlias', 'IPAddress'],
-  synopsis: 'Gets the IP address configuration.',
-  module: 'NetTCPIP',
-  run(ctx) {
-    const r = netCfg(ctx.s)
-    const items = [
-      psObject('MSFT_NetIPAddress', { IPAddress: r.ip, InterfaceIndex: 6, InterfaceAlias: 'Ethernet', AddressFamily: 'IPv4', Type: 'Unicast', PrefixLength: r.prefijo, PrefixOrigin: 'Manual', SuffixOrigin: 'Manual', AddressState: 'Preferred' }),
-      psObject('MSFT_NetIPAddress', { IPAddress: '127.0.0.1', InterfaceIndex: 1, InterfaceAlias: 'Loopback Pseudo-Interface 1', AddressFamily: 'IPv4', Type: 'Unicast', PrefixLength: 8, PrefixOrigin: 'WellKnown', SuffixOrigin: 'WellKnown', AddressState: 'Preferred' }),
-    ]
-    return items.filter((i) => (!has(ctx, 'AddressFamily') || psEquals(i.AddressFamily, param(ctx, 'AddressFamily'))) && (!has(ctx, 'InterfaceAlias') || psEquals(i.InterfaceAlias, param(ctx, 'InterfaceAlias'))))
-  },
-})
-
-cmdlet('Get-NetIPConfiguration', {
-  synopsis: 'Gets IP network configuration.',
-  module: 'NetTCPIP',
-  run(ctx) {
-    const r = netCfg(ctx.s)
-    return [formatted(`\n\nInterfaceAlias       : Ethernet\nInterfaceIndex       : 6\nInterfaceDescription : Microsoft Hyper-V Network Adapter\nNetProfile.Name      : ${ctx.s.state.dominio ?? 'Network'}\nIPv4Address          : ${r.ip}\nIPv4DefaultGateway   : ${r.puerta_enlace}\nDNSServer            : ${r.dns.join('\n                       ')}\n\n`)]
-  },
-}, ['gip'])
-
-cmdlet('ipconfig', {
-  params: ['all'],
-  switches: ['all'],
-  synopsis: 'Displays all current TCP/IP network configuration values (ipconfig.exe).',
-  run(ctx) {
-    const r = netCfg(ctx.s)
-    const all = ctx.positional.some((p) => toText(p).toLowerCase() === '/all')
-    const mask = r.prefijo === 24 ? '255.255.255.0' : r.prefijo === 16 ? '255.255.0.0' : '255.255.255.0'
-    const text = `\nWindows IP Configuration\n\n${all ? `   Host Name . . . . . . . . . . . . : ${ctx.s.state.equipo}\n   Primary Dns Suffix  . . . . . . . : ${ctx.s.state.dominio ?? ''}\n\n` : ''}\nEthernet adapter Ethernet:\n\n   Connection-specific DNS Suffix  . : \n${all ? '   Physical Address. . . . . . . . . : 00-15-5D-01-0A-14\n   DHCP Enabled. . . . . . . . . . . : No\n' : ''}   IPv4 Address. . . . . . . . . . . : ${r.ip}\n   Subnet Mask . . . . . . . . . . . : ${mask}\n   Default Gateway . . . . . . . . . : ${r.puerta_enlace}\n${all ? `   DNS Servers . . . . . . . . . . . : ${r.dns.join('\n                                       ')}\n` : ''}`
-    return [formatted(text)]
-  },
-})
-
-function reachable(s: PsSession, target: string): boolean {
+function reachable(s: PsSession, target: string, port?: number): boolean {
   const r = netCfg(s)
-  return target === '127.0.0.1' || target.toLowerCase() === 'localhost' || target === r.ip || target === r.puerta_enlace || r.alcanzables.some((a) => a.toLowerCase() === target.toLowerCase()) || r.dns.includes(target)
+  if (target === '127.0.0.1' || target.toLowerCase() === 'localhost' || target.toLowerCase() === s.state.equipo.toLowerCase() || target === r.ip) return true
+  // Un equipo del laboratorio responde según su firewall, su perfil de red y lo que escucha.
+  if (s.lab?.find(target)) return reach(s, target, port).ok
+  if (!r.conectada) return false
+  return target === r.puerta_enlace || r.alcanzables.some((a) => a.toLowerCase() === target.toLowerCase()) || r.dns.includes(target)
+}
+
+/** IP de un nombre (equipo del laboratorio o registro DNS), para mostrar en ping y Test-NetConnection. */
+function addressOf(s: PsSession, target: string): string {
+  const t = s.lab?.find(target)
+  if (t) return t.state.red.ip
+  const rec = ((s.data.dnsRecords ?? []) as PsObject[]).find((x) => psEquals(x.Name, target) && x.Type === 'A')
+  return rec ? toText(rec.IPAddress) : target
 }
 
 cmdlet('Test-Connection', {
@@ -1498,28 +1558,36 @@ cmdlet('ping', {
   run(ctx) {
     const target = toText(ctx.positional.find((p) => !toText(p).startsWith('-')) ?? '')
     const ok = reachable(ctx.s, target)
-    let text = `\nPinging ${target} with 32 bytes of data:\n`
-    for (let i = 0; i < 4; i++) text += ok ? `Reply from ${target}: bytes=32 time<1ms TTL=128\n` : 'Request timed out.\n'
-    text += `\nPing statistics for ${target}:\n    Packets: Sent = 4, Received = ${ok ? 4 : 0}, Lost = ${ok ? 0 : 4} (${ok ? 0 : 100}% loss),\n`
+    const ip = addressOf(ctx.s, target)
+    if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ctx.s.lab?.find(target) && !reachable(ctx.s, target)) return [formatted(`Ping request could not find host ${target}. Please check the name and try again.\n`)]
+    let text = `\nPinging ${ip === target ? target : `${target} [${ip}]`} with 32 bytes of data:\n`
+    for (let i = 0; i < 4; i++) text += ok ? `Reply from ${ip}: bytes=32 time<1ms TTL=128\n` : 'Request timed out.\n'
+    text += `\nPing statistics for ${ip}:\n    Packets: Sent = 4, Received = ${ok ? 4 : 0}, Lost = ${ok ? 0 : 4} (${ok ? 0 : 100}% loss),\n`
+    if (ok) text += 'Approximate round trip times in milli-seconds:\n    Minimum = 0ms, Maximum = 1ms, Average = 0ms\n'
     return [formatted(text)]
   },
 })
 
 cmdlet('Test-NetConnection', {
-  params: ['ComputerName', 'Port', 'CommonTCPPort'],
-  switches: ['InformationLevel'],
+  params: ['ComputerName', 'Port', 'CommonTCPPort', 'InformationLevel'],
   positional: ['ComputerName'],
   synopsis: 'Displays diagnostic information for a connection.',
   module: 'NetTCPIP',
   run(ctx) {
     const target = str(ctx, 'ComputerName') ?? 'internetbeacon.msedge.net'
-    const ok = reachable(ctx.s, target)
-    const port = param(ctx, 'Port')
-    return [
-      formatted(
-        `\nComputerName     : ${target}\nRemoteAddress    : ${target}\n${port !== undefined ? `RemotePort       : ${toText(port)}\n` : ''}InterfaceAlias   : Ethernet\nSourceAddress    : ${netCfg(ctx.s).ip}\n${port !== undefined ? `TcpTestSucceeded : ${ok ? 'True' : 'False'}` : `PingSucceeded    : ${ok ? 'True' : 'False'}`}\n\n`,
-      ),
-    ]
+    const common: Record<string, number> = { http: 80, rdp: 3389, smb: 445, winrm: 5985 }
+    const port = param(ctx, 'Port') ?? (str(ctx, 'CommonTCPPort') ? common[str(ctx, 'CommonTCPPort')!.toLowerCase()] : undefined)
+    const ok = reachable(ctx.s, target, port === undefined ? undefined : Number(port))
+    const ip = addressOf(ctx.s, target)
+    const warn = !ok ? (port !== undefined ? `WARNING: TCP connect to (${ip} : ${toText(port)}) failed\n` : `WARNING: Ping to ${ip} failed with status: TimedOut\n`) : ''
+    if (warn) ctx.host(warn)
+    if (psEquals(param(ctx, 'InformationLevel'), 'Quiet')) return [ok]
+    const props: Record<string, unknown> = { ComputerName: target, RemoteAddress: ip }
+    if (port !== undefined) props.RemotePort = Number(port)
+    Object.assign(props, { InterfaceAlias: netCfg(ctx.s).adaptador, SourceAddress: netCfg(ctx.s).ip })
+    if (port !== undefined) props.TcpTestSucceeded = ok
+    else props.PingSucceeded = ok
+    return [psObject('TestNetConnectionResult', props)]
   },
 }, ['tnc'])
 

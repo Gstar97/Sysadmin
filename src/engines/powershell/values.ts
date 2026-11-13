@@ -207,7 +207,12 @@ export function formatDefault(items: unknown[]): string {
       )
       continue
     }
-    const view = VIEWS[t]
+    let view = VIEWS[t]
+    // Lo que vuelve de otro equipo usa la vista original más la columna PSComputerName.
+    if (!view && t.startsWith('Deserialized.') && VIEWS[t.slice(13)]) {
+      const base = VIEWS[t.slice(13)]
+      view = { ...base, columns: [...base.columns, ...((group[0] as PsObject).PSComputerName !== undefined ? [{ label: 'PSComputerName', value: (o: PsObject) => o.PSComputerName }] : [])] }
+    }
     if (view) {
       if (view.groupBy) {
         const groups = new Map<string, PsObject[]>()

@@ -1,7 +1,11 @@
 import './cmdlets'
-import { buildAdStore, ouPathToDn, store } from './ad'
-import { psCheckSchema, psStateSchema, type PsCheckInput, type PsStateInput } from './schema'
+import './remoting'
+import './system'
+import { buildAdStore, ouPathToDn, store, type AdStore } from './ad'
+import { BASE_RULES, DC_RULES, Lab, ruleObject } from './machine'
+import { psCheckSchema, psStateSchema, type PsCheckInput, type PsServerState, type PsStateInput } from './schema'
 import { asArray, PsSession } from './session'
+import { verifySystem } from './verify-system'
 import { psObject, toText, type PsObject } from './values'
 
 export { PsSession, CMDLETS, ALIASES, canonicalName } from './session'
@@ -50,11 +54,23 @@ const BASE_FEATURES: [string, string, boolean][] = [
   ['DNS', 'DNS Server', false],
   ['FileAndStorage-Services', 'File and Storage Services', true],
   ['FS-FileServer', 'File Server', true],
+  ['FS-DFS-Namespace', 'DFS Namespaces', false],
+  ['FS-DFS-Replication', 'DFS Replication', false],
+  ['FS-Resource-Manager', 'File Server Resource Manager', false],
+  ['FS-Data-Deduplication', 'Data Deduplication', false],
   ['Hyper-V', 'Hyper-V', false],
   ['Web-Server', 'Web Server (IIS)', false],
+  ['UpdateServices', 'Windows Server Update Services', false],
+  ['WDS', 'Windows Deployment Services', false],
+  ['Print-Services', 'Print and Document Services', false],
+  ['Failover-Clustering', 'Failover Clustering', false],
   ['NET-Framework-45-Core', '.NET Framework 4.8', true],
   ['RSAT-AD-Tools', 'AD DS and AD LDS Tools', false],
+  ['RSAT-AD-PowerShell', 'Active Directory module for Windows PowerShell', false],
+  ['RSAT-ADDS', 'AD DS Tools', false],
+  ['GPMC', 'Group Policy Management', false],
   ['RSAT-DNS-Server', 'DNS Server Tools', false],
+  ['RSAT-DHCP', 'DHCP Server Tools', false],
   ['Telnet-Client', 'Telnet Client', false],
   ['Windows-Defender', 'Microsoft Defender Antivirus', true],
   ['Windows-Server-Backup', 'Windows Server Backup', false],
@@ -75,10 +91,32 @@ function mkProcess(id: number, name: string, cpu: number, memMb: number, si = 0)
   })
 }
 
-/** Crea una sesión de PowerShell a partir del estado inicial de un ejercicio. */
+/** Crea una sesión de PowerShell a partir del estado inicial de un ejercicio (con los demás equipos de la red). */
 export function createPsSession(input: PsStateInput = {}): PsSession {
   const state = psStateSchema.parse(input)
+  const lab = new Lab()
+  lab.build = buildComputer
+  const { servidores, ...own } = state
+  // Las bases de AD primero: los equipos de un dominio la comparten.
+  for (const st of [own, ...servidores]) {
+    if (st.ad && st.dominio && !lab.adStores.has(st.dominio.toLowerCase())) lab.adStores.set(st.dominio.toLowerCase(), buildAdStore({ state: st } as PsSession))
+  }
+  for (const srv of servidores) lab.register(srv)
+  return buildComputer(own, lab)
+}
+
+/** Es controlador de dominio: trae la base de AD en su estado o es otro DC de un dominio que existe. */
+export function isDomainController(state: PsServerState, lab?: Lab): boolean {
+  return !!state.dominio && (!!state.ad || (state.controlador_dominio && !!lab?.adStores.has(state.dominio.toLowerCase())))
+}
+
+const BASE_MODULES = ['CimCmdlets', 'DnsClient', 'Microsoft.PowerShell.LocalAccounts', 'Microsoft.PowerShell.Management', 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Utility', 'NetAdapter', 'NetConnection', 'NetSecurity', 'NetTCPIP', 'PackageManagement', 'PowerShellGet', 'PSReadLine', 'ScheduledTasks', 'ServerManager', 'Storage']
+
+function buildComputer(state: PsServerState, lab: Lab): PsSession {
   const s = new PsSession(state)
+  s.lab = lab
+  lab.add(s)
+  const dc = isDomainController(state, lab)
   const fs = s.fs
   const now = Date.now()
 
@@ -95,7 +133,8 @@ export function createPsSession(input: PsStateInput = {}): PsSession {
 
   // Servicios
   const services = new Map<string, ServiceSeed>()
-  for (const sv of [...BASE_SERVICES, ...(state.ad ? DC_SERVICES : [])]) services.set(sv.name.toLowerCase(), sv)
+  for (const sv of [...BASE_SERVICES, ...(dc ? DC_SERVICES : [])]) services.set(sv.name.toLowerCase(), sv)
+  if (!state.remoting) services.set('winrm', { ...services.get('winrm')!, status: 'Stopped', start: 'Manual' })
   const failures = new Map<string, string>()
   for (const sv of state.servicios ?? []) {
     services.set(sv.nombre.toLowerCase(), { name: sv.nombre, display: sv.nombre_visible ?? sv.nombre, status: sv.estado, start: sv.inicio })
@@ -121,7 +160,7 @@ export function createPsSession(input: PsStateInput = {}): PsSession {
     mkProcess(512, 'csrss', 2.3, 5.4),
     mkProcess(588, 'wininit', 0.2, 6.8),
     mkProcess(664, 'services', 9.8, 9.6),
-    mkProcess(684, 'lsass', 25.6, state.ad ? 92 : 18),
+    mkProcess(684, 'lsass', 25.6, dc ? 92 : 18),
     mkProcess(812, 'svchost', 12.5, 24),
     mkProcess(876, 'svchost', 30.1, 41),
     mkProcess(1044, 'svchost', 4.4, 12),
@@ -131,14 +170,14 @@ export function createPsSession(input: PsStateInput = {}): PsSession {
     mkProcess(3876, 'explorer', 18.9, 96, 1),
     mkProcess(4410, 'powershell', 2.7, 78, 1),
   ]
-  if (state.ad) procs.push(mkProcess(2480, 'dns', 6.2, 64), mkProcess(2532, 'Microsoft.ActiveDirectory.WebServices', 4.8, 58))
+  if (dc) procs.push(mkProcess(2480, 'dns', 6.2, 64), mkProcess(2532, 'Microsoft.ActiveDirectory.WebServices', 4.8, 58))
   let nextPid = 5200
   for (const p of state.procesos ?? []) procs.push(mkProcess(nextPid += 64, p.nombre, p.cpu, p.memoria_mb, 1))
   s.data.processes = procs.filter((p) => p.ProcessName !== 'spoolsv' || services.get('spooler')?.status === 'Running')
 
   // Roles y características
   const features = new Map(BASE_FEATURES.map(([name, display, installed]) => [name.toLowerCase(), { name, display, installed }]))
-  if (state.ad) for (const n of ['AD-Domain-Services', 'DNS', 'RSAT-AD-Tools', 'RSAT-DNS-Server']) features.get(n.toLowerCase())!.installed = true
+  if (dc) for (const n of ['AD-Domain-Services', 'DNS', 'RSAT-AD-Tools', 'RSAT-AD-PowerShell', 'RSAT-DNS-Server', 'GPMC']) features.get(n.toLowerCase())!.installed = true
   for (const f of state.caracteristicas ?? []) features.set(f.nombre.toLowerCase(), { name: f.nombre, display: f.nombre_visible, installed: f.instalada })
   s.data.features = [...features.values()].map((f) => psObject('Microsoft.Windows.ServerManager.Commands.Feature', { DisplayName: f.display, Name: f.name, Installed: f.installed, InstallState: f.installed ? 'Installed' : 'Available', FeatureType: 'Role' }))
 
@@ -174,16 +213,59 @@ export function createPsSession(input: PsStateInput = {}): PsSession {
     psObject('Microsoft.DnsClient.Commands.DnsRecord', { Name, Type, TTL: 3600, Section: 'Answer', ...(Type === 'CNAME' ? { NameHost: value } : Type === 'MX' ? { NameExchange: value } : { IPAddress: value }) })
   const records: PsObject[] = [dnsRecord('localhost', 'A', '127.0.0.1')]
   if (state.dominio) {
-    records.push(dnsRecord(state.dominio, 'A', state.red.ip), dnsRecord(`${state.equipo}.${state.dominio}`.toLowerCase(), 'A', state.red.ip))
-    for (const c of state.ad?.equipos ?? []) records.push(dnsRecord(`${c.nombre}.${state.dominio}`.toLowerCase(), 'A', '0.0.0.0'))
+    const members = [state, ...lab.states.values()].filter((x) => x.dominio?.toLowerCase() === state.dominio!.toLowerCase())
+    const dcs = members.filter((x) => isDomainController(x, lab))
+    for (const d of dcs) records.push(dnsRecord(state.dominio, 'A', d.red.ip))
+    for (const m of members) if (!records.some((r) => r.Name === `${m.equipo}.${state.dominio}`.toLowerCase())) records.push(dnsRecord(`${m.equipo}.${state.dominio}`.toLowerCase(), 'A', m.red.ip))
+    for (const c of state.ad?.equipos ?? []) if (!records.some((r) => r.Name === `${c.nombre}.${state.dominio}`.toLowerCase())) records.push(dnsRecord(`${c.nombre}.${state.dominio}`.toLowerCase(), 'A', '0.0.0.0'))
+  } else {
+    for (const m of lab.states.values()) if (!m.dominio) records.push(dnsRecord(m.equipo.toLowerCase(), 'A', m.red.ip))
   }
   records.push(dnsRecord('www.microsoft.com', 'A', '23.45.229.117'), dnsRecord('learn.microsoft.com', 'A', '13.107.246.53'))
   for (const r of state.dns) records.push(dnsRecord(r.nombre, r.tipo, r.valor))
   s.data.dnsRecords = records
 
-  // Active Directory
-  const ad = buildAdStore(s)
-  if (ad) s.data.ad = [ad]
+  // Active Directory: los DC tienen la base; los miembros la usan si instalan las herramientas (RSAT).
+  const ad = state.dominio ? (lab.adStores.get(state.dominio.toLowerCase()) as AdStore | undefined) : undefined
+  if (ad && dc) s.data.ad = [ad]
+  if (ad) s.data.domainStore = [ad]
+
+  // Firewall, red, escritorio remoto y WinRM
+  const seeds = [...BASE_RULES, ...(dc ? DC_RULES : [])]
+  const rules = seeds.map((r) => ruleObject({ ...r, enabled: r.enabled || state.firewall.habilitar.some((h) => h.toLowerCase() === r.name.toLowerCase() || h.toLowerCase() === r.display.toLowerCase() || h.toLowerCase() === r.group.toLowerCase()) || (state.escritorio_remoto && r.group === 'Remote Desktop') }))
+  for (const r of state.firewall.reglas) rules.push(ruleObject({ name: r.nombre, display: r.nombre_visible, group: r.grupo ?? '', enabled: r.habilitada, proto: r.protocolo, port: r.puerto, profile: r.perfil, remote: r.origen, action: r.accion }))
+  s.data.firewallRules = rules
+  s.data.firewallProfiles = [{ ...state.firewall.perfiles }]
+  if (state.red.perfil) s.data.netProfile = [state.red.perfil]
+  s.data.winrm = [state.remoting]
+  s.data.rdp = [state.escritorio_remoto]
+  s.data.trustedHosts = [state.trusted_hosts]
+  s.data.timeZone = [state.zona_horaria]
+
+  // Discos: el del sistema (GPT con las particiones de UEFI) y los que agregue el ejercicio.
+  const disks = state.discos ?? []
+  if (!disks.some((d) => d.numero === 0)) {
+    disks.unshift({ numero: 0, tamano_gb: 60, modelo: 'Msft Virtual Disk', estilo: 'GPT', offline: false, bus: 'SAS', particiones: [
+      { tamano_gb: 0.1, sistema: 'FAT32', etiqueta: '', tipo: 'System', usado_gb: 0.03 },
+      { tamano_gb: 0.016, etiqueta: '', tipo: 'Reserved', usado_gb: 0 },
+      { letra: 'C', tamano_gb: 59.27, sistema: 'NTFS', etiqueta: '', tipo: 'Basic', usado_gb: 14.6 },
+      { tamano_gb: 0.61, sistema: 'NTFS', etiqueta: 'Recovery', tipo: 'Recovery', usado_gb: 0.5 },
+    ] })
+  }
+  s.data.disks = disks.map((d) => ({ ...d, particiones: d.particiones.map((p) => ({ ...p })) }))
+
+  // Actualizaciones instaladas
+  s.data.hotfixes = (state.actualizaciones ?? [
+    { id: 'KB5054979', descripcion: 'Update', hace_dias: 95 },
+    { id: 'KB5066131', descripcion: 'Security Update', hace_dias: 58 },
+    { id: 'KB5068966', descripcion: 'Security Update', hace_dias: 26 },
+  ]).map((h) => psObject('System.Management.ManagementObject#root\\cimv2\\Win32_QuickFixEngineering', { Source: state.equipo, Description: h.descripcion, HotFixID: h.id, InstalledBy: 'NT AUTHORITY\\SYSTEM', InstalledOn: new Date(now - h.hace_dias * 86_400_000) }))
+
+  // Módulos
+  s.data.modules = [...BASE_MODULES, ...(dc ? ['ActiveDirectory', 'GroupPolicy', 'DnsServer', 'ADDSDeployment'] : []), ...state.modulos]
+  s.executionPolicy = state.politica_ejecucion
+  // Sin servidor DHCP la placa queda con una dirección automática 169.254.x.x (/16).
+  if (state.red.ip.startsWith('169.254.')) state.red.prefijo = 16
   return s
 }
 
@@ -194,7 +276,14 @@ export interface CheckResult {
 
 /** Comprueba una verificación de ejercicio contra el estado actual de la sesión. */
 export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
-  const check = psCheckSchema.parse(raw)
+  const parsed = psCheckSchema.parse(raw)
+  if ('en' in parsed) {
+    const remote = s.lab?.find(parsed.en)
+    if (!remote) return { ok: false, label: `${parsed.en} existe` }
+    const r = verifyPs(remote, parsed.verificar)
+    return { ok: r.ok, label: `en ${parsed.en}: ${r.label}` }
+  }
+  const check = parsed
   if ('archivo' in check) {
     const node = s.fs.get(s.resolvePath(check.archivo))
     if (!check.existe) return { ok: !node, label: `${check.archivo} no existe` }
@@ -274,8 +363,11 @@ export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
     const re = safeRegex(check.salida_regex, 'mi')
     return { ok: !!re && re.test(s.lastOutput), label: 'la salida tiene el formato esperado' }
   }
-  const re = safeRegex(check.comando_usado, 'i')
-  return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
+  if ('comando_usado' in check) {
+    const re = safeRegex(check.comando_usado, 'i')
+    return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
+  }
+  return verifySystem(s, check)
 }
 
 function safeRegex(pattern: string, flags: string): RegExp | undefined {

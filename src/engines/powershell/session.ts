@@ -1,4 +1,5 @@
-import type { PsState } from './schema'
+import type { PsServerState } from './schema'
+import type { Lab } from './machine'
 import { parsePs, PsIncomplete, PsParseError, type Arg, type Element, type Expr, type ParamSpec, type Redirect, type Stmt } from './parser'
 import { formatDefault, getProp, isPsObject, isScriptBlock, propNames, psObject, setProp, toText, typeName, type PsObject, type ScriptBlock } from './values'
 
@@ -163,6 +164,8 @@ export interface CmdletContext {
   /** Error que no corta el pipeline (como Get-Service con un nombre inexistente). */
   writeError: (message: string, category?: string, target?: string, errorId?: string) => void
   host: (text: string) => void
+  /** Texto de error ya formateado (el que llega de una sesión remota). */
+  errRaw: (text: string) => void
 }
 
 export interface CmdletDef {
@@ -190,6 +193,18 @@ export function cmdlet(names: string | string[], def: CmdletDef, aliases: string
   const list = Array.isArray(names) ? names : [names]
   for (const n of list) CMDLETS.set(n.toLowerCase(), { ...def, displayName: n })
   for (const a of aliases) ALIASES.set(a.toLowerCase(), list[0])
+}
+
+/** Módulos que siempre están (los del propio PowerShell). */
+const CORE_MODULES = ['microsoft.powershell.core', 'microsoft.powershell.management', 'microsoft.powershell.utility', 'microsoft.powershell.security', 'microsoft.powershell.diagnostics', 'microsoft.wsman.management']
+
+export function moduleAvailable(s: PsSession, mod?: string): boolean {
+  if (!mod) return true
+  const m = mod.toLowerCase()
+  if (CORE_MODULES.includes(m)) return true
+  const list = s.data.modules as string[] | undefined
+  if (!list) return true
+  return list.some((x) => x.toLowerCase() === m)
 }
 
 /** Nombre oficial de un cmdlet a partir de su nombre o alias (sin distinguir mayúsculas). */
@@ -252,15 +267,23 @@ export class PsSession {
   lastOutput = ''
   pendingClear = false
   executionPolicy = 'RemoteSigned'
-  state: PsState
+  state: PsServerState
   /** Objetos de la sesión (servicios, procesos, AD...) que usan los cmdlets. */
   data: Record<string, unknown[]> = {}
+  /** Los demás equipos de la red. */
+  lab?: Lab
+  /** Sesión remota abierta con Enter-PSSession: lo que se escribe se ejecuta allá. */
+  activeRemote?: PsSession
+  /** Esta sesión es remota (la abrió otro equipo): no se puede volver a anidar. */
+  isRemote = false
+  /** Cambios que se aplican al reiniciar (Rename-Computer, Add-Computer, roles). */
+  pending: { name?: string; domain?: string; messages: string[] } = { messages: [] }
 
   get vars(): Map<string, unknown> {
     return this.scopes[0]
   }
 
-  constructor(state: PsState) {
+  constructor(state: PsServerState) {
     this.state = state
     this.home = `C:\\Users\\${state.usuario}`
     this.cwd = state.directorio
@@ -276,7 +299,8 @@ export class PsSession {
     this.vars.set('lastexitcode', 0)
   }
 
-  prompt() {
+  prompt(): string {
+    if (this.activeRemote) return `[${this.activeRemote.state.equipo}]: ${this.activeRemote.prompt()}`
     return `PS ${this.cwd}> `
   }
 
@@ -345,6 +369,19 @@ export class PsSession {
   }
 
   async run(source: string): Promise<{ chunks: OutputChunk[]; incomplete?: boolean }> {
+    if (this.activeRemote) {
+      // Dentro de Enter-PSSession: exit o Exit-PSSession vuelven; lo demás corre en el otro equipo.
+      if (/^\s*(exit|exit-pssession)\s*$/i.test(source)) {
+        this.history.push(source)
+        this.activeRemote = undefined
+        this.lastOutput = ''
+        return { chunks: [] }
+      }
+      const r = await this.activeRemote.run(source)
+      if (!r.incomplete && source.trim()) this.history.push(source)
+      this.lastOutput = this.activeRemote.lastOutput
+      return r
+    }
     const chunks: OutputChunk[] = []
     const out = (stream: 'out' | 'err') => (text: string) => {
       if (!text) return
@@ -696,7 +733,9 @@ export class PsSession {
     const fn = this.functions.get(name.toLowerCase())
     if (fn) return this.callFunction(name, fn, args, input, hasInput, err, host)
     const canonical = canonicalName(name)
-    const def = canonical ? CMDLETS.get(canonical.toLowerCase()) : undefined
+    const found = canonical ? CMDLETS.get(canonical.toLowerCase()) : undefined
+    // Un cmdlet de un módulo que no está instalado no existe para este equipo.
+    const def = found && moduleAvailable(this, found.module) ? found : undefined
     if (!def) {
       if (/\.ps1$/i.test(name)) return this.runScript(name, err, host, args, input, hasInput)
       throw new PsError(
@@ -759,6 +798,7 @@ export class PsSession {
       input,
       hasInput,
       s: this,
+      errRaw: err,
       writeError: (message, category = 'ObjectNotFound', target = '', errorId) => {
         const id = errorId ?? `${category},Microsoft.PowerShell.Commands.${canonical!.replace(/-/g, '')}Command`
         if (action === 'stop') throw new PsError(message, category, id, target)
