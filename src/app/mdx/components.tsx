@@ -54,6 +54,8 @@ const WifiPlannerView = lazy(() => import('@/interactive/redes/WifiPlanner').the
 const RouteDecisionView = lazy(() => import('@/interactive/redes/RouteDecision').then((m) => ({ default: m.RouteDecision })))
 const CaptureViewerView = lazy(() => import('@/interactive/redes/CaptureViewer').then((m) => ({ default: m.CaptureViewer })))
 const NatSimView = lazy(() => import('@/interactive/redes/NatSim').then((m) => ({ default: m.NatSim })))
+const LicenseCalculatorView = lazy(() => import('@/interactive/windows/LicenseCalculator').then((m) => ({ default: m.LicenseCalculator })))
+const GpoSimulatorView = lazy(() => import('@/interactive/windows/GpoSimulator').then((m) => ({ default: m.GpoSimulator })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
 
 function Loading() {
@@ -342,6 +344,22 @@ export function CalculadoraPoe(props: ComponentProps<typeof PoeCalculatorView>) 
   )
 }
 
+export function CalculadoraLicencias(props: ComponentProps<typeof LicenseCalculatorView>) {
+  return (
+    <Island>
+      <LicenseCalculatorView {...props} />
+    </Island>
+  )
+}
+
+export function SimuladorGPO() {
+  return (
+    <Island>
+      <GpoSimulatorView />
+    </Island>
+  )
+}
+
 export function SimuladorSwitch() {
   return (
     <Island>
@@ -607,6 +625,8 @@ export const mdxComponents = {
   SimuladorVim,
   CalculadoraPermisos,
   CalculadoraPoe,
+  CalculadoraLicencias,
+  SimuladorGPO,
   SimuladorSwitch,
   ClasificadorIp,
   DisenadorVlsm,

@@ -6,6 +6,8 @@ import { Button, Callout, Card, PageHeader } from '@/ui'
 import {
   Advertencia,
   CalculadoraPoe,
+  CalculadoraLicencias,
+  SimuladorGPO,
   CalculadoraUnidades,
   ClasificadorIp,
   ComparadorDiscos,
@@ -137,6 +139,11 @@ export default function GalleryPage() {
 
       <Section id="powershell" titulo="Windows PowerShell" descripcion="Pipeline de objetos (Where-Object, Select-Object, Sort-Object, Format-Table), archivos, servicios, procesos, eventos y el módulo ActiveDirectory. Los errores salen con el mismo formato que en Windows.">
         <Terminal ejercicio={terminalPs} />
+      </Section>
+
+      <Section id="windows" titulo="Windows Server: licencias y directivas de grupo" descripcion="Cuántas licencias por núcleo hay que comprar (Standard contra Datacenter, con práctica) y el simulador “¿qué GPO gana?”: vincular, exigir, bloquear herencia y filtrar por grupo, y ver qué le queda a cada persona.">
+        <CalculadoraLicencias />
+        <SimuladorGPO />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">
