@@ -461,8 +461,25 @@ export function search(ctx: CmdletContext, list: PsObject[], cmd: string, noun: 
 
 /** Registra un cmdlet del módulo ActiveDirectory (solo existe si el ejercicio define un dominio). */
 export function adCmdlet(name: string, def: CmdletDef) {
+  const verb = name.split('-')[0]
+  const changes = ['Set', 'New', 'Remove', 'Move', 'Disable', 'Enable', 'Unlock', 'Add', 'Rename', 'Restore'].includes(verb)
   cmdlet(name, {
     ...def,
+    // -WhatIf: qué haría, objeto por objeto, sin hacerlo.
+    whatIf:
+      def.whatIf ??
+      (changes
+        ? (ctx) => {
+            const st = ctx.s.data.ad?.[0] as AdStore | undefined
+            const ids = ctx.params.has('identity') ? [ctx.params.get('identity')] : ctx.params.has('name') ? [ctx.params.get('name')] : ctx.input
+            const targets = ids.map((i) => {
+              const o = st && isPsObject(i) ? i : st ? resolveAny(st, identityText(i)) : undefined
+              return o ? toText(getProp(o, 'DistinguishedName') ?? (o.__parent ? dnOf(o) : identityText(o))) : identityText(i)
+            })
+            const op = { Set: 'Set', New: 'New', Remove: 'Remove', Move: 'Move', Disable: 'Set', Enable: 'Set', Unlock: 'Set', Add: 'Set', Rename: 'Rename', Restore: 'Restore' }[verb]
+            return (targets.length ? targets : ['']).map((t) => `Performing the operation "${op}" on target "${t}".`).join('\nWhat if: ')
+          }
+        : undefined),
     module: AD_MODULE,
     run(ctx) {
       if (!ctx.s.data.ad?.length) {

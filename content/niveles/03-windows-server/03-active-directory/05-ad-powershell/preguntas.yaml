@@ -1,0 +1,119 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Necesitás la lista de usuarios del departamento Ventas. ¿Cuál es la mejor forma?
+  opciones:
+    - { texto: "Get-ADUser -Filter \"Department -eq 'Ventas'\"", correcta: true, explicacion: "El controlador filtra y solo viajan los resultados." }
+    - { texto: "Get-ADUser -Filter * | Where-Object Department -eq 'Ventas'", explicacion: "Trae todo el directorio por la red y además Department no viene sin -Properties: no encontraría a nadie." }
+    - { texto: "Get-ADUser Ventas", explicacion: "-Identity busca una cuenta llamada Ventas." }
+    - { texto: "Get-ADGroupMember Ventas", explicacion: "Eso lista un grupo, no el atributo Department." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Get-ADUser mlopez | Select-Object Name, Department muestra la columna Department vacía, aunque la cuenta tiene el dato cargado. ¿Por qué?
+  opciones:
+    - { texto: "Department no viene por defecto: hay que pedirlo con -Properties Department", correcta: true, explicacion: "Get-ADUser trae unas diez propiedades; las demás se piden." }
+    - { texto: "El dato no se replicó", explicacion: "Si estuviera cargado en otro DC, igual sería una propiedad que no pediste." }
+    - { texto: "Select-Object no funciona con objetos de AD", explicacion: "Funciona con cualquier objeto." }
+    - { texto: "Hay que escribirlo department, en minúsculas", explicacion: "Los nombres de propiedades no distinguen mayúsculas." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que muestra el puesto (Title) y el último inicio de sesión (LastLogonDate) de mlopez.
+  aceptadas:
+    - "Get-ADUser mlopez -Properties Title, LastLogonDate"
+    - "Get-ADUser mlopez -Properties Title,LastLogonDate"
+    - "Get-ADUser -Identity mlopez -Properties Title, LastLogonDate"
+    - "Get-ADUser mlopez -Properties LastLogonDate, Title"
+  patrones: ["^get-aduser\\s+(-identity\\s+)?mlopez\\s+-properties\\s+(title\\s*,\\s*lastlogondate|lastlogondate\\s*,\\s*title)$"]
+  explicacion: "-Properties con la lista de propiedades que querés, separadas por comas."
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Vas a cambiar el departamento de todos los usuarios de una OU con Get-ADUser … | Set-ADUser -Department Comercial. ¿Qué hacés primero?
+  opciones:
+    - { texto: "Correrlo con -WhatIf para ver a quiénes va a tocar", correcta: true, explicacion: "Si el filtro o la OU están mal, lo ves antes de cambiar nada." }
+    - { texto: "Correrlo directamente: Set-ADUser pide confirmación", explicacion: "No pide confirmación; cambia todo." }
+    - { texto: "Hacer una copia de la base de AD", explicacion: "Un respaldo está bien, pero -WhatIf es lo que te muestra el alcance." }
+    - { texto: "Deshabilitar las cuentas mientras tanto", explicacion: "No hace falta y deja a la gente sin entrar." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué significa esta salida?
+  salida: |
+    PS C:\> Get-ADUser -Filter * -SearchBase "OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local" | Set-ADUser -Department Comercial -WhatIf
+    What if: Performing the operation "Set" on target "CN=María López,OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local".
+    What if: Performing the operation "Set" on target "CN=Pedro Ruiz,OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local".
+  opciones:
+    - { texto: "Se cambiarían esas dos cuentas, pero todavía no se cambió nada", correcta: true, explicacion: "-WhatIf solo describe lo que haría." }
+    - { texto: "Se cambiaron las dos cuentas", explicacion: "Con -WhatIf no se cambia nada." }
+    - { texto: "Hubo un error en las dos cuentas", explicacion: "No es un error; es la vista previa." }
+    - { texto: "Solo se cambia la primera", explicacion: "Lista todas las que tocaría." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué comando lista los usuarios que no iniciaron sesión en los últimos 90 días?
+  opciones:
+    - { texto: "Search-ADAccount -AccountInactive -TimeSpan 90.00:00:00 -UsersOnly", correcta: true, explicacion: "El TimeSpan es días.horas:minutos:segundos." }
+    - { texto: "Search-ADAccount -AccountDisabled", explicacion: "Eso lista las deshabilitadas." }
+    - { texto: "Get-ADUser -Filter \"Enabled -eq '$false'\"", explicacion: "También lista las deshabilitadas." }
+    - { texto: "Search-ADAccount -AccountExpired", explicacion: "Lista las que tienen fecha de vencimiento pasada." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una persona inició sesión ayer, pero su LastLogonDate dice hace diez días. ¿Qué pasa?
+  opciones:
+    - { texto: "Es normal: el atributo detrás de LastLogonDate se actualiza solo si el valor anterior tiene más de unos 14 días", correcta: true, explicacion: "Sirve para meses, no para días. Para la fecha exacta, lastLogon en cada DC." }
+    - { texto: "La replicación entre DC está rota", explicacion: "Puede ser, pero el margen de 14 días lo explica sin nada roto." }
+    - { texto: "La cuenta está bloqueada", explicacion: "No tiene relación con la fecha." }
+    - { texto: "El reloj de su PC está atrasado", explicacion: "Con diez días de diferencia, Kerberos ni la dejaría entrar." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: Search-ADAccount -AccountInactive devolvió 40 cuentas. ¿Cuáles conviene revisar antes de deshabilitarlas todas? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Cuentas de servicio que usan aplicaciones", correcta: true, explicacion: "No inician sesión como una persona y aparecen como inactivas." }
+    - { texto: "Personas de licencia o vacaciones largas", correcta: true, explicacion: "Van a volver y necesitan su cuenta." }
+    - { texto: "Cuentas de administración de emergencia", correcta: true, explicacion: "Se usan poco a propósito." }
+    - { texto: "Cuentas de gente que se fue hace un año", explicacion: "Esas son justamente las que hay que deshabilitar." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para deshabilitar en masa las cuentas inactivas.
+  pasos:
+    - Search-ADAccount -AccountInactive -TimeSpan 90.00:00:00 -UsersOnly
+    - Revisar la lista y sacar cuentas de servicio y de personas de licencia
+    - Exportar la lista final a un CSV como registro
+    - Correr Disable-ADAccount con -WhatIf
+    - Correr Disable-ADAccount sin -WhatIf
+  explicacion: "Buscar, revisar a mano, dejar registro, mirar el alcance con -WhatIf y recién ahí aplicar."
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este informe debería mostrar los usuarios con contraseña que nunca vence y su departamento, pero la columna Department sale vacía. Marcá la línea con el error.
+  lenguaje: powershell
+  archivo: |
+    Get-ADUser -Filter "PasswordNeverExpires -eq '$true'" |
+        Select-Object Name, SamAccountName, Department |
+        Export-Csv C:\Informes\nunca-vencen.csv -NoTypeInformation
+  lineas_con_error: [1]
+  explicacion: "Falta -Properties Department en Get-ADUser: filtrar por PasswordNeverExpires no hace falta pedirlo, pero Department, para mostrarlo, sí."
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué responde Get-ADGroupMember "Domain Admins" -Recursive?
+  opciones:
+    - { texto: "Quiénes son, en la práctica, administradores del dominio, incluidas las cuentas dentro de grupos anidados", correcta: true, explicacion: "Es el primer informe que pide cualquier auditoría." }
+    - { texto: "En qué grupos está la cuenta Domain Admins", explicacion: "Eso sería Get-ADPrincipalGroupMembership." }
+    - { texto: "Los permisos que tiene el grupo", explicacion: "Muestra miembros, no permisos." }
+    - { texto: "Las cuentas administradoras locales de cada PC", explicacion: "Muestra un grupo del dominio." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Querés saber qué cmdlet equivale a algo que hiciste con el mouse en el Centro de administración de Active Directory. ¿Dónde lo mirás?
+  opciones:
+    - { texto: "En el panel Historial de Windows PowerShell de esa misma consola", correcta: true, explicacion: "Muestra el comando completo de cada acción." }
+    - { texto: "En el Visor de eventos", explicacion: "Ahí se registran sucesos, no los comandos." }
+    - { texto: "En Get-History", explicacion: "Get-History muestra lo que escribiste en esa sesión de PowerShell." }
+    - { texto: "No hay forma", explicacion: "Sí la hay." }

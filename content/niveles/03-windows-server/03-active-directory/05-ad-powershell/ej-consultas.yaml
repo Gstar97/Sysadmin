@@ -1,0 +1,91 @@
+tipo: terminal
+shell: powershell
+titulo: Consultas, cambios masivos y limpieza de cuentas
+descripcion: >-
+  Hoy toca mantenimiento del directorio de empresa.local. Ventas pasa a llamarse Comercial, hay
+  que limpiar las cuentas que no se usan hace meses, armar un informe para auditoría y destrabar
+  una cuenta bloqueada. Estás en DC01; la carpeta C:\Informes existe.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+  archivos:
+    C:\Informes: { tipo: directorio }
+  ad:
+    ous: [Empresa/Usuarios/Ventas, Empresa/Usuarios/Compras]
+    usuarios:
+      - { sam: mlopez, nombre: María, apellido: López, ou: Empresa/Usuarios/Ventas, departamento: Ventas }
+      - { sam: lgomez, nombre: Laura, apellido: Gómez, ou: Empresa/Usuarios/Ventas, departamento: Ventas, bloqueado: true }
+      - { sam: pruiz, nombre: Pablo, apellido: Ruiz, ou: Empresa/Usuarios/Ventas, departamento: Ventas, ultimo_inicio: "2026-04-02" }
+      - { sam: jperez, nombre: Juan, apellido: Pérez, ou: Empresa/Usuarios/Compras, departamento: Compras }
+      - { sam: rsosa, nombre: Raúl, apellido: Sosa, ou: Empresa/Usuarios/Compras, departamento: Compras, ultimo_inicio: "2026-03-15", contrasena_nunca_vence: true }
+      - { sam: svc-backup, nombre: svc-backup, ou: Empresa/Usuarios/Compras, contrasena_nunca_vence: true }
+pasos:
+  - consigna: >-
+      Listá con -Filter los usuarios del departamento Ventas, mostrando el nombre y el
+      SamAccountName.
+    verificar:
+      - { comando_usado: "get-aduser.*-filter.*department" }
+      - { salida_contiene: "pruiz" }
+    pistas:
+      - "Get-ADUser -Filter \"Department -eq 'Ventas'\" no trae Department en la salida: si querés verlo, agregá -Properties Department."
+    solucion: ["Get-ADUser -Filter \"Department -eq 'Ventas'\" | Select-Object Name, SamAccountName"]
+  - consigna: >-
+      Mirá de mlopez su departamento, su último inicio de sesión y si está bloqueada (las
+      propiedades Department, LastLogonDate y LockedOut).
+    verificar:
+      - { comando_usado: "get-aduser.*mlopez.*-properties" }
+      - { salida_contiene: "LastLogonDate" }
+    solucion: ["Get-ADUser mlopez -Properties Department, LastLogonDate, LockedOut | Select-Object Name, Department, LastLogonDate, LockedOut"]
+    explicacion: >-
+      Get-ADUser trae pocas propiedades por defecto para no cargar al DC. Las demás se piden con
+      -Properties, nombrándolas (o * para todas, que es más lento).
+  - consigna: >-
+      Ventas pasa a llamarse Comercial: cambiá el departamento de todos los usuarios de la OU
+      Ventas. Probá primero con -WhatIf.
+    verificar:
+      - { usuario_ad: mlopez, departamento: Comercial }
+      - { usuario_ad: pruiz, departamento: Comercial }
+      - { comando_usado: "-whatif" }
+    pistas:
+      - "Get-ADUser -Filter * -SearchBase 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local' | Set-ADUser -Department Comercial"
+    solucion:
+      - Get-ADUser -Filter * -SearchBase 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local' | Set-ADUser -Department Comercial -WhatIf
+      - Get-ADUser -Filter * -SearchBase 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local' | Set-ADUser -Department Comercial
+  - consigna: >-
+      Encontrá las cuentas de usuario que no iniciaron sesión en los últimos 90 días.
+    verificar:
+      - { comando_usado: "search-adaccount.*-accountinactive" }
+      - { salida_contiene: "rsosa" }
+    pistas:
+      - "Search-ADAccount -AccountInactive -TimeSpan 90.00:00:00 -UsersOnly"
+    solucion: [Search-ADAccount -AccountInactive -TimeSpan 90.00:00:00 -UsersOnly]
+  - consigna: >-
+      Deshabilitá esas cuentas inactivas (las de personas: pruiz y rsosa), pasándolas por la
+      tubería.
+    verificar:
+      - { usuario_ad: pruiz, habilitado: false }
+      - { usuario_ad: rsosa, habilitado: false }
+    solucion:
+      - Search-ADAccount -AccountInactive -TimeSpan 90.00:00:00 -UsersOnly | Where-Object SamAccountName -in 'pruiz','rsosa' | Disable-ADAccount
+    explicacion: >-
+      Antes de deshabilitar en masa, mirá la lista: las cuentas de servicio y las de personas de
+      licencia también aparecen como inactivas. Por eso se filtran las que sabés que son de gente
+      que se fue.
+  - consigna: >-
+      Para auditoría, guardá en C:\Informes\nunca-vencen.csv las cuentas con contraseña que nunca
+      vence (nombre y SamAccountName).
+    verificar:
+      - { archivo: C:\Informes\nunca-vencen.csv, contenido_incluye: "svc-backup" }
+    solucion:
+      - Search-ADAccount -PasswordNeverExpires -UsersOnly | Select-Object Name, SamAccountName | Export-Csv C:\Informes\nunca-vencen.csv -NoTypeInformation
+    explicacion: >-
+      svc-backup es una cuenta de servicio con contraseña fija: candidata a pasar a gMSA. Las de
+      personas con contraseña que nunca vence casi nunca tienen justificación.
+  - consigna: Laura Gómez llamó porque no puede entrar. Encontrá las cuentas bloqueadas y desbloqueala.
+    verificar:
+      - { comando_usado: "search-adaccount.*-lockedout" }
+      - { comando_usado: "unlock-adaccount" }
+    solucion:
+      - Search-ADAccount -LockedOut
+      - Unlock-ADAccount lgomez

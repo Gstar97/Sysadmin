@@ -1,0 +1,174 @@
+---
+id: n3-m3-l4
+titulo: Usuarios, grupos y equipos
+minutos: 180
+objetivos:
+  - Crear cuentas de usuario de a una y en forma masiva desde un CSV, con contraseña inicial y cambio obligatorio.
+  - Distinguir tipos y ámbitos de grupo (global, local de dominio, universal) y aplicar AGDLP para dar permisos.
+  - Unir equipos al dominio, crear cuentas de equipo de antemano y usar cuentas de servicio administradas de grupo (gMSA).
+glosario: [ambito-grupo, agdlp, gmsa]
+verificado: 2026-11
+---
+
+import agdlp from './agdlp.svg?raw'
+import grupos from './tipo-grupo.yaml'
+import alta from './ej-alta-masiva.yaml'
+import equipo from './ej-equipo-gmsa.yaml'
+
+Con las OU en su lugar, llega el trabajo de todos los días: altas y bajas de personas, grupos para dar permisos y equipos que se suman al dominio. Esta lección cubre los tres tipos de objeto más comunes y una regla, AGDLP, que te va a evitar el desorden de permisos más típico de las redes Windows.
+
+<AntesDeEmpezar>
+- Unidades organizativas (lección anterior).
+- Objetos, Import-Csv y bucles en PowerShell (módulo 3.2).
+- Grupos y permisos en Linux (módulo 1.2), para comparar.
+</AntesDeEmpezar>
+
+## Usuarios
+
+Una cuenta de usuario tiene un **nombre de inicio de sesión** (`lgomez`, el *sAMAccountName*, de hasta 20 caracteres), un **UPN** (`lgomez@empresa.local`), un nombre para mostrar y todos los atributos que quieras completar: departamento, puesto, teléfono, oficina. Vale la pena completarlos: después sirven para filtrar ("todos los de Ventas") y para que aparezcan en la libreta de direcciones.
+
+```powershell
+$clave = Read-Host -AsSecureString "Contraseña inicial"
+New-ADUser -Name "Laura Gómez" -GivenName Laura -Surname Gómez `
+    -SamAccountName lgomez -UserPrincipalName lgomez@empresa.local `
+    -Department Ventas -Title Vendedora `
+    -Path "OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local" `
+    -AccountPassword $clave -ChangePasswordAtLogon $true -Enabled $true
+```
+
+Tres detalles: la contraseña va siempre como **SecureString** (con texto normal, el cmdlet la rechaza); sin contraseña, la cuenta no se puede crear **habilitada**; y `-ChangePasswordAtLogon` obliga a la persona a elegir la suya el primer día, así nadie más la conoce.
+
+### Alta masiva desde un CSV
+
+Cuando entran diez personas, no se crean de a una. Recursos Humanos te pasa una planilla, la guardás como CSV y la recorrés:
+
+```powershell
+Import-Csv C:\Altas\ingresos.csv | ForEach-Object {
+    $datos = @{
+        Name              = "$($_.Nombre) $($_.Apellido)"
+        GivenName         = $_.Nombre
+        Surname           = $_.Apellido
+        SamAccountName    = $_.Usuario
+        UserPrincipalName = "$($_.Usuario)@empresa.local"
+        Department        = $_.Area
+        Path              = "OU=$($_.Area),OU=Usuarios,OU=Empresa,DC=empresa,DC=local"
+        AccountPassword   = $clave
+        ChangePasswordAtLogon = $true
+        Enabled           = $true
+    }
+    New-ADUser @datos
+}
+```
+
+Ese `@datos` es **splatting**: en lugar de una línea larguísima, los parámetros van en una tabla hash y se pasan con `@`. Es lo mismo, pero se lee y se modifica mucho mejor.
+
+### Bajas
+
+Cuando alguien se va, no se borra la cuenta el primer día: se **deshabilita** (`Disable-ADAccount`), se mueve a una OU de bajas y se le sacan los grupos. Así, si mañana hace falta un archivo suyo o una auditoría pregunta qué podía hacer, la cuenta sigue ahí. Se borra después de un plazo que defina la empresa (30 o 90 días).
+
+## Grupos
+
+Los permisos **no se dan a personas**: se dan a grupos, y las personas entran y salen de los grupos. Igual que en Linux. Un grupo de AD tiene dos características:
+
+- **Tipo**: **seguridad** (sirve para permisos) o **distribución** (solo listas de correo). Para permisos, siempre seguridad.
+- **Ámbito**: dónde puede usarse y qué puede tener adentro.
+
+| Ámbito | Qué puede contener | Dónde se usa | Para qué |
+|---|---|---|---|
+| **Global** | cuentas y grupos globales del mismo dominio | en cualquier dominio del bosque | juntar personas por función: "los de Ventas" |
+| **Local de dominio** | cuentas y grupos de cualquier dominio del bosque | solo en su dominio | recibir permisos sobre un recurso: "lectura de la carpeta Ventas" |
+| **Universal** | cuentas y grupos de cualquier dominio del bosque | en todo el bosque | bosques con varios dominios; en uno solo casi no hace falta |
+
+### AGDLP
+
+La regla que ordena todo: **A**ccounts (cuentas) → **G**lobal → **D**omain **L**ocal → **P**ermissions (permisos).
+
+<Diagrama svg={agdlp} alt="De izquierda a derecha. Las cuentas de Laura, Pablo y Sofía van en el grupo global GG-Ventas (quiénes son). GG-Ventas va adentro de dos grupos locales de dominio: DL-Ventas-Lectura y DL-Pedidos-Modificar (qué pueden hacer sobre cada recurso). Cada grupo local de dominio recibe el permiso: lectura sobre la carpeta \\SRV-ARCH01\Ventas, y modificar sobre \\SRV-ARCH01\Pedidos. Abajo, dos casos: cuando entra Tomás, se lo suma a GG-Ventas y recibe todo; cuando Pedidos pasa a ser solo lectura, se cambia el permiso de un solo grupo." pie="Las personas van en grupos globales; los permisos, en grupos locales de dominio; y el global va dentro del local." />
+
+1. Las **cuentas** van en un grupo **global** que dice **quiénes son**: `GG-Ventas`.
+2. Por cada recurso y nivel de acceso, un grupo **local de dominio** que dice **qué pueden hacer**: `DL-Ventas-Lectura`, `DL-Pedidos-Modificar`.
+3. El global va **dentro** del local de dominio.
+4. El **permiso** (sobre la carpeta, la impresora, la aplicación) se da **solo** al grupo local de dominio.
+
+Parece mucho para una empresa chica, pero el día que entra alguien nuevo alcanza con sumarlo a `GG-Ventas`; el día que cambian los permisos de una carpeta, se cambia en un solo grupo; y una auditoría que pregunta "¿quién puede modificar Pedidos?" se responde mirando los miembros de un grupo, sin recorrer carpeta por carpeta. Una **nomenclatura** fija (`GG-` para globales, `DL-` para locales de dominio, el recurso y el permiso en el nombre) hace todo eso legible.
+
+```powershell
+New-ADGroup -Name GG-Ventas -GroupScope Global -GroupCategory Security -Path "OU=Grupos,OU=Empresa,DC=empresa,DC=local"
+New-ADGroup -Name DL-Ventas-Lectura -GroupScope DomainLocal -GroupCategory Security -Path "OU=Grupos,OU=Empresa,DC=empresa,DC=local"
+Add-ADGroupMember GG-Ventas -Members lgomez, pruiz, sdiaz
+Add-ADGroupMember DL-Ventas-Lectura -Members GG-Ventas
+Get-ADGroupMember DL-Ventas-Lectura -Recursive      # quiénes tienen el acceso, al final
+```
+
+<Emparejar ejercicio={grupos} />
+
+<Terminal ejercicio={alta} />
+
+## Equipos
+
+Cada PC o servidor del dominio tiene una **cuenta de equipo** (con un `$` al final: `PC01$`) y una contraseña propia que cambia sola cada 30 días. Con esa cuenta, el equipo se autentica ante el dominio (el "canal seguro") aunque nadie haya iniciado sesión.
+
+**Unir un equipo** pide tres cosas: que use como DNS al controlador de dominio, que su hora esté bien, y una cuenta del dominio con permiso para unir equipos.
+
+```powershell
+Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.10
+Add-Computer -DomainName empresa.local -OUPath "OU=Equipos,OU=Empresa,DC=empresa,DC=local" -Credential EMPRESA\admin.it -Restart
+```
+
+Se puede también **crear la cuenta de antemano** (`New-ADComputer -Name PC15 -Path "OU=Equipos,…"`) y que el equipo la "tome" al unirse. Sirve cuando quien une la PC no tiene permiso para crear cuentas en esa OU, o para que caiga directamente donde va.
+
+Cuando la relación de confianza de un equipo se rompe (alguien restauró una instantánea vieja y la contraseña de la cuenta ya no coincide), aparece el famoso "la relación de confianza entre esta estación de trabajo y el dominio principal falló". `Test-ComputerSecureChannel` lo confirma y, con `-Repair` y una cuenta del dominio, lo arregla sin sacar el equipo del dominio.
+
+<Pregunta id="p07" />
+
+## Cuentas de servicio administradas (gMSA)
+
+Los programas que corren como servicio (un sistema de pedidos, un agente de copias, una tarea programada) necesitan una cuenta. Lo clásico era crear un usuario "svc-pedidos" con una contraseña que no vence y que alguien anotaba en una planilla. Es de lo más peligroso que hay en un dominio: una contraseña fija, conocida por varios, con permisos sobre datos importantes.
+
+Una **cuenta de servicio administrada de grupo** (gMSA) resuelve eso: la contraseña la genera y la cambia **el dominio**, cada 30 días, y nadie la conoce. Solo los equipos autorizados pueden pedirla.
+
+```powershell
+# Una vez por bosque (en un laboratorio de un solo DC, efectiva desde hace 10 horas):
+Add-KdsRootKey -EffectiveImmediately
+
+New-ADServiceAccount -Name svc-pedidos -DNSHostName svc-pedidos.empresa.local `
+    -PrincipalsAllowedToRetrieveManagedPassword "Servidores-Pedidos"
+# En cada servidor autorizado:
+Install-ADServiceAccount svc-pedidos
+Test-ADServiceAccount svc-pedidos      # True
+```
+
+Después, el servicio se configura para correr como `EMPRESA\svc-pedidos$`, sin contraseña. Dos detalles reales: la clave raíz de KDS tarda **10 horas** en estar disponible (para que replique a todos los DC), y si autorizás a un **grupo** de equipos, cada equipo nuevo que sumes al grupo tiene que reiniciar (o purgar sus tickets de Kerberos con `klist -li 0x3e7 purge`) para "enterarse" de que está en el grupo.
+
+<EnSimple>
+Personas en grupos globales, permisos en grupos locales de dominio, y el global dentro del local. Y para los servicios, gMSA: una cuenta cuya contraseña nadie conoce.
+</EnSimple>
+
+<Terminal ejercicio={equipo} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Dar permisos directamente a personas">
+    Cuando alguien cambia de puesto, los permisos quedan olvidados en carpetas que nadie revisa. Siempre a grupos, con AGDLP.
+  </ErrorComun>
+  <ErrorComun titulo="Usar grupos de distribución para permisos">
+    Los de distribución son solo listas de correo. Para permisos, tipo seguridad.
+  </ErrorComun>
+  <ErrorComun titulo="Borrar la cuenta de quien se fue el mismo día">
+    Perdés su historial y la forma de saber qué podía hacer. Deshabilitar, mover a Bajas y borrar después de un plazo.
+  </ErrorComun>
+  <ErrorComun titulo="Cuentas de servicio con contraseña que no vence">
+    Una contraseña fija y conocida con permisos sobre datos importantes. Usá gMSA.
+  </ErrorComun>
+  <ErrorComun titulo="Sacar un equipo del dominio para arreglar la confianza">
+    Pierde su cuenta, su OU y sus grupos. Test-ComputerSecureChannel -Repair lo arregla en el lugar.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- New-ADUser con la contraseña como SecureString, -ChangePasswordAtLogon y los atributos completos; en masa, Import-Csv con splatting.
+- Las bajas se deshabilitan primero y se borran después de un plazo.
+- Grupos de seguridad (para permisos) o distribución (correo); ámbitos global, local de dominio y universal.
+- AGDLP: cuentas en un global (quiénes), el global dentro de un local de dominio (qué pueden), y el permiso solo al local de dominio.
+- Unir un equipo: DNS del DC, hora correcta y Add-Computer con -OUPath; Test-ComputerSecureChannel -Repair arregla la confianza.
+- gMSA: la contraseña la maneja el dominio; KDS una vez por bosque, New-ADServiceAccount, Install-ADServiceAccount y Test-ADServiceAccount.
+</Resumen>

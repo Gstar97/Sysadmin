@@ -1,0 +1,74 @@
+tipo: terminal
+shell: powershell
+titulo: Unir un servidor al dominio y darle una cuenta de servicio
+descripcion: >-
+  SRV-WEB01 (192.168.10.30) es un servidor nuevo, todavía en un grupo de trabajo, que va a correr
+  el sistema de pedidos. Hay que unirlo al dominio empresa.local en la OU Servidores y crearle
+  una cuenta de servicio administrada (gMSA) para que el sistema no corra con una cuenta de
+  usuario con contraseña fija. El controlador de dominio es DC01 (192.168.10.10).
+estado_inicial:
+  equipo: SRV-WEB01
+  red: { ip: 192.168.10.30, dns: [8.8.8.8] }
+  servidores:
+    - equipo: DC01
+      dominio: empresa.local
+      red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+      ad: { ous: [Empresa/Servidores, Empresa/Cuentas de servicio] }
+pasos:
+  - consigna: Intentá unirlo al dominio empresa.local y leé el error.
+    verificar:
+      - { comando_usado: "add-computer" }
+    solucion: [Add-Computer -DomainName empresa.local]
+    explicacion: >-
+      "The specified domain either does not exist or could not be contacted": con 8.8.8.8 como
+      DNS, el servidor no encuentra los registros SRV del dominio.
+  - consigna: Poné a DC01 como DNS y comprobá que ahora encuentra un controlador.
+    verificar:
+      - { dns_cliente: [192.168.10.10] }
+      - { salida_contiene: "DC01.empresa.local" }
+    pistas:
+      - "nltest /dsgetdc:empresa.local dice qué controlador encontró."
+    solucion:
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.10
+      - nltest /dsgetdc:empresa.local
+  - consigna: >-
+      Unilo al dominio en la OU Servidores, con credenciales de un administrador del dominio, y
+      reiniciá.
+    verificar:
+      - { unido_a: empresa.local }
+    pistas:
+      - "Add-Computer -DomainName empresa.local -OUPath 'OU=Servidores,OU=Empresa,DC=empresa,DC=local' -Credential EMPRESA\\Administrator -Restart"
+    solucion:
+      - Add-Computer -DomainName empresa.local -OUPath 'OU=Servidores,OU=Empresa,DC=empresa,DC=local' -Credential EMPRESA\Administrator -Restart
+  - consigna: >-
+      Instalá el módulo de AD en SRV-WEB01 y creá en el dominio la clave raíz de KDS, que las gMSA
+      necesitan una sola vez por bosque. Es un laboratorio con un solo DC: hacela efectiva desde
+      hace 10 horas.
+    verificar:
+      - { caracteristica: RSAT-AD-PowerShell, instalada: true }
+      - { comando_usado: "add-kdsrootkey" }
+    pistas:
+      - "Install-WindowsFeature RSAT-AD-PowerShell"
+      - "Add-KdsRootKey -EffectiveTime ((Get-Date).AddHours(-10)); en producción, Add-KdsRootKey -EffectiveImmediately y esperar 10 horas."
+    solucion:
+      - Install-WindowsFeature RSAT-AD-PowerShell
+      - Add-KdsRootKey -EffectiveTime ((Get-Date).AddHours(-10))
+  - consigna: >-
+      Creá la gMSA svc-pedidos (DNSHostName svc-pedidos.empresa.local) en la OU Cuentas de
+      servicio, que solo pueda usar SRV-WEB01.
+    verificar:
+      - { cuenta_servicio: svc-pedidos }
+    pistas:
+      - "-PrincipalsAllowedToRetrieveManagedPassword 'SRV-WEB01$' (las cuentas de equipo terminan en $)."
+    solucion:
+      - New-ADServiceAccount -Name svc-pedidos -DNSHostName svc-pedidos.empresa.local -Path 'OU=Cuentas de servicio,OU=Empresa,DC=empresa,DC=local' -PrincipalsAllowedToRetrieveManagedPassword 'SRV-WEB01$'
+  - consigna: Instalala en SRV-WEB01 y probá que el equipo la puede usar.
+    verificar:
+      - { cuenta_servicio: svc-pedidos, instalada: true }
+      - { salida_regex: "^True$" }
+    solucion:
+      - Install-ADServiceAccount svc-pedidos
+      - Test-ADServiceAccount svc-pedidos
+    explicacion: >-
+      Ahora el servicio del sistema de pedidos se configura para correr como EMPRESA\svc-pedidos$,
+      sin contraseña: Windows la cambia sola cada 30 días y nadie la conoce.

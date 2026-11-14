@@ -1,0 +1,80 @@
+tipo: terminal
+shell: powershell
+titulo: Alta masiva desde un CSV y grupos con AGDLP
+descripcion: >-
+  Recursos Humanos te pasó C:\Altas\ingresos.csv con las cuatro personas que entran el lunes al
+  área de Ventas. Vas a crear las cuentas en su OU, armar los grupos según AGDLP y dar acceso de
+  lectura a la carpeta de Ventas a través del grupo local de dominio. Estás en DC01.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+  ad:
+    ous: [Empresa/Usuarios/Ventas, Empresa/Grupos]
+  archivos:
+    C:\Altas\ingresos.csv: |
+      Nombre,Apellido,Usuario,Puesto
+      Laura,Gómez,lgomez,Vendedora
+      Pablo,Ruiz,pruiz,Vendedor
+      Sofía,Díaz,sdiaz,Supervisora
+      Tomás,Romero,tromero,Vendedor
+pasos:
+  - consigna: Leé el CSV con Import-Csv y mirá qué columnas trae.
+    verificar:
+      - { comando_usado: "import-csv" }
+      - { salida_contiene: "lgomez" }
+    solucion: [Import-Csv C:\Altas\ingresos.csv]
+    explicacion: >-
+      Import-Csv convierte cada fila en un objeto con una propiedad por columna: $_.Nombre,
+      $_.Usuario. Es lo que permite crear las cuentas en un bucle.
+  - consigna: >-
+      Guardá en $clave una contraseña inicial como SecureString (en el laboratorio,
+      Inicio.2026!).
+    verificar:
+      - { variable: clave }
+    solucion: ["$clave = ConvertTo-SecureString 'Inicio.2026!' -AsPlainText -Force"]
+  - consigna: >-
+      Creá las cuatro cuentas en la OU Ventas, habilitadas, con nombre, apellido, UPN
+      (usuario@empresa.local), departamento Ventas, el puesto y la obligación de cambiar la
+      contraseña al iniciar sesión.
+    verificar:
+      - { usuario_ad: lgomez, habilitado: true, ou: Empresa/Usuarios/Ventas, departamento: Ventas }
+      - { usuario_ad: tromero, habilitado: true, ou: Empresa/Usuarios/Ventas }
+    pistas:
+      - "Import-Csv … | ForEach-Object { New-ADUser -Name \"$($_.Nombre) $($_.Apellido)\" -SamAccountName $_.Usuario … }"
+      - "-Path 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local' -AccountPassword $clave -ChangePasswordAtLogon $true -Enabled $true"
+    solucion:
+      - "Import-Csv C:\\Altas\\ingresos.csv | ForEach-Object { New-ADUser -Name \"$($_.Nombre) $($_.Apellido)\" -GivenName $_.Nombre -Surname $_.Apellido -SamAccountName $_.Usuario -UserPrincipalName \"$($_.Usuario)@empresa.local\" -Department Ventas -Title $_.Puesto -Path 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local' -AccountPassword $clave -ChangePasswordAtLogon $true -Enabled $true }"
+  - consigna: >-
+      Creá en la OU Grupos el grupo global de seguridad GG-Ventas y el grupo local de dominio
+      DL-Ventas-Lectura.
+    verificar:
+      - { grupo_ad: GG-Ventas }
+      - { grupo_ad: DL-Ventas-Lectura }
+    pistas:
+      - "New-ADGroup -Name GG-Ventas -GroupScope Global -GroupCategory Security -Path 'OU=Grupos,OU=Empresa,DC=empresa,DC=local'"
+    solucion:
+      - New-ADGroup -Name GG-Ventas -GroupScope Global -GroupCategory Security -Path 'OU=Grupos,OU=Empresa,DC=empresa,DC=local'
+      - New-ADGroup -Name DL-Ventas-Lectura -GroupScope DomainLocal -GroupCategory Security -Path 'OU=Grupos,OU=Empresa,DC=empresa,DC=local'
+  - consigna: >-
+      Aplicá AGDLP: las cuentas van al grupo global, y el grupo global va dentro del local de
+      dominio (que es el que después recibe el permiso sobre la carpeta).
+    verificar:
+      - { grupo_ad: GG-Ventas, miembros: [lgomez, pruiz, sdiaz, tromero] }
+      - { grupo_ad: DL-Ventas-Lectura, miembros: [GG-Ventas] }
+    pistas:
+      - "Get-ADUser -Filter \"Department -eq 'Ventas'\" | ForEach-Object { Add-ADGroupMember GG-Ventas -Members $_ }"
+      - "Add-ADGroupMember DL-Ventas-Lectura -Members GG-Ventas"
+    solucion:
+      - "Add-ADGroupMember GG-Ventas -Members lgomez, pruiz, sdiaz, tromero"
+      - Add-ADGroupMember DL-Ventas-Lectura -Members GG-Ventas
+  - consigna: >-
+      Comprobá quiénes terminan teniendo el acceso de DL-Ventas-Lectura, contando los miembros
+      de los grupos anidados.
+    verificar:
+      - { comando_usado: "get-adgroupmember.*dl-ventas-lectura.*-recursive" }
+      - { salida_contiene: "sdiaz" }
+    solucion: ["Get-ADGroupMember DL-Ventas-Lectura -Recursive | Select-Object Name, SamAccountName"]
+    explicacion: >-
+      Cuando entre otra persona a Ventas, alcanza con sumarla a GG-Ventas: el acceso a la carpeta
+      (y a todo lo que tenga DL-Ventas-Lectura u otros grupos donde esté GG-Ventas) le llega solo.

@@ -1,0 +1,93 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿A quién conviene darle el permiso de lectura sobre la carpeta de Ventas?
+  opciones:
+    - { texto: "A un grupo local de dominio (DL-Ventas-Lectura) que tenga adentro al grupo global de Ventas", correcta: true, explicacion: "AGDLP: cuentas en el global, global en el local, permiso al local." }
+    - { texto: "A cada vendedor, uno por uno", explicacion: "Cuando alguien cambie de área, el permiso queda olvidado." }
+    - { texto: "A Domain Users", explicacion: "Le darías acceso a toda la empresa." }
+    - { texto: "Al grupo de distribución de Ventas", explicacion: "Los de distribución no sirven para permisos." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: New-ADUser -Name "Laura Gómez" -SamAccountName lgomez -AccountPassword "Clave.2026!" -Enabled $true da un error. ¿Por qué?
+  opciones:
+    - { texto: "La contraseña tiene que ser un SecureString (ConvertTo-SecureString o Read-Host -AsSecureString)", correcta: true, explicacion: "El cmdlet no acepta contraseñas en texto." }
+    - { texto: "Falta -Path", explicacion: "Sin -Path la crea en el contenedor por defecto." }
+    - { texto: "El nombre tiene tilde", explicacion: "Los nombres admiten tildes." }
+    - { texto: "-Enabled no existe", explicacion: "Existe." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una empleada se fue de la empresa hoy. ¿Qué hacés con su cuenta?
+  opciones:
+    - { texto: "La deshabilitás, la movés a una OU de bajas y le sacás los grupos; se borra después de un plazo", correcta: true, explicacion: "Así conservás su historial por si hace falta." }
+    - { texto: "La borrás en el momento", explicacion: "Perdés el rastro de qué podía hacer y sus archivos asociados." }
+    - { texto: "Le cambiás la contraseña y la dejás igual", explicacion: "Sigue habilitada y con todos sus permisos." }
+    - { texto: "Nada, hasta que alguien lo pida", explicacion: "Una cuenta activa de alguien que se fue es un riesgo." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ámbito tiene que tener el grupo que junta a las personas de Compras?
+  opciones:
+    - { texto: "Global", correcta: true, explicacion: "Los globales juntan personas por función." }
+    - { texto: "Local de dominio", explicacion: "Ese es el que recibe los permisos sobre un recurso." }
+    - { texto: "Universal", explicacion: "Se usa con varios dominios." }
+    - { texto: "Distribución", explicacion: "Distribución es un tipo, no un ámbito, y no sirve para permisos." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que mete al grupo GG-Ventas dentro de DL-Ventas-Lectura.
+  aceptadas: ["Add-ADGroupMember DL-Ventas-Lectura -Members GG-Ventas", "Add-ADGroupMember -Identity DL-Ventas-Lectura -Members GG-Ventas"]
+  patrones: ["^add-adgroupmember\\s+(-identity\\s+)?dl-ventas-lectura\\s+-members\\s+gg-ventas$"]
+  explicacion: "El primero es el grupo que recibe al miembro; -Members, lo que se agrega."
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué muestra Get-ADGroupMember DL-Ventas-Lectura -Recursive?
+  opciones:
+    - { texto: "Todas las cuentas que terminan teniendo el acceso, incluidas las que están en grupos anidados", correcta: true, explicacion: "Sin -Recursive mostraría solo GG-Ventas." }
+    - { texto: "Solo los grupos de adentro", explicacion: "Eso es sin -Recursive." }
+    - { texto: "Los grupos a los que pertenece DL-Ventas-Lectura", explicacion: "Eso es Get-ADPrincipalGroupMembership." }
+    - { texto: "Los permisos del grupo", explicacion: "Los permisos están en el recurso." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC dice "La relación de confianza entre esta estación de trabajo y el dominio principal falló" después de restaurar una instantánea vieja. ¿Qué hacés?
+  opciones:
+    - { texto: "Test-ComputerSecureChannel -Repair con una cuenta del dominio, sin sacarla del dominio", correcta: true, explicacion: "La contraseña de la cuenta de equipo quedó desincronizada; -Repair la vuelve a acordar." }
+    - { texto: "Sacarla del dominio y volver a unirla", explicacion: "Funciona, pero pierde su cuenta, su OU y sus grupos." }
+    - { texto: "Reinstalar Windows", explicacion: "No hace falta." }
+    - { texto: "Cambiar la contraseña del usuario", explicacion: "El problema es la cuenta del equipo." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ventaja tiene una gMSA frente a un usuario común con contraseña que no vence para correr un servicio?
+  opciones:
+    - { texto: "La contraseña la genera y la cambia el dominio, nadie la conoce y solo la pueden pedir los equipos autorizados", correcta: true, explicacion: "Se elimina la contraseña fija anotada en una planilla." }
+    - { texto: "No necesita permisos", explicacion: "Necesita los que el servicio use." }
+    - { texto: "Funciona en cualquier equipo de internet", explicacion: "Solo en los autorizados del dominio." }
+    - { texto: "Es más rápida", explicacion: "No es una cuestión de velocidad." }
+- id: p09
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Creaste la clave de KDS con -EffectiveImmediately y al crear la gMSA aparece esto. ¿Por qué?
+  salida: |
+    New-ADServiceAccount : Key does not exist
+        + CategoryInfo          : NotSpecified: (svc-pedidos:String) [New-ADServiceAccount], ADException
+  opciones:
+    - { texto: "La clave raíz de KDS recién está disponible 10 horas después, para dar tiempo a que replique", correcta: true, explicacion: "En un laboratorio de un solo DC se crea con -EffectiveTime ((Get-Date).AddHours(-10))." }
+    - { texto: "No existe el módulo de AD", explicacion: "El cmdlet se ejecutó; el error es de la clave." }
+    - { texto: "El nombre es muy largo", explicacion: "Ese sería otro error." }
+    - { texto: "Hay que reiniciar el DC", explicacion: "Hay que esperar, no reiniciar." }
+- id: p10
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace falta para unir una PC al dominio? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Que use como DNS al controlador de dominio", correcta: true, explicacion: "Para encontrar los registros SRV." }
+    - { texto: "Que su hora no difiera más de 5 minutos de la del dominio", correcta: true, explicacion: "Kerberos." }
+    - { texto: "Una cuenta del dominio con permiso para unir equipos", correcta: true, explicacion: "Add-Computer -Credential." }
+    - { texto: "Que tenga la misma IP que el DC", explicacion: "Cada equipo tiene su IP." }
+    - { texto: "Windows Home", explicacion: "Las ediciones Home no se unen a dominios; hace falta Pro o Enterprise." }

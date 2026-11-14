@@ -1,0 +1,134 @@
+---
+id: n3-m3-l5
+titulo: Administrar Active Directory con PowerShell
+minutos: 180
+objetivos:
+  - Consultar objetos con Get-ADUser, -Filter, -Properties y -SearchBase, sin traer todo el directorio.
+  - Modificar objetos en masa con la tubería (Set-ADUser, Disable-ADAccount), probando antes con -WhatIf.
+  - Encontrar cuentas inactivas, deshabilitadas, bloqueadas o con contraseñas que nunca vencen, y armar informes.
+glosario: [filtro-ad, lastlogondate]
+verificado: 2026-11
+---
+
+import consulta from './anatomia-consulta.svg?raw'
+import cual from './cual-consulta.yaml'
+import consultas from './ej-consultas.yaml'
+
+La consola gráfica de Usuarios y equipos de Active Directory sirve para mirar una cuenta o cambiar una contraseña. Pero "¿quiénes no iniciaron sesión en tres meses?", "cambiá el departamento de las 40 personas de Ventas" o "¿qué cuentas tienen contraseñas que nunca vencen?" son preguntas de todas las semanas, y con el mouse llevan una tarde. Con el módulo **ActiveDirectory** de PowerShell, una línea cada una. Esta lección junta lo que aprendiste de PowerShell y de AD.
+
+<AntesDeEmpezar>
+- Objetos, pipeline, filtros y exportar (lección 3.2.2).
+- Usuarios, grupos y equipos de AD (lección anterior).
+</AntesDeEmpezar>
+
+## Consultar: las tres preguntas de cada Get-AD
+
+Todos los cmdlets de consulta (`Get-ADUser`, `Get-ADGroup`, `Get-ADComputer`, `Get-ADOrganizationalUnit`, `Get-ADObject`) funcionan igual, y cada consulta responde tres preguntas.
+
+<Diagrama svg={consulta} alt="La consulta Get-ADUser -Filter &quot;Department -eq 'Ventas' -and Enabled -eq $true&quot; -SearchBase &quot;OU=Usuarios,OU=Empresa,DC=empresa,DC=local&quot; -Properties Department, LastLogonDate desarmada en tres partes: -Filter responde a quiénes (lo filtra el controlador de dominio, no tu equipo); -SearchBase responde dónde buscar (una OU y lo que tiene adentro, o con -SearchScope OneLevel solo ese nivel); -Properties responde qué datos traer (por defecto vienen unos diez; los demás hay que pedirlos). A la derecha, -Identity para traer uno solo por su nombre, DN, GUID o SID." pie="Filtrar en el controlador, buscar donde hace falta y pedir solo las propiedades que vas a usar." />
+
+**¿A quiénes?** `-Identity` trae uno solo (por SamAccountName, DN, GUID o SID). `-Filter` trae los que cumplan una condición, escrita con la sintaxis de PowerShell entre comillas:
+
+```powershell
+Get-ADUser mlopez                                         # uno, por -Identity
+Get-ADUser -Filter *                                      # todos
+Get-ADUser -Filter "Department -eq 'Ventas'"
+Get-ADUser -Filter "Enabled -eq '$false' -and Surname -like 'G*'"
+Get-ADComputer -Filter "OperatingSystem -like '*Server*'"
+```
+
+Ese filtro **lo aplica el controlador de dominio**: viajan solo los resultados. Es la regla de "filtrar a la izquierda" de la lección 3.2.2 llevada al extremo: `Get-ADUser -Filter * | Where-Object Department -eq 'Ventas'` da lo mismo, pero trae todo el directorio por la red para después descartarlo. Con 50 usuarios no se nota; con 20.000, sí. (Existe también `-LDAPFilter`, con la sintaxis de LDAP, para quien la conoce: `-LDAPFilter "(department=Ventas)"`.)
+
+**¿Dónde?** `-SearchBase` limita la búsqueda a una OU (y lo que tiene adentro); con `-SearchScope OneLevel`, solo a ese nivel.
+
+**¿Qué datos?** Por defecto, Get-ADUser trae unas diez propiedades (nombre, SamAccountName, DN, Enabled…). El departamento, el último inicio de sesión o el puesto **no vienen** si no los pedís con `-Properties`:
+
+```powershell
+Get-ADUser mlopez -Properties Department, Title, LastLogonDate
+Get-ADUser mlopez -Properties *        # todas: útil para explorar, lento para muchos
+```
+
+Si filtrás por una propiedad, no hace falta pedirla para filtrar; sí para verla en el resultado.
+
+<Pregunta id="p03" />
+
+## Modificar en masa
+
+Lo que devuelve un `Get-AD*` se puede pasar por la tubería a los cmdlets que cambian cosas:
+
+```powershell
+Get-ADUser -Filter * -SearchBase "OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local" |
+    Set-ADUser -Department Comercial -WhatIf
+Get-ADUser -Filter "Department -eq 'Comercial'" | Set-ADUser -Office "Rosario"
+Get-ADUser lgomez | Set-ADUser -Replace @{ telephoneNumber = '341 555-0101' }
+```
+
+- **`Set-ADUser`** cambia atributos: los comunes tienen su parámetro (`-Department`, `-Title`, `-Office`, `-Manager`); los demás se cambian con `-Replace`, `-Add` o `-Clear` y el nombre LDAP del atributo.
+- **`-WhatIf` siempre primero** en un cambio en masa: muestra cada objeto que tocaría. Un filtro mal escrito puede alcanzar a toda la empresa.
+- Los mismos patrones sirven para mover (`Move-ADObject`), deshabilitar (`Disable-ADAccount`), sumar a grupos (`Add-ADGroupMember`) o actualizar desde un CSV (`Import-Csv | ForEach-Object { Set-ADUser $_.Usuario -Title $_.Puesto }`).
+
+<EnSimple>
+Pedile al controlador solo lo que necesitás (-Filter, -SearchBase, -Properties), y antes de cambiar en masa, mirá con -WhatIf a quiénes vas a tocar.
+</EnSimple>
+
+## Las consultas de mantenimiento
+
+`Search-ADAccount` tiene atajos para las preguntas de siempre:
+
+```powershell
+Search-ADAccount -AccountInactive -TimeSpan 90.00:00:00 -UsersOnly   # sin iniciar sesión en 90 días
+Search-ADAccount -AccountDisabled -UsersOnly
+Search-ADAccount -LockedOut                                          # bloqueadas por intentos fallidos
+Search-ADAccount -PasswordNeverExpires -UsersOnly
+Search-ADAccount -AccountExpired
+Unlock-ADAccount lgomez
+```
+
+Sobre "inactivas", un detalle técnico que importa: **LastLogonDate** sale de un atributo (`lastLogonTimestamp`) que se replica entre los DC, pero se actualiza solo si el valor anterior tiene más de unos 14 días. Sirve para "no entra hace 90 días"; no sirve para "entró ayer". Para la fecha exacta hay que consultar `lastLogon` en cada DC (no se replica). Y antes de deshabilitar en masa, **mirá la lista**: las cuentas de servicio, las de personas de licencia y las de equipo que se usan poco también aparecen.
+
+Dos informes que conviene armar todos los meses:
+
+```powershell
+Search-ADAccount -AccountInactive -TimeSpan 90.00:00:00 -UsersOnly |
+    Select-Object Name, SamAccountName, LastLogonDate |
+    Export-Csv C:\Informes\inactivas.csv -NoTypeInformation
+
+Get-ADGroupMember "Domain Admins" -Recursive | Select-Object Name, SamAccountName
+```
+
+El segundo responde la pregunta que toda auditoría hace primero: **¿quiénes son administradores del dominio?** Tienen que ser pocos, con nombre y apellido, y con cuentas separadas de las de uso diario.
+
+<Emparejar ejercicio={cual} />
+
+<Terminal ejercicio={consultas} />
+
+## Un truco para aprender: el historial de PowerShell del Centro administrativo
+
+El **Centro de administración de Active Directory** (`dsac.exe`, viene con las RSAT) es la otra consola de AD, más moderna. Tiene un panel abajo, **Historial de Windows PowerShell**, que muestra el cmdlet equivalente a cada cosa que hacés con el mouse: creás un usuario con el formulario y aparece el `New-ADUser` completo. Es la forma más rápida de aprender el parámetro que no sabías y de copiar el comando para un script.
+
+<ErroresComunes>
+  <ErrorComun titulo="Get-ADUser -Filter * | Where-Object …">
+    Trae todo el directorio por la red para filtrar después. Poné la condición en -Filter.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar ver una propiedad que no pediste">
+    Department, Title o LastLogonDate no vienen por defecto. Pedilos con -Properties.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar en masa sin -WhatIf">
+    Un filtro mal escrito puede alcanzar a toda la empresa. Primero -WhatIf, después sin.
+  </ErrorComun>
+  <ErrorComun titulo="Deshabilitar todas las inactivas sin mirar">
+    Aparecen cuentas de servicio y de personas de licencia. Revisá la lista y filtrá.
+  </ErrorComun>
+  <ErrorComun titulo="Confiar en LastLogonDate al día">
+    Se actualiza con un margen de unos 14 días. Sirve para meses, no para ayer.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Cada consulta: a quiénes (-Identity o -Filter), dónde (-SearchBase) y qué datos (-Properties).
+- -Filter lo resuelve el controlador; filtrar después con Where-Object trae todo por la red.
+- Por defecto vienen unas diez propiedades; las demás se piden con -Properties.
+- Cambios en masa por la tubería (Set-ADUser, Move-ADObject, Disable-ADAccount), siempre con -WhatIf primero.
+- Search-ADAccount encuentra inactivas, deshabilitadas, bloqueadas y contraseñas que nunca vencen; LastLogonDate tiene un margen de unos 14 días.
+- Informe básico de auditoría: Get-ADGroupMember "Domain Admins" -Recursive.
+</Resumen>
