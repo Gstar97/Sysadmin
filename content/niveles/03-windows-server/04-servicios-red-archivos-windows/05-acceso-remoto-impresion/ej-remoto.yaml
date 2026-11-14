@@ -1,0 +1,69 @@
+tipo: terminal
+shell: powershell
+titulo: Escritorio remoto seguro y un DC sin cola de impresión
+descripcion: >-
+  El proveedor del sistema de facturación necesita entrar por escritorio remoto a SRV-APP01 para
+  dar soporte, y el equipo de soporte interno también. Al mismo tiempo, una auditoría marcó que
+  los controladores de dominio tienen corriendo la cola de impresión. Estás en SRV-APP01; DC01 es
+  el controlador de dominio. Los grupos GG-Soporte y GG-Proveedor-Facturacion ya existen.
+estado_inicial:
+  equipo: SRV-APP01
+  dominio: empresa.local
+  red: { ip: 192.168.10.30, dns: [192.168.10.10] }
+  servidores:
+    - equipo: DC01
+      dominio: empresa.local
+      red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+      ad:
+        grupos:
+          - { nombre: GG-Soporte }
+          - { nombre: GG-Proveedor-Facturacion }
+pasos:
+  - consigna: >-
+      Habilitá el escritorio remoto en SRV-APP01 (el valor fDenyTSConnections y las reglas del
+      grupo "Remote Desktop" del firewall), con la autenticación a nivel de red (NLA) activada.
+    verificar:
+      - { escritorio_remoto: true }
+      - { nla: true }
+      - { regla_firewall: RemoteDesktop-UserMode-In-TCP, habilitada: true }
+    pistas:
+      - "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name fDenyTSConnections -Value 0"
+      - "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication -Value 1"
+      - "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
+    solucion:
+      - Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
+      - Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 1
+      - Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
+    explicacion: >-
+      Con NLA, la persona se autentica antes de que el servidor le abra una sesión: un atacante no
+      llega ni a ver la pantalla de inicio de sesión, y el servidor gasta menos recursos con cada
+      intento.
+  - consigna: >-
+      Quiénes pueden entrar: agregá GG-Soporte y GG-Proveedor-Facturacion al grupo local Remote
+      Desktop Users (no los hagas administradores).
+    verificar:
+      - { grupo_local: Remote Desktop Users, miembro: EMPRESA\GG-Soporte }
+      - { grupo_local: Remote Desktop Users, miembro: EMPRESA\GG-Proveedor-Facturacion }
+      - { grupo_local: Administrators, miembro: EMPRESA\GG-Proveedor-Facturacion, es_miembro: false }
+    pistas:
+      - "Add-LocalGroupMember -Group 'Remote Desktop Users' -Member 'EMPRESA\\GG-Soporte', 'EMPRESA\\GG-Proveedor-Facturacion'"
+    solucion:
+      - Add-LocalGroupMember -Group 'Remote Desktop Users' -Member 'EMPRESA\GG-Soporte', 'EMPRESA\GG-Proveedor-Facturacion'
+      - Get-LocalGroupMember 'Remote Desktop Users'
+    explicacion: >-
+      En muchos servidores, esto mismo se hace con una GPO (Grupos restringidos o la preferencia
+      de grupos locales), para no depender de que alguien se acuerde de cada servidor.
+  - consigna: >-
+      En DC01, detené la cola de impresión (Spooler) y dejala deshabilitada. Un DC no imprime.
+    verificar:
+      - { en: DC01, verificar: { servicio: Spooler, estado: Stopped, inicio: Disabled } }
+    pistas:
+      - "Invoke-Command DC01 { Stop-Service Spooler -Force; Set-Service Spooler -StartupType Disabled }"
+    solucion:
+      - Invoke-Command DC01 { Stop-Service Spooler -Force; Set-Service Spooler -StartupType Disabled }
+      - Invoke-Command DC01 { Get-Service Spooler | Select-Object Name, Status, StartType }
+    explicacion: >-
+      Después de PrintNightmare (2021), la recomendación es apagar la cola de impresión en todo
+      servidor que no imprima ni comparta impresoras, empezando por los DC. Se puede hacer para
+      todos con una GPO (Configuración del equipo, Configuración de Windows, Configuración de
+      seguridad, Servicios del sistema).

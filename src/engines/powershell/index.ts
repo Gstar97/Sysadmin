@@ -212,11 +212,11 @@ function buildComputer(state: PsServerState, lab: Lab): PsSession {
   ]
   const localGroup = (Name: string, Description: string, members: string[]) => psObject('Microsoft.PowerShell.Commands.LocalGroup', { Name, Description, __members: members })
   s.data.localGroups = [
-    localGroup('Administrators', 'Administrators have complete and unrestricted access to the computer/domain', [state.usuario]),
+    localGroup('Administrators', 'Administrators have complete and unrestricted access to the computer/domain', [state.usuario, ...(state.dominio && !dc ? [`${state.dominio.split('.')[0].toUpperCase()}\\Domain Admins`] : [])]),
     localGroup('Backup Operators', 'Backup Operators can override security restrictions for the sole purpose of backing up or restoring files', []),
     localGroup('Event Log Readers', 'Members of this group can read event logs from local machine', []),
     localGroup('Remote Desktop Users', 'Members in this group are granted the right to logon remotely', []),
-    localGroup('Users', 'Users are prevented from making accidental or intentional system-wide changes and can run most applications', []),
+    localGroup('Users', 'Users are prevented from making accidental or intentional system-wide changes and can run most applications', state.dominio && !dc ? [`${state.dominio.split('.')[0].toUpperCase()}\\Domain Users`] : []),
   ]
 
   // Eventos

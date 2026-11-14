@@ -1,0 +1,42 @@
+---
+titulo: Servidor de archivos por área y DHCP con respaldo
+horas: 4
+verificacion:
+  - Resolví el laboratorio simulado completo, con la prueba final desde la PC de María.
+  - DC01 y DC02 reparten direcciones en conmutación por error, y apagando el servicio en uno, PC01 sigue recibiendo dirección.
+  - El DNS tiene zona inversa y el alias archivos; nslookup ya no dice UnKnown.
+  - D:\Datos de SRV-CORE01 no hereda de la raíz del disco y cada área tiene Modificar solo por su grupo local de dominio.
+  - El recurso Datos da control total a Authenticated Users, con enumeración basada en acceso, y María solo ve Ventas.
+  - La cuota de Ventas y el filtro de audio y video bloquean lo que tienen que bloquear.
+  - La unidad S de la GPO apunta al espacio de nombres DFS, no al nombre del servidor.
+---
+
+import sim from './lab-archivos-sim.yaml'
+import pasos from './lab-archivos.yaml'
+
+## Objetivo
+
+Juntar el módulo en lo que se pide en cualquier PyME: que las PC reciban su configuración de red de los servidores de la empresa (y no de un router que nadie administra), y un servidor de archivos donde cada área ve lo suyo, con límites de espacio y un nombre que no cambie el día que se reemplaza el servidor. Al terminar, el dominio del módulo 3.3 queda listo para el módulo 3.5 (actualizaciones y respaldos) y para el proyecto del nivel.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: el dominio del módulo 3.3 (DC01, DC02, SRV-ADMIN, SRV-CORE01 con su disco D: y PC01), y poder apagar cualquier otro DHCP de tu red de laboratorio.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Consejo>
+Guardá los comandos de las partes de permisos y recursos en un script (por ejemplo, Publicar-Areas.ps1 con un CSV de carpetas y grupos). Lo vas a reusar en el proyecto del nivel y, con cambios mínimos, en la próxima empresa.
+</Consejo>
+
+## Para pensar
+
+1. Si DC01 se apaga un fin de semana entero, ¿qué pasa con las PC que arrancan el lunes? ¿Y si se apagan los dos DC?
+2. Juan pide acceso de lectura a Ventas "solo por esta semana". ¿Cómo lo harías sin tocar NTFS cada vez? ¿Quién debería aprobarlo?
+3. ¿Qué cambiarías para que `\\empresa.local\Empresa` siga andando aunque SRV-CORE01 se rompa? ¿Alcanza con un segundo servidor de la raíz?

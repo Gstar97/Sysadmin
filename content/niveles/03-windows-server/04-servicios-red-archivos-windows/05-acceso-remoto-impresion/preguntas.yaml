@@ -1,0 +1,92 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál es la forma aceptable de que alguien entre por escritorio remoto a un servidor desde su casa?
+  opciones:
+    - { texto: "Conectarse primero por VPN (con segundo factor) y después usar escritorio remoto adentro", correcta: true, explicacion: "O una puerta de enlace de escritorio remoto." }
+    - { texto: "Redirigir el puerto 3389 del router al servidor", explicacion: "Robots de todo internet prueban contraseñas en minutos." }
+    - { texto: "Cambiar el 3389 por otro puerto y publicarlo", explicacion: "Lo encuentran igual; solo tarda un poco más." }
+    - { texto: "Darle la contraseña del administrador", explicacion: "No resuelve el acceso y comparte una cuenta." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace la autenticación a nivel de red (NLA)?
+  opciones:
+    - { texto: "Exige autenticarse antes de que el servidor abra una sesión de escritorio remoto", correcta: true, explicacion: "Un atacante no llega ni a la pantalla de inicio de sesión." }
+    - { texto: "Cifra el disco del servidor", explicacion: "No tiene relación." }
+    - { texto: "Permite entrar sin contraseña desde la red local", explicacion: "Al revés: exige autenticarse antes." }
+    - { texto: "Cambia el puerto de RDP", explicacion: "El puerto sigue siendo el 3389." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una persona de soporte tiene que poder entrar por escritorio remoto a SRV-APP01, nada más. ¿Qué hacés?
+  opciones:
+    - { texto: "Agregás su grupo (por ejemplo GG-Soporte) al grupo local Remote Desktop Users de SRV-APP01", correcta: true, explicacion: "No hace falta ser administrador para entrar." }
+    - { texto: "La agregás a Domain Admins", explicacion: "Le das control de todo el dominio." }
+    - { texto: "La agregás a Administrators de SRV-APP01", explicacion: "Más de lo necesario." }
+    - { texto: "Le das la cuenta del administrador local", explicacion: "Las cuentas son personales." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En el registro de Seguridad de un servidor ves cientos de eventos 4625 por minuto desde IP de otros países. ¿Qué significa?
+  opciones:
+    - { texto: "Intentos fallidos de inicio de sesión: alguien prueba contraseñas, probablemente porque el escritorio remoto está expuesto", correcta: true, explicacion: "Cerrá el puerto en el router y revisá si alguno tuvo éxito (4624)." }
+    - { texto: "Inicios de sesión correctos", explicacion: "Esos son 4624." }
+    - { texto: "Un problema de DNS", explicacion: "No tiene relación." }
+    - { texto: "Actualizaciones fallidas", explicacion: "Esos eventos son de inicio de sesión." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Treinta personas tienen que usar una aplicación que solo corre en Windows, todas en un mismo servidor. ¿Qué necesitás?
+  opciones:
+    - { texto: "Servicios de Escritorio remoto (RDS), con sus CAL de RDS además de las de Windows Server", correcta: true, explicacion: "Un servidor común admite dos sesiones administrativas." }
+    - { texto: "Habilitar el escritorio remoto y agregarlas a Remote Desktop Users", explicacion: "Sin RDS, solo dos sesiones a la vez." }
+    - { texto: "Una VPN", explicacion: "La VPN da acceso a la red, no sesiones en un servidor." }
+    - { texto: "Treinta servidores", explicacion: "Para eso está RDS." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué recomendación quedó después de PrintNightmare para los controladores de dominio?
+  opciones:
+    - { texto: "Detener y deshabilitar la cola de impresión (Spooler)", correcta: true, explicacion: "Un DC no imprime; el servicio solo agrega riesgo." }
+    - { texto: "Compartir las impresoras desde los DC", explicacion: "Al revés: la cola de impresión no debería correr ahí." }
+    - { texto: "Darle a todos permiso para instalar controladores", explicacion: "Es lo que explotaba la vulnerabilidad." }
+    - { texto: "Cambiar el puerto de impresión", explicacion: "No tiene relación." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene un servidor de impresión en lugar de instalar cada impresora en cada PC?
+  opciones:
+    - { texto: "Un solo lugar para controladores, colas y permisos, y se distribuyen por GPO", correcta: true, explicacion: "Además, no hace falta dar permisos de administrador a la gente." }
+    - { texto: "Imprime más rápido", explicacion: "No necesariamente." }
+    - { texto: "No necesita controladores", explicacion: "Los necesita, pero en un solo lugar." }
+    - { texto: "Es obligatorio en un dominio", explicacion: "No es obligatorio; es lo práctico." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que agrega EMPRESA\GG-Soporte al grupo local Remote Desktop Users.
+  aceptadas:
+    - "Add-LocalGroupMember -Group 'Remote Desktop Users' -Member 'EMPRESA\\GG-Soporte'"
+    - "Add-LocalGroupMember -Group \"Remote Desktop Users\" -Member \"EMPRESA\\GG-Soporte\""
+    - "Add-LocalGroupMember 'Remote Desktop Users' 'EMPRESA\\GG-Soporte'"
+  patrones: ["^add-localgroupmember\\s+(-group\\s+)?['\"]remote desktop users['\"]\\s+(-member\\s+)?['\"]?empresa\\\\gg-soporte['\"]?$"]
+  explicacion: "Con una GPO se puede hacer en muchos servidores a la vez."
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: El proveedor de facturación necesita entrar a un servidor una vez por mes. ¿Qué conviene? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Una cuenta por técnico", correcta: true, explicacion: "Para saber quién entró." }
+    - { texto: "Cuentas deshabilitadas salvo cuando hay un pedido", correcta: true, explicacion: "Así no quedan puertas abiertas." }
+    - { texto: "Fecha de vencimiento en las cuentas", correcta: true, explicacion: "Si nadie se acuerda, se cierran solas." }
+    - { texto: "Una cuenta compartida 'proveedor' siempre habilitada", explicacion: "Sin rastro y con la contraseña repartida." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es una puerta de enlace de Escritorio remoto (RD Gateway)?
+  opciones:
+    - { texto: "Un servidor que recibe RDP dentro de HTTPS (443) y decide quién llega a qué servidor", correcta: true, explicacion: "Una alternativa a la VPN para escritorio remoto." }
+    - { texto: "Un router que reenvía el 3389", explicacion: "Eso es justamente lo que no hay que hacer." }
+    - { texto: "El servidor de licencias de RDS", explicacion: "Es otro componente." }
+    - { texto: "Una VPN de Microsoft", explicacion: "No es una VPN." }

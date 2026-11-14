@@ -1,0 +1,104 @@
+---
+id: n3-m4-l5
+titulo: Acceso remoto e impresión
+minutos: 90
+objetivos:
+  - Configurar Escritorio remoto de forma segura (NLA, grupos autorizados, nunca expuesto a internet).
+  - Conocer los Servicios de Escritorio remoto y cuándo hacen falta.
+  - Administrar impresoras desde un servidor de impresión y entender los riesgos de la cola de impresión.
+glosario: [escritorio-remoto, nla, rds, cola-impresion]
+verificado: 2026-11
+---
+
+import afuera from './acceso-desde-afuera.svg?raw'
+import decisiones from './decisiones.yaml'
+import remoto from './ej-remoto.yaml'
+
+Esta lección junta dos servicios que parecen menores y que aparecen una y otra vez en los informes de incidentes: el **escritorio remoto**, la puerta por la que más ransomware entra a las empresas, y la **impresión**, el servicio que tuvo la vulnerabilidad más famosa de los últimos años. Ninguno es difícil; los dos se configuran mal con mucha facilidad.
+
+<AntesDeEmpezar>
+- Firewall de Windows y escritorio remoto en un servidor (lección 3.1.3).
+- Grupos locales y del dominio (lección 3.3.4) y directivas de grupo (lecciones 3.3.6 y 3.3.7).
+- VPN (módulo 2.6).
+</AntesDeEmpezar>
+
+## Escritorio remoto bien configurado
+
+El **Escritorio remoto** (RDP, puerto **3389**) da una sesión gráfica completa en otro equipo. En un servidor se activa desde el Administrador del servidor, desde sconfig o con PowerShell:
+
+```powershell
+Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
+Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 1
+Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
+Add-LocalGroupMember -Group 'Remote Desktop Users' -Member 'EMPRESA\GG-Soporte'
+```
+
+Tres reglas:
+
+- **NLA siempre activada** (*Network Level Authentication*, la autenticación a nivel de red). La persona se autentica **antes** de que el servidor le abra una sesión: un atacante no llega ni a la pantalla de inicio de sesión. Viene activada por defecto; no la apagues "porque un cliente viejo no conecta".
+- **Quién puede entrar**: los **Administradores** y el grupo local **Remote Desktop Users**. Para entrar a un servidor no hace falta ser administrador: se agrega el grupo que corresponde a Remote Desktop Users, de ese servidor y no de todos. En muchos servidores se hace con una GPO.
+- **Un servidor común admite dos sesiones administrativas a la vez**. Para que mucha gente trabaje en un mismo servidor hace falta otra cosa (ver más abajo).
+
+## Desde afuera, nunca directo
+
+<Diagrama svg={afuera} alt="Tres caminos para llegar por escritorio remoto a SRV-APP01 (RDP 3389 con NLA) desde una casa o un proveedor. No: abrir el 3389 en el router, porque robots de todo el mundo prueban contraseñas en minutos y es una de las entradas más comunes de ransomware. Sí: VPN y después escritorio remoto adentro, primero se entra a la red con segundo factor y el 3389 nunca está expuesto. Sí: una puerta de enlace de escritorio remoto (RD Gateway), RDP dentro de HTTPS por el 443, con autenticación y reglas de quién llega a qué servidor. Adentro también: solo los grupos que hacen falta, cuentas personales y bloqueo por intentos fallidos." pie="El puerto 3389 no se publica en internet. Nunca." />
+
+Si hace falta entrar desde afuera, hay dos caminos aceptables: **VPN** (con segundo factor) y escritorio remoto ya adentro de la red, o una **puerta de enlace de Escritorio remoto** (*RD Gateway*), que encapsula RDP en HTTPS y controla quién llega a qué servidor. Lo que **nunca** se hace es redirigir el 3389 del router a un servidor: hay robots probando contraseñas en todo internet todo el tiempo, y vas a ver cientos de eventos **4625** (inicio de sesión fallido) en minutos.
+
+Y si alguien de afuera (un proveedor) necesita entrar: **una cuenta por persona**, en un grupo propio, **deshabilitada** salvo cuando hay un pedido, y con fecha de vencimiento. Nunca una cuenta "proveedor" compartida.
+
+<EnSimple>
+Escritorio remoto con NLA, solo para los grupos que hacen falta, y desde afuera siempre a través de VPN o de una puerta de enlace. El 3389 jamás en internet.
+</EnSimple>
+
+## Servicios de Escritorio remoto
+
+Cuando muchas personas tienen que trabajar en un mismo servidor (una aplicación vieja que solo corre en Windows, una sucursal con PC muy básicas), se usan los **Servicios de Escritorio remoto** (*Remote Desktop Services*, RDS): servidores de sesiones donde cada persona tiene su escritorio, un agente de conexiones que reparte a la gente, la puerta de enlace para entrar desde afuera y un servidor de licencias.
+
+Lo que conviene saber desde ya: RDS necesita **licencias propias** (las **CAL de RDS**, por usuario o por dispositivo), **además** de las CAL de Windows Server (lección 3.1.1). Y hoy compite con servicios en la nube como Azure Virtual Desktop y Windows 365. Armarlo queda *para más adelante*.
+
+## Impresión: el servidor de impresión
+
+En lugar de que cada PC instale cada impresora por su cuenta, las impresoras se instalan **una vez** en un **servidor de impresión** (rol *Print and Document Services*, consola **Administración de impresión**), se comparten y se distribuyen a las PC por **GPO** (la parte de impresoras de las preferencias, o la opción de implementar con directiva de grupo). Así hay un solo lugar para los controladores, las colas y los permisos de quién imprime en qué.
+
+## PrintNightmare y la cola de impresión
+
+La **cola de impresión** (*Print Spooler*, servicio `Spooler`) corre en todos los Windows. En 2021, una serie de vulnerabilidades conocidas como **PrintNightmare** permitió a cualquier usuario del dominio ejecutar código con los máximos privilegios a través de ese servicio, incluso en los controladores de dominio. De ahí quedaron tres reglas:
+
+- **Apagar la cola de impresión** (detenida y deshabilitada) en todo servidor que no imprime ni comparte impresoras, **empezando por los DC**. Se puede hacer para todos con una GPO.
+- **Restringir la instalación de controladores**: desde las actualizaciones de 2021, por defecto instalar un controlador por *Point and Print* pide permisos de administrador; con la GPO de **restricciones de Point and Print** se limita de qué servidores pueden venir. No se lo "arregla" dando permisos de administrador a la gente.
+- **Controladores del fabricante o el universal**, nunca bajados de cualquier página. Microsoft está empujando el controlador universal de impresión por red (IPP, el estándar Mopria) y el **modo de impresión protegido** de Windows 11, que solo usa ese controlador; con el tiempo, los controladores de terceros dejan de distribuirse por Windows Update.
+
+<Troubleshooting escenario={decisiones} />
+
+<Terminal ejercicio={remoto} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Publicar el 3389 en el router">
+    Es de las entradas más comunes de ransomware. Desde afuera, VPN o puerta de enlace.
+  </ErrorComun>
+  <ErrorComun titulo="Apagar NLA para que conecte un cliente viejo">
+    Deja la pantalla de inicio de sesión expuesta a cualquiera. Actualizá el cliente.
+  </ErrorComun>
+  <ErrorComun titulo="Hacer administrador a quien solo necesita entrar">
+    Remote Desktop Users de ese servidor alcanza. Administrador es para administrar.
+  </ErrorComun>
+  <ErrorComun titulo="Una cuenta compartida para el proveedor">
+    Sin rastro de quién entró. Cuentas personales, deshabilitadas fuera de los pedidos.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar la cola de impresión prendida en los DC">
+    Fue el blanco de PrintNightmare. Detenida y deshabilitada en todo servidor que no imprime.
+  </ErrorComun>
+  <ErrorComun titulo="Dar administrador local para instalar impresoras">
+    Abre la puerta a instalar cualquier cosa. Servidor de impresión, GPO y restricciones de Point and Print.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Escritorio remoto (3389) con NLA, y solo para Administradores y los grupos que se agregan a Remote Desktop Users de cada servidor.
+- Desde afuera, VPN con segundo factor o puerta de enlace de escritorio remoto; nunca el 3389 abierto en el router.
+- Proveedores con cuentas personales, deshabilitadas salvo cuando hay un pedido y con vencimiento.
+- RDS para que mucha gente trabaje en un servidor; necesita CAL de RDS además de las de Windows Server.
+- Impresoras instaladas una vez en un servidor de impresión y distribuidas por GPO, con controladores del fabricante o el universal.
+- Después de PrintNightmare: cola de impresión apagada en los servidores que no imprimen (los DC primero) y restricciones de Point and Print.
+</Resumen>

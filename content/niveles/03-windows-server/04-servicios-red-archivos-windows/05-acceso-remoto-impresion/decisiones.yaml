@@ -1,0 +1,89 @@
+tipo: troubleshooting
+titulo: Tres pedidos de la semana
+descripcion: >-
+  Escenarios de decisión en una empresa de 60 personas. No hay una sola respuesta posible, pero sí
+  caminos que dejan la puerta abierta. Cada decisión suma minutos (y a veces, riesgo).
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes. El gerente general quiere entrar desde su casa, los fines de semana, al servidor de
+      facturación (SRV-APP01), "como si estuviera en la oficina". La empresa tiene un firewall con
+      VPN que casi nadie usa.
+    opciones:
+      - { texto: "Darle acceso por la VPN (con segundo factor) y escritorio remoto adentro, solo a SRV-APP01", ir_a: n2, minutos: 30 }
+      - texto: Redirigir el puerto 3389 del router al servidor, que es lo más rápido
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          A la media hora, el registro de Seguridad de SRV-APP01 muestra cientos de eventos 4625
+          (inicio de sesión fallido) desde direcciones de otros países. Lo cerrás antes de que
+          alguien adivine una contraseña. El 3389 expuesto es una de las entradas más comunes de
+          ransomware.
+      - texto: Dejarle instalar en el servidor el programa de control remoto que él usa en su casa
+        ir_a: n1
+        minutos: 5
+        consecuencia: >-
+          Queda un acceso al servidor que no controlás, con una cuenta personal en un servicio de
+          afuera y sin registro en la empresa. Si esa cuenta se compromete, entran directo al
+          servidor de facturación.
+  n2:
+    situacion: >-
+      Ya entra por VPN. Ahora pide: "haceme administrador del servidor, así no me pide nada".
+    opciones:
+      - { texto: "Explicarle que alcanza con estar en Remote Desktop Users de SRV-APP01 y hacerlo por su grupo", ir_a: n3, minutos: 10 }
+      - texto: Agregarlo a Domain Admins para que no moleste más
+        ir_a: n2
+        minutos: 2
+        consecuencia: >-
+          Su notebook personal, con la que entra desde la casa, pasa a tener una cuenta capaz de
+          administrar todo el dominio. Si alguien le roba esa sesión, tiene la empresa entera.
+      - texto: Darle la contraseña del Administrador local
+        ir_a: n2
+        minutos: 2
+        consecuencia: >-
+          Una cuenta compartida no deja rastro de quién hizo qué, y la contraseña ya no es solo de
+          IT. Las cuentas son personales.
+  n3:
+    situacion: >-
+      Miércoles. El proveedor del sistema de facturación necesita entrar a SRV-APP01 cuando hay una
+      actualización, una o dos veces por mes. Son tres técnicos.
+    opciones:
+      - { texto: "Una cuenta por técnico, en GG-Proveedor-Facturacion (en Remote Desktop Users de SRV-APP01), deshabilitadas y habilitadas solo cuando hay un pedido, con vencimiento", ir_a: n4, minutos: 20 }
+      - texto: Una cuenta "proveedor" compartida, siempre habilitada
+        ir_a: n3
+        minutos: 5
+        consecuencia: >-
+          No sabés cuál de los tres entró ni cuándo, y si uno deja la empresa proveedora, la
+          contraseña se va con él. Con el tiempo, nadie sabe quién la conoce.
+  n4:
+    situacion: >-
+      Viernes. Contabilidad quiere imprimir en la nueva impresora del segundo piso. El técnico de
+      turno propone bajar el controlador de una página que encontró y que cada uno lo instale como
+      administrador en su PC.
+    opciones:
+      - { texto: "Instalar la impresora una vez en el servidor de impresión, con el controlador del fabricante, y distribuirla por GPO", ir_a: n5, minutos: 25 }
+      - texto: Darles permisos de administrador local para que instalen controladores
+        ir_a: n4
+        minutos: 5
+        consecuencia: >-
+          Es justo lo que explotaba PrintNightmare: instalar controladores de impresora como
+          administrador abre la puerta a ejecutar código con los máximos privilegios. Y además
+          podrían instalar cualquier otra cosa.
+  n5:
+    situacion: >-
+      Para distribuirla, configurás en la GPO las restricciones de Point and Print: solo se
+      instalan controladores de tus servidores de impresión, y siempre con aviso de elevación.
+    opciones:
+      - { texto: "Cerrar la semana documentando lo decidido", ir_a: n_ok, minutos: 10 }
+  n_ok:
+    final: exito
+    resumen: >-
+      Las tres decisiones tienen la misma idea de fondo: dar el acceso justo, por el camino
+      controlado, con cuentas personales. Escritorio remoto desde afuera solo a través de VPN (o de
+      una puerta de enlace de escritorio remoto), nunca con el 3389 abierto; para entrar a un
+      servidor alcanza con Remote Desktop Users, no hace falta ser administrador; los proveedores
+      tienen cuentas propias, habilitadas solo cuando hay un pedido y con vencimiento; y las
+      impresoras se instalan una vez en un servidor de impresión con controladores del fabricante,
+      se distribuyen por GPO y se restringe de dónde pueden venir los controladores. Además, la cola
+      de impresión queda apagada en los servidores que no imprimen.

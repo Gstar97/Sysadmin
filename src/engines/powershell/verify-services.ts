@@ -2,6 +2,7 @@
 import { dhcpState, isAuthorized, leaseInfo } from './dhcp'
 import { resolveName, serverZones } from './dns'
 import { canonicalIdentity, findShare, getSd, localLevel, networkLevel } from './files'
+import { nlaEnabled } from './system'
 import type { PsCheck } from './schema'
 import type { PsSession } from './session'
 import { toText } from './values'
@@ -161,6 +162,14 @@ export function verifyServices(s: PsSession, check: PsCheck): Result | undefined
     const folder = root?.folders.find((f) => f.name.toLowerCase() === parts.slice(2).join('\\').toLowerCase())
     const ok = !!folder && (!check.destino || folder.targets.some((t) => t.toLowerCase() === check.destino!.toLowerCase()))
     return { ok, label: `existe la carpeta DFS ${check.carpeta_dfs}${check.destino ? ` → ${check.destino}` : ''}` }
+  }
+  if ('nla' in check) return { ok: nlaEnabled(s) === check.nla, label: `la autenticación a nivel de red (NLA) está ${check.nla ? 'activada' : 'desactivada'} en ${s.state.equipo}` }
+  if ('grupo_local' in check) {
+    const g = ((s.data.localGroups ?? []) as { Name: unknown; __members?: unknown }[]).find((x) => toText(x.Name).toLowerCase() === check.grupo_local.toLowerCase())
+    const members = ((g?.__members ?? []) as unknown[]).map((m) => toText(m).toLowerCase())
+    const want = check.miembro.toLowerCase()
+    const found = members.some((m) => m === want || m.split('\\').pop() === want.split('\\').pop())
+    return { ok: !!g && found === check.es_miembro, label: `${check.miembro} ${check.es_miembro ? 'está' : 'no está'} en el grupo local ${check.grupo_local} de ${s.state.equipo}` }
   }
   if ('unidad_red' in check) {
     const target = s.fs.drives.get(check.unidad_red.toUpperCase().replace(/:?$/, ':'))

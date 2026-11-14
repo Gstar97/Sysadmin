@@ -1,0 +1,97 @@
+tipo: pasos
+titulo: Servidor de archivos y DHCP en tus máquinas virtuales
+descripcion: >-
+  Sobre el dominio del módulo 3.3 (DC01, DC02, SRV-ADMIN, SRV-CORE01 y PC01). SRV-CORE01 pasa a
+  ser el servidor de archivos (usa el disco D: del módulo 3.1) y los dos DC reparten direcciones.
+  Trabajás desde SRV-ADMIN con tu cuenta administrativa. Calculá unas tres horas y media.
+pasos:
+  - titulo: Apagar el DHCP viejo
+    detalle: >-
+      Si tu red de laboratorio tiene otro DHCP (el del router de tu casa o el Kea del Nivel 2),
+      apagalo o sacá esa red del alcance: dos servidores DHCP sin coordinación en la misma red se
+      pisan. Anotá qué cambiaste para poder volver atrás.
+    comprobar: En la red del laboratorio no queda ningún otro servidor DHCP activo.
+  - titulo: DHCP en DC01 y DC02, con conmutación por error
+    detalle: >-
+      Desde SRV-ADMIN, con las herramientas RSAT-DHCP instaladas. El rango deja afuera las IP
+      fijas que ya usás (.1 a .99).
+    comandos:
+      - Install-WindowsFeature RSAT-DHCP
+      - Invoke-Command DC01, DC02 { Install-WindowsFeature DHCP -IncludeManagementTools }
+      - Add-DhcpServerInDC -DnsName dc01.empresa.local -IPAddress 192.168.10.10
+      - Add-DhcpServerInDC -DnsName dc02.empresa.local -IPAddress 192.168.10.11
+      - Add-DhcpServerv4Scope -ComputerName DC01 -Name Oficina -StartRange 192.168.10.100 -EndRange 192.168.10.199 -SubnetMask 255.255.255.0 -State InActive
+      - Set-DhcpServerv4OptionValue -ComputerName DC01 -ScopeId 192.168.10.0 -Router 192.168.10.1 -DnsServer 192.168.10.10, 192.168.10.11 -DnsDomain empresa.local
+      - Set-DhcpServerv4Scope -ComputerName DC01 -ScopeId 192.168.10.0 -State Active
+      - Add-DhcpServerv4Failover -ComputerName DC01 -Name dc01-dc02 -PartnerServer dc02.empresa.local -ScopeId 192.168.10.0 -LoadBalancePercent 50 -SharedSecret (Read-Host 'Clave compartida')
+    comprobar: Get-DhcpServerv4Failover -ComputerName DC01 muestra State Normal, y Get-DhcpServerv4Scope -ComputerName DC02 muestra el ámbito.
+  - titulo: Pasar PC01 a DHCP
+    detalle: >-
+      En PC01 (sesión de administrador): sacá la IP fija y pasá la placa a DHCP. Debería recibir
+      una dirección del rango con los DNS de los DC.
+    comandos:
+      - Remove-NetIPAddress -InterfaceAlias Ethernet -Confirm:$false
+      - Remove-NetRoute -InterfaceAlias Ethernet -Confirm:$false
+      - Set-NetIPInterface -InterfaceAlias Ethernet -Dhcp Enabled
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ResetServerAddresses
+      - ipconfig /renew
+      - ipconfig /all
+    comprobar: ipconfig /all muestra DHCP Enabled Yes, una IP .1xx, DHCP Server 192.168.10.10 u .11 y los dos DC como DNS.
+    si_falla: Si queda en 169.254, mirá Get-DhcpServerInDC (autorización) y que el ámbito esté activo.
+  - titulo: DNS prolijo
+    detalle: Zona inversa, el PTR de los dos DC y el alias archivos para SRV-CORE01.
+    comandos:
+      - Add-DnsServerPrimaryZone -ComputerName DC01 -NetworkId 192.168.10.0/24 -ReplicationScope Domain
+      - Add-DnsServerResourceRecordPtr -ComputerName DC01 -ZoneName 10.168.192.in-addr.arpa -Name 10 -PtrDomainName dc01.empresa.local
+      - Add-DnsServerResourceRecordPtr -ComputerName DC01 -ZoneName 10.168.192.in-addr.arpa -Name 11 -PtrDomainName dc02.empresa.local
+      - Add-DnsServerResourceRecordCName -ComputerName DC01 -ZoneName empresa.local -Name archivos -HostNameAlias srv-core01.empresa.local
+    comprobar: En PC01, nslookup archivos muestra Server dc01.empresa.local (ya no UnKnown) y el alias de srv-core01.
+  - titulo: Carpetas y permisos NTFS en SRV-CORE01
+    detalle: >-
+      Una carpeta por área en D:\Datos, sin herencia en la raíz de los datos y con Modificar para
+      el DL de cada área. Si no armaste los DL en el módulo 3.3, crealos ahora (DL-Ventas-Modificar
+      con GG-Ventas adentro, y así con cada área).
+    comandos:
+      - Invoke-Command SRV-CORE01 { New-Item -ItemType Directory D:\Datos\Ventas, D:\Datos\Compras -Force }
+      - Invoke-Command SRV-CORE01 { icacls D:\Datos /inheritance:d; icacls D:\Datos /remove Users 'CREATOR OWNER'; icacls D:\Datos /grant 'EMPRESA\Domain Users:RX' }
+      - Invoke-Command SRV-CORE01 { icacls D:\Datos\Ventas /grant 'EMPRESA\DL-Ventas-Modificar:(OI)(CI)M'; icacls D:\Datos\Compras /grant 'EMPRESA\DL-Compras-Modificar:(OI)(CI)M' }
+    comprobar: En SRV-ADMIN, en las propiedades de \\SRV-CORE01\D$\Datos\Ventas, Opciones avanzadas, Acceso efectivo, María (de Ventas) tiene Modificar y Juan (de Compras), nada.
+  - titulo: Recurso compartido, cuota y filtro
+    detalle: >-
+      En SRV-CORE01. El recurso de la carpeta Ventas del módulo 3.3, si lo creaste, se puede
+      borrar: desde ahora todo pasa por Datos.
+    comandos:
+      - Invoke-Command SRV-CORE01 { New-SmbShare -Name Datos -Path D:\Datos -FullAccess 'Authenticated Users' -FolderEnumerationMode AccessBased }
+      - Invoke-Command SRV-CORE01 { Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools }
+      - Invoke-Command SRV-CORE01 { New-FsrmQuota -Path D:\Datos\Ventas -Size 2GB; New-FsrmFileScreen -Path D:\Datos -IncludeGroup 'Audio and Video Files' -Active }
+    comprobar: Get-SmbShare -CimSession SRV-CORE01 muestra Datos, y Get-FsrmQuota -CimSession SRV-CORE01 muestra la cuota de Ventas.
+  - titulo: Espacio de nombres DFS
+    detalle: >-
+      La raíz en SRV-CORE01. Si querés que siga andando aunque SRV-CORE01 se apague, sumá DC02 como
+      segundo servidor de la raíz (New-DfsnRootTarget), con su propia carpeta compartida.
+    comandos:
+      - Invoke-Command SRV-CORE01 { Install-WindowsFeature FS-DFS-Namespace; New-Item -ItemType Directory D:\DFSRoots\Empresa; New-SmbShare -Name Empresa -Path D:\DFSRoots\Empresa -ReadAccess 'Authenticated Users' }
+      - Install-WindowsFeature RSAT-DFS-Mgmt-Con
+      - New-DfsnRoot -Path \\empresa.local\Empresa -TargetPath \\SRV-CORE01\Empresa -Type DomainV2
+      - New-DfsnFolder -Path \\empresa.local\Empresa\Datos -TargetPath \\SRV-CORE01\Datos
+    comprobar: En PC01, el Explorador abre \\empresa.local\Empresa\Datos.
+  - titulo: La unidad S por DFS
+    detalle: >-
+      En la GPO "Usuarios - Unidades de red" del módulo 3.3, cambiá la ubicación de la unidad S
+      por \\empresa.local\Empresa\Datos\Ventas (con la misma segmentación por GG-Ventas). Agregá,
+      si querés, la unidad C: de Compras para GG-Compras.
+    comprobar: En PC01, con la sesión de María (después de gpupdate y volver a entrar), S abre Ventas por el nombre DFS.
+  - titulo: Probar como usuarios
+    detalle: >-
+      Con María en PC01: abrí \\empresa.local\Empresa\Datos (solo tiene que ver Ventas), guardá un
+      archivo en Ventas, probá copiar un .mp3 (filtro) y creá un archivo de 3 GB (cuota). Después
+      cerrá sesión y entrá como Juan: tiene que ver solo Compras.
+    comandos:
+      - fsutil file createnew S:\grande.bin 3000000000
+    comprobar: El .mp3 da "Acceso denegado", el archivo de 3 GB da "No hay espacio suficiente en el disco" y cada uno ve solo su carpeta.
+  - titulo: Documentar y guardar
+    detalle: >-
+      Anotá el rango de DHCP, las reservas, la clave de la conmutación (en el gestor de
+      contraseñas), las carpetas con sus grupos y el espacio de nombres. Apagá en orden y tomá una
+      instantánea de todas las máquinas (archivos-y-dhcp).
+    comprobar: Tenés la documentación y las instantáneas.

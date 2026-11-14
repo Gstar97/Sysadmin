@@ -1,0 +1,114 @@
+tipo: troubleshooting
+titulo: Una persona ve carpetas que no debería ver
+descripcion: >-
+  Incidente simulado en una empresa de 80 personas. El servidor de archivos SRV-ARCH01 tiene
+  D:\Datos compartido como \\empresa.local\Empresa\Datos, con una carpeta por área y enumeración
+  basada en acceso. Cada decisión suma minutos, y el tema es delicado.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Martes, 10:00. La jefa de RRHH llama alterada: Lucía, de Compras, le comentó a un compañero
+      cuánto cobra el gerente de Ventas. Lo vio en D:\Datos\RRHH\Sueldos\liquidacion-octubre.xlsx.
+      RRHH pide "que nadie más vea esa carpeta ya".
+    opciones:
+      - { texto: "Mirar el acceso efectivo de Lucía sobre la carpeta Sueldos, para entender por dónde entra", ir_a: n_efectivo, minutos: 5 }
+      - texto: Agregar una denegación de lectura para Lucía en RRHH
+        ir_a: n1
+        minutos: 3
+        consecuencia: >-
+          Lucía deja de ver la carpeta, pero si ella pudo, ¿quién más puede? No sabés por dónde
+          entraba ni a cuántas personas más les pasa lo mismo. Además, una denegación a una persona
+          suelta es justo lo que después nadie entiende.
+      - texto: Sacar a Lucía de todos sus grupos
+        ir_a: n1
+        minutos: 4
+        consecuencia: Lucía se queda sin acceso a Compras y no puede trabajar. Y la causa sigue ahí.
+  n_efectivo:
+    situacion: >-
+      La pestaña Acceso efectivo dice que Lucía tiene Lectura y ejecución sobre Sueldos. Mirás de
+      dónde viene.
+    evidencia:
+      - titulo: icacls D:\Datos\RRHH\Sueldos
+        contenido: |
+          D:\Datos\RRHH\Sueldos EMPRESA\DL-RRHH-Modificar:(I)(OI)(CI)(M)
+                                EMPRESA\DL-RRHH-Lectura:(I)(OI)(CI)(RX)
+                                EMPRESA\Domain Users:(I)(OI)(CI)(RX)
+                                NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
+                                BUILTIN\Administrators:(I)(OI)(CI)(F)
+      - titulo: icacls D:\Datos
+        contenido: |
+          D:\Datos NT AUTHORITY\SYSTEM:(OI)(CI)(F)
+                   BUILTIN\Administrators:(OI)(CI)(F)
+                   EMPRESA\Domain Users:(OI)(CI)(RX)
+    opciones:
+      - { texto: "Domain Users tiene lectura en D:\\Datos con (OI)(CI): se hereda a todo. Corregirlo para que valga solo en D:\\Datos", ir_a: n_raiz, minutos: 6 }
+      - texto: Quitar a Domain Users en la carpeta Sueldos
+        ir_a: n_efectivo
+        minutos: 2
+        consecuencia: >-
+          No se puede: la entrada es heredada (I). Solo se quita donde nace, en D:\Datos, o
+          cortando la herencia en Sueldos (y eso deja el mismo problema en todas las demás áreas).
+  n_raiz:
+    situacion: >-
+      Alguien, hace un año, dio a Domain Users lectura "en Datos" para que se vieran las carpetas de
+      las áreas, pero con herencia: todos podían leer todo lo que no tuviera la herencia cortada.
+      Lo cambiás para que valga solo en la carpeta Datos. Pedís a Lucía que cierre sesión y vuelva a
+      entrar... y sigue viendo Sueldos.
+    evidencia:
+      - titulo: Lo que se ejecutó
+        contenido: |
+          icacls D:\Datos /remove 'EMPRESA\Domain Users'
+          icacls D:\Datos /grant 'EMPRESA\Domain Users:RX'
+      - titulo: Get-ADPrincipalGroupMembership lsosa | Select-Object Name
+        contenido: |
+          Name
+          ----
+          Domain Users
+          GG-Compras
+          GG-Jefes
+    opciones:
+      - { texto: "Ver quiénes terminan en DL-RRHH-Lectura, con grupos anidados (Get-ADGroupMember -Recursive)", ir_a: n_anidado, minutos: 5 }
+      - texto: Pensar que es la memoria del Explorador y esperar
+        ir_a: n_raiz
+        minutos: 15
+        consecuencia: >-
+          Lucía cerró sesión y volvió a entrar: su token es nuevo. Si sigue entrando, hay otro
+          permiso. Esperar no lo cambia.
+  n_anidado:
+    situacion: >-
+      DL-RRHH-Lectura tiene adentro a GG-Jefes. Hace dos años, alguien quiso que los jefes vieran
+      "los legajos de su equipo" y metió a todos los jefes en el grupo de lectura de RRHH. Lucía es
+      jefa de Compras desde marzo: al sumarla a GG-Jefes, heredó la lectura de todo RRHH.
+    evidencia:
+      - titulo: Get-ADGroupMember DL-RRHH-Lectura | Select-Object Name, ObjectClass
+        contenido: |
+          Name         ObjectClass
+          ----         -----------
+          GG-RRHH      group
+          GG-Jefes     group
+      - titulo: Get-ADGroupMember DL-RRHH-Lectura -Recursive | Measure-Object
+        contenido: |
+          Count    : 23
+    opciones:
+      - { texto: "Consultar con RRHH (los dueños de los datos) quién tiene que ver qué, y sacar GG-Jefes de DL-RRHH-Lectura", ir_a: n_ok, minutos: 20 }
+      - texto: Sacar a Lucía de GG-Jefes
+        ir_a: n_anidado
+        minutos: 2
+        consecuencia: >-
+          Lucía deja de ver Sueldos, pero los otros 15 jefes siguen viéndolo, y Lucía pierde lo que
+          sí le corresponde como jefa. El problema es el anidamiento, no ella.
+  n_ok:
+    final: exito
+    resumen: >-
+      Había dos accesos de más, uno encima del otro. Primero, una herencia: Domain Users con
+      lectura en D:\Datos y (OI)(CI) le daba a todo el dominio lectura sobre cualquier carpeta que
+      no tuviera la herencia cortada (y nadie lo había notado porque la enumeración basada en
+      acceso no oculta lo que sí se puede leer). Segundo, un grupo anidado: GG-Jefes dentro de
+      DL-RRHH-Lectura hacía que cualquier jefe nuevo heredara la lectura de todo RRHH. Se corrigió
+      la entrada de la raíz (solo esa carpeta), RRHH definió que los jefes no ven Sueldos y se sacó
+      GG-Jefes del grupo. Lo que queda para que no se repita: un informe mensual con
+      Get-ADGroupMember -Recursive de cada grupo de permisos y con icacls de las carpetas raíz,
+      revisado por el dueño de cada área; los permisos se piden y los aprueba el dueño de los
+      datos, no IT; y se revisa con Acceso efectivo antes de dar por terminado un cambio. Como hubo
+      una exposición de datos personales, se avisó a la gerencia y se dejó registro del incidente.

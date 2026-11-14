@@ -1521,7 +1521,13 @@ cmdlet('Get-LocalGroupMember', {
   run(ctx) {
     const g = data(ctx.s, 'localGroups').find((x) => psEquals(x.Name, param(ctx, 'Group')))
     if (!g) throw new PsError(`Group ${str(ctx, 'Group')} was not found.`, 'ObjectNotFound', 'GroupNotFound', str(ctx, 'Group'))
-    return asArray(g.__members).map((m) => psObject('Microsoft.PowerShell.Commands.LocalPrincipal', { ObjectClass: 'User', Name: `${ctx.s.state.equipo}\\${toText(m)}`, PrincipalSource: 'Local' }))
+    const st = ctx.s.data.domainStore?.[0] as { netbios: string; groups: PsObject[] } | undefined
+    return asArray(g.__members).map((m) => {
+      const t = toText(m)
+      const domain = t.includes('\\') && st && psEquals(t.split('\\')[0], st.netbios)
+      const isGroup = domain && st.groups.some((x) => psEquals(x.Name, t.split('\\')[1]))
+      return psObject('Microsoft.PowerShell.Commands.LocalPrincipal', { ObjectClass: isGroup || /^(domain|enterprise) admins$/i.test(t.split('\\').pop()!) ? 'Group' : 'User', Name: t.includes('\\') ? t : `${ctx.s.state.equipo}\\${t}`, PrincipalSource: domain ? 'ActiveDirectory' : 'Local' })
+    })
   },
 })
 

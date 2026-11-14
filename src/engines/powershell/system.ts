@@ -707,6 +707,12 @@ cmdlet('sconfig', {
 })
 
 const TS_KEY = /^hklm:\\system\\currentcontrolset\\control\\terminal server$/i
+const RDP_TCP_KEY = /^hklm:\\system\\currentcontrolset\\control\\terminal server\\winstations\\rdp-tcp$/i
+
+/** Autenticación a nivel de red (NLA) del escritorio remoto: activada por defecto. */
+export function nlaEnabled(s: PsSession): boolean {
+  return (s.data.rdpNla?.[0] as boolean | undefined) ?? true
+}
 
 cmdlet('Get-ItemProperty', {
   params: ['Path', 'Name'],
@@ -715,7 +721,8 @@ cmdlet('Get-ItemProperty', {
   run(ctx) {
     const path = (str(ctx, 'Path') ?? '').replace(/\//g, '\\')
     if (TS_KEY.test(path)) return [psObject('System.Management.Automation.PSCustomObject', { fDenyTSConnections: ctx.s.data.rdp?.[0] ? 0 : 1, PSPath: `Microsoft.PowerShell.Core\\Registry::HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\Terminal Server` })]
-    throw new PsError(`[simulador] El registro simulado solo tiene la clave del Escritorio remoto (HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server).`, 'NotImplemented', 'NotSupported', path)
+    if (RDP_TCP_KEY.test(path)) return [psObject('System.Management.Automation.PSCustomObject', { UserAuthentication: nlaEnabled(ctx.s) ? 1 : 0, SecurityLayer: 2, PortNumber: 3389, PSPath: `Microsoft.PowerShell.Core\\Registry::HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp` })]
+    throw new PsError(`[simulador] El registro simulado solo tiene las claves del Escritorio remoto (HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server y su subclave WinStations\\RDP-Tcp).`, 'NotImplemented', 'NotSupported', path)
   },
 }, ['gp'])
 
@@ -729,7 +736,11 @@ cmdlet('Set-ItemProperty', {
       ctx.s.data.rdp = [Number(param(ctx, 'Value')) === 0]
       return []
     }
-    throw new PsError(`[simulador] El registro simulado solo tiene el valor fDenyTSConnections de HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server.`, 'NotImplemented', 'NotSupported', path)
+    if (RDP_TCP_KEY.test(path) && psEquals(param(ctx, 'Name'), 'UserAuthentication')) {
+      ctx.s.data.rdpNla = [Number(param(ctx, 'Value')) === 1]
+      return []
+    }
+    throw new PsError(`[simulador] El registro simulado solo tiene fDenyTSConnections (Terminal Server) y UserAuthentication (WinStations\\RDP-Tcp).`, 'NotImplemented', 'NotSupported', path)
   },
 }, ['sp'])
 

@@ -358,6 +358,8 @@ const psSingleCheckSchema = z.union([
   z.strictObject({ filtro_archivos: z.string(), grupo: z.string().optional() }),
   z.strictObject({ carpeta_dfs: z.string(), destino: z.string().optional() }),
   z.strictObject({ unidad_red: z.string(), ruta: z.string().optional() }),
+  z.strictObject({ nla: z.boolean() }),
+  z.strictObject({ grupo_local: z.string(), miembro: z.string(), es_miembro: z.boolean().default(true) }),
   /** Cliente: tiene una concesión de DHCP (no una dirección APIPA). */
   z.strictObject({ concesion_dhcp: z.boolean(), direccion: z.string().optional(), de: z.string().optional() }),
 ])

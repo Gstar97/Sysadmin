@@ -1,0 +1,103 @@
+tipo: terminal
+shell: powershell
+titulo: Servidor de archivos por área y DHCP con respaldo
+descripcion: >-
+  Distribuidora del Litoral sigue creciendo. Hoy toca: DHCP en los dos DC (en conmutación por
+  error) para dejar de depender del router, y el servidor de archivos SRV-ARCH01 con una carpeta
+  por área, permisos por grupos, recurso compartido, cuota y un nombre DFS. PC01 (la PC de María,
+  de Ventas) está configurada por DHCP y hoy tiene una 169.254.x.x. Estás en DC01.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1, 192.168.10.11] }
+  ad:
+    ous: [Empresa/Usuarios/Ventas, Empresa/Usuarios/Compras, Empresa/Grupos]
+    usuarios:
+      - { sam: mlopez, nombre: María, apellido: López, ou: Empresa/Usuarios/Ventas, grupos: [GG-Ventas] }
+      - { sam: jperez, nombre: Juan, apellido: Pérez, ou: Empresa/Usuarios/Compras, grupos: [GG-Compras] }
+    grupos:
+      - { nombre: GG-Ventas, ou: Empresa/Grupos }
+      - { nombre: GG-Compras, ou: Empresa/Grupos }
+      - { nombre: DL-Ventas-Modificar, ambito: DomainLocal, ou: Empresa/Grupos, miembros: [GG-Ventas] }
+      - { nombre: DL-Compras-Modificar, ambito: DomainLocal, ou: Empresa/Grupos, miembros: [GG-Compras] }
+  servidores:
+    - { equipo: DC02, dominio: empresa.local, controlador_dominio: true, red: { ip: 192.168.10.11, dns: [192.168.10.10, 127.0.0.1] } }
+    - equipo: SRV-ARCH01
+      dominio: empresa.local
+      red: { ip: 192.168.10.20, dns: [192.168.10.10, 192.168.10.11] }
+      archivos:
+        D:\Datos\Ventas\precios.xlsx: precios
+        D:\Datos\Compras\proveedores.xlsx: proveedores
+    - { equipo: PC01, dominio: empresa.local, usuario: mlopez, red: { ip: 169.254.20.31, prefijo: 16, puerta_enlace: '', dns: [], dhcp: true } }
+pasos:
+  - consigna: >-
+      DHCP en DC01: instalalo, autorizalo y creá el ámbito 192.168.10.100-.199 (/24) inactivo, con
+      puerta de enlace .1, DNS DC01 y DC02 y dominio empresa.local. Después activalo.
+    verificar:
+      - { dhcp_autorizado: true }
+      - { ambito_dhcp: 192.168.10.0, activo: true, puerta_enlace: 192.168.10.1, dns: [192.168.10.10, 192.168.10.11] }
+      - { en: PC01, verificar: { concesion_dhcp: true } }
+    solucion:
+      - Install-WindowsFeature DHCP -IncludeManagementTools
+      - Add-DhcpServerInDC -DnsName dc01.empresa.local -IPAddress 192.168.10.10
+      - Add-DhcpServerv4Scope -Name Oficina -StartRange 192.168.10.100 -EndRange 192.168.10.199 -SubnetMask 255.255.255.0 -State InActive
+      - Set-DhcpServerv4OptionValue -ScopeId 192.168.10.0 -Router 192.168.10.1 -DnsServer 192.168.10.10, 192.168.10.11 -DnsDomain empresa.local
+      - Set-DhcpServerv4Scope -ScopeId 192.168.10.0 -State Active
+  - consigna: Sumá DC02 en conmutación por error (carga compartida 50 y 50).
+    verificar:
+      - { conmutacion_dhcp: DC02, modo: LoadBalance }
+    solucion:
+      - Invoke-Command DC02 { Install-WindowsFeature DHCP -IncludeManagementTools }
+      - Add-DhcpServerInDC -DnsName dc02.empresa.local -IPAddress 192.168.10.11
+      - Add-DhcpServerv4Failover -Name dc01-dc02 -PartnerServer DC02 -ScopeId 192.168.10.0 -LoadBalancePercent 50 -SharedSecret 'Una.Clave.Larga'
+  - consigna: >-
+      En el DNS, el alias archivos.empresa.local apuntando a srv-arch01.empresa.local (así la gente
+      no depende del nombre del servidor ni para eso).
+    verificar:
+      - { registro_dns: archivos.empresa.local, tipo: CNAME, valor: srv-arch01.empresa.local }
+    solucion: ["Add-DnsServerResourceRecordCName -ZoneName empresa.local -Name archivos -HostNameAlias srv-arch01.empresa.local"]
+  - consigna: >-
+      En SRV-ARCH01 (con Invoke-Command): cortá la herencia de D:\Datos copiando, sacá a Users y a
+      CREATOR OWNER, dale a Domain Users lectura solo en esa carpeta, y Modificar a cada DL en su
+      carpeta.
+    verificar:
+      - { en: SRV-ARCH01, verificar: { herencia_ntfs: D:\Datos, habilitada: false } }
+      - { en: SRV-ARCH01, verificar: { permiso_ntfs: D:\Datos\Ventas, para: mlopez, nivel: Modify } }
+      - { en: SRV-ARCH01, verificar: { permiso_ntfs: D:\Datos\Compras, para: mlopez, nivel: None } }
+    pistas:
+      - "Invoke-Command SRV-ARCH01 { icacls D:\\Datos /inheritance:d; icacls D:\\Datos /remove Users 'CREATOR OWNER'; ... }"
+    solucion:
+      - Invoke-Command SRV-ARCH01 { icacls D:\Datos /inheritance:d; icacls D:\Datos /remove Users 'CREATOR OWNER'; icacls D:\Datos /grant 'EMPRESA\Domain Users:RX' }
+      - Invoke-Command SRV-ARCH01 { icacls D:\Datos\Ventas /grant 'DL-Ventas-Modificar:(OI)(CI)M'; icacls D:\Datos\Compras /grant 'DL-Compras-Modificar:(OI)(CI)M' }
+  - consigna: >-
+      Compartí D:\Datos como Datos (Control total para Authenticated Users, enumeración basada en
+      acceso) y poné una cuota estricta de 2 GB en Ventas.
+    verificar:
+      - { en: SRV-ARCH01, verificar: { recurso_compartido: Datos, abe: true } }
+      - { en: SRV-ARCH01, verificar: { acceso_compartido: Datos, cuenta: Authenticated Users, nivel: Full } }
+      - { en: SRV-ARCH01, verificar: { cuota: D:\Datos\Ventas, limite_mb: 2048 } }
+    solucion:
+      - Invoke-Command SRV-ARCH01 { New-SmbShare -Name Datos -Path D:\Datos -FullAccess 'Authenticated Users' -FolderEnumerationMode AccessBased }
+      - Invoke-Command SRV-ARCH01 { Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools; New-FsrmQuota -Path D:\Datos\Ventas -Size 2GB }
+  - consigna: >-
+      El espacio de nombres \\empresa.local\Empresa con la carpeta Datos apuntando a
+      \\SRV-ARCH01\Datos (la raíz, en D:\DFSRoots\Empresa de SRV-ARCH01).
+    verificar:
+      - { carpeta_dfs: \\empresa.local\Empresa\Datos, destino: \\SRV-ARCH01\Datos }
+    solucion:
+      - Invoke-Command SRV-ARCH01 { Install-WindowsFeature FS-DFS-Namespace -IncludeManagementTools; New-Item -ItemType Directory D:\DFSRoots\Empresa; New-SmbShare -Name Empresa -Path D:\DFSRoots\Empresa -ReadAccess 'Authenticated Users' }
+      - Invoke-Command SRV-ARCH01 { New-DfsnRoot -Path \\empresa.local\Empresa -TargetPath \\SRV-ARCH01\Empresa -Type DomainV2; New-DfsnFolder -Path \\empresa.local\Empresa\Datos -TargetPath \\SRV-ARCH01\Datos }
+  - consigna: >-
+      La prueba final, desde PC01 con la sesión de María: listá \\empresa.local\Empresa\Datos (tiene
+      que ver solo Ventas) y guardá un archivo en Ventas.
+    verificar:
+      - { comando_usado: "invoke-command.*pc01" }
+      - { salida_contiene: "Ventas" }
+      - { en: SRV-ARCH01, verificar: { archivo: D:\Datos\Ventas\prueba.txt } }
+    solucion:
+      - Invoke-Command PC01 { Set-Content \\empresa.local\Empresa\Datos\Ventas\prueba.txt 'hola' }
+      - Invoke-Command PC01 { Get-ChildItem \\empresa.local\Empresa\Datos }
+    explicacion: >-
+      Todo encadenado: PC01 recibió su dirección y su DNS por DHCP, encontró el espacio de nombres
+      en AD, llegó al recurso de SRV-ARCH01, el recurso la dejó pasar a todo y NTFS le permitió
+      Ventas. Y la enumeración basada en acceso le escondió Compras.
