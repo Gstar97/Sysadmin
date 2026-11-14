@@ -6,6 +6,7 @@ import { stableGuid } from './ad'
 import { activeProfile, networkCategory, ruleObject } from './machine'
 import { connect } from './remoting'
 import { asArray, BOOT_HOOKS, cmdlet, PsError, PsSession, psEquals, wildcardToRegex, type CmdletContext } from './session'
+import { dhcpAcquire, dhcpRelease, leaseInfo } from './dhcp'
 import { disks, type DiskPartition, type DiskState } from './verify-system'
 import { psObject, toText, VIEWS, type PsObject } from './values'
 
@@ -54,7 +55,7 @@ function prefixToMask(p: number): string {
   return [24, 16, 8, 0].map((sh) => (n >>> sh) & 255).join('.')
 }
 
-function mac(s: PsSession) {
+export function mac(s: PsSession) {
   const g = stableGuid(`mac:${s.state.equipo}`).replace(/-/g, '')
   return `00-15-5D-${g.slice(0, 2)}-${g.slice(2, 4)}-${g.slice(4, 6)}`.toUpperCase()
 }
@@ -193,12 +194,11 @@ cmdlet('Set-NetIPInterface', {
     checkAlias(ctx, 'Set-NetIPInterface')
     const r = ctx.s.state.red
     if (psEquals(param(ctx, 'Dhcp'), 'Enabled')) {
-      r.dhcp = true
-      r.ip = '169.254.12.34'
-      r.prefijo = 16
-      r.puerta_enlace = ''
-      ctx.host('[simulador] La placa pidió IP por DHCP; como no hay servidor DHCP en esta red, quedó con una dirección APIPA (169.254.x.x).\n')
+      const res = dhcpAcquire(ctx.s)
+      if (!res.ok) ctx.host('[simulador] La placa pidió IP por DHCP; como ningún servidor DHCP le contestó, quedó con una dirección APIPA (169.254.x.x).\n')
+      void r
     }
+    if (psEquals(param(ctx, 'Dhcp'), 'Disabled')) r.dhcp = false
     return []
   },
 })
@@ -276,15 +276,23 @@ function renderIpconfig(s: PsSession, all: boolean): string {
   if (!r.conectada) return `\nWindows IP Configuration\n\n\nEthernet adapter ${r.adaptador}:\n\n   Media State . . . . . . . . . . . : Media disconnected\n   Connection-specific DNS Suffix  . : \n`
   const head = all ? `   Host Name . . . . . . . . . . . . : ${s.state.equipo}\n   Primary Dns Suffix  . . . . . . . : ${s.state.dominio ?? ''}\n   Node Type . . . . . . . . . . . . : Hybrid\n   IP Routing Enabled. . . . . . . . : No\n   WINS Proxy Enabled. . . . . . . . : No\n\n` : ''
   const apipa = r.ip.startsWith('169.254.')
+  const lease = r.dhcp && !apipa ? leaseInfo(s) : undefined
+  const when = (d: Date) => `${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()]}, ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} ${d.toLocaleTimeString('en-US')}`
   const lines = [
-    '   Connection-specific DNS Suffix  . : ',
+    `   Connection-specific DNS Suffix  . : ${lease?.suffix ?? ''}`,
     ...(all ? [`   Description . . . . . . . . . . . : Microsoft Hyper-V Network Adapter`, `   Physical Address. . . . . . . . . : ${mac(s)}`, `   DHCP Enabled. . . . . . . . . . . : ${r.dhcp ? 'Yes' : 'No'}`, `   Autoconfiguration Enabled . . . . : Yes`] : []),
+  ]
+  const ipLines = [
     `   ${apipa ? 'Autoconfiguration IPv4 Address' : 'IPv4 Address'}. . . . . . . . . . . : ${r.ip}${all ? '(Preferred)' : ''}`.replace('Autoconfiguration IPv4 Address. . . . . . . . . . .', 'Autoconfiguration IPv4 Address. .'),
     `   Subnet Mask . . . . . . . . . . . : ${prefixToMask(r.prefijo)}`,
+  ].filter(() => r.ip !== '0.0.0.0')
+  const tail = [
+    ...(all && lease ? [`   Lease Obtained. . . . . . . . . . : ${when(lease.obtained)}`, `   Lease Expires . . . . . . . . . . : ${when(lease.expires)}`] : []),
     `   Default Gateway . . . . . . . . . : ${r.puerta_enlace}`,
+    ...(all && lease ? [`   DHCP Server . . . . . . . . . . . : ${lease.server}`] : []),
     ...(all ? [`   DNS Servers . . . . . . . . . . . : ${r.dns.join('\n                                       ') || ''}`, '   NetBIOS over Tcpip. . . . . . . . : Enabled'] : []),
   ]
-  return `\nWindows IP Configuration\n\n${head}\nEthernet adapter ${r.adaptador}:\n\n${lines.join('\n')}\n`
+  return `\nWindows IP Configuration\n\n${head}\nEthernet adapter ${r.adaptador}:\n\n${[...lines, ...ipLines, ...tail].join('\n')}\n`
 }
 
 cmdlet('ipconfig', {
@@ -293,6 +301,17 @@ cmdlet('ipconfig', {
   run(ctx) {
     const args = ctx.positional.map((p) => toText(p).toLowerCase())
     if (args.includes('/flushdns')) return [formatted('\nWindows IP Configuration\n\nSuccessfully flushed the DNS Resolver Cache.\n')]
+    if (args.includes('/release')) {
+      if (!ctx.s.state.red.dhcp) return [formatted(`\nWindows IP Configuration\n\nThe operation failed as no adapter is in the state permissible for\nthis operation.\n`)]
+      dhcpRelease(ctx.s)
+      return [formatted(renderIpconfig(ctx.s, false))]
+    }
+    if (args.includes('/renew')) {
+      if (!ctx.s.state.red.dhcp) return [formatted(`\nWindows IP Configuration\n\nThe operation failed as no adapter is in the state permissible for\nthis operation.\n`)]
+      const res = dhcpAcquire(ctx.s)
+      if (!res.ok) return [formatted(`\nWindows IP Configuration\n\nAn error occurred while renewing interface ${ctx.s.state.red.adaptador} : unable to contact your DHCP server. Request has timed out.\n`)]
+      return [formatted(renderIpconfig(ctx.s, false))]
+    }
     if (args.includes('/registerdns')) return [formatted('\nWindows IP Configuration\n\nRegistration of the DNS resource records for all adapters of this computer has been initiated. Any errors will be reported in the Event Viewer in 15 minutes.\n')]
     return [formatted(renderIpconfig(ctx.s, args.includes('/all')))]
   },
@@ -528,6 +547,7 @@ export function restart(ctx: CmdletContext) {
   s.data.bootTime = [new Date()]
   // Al reiniciar, el equipo pide un ticket nuevo de Kerberos con sus grupos actuales.
   delete s.data.tokenGroups
+  delete s.data.userToken
   for (const hook of BOOT_HOOKS) hook(s)
   ctx.host(`[simulador] ${s.state.equipo} se reinició y ya está de vuelta.\n`)
 }

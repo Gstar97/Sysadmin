@@ -1,4 +1,4 @@
-import { asArray, ALIASES, CMDLETS, cmdlet, formatDotnetDate, moduleAvailable, psEquals, PsError, PsSession, truthy, wildcardToRegex, type CmdletContext } from './session'
+import { asArray, ALIASES, CMDLETS, CONSTRUCTORS, cmdlet, formatDotnetDate, moduleAvailable, psEquals, PsError, PsSession, truthy, wildcardToRegex, type CmdletContext } from './session'
 import { formatDefault, formatList, formatTable, getProp, isPsObject, isScriptBlock, propNames, psObject, setProp, toText, typeName, VIEWS, type PsObject } from './values'
 import { reach } from './machine'
 import { connect, setTrustedHosts, wsmanItem } from './remoting'
@@ -658,7 +658,7 @@ cmdlet(
     synopsis: 'Creates table-like custom objects from the items in a character-separated value (CSV) file.',
     run(ctx) {
       const path = ctx.s.resolvePath(str(ctx, 'Path') ?? '')
-      const node = ctx.s.fs.get(path)
+      const node = ctx.s.fs.read(path)
       if (!node || node.type !== 'file') throw new PsError(`Could not find file '${path}'.`, 'ObjectNotFound', 'FileOpenFailure,Microsoft.PowerShell.Commands.ImportCsvCommand', path)
       return parseCsv(node.content, str(ctx, 'Delimiter') ?? ',')
     },
@@ -885,7 +885,7 @@ function fileObject(s: PsSession, path: string): PsObject {
   return psObject(dir ? 'System.IO.DirectoryInfo' : 'System.IO.FileInfo', {
     Name: node.name,
     FullName: path,
-    Length: dir ? null : new TextEncoder().encode(node.content).length,
+    Length: dir ? null : (node.size ?? new TextEncoder().encode(node.content).length),
     LastWriteTime: new Date(node.mtime),
     Mode: dir ? 'd-----' : '-a----',
     Extension: dir ? '' : (/\.[^.\\]+$/.exec(node.name)?.[0] ?? ''),
@@ -1011,7 +1011,7 @@ cmdlet(
       const out: unknown[] = []
       for (const p of list(ctx, 'Path')) {
         const path = ctx.s.resolvePath(toText(p))
-        const node = ctx.s.fs.get(path)
+        const node = ctx.s.fs.read(path)
         if (!node) {
           ctx.writeError(`Cannot find path '${path}' because it does not exist.`, 'ObjectNotFound', path, 'PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand')
           continue
@@ -1367,6 +1367,15 @@ const FEATURE_MODULES: Record<string, string> = {
   'fs-dfs-replication': 'DFSR',
   'fs-resource-manager': 'FileServerResourceManager',
 }
+/** Servicio que crea cada rol al instalarse. */
+const FEATURE_SERVICES: Record<string, [string, string]> = {
+  dns: ['DNS', 'DNS Server'],
+  dhcp: ['DHCPServer', 'DHCP Server'],
+  'fs-resource-manager': ['SrmSvc', 'File Server Resource Manager'],
+  'fs-dfs-namespace': ['Dfs', 'DFS Namespace'],
+  'fs-dfs-replication': ['DFSR', 'DFS Replication'],
+  updateservices: ['WsusService', 'WSUS Service'],
+}
 const NEEDS_RESTART = ['hyper-v', 'failover-clustering', 'fs-data-deduplication']
 
 /** -ComputerName: el cambio se hace en otro servidor (por WinRM, como el Administrador del servidor). */
@@ -1397,6 +1406,13 @@ function featureChange(ctx: CmdletContext, install: boolean) {
       const mods = (target.data.modules ??= []) as string[]
       if (mod && install && !mods.includes(mod)) mods.push(mod)
       if (mod && !install) target.data.modules = mods.filter((m) => m !== mod)
+      const svc = FEATURE_SERVICES[n.toLowerCase()]
+      if (svc) {
+        const services = data(target, 'services')
+        const existing = services.find((x) => psEquals(x.Name, svc[0]))
+        if (install && !existing) services.push(psObject('System.ServiceProcess.ServiceController', { Status: 'Running', Name: svc[0], DisplayName: svc[1], ServiceName: svc[0], StartType: 'Automatic', CanStop: true }))
+        if (!install && existing) services.splice(services.indexOf(existing), 1)
+      }
       // Con el módulo de AD, un servidor miembro ya puede consultar el dominio.
       if (n.toLowerCase() === 'rsat-ad-powershell' && install && target.data.domainStore?.length) target.data.ad = target.data.domainStore
     }
@@ -1672,3 +1688,27 @@ cmdlet('Get-EventLog', {
 })
 
 export { setProp, truthy }
+
+// ---------------------------------------------------------------------------------------
+// New-Object: objetos .NET con constructor conocido y PSObject con -Property
+// ---------------------------------------------------------------------------------------
+
+cmdlet('New-Object', {
+  params: ['TypeName', 'ArgumentList', 'Property', 'ComObject'],
+  positional: ['TypeName', 'ArgumentList'],
+  synopsis: 'Creates an instance of a Microsoft .NET Framework or COM object.',
+  run(ctx) {
+    const type = toText(param(ctx, 'TypeName') ?? '')
+    const t = type.toLowerCase()
+    if (t === 'psobject' || t === 'system.management.automation.psobject' || t === 'pscustomobject') {
+      const props = param(ctx, 'Property')
+      const o = psObject('System.Management.Automation.PSCustomObject', {})
+      if (props instanceof Map) for (const [k, v] of props) setProp(o, toText(k), v)
+      return [o]
+    }
+    const ctor = CONSTRUCTORS.get(t) ?? CONSTRUCTORS.get(t.split('.').pop()!)
+    if (!ctor) throw new PsError(`Cannot find type [${type}]: verify that the assembly containing this type is loaded.`, 'InvalidType', 'TypeNotFound,Microsoft.PowerShell.Commands.NewObjectCommand', type)
+    const args = has(ctx, 'ArgumentList') ? asArray(param(ctx, 'ArgumentList')) : []
+    return [ctor(ctx.s, args)]
+  },
+})

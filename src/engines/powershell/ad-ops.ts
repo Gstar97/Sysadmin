@@ -1321,6 +1321,7 @@ cmdlet('klist', {
     const logon = system ? '0:0x3e7' : '0:0x2b6f1'
     if (args.includes('purge')) {
       if (system) delete s.data.tokenGroups
+      else delete s.data.userToken
       s.data.ticketsPurged = [true]
       return [formatted(`\nCurrent LogonId is ${logon}\n${system ? 'Targeted LogonId is 0:0x3e7\n' : ''}\tDeleting all tickets:\n\tTicket(s) purged!\n`)]
     }

@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const fileSpecSchema = z.union([
   z.string(),
-  z.strictObject({ tipo: z.enum(['archivo', 'directorio']).default('archivo'), contenido: z.string().optional() }),
+  z.strictObject({ tipo: z.enum(['archivo', 'directorio']).default('archivo'), contenido: z.string().optional(), tamano_mb: z.number().optional() }),
 ])
 
 const diskSchema = z.strictObject({
@@ -156,6 +156,90 @@ const stateShape = {
     })
     .optional(),
   dns: z.array(z.strictObject({ nombre: z.string(), tipo: z.enum(['A', 'AAAA', 'CNAME', 'MX']).default('A'), valor: z.string() })).default([]),
+  /** Permisos NTFS explícitos por ruta. */
+  permisos: z
+    .record(
+      z.string(),
+      z.strictObject({
+        herencia: z.boolean().default(true),
+        dueno: z.string().optional(),
+        reglas: z
+          .array(
+            z.strictObject({
+              quien: z.string(),
+              nivel: z.enum(['FullControl', 'Modify', 'ReadAndExecute', 'Read', 'Write', 'ListDirectory']),
+              tipo: z.enum(['permitir', 'denegar']).default('permitir'),
+              aplica: z.enum(['carpeta_subcarpetas_archivos', 'carpeta', 'subcarpetas_archivos', 'carpeta_subcarpetas', 'archivos']).default('carpeta_subcarpetas_archivos'),
+            }),
+          )
+          .default([]),
+      }),
+    )
+    .default({}),
+  recursos_compartidos: z
+    .array(
+      z.strictObject({
+        nombre: z.string(),
+        ruta: z.string(),
+        descripcion: z.string().optional(),
+        acceso: z.array(z.strictObject({ quien: z.string(), nivel: z.enum(['Full', 'Change', 'Read']), tipo: z.enum(['permitir', 'denegar']).default('permitir') })).default([{ quien: 'Everyone', nivel: 'Read', tipo: 'permitir' }]),
+        /** Enumeración basada en acceso. */
+        abe: z.boolean().default(false),
+      }),
+    )
+    .default([]),
+  cuotas: z.array(z.strictObject({ ruta: z.string(), limite_mb: z.number(), blanda: z.boolean().default(false) })).default([]),
+  filtros_archivos: z.array(z.strictObject({ ruta: z.string(), grupos: z.array(z.string()) })).default([]),
+  /** Unidades de red del cliente: { 'S:': '\\\\SRV-ARCH01\\Ventas' } */
+  unidades_red: z.record(z.string(), z.string()).default({}),
+  /** Espacio de nombres DFS de dominio (se guarda en AD). */
+  dfs: z.strictObject({ espacio: z.string(), destinos: z.array(z.string()), carpetas: z.array(z.strictObject({ nombre: z.string(), destinos: z.array(z.string()) })).default([]) }).optional(),
+  /** Rol de servidor DHCP con sus ámbitos (autorizado en AD si el equipo es de un dominio). */
+  dhcp_servidor: z
+    .strictObject({
+      autorizado: z.boolean().default(true),
+      servicio_detenido: z.boolean().default(false),
+      ambitos: z
+        .array(
+          z.strictObject({
+            nombre: z.string().optional(),
+            inicio: z.string(),
+            fin: z.string(),
+            prefijo: z.number().int().default(24),
+            activo: z.boolean().default(true),
+            duracion_dias: z.number().default(8),
+            puerta_enlace: z.string().optional(),
+            dns: z.array(z.string()).default([]),
+            dominio: z.string().optional(),
+            exclusiones: z.array(z.tuple([z.string(), z.string()])).default([]),
+            reservas: z.array(z.strictObject({ ip: z.string(), mac: z.string(), nombre: z.string().optional() })).default([]),
+            concesiones: z.array(z.strictObject({ ip: z.string(), mac: z.string(), nombre: z.string() })).default([]),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+  /** Rol de servidor DNS: zonas (además de la del dominio en un DC), reenviadores y limpieza. */
+  dns_servidor: z
+    .strictObject({
+      zonas: z
+        .array(
+          z.strictObject({
+            nombre: z.string(),
+            tipo: z.enum(['primaria', 'reenviador_condicional']).default('primaria'),
+            integrada_ad: z.boolean().default(true),
+            maestros: z.array(z.string()).default([]),
+            antiguedad: z.boolean().default(false),
+            actualizacion: z.enum(['segura', 'no_segura', 'ninguna']).optional(),
+            /** hace_dias: registro dinámico con esa antigüedad (sin él, es estático). */
+            registros: z.array(z.strictObject({ nombre: z.string(), tipo: z.enum(['A', 'AAAA', 'CNAME', 'MX', 'PTR', 'TXT']).default('A'), valor: z.string(), hace_dias: z.number().optional() })).default([]),
+          }),
+        )
+        .default([]),
+      reenviadores: z.array(z.string()).default([]),
+      limpieza: z.boolean().default(false),
+    })
+    .optional(),
   eventos: z
     .array(
       z.strictObject({
@@ -250,6 +334,32 @@ const psSingleCheckSchema = z.union([
   z.strictObject({ cuenta_servicio: z.string(), existe: z.boolean().default(true), instalada: z.boolean().optional() }),
   z.strictObject({ politica_contrasenas: z.strictObject({ longitud_minima: z.number().optional(), umbral_bloqueo: z.number().optional(), complejidad: z.boolean().optional() }) }),
   z.strictObject({ politica_resultante: z.string(), politica: z.string() }),
+  /** Servidor DNS: una zona de este servidor. */
+  z.strictObject({ zona_dns: z.string(), existe: z.boolean().default(true), integrada_ad: z.boolean().optional(), inversa: z.boolean().optional(), reenviador_condicional: z.boolean().optional(), antiguedad: z.boolean().optional() }),
+  /** Servidor DNS: un registro cargado en una de sus zonas. */
+  z.strictObject({ registro_dns: z.string(), tipo: z.enum(['A', 'AAAA', 'CNAME', 'MX', 'PTR', 'TXT']).default('A'), valor: z.string().optional(), existe: z.boolean().default(true) }),
+  z.strictObject({ reenviador_dns: z.string() }),
+  z.strictObject({ limpieza_dns: z.boolean() }),
+  /** Cliente: el nombre se resuelve (con el DNS que tiene configurado este equipo). */
+  z.strictObject({ resuelve: z.string(), tipo: z.enum(['A', 'CNAME', 'MX', 'PTR', 'SRV']).default('A'), valor: z.string().optional(), resuelve_bien: z.boolean().default(true) }),
+  /** Servidor DHCP: un ámbito y su configuración. */
+  z.strictObject({ ambito_dhcp: z.string(), existe: z.boolean().default(true), activo: z.boolean().optional(), inicio: z.string().optional(), fin: z.string().optional(), puerta_enlace: z.string().optional(), dns: z.array(z.string()).optional(), excluye: z.string().optional() }),
+  z.strictObject({ reserva_dhcp: z.string(), mac: z.string().optional(), ambito: z.string().optional() }),
+  z.strictObject({ dhcp_autorizado: z.boolean() }),
+  z.strictObject({ conmutacion_dhcp: z.string(), modo: z.enum(['LoadBalance', 'HotStandby']).optional() }),
+  /** NTFS: nivel efectivo de una cuenta (usuario o grupo) sobre una ruta local de este equipo. */
+  z.strictObject({ permiso_ntfs: z.string(), para: z.string(), nivel: z.enum(['FullControl', 'Modify', 'ReadAndExecute', 'Read', 'Write', 'None', 'Special']) }),
+  z.strictObject({ herencia_ntfs: z.string(), habilitada: z.boolean() }),
+  z.strictObject({ recurso_compartido: z.string(), ruta: z.string().optional(), existe: z.boolean().default(true), abe: z.boolean().optional() }),
+  z.strictObject({ acceso_compartido: z.string(), cuenta: z.string(), nivel: z.enum(['Full', 'Change', 'Read', 'None']) }),
+  /** Por la red: lo que puede hacer un usuario del dominio en \\servidor\recurso\ruta (recurso + NTFS). */
+  z.strictObject({ acceso_red: z.string(), usuario: z.string(), nivel: z.enum(['FullControl', 'Modify', 'ReadAndExecute', 'Read', 'Write', 'None', 'Special']) }),
+  z.strictObject({ cuota: z.string(), limite_mb: z.number().optional(), blanda: z.boolean().optional() }),
+  z.strictObject({ filtro_archivos: z.string(), grupo: z.string().optional() }),
+  z.strictObject({ carpeta_dfs: z.string(), destino: z.string().optional() }),
+  z.strictObject({ unidad_red: z.string(), ruta: z.string().optional() }),
+  /** Cliente: tiene una concesión de DHCP (no una dirección APIPA). */
+  z.strictObject({ concesion_dhcp: z.boolean(), direccion: z.string().optional(), de: z.string().optional() }),
 ])
 
 export const psCheckSchema = z.union([psSingleCheckSchema, z.strictObject({ en: z.string(), verificar: psSingleCheckSchema })])

@@ -2,6 +2,10 @@ import './cmdlets'
 import './remoting'
 import './system'
 import './dns'
+import { initialDnsServer } from './dnsserver'
+import { verifyServices } from './verify-services'
+import { initialFiles, installFiles } from './files'
+import { dhcpAcquire, initialDhcp } from './dhcp'
 import './ad-ops'
 import { initialGroupPolicy } from './gpo'
 import { buildAdStore, computerObject, ouPathToDn, sameDn, store, type AdStore } from './ad'
@@ -119,6 +123,8 @@ export function createPsSession(input: PsStateInput = {}): PsSession {
   const root = buildComputer(own, lab)
   // Los demás equipos se arman ya, con las GPO que tienen aplicadas al empezar el ejercicio.
   for (const srv of servidores) lab.find(srv.equipo)
+  // Con todos los servidores armados, los equipos con DHCP piden su dirección.
+  for (const x of [...lab.sessions.values()]) if (x.state.red.dhcp && !x.state.red.ip.startsWith('169.254.')) dhcpAcquire(x)
   return root
 }
 
@@ -127,7 +133,7 @@ export function isDomainController(state: PsServerState, lab?: Lab): boolean {
   return !!state.dominio && (!!state.ad || (state.controlador_dominio && !!lab?.adStores.has(state.dominio.toLowerCase())))
 }
 
-const BASE_MODULES = ['CimCmdlets', 'DnsClient', 'Microsoft.PowerShell.LocalAccounts', 'Microsoft.PowerShell.Management', 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Utility', 'NetAdapter', 'NetConnection', 'NetSecurity', 'NetTCPIP', 'PackageManagement', 'PowerShellGet', 'PSReadLine', 'ScheduledTasks', 'ServerManager', 'Storage']
+const BASE_MODULES = ['CimCmdlets', 'DnsClient', 'Microsoft.PowerShell.LocalAccounts', 'Microsoft.PowerShell.Management', 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Utility', 'NetAdapter', 'NetConnection', 'NetSecurity', 'NetTCPIP', 'PackageManagement', 'PowerShellGet', 'PSReadLine', 'ScheduledTasks', 'ServerManager', 'SmbShare', 'Storage']
 
 function buildComputer(state: PsServerState, lab: Lab): PsSession {
   const s = new PsSession(state)
@@ -283,6 +289,16 @@ function buildComputer(state: PsServerState, lab: Lab): PsSession {
   s.executionPolicy = state.politica_ejecucion
   // Sin servidor DHCP la placa queda con una dirección automática 169.254.x.x (/16).
   if (state.red.ip.startsWith('169.254.')) state.red.prefijo = 16
+  // Un servidor con zonas propias tiene el rol DNS aunque no sea DC.
+  if (state.dns_servidor && !dc) {
+    for (const f of s.data.features as PsObject[]) if (['dns', 'rsat-dns-server'].includes(toText(f.Name).toLowerCase())) Object.assign(f, { Installed: true, InstallState: 'Installed' })
+    if (!(s.data.services as PsObject[]).some((x) => toText(x.Name) === 'DNS')) (s.data.services as PsObject[]).push(psObject('System.ServiceProcess.ServiceController', { Status: 'Running', Name: 'DNS', DisplayName: 'DNS Server', ServiceName: 'DNS', StartType: 'Automatic', CanStop: true }))
+    ;(s.data.modules as string[]).push('DnsServer')
+  }
+  initialDnsServer(s)
+  initialDhcp(s)
+  installFiles(s)
+  initialFiles(s)
   initialGroupPolicy(s)
   return s
 }
@@ -385,7 +401,7 @@ export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
     const re = safeRegex(check.comando_usado, 'i')
     return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
   }
-  return verifyAd(s, check) ?? verifySystem(s, check)
+  return verifyAd(s, check) ?? verifyServices(s, check) ?? verifySystem(s, check)
 }
 
 function safeRegex(pattern: string, flags: string): RegExp | undefined {

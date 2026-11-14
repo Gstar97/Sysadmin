@@ -73,22 +73,66 @@ export interface WinNode {
   content: string
   mtime: number
   hidden?: boolean
+  /** Tamaño en bytes cuando no se guarda el contenido real (archivos grandes del ejercicio). */
+  size?: number
+}
+
+/** Constructores de tipos .NET: [Tipo]::new(...) y New-Object Tipo(...). La clave es el nombre en minúsculas. */
+export const CONSTRUCTORS = new Map<string, (s: PsSession, args: unknown[]) => unknown>()
+
+export type FsOp = 'list' | 'read' | 'write' | 'create' | 'mkdir' | 'delete'
+
+/** Una ruta de red (\\servidor\recurso\...) resuelta en el disco del servidor. */
+export interface UncTarget {
+  fs: WinFS
+  /** La ruta en el disco del servidor. */
+  local: string
+  uncRoot: string
+  localRoot: string
+  /** Lanza un error si el usuario no puede hacer esa operación. */
+  check?: (op: FsOp, localPath: string) => void
+  /** Enumeración basada en acceso: si el usuario ve ese elemento al listar. */
+  visible?: (localPath: string) => boolean
+  /** Lo creó el usuario remoto (queda como dueño). */
+  created?: (localPath: string) => void
 }
 
 export class WinFS {
   nodes = new Map<string, WinNode>()
+  /** Resuelve rutas de red en otro equipo (lo instala el módulo de archivos). */
+  unc?: (path: string) => UncTarget | undefined
+  /** Unidades de red: S: → \\SRV-ARCH01\Ventas */
+  drives = new Map<string, string>()
+  /** Controles del propio servidor (cuotas y filtros de archivos). */
+  guard?: (op: FsOp, path: string, content?: string) => void
 
   key(path: string) {
     return path.toLowerCase().replace(/\\+$/, '') || 'c:'
   }
 
+  isUnc(path: string) {
+    return path.startsWith('\\\\')
+  }
+
   normalize(path: string, cwd: string, home: string): string {
     let p = path.replace(/\//g, '\\')
     if (p === '~' || p.startsWith('~\\')) p = home + p.slice(1)
-    if (/^[A-Za-z]:\\?/.test(p)) {
+    const drive0 = /^([A-Za-z]:)/.exec(p)?.[1].toUpperCase()
+    if (drive0 && this.drives.has(drive0)) p = this.drives.get(drive0)! + '\\' + p.slice(2).replace(/^\\/, '')
+    if (/^[A-Za-z]:\\?/.test(p) || this.isUnc(p)) {
       // absoluta
-    } else if (p.startsWith('\\')) p = 'C:' + p
+    } else if (p.startsWith('\\')) p = (this.isUnc(cwd) ? cwd.split('\\').slice(0, 4).join('\\') : 'C:') + p
     else p = `${cwd}\\${p}`
+    if (this.isUnc(p)) {
+      const parts: string[] = []
+      for (const seg of p.slice(2).split('\\')) {
+        if (!seg || seg === '.') continue
+        if (seg === '..') {
+          if (parts.length > 2) parts.pop()
+        } else parts.push(seg)
+      }
+      return '\\\\' + parts.join('\\')
+    }
     const drive = p.slice(0, 2).toUpperCase()
     const parts: string[] = []
     for (const seg of p.slice(2).split('\\')) {
@@ -106,16 +150,49 @@ export class WinFS {
     return acc === drive ? `${drive}\\` : acc
   }
 
-  get(path: string) {
+  private remote(path: string): UncTarget | undefined {
+    return this.unc?.(path)
+  }
+
+  private toUnc(t: UncTarget, local: string) {
+    return t.uncRoot + local.slice(t.localRoot.replace(/\\$/, '').length)
+  }
+
+  get(path: string): WinNode | undefined {
+    if (this.isUnc(path)) {
+      const t = this.remote(path)
+      return t ? t.fs.get(t.local) : undefined
+    }
     return this.nodes.get(this.key(path))
+  }
+
+  /** Como get, pero para leer el contenido (controla los permisos en las rutas de red). */
+  read(path: string): WinNode | undefined {
+    if (this.isUnc(path)) {
+      const t = this.remote(path)
+      const node = t?.fs.get(t.local)
+      if (t && node) t.check?.(node.type === 'dir' ? 'list' : 'read', t.local)
+      return node
+    }
+    return this.get(path)
   }
 
   parent(path: string) {
     const i = path.lastIndexOf('\\')
+    if (this.isUnc(path)) return path.split('\\').length <= 4 ? path : path.slice(0, i)
     return i <= 2 ? path.slice(0, 2) + '\\' : path.slice(0, i)
   }
 
   children(path: string): { path: string; node: WinNode }[] {
+    if (this.isUnc(path)) {
+      const t = this.remote(path)
+      if (!t) return []
+      t.check?.('list', t.local)
+      return t.fs
+        .children(t.local)
+        .filter((c) => !t.visible || t.visible(c.path))
+        .map((c) => ({ path: this.toUnc(t, c.path), node: c.node }))
+    }
     const base = this.key(path)
     const out: { path: string; node: WinNode }[] = []
     for (const [k, node] of this.nodes) {
@@ -126,17 +203,46 @@ export class WinFS {
   }
 
   mkdirp(path: string) {
+    if (this.isUnc(path)) {
+      const t = this.remote(path)
+      if (!t) throw new PsError(`The network path was not found.`, 'ObjectNotFound', 'NetworkPathNotFound', path)
+      if (!t.fs.get(t.local)) {
+        t.check?.('mkdir', t.fs.parent(t.local))
+        t.fs.mkdirp(t.local)
+        t.created?.(t.local)
+      }
+      return
+    }
     const parts = path.split('\\').filter(Boolean)
     let acc = parts[0]
     for (const seg of parts.slice(1)) {
       acc += '\\' + seg
-      if (!this.nodes.has(this.key(acc))) this.nodes.set(this.key(acc), { name: seg, type: 'dir', content: '', mtime: Date.now() })
+      if (!this.nodes.has(this.key(acc))) {
+        this.guard?.('mkdir', acc)
+        this.nodes.set(this.key(acc), { name: seg, type: 'dir', content: '', mtime: Date.now() })
+      }
     }
   }
 
   write(path: string, content: string, append = false) {
+    if (this.isUnc(path)) {
+      const t = this.remote(path)
+      if (!t) throw new PsError(`The network path was not found.`, 'ObjectNotFound', 'NetworkPathNotFound', path)
+      const exists = !!t.fs.get(t.local)
+      t.check?.(exists ? 'write' : 'create', exists ? t.local : t.fs.parent(t.local))
+      try {
+        t.fs.write(t.local, content, append)
+      } catch (e) {
+        // El error del servidor (cuota, filtro) se muestra con la ruta de red que usó la persona.
+        if (e instanceof PsError) throw new PsError(e.message.split(t.local).join(path), e.category, e.errorId, path)
+        throw e
+      }
+      if (!exists) t.created?.(t.local)
+      return
+    }
     this.mkdirp(this.parent(path))
     const existing = this.get(path)
+    this.guard?.('write', path, append && existing ? existing.content + content : content)
     const name = path.slice(path.lastIndexOf('\\') + 1)
     if (existing) {
       existing.content = append ? existing.content + content : content
@@ -145,6 +251,13 @@ export class WinFS {
   }
 
   remove(path: string) {
+    if (this.isUnc(path)) {
+      const t = this.remote(path)
+      if (!t) return
+      t.check?.('delete', t.local)
+      t.fs.remove(t.local)
+      return
+    }
     const k = this.key(path)
     for (const key of [...this.nodes.keys()]) if (key === k || key.startsWith(k + '\\')) this.nodes.delete(key)
   }
@@ -1234,6 +1347,10 @@ export class PsSession {
       if (m === 'pow') return a[0] ** a[1]
       if (m === 'sqrt') return Math.sqrt(a[0])
       if (m === 'pi') return Math.PI
+    }
+    if (m === 'new') {
+      const ctor = CONSTRUCTORS.get(t) ?? CONSTRUCTORS.get(t.split('.').pop()!)
+      if (ctor) return ctor(this, args ?? [])
     }
     if (t === 'datetime' && m === 'now') return new Date()
     if (t === 'environment' && m === 'machinename') return this.state.equipo
