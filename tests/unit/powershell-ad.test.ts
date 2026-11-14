@@ -234,6 +234,16 @@ describe('Directivas de grupo en la terminal', () => {
     expect((await run(s, 'Invoke-Command PC01 { gpupdate /force; gpresult /r /scope user }')).out).toMatch(/Ventas - Protector\s+Filtering:\s+Denied \(Security\)/)
   })
 
+  it('(Get-GPO X).GpoStatus = ... cambia la GPO, y valida el valor', async () => {
+    const s = lab()
+    await run(s, "(Get-GPO 'Empresa - Protector').GpoStatus = 'ComputerSettingsDisabled'")
+    expect((await run(s, "(Get-GPO 'Empresa - Protector').GpoStatus")).out.trim()).toBe('ComputerSettingsDisabled')
+    const r = await run(s, "(Get-GPO 'Empresa - Protector').GpoStatus = 'Nada'")
+    expect(r.err).toMatch(/Exception setting "GpoStatus"/)
+    expect(r.err).toMatch(/\+ \(Get-GPO 'Empresa - Protector'\)\.GpoStatus = 'Nada'/)
+    expect((await run(s, "Set-GPO 'Empresa - Protector' -GpoStatus AllSettingsEnabled")).err).toMatch(/not recognized/)
+  })
+
   it('respaldo y restauración: la GPO borrada vuelve sin vínculos', async () => {
     const s = lab()
     await run(s, 'New-Item -ItemType Directory C:\\Backups')

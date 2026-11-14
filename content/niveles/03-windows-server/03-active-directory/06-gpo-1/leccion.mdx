@@ -1,0 +1,157 @@
+---
+id: n3-m3-l6
+titulo: Directivas de grupo (GPO), parte 1
+minutos: 180
+objetivos:
+  - Explicar qué es una directiva de grupo, qué partes tiene y cuándo la recibe cada equipo y cada usuario.
+  - Predecir qué directiva gana con el orden LSDOU, el orden de vínculos, el bloqueo de herencia y el vínculo exigido.
+  - Crear, configurar, vincular y filtrar directivas con la consola y con PowerShell.
+glosario: [gpo, lsdou, vinculo-exigido, filtrado-seguridad, filtro-wmi]
+verificado: 2026-11
+---
+
+import lsdou from './orden-lsdou.svg?raw'
+import orden from './orden-gpo.yaml'
+import primera from './ej-primera-gpo.yaml'
+
+Hasta ahora, Active Directory te sirvió para saber **quién es quién**. Las **directivas de grupo** (*Group Policy Objects*, GPO) son la otra mitad: la forma de decirle a cientos de equipos **cómo tienen que estar configurados**, sin tocarlos uno por uno. Bloquear la pantalla a los 10 minutos, mapear la unidad de red de Ventas, prohibir los pendrives, instalar un programa, configurar el firewall: todo eso es una GPO. En esta lección vas a aprender cómo funcionan y, sobre todo, a responder la pregunta que más vas a escuchar: **¿por qué le llega (o no le llega) esta directiva a esta persona?**
+
+<AntesDeEmpezar>
+- Unidades organizativas (lección 3.3.3).
+- Grupos y equipos de AD (lección 3.3.4).
+- El registro de Windows, de forma general: una base de configuraciones con claves y valores.
+</AntesDeEmpezar>
+
+## Qué es una GPO
+
+Una GPO es un **paquete de configuraciones** con nombre. Tiene dos mitades:
+
+- **Configuración del equipo**: se aplica a la PC sin importar quién inicie sesión. Se procesa al **arrancar**. Ejemplos: el firewall, las actualizaciones, quién puede iniciar sesión en esa máquina.
+- **Configuración del usuario**: sigue a la persona a cualquier PC del dominio. Se procesa al **iniciar sesión**. Ejemplos: el fondo de pantalla, las unidades de red, el protector de pantalla.
+
+Y en cada mitad, dos tipos de contenido: las **directivas** (*Policies*), que la persona no puede cambiar y desaparecen si la GPO deja de aplicarse, y las **preferencias** (*Preferences*), que dejan un valor inicial que sí se puede cambiar. Las preferencias son el tema de la lección que viene.
+
+Una GPO sola no hace nada. Para que se aplique, se **vincula** a un sitio, al dominio o a una OU, y afecta a los usuarios y equipos que están **adentro**, incluidas las OU de adentro. Una misma GPO se puede vincular en varios lugares.
+
+Por dentro, cada GPO vive en dos lugares: un objeto en la base de AD (su nombre, su estado, sus permisos) y una carpeta en **SYSVOL**, la carpeta compartida que todos los DC replican, con los archivos de configuración. Por eso las dos cosas que más rompen las GPO son la replicación entre DC y que la PC no pueda leer SYSVOL.
+
+Pensalo como el reglamento de un edificio de oficinas: hay reglas generales del edificio, reglas de cada piso y reglas de cada oficina. Donde no llega la comparación: acá las reglas no se cumplen "de palabra": la PC las aplica sola, y si una regla del piso choca con una del edificio, hay un orden exacto que decide cuál vale.
+
+<EnSimple>
+Una GPO es un paquete de configuraciones. Se vincula a una OU (o al dominio) y les llega a los equipos y usuarios que están adentro. La parte de equipo se aplica al arrancar; la de usuario, al iniciar sesión.
+</EnSimple>
+
+## La herramienta: la consola de Administración de directivas de grupo
+
+Las GPO se administran con **Administración de directivas de grupo** (`gpmc.msc`), que viene con las RSAT o en el DC. Ahí ves el bosque, los dominios y las OU con sus vínculos, y todas las GPO en la carpeta **Objetos de directiva de grupo**. Clic derecho en una GPO y **Editar** abre el editor, con las dos mitades (Configuración del equipo y Configuración del usuario) y, en cada una, Directivas y Preferencias.
+
+Dentro del editor, la mayoría de lo que vas a tocar está en **Plantillas administrativas**: miles de configuraciones, ordenadas por tema, cada una con tres estados: **No configurada** (esta GPO no opina), **Habilitada** y **Deshabilitada**. Ojo: "Deshabilitada" no es lo mismo que "No configurada". Deshabilitar una directiva que dice "Prohibir el acceso al Panel de control" significa "permitirlo explícitamente", y eso puede pisar a otra GPO que lo prohíbe.
+
+El dominio trae dos GPO de fábrica:
+
+- **Default Domain Policy**, vinculada al dominio. Contiene la directiva de contraseñas y de bloqueo de cuentas del dominio. La regla de oro: **no le agregues nada más**. Lo que quieras para toda la empresa, en una GPO nueva.
+- **Default Domain Controllers Policy**, vinculada a la OU Domain Controllers, con los derechos de los controladores. Tampoco se toca, salvo que sepas exactamente por qué.
+
+## Quién gana: LSDOU
+
+Un usuario de Ventas puede recibir directivas de cuatro lugares a la vez, y dos de ellas pueden configurar lo mismo de forma distinta. El orden de procesamiento resuelve los choques:
+
+<Diagrama svg={lsdou} alt="Cinco cajas en fila, de izquierda a derecha, unidas por flechas: 1 Local (la directiva propia de cada equipo, gpedit.msc), 2 Sitio (vinculadas al sitio de AD, poco usadas), 3 Dominio (Default Domain Policy y otras), 4 OU de arriba (de la más general a la más cercana, por ejemplo Empresa y Usuarios), 5 OU del objeto (Ventas), que se procesa última y gana si hay choque. Una flecha larga debajo: se aplica primero a la izquierda, se aplica última y gana los empates a la derecha. Abajo, tres recuadros: Bloquear herencia en una OU corta lo que viene de arriba; Exigido en un vínculo atraviesa el bloqueo y le gana a todo lo de abajo, y entre dos exigidas gana la de más arriba; Filtros en la GPO: seguridad (a qué grupos) y WMI (una condición que evalúa el equipo)." pie="La que se aplica última pisa a las anteriores, salvo que una de arriba esté exigida." />
+
+**L**ocal, **S**itio, **D**ominio, **OU** (de la más general a la más cercana). Cada una se aplica encima de la anterior, así que **la más cercana al objeto gana los empates**. Las configuraciones que no chocan se suman: si la del dominio pone el fondo de pantalla y la de Ventas el protector, el usuario recibe las dos.
+
+Dos detalles más:
+
+- **Varias GPO vinculadas a la misma OU** tienen un **orden de vínculo**: la número 1 tiene la mayor precedencia (se procesa última). Se cambia en la consola o con `Set-GPLink -Order`.
+- **Lo que importa es dónde está el objeto**, no dónde están sus grupos. Un usuario en la OU Ventas recibe las de Ventas aunque pertenezca al grupo de Compras. La parte de equipo, igual, sigue a la OU **del equipo**: si la PC de María está en la OU Equipos, la configuración de equipo de la GPO de Ventas no le llega.
+
+Ese último punto es la causa número uno de "armé la GPO y no hace nada": la configuración de equipo vinculada a una OU donde solo hay usuarios, o al revés.
+
+## Cambiar el orden: bloquear y exigir
+
+A veces la herencia normal no alcanza:
+
+- **Bloquear la herencia** se marca en una **OU**: corta todo lo que viene de arriba (dominio y OU superiores). Sirve para una OU especial (un laboratorio, los equipos de una sala de capacitación) que no tiene que recibir lo general.
+- **Exigido** (*Enforced*) se marca en un **vínculo**: esa GPO atraviesa cualquier bloqueo de herencia y **le gana a todo lo de abajo**, aunque la de abajo sea más cercana. Si hay dos exigidas, gana la de más arriba. Es para lo que no se negocia: la seguridad de la empresa.
+
+Los dos son herramientas para excepciones. Una estructura llena de bloqueos y exigidos se vuelve imposible de razonar: cada vez que alguien pregunte "¿por qué le pasa esto?", vas a tener que recorrer el árbol entero. Y una GPO exigida tiene que contener **solo** lo que no se negocia; si mezcla otras cosas, les gana a las OU de abajo también en eso. Lo vas a ver en el ejercicio.
+
+<SimuladorGPO />
+
+Probá en el simulador: vinculá las directivas, bloqueá la herencia en Ventas, exigí la del dominio y mirá cómo cambia el resultado de cada persona.
+
+<Ordenar ejercicio={orden} />
+
+## Filtrar: a quién dentro de la OU
+
+El vínculo dice **dónde**. Los filtros dicen **a quién** de los que están ahí:
+
+- **Filtrado de seguridad.** Por defecto, cada GPO tiene a **Authenticated Users** con permiso de leer y **aplicar**: le llega a todos. Para que llegue solo a un grupo, le das "Aplicar directiva de grupo" a ese grupo y a Authenticated Users le dejás **solo lectura**. No lo saques del todo: desde un cambio de seguridad de 2016 (MS16-072), la PC lee las directivas con **su cuenta de equipo**; si los equipos no pueden leer la GPO, no se aplica a nadie y gpresult dice "Denied (Security)".
+- **Filtros WMI.** Una condición que **el equipo evalúa** al procesar la directiva, escrita como una consulta: solo notebooks, solo Windows 11, solo equipos con más de 8 GB de memoria. Por ejemplo, solo PC de escritorio (no servidores) con Windows 11: `SELECT * FROM Win32_OperatingSystem WHERE ProductType = "1" AND Version LIKE "10.0.2%"` (ProductType 1 es un equipo de escritorio; las versiones de Windows 11 empiezan con 10.0.2). Úsalos con medida: se evalúan en cada procesamiento y un filtro lento demora el inicio.
+
+Y una opción para ganar velocidad: si una GPO solo tiene configuración de usuario, en su **Estado** podés deshabilitar la parte de equipo (`(Get-GPO 'Nombre').GpoStatus = 'ComputerSettingsDisabled'`), y la PC ni la mira al arrancar.
+
+<Pregunta id="p06" />
+
+## Cuándo llegan los cambios
+
+Los cambios **no llegan al instante**. Los equipos piden las directivas:
+
+- Al **arrancar** (la parte de equipo) y al **iniciar sesión** (la de usuario).
+- **En segundo plano cada 90 minutos**, con hasta 30 minutos más al azar para que no pidan todos a la vez. Los DC, cada 5 minutos.
+
+Algunas configuraciones (instalar software, redirigir carpetas) solo se aplican al arrancar o al iniciar sesión, nunca en segundo plano. Para probar sin esperar, en la PC: `gpupdate /force`, y para ver qué llegó, `gpresult /r` (lo vas a ver en detalle en la lección que viene). Desde el servidor, `Invoke-GPUpdate -Computer PC01` hace lo mismo a distancia.
+
+## Lo mismo con PowerShell
+
+El módulo **GroupPolicy** (viene con la consola) hace todo lo anterior:
+
+```powershell
+New-GPO -Name "Ventas - Protector" -Comment "Bloqueo a los 5 minutos"
+Set-GPRegistryValue -Name "Ventas - Protector" `
+    -Key "HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop" `
+    -ValueName ScreenSaveTimeOut -Type String -Value 300
+New-GPLink -Name "Ventas - Protector" -Target "OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local"
+
+Get-GPInheritance -Target "OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local"   # qué le llega y en qué orden
+Set-GPLink -Name "Empresa - Seguridad" -Target "OU=Empresa,DC=empresa,DC=local" -Enforced Yes
+Set-GPInheritance -Target "OU=Laboratorio,OU=Empresa,DC=empresa,DC=local" -IsBlocked Yes
+Set-GPPermission -Name "Ventas - Protector" -TargetName GG-Ventas -TargetType Group -PermissionLevel GpoApply
+```
+
+`Set-GPRegistryValue` escribe directamente el valor del registro que configura una directiva. Para cosas simples es muy práctico; para la mayoría de las configuraciones, el editor gráfico es más claro, porque te muestra el nombre y la explicación de cada opción. Los dos se combinan bien: lo que hacés con el editor, después lo comprobás con PowerShell.
+
+<Terminal ejercicio={primera} />
+
+*Para más adelante*: el procesamiento en bucle invertido (*loopback*), que hace que en ciertos equipos (una terminal de autoservicio, un servidor de escritorio remoto) se apliquen las configuraciones de usuario de la OU del equipo y no las de la persona.
+
+<ErroresComunes>
+  <ErrorComun titulo="Configuración de equipo en una OU de usuarios">
+    La parte de equipo sigue a la OU del equipo. Si solo hay usuarios, esa mitad de la GPO no le llega a nadie.
+  </ErrorComun>
+  <ErrorComun titulo="Agregar cosas a la Default Domain Policy">
+    Dejala con contraseñas y bloqueo de cuentas. Lo demás, en GPO nuevas con nombres claros.
+  </ErrorComun>
+  <ErrorComun titulo="Sacar a Authenticated Users del filtrado de seguridad">
+    Los equipos necesitan leer la GPO. Dejale lectura y dale Aplicar solo al grupo que corresponde.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir “Deshabilitada” con “No configurada”">
+    Deshabilitar una directiva es una decisión explícita y puede pisar a otra GPO. Si no querés opinar, dejala No configurada.
+  </ErrorComun>
+  <ErrorComun titulo="Exigir una GPO con configuraciones mezcladas">
+    Le gana a todo lo de abajo, también en lo que una OU necesitaba distinto. En la exigida, solo lo que no se negocia.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar que el cambio llegue en el momento">
+    Las PC piden directivas cada 90 minutos (más hasta 30 al azar). Para probar, gpupdate /force.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una GPO es un paquete de configuraciones de equipo (al arrancar) y de usuario (al iniciar sesión), que se vincula al dominio, a un sitio o a una OU.
+- Vive en AD y en SYSVOL; la Default Domain Policy es solo para contraseñas y bloqueo.
+- Orden LSDOU: local, sitio, dominio y OU de arriba hacia abajo; la más cercana gana los choques y lo que no choca se suma. En la misma OU, el vínculo 1 tiene más precedencia.
+- Cuenta dónde está el objeto: la parte de usuario sigue a la OU del usuario; la de equipo, a la OU del equipo.
+- Bloquear herencia (en la OU) corta lo de arriba; exigido (en el vínculo) atraviesa el bloqueo y gana.
+- Filtrado de seguridad para limitar a un grupo (Authenticated Users con lectura); filtros WMI para condiciones del equipo.
+- Las PC piden directivas al arrancar, al iniciar sesión y cada 90 minutos; gpupdate /force para no esperar.
+</Resumen>

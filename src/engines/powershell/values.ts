@@ -96,8 +96,16 @@ export function setProp(v: unknown, name: string, value: unknown) {
   }
   if (v && typeof v === 'object') {
     const key = Object.keys(v).find((k) => k.toLowerCase() === name.toLowerCase()) ?? name
-    ;(v as Record<string, unknown>)[key] = value
+    // Objetos "vivos" (como los de Get-GPO): el cambio se escribe también en el origen.
+    const onSet = (v as { __onSet?: (name: string, value: unknown) => unknown }).__onSet
+    ;(v as Record<string, unknown>)[key] = onSet ? (onSet(key, value) ?? value) : value
   }
+}
+
+/** Marca un objeto para que las asignaciones a sus propiedades pasen por onSet (que puede validar o convertir el valor). */
+export function withSetter<T extends object>(obj: T, onSet: (name: string, value: unknown) => unknown): T {
+  Object.defineProperty(obj, '__onSet', { value: onSet, enumerable: false })
+  return obj
 }
 
 // ---------------------------------------------------------------------------------------

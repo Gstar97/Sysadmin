@@ -441,19 +441,21 @@ export function parsePs(src: string): Stmt[] {
       if (eof() || peek() === '\n' || peek() === ';' || peek() === '}') return { k: 'return' }
       return { k: 'return', value: parsePipeline() }
     }
-    // Asignación: $x = ..., $x.Prop = ..., $x += ...
-    if (peek() === '$') {
+    // Asignación: $x = ..., $x.Prop = ..., $x += ..., (Get-Algo).Prop = ...
+    if (peek() === '$' || peek() === '(') {
+      const paren = peek() === '('
       const save = pos
       try {
         const target = parsePostfix()
         skipWs()
+        const assignable = paren ? target.k === 'member' || target.k === 'index' : target.k === 'var' || target.k === 'member' || target.k === 'index'
         const incr = /^(\+\+|--)(?![\w$])/.exec(src.slice(pos))?.[0]
-        if (incr && (target.k === 'var' || target.k === 'member' || target.k === 'index')) {
+        if (incr && assignable) {
           pos += 2
           return { k: 'incr', target, delta: incr === '++' ? 1 : -1 }
         }
         const op = /^(\+=|-=|\*=|\/=|=(?!=))/.exec(src.slice(pos))?.[0]
-        if (op && (target.k === 'var' || target.k === 'member' || target.k === 'index')) {
+        if (op && assignable) {
           pos += op.length
           skipWs(true)
           return { k: 'assign', target, op: op as '=' | '+=' | '-=', value: parseStatement() }

@@ -1,0 +1,134 @@
+---
+id: n3-m3-l7
+titulo: Directivas de grupo (GPO), parte 2
+minutos: 180
+objetivos:
+  - Resolver pedidos reales con directivas y preferencias (contraseñas, unidades de red, software, restricciones).
+  - Mantener las plantillas administrativas al día con el almacén central.
+  - Diagnosticar una directiva que no se aplica con gpresult, RSoP y el registro de eventos.
+glosario: [preferencias-gpo, almacen-central, rsop, pso]
+verificado: 2026-11
+---
+
+import revision from './revision.svg?raw'
+import noSeAplica from './no-se-aplica.yaml'
+import casos from './ej-casos.yaml'
+
+En la lección anterior viste cómo funcionan las directivas: dónde se vinculan, en qué orden se aplican y quién gana. En esta vas a usarlas para lo que te van a pedir de verdad (contraseñas, unidades de red, programas, restricciones) y vas a aprender a responder la pregunta del día a día: "armé la directiva y no le llega".
+
+<AntesDeEmpezar>
+- Directivas de grupo, parte 1 (lección anterior).
+- Grupos y AGDLP (lección 3.3.4).
+- Carpetas compartidas: lo vas a ver a fondo en el módulo 3.4; acá alcanza con saber que \\servidor\carpeta es una ruta de red.
+</AntesDeEmpezar>
+
+## Contraseñas y bloqueo de cuentas
+
+Es el primer pedido de cualquier auditoría, y tiene una regla que sorprende: **para las cuentas del dominio hay una sola directiva de contraseñas, la que está vinculada al dominio** (en la Default Domain Policy). Una GPO de contraseñas vinculada a una OU no cambia nada para los usuarios del dominio; solo afecta a las cuentas locales de los equipos de esa OU.
+
+```powershell
+Get-ADDefaultDomainPasswordPolicy
+Set-ADDefaultDomainPasswordPolicy -Identity empresa.local -MinPasswordLength 12 `
+    -LockoutThreshold 5 -LockoutDuration 00:15:00 -LockoutObservationWindow 00:15:00
+```
+
+¿Y si los administradores necesitan contraseñas más largas? Para eso están las **directivas de contraseñas específicas** (*fine-grained password policies*, o PSO), que se aplican a **grupos o usuarios**, no a OU:
+
+```powershell
+New-ADFineGrainedPasswordPolicy -Name PSO-Admins -Precedence 10 -MinPasswordLength 16 -ComplexityEnabled $true
+Add-ADFineGrainedPasswordPolicySubject PSO-Admins -Subjects GG-Admins-IT
+Get-ADUserResultantPasswordPolicy admin.jp      # cuál le toca a una cuenta
+```
+
+Sobre los valores: las recomendaciones actuales priorizan **largo** sobre complejidad y **no forzar cambios periódicos** (obligan a la gente a inventar variantes previsibles, como Verano2026!, Otoño2026!). Lo que sí suma: un mínimo de 12 a 14 caracteres, bloqueo tras varios intentos fallidos, frases de contraseña, y el segundo factor donde se pueda. La política de cada empresa la decide la empresa; vos tenés que saber dónde se configura.
+
+## Directivas y preferencias
+
+En el editor, cada mitad tiene dos ramas:
+
+- **Directivas** (*Policies*): la persona no las puede cambiar (la opción aparece en gris), y cuando la GPO deja de aplicarse, la configuración **se retira sola**.
+- **Preferencias** (*Preferences*): dejan un valor configurado, que la persona en general puede cambiar. Si la GPO deja de aplicarse, el valor **queda** (salvo que marques "Quitar este elemento cuando ya no se aplique"). Sirven para cosas que no tienen una directiva: unidades de red, accesos directos, impresoras, tareas programadas, valores del registro, grupos locales.
+
+Las preferencias tienen una función muy útil: la **segmentación por elemento** (*item-level targeting*). Cada elemento puede tener una condición propia: "solo si el usuario es miembro de GG-Ventas", "solo en notebooks", "solo en la sede Rosario". Así, una sola GPO "Empresa - Unidades de red" puede mapear S: a Ventas, C: a Compras y P: a todos, en lugar de tener una GPO por área.
+
+## Los pedidos de siempre
+
+**Unidades de red.** Configuración del usuario › Preferencias › Configuración de Windows › Asignaciones de unidades. Acción **Actualizar** (crea la unidad si no está y la corrige si cambió), la ruta (`\\ARCHIVOS01\Ventas`), la letra y, en la pestaña Común, la segmentación por grupo.
+
+**Restricciones.** Configuración del usuario › Directivas › Plantillas administrativas: quitar el Administrador de tareas (Sistema › Opciones de Ctrl+Alt+Supr), prohibir el Panel de control, impedir el símbolo del sistema. Y en la parte de equipo, bloquear el almacenamiento extraíble: Sistema › Acceso de almacenamiento extraíble › "Todas las clases de almacenamiento extraíble: denegar el acceso a todo". Este último es de **equipo**: va en la OU de los equipos.
+
+**Seguridad del equipo.** Configuración del equipo › Directivas › Configuración de Windows › Configuración de seguridad: quién puede iniciar sesión localmente o por escritorio remoto, la auditoría, el firewall. Muchas de las recomendaciones de seguridad de Microsoft (las *líneas base de seguridad*) se distribuyen como GPO listas para importar (*para más adelante*).
+
+**Instalar software.** Configuración del equipo › Directivas › Configuración de software › Instalación de software: se asigna un paquete **MSI** desde una carpeta compartida que los **equipos** puedan leer, y se instala al **arrancar**. Funciona y lo vas a encontrar en muchas empresas, pero es limitado (solo MSI, sin informes de si salió bien). Hoy la mayoría usa otras herramientas, como Intune o Configuration Manager, que vas a ver *más adelante*.
+
+<EnSimple>
+Contraseñas del dominio: solo en la directiva del dominio, y para grupos especiales, una PSO. Directivas: lo que la persona no puede cambiar. Preferencias: valores iniciales, como las unidades de red, con condiciones por grupo.
+</EnSimple>
+
+<Terminal ejercicio={casos} />
+
+## Las plantillas y el almacén central
+
+Las opciones de Plantillas administrativas salen de archivos **ADMX** (y sus traducciones, ADML). Cada versión de Windows trae plantillas nuevas, y si editás una GPO desde un servidor viejo no vas a ver las opciones nuevas de Windows 11.
+
+La solución es el **almacén central**: una carpeta `PolicyDefinitions` dentro de SYSVOL (`\\empresa.local\SYSVOL\empresa.local\Policies\PolicyDefinitions`). Si existe, la consola usa esas plantillas sin importar desde qué equipo edites, y como SYSVOL se replica, todos los administradores ven lo mismo. Se crea copiando la carpeta `C:\Windows\PolicyDefinitions` de un Windows 11 actualizado, o las plantillas que Microsoft publica para cada versión, y se actualiza cada vez que sale una versión nueva de Windows. Las plantillas de otros programas (Edge, Chrome, Office) se copian ahí también.
+
+## Diagnosticar: la directiva no se aplica
+
+Cuando algo no llega, no adivines: seguí siempre el mismo orden.
+
+<Diagrama svg={revision} alt="Seis pasos en dos filas, unidos por flechas. 1: dónde está el objeto (el usuario, su OU; el equipo, la OU del equipo; Users y Computers no reciben directivas). 2: si está vinculada y activa (vínculo habilitado, la mitad correcta habilitada, Get-GPInheritance). 3: si le gana otra o la cortan (herencia bloqueada, una exigida más arriba, otra con mejor orden). 4: si los filtros la dejan afuera (Denied Security, si inició sesión antes de que lo agregaran al grupo, Denied WMI Filter). 5: si ya la pidió (gpupdate /force; algunas solo al reiniciar o iniciar sesión). 6: si llega al DC y a SYSVOL (DNS, hora, red; eventos 1058 y 1030). Abajo, las herramientas: gpresult /r y /h, Resultados y Modelado de la consola, Get-GPResultantSetOfPolicy y el registro GroupPolicy Operational del Visor de eventos." pie="De lo más simple a lo más raro. Casi siempre se resuelve en los pasos 1 a 4." />
+
+La herramienta principal es **gpresult**, en la PC del usuario:
+
+```powershell
+gpresult /r                       # usuario actual: dónde está, qué se aplicó, qué se filtró y por qué
+gpresult /r /scope computer       # la parte de equipo (necesita una consola como administrador)
+gpresult /h C:\Temp\informe.html  # todo, con la GPO ganadora de cada configuración
+```
+
+Leé `gpresult /r` de arriba hacia abajo: la primera línea es el **nombre distinguido** del objeto (¿está en la OU que creés?); después, **Applied Group Policy Objects**; después, las **filtradas, con el motivo** (`Denied (Security)`, `Denied (WMI Filter)`, `Disabled (Link)`, `Not Applied (Empty)`), y al final los **grupos** de la sesión.
+
+Ese último dato esconde una trampa clásica: **los grupos de una persona se leen al iniciar sesión** (y los de un equipo, al arrancar). Si a alguien lo agregás a un grupo mientras está trabajando, su sesión no se entera hasta que cierre sesión y vuelva a entrar; para un equipo, hasta que reinicie.
+
+Desde el servidor tenés dos ayudas más en la consola de Administración de directivas de grupo: **Resultados de directivas de grupo** (lo mismo que gpresult, pero sobre una PC remota) y **Modelado de directivas de grupo** ("¿qué recibiría este usuario si lo muevo a esta OU?", sin moverlo). Y cuando el problema es de comunicación, el **Visor de eventos** de la PC, en Aplicaciones y servicios › Microsoft › Windows › GroupPolicy › Operational, dice qué DC se usó y qué falló; los eventos **1058** (no pudo leer SYSVOL) y **1030** (falló el procesamiento) en el registro Sistema casi siempre son DNS, hora o red.
+
+<Troubleshooting escenario={noSeAplica} />
+
+## Buenas prácticas
+
+- **Una GPO, un propósito**, con nombre que diga a quién y para qué: "Equipos - Sin almacenamiento extraíble", "Ventas - Unidades". Una GPO gigante con todo es imposible de diagnosticar.
+- **Probá en una OU de prueba** con un usuario y una PC antes de vincular a toda la empresa.
+- **Usá el comentario** de cada GPO para decir quién la pidió y por qué.
+- **Deshabilitá la mitad que no uses**: la PC la saltea y es más claro.
+- **Respaldá**: `Backup-GPO -All -Path \\servidor\respaldos\gpo` antes de cambios grandes y en forma periódica, y un informe `Get-GPOReport -All -ReportType Html` para comparar.
+
+<ErroresComunes>
+  <ErrorComun titulo="Poner la directiva de contraseñas en una OU">
+    Para las cuentas del dominio solo vale la del dominio. Para grupos especiales, una PSO.
+  </ErrorComun>
+  <ErrorComun titulo="Una GPO por área para cada unidad de red">
+    Con segmentación por elemento, una sola GPO de unidades resuelve todas las áreas.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar que una preferencia se retire sola">
+    Las preferencias quedan aunque la GPO deje de aplicarse, salvo que marques "Quitar este elemento cuando ya no se aplique".
+  </ErrorComun>
+  <ErrorComun titulo="Agregar a alguien a un grupo y esperar el cambio al instante">
+    Los grupos se leen al iniciar sesión. Tiene que cerrar sesión y volver a entrar (y un equipo, reiniciar).
+  </ErrorComun>
+  <ErrorComun titulo="Editar GPO con plantillas viejas">
+    Sin almacén central, cada administrador ve las plantillas de su propio equipo. Crealo y mantenelo al día.
+  </ErrorComun>
+  <ErrorComun titulo="Diagnosticar sin gpresult">
+    La primera línea dice dónde está el objeto y la lista de filtradas dice por qué no se aplica. Empezá siempre por ahí.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Contraseñas del dominio: una sola directiva, la del dominio; para grupos especiales, PSO con Add-ADFineGrainedPasswordPolicySubject.
+- Directivas: fijas y se retiran solas. Preferencias: valores iniciales que quedan, con segmentación por elemento (por grupo, por tipo de equipo).
+- Unidades de red con preferencias; restricciones con plantillas administrativas; almacenamiento extraíble y seguridad en la parte de equipo; software MSI al arrancar.
+- Almacén central: PolicyDefinitions en SYSVOL, con las plantillas al día para todos los administradores.
+- Diagnóstico en orden: dónde está el objeto, vínculo, herencia, filtros, si ya la pidió, y comunicación con el DC.
+- gpresult /r y /h, Resultados y Modelado en la consola, y el registro GroupPolicy Operational. Los grupos nuevos se ven después de volver a iniciar sesión.
+</Resumen>

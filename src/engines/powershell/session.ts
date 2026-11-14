@@ -426,7 +426,7 @@ export class PsSession {
       } catch (e) {
         if (e instanceof PsError) {
           this.recordError(errorRecord(e.message, e.category, e.errorId, e.target))
-          out('err')(this.formatError(e, st))
+          out('err')(this.formatError(e, st, stmts.length === 1 ? source.trim() : ''))
         } else if (e instanceof ThrowSignal) out('err')(this.throwText(e, st))
         else if (e instanceof ReturnSignal) out('out')(this.render(e.value))
         else if (e instanceof ExitSignal) break
@@ -451,8 +451,8 @@ export class PsSession {
     return `${e.message}\nAt line:1 char:1\n+ ${src}\n+ ${'~'.repeat(Math.max(1, src.length))}\n    + CategoryInfo          : OperationStopped: (${e.message}:String) [], RuntimeException\n    + FullyQualifiedErrorId : ${id === 'RuntimeException' ? e.message : id}\n \n`
   }
 
-  formatError(e: PsError, st: Stmt): string {
-    const src = st.k === 'pipe' ? st.src : ''
+  formatError(e: PsError, st: Stmt, line = ''): string {
+    const src = st.k === 'pipe' ? st.src : line
     const cmd = st.k === 'pipe' && st.elements[0]?.k === 'cmd' ? (canonicalName(st.elements[0].name) ?? st.elements[0].name) : ''
     return this.errorText(e, src, cmd)
   }

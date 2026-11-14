@@ -1,0 +1,161 @@
+tipo: troubleshooting
+titulo: La unidad S de Ventas no le aparece a Pablo
+descripcion: >-
+  Incidente simulado en empresa.local. La directiva "Ventas - Unidades" mapea la unidad S: a
+  \\ARCHIVOS01\Ventas con una preferencia, y está vinculada a la OU Ventas. Cada decisión suma
+  minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:20. Pablo Ruiz entró ayer a Ventas y hoy es su primer día con PC propia (PC07). Dice
+      que no tiene la unidad S:, y sus compañeros sí. La mesa de ayuda creó su cuenta el viernes y
+      esta mañana, a las 8:50, lo agregó al grupo GG-Ventas.
+    opciones:
+      - { texto: "Mirar con gpresult /r qué directivas le llegan a Pablo en PC07", ir_a: n_gpresult, minutos: 3 }
+      - texto: Mapearle la unidad S a mano con net use
+        ir_a: n1
+        minutos: 4
+        consecuencia: >-
+          Funciona hoy, en esta PC. Mañana se sienta en otra y no la tiene, y el próximo empleado
+          nuevo va a tener el mismo problema. Primero, la causa.
+      - texto: Reiniciar el servidor ARCHIVOS01
+        ir_a: n1
+        minutos: 12
+        consecuencia: >-
+          Los compañeros de Pablo siguen trabajando con S: sin problemas: el servidor anda bien.
+  n_gpresult:
+    situacion: La directiva de Ventas ni siquiera aparece en la lista de Pablo.
+    evidencia:
+      - titulo: gpresult /r /scope user (en PC07, como Pablo)
+        contenido: |
+          RSOP data for EMPRESA\pruiz on PC07 : Logging Mode
+          --------------------------------------------------
+
+          USER SETTINGS
+          -------------
+              CN=Pablo Ruiz,CN=Users,DC=empresa,DC=local
+              Last time Group Policy was applied: 11/16/2026 at 9:21:44 AM
+              Group Policy was applied from:      DC01.empresa.local
+
+              Applied Group Policy Objects
+              -----------------------------
+                  Default Domain Policy
+
+              The following GPOs were not applied because they were filtered out
+              -------------------------------------------------------------------
+                  Local Group Policy
+                      Filtering:  Not Applied (Empty)
+    opciones:
+      - { texto: "Mirar dónde está la cuenta de Pablo en el directorio", ir_a: n_donde, minutos: 2 }
+      - texto: Vincular "Ventas - Unidades" al dominio, para que le llegue seguro
+        ir_a: n_gpresult
+        minutos: 3
+        consecuencia: >-
+          Ahora toda la empresa (Compras, Gerencia, los servidores…) recibe la unidad de Ventas. Lo
+          deshacés enseguida: el problema no es la directiva.
+      - texto: gpupdate /force y volver a mirar
+        ir_a: n_gpresult
+        minutos: 3
+        consecuencia: Mismo resultado. Pedir de nuevo no cambia lo que el dominio tiene para darle.
+  n_donde:
+    situacion: >-
+      La primera línea de gpresult ya lo decía: la cuenta está en CN=Users, el contenedor por
+      defecto, no en la OU Ventas. La mesa de ayuda la creó con New-ADUser sin -Path, y en este
+      dominio nunca se configuró redirusr. Y "Empresa - Escritorio" tampoco le llega, aunque
+      debería: Users está fuera de la OU Empresa.
+    evidencia:
+      - titulo: Get-ADUser pruiz | Select-Object DistinguishedName
+        contenido: |
+          DistinguishedName
+          -----------------
+          CN=Pablo Ruiz,CN=Users,DC=empresa,DC=local
+    opciones:
+      - { texto: "Mover la cuenta a la OU Ventas y pedirle a Pablo que haga gpupdate /force", ir_a: n_movido, minutos: 4 }
+      - texto: Vincular "Ventas - Unidades" también al contenedor Users
+        ir_a: n_donde
+        minutos: 2
+        consecuencia: >-
+          New-GPLink responde que el destino no es válido: Users no es una OU y no admite
+          vínculos de directivas.
+  n_movido:
+    situacion: >-
+      Ahora la directiva aparece, pero filtrada. Y en la lista de grupos de Pablo no figura
+      GG-Ventas.
+    evidencia:
+      - titulo: gpresult /r /scope user (en PC07, después de gpupdate /force)
+        contenido: |
+              CN=Pablo Ruiz,OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local
+
+              Applied Group Policy Objects
+              -----------------------------
+                  Empresa - Escritorio
+                  Default Domain Policy
+
+              The following GPOs were not applied because they were filtered out
+              -------------------------------------------------------------------
+                  Ventas - Unidades
+                      Filtering:  Denied (Security)
+
+              The user is a part of the following security groups
+              -----------------------------------------------
+                  Domain Users
+                  Everyone
+                  BUILTIN\Users
+                  NT AUTHORITY\INTERACTIVE
+                  NT AUTHORITY\Authenticated Users
+      - titulo: Get-GPPermission -Name "Ventas - Unidades" -All | Select-Object Trustee, Permission
+        contenido: |
+          Trustee             Permission
+          -------             ----------
+          GG-Ventas           GpoApply
+          Authenticated Users GpoRead
+          Domain Admins       GpoEditDeleteModifySecurity
+          SYSTEM              GpoEditDeleteModifySecurity
+    opciones:
+      - { texto: "Pedirle a Pablo que cierre sesión y vuelva a entrar", ir_a: n_sesion, minutos: 4 }
+      - texto: Darle GpoApply a Authenticated Users en "Ventas - Unidades"
+        ir_a: n_movido
+        minutos: 3
+        consecuencia: >-
+          A Pablo le llegaría, pero también a los dos pasantes de la OU Ventas que no están en
+          GG-Ventas y no tienen que ver esa carpeta. El filtrado está bien; lo que falla es otra cosa.
+      - texto: Sacarlo y volver a agregarlo a GG-Ventas
+        ir_a: n_movido
+        minutos: 3
+        consecuencia: >-
+          Get-ADPrincipalGroupMembership pruiz ya mostraba GG-Ventas. En AD está bien: el que no
+          se enteró es el inicio de sesión de Pablo.
+  n_sesion:
+    situacion: >-
+      Pablo inició sesión a las 8:40 y lo agregaron al grupo a las 8:50. Los grupos de una
+      persona se leen al iniciar sesión: hasta que no vuelva a entrar, su sesión sigue sin
+      GG-Ventas. Cierra sesión, vuelve a entrar y aparece la unidad S:.
+    evidencia:
+      - titulo: gpresult /r /scope user (después de volver a iniciar sesión)
+        contenido: |
+              Applied Group Policy Objects
+              -----------------------------
+                  Ventas - Unidades
+                  Empresa - Escritorio
+                  Default Domain Policy
+    opciones:
+      - { texto: "Evitar que vuelva a pasar: redirusr a una OU y revisar el procedimiento de altas", ir_a: n_ok, minutos: 10 }
+      - texto: Dar el caso por cerrado
+        ir_a: n_sesion
+        minutos: 1
+        consecuencia: >-
+          Pablo ya tiene su unidad, pero la próxima cuenta que se cree sin -Path va a caer de nuevo
+          en Users, fuera de todas las directivas de la empresa.
+  n_ok:
+    final: exito
+    resumen: >-
+      Hubo dos causas encadenadas. La cuenta se creó sin -Path y cayó en el contenedor Users, que
+      no admite directivas: no le llegaba ninguna de las GPO de la empresa (tampoco las de
+      seguridad, que es lo más grave). Al moverla a Ventas, la directiva apareció pero filtrada,
+      porque a Pablo lo agregaron a GG-Ventas después de iniciar sesión, y los grupos se leen al
+      entrar. La solución de fondo: redirusr "OU=Nuevos,OU=Usuarios,OU=Empresa,DC=empresa,DC=local"
+      para que nada vuelva a caer en Users, una tarea semanal que avise si hay cuentas en
+      CN=Users, y una línea en el procedimiento de altas: crear la cuenta en su OU, sumarla a sus
+      grupos y recién después darle los datos a la persona. La lectura de gpresult resolvió todo:
+      la primera línea dice dónde está el objeto, y la lista de filtradas dice por qué no se aplica.

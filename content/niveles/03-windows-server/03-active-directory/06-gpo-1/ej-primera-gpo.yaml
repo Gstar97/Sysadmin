@@ -1,0 +1,137 @@
+tipo: terminal
+shell: powershell
+titulo: Tu primera directiva, de punta a punta
+descripcion: >-
+  En empresa.local ya hay una directiva para toda la empresa (Empresa - Protector, que pone el
+  protector de pantalla a los 15 minutos). Ventas pidió que sus pantallas se bloqueen a los 5
+  minutos, porque atienden gente en el mostrador. Gerencia tiene la herencia bloqueada desde hace
+  años y nadie recuerda por qué. Estás en DC01; PC01 es la PC de María López, de Ventas.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+  ad:
+    ous: [Empresa/Usuarios/Ventas, Empresa/Usuarios/Gerencia, Empresa/Equipos]
+    usuarios:
+      - { sam: mlopez, nombre: María, apellido: López, ou: Empresa/Usuarios/Ventas, grupos: [GG-Ventas] }
+      - { sam: pasante1, nombre: Pasante, apellido: Ventas, ou: Empresa/Usuarios/Ventas }
+      - { sam: agarcia, nombre: Ana, apellido: García, ou: Empresa/Usuarios/Gerencia, grupos: [GG-Gerencia] }
+    grupos:
+      - { nombre: GG-Ventas }
+      - { nombre: GG-Gerencia }
+    equipos:
+      - { nombre: PC01, ou: Empresa/Equipos }
+    bloquear_herencia: [Empresa/Usuarios/Gerencia]
+    gpos:
+      - nombre: Empresa - Protector
+        vinculos: [{ a: Empresa }]
+        configuracion:
+          - { clave: "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop", valor_nombre: ScreenSaveTimeOut, valor: "900", nombre_visible: "Tiempo de espera del protector de pantalla" }
+          - { clave: "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop", valor_nombre: ScreenSaverIsSecure, valor: "1", nombre_visible: "Proteger el protector de pantalla con contraseña" }
+  servidores:
+    - { equipo: PC01, dominio: empresa.local, usuario: mlopez, red: { ip: 192.168.10.50, dns: [192.168.10.10] } }
+pasos:
+  - consigna: >-
+      Mirá qué directivas existen en el dominio y cuáles le llegan hoy a la OU Ventas (con su
+      orden de precedencia).
+    verificar:
+      - { comando_usado: "get-gpinheritance" }
+      - { salida_contiene: "Empresa - Protector" }
+    pistas:
+      - "Get-GPO -All | Select-Object DisplayName lista las directivas."
+      - "Get-GPInheritance -Target 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local' muestra las que le llegan."
+    solucion:
+      - Get-GPO -All | Select-Object DisplayName, GpoStatus
+      - Get-GPInheritance -Target 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+    explicacion: >-
+      Además de Empresa - Protector aparecen las dos que crea el dominio: Default Domain Policy
+      (vinculada al dominio) y Default Domain Controllers Policy (en la OU Domain Controllers).
+  - consigna: >-
+      Creá la directiva "Ventas - Protector" con el protector de pantalla a los 5 minutos (300
+      segundos, valor ScreenSaveTimeOut, tipo String, en la misma clave que la de la empresa).
+    verificar:
+      - { gpo: Ventas - Protector, configura: { clave: "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop", valor_nombre: ScreenSaveTimeOut, valor: "300" } }
+    pistas:
+      - "New-GPO -Name 'Ventas - Protector'"
+      - "Set-GPRegistryValue -Name 'Ventas - Protector' -Key 'HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop' -ValueName ScreenSaveTimeOut -Type String -Value 300"
+    solucion:
+      - New-GPO -Name 'Ventas - Protector' -Comment 'Bloqueo a los 5 minutos para el mostrador'
+      - Set-GPRegistryValue -Name 'Ventas - Protector' -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -ValueName ScreenSaveTimeOut -Type String -Value 300
+    explicacion: >-
+      Una GPO recién creada no hace nada: es un paquete de configuraciones sin dueño. Recién
+      cuando se vincula a una OU empieza a aplicarse.
+  - consigna: Vinculala a la OU Ventas y comprobá que, para María, el tiempo del protector lo define ahora la nueva.
+    verificar:
+      - { gpo: Ventas - Protector, vinculada_a: Empresa/Usuarios/Ventas }
+      - { gpo_ganadora: Ventas - Protector, a: mlopez, clave: "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop", valor_nombre: ScreenSaveTimeOut }
+    pistas:
+      - "New-GPLink -Name 'Ventas - Protector' -Target 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'"
+    solucion:
+      - New-GPLink -Name 'Ventas - Protector' -Target 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+      - Get-GPInheritance -Target 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+    explicacion: >-
+      Las dos directivas configuran ScreenSaveTimeOut. Gana la más cercana al objeto (la de la OU
+      Ventas), porque se procesa última. La contraseña al volver del protector la sigue poniendo
+      la de la empresa: las configuraciones que no chocan se suman.
+  - consigna: >-
+      Seguridad exige que el bloqueo con contraseña llegue a todos, incluida Gerencia. Sin tocar
+      el bloqueo de herencia de Gerencia, hacé que Empresa - Protector le llegue igual.
+    verificar:
+      - { gpo: Empresa - Protector, vinculada_a: Empresa, exigida: true }
+      - { gpo_aplicada: Empresa - Protector, a: agarcia }
+      - { herencia_bloqueada: Empresa/Usuarios/Gerencia }
+    pistas:
+      - "Un vínculo exigido (Enforced) atraviesa el bloqueo de herencia."
+      - "Set-GPLink -Name 'Empresa - Protector' -Target 'OU=Empresa,DC=empresa,DC=local' -Enforced Yes"
+    solucion: ["Set-GPLink -Name 'Empresa - Protector' -Target 'OU=Empresa,DC=empresa,DC=local' -Enforced Yes"]
+    explicacion: >-
+      Exigir tiene un efecto que hay que ver: ahora Empresa - Protector también le gana a las OU
+      de abajo. En Ventas, ScreenSaveTimeOut vuelve a ser 900. Lo vas a notar en el paso que
+      sigue.
+  - consigna: >-
+      Revisá qué gana ahora para María. Las pantallas de Ventas volvieron a los 15 minutos: la
+      exigida le gana a la de Ventas. Arreglalo sin sacar el exigido: sacale el tiempo del
+      protector a Empresa - Protector y pasalo a una directiva nueva, "Empresa - Tiempo protector",
+      vinculada a Empresa sin exigir.
+    verificar:
+      - { gpo_ganadora: Ventas - Protector, a: mlopez, clave: "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop", valor_nombre: ScreenSaveTimeOut }
+      - { gpo_ganadora: Empresa - Protector, a: agarcia, clave: "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop", valor_nombre: ScreenSaverIsSecure }
+      - { gpo: Empresa - Tiempo protector, vinculada_a: Empresa, exigida: false }
+    pistas:
+      - "Remove-GPRegistryValue -Name 'Empresa - Protector' -Key '…\\Desktop' -ValueName ScreenSaveTimeOut"
+      - "Después New-GPO, Set-GPRegistryValue con 900 y New-GPLink a OU=Empresa,DC=empresa,DC=local."
+    solucion:
+      - Remove-GPRegistryValue -Name 'Empresa - Protector' -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -ValueName ScreenSaveTimeOut
+      - New-GPO -Name 'Empresa - Tiempo protector'
+      - Set-GPRegistryValue -Name 'Empresa - Tiempo protector' -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -ValueName ScreenSaveTimeOut -Type String -Value 900
+      - New-GPLink -Name 'Empresa - Tiempo protector' -Target 'OU=Empresa,DC=empresa,DC=local'
+    explicacion: >-
+      La lección de fondo: en una GPO exigida poné solo lo que de verdad no se negocia. Lo que una
+      OU puede querer distinto va en otra directiva, sin exigir.
+  - consigna: >-
+      El pasante de Ventas no tiene que recibir el bloqueo a los 5 minutos (comparte la PC del
+      depósito). Hacé que Ventas - Protector se aplique solo a los miembros de GG-Ventas.
+    verificar:
+      - { gpo_aplicada: Ventas - Protector, a: mlopez }
+      - { gpo_aplicada: Ventas - Protector, a: pasante1, aplicada: false }
+    pistas:
+      - "Filtrado de seguridad: a Authenticated Users dejale solo lectura (GpoRead) y dale GpoApply a GG-Ventas."
+      - "Set-GPPermission -Name 'Ventas - Protector' -TargetName 'Authenticated Users' -TargetType Group -PermissionLevel GpoRead -Replace"
+    solucion:
+      - Set-GPPermission -Name 'Ventas - Protector' -TargetName 'GG-Ventas' -TargetType Group -PermissionLevel GpoApply
+      - Set-GPPermission -Name 'Ventas - Protector' -TargetName 'Authenticated Users' -TargetType Group -PermissionLevel GpoRead -Replace
+    explicacion: >-
+      No saques a Authenticated Users del todo: las PC leen la directiva con su cuenta de equipo
+      (un cambio de seguridad de 2016) y, sin lectura, no se le aplica a nadie.
+  - consigna: >-
+      Comprobá desde PC01 que María recibe Ventas - Protector. Acordate de que la PC no se entera
+      sola en el momento.
+    verificar:
+      - { comando_usado: "gpupdate" }
+      - { salida_contiene: "Ventas - Protector" }
+    pistas:
+      - "Invoke-Command PC01 { gpupdate /force; gpresult /r /scope user }"
+    solucion: ["Invoke-Command PC01 { gpupdate /force; gpresult /r /scope user }"]
+    explicacion: >-
+      Las PC piden las directivas al arrancar, al iniciar sesión y cada 90 minutos (con hasta 30
+      de margen). gpupdate /force fuerza el pedido ya; gpresult muestra lo que llegó.

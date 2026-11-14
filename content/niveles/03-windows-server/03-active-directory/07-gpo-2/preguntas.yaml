@@ -1,0 +1,121 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: Vinculaste a la OU Admin una GPO que exige contraseñas de 16 caracteres. Los administradores siguen pudiendo usar contraseñas de 12. ¿Por qué?
+  opciones:
+    - { texto: "Para las cuentas del dominio solo vale la directiva de contraseñas del dominio; para un grupo hay que usar una PSO", correcta: true, explicacion: "Una GPO de contraseñas en una OU solo afecta a las cuentas locales de los equipos." }
+    - { texto: "Falta gpupdate /force", explicacion: "Por más que se aplique, no cambia las cuentas del dominio." }
+    - { texto: "La GPO de la OU tiene menos precedencia que la del dominio", explicacion: "Normalmente la OU ganaría; acá directamente no aplica a cuentas del dominio." }
+    - { texto: "Hay que reiniciar los DC", explicacion: "No hace falta." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    Una GPO mapeaba la unidad S: con una preferencia. Desvinculaste la GPO y la unidad sigue apareciendo. ¿Por qué?
+  opciones:
+    - { texto: "Las preferencias quedan aunque la GPO deje de aplicarse, salvo que se marque “Quitar este elemento cuando ya no se aplique”", correcta: true, explicacion: "Es la diferencia principal con las directivas." }
+    - { texto: "La desvinculación tarda 24 horas", explicacion: "No existe esa demora." }
+    - { texto: "Las unidades de red nunca se pueden quitar con GPO", explicacion: "Se pueden quitar con la acción Eliminar o con la opción de quitar." }
+    - { texto: "El usuario la mapeó a mano", explicacion: "Puede pasar, pero no es la explicación general." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    Ventas necesita S:, Compras C: y todos P:. ¿Cuál es la forma más prolija?
+  opciones:
+    - { texto: "Una GPO de unidades con tres elementos de preferencia, cada uno segmentado por grupo", correcta: true, explicacion: "La segmentación por elemento evita tener una GPO por área." }
+    - { texto: "Tres GPO, una por área, cada una vinculada a su OU", explicacion: "Funciona, pero multiplica las GPO y depende de la OU, no del grupo." }
+    - { texto: "Un script de inicio de sesión con net use", explicacion: "Se usaba antes; las preferencias son más claras y diagnosticables." }
+    - { texto: "Mapearlas a mano en cada PC", explicacion: "No escala ni sigue a la persona." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés bloquear los pendrives en todas las PC. ¿Dónde va la configuración y dónde vinculás la GPO?
+  opciones:
+    - { texto: "En Configuración del equipo, vinculada a la OU donde están los equipos", correcta: true, explicacion: "Es una configuración de equipo: sigue a la OU del equipo." }
+    - { texto: "En Configuración del usuario, vinculada a la OU de usuarios", explicacion: "Esa directiva está en la parte de equipo." }
+    - { texto: "En la Default Domain Policy", explicacion: "Esa se deja solo para contraseñas y bloqueo." }
+    - { texto: "En Preferencias del usuario", explicacion: "Es una directiva de equipo, no una preferencia." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice esta parte de gpresult /r?
+  salida: |
+    USER SETTINGS
+    -------------
+        CN=Laura Gómez,CN=Users,DC=empresa,DC=local
+        Applied Group Policy Objects
+        -----------------------------
+            Default Domain Policy
+  opciones:
+    - { texto: "La cuenta está en el contenedor Users, así que solo le llegan las directivas del dominio", correcta: true, explicacion: "Users no admite vínculos: hay que moverla a su OU." }
+    - { texto: "Laura no tiene permisos para recibir directivas", explicacion: "Si fuera por permisos, aparecería en las filtradas." }
+    - { texto: "La PC no llega al DC", explicacion: "Recibió la Default Domain Policy: llega." }
+    - { texto: "Todas las GPO están deshabilitadas", explicacion: "Lo que falla es la ubicación de la cuenta." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: >-
+    A las 10 agregaste a Pedro al grupo GG-Compras, que es el filtro de seguridad de "Compras -
+    Unidades". Pedro hace gpupdate /force y sigue apareciendo Denied (Security). ¿Qué falta?
+  opciones:
+    - { texto: "Que cierre sesión y vuelva a entrar: los grupos se leen al iniciar sesión", correcta: true, explicacion: "gpupdate usa los grupos de la sesión actual." }
+    - { texto: "Darle GpoApply a Authenticated Users", explicacion: "Le llegaría a todos los de la OU." }
+    - { texto: "Esperar 90 minutos", explicacion: "El refresco en segundo plano usa los mismos grupos de la sesión." }
+    - { texto: "Reiniciar el DC", explicacion: "El DC ya sabe que es miembro." }
+- id: p07
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para diagnosticar una directiva que no le llega a un usuario.
+  pasos:
+    - "Mirar en gpresult /r en qué OU está el usuario"
+    - "Comprobar que la GPO esté vinculada a esa OU (o arriba) y habilitada"
+    - "Revisar herencia bloqueada y GPO exigidas o con mejor orden"
+    - "Revisar el filtrado de seguridad y WMI en la lista de filtradas"
+    - "Forzar gpupdate y, si cambió algún grupo, volver a iniciar sesión"
+    - "Si nada de eso, revisar DNS, hora y los eventos de GroupPolicy en la PC"
+  explicacion: "De lo más simple y frecuente a lo más raro."
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que genera en la PC un informe HTML completo de directivas en C:\Temp\informe.html.
+  aceptadas: ["gpresult /h C:\\Temp\\informe.html", "gpresult /h C:\\Temp\\informe.html /f"]
+  patrones: ["^gpresult\\s+(/scope\\s+\\w+\\s+)?/h\\s+c:\\\\temp\\\\informe\\.html(\\s+/f)?$"]
+  explicacion: "/h genera el informe HTML; /f lo sobrescribe si ya existe."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve el almacén central de plantillas?
+  opciones:
+    - { texto: "Para que todos los administradores editen las GPO con las mismas plantillas ADMX, actualizadas", correcta: true, explicacion: "Vive en SYSVOL y se replica entre los DC." }
+    - { texto: "Para guardar respaldos de las GPO", explicacion: "Eso es Backup-GPO." }
+    - { texto: "Para que las PC descarguen las directivas más rápido", explicacion: "Las PC no usan las plantillas para aplicar." }
+    - { texto: "Para guardar los instaladores MSI", explicacion: "Eso va en una carpeta compartida aparte." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En el registro Sistema de una PC aparece el evento 1058 de GroupPolicy. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "La PC no pudo leer los archivos de la GPO en SYSVOL: suele ser DNS, red o un problema de replicación", correcta: true, explicacion: "El evento dice qué ruta no pudo leer." }
+    - { texto: "El usuario no está en el grupo del filtro", explicacion: "Eso aparece como Denied (Security), no como error." }
+    - { texto: "La GPO no tiene configuraciones", explicacion: "Eso sería Not Applied (Empty)." }
+    - { texto: "La contraseña del usuario venció", explicacion: "No tiene relación." }
+- id: p11
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son buenas prácticas con las GPO? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Una GPO por propósito, con un nombre que diga a quién y para qué", correcta: true, explicacion: "Hace el diagnóstico mucho más simple." }
+    - { texto: "Probar en una OU de prueba antes de vincular a toda la empresa", correcta: true, explicacion: "Un error en una GPO llega a cientos de equipos." }
+    - { texto: "Respaldar con Backup-GPO -All en forma periódica", correcta: true, explicacion: "Y antes de cambios grandes." }
+    - { texto: "Juntar todo en la Default Domain Policy para tenerlo en un solo lugar", explicacion: "Esa se deja solo para contraseñas y bloqueo." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés saber qué directivas recibiría un usuario si lo movés a la OU Gerencia, sin moverlo. ¿Qué usás?
+  opciones:
+    - { texto: "Modelado de directivas de grupo, en la consola de Administración de directivas de grupo", correcta: true, explicacion: "Simula el resultado sin cambiar nada." }
+    - { texto: "gpresult /r", explicacion: "Muestra lo que recibe ahora, no lo que recibiría." }
+    - { texto: "Get-GPInheritance", explicacion: "Muestra las GPO de una OU, pero no los filtros para esa persona." }
+    - { texto: "Moverlo y volverlo a poner", explicacion: "Funciona, pero cambia cosas en producción." }

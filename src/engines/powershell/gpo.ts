@@ -9,7 +9,7 @@ import { computerTokenGroups, groupNames } from './ad-ops'
 import { isDc, locateDc } from './dns'
 import { connect } from './remoting'
 import { BOOT_HOOKS, cmdlet, PsError, PsSession, psEquals, type CmdletContext } from './session'
-import { psObject, toText, type PsObject } from './values'
+import { psObject, toText, withSetter, type PsObject } from './values'
 
 const MODULE = 'GroupPolicy'
 const param = (ctx: CmdletContext, n: string) => ctx.params.get(n.toLowerCase())
@@ -36,7 +36,7 @@ function gpCmdlet(name: string, def: Parameters<typeof cmdlet>[1]) {
 // ---------------------------------------------------------------------------------------
 
 function gpoObject(st: AdStore, g: StoredGpo): PsObject {
-  return psObject('Microsoft.GroupPolicy.Gpo', {
+  const o = psObject('Microsoft.GroupPolicy.Gpo', {
     DisplayName: g.name,
     DomainName: st.domain,
     Owner: `${st.netbios}\\Domain Admins`,
@@ -50,7 +50,24 @@ function gpoObject(st: AdStore, g: StoredGpo): PsObject {
     WmiFilter: g.wmi ? g.wmi.name : '',
     __toString: g.name,
   })
+  // (Get-GPO X).GpoStatus = '...' y .Description = '...' cambian la GPO, como en Windows.
+  return withSetter(o, (name, value) => {
+    if (/^gpostatus$/i.test(name)) {
+      const v = GPO_STATUS.find((x) => psEquals(x, value))
+      if (!v) throw new PsError(`Exception setting "GpoStatus": "Cannot convert value "${toText(value)}" to type "Microsoft.GroupPolicy.GpoStatus".`, 'InvalidOperation', 'ExceptionWhenSetting')
+      g.status = v
+      g.modified = new Date()
+      return v
+    }
+    if (/^description$/i.test(name)) {
+      g.description = toText(value)
+      g.modified = new Date()
+    }
+    return undefined
+  })
 }
+
+const GPO_STATUS: StoredGpo['status'][] = ['AllSettingsEnabled', 'UserSettingsDisabled', 'ComputerSettingsDisabled', 'AllSettingsDisabled']
 
 function linkObject(st: AdStore, l: { gpoId: string; target: string; enabled: boolean; enforced: boolean; order: number }): PsObject {
   const g = st.gpos!.find((x) => x.id === l.gpoId)
@@ -160,24 +177,6 @@ gpCmdlet('Copy-GPO', {
     const now = new Date()
     const g: StoredGpo = { ...src, id: stableGuid(`gpo:${name}:${st.gpos!.length}`), name, settings: src.settings.map((x) => ({ ...x })), apply: has(ctx, 'CopyAcl') ? [...src.apply] : ['Authenticated Users'], readers: has(ctx, 'CopyAcl') ? [...(src.readers ?? [])] : ['ENTERPRISE DOMAIN CONTROLLERS'], created: now, modified: now }
     st.gpos!.push(g)
-    return [gpoObject(st, g)]
-  },
-})
-
-gpCmdlet('Set-GPO', {
-  params: ['Name', 'Guid', 'GpoStatus', 'Comment'],
-  positional: ['Name'],
-  synopsis: 'Changes the status or the comment of a GPO.',
-  run(ctx) {
-    const st = gpStore(ctx.s)
-    const g = findGpo(ctx, st)!
-    if (has(ctx, 'GpoStatus')) {
-      const v = ['AllSettingsEnabled', 'UserSettingsDisabled', 'ComputerSettingsDisabled', 'AllSettingsDisabled'].find((x) => psEquals(x, param(ctx, 'GpoStatus')))
-      if (!v) throw new PsError(`Cannot bind parameter 'GpoStatus'. Cannot convert value "${str(ctx, 'GpoStatus')}" to type "Microsoft.GroupPolicy.GpoStatus".`, 'InvalidArgument', 'CannotConvertArgumentNoMessage')
-      g.status = v as StoredGpo['status']
-    }
-    if (has(ctx, 'Comment')) g.description = str(ctx, 'Comment') ?? ''
-    g.modified = new Date()
     return [gpoObject(st, g)]
   },
 })
@@ -709,7 +708,10 @@ cmdlet('gpresult', {
     const dcRole = isDc(s.state, s.lab)
     const header = `\nMicrosoft (R) Windows (R) Operating System Group Policy Result tool v2.0\n© Microsoft Corporation. All rights reserved.\n\nCreated on ${new Date(Date.now() + s.state.desfase_reloj_min * 60_000).toLocaleString('en-US').replace(',', ' at')}\n\n\nRSOP data for ${st.netbios}\\${userName} on ${s.state.equipo} : Logging Mode\n${'-'.repeat(`RSOP data for ${st.netbios}\\${userName} on ${s.state.equipo} : Logging Mode`.length)}\n\nOS Configuration:            ${dcRole ? 'Primary Domain Controller' : /Windows 11/.test(toText(comp?.OperatingSystem)) ? 'Member Workstation' : 'Member Server'}\nOS Version:                  10.0.26100\nSite Name:                   Default-First-Site-Name\nRoaming Profile:             N/A\nLocal Profile:               C:\\Users\\${userName}\nConnected over a slow link?: No\n`
     const compGroups = ['BUILTIN\\Administrators', 'Everyone', 'BUILTIN\\Users', 'NT AUTHORITY\\NETWORK', 'NT AUTHORITY\\Authenticated Users', 'This Organization', `${s.state.equipo.toUpperCase()}$`, ...(comp ? computerTokenGroups(s, st) : []), 'System Mandatory Level']
-    const userGroups = ['Domain Users', 'Everyone', 'BUILTIN\\Users', 'BUILTIN\\Administrators', 'NT AUTHORITY\\INTERACTIVE', 'NT AUTHORITY\\Authenticated Users', 'This Organization', 'LOCAL', ...(user ? groupNames(st, user).filter((g) => g !== 'Domain Users') : []), 'High Mandatory Level']
+    const extra = user ? groupNames(st, user).filter((g) => g !== 'Domain Users') : []
+    // Solo los administradores del dominio son administradores locales de las PC por defecto.
+    const isAdmin = extra.some((g) => /^(domain|enterprise) admins$/i.test(g)) || !user
+    const userGroups = ['Domain Users', 'Everyone', 'BUILTIN\\Users', ...(isAdmin ? ['BUILTIN\\Administrators'] : []), 'NT AUTHORITY\\INTERACTIVE', 'NT AUTHORITY\\Authenticated Users', 'This Organization', 'LOCAL', ...extra, isAdmin ? 'High Mandatory Level' : 'Medium Mandatory Level']
     let text = header
     if (scope !== 'user') text += section(st, 'COMPUTER SETTINGS', comp ? dnOf(comp) : '', applied.computer, applied, compGroups, verbose, 'computer')
     if (scope !== 'computer') text += section(st, 'USER SETTINGS', user ? dnOf(user) : '', applied.user, applied, userGroups, verbose, 'user')

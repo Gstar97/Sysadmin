@@ -1,0 +1,108 @@
+tipo: terminal
+shell: powershell
+titulo: Tres pedidos reales y su comprobación
+descripcion: >-
+  Llegaron tres pedidos de la gerencia de empresa.local. Uno, contraseñas más largas para todos y
+  más exigentes para los administradores. Dos, nada de pendrives en las PC de la empresa. Tres,
+  que la gente de Ventas no pueda abrir el Administrador de tareas. Estás en DC01. PC01 es la PC
+  de María López (Ventas) y está en la OU Equipos.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+  archivos:
+    C:\Informes: { tipo: directorio }
+  ad:
+    ous: [Empresa/Usuarios/Ventas, Empresa/Equipos, Empresa/Admin]
+    usuarios:
+      - { sam: mlopez, nombre: María, apellido: López, ou: Empresa/Usuarios/Ventas, grupos: [GG-Ventas] }
+      - { sam: admin.jp, nombre: Juan, apellido: Pérez (admin), ou: Empresa/Admin, grupos: [GG-Admins-IT, Domain Admins] }
+    grupos:
+      - { nombre: GG-Ventas }
+      - { nombre: GG-Admins-IT }
+    equipos:
+      - { nombre: PC01, ou: Empresa/Equipos, so: Windows 11 Pro }
+  servidores:
+    - { equipo: PC01, dominio: empresa.local, usuario: mlopez, red: { ip: 192.168.10.50, dns: [192.168.10.10] } }
+pasos:
+  - consigna: >-
+      Contraseñas del dominio: mínimo 12 caracteres y bloqueo de la cuenta a los 5 intentos
+      fallidos. Miralo primero como está.
+    verificar:
+      - { politica_contrasenas: { longitud_minima: 12, umbral_bloqueo: 5 } }
+    pistas:
+      - "Get-ADDefaultDomainPasswordPolicy muestra la actual."
+      - "Set-ADDefaultDomainPasswordPolicy -Identity empresa.local -MinPasswordLength 12 -LockoutThreshold 5"
+    solucion:
+      - Get-ADDefaultDomainPasswordPolicy
+      - Set-ADDefaultDomainPasswordPolicy -Identity empresa.local -MinPasswordLength 12 -LockoutThreshold 5
+    explicacion: >-
+      La directiva de contraseñas del dominio vive en la Default Domain Policy, y es la única que
+      vale para las cuentas del dominio: una GPO de contraseñas vinculada a una OU no les cambia
+      nada a los usuarios del dominio (solo a las cuentas locales de esos equipos).
+  - consigna: >-
+      Para los administradores (grupo GG-Admins-IT), mínimo 16 caracteres. Como no se puede con
+      una GPO en su OU, usá una directiva de contraseñas específica llamada PSO-Admins.
+    verificar:
+      - { politica_resultante: admin.jp, politica: PSO-Admins }
+    pistas:
+      - "New-ADFineGrainedPasswordPolicy -Name PSO-Admins -Precedence 10 -MinPasswordLength 16"
+      - "Add-ADFineGrainedPasswordPolicySubject PSO-Admins -Subjects GG-Admins-IT"
+    solucion:
+      - New-ADFineGrainedPasswordPolicy -Name PSO-Admins -Precedence 10 -MinPasswordLength 16 -LockoutThreshold 5 -ComplexityEnabled $true
+      - Add-ADFineGrainedPasswordPolicySubject PSO-Admins -Subjects GG-Admins-IT
+      - Get-ADUserResultantPasswordPolicy admin.jp
+    explicacion: >-
+      Las directivas de contraseñas específicas (PSO) se aplican a grupos o usuarios, no a OU.
+      Get-ADUserResultantPasswordPolicy dice cuál le toca a cada cuenta.
+  - consigna: >-
+      Pendrives: creá "Equipos - Sin almacenamiento extraíble", que bloquea todas las clases de
+      almacenamiento extraíble (Deny_All = 1, DWord, en
+      HKLM\Software\Policies\Microsoft\Windows\RemovableStorageDevices), y vinculala donde le
+      llegue a PC01.
+    verificar:
+      - { gpo: Equipos - Sin almacenamiento extraíble, vinculada_a: Empresa/Equipos, configura: { clave: "HKLM\\Software\\Policies\\Microsoft\\Windows\\RemovableStorageDevices", valor_nombre: Deny_All, valor: 1 } }
+    pistas:
+      - "Es configuración de equipo: tiene que ir en la OU de los equipos, no en la de los usuarios."
+      - "Set-GPRegistryValue -Name '…' -Key 'HKLM\\Software\\Policies\\Microsoft\\Windows\\RemovableStorageDevices' -ValueName Deny_All -Type DWord -Value 1"
+    solucion:
+      - New-GPO -Name 'Equipos - Sin almacenamiento extraíble'
+      - Set-GPRegistryValue -Name 'Equipos - Sin almacenamiento extraíble' -Key 'HKLM\Software\Policies\Microsoft\Windows\RemovableStorageDevices' -ValueName Deny_All -Type DWord -Value 1
+      - New-GPLink -Name 'Equipos - Sin almacenamiento extraíble' -Target 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+  - consigna: >-
+      Administrador de tareas: creá "Ventas - Restricciones" con DisableTaskMgr = 1 (DWord, en
+      HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System). Como solo tiene
+      configuración de usuario, deshabilitá su parte de equipo, y vinculala donde le llegue a
+      María.
+    verificar:
+      - { gpo: Ventas - Restricciones, vinculada_a: Empresa/Usuarios/Ventas, configura: { clave: "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", valor_nombre: DisableTaskMgr, valor: 1 } }
+      - { gpo_aplicada: Ventas - Restricciones, a: mlopez }
+      - { comando_usado: "computersettingsdisabled" }
+    pistas:
+      - "(Get-GPO 'Ventas - Restricciones').GpoStatus = 'ComputerSettingsDisabled'"
+    solucion:
+      - New-GPO -Name 'Ventas - Restricciones'
+      - Set-GPRegistryValue -Name 'Ventas - Restricciones' -Key 'HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System' -ValueName DisableTaskMgr -Type DWord -Value 1
+      - (Get-GPO 'Ventas - Restricciones').GpoStatus = 'ComputerSettingsDisabled'
+      - New-GPLink -Name 'Ventas - Restricciones' -Target 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+  - consigna: >-
+      Comprobá en PC01 que llegaron las dos: forzá la actualización y mirá el resultado de la
+      parte de equipo (la de los pendrives).
+    verificar:
+      - { comando_usado: "gpupdate" }
+      - { salida_contiene: "Equipos - Sin almacenamiento" }
+    pistas:
+      - "Invoke-Command PC01 { gpupdate /force; gpresult /r /scope computer }"
+      - "gpresult /scope computer necesita permisos de administrador en la PC; con Invoke-Command desde el DC los tenés."
+    solucion: ["Invoke-Command PC01 { gpupdate /force; gpresult /r /scope computer }"]
+  - consigna: >-
+      Dejá documentado cómo quedó: guardá un informe HTML de todas las GPO del dominio en
+      C:\Informes\gpo.html.
+    verificar:
+      - { archivo: C:\Informes\gpo.html, contenido_incluye: "Ventas - Restricciones" }
+    pistas:
+      - "Get-GPOReport -All -ReportType Html -Path C:\\Informes\\gpo.html"
+    solucion: ["Get-GPOReport -All -ReportType Html -Path C:\\Informes\\gpo.html"]
+    explicacion: >-
+      Un informe por mes (o antes y después de cada cambio grande) te permite comparar qué
+      cambió cuando algo deja de andar. Para respaldar de verdad, Backup-GPO -All.

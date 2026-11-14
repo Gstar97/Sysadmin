@@ -1,0 +1,126 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Creaste una GPO, la configuraste y no le llega a nadie. Gpupdate no cambia nada. ¿Qué es lo primero que revisás?
+  opciones:
+    - { texto: "Que esté vinculada a la OU donde están los usuarios o equipos", correcta: true, explicacion: "Una GPO sin vínculo no hace nada." }
+    - { texto: "Que el DC tenga suficiente memoria", explicacion: "No tiene relación." }
+    - { texto: "Que los usuarios tengan permisos de administrador", explicacion: "Las directivas se aplican igual a usuarios comunes." }
+    - { texto: "Que la GPO tenga un nombre corto", explicacion: "El nombre no influye." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    La GPO del dominio pone el protector a los 15 minutos y la de la OU Ventas, a los 5. Ninguna
+    está exigida. ¿Qué recibe un usuario de Ventas?
+  opciones:
+    - { texto: "5 minutos: la de la OU se procesa última y gana el choque", correcta: true, explicacion: "Orden LSDOU: lo más cercano al objeto gana." }
+    - { texto: "15 minutos: el dominio siempre manda", explicacion: "Solo si estuviera exigida." }
+    - { texto: "El menor de los dos, por seguridad", explicacion: "No hay una regla así: gana la última procesada." }
+    - { texto: "Ninguno, porque chocan", explicacion: "Los choques se resuelven por orden." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    Vinculaste a la OU Ventas (donde están los usuarios) una GPO que configura el firewall en
+    Configuración del equipo. Las PC de Ventas están en la OU Equipos. ¿Qué pasa?
+  opciones:
+    - { texto: "No se aplica: la parte de equipo sigue a la OU del equipo, no la del usuario", correcta: true, explicacion: "Hay que vincularla a la OU Equipos." }
+    - { texto: "Se aplica cuando un usuario de Ventas inicia sesión", explicacion: "La configuración de equipo no depende de quién inicia sesión." }
+    - { texto: "Se aplica a todas las PC del dominio", explicacion: "Solo a lo que está dentro de la OU vinculada." }
+    - { texto: "Se aplica en el próximo reinicio", explicacion: "Reiniciar no cambia dónde está el equipo." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    La OU Laboratorio tiene la herencia bloqueada. En el dominio hay una GPO de seguridad que tiene
+    que llegar a todos los equipos sin excepción. ¿Qué hacés?
+  opciones:
+    - { texto: "Marcar como exigido el vínculo de la GPO de seguridad", correcta: true, explicacion: "Exigido atraviesa el bloqueo de herencia." }
+    - { texto: "Sacar el bloqueo de herencia de Laboratorio", explicacion: "Le llegarían también las demás, que es lo que el bloqueo evitaba." }
+    - { texto: "Copiar las configuraciones en una GPO de Laboratorio", explicacion: "Funciona, pero duplica y se desincroniza." }
+    - { texto: "Ponerle orden de vínculo 1", explicacion: "El orden solo compite entre vínculos de la misma OU." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas afirmaciones sobre la Default Domain Policy son correctas? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Está vinculada al dominio", correcta: true, explicacion: "Por eso le llega a todos." }
+    - { texto: "Contiene la directiva de contraseñas y de bloqueo de cuentas del dominio", correcta: true, explicacion: "Es su función principal." }
+    - { texto: "Es el lugar ideal para todo lo que va a toda la empresa", explicacion: "Lo general va en GPO nuevas; esta se deja limpia." }
+    - { texto: "Conviene borrarla y crear una propia", explicacion: "No se borra." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: >-
+    Para que una GPO se aplique solo a GG-Ventas, le sacaste por completo a Authenticated Users y le
+    diste Aplicar a GG-Ventas. Ahora no le llega a nadie y gpresult dice Denied (Security). ¿Por qué?
+  opciones:
+    - { texto: "Los equipos leen la GPO con su propia cuenta: sin lectura para Authenticated Users (o Domain Computers), no pueden leerla", correcta: true, explicacion: "Es el cambio MS16-072. Dejale lectura a Authenticated Users." }
+    - { texto: "Falta gpupdate en el DC", explicacion: "El problema es de permisos." }
+    - { texto: "GG-Ventas tiene que ser un grupo universal", explicacion: "El ámbito del grupo no influye." }
+    - { texto: "Hay que reiniciar el DC", explicacion: "No hace falta." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que vincula la GPO "Ventas - Protector" a la OU Ventas (OU=Ventas,OU=Empresa,DC=empresa,DC=local).
+  aceptadas:
+    - "New-GPLink -Name 'Ventas - Protector' -Target 'OU=Ventas,OU=Empresa,DC=empresa,DC=local'"
+    - "New-GPLink -Name \"Ventas - Protector\" -Target \"OU=Ventas,OU=Empresa,DC=empresa,DC=local\""
+  patrones: ["^new-gplink\\s+-name\\s+['\"]ventas - protector['\"]\\s+-target\\s+['\"]ou=ventas,ou=empresa,dc=empresa,dc=local['\"]$"]
+  explicacion: "New-GPLink crea el vínculo; Set-GPLink cambia uno que ya existe (exigido, habilitado, orden)."
+- id: p08
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice esta salida?
+  salida: |
+    Name                  : ventas
+    ContainerType         : OU
+    Path                  : ou=ventas,ou=empresa,dc=empresa,dc=local
+    GpoInheritanceBlocked : No
+    GpoLinks              : {Ventas - Protector}
+    InheritedGpoLinks     : {Ventas - Protector, Empresa - Escritorio, Default Domain Policy}
+  opciones:
+    - { texto: "A Ventas le llegan tres GPO; Ventas - Protector, vinculada a ella, es la de mayor precedencia", correcta: true, explicacion: "InheritedGpoLinks lista de mayor a menor precedencia, incluidas las propias." }
+    - { texto: "Ventas solo recibe Ventas - Protector", explicacion: "GpoLinks son las vinculadas ahí; InheritedGpoLinks, todas las que le llegan." }
+    - { texto: "La herencia está bloqueada", explicacion: "GpoInheritanceBlocked dice No." }
+    - { texto: "Default Domain Policy gana todos los choques", explicacion: "Es la de menor precedencia de la lista." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Cambiaste una GPO de usuario hace 10 minutos. ¿Cuándo le llega a una PC que ya está prendida, sin que nadie haga nada?
+  opciones:
+    - { texto: "En el próximo refresco en segundo plano: cada 90 minutos, con hasta 30 más al azar", correcta: true, explicacion: "O al próximo inicio de sesión, o con gpupdate." }
+    - { texto: "En el acto: las directivas se empujan desde el DC", explicacion: "Las PC las piden; el DC no las empuja." }
+    - { texto: "Recién al día siguiente", explicacion: "Se refrescan varias veces por día." }
+    - { texto: "Nunca, hay que reiniciar", explicacion: "Casi todo se aplica en segundo plano." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: >-
+    "Empresa - Seguridad" está exigida en la OU Empresa y pone el protector a 15 minutos (entre otras
+    cosas). Ventas quiere 5 minutos con su propia GPO. ¿Qué conviene hacer?
+  opciones:
+    - { texto: "Sacar el protector de la GPO exigida y ponerlo en otra GPO de Empresa sin exigir", correcta: true, explicacion: "En la exigida, solo lo que no se negocia; así Ventas puede pisar el tiempo." }
+    - { texto: "Exigir también la GPO de Ventas", explicacion: "Entre dos exigidas gana la de más arriba: seguiría ganando Empresa." }
+    - { texto: "Bloquear la herencia en Ventas", explicacion: "Exigido atraviesa el bloqueo." }
+    - { texto: "Ponerle orden 1 a la de Ventas", explicacion: "El orden no le gana a una exigida." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve un filtro WMI en una GPO?
+  opciones:
+    - { texto: "Para que el equipo aplique la GPO solo si cumple una condición, como tener Windows 11 o ser notebook", correcta: true, explicacion: "La condición la evalúa el propio equipo." }
+    - { texto: "Para filtrar por grupo de seguridad", explicacion: "Eso es el filtrado de seguridad." }
+    - { texto: "Para elegir a qué OU se vincula", explicacion: "Eso es el vínculo." }
+    - { texto: "Para acelerar el procesamiento de todas las GPO", explicacion: "Al contrario: cada filtro suma tiempo." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En una GPO, la directiva "Prohibir el acceso al Panel de control" está en Deshabilitada. ¿Qué significa?
+  opciones:
+    - { texto: "Que esta GPO permite el Panel de control de forma explícita, y puede pisar a otra que lo prohíba", correcta: true, explicacion: "Deshabilitada es una decisión; No configurada es no opinar." }
+    - { texto: "Que esta GPO no opina sobre el tema", explicacion: "Eso es No configurada." }
+    - { texto: "Que la GPO entera está deshabilitada", explicacion: "Afecta solo a esa directiva." }
+    - { texto: "Que se prohíbe el Panel de control", explicacion: "Eso sería Habilitada." }
