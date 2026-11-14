@@ -1,0 +1,81 @@
+tipo: terminal
+shell: powershell
+titulo: Varios servidores a la vez y un módulo de la galería
+descripcion: >-
+  Estás en SRV-ADMIN, en el dominio empresa.local. Hay tres servidores más: DC01, SRV01 y SRV02.
+  Te piden revisar un servicio en todos, trabajar un rato en uno de ellos y dejar instalado un
+  módulo para armar planillas de Excel.
+estado_inicial:
+  equipo: SRV-ADMIN
+  dominio: empresa.local
+  red: { ip: 192.168.10.5, dns: [192.168.10.10] }
+  servidores:
+    - { equipo: DC01, dominio: empresa.local, red: { ip: 192.168.10.10, dns: [127.0.0.1] }, ad: {} }
+    - { equipo: SRV01, dominio: empresa.local, red: { ip: 192.168.10.11, dns: [192.168.10.10] } }
+    - { equipo: SRV02, dominio: empresa.local, red: { ip: 192.168.10.12, dns: [192.168.10.10] }, remoting: false }
+pasos:
+  - consigna: >-
+      Mirá el estado del servicio W32Time (la hora) en DC01, SRV01 y SRV02 con un solo
+      Invoke-Command. ¿Respondieron todos?
+    verificar:
+      - { comando_usado: "invoke-command.*dc01.*srv01.*srv02|icm.*dc01.*srv01.*srv02" }
+      - { salida_contiene: "SRV02" }
+    pistas:
+      - "-ComputerName acepta varios nombres separados por comas."
+    solucion: ["Invoke-Command -ComputerName DC01, SRV01, SRV02 -ScriptBlock { Get-Service W32Time }"]
+    explicacion: >-
+      Invoke-Command corre en paralelo en todos y agrega la columna PSComputerName para saber de
+      quién es cada resultado. SRV02 no respondió: el error dice que WinRM no está escuchando
+      ("winrm quickconfig"). Los demás funcionaron igual: un servidor que falla no corta al resto.
+  - consigna: >-
+      Guardá en $servicio el texto Spooler y usalo dentro del bloque remoto para consultar ese
+      servicio en DC01 y SRV01.
+    verificar:
+      - { comando_usado: "\\$using:servicio" }
+      - { salida_contiene: "Spooler" }
+    pistas:
+      - "El bloque corre en el otro equipo, donde $servicio no existe: hay que traerla con $using:servicio."
+    solucion:
+      - $servicio = 'Spooler'
+      - "Invoke-Command -ComputerName DC01, SRV01 -ScriptBlock { Get-Service -Name $using:servicio }"
+  - consigna: >-
+      Abrí una sesión persistente con SRV01 en la variable $s, guardá allá una variable con la
+      fecha de arranque del equipo y, en un segundo Invoke-Command con la misma sesión, mostrala.
+    verificar:
+      - { comando_usado: "new-pssession" }
+      - { comando_usado: "invoke-command.*-session" }
+    pistas:
+      - "$s = New-PSSession -ComputerName SRV01"
+      - "Invoke-Command -Session $s { $inicio = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime }"
+    solucion:
+      - $s = New-PSSession -ComputerName SRV01
+      - "Invoke-Command -Session $s -ScriptBlock { $inicio = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime }"
+      - "Invoke-Command -Session $s -ScriptBlock { $inicio }"
+    explicacion: >-
+      Con -ComputerName cada Invoke-Command abre y cierra una conexión, y lo que guardaste se
+      pierde. Una sesión queda abierta y recuerda las variables entre llamadas: sirve para
+      trabajar varios pasos sobre el mismo equipo.
+  - consigna: Cerrá la sesión cuando termines.
+    verificar:
+      - { comando_usado: "remove-pssession" }
+    solucion: [Remove-PSSession $s]
+  - consigna: >-
+      Buscá en la galería de PowerShell el módulo ImportExcel e instalalo solo para tu usuario.
+    verificar:
+      - { comando_usado: "install-module.*importexcel.*-scope\\s+currentuser|install-module.*-scope\\s+currentuser.*importexcel" }
+    pistas:
+      - "Find-Module ImportExcel muestra la versión y la descripción."
+      - "Install-Module ImportExcel -Scope CurrentUser"
+    solucion:
+      - Find-Module ImportExcel
+      - Install-Module ImportExcel -Scope CurrentUser
+    explicacion: >-
+      La primera vez pide instalar el proveedor NuGet y avisa que PSGallery no es de confianza:
+      la galería es pública y cualquiera puede publicar. Antes de aceptar, mirá quién lo publica,
+      cuántas descargas tiene y, si es para un servidor importante, bajalo con Save-Module y
+      revisalo.
+  - consigna: Comprobá que el módulo quedó disponible.
+    verificar:
+      - { comando_usado: "get-module.*-listavailable" }
+      - { salida_contiene: "ImportExcel" }
+    solucion: [Get-Module -ListAvailable ImportExcel]

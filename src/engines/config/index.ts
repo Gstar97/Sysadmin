@@ -13,6 +13,7 @@ import { validateZone } from './zone'
 import { validateFrr } from './frr'
 import { validateNftables } from './nftables'
 import { validateWireguard } from './wireguard'
+import { validatePowerShell } from './powershell'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -63,6 +64,8 @@ export function validateConfig(lang: ConfigLanguage, text: string, fileName?: st
       return { diagnostics: validateSudoers(text).diagnostics }
     case 'systemd':
       return validateSystemd(text)
+    case 'powershell':
+      return validatePowerShell(text)
     case 'texto':
       return { diagnostics: [] }
   }

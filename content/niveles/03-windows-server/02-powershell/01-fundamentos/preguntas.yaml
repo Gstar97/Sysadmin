@@ -1,0 +1,90 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Necesitás ver las reglas del firewall de Windows y no sabés el cmdlet. ¿Cuál es la forma más rápida de encontrarlo?
+  opciones:
+    - { texto: "Get-Command *firewall*", correcta: true, explicacion: "Busca por una parte del nombre: aparece Get-NetFirewallRule." }
+    - { texto: "Buscar en internet", explicacion: "Sirve, pero desde la consola es más rápido." }
+    - { texto: "Get-Help firewall", explicacion: "Funciona a veces, pero Get-Command es la herramienta para encontrar comandos." }
+    - { texto: "Probar Show-Firewall", explicacion: "Show-Firewall no existe." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cuál de estos nombres de cmdlet existe?
+  opciones:
+    - { texto: "Remove-Item", correcta: true, explicacion: "Remove es el verbo para borrar." }
+    - { texto: "Delete-Item", explicacion: "Delete no es un verbo aprobado: se usa Remove." }
+    - { texto: "Get-Services", explicacion: "El sustantivo va en singular: Get-Service." }
+    - { texto: "Service-Get", explicacion: "Primero el verbo, después el sustantivo." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Vas a borrar con Remove-Item todos los .log de C:\Temp que cumplan un filtro, y querés estar seguro antes. ¿Qué agregás?
+  opciones:
+    - { texto: "-WhatIf, para ver qué borraría sin borrar nada", correcta: true, explicacion: "Después, si la lista es la correcta, lo ejecutás sin -WhatIf." }
+    - { texto: "-Force", explicacion: "-Force borra incluso lo que normalmente protegería." }
+    - { texto: "-Verbose", explicacion: "Cuenta lo que hace, pero lo hace igual." }
+    - { texto: "Nada: Remove-Item siempre pregunta", explicacion: "No pregunta salvo en casos especiales." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un servidor recién instalado, Get-Help Get-ADUser muestra solo la sintaxis y un aviso. ¿Qué hacés?
+  opciones:
+    - { texto: "Update-Help como administrador (con salida a internet), o Get-Help Get-ADUser -Online", correcta: true, explicacion: "La ayuda completa no viene instalada." }
+    - { texto: "Reinstalar el módulo ActiveDirectory", explicacion: "El módulo anda; falta el archivo de ayuda." }
+    - { texto: "Instalar PowerShell 7", explicacion: "PowerShell 7 también necesita Update-Help." }
+    - { texto: "Nada: no hay más ayuda", explicacion: "Hay ayuda completa con ejemplos." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí el comando que muestra solo los ejemplos de la ayuda de Get-Service.
+  aceptadas: ["Get-Help Get-Service -Examples", "help Get-Service -Examples", "Get-Help -Name Get-Service -Examples"]
+  patrones: ["^(get-help|help)\\s+(-name\\s+)?get-service\\s+-ex(amples?)?$"]
+  explicacion: "Get-Help con -Examples va directo a los ejemplos, que es lo que más se consulta."
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En PowerShell escribís `ls -la` y da error. ¿Por qué?
+  opciones:
+    - { texto: "ls es un alias de Get-ChildItem, que no tiene un parámetro -la", correcta: true, explicacion: "Para ver ocultos: Get-ChildItem -Force." }
+    - { texto: "PowerShell no tiene ls", explicacion: "Lo tiene, como alias." }
+    - { texto: "Hace falta ser administrador", explicacion: "Listar no requiere privilegios." }
+    - { texto: "Las opciones van con barra: ls /la", explicacion: "Tampoco existe." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no conviene usar alias como gci, ? y % en un script?
+  opciones:
+    - { texto: "Porque el que lo lea después tiene que adivinar qué hace cada uno; con los nombres completos se entiende solo", correcta: true, explicacion: "Los alias son para escribir rápido en la consola." }
+    - { texto: "Porque en los scripts no funcionan", explicacion: "Funcionan, pero complican la lectura." }
+    - { texto: "Porque son más lentos", explicacion: "La velocidad es la misma." }
+    - { texto: "Porque PowerShell 7 los eliminó", explicacion: "Siguen existiendo (salvo algunos que chocan con Linux)." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre Windows PowerShell 5.1 y PowerShell 7?
+  opciones:
+    - { texto: "5.1 viene con Windows y ya no evoluciona; 7 se instala aparte (pwsh), es multiplataforma y conviven", correcta: true, explicacion: "La vigente con soporte largo es la 7.6 LTS." }
+    - { texto: "7 reemplaza a 5.1 al instalarlo", explicacion: "Conviven: cada uno se abre con su ejecutable." }
+    - { texto: "5.1 no sirve para administrar Windows Server", explicacion: "Es el que viene y el que usan todos los módulos." }
+    - { texto: "Son iguales con otro número", explicacion: "Se basan en distintos .NET y 7 tiene mejoras de lenguaje." }
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas formas de escribir el comando funcionan igual? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Get-Service -Name Spooler", correcta: true, explicacion: "Con el parámetro por su nombre." }
+    - { texto: "get-service spooler", correcta: true, explicacion: "PowerShell no distingue mayúsculas y -Name es posicional." }
+    - { texto: "gsv Spooler", correcta: true, explicacion: "gsv es un alias de Get-Service." }
+    - { texto: "Get-Service -N Spooler", correcta: true, explicacion: "Los parámetros se pueden abreviar si no hay ambigüedad." }
+    - { texto: "Get Service Spooler", explicacion: "Falta el guion: busca un comando llamado Get." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Ejecutás Set-TimeZone y aparece "Access is denied", aunque tu cuenta es administradora. ¿Qué pasó?
+  opciones:
+    - { texto: "La consola no se abrió como administrador: con UAC, hay que pedir los privilegios", correcta: true, explicacion: "Clic derecho, Run as administrator." }
+    - { texto: "El cmdlet está mal escrito", explicacion: "Si estuviera mal escrito, diría que no lo reconoce." }
+    - { texto: "Hace falta PowerShell 7", explicacion: "Funciona igual en 5.1." }
+    - { texto: "El servidor está bloqueado", explicacion: "Es el control de cuentas de usuario." }

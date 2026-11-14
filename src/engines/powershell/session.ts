@@ -184,6 +184,18 @@ export interface CmdletDef {
   native?: boolean
 }
 
+/** Intervalo de tiempo como System.TimeSpan (lo que da restar dos fechas). */
+export function timeSpan(ms: number): PsObject {
+  const abs = Math.abs(ms)
+  const sign = ms < 0 ? -1 : 1
+  const days = Math.floor(abs / 86_400_000)
+  const hours = Math.floor((abs % 86_400_000) / 3_600_000)
+  const minutes = Math.floor((abs % 3_600_000) / 60_000)
+  const seconds = Math.floor((abs % 60_000) / 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return psObject('System.TimeSpan', { Days: sign * days, Hours: sign * hours, Minutes: sign * minutes, Seconds: sign * seconds, Milliseconds: sign * (abs % 1000), Ticks: ms * 10_000, TotalDays: ms / 86_400_000, TotalHours: ms / 3_600_000, TotalMinutes: ms / 60_000, TotalSeconds: ms / 1000, TotalMilliseconds: ms, __toString: `${ms < 0 ? '-' : ''}${days ? `${days}.` : ''}${pad(hours)}:${pad(minutes)}:${pad(seconds)}` })
+}
+
 /** Lo que corre cada vez que un equipo arranca (por ejemplo, aplicar las GPO de equipo). */
 export const BOOT_HOOKS: ((s: PsSession) => void)[] = []
 
@@ -1103,6 +1115,9 @@ export class PsSession {
       case '+':
         return this.add(l, r)
       case '-':
+        // Fecha menos fecha da un intervalo (TimeSpan) con Days, Hours, TotalHours…
+        if (l instanceof Date && r instanceof Date) return timeSpan(l.getTime() - r.getTime())
+        if (l instanceof Date) return new Date(l.getTime() - Number(r))
         return Number(l) - Number(r)
       case '*':
         return typeof l === 'string' ? l.repeat(Number(r)) : Number(l) * Number(r)
@@ -1202,6 +1217,13 @@ export class PsSession {
   private callStatic(type: string, member: string, args?: unknown[]): unknown {
     const t = type.toLowerCase()
     const m = member.toLowerCase()
+    if (t === 'string' || t === 'system.string') {
+      const a = args ?? []
+      if (m === 'join') return asArray(a[1]).concat(a.slice(2)).map((x) => toText(x)).join(toText(a[0]))
+      if (m === 'isnullorempty') return a[0] === null || a[0] === undefined || toText(a[0]) === ''
+      if (m === 'isnullorwhitespace') return a[0] === null || a[0] === undefined || toText(a[0]).trim() === ''
+      if (m === 'empty') return ''
+    }
     if (t === 'math') {
       const a = (args ?? []).map(Number)
       if (m === 'round') return a[1] !== undefined ? Number(a[0].toFixed(a[1])) : Math.round(a[0])
@@ -1258,6 +1280,24 @@ export class PsSession {
     if (m === 'tostring') {
       if (target instanceof Date && args[0]) return formatDotnetDate(target, toText(args[0]))
       return toText(target)
+    }
+    if (m === 'gettype') {
+      const full = target === null ? 'null' : target instanceof Date ? 'System.DateTime' : typeof target === 'string' ? 'System.String' : typeof target === 'boolean' ? 'System.Boolean' : typeof target === 'number' ? (Number.isInteger(target) ? 'System.Int32' : 'System.Double') : Array.isArray(target) ? 'System.Object[]' : target instanceof Map ? 'System.Collections.Hashtable' : isPsObject(target) ? target.__type.replace(/^Deserialized\./, '') : 'System.Object'
+      const short = full.split('.').pop()!
+      return psObject('System.RuntimeType', { IsPublic: true, IsSerial: true, Name: short, BaseType: full === 'System.Object' ? null : 'System.Object', FullName: full, __toString: full })
+    }
+    if (target instanceof Date) {
+      if (m === 'addmonths') {
+        const d = new Date(target)
+        d.setMonth(d.getMonth() + Number(args[0]))
+        return d
+      }
+      if (m === 'addyears') {
+        const d = new Date(target)
+        d.setFullYear(d.getFullYear() + Number(args[0]))
+        return d
+      }
+      if (m === 'addseconds') return new Date(target.getTime() + Number(args[0]) * 1000)
     }
     if (target instanceof Date) {
       if (m === 'adddays') return new Date(target.getTime() + Number(args[0]) * 86_400_000)

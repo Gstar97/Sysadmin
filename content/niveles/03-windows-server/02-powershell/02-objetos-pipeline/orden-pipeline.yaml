@@ -1,0 +1,14 @@
+tipo: ordenar
+consigna: >-
+  Ordená las partes de una tubería que guarda en un CSV el nombre y la memoria en MB de los 10
+  procesos que más memoria usan (de los que usan más de 50 MB).
+pasos:
+  - "Get-Process"
+  - "Where-Object { $_.WorkingSet -gt 50MB }"
+  - "Sort-Object WorkingSet -Descending"
+  - "Select-Object -First 10 Name, @{n='MB'; e={ [math]::Round($_.WorkingSet / 1MB) }}"
+  - "Export-Csv C:\\Informes\\procesos.csv -NoTypeInformation"
+explicacion: >-
+  Primero se traen los datos, después se filtra (cuanto antes, menos trabajo para los que siguen),
+  se ordena, se eligen las columnas y al final se exporta. Si Select-Object fuera antes de
+  Sort-Object, ya no estaría WorkingSet para ordenar.

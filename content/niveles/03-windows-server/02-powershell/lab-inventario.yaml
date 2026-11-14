@@ -1,0 +1,100 @@
+tipo: pasos
+titulo: El script de inventario en tus servidores
+descripcion: >-
+  Vas a correr el inventario de verdad, desde SRV-ADMIN contra SRV-CORE01 (los dos del laboratorio
+  del módulo 3.1). Como todavía no hay dominio, vas a usar TrustedHosts y credenciales. Calculá
+  una hora y media.
+pasos:
+  - titulo: Preparar las carpetas
+    detalle: En SRV-ADMIN, creá las carpetas para los scripts y los informes.
+    comandos:
+      - New-Item -ItemType Directory C:\Scripts, C:\Informes -Force
+    comprobar: Test-Path C:\Scripts, C:\Informes da True dos veces.
+  - titulo: Escribir el script
+    detalle: >-
+      Abrí Visual Studio Code (o el ISE) y guardá este script como C:\Scripts\Inventario.ps1.
+      Leelo entero antes de guardarlo: tenés que poder explicar qué hace cada parte.
+    archivo:
+      ruta: C:\Scripts\Inventario.ps1
+      contenido: |
+        <#
+        .SYNOPSIS
+        Inventario de discos, servicios automáticos detenidos y actualizaciones de varios servidores.
+        .EXAMPLE
+        .\Inventario.ps1 -Servidores DC01, SRV01 -Carpeta C:\Informes
+        #>
+        param(
+            [Parameter(Mandatory)]
+            [string[]]$Servidores,
+
+            [string]$Carpeta = 'C:\Informes',
+
+            [int]$LimiteGB = 10
+        )
+
+        $datos = Invoke-Command -ComputerName $Servidores -ErrorAction SilentlyContinue -ErrorVariable fallas -ScriptBlock {
+            $limite = $using:LimiteGB
+            $discos = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+            $detenidos = Get-Service | Where-Object { $_.StartType -eq 'Automatic' -and $_.Status -ne 'Running' }
+            $ultima = Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 1
+            foreach ($d in $discos) {
+                $libre = [math]::Round($d.FreeSpace / 1GB, 1)
+                [PSCustomObject]@{
+                    Unidad            = $d.DeviceID
+                    LibreGB           = $libre
+                    Estado            = if ($libre -lt $limite) { 'BAJO' } else { 'OK' }
+                    ServiciosCaidos   = ($detenidos.Name -join ', ')
+                    UltimaActualizacion = $ultima.HotFixID
+                    Fecha             = $ultima.InstalledOn
+                }
+            }
+        }
+
+        $informe = $datos | Select-Object @{n = 'Servidor'; e = { $_.PSComputerName }}, Unidad, LibreGB, Estado, ServiciosCaidos, UltimaActualizacion, Fecha
+
+        $informe | Export-Csv (Join-Path $Carpeta 'inventario.csv') -NoTypeInformation
+        $informe | ConvertTo-Html -Title 'Inventario de servidores' -PreContent "<h1>Inventario del $(Get-Date -Format 'dd/MM/yyyy HH:mm')</h1>" |
+            Out-File (Join-Path $Carpeta 'inventario.html')
+
+        foreach ($f in $fallas) {
+            Write-Warning "No se pudo consultar $($f.TargetObject)"
+        }
+        $informe
+    comprobar: Get-Help C:\Scripts\Inventario.ps1 -Examples muestra el ejemplo del comentario.
+  - titulo: Credenciales para un grupo de trabajo
+    detalle: >-
+      Sin dominio, Invoke-Command necesita credenciales de SRV-CORE01. Agregá al script un
+      parámetro [pscredential]$Credential y pasalo a Invoke-Command con -Credential $Credential.
+      (Cuando el laboratorio tenga dominio, el parámetro queda vacío y usa tu sesión.)
+    comandos:
+      - $cred = Get-Credential SRV-CORE01\Administrator
+    comprobar: El script acepta -Credential $cred sin error.
+  - titulo: Correrlo
+    detalle: >-
+      Corré el inventario contra SRV-CORE01 y contra un nombre que no existe, para ver cómo trata
+      los errores. Abrí el HTML en el navegador.
+    comandos:
+      - Set-Location C:\Scripts
+      - .\Inventario.ps1 -Servidores SRV-CORE01, NOEXISTE -Credential $cred
+      - Invoke-Item C:\Informes\inventario.html
+    comprobar: Aparece un aviso por NOEXISTE y el HTML muestra los discos de SRV-CORE01.
+  - titulo: Provocar un hallazgo
+    detalle: >-
+      En SRV-CORE01, poné el servicio Spooler en automático y detenelo, y llená el disco D: con un
+      archivo grande. Volvé a correr el inventario con -LimiteGB 15 y comprobá que lo detecta.
+    comandos:
+      - Invoke-Command -ComputerName SRV-CORE01 -Credential $cred -ScriptBlock { Set-Service Spooler -StartupType Automatic; Stop-Service Spooler -Force; fsutil file createnew D:\relleno.bin 8GB }
+      - .\Inventario.ps1 -Servidores SRV-CORE01 -Credential $cred -LimiteGB 15
+    comprobar: >-
+      El informe muestra Spooler en ServiciosCaidos y la unidad D: en estado BAJO.
+  - titulo: Dejarlo como estaba
+    comandos:
+      - Invoke-Command -ComputerName SRV-CORE01 -Credential $cred -ScriptBlock { Remove-Item D:\relleno.bin; Start-Service Spooler }
+    comprobar: Un nuevo inventario da todo OK.
+  - titulo: Mejorarlo (para que sea tuyo)
+    detalle: >-
+      Elegí al menos una mejora y hacela: agregar la versión de Windows (Win32_OperatingSystem) y
+      los días desde el último reinicio; marcar en rojo las filas BAJO con un poco de CSS
+      (ConvertTo-Html -Head); guardar los informes con la fecha en el nombre; o leer la lista de
+      servidores de un archivo de texto.
+    comprobar: El script mejorado corre sin errores y lo guardaste en el cuaderno técnico con una nota de qué cambiaste.

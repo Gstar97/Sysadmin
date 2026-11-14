@@ -1,0 +1,77 @@
+tipo: terminal
+shell: powershell
+titulo: Desafíos con objetos y pipeline
+descripcion: >-
+  Estás en SRV-ADMIN. Esta mañana algo no imprime, y de paso te pidieron dos informes para la
+  reunión de IT: los servicios que están corriendo, en CSV, y el espacio libre de los discos, en
+  HTML. Todo con una línea de PowerShell por tarea. La carpeta C:\Informes ya existe.
+estado_inicial:
+  equipo: SRV-ADMIN
+  archivos:
+    C:\Informes: { tipo: directorio }
+  servicios:
+    - { nombre: Spooler, nombre_visible: Print Spooler, estado: Stopped, inicio: Automatic }
+pasos:
+  - consigna: Mirá qué propiedades tienen los objetos que devuelve Get-Service.
+    verificar:
+      - { comando_usado: "get-service.*\\|\\s*(get-member|gm)" }
+    solucion: [Get-Service | Get-Member]
+    explicacion: >-
+      TypeName te dice qué tipo de objeto es; las propiedades (Property) son los datos que podés
+      filtrar, ordenar o exportar. StartType y Status son las que vas a usar ahora.
+  - consigna: >-
+      Encontrá los servicios que deberían arrancar solos (StartType Automatic) pero están
+      detenidos.
+    verificar:
+      - { comando_usado: "where-object|\\?\\s*\\{|\\bwhere\\b" }
+      - { salida_contiene: "Spooler" }
+    pistas:
+      - "Dos condiciones a la vez: Where-Object { $_.StartType -eq 'Automatic' -and $_.Status -eq 'Stopped' }"
+    solucion:
+      - Get-Service | Where-Object { $_.StartType -eq 'Automatic' -and $_.Status -eq 'Stopped' }
+    explicacion: >-
+      Ahí está por qué no imprime: la cola de impresión debería estar corriendo y no lo está. Es
+      una de las consultas más útiles para revisar un servidor después de un reinicio.
+  - consigna: Arrancá ese servicio usando la tubería, sin escribir su nombre.
+    verificar:
+      - { servicio: Spooler, estado: Running }
+    pistas:
+      - "Lo que devuelve el filtro puede pasar directo a Start-Service."
+    solucion:
+      - Get-Service | Where-Object { $_.StartType -eq 'Automatic' -and $_.Status -eq 'Stopped' } | Start-Service
+  - consigna: >-
+      Mostrá los 5 procesos que más memoria usan, con el nombre y la memoria en MB (redondeada a
+      un decimal).
+    verificar:
+      - { comando_usado: "sort-object.*workingset.*-desc|sort.*ws.*-desc" }
+      - { salida_contiene: "MsMpEng" }
+    pistas:
+      - "Sort-Object WorkingSet -Descending | Select-Object -First 5 …"
+      - "Una propiedad calculada: @{Name='MB'; Expression={ [math]::Round($_.WorkingSet / 1MB, 1) }}"
+    solucion:
+      - Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 5 Name, @{Name='MB'; Expression={ [math]::Round($_.WorkingSet / 1MB, 1) }}
+  - consigna: Contá cuántos servicios hay en cada estado.
+    verificar:
+      - { comando_usado: "group-object|group\\s" }
+      - { salida_regex: "Running" }
+    solucion: [Get-Service | Group-Object Status]
+  - consigna: >-
+      Guardá en C:\Informes\servicios.csv el nombre, el nombre para mostrar y el tipo de inicio de
+      los servicios que están corriendo.
+    verificar:
+      - { archivo: C:\Informes\servicios.csv, contenido_incluye: '"Name","DisplayName","StartType"' }
+    pistas:
+      - "Primero filtrá, después Select-Object con las tres propiedades y al final Export-Csv -NoTypeInformation."
+      - "No uses Format-Table antes de exportar: lo que sale de Format-Table ya no son los objetos."
+    solucion:
+      - Get-Service | Where-Object Status -eq Running | Select-Object Name, DisplayName, StartType | Export-Csv C:\Informes\servicios.csv -NoTypeInformation
+  - consigna: >-
+      Generá C:\Informes\discos.html con la letra de cada disco (DeviceID) y su espacio libre en GB
+      en una columna llamada LibreGB.
+    verificar:
+      - { archivo: C:\Informes\discos.html, contenido_incluye: "LibreGB" }
+    pistas:
+      - "Get-CimInstance Win32_LogicalDisk trae FreeSpace en bytes."
+      - "ConvertTo-Html arma la página y Out-File la guarda."
+    solucion:
+      - Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID, @{Name='LibreGB'; Expression={ [math]::Round($_.FreeSpace / 1GB, 1) }} | ConvertTo-Html -Title "Discos de SRV-ADMIN" | Out-File C:\Informes\discos.html

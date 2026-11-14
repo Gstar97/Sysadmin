@@ -1,0 +1,89 @@
+tipo: terminal
+shell: powershell
+titulo: Ejecutar un script con parámetros y manejo de errores
+descripcion: >-
+  En C:\Scripts hay un script que te pasó un compañero, Revisar-Servicios.ps1, que revisa el
+  estado de una lista de servicios. Lo vas a ejecutar en SRV-ADMIN, donde alguien dejó la
+  directiva de ejecución más restrictiva. La carpeta C:\Informes ya existe.
+estado_inicial:
+  equipo: SRV-ADMIN
+  directorio: C:\Scripts
+  politica_ejecucion: Restricted
+  archivos:
+    C:\Informes: { tipo: directorio }
+    C:\Scripts\Revisar-Servicios.ps1: |
+      <#
+      .SYNOPSIS
+      Muestra el estado de una lista de servicios.
+      .EXAMPLE
+      .\Revisar-Servicios.ps1 -Servicios Spooler, WinRM
+      #>
+      param(
+          [string[]]$Servicios = @('Spooler', 'WinRM', 'W32Time')
+      )
+
+      foreach ($nombre in $Servicios) {
+          try {
+              $s = Get-Service -Name $nombre -ErrorAction Stop
+              [PSCustomObject]@{ Servicio = $s.Name; Estado = $s.Status; Inicio = $s.StartType }
+          }
+          catch {
+              [PSCustomObject]@{ Servicio = $nombre; Estado = 'No existe'; Inicio = '' }
+          }
+      }
+pasos:
+  - consigna: Mirá el contenido del script antes de ejecutarlo.
+    verificar:
+      - { comando_usado: "get-content|gc |cat |type " }
+    solucion: [Get-Content .\Revisar-Servicios.ps1]
+    explicacion: >-
+      Leer un script ajeno antes de ejecutarlo es una costumbre que te va a salvar alguna vez:
+      un script corre con tus permisos.
+  - consigna: Ejecutalo y leé el error.
+    verificar:
+      - { comando_usado: "\\.\\\\revisar-servicios" }
+    solucion: [.\Revisar-Servicios.ps1]
+    pistas:
+      - "Un script de la carpeta actual se ejecuta con .\\ adelante: .\\Revisar-Servicios.ps1"
+    explicacion: >-
+      La directiva de ejecución Restricted no deja correr ningún script. No es una barrera de
+      seguridad (cualquiera puede saltearla), sino una protección contra ejecutar algo sin querer.
+  - consigna: >-
+      Mirá las directivas de ejecución por ámbito y dejá RemoteSigned solo para tu usuario
+      (ámbito CurrentUser), sin tocar la del equipo. Comprobá cuál queda vigente.
+    verificar:
+      - { comando_usado: "set-executionpolicy.*currentuser|set-executionpolicy.*-scope\\s+currentuser" }
+      - { salida_contiene: "RemoteSigned" }
+    pistas:
+      - "Get-ExecutionPolicy -List muestra cada ámbito."
+      - "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+    solucion:
+      - Get-ExecutionPolicy -List
+      - Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+      - Get-ExecutionPolicy
+    explicacion: >-
+      RemoteSigned deja correr los scripts locales y pide firma a los que vienen de internet.
+      CurrentUser le gana a LocalMachine, así que el cambio vale solo para vos.
+  - consigna: Ejecutá el script para revisar solo Spooler y WinRM.
+    verificar:
+      - { salida_regex: "Spooler\\s+Running" }
+      - { comando_usado: "-servicios\\s+spooler\\s*,\\s*winrm|-servicios\\s+@?\\(?['\"]?spooler" }
+    solucion: [".\\Revisar-Servicios.ps1 -Servicios Spooler, WinRM"]
+  - consigna: >-
+      Probalo con un servicio que no existe, Inventado, junto con Spooler. ¿Se corta o sigue?
+    verificar:
+      - { salida_contiene: "No existe" }
+      - { salida_contiene: "Spooler" }
+    solucion: [".\\Revisar-Servicios.ps1 -Servicios Inventado, Spooler"]
+    explicacion: >-
+      Gracias al -ErrorAction Stop dentro del try, el error de Get-Service se atrapa en el catch,
+      el script anota "No existe" y sigue con el siguiente. Sin try/catch, vería un error rojo
+      por cada servicio que falte.
+  - consigna: >-
+      Guardá el resultado del script (con su lista por defecto) en C:\Informes\estado.csv.
+    verificar:
+      - { archivo: C:\Informes\estado.csv, contenido_incluye: '"Servicio","Estado","Inicio"' }
+    solucion: [.\Revisar-Servicios.ps1 | Export-Csv C:\Informes\estado.csv -NoTypeInformation]
+    explicacion: >-
+      Como el script devuelve objetos (no texto), su salida se exporta, se filtra o se ordena
+      como la de cualquier cmdlet.

@@ -1,0 +1,102 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: $nombre vale SRV01. ¿Qué muestra 'Hola $nombre' (con comillas simples)?
+  opciones:
+    - { texto: "Hola $nombre", correcta: true, explicacion: "Las comillas simples muestran el texto tal cual." }
+    - { texto: "Hola SRV01", explicacion: "Eso pasaría con comillas dobles." }
+    - { texto: "Un error", explicacion: "Es un texto válido." }
+    - { texto: "Hola", explicacion: "El texto se muestra completo." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    $s es el servicio Spooler. ¿Cómo escribís un texto que diga "Estado: Running"?
+  opciones:
+    - { texto: "\"Estado: $($s.Status)\"", correcta: true, explicacion: "Para una propiedad dentro de comillas dobles hace falta la subexpresión $( )." }
+    - { texto: "\"Estado: $s.Status\"", explicacion: "Reemplaza solo $s (el objeto) y agrega el texto .Status." }
+    - { texto: "'Estado: $($s.Status)'", explicacion: "Las comillas simples no reemplazan nada." }
+    - { texto: "\"Estado: \" = $s.Status", explicacion: "= asigna; no arma textos." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí la instrucción que guarda en $servidores un array con DC01 y SRV01.
+  aceptadas: ["$servidores = @('DC01', 'SRV01')", "$servidores = 'DC01', 'SRV01'", "$servidores = @(\"DC01\", \"SRV01\")", "$servidores = \"DC01\", \"SRV01\""]
+  patrones: ["^\\$servidores\\s*=\\s*(@\\(\\s*)?['\"]dc01['\"]\\s*,\\s*['\"]srv01['\"]\\s*\\)?$"]
+  explicacion: "Un array se arma con @( ) o simplemente separando los valores con comas."
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: $ips es una tabla hash con el nombre de cada servidor como clave. Escribí la expresión que devuelve la IP de SRV-WEB01.
+  aceptadas: ["$ips['SRV-WEB01']", "$ips[\"SRV-WEB01\"]", "$ips.'SRV-WEB01'", "$ips.\"SRV-WEB01\""]
+  patrones: ["^\\$ips(\\[\\s*['\"]srv-web01['\"]\\s*\\]|\\.['\"]srv-web01['\"])$"]
+  explicacion: "Con corchetes y la clave entre comillas; como tiene un guion, $ips.SRV-WEB01 sin comillas no funciona."
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés guardar para cada servidor su nombre, su IP y si responde, y después exportarlo a CSV. ¿Qué estructura usás para cada servidor?
+  opciones:
+    - { texto: "Un [PSCustomObject] con las propiedades Servidor, IP y Online", correcta: true, explicacion: "Una lista de objetos se exporta con Export-Csv, una fila por objeto." }
+    - { texto: "Un texto con los tres datos separados por comas", explicacion: "Funciona, pero perdés las propiedades y tenés que recortarlo después." }
+    - { texto: "Una variable distinta por dato y por servidor", explicacion: "Imposible de recorrer o exportar." }
+    - { texto: "Un array de arrays", explicacion: "Sin nombres de columna, el CSV no sabe qué es cada dato." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué devuelve 'SRV-WEB01' -like 'srv-*'?
+  opciones:
+    - { texto: "True: -like usa comodines y no distingue mayúsculas", correcta: true, explicacion: "Para distinguir mayúsculas: -clike." }
+    - { texto: "False, por las mayúsculas", explicacion: "Los operadores no distinguen mayúsculas por defecto." }
+    - { texto: "SRV-WEB01", explicacion: "Con un solo valor a la izquierda devuelve True o False; con una lista, filtra." }
+    - { texto: "Un error: falta -match", explicacion: "-like es correcto para comodines." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre -like y -match?
+  opciones:
+    - { texto: "-like usa comodines (* y ?); -match usa expresiones regulares y guarda lo encontrado en $Matches", correcta: true, explicacion: "Para patrones como \\d{3}, -match." }
+    - { texto: "Son iguales", explicacion: "Entienden patrones distintos." }
+    - { texto: "-match distingue mayúsculas y -like no", explicacion: "Ninguno distingue mayúsculas por defecto." }
+    - { texto: "-like sirve solo para números", explicacion: "Es para textos con comodines." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué devuelve $servidores -like 'SRV-*' si $servidores es @('DC01','SRV-ARCH01','SRV-WEB01')?
+  opciones:
+    - { texto: "SRV-ARCH01 y SRV-WEB01: con una lista a la izquierda, el operador filtra", correcta: true, explicacion: "Devuelve los elementos que cumplen." }
+    - { texto: "True", explicacion: "Con una lista no devuelve True o False." }
+    - { texto: "False, porque DC01 no cumple", explicacion: "No exige que cumplan todos." }
+    - { texto: "Un error", explicacion: "Es válido." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí la expresión que da True si DC01 está en la lista $servidores (con el valor a la izquierda).
+  aceptadas: ["'DC01' -in $servidores", "\"DC01\" -in $servidores"]
+  patrones: ["^['\"]dc01['\"]\\s+-in\\s+\\$servidores$"]
+  explicacion: "-in pregunta si el valor está en la lista; -contains es lo mismo con la lista a la izquierda."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué da '42' + 1 en PowerShell?
+  opciones:
+    - { texto: "421, porque gana el tipo de la izquierda (texto)", correcta: true, explicacion: "Para sumar: [int]'42' + 1 da 43." }
+    - { texto: "43", explicacion: "Habría que convertir el texto a número primero." }
+    - { texto: "Un error", explicacion: "PowerShell convierte el 1 a texto." }
+    - { texto: "42", explicacion: "Concatena los dos." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Escribiste if ($espacio > 20) { 'ok' } y apareció un archivo llamado 20 en la carpeta. ¿Qué pasó?
+  opciones:
+    - { texto: "> redirige la salida a un archivo; para comparar se usa -gt", correcta: true, explicacion: "Los operadores de comparación llevan guion." }
+    - { texto: "Es un error de PowerShell", explicacion: "Hizo lo que se le pidió: redirigir." }
+    - { texto: "El if no funciona con números", explicacion: "Funciona con -gt." }
+    - { texto: "Faltan comillas en 20", explicacion: "El problema es el operador." }
+- id: p12
+  tipo: completar_comando
+  dificultad: 3
+  enunciado: Escribí la expresión que calcula cuántos días pasaron desde el 1 de noviembre de 2026 hasta hoy (usá Get-Date y la propiedad Days).
+  aceptadas: ["((Get-Date) - [datetime]'2026-11-01').Days", "((Get-Date) - [datetime]\"2026-11-01\").Days", "((Get-Date) - (Get-Date '2026-11-01')).Days"]
+  patrones: ["^\\(\\(get-date\\)\\s*-\\s*(\\[datetime\\]\\s*['\"]2026-11-01['\"]|\\(get-date\\s+['\"]2026-11-01['\"]\\))\\)\\.days$"]
+  explicacion: "Restar dos fechas da un TimeSpan; su propiedad Days son los días enteros."

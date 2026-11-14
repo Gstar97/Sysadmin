@@ -1,0 +1,114 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Estás en C:\Scripts y escribís Revisar.ps1 para ejecutar el script que está ahí. Dice que no reconoce el término. ¿Qué falta?
+  opciones:
+    - { texto: "El .\\ adelante: .\\Revisar.ps1", correcta: true, explicacion: "PowerShell no busca scripts en la carpeta actual si no le das la ruta, igual que Linux con ./." }
+    - { texto: "Cambiar la directiva de ejecución", explicacion: "Ese error sería otro (running scripts is disabled)." }
+    - { texto: "Ejecutarlo como administrador", explicacion: "No tiene que ver con permisos." }
+    - { texto: "Renombrarlo a .bat", explicacion: "Los scripts de PowerShell son .ps1." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Pusiste try { Get-Service Inventado } catch { 'No existe' } y en lugar de "No existe" aparece un error rojo. ¿Por qué?
+  opciones:
+    - { texto: "El error de Get-Service no corta, y try/catch solo atrapa los que cortan: falta -ErrorAction Stop", correcta: true, explicacion: "Con -ErrorAction Stop el error pasa a cortar y lo atrapa el catch." }
+    - { texto: "catch no funciona en la consola", explicacion: "Funciona igual que en un script." }
+    - { texto: "Falta finally", explicacion: "finally es opcional." }
+    - { texto: "Hay que escribir catch [Exception]", explicacion: "Un catch sin tipo atrapa todo; el problema es otro." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el bloque param de un script con un único parámetro obligatorio $Servidor de tipo texto.
+  aceptadas: ["param([Parameter(Mandatory)][string]$Servidor)", "param([Parameter(Mandatory=$true)][string]$Servidor)", "param( [Parameter(Mandatory)] [string]$Servidor )"]
+  patrones: ["^param\\(\\s*\\[parameter\\(mandatory(\\s*=\\s*\\$true)?\\)\\]\\s*\\[string\\]\\s*\\$servidor\\s*\\)$"]
+  explicacion: "[Parameter(Mandatory)] hace que PowerShell lo pida si falta; [string] fija el tipo."
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una función hace Write-Host $resultado y, al guardar su salida en una variable, la variable queda vacía. ¿Por qué?
+  opciones:
+    - { texto: "Write-Host solo muestra en pantalla: para devolver datos hay que escribirlos (o usar Write-Output)", correcta: true, explicacion: "Lo que no se guarda sale como resultado; Write-Host no." }
+    - { texto: "Las funciones no pueden devolver nada sin return", explicacion: "No hace falta return." }
+    - { texto: "Hay que declarar la variable antes", explicacion: "Las variables no se declaran." }
+    - { texto: "Write-Host borra la variable", explicacion: "Solo muestra." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace la directiva de ejecución RemoteSigned?
+  opciones:
+    - { texto: "Deja correr los scripts locales y exige firma a los que vienen de internet", correcta: true, explicacion: "Es la que trae Windows Server por defecto." }
+    - { texto: "Solo deja correr scripts firmados", explicacion: "Esa es AllSigned." }
+    - { texto: "Bloquea todos los scripts", explicacion: "Esa es Restricted." }
+    - { texto: "Solo deja ejecutar scripts de forma remota", explicacion: "El nombre confunde: habla del origen del archivo." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un colega dice que dejó la directiva en AllSigned "para que nadie pueda ejecutar código malicioso". ¿Qué le respondés?
+  opciones:
+    - { texto: "Que no es una barrera de seguridad: se saltea con -ExecutionPolicy Bypass o pegando el código; sirve contra ejecuciones accidentales", correcta: true, explicacion: "La seguridad está en los permisos y en revisar lo que se ejecuta." }
+    - { texto: "Que tiene razón", explicacion: "Microsoft aclara que no es un límite de seguridad." }
+    - { texto: "Que AllSigned bloquea también los cmdlets", explicacion: "Solo afecta a los scripts." }
+    - { texto: "Que hay que poner Restricted", explicacion: "Tampoco es una barrera." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés que RemoteSigned valga solo para tu usuario, sin cambiar la del equipo. ¿Qué ejecutás?
+  opciones:
+    - { texto: "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser", correcta: true, explicacion: "CurrentUser le gana a LocalMachine." }
+    - { texto: "Set-ExecutionPolicy RemoteSigned", explicacion: "Sin -Scope cambia LocalMachine (todo el equipo)." }
+    - { texto: "Set-ExecutionPolicy RemoteSigned -Scope MachinePolicy", explicacion: "Ese ámbito lo fijan las directivas de grupo." }
+    - { texto: "Unblock-File", explicacion: "Saca la marca de internet de un archivo, no cambia la directiva." }
+- id: p08
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué directiva se aplica en esta sesión?
+  salida: |
+    Scope          ExecutionPolicy
+    -----          ---------------
+    MachinePolicy  Undefined
+    UserPolicy     Undefined
+    Process        Bypass
+    CurrentUser    RemoteSigned
+    LocalMachine   Restricted
+  opciones:
+    - { texto: "Bypass: Process le gana a CurrentUser y a LocalMachine", correcta: true, explicacion: "Se aplica el primer ámbito (de arriba hacia abajo) que no sea Undefined." }
+    - { texto: "Restricted, porque es la del equipo", explicacion: "LocalMachine es el último en el orden." }
+    - { texto: "RemoteSigned", explicacion: "Process está antes." }
+    - { texto: "La más restrictiva de todas", explicacion: "No se elige por restricción sino por orden de ámbito." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué diferencia hay entre foreach ($s in $lista) { } y $lista | ForEach-Object { }?
+  opciones:
+    - { texto: "Hacen lo mismo: uno es la instrucción del lenguaje (más rápida con listas grandes) y el otro, el cmdlet de la tubería", correcta: true, explicacion: "En los scripts suele leerse mejor foreach; en la tubería, ForEach-Object." }
+    - { texto: "foreach solo funciona con números", explicacion: "Funciona con cualquier lista." }
+    - { texto: "ForEach-Object no existe en Windows PowerShell 5.1", explicacion: "Existe desde siempre." }
+    - { texto: "foreach no acepta variables", explicacion: "Justamente recorre una variable." }
+- id: p10
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son buenas costumbres al escribir un script? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Ayuda en un comentario al principio, con un ejemplo", correcta: true, explicacion: "Get-Help la muestra." }
+    - { texto: "Parámetros con tipos y validaciones", correcta: true, explicacion: "PowerShell valida por vos." }
+    - { texto: "Devolver objetos, no texto", correcta: true, explicacion: "Quien llama decide qué hacer con ellos." }
+    - { texto: "Usar alias para que sea más corto", explicacion: "En un script, nombres completos." }
+    - { texto: "Poner Bypass en todo el equipo para que corra siempre", explicacion: "RemoteSigned para tu usuario alcanza." }
+- id: p11
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este script tiene que avisar cuando un disco tiene menos de 10 GB libres. Marcá las líneas con errores.
+  lenguaje: powershell
+  archivo: |
+    param([int]$Limite = 10)
+    $discos = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+    foreach ($d in $discos) {
+        $libre = $d.FreeSpace / 1GB
+        if ($libre < $Limite) {
+            Write-Warning "Poco espacio en $d.DeviceID"
+        }
+    }
+  lineas_con_error: [5, 6]
+  explicacion: "Línea 5: < no compara (es un operador reservado); va -lt. Línea 6: dentro de comillas, una propiedad necesita $( ): \"$($d.DeviceID)\"."

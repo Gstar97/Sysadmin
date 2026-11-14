@@ -1,0 +1,89 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Ejecutás Invoke-Command en 30 servidores y 2 están apagados. ¿Qué pasa?
+  opciones:
+    - { texto: "Muestra el error de esos 2 y devuelve los resultados de los otros 28", correcta: true, explicacion: "Un equipo que falla no corta a los demás." }
+    - { texto: "Se detiene en el primero que falla", explicacion: "Sigue con el resto." }
+    - { texto: "Espera a que se enciendan", explicacion: "Da el error de conexión y sigue." }
+    - { texto: "No hace nada en ninguno", explicacion: "Los que responden se procesan." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: $dias vale 30. ¿Por qué Invoke-Command -ComputerName SRV01 { Get-ChildItem C:\Logs | Where-Object LastWriteTime -lt (Get-Date).AddDays(-$dias) } no filtra bien?
+  opciones:
+    - { texto: "$dias no existe en SRV01; hay que usar $using:dias", correcta: true, explicacion: "El bloque corre en el otro equipo." }
+    - { texto: "Where-Object no funciona en remoto", explicacion: "Funciona; el problema es la variable." }
+    - { texto: "Falta -Session", explicacion: "Con -ComputerName también se puede, usando $using:." }
+    - { texto: "AddDays no acepta variables", explicacion: "Acepta; pero la variable está vacía allá." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuándo conviene New-PSSession en lugar de Invoke-Command -ComputerName?
+  opciones:
+    - { texto: "Cuando hacés varios pasos en el mismo equipo y necesitás que se mantengan las variables (o no querés reconectar cada vez)", correcta: true, explicacion: "La sesión queda viva hasta Remove-PSSession." }
+    - { texto: "Siempre: -ComputerName está obsoleto", explicacion: "-ComputerName es lo más usado para tareas puntuales." }
+    - { texto: "Solo con servidores Linux", explicacion: "Funciona con cualquiera." }
+    - { texto: "Para que no haga falta WinRM", explicacion: "También usa WinRM." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Desde una sesión remota en SRV01 intentás leer \\SRV-ARCH01\Compartida y da "Access is denied", aunque tu usuario tiene permiso. ¿Qué pasa?
+  opciones:
+    - { texto: "Es el segundo salto: tus credenciales llegaron a SRV01 pero no pueden pasar a un tercer equipo", correcta: true, explicacion: "Lo más simple es acceder a SRV-ARCH01 directamente desde tu equipo." }
+    - { texto: "SRV-ARCH01 está apagado", explicacion: "Sería otro error." }
+    - { texto: "Falta TrustedHosts", explicacion: "Es un dominio: se usa Kerberos." }
+    - { texto: "Hay que usar Enter-PSSession", explicacion: "Pasa lo mismo." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servicio que volvió de Invoke-Command no tiene el método Stop(). ¿Por qué?
+  opciones:
+    - { texto: "Los objetos que vuelven son copias deserializadas: tienen las propiedades, pero no los métodos", correcta: true, explicacion: "Lo que haya que hacer, se hace dentro del bloque remoto." }
+    - { texto: "El servicio no se puede detener", explicacion: "El objeto local es una copia." }
+    - { texto: "Hace falta Import-Module", explicacion: "No tiene relación." }
+    - { texto: "Es un error del servidor remoto", explicacion: "Es así por diseño." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que instala el módulo ImportExcel desde la galería solo para tu usuario.
+  aceptadas: ["Install-Module ImportExcel -Scope CurrentUser", "Install-Module -Name ImportExcel -Scope CurrentUser"]
+  patrones: ["^install-module\\s+(-name\\s+)?importexcel\\s+-scope\\s+currentuser(\\s+-force)?$"]
+  explicacion: "-Scope CurrentUser lo instala en tu perfil y no pide ser administrador."
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene revisar antes de instalar un módulo de la PowerShell Gallery en un servidor? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Quién lo publica y si tiene su código en un lugar público", correcta: true, explicacion: "Cualquiera puede publicar en la galería." }
+    - { texto: "Cuántas descargas tiene y si se mantiene", correcta: true, explicacion: "Un módulo abandonado es un riesgo." }
+    - { texto: "Bajarlo con Save-Module y leerlo si es para algo importante", correcta: true, explicacion: "Corre con tus permisos." }
+    - { texto: "Que tenga un nombre parecido al que buscabas", explicacion: "Los nombres parecidos son una trampa conocida." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un servidor recién instalado, Get-ADUser dice que no reconoce el término. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "No está instalado el módulo de Active Directory (RSAT-AD-PowerShell)", correcta: true, explicacion: "Los cmdlets vienen en módulos; sin el módulo, no existen." }
+    - { texto: "Hace falta Import-Module ActiveDirectory", explicacion: "Si estuviera instalado, se cargaría solo." }
+    - { texto: "El dominio está caído", explicacion: "Daría otro error (no puede contactar al servidor)." }
+    - { texto: "Está mal escrito", explicacion: "Get-ADUser es el nombre correcto." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cómo instalás un módulo de la galería en un servidor que no tiene salida a internet?
+  opciones:
+    - { texto: "Save-Module en un equipo con internet y copiar la carpeta a C:\\Program Files\\WindowsPowerShell\\Modules del servidor", correcta: true, explicacion: "Los módulos son carpetas con archivos." }
+    - { texto: "No se puede", explicacion: "Se copian." }
+    - { texto: "Install-Module -Offline", explicacion: "Ese parámetro no existe." }
+    - { texto: "Abrir internet en el servidor un rato", explicacion: "No hace falta." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué parámetros usa Enter-PSSession para conectarse por SSH en PowerShell 7?
+  opciones:
+    - { texto: "-HostName y -UserName", correcta: true, explicacion: "Con WinRM se usa -ComputerName." }
+    - { texto: "-ComputerName y -Credential", explicacion: "Esos son de WinRM." }
+    - { texto: "-SSH", explicacion: "No existe." }
+    - { texto: "Ninguno: SSH no funciona con PowerShell", explicacion: "PowerShell 7 lo admite." }

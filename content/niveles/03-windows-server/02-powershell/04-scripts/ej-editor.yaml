@@ -1,0 +1,75 @@
+tipo: configuracion
+titulo: Un script para limpiar registros viejos
+lenguaje: powershell
+nombre_archivo: C:\Scripts\Limpiar-Registros.ps1
+consigna: >-
+  Completá el script para que reciba la carpeta (-Ruta, obligatoria), la cantidad de días
+  (-Dias, 30 si no se indica) y un switch -Simular. Tiene que borrar los .log más viejos que esos
+  días (con -WhatIf cuando se pide simular), atrapar los errores con try/catch para que un archivo
+  bloqueado no corte todo, y devolver un resumen. Sin alias: nombres completos.
+archivo_inicial: |
+  <#
+  .SYNOPSIS
+  Borra los archivos .log más viejos que una cantidad de días.
+  .EXAMPLE
+  .\Limpiar-Registros.ps1 -Ruta D:\Logs -Dias 60 -Simular
+  #>
+  param(
+      # Completá los tres parámetros
+  )
+
+  $limite = (Get-Date).AddDays(-$Dias)
+  $viejos = gci $Ruta -Filter *.log | ? { $_.LastWriteTime -lt $limite }
+
+  $borrados = 0
+  foreach ($archivo in $viejos) {
+      Remove-Item $archivo.FullName -WhatIf:$Simular
+      $borrados++
+  }
+
+  [PSCustomObject]@{
+      Carpeta  = $Ruta
+      Borrados = $borrados
+  }
+reglas:
+  - { tipo: sin_errores, mensaje: "El script no tiene errores de sintaxis" }
+  - { tipo: contiene, regex: "\\[Parameter\\(Mandatory(\\s*=\\s*\\$true)?\\)\\]\\s*(\\[string\\])?\\s*\\$Ruta", mensaje: "-Ruta es obligatoria ([Parameter(Mandatory)])" }
+  - { tipo: contiene, regex: "\\[int\\]\\s*\\$Dias\\s*=\\s*30", mensaje: "-Dias es un número entero que vale 30 si no se indica" }
+  - { tipo: contiene, regex: "\\[switch\\]\\s*\\$Simular", mensaje: "-Simular es un switch" }
+  - { tipo: no_contiene, regex: "(^|[|;{(]\\s*)(gci|\\?|%|ls|dir)(\\s|$)", mensaje: "No quedan alias: Get-ChildItem y Where-Object con su nombre completo" }
+  - { tipo: contiene, regex: "try\\s*\\{[\\s\\S]*Remove-Item[\\s\\S]*-ErrorAction\\s+Stop[\\s\\S]*\\}\\s*catch\\s*\\{", mensaje: "Remove-Item va dentro de un try con -ErrorAction Stop, y hay un catch" }
+  - { tipo: contiene, regex: "catch\\s*\\{[^}]*(Write-Warning|Write-Error)", mensaje: "El catch avisa qué archivo no se pudo borrar (Write-Warning)" }
+solucion: |
+  <#
+  .SYNOPSIS
+  Borra los archivos .log más viejos que una cantidad de días.
+  .EXAMPLE
+  .\Limpiar-Registros.ps1 -Ruta D:\Logs -Dias 60 -Simular
+  #>
+  param(
+      [Parameter(Mandatory)]
+      [string]$Ruta,
+
+      [int]$Dias = 30,
+
+      [switch]$Simular
+  )
+
+  $limite = (Get-Date).AddDays(-$Dias)
+  $viejos = Get-ChildItem $Ruta -Filter *.log | Where-Object { $_.LastWriteTime -lt $limite }
+
+  $borrados = 0
+  foreach ($archivo in $viejos) {
+      try {
+          Remove-Item $archivo.FullName -WhatIf:$Simular -ErrorAction Stop
+          $borrados++
+      }
+      catch {
+          Write-Warning "No se pudo borrar $($archivo.Name): $($_.Exception.Message)"
+      }
+  }
+
+  [PSCustomObject]@{
+      Carpeta  = $Ruta
+      Borrados = $borrados
+  }

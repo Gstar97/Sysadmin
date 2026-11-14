@@ -1,0 +1,105 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué viaja por la tubería entre Get-Service y Where-Object?
+  opciones:
+    - { texto: "Objetos de tipo servicio, con todas sus propiedades", correcta: true, explicacion: "Where-Object puede preguntar por cualquier propiedad por su nombre." }
+    - { texto: "El texto de la tabla que se ve en pantalla", explicacion: "La tabla es solo una vista armada al final." }
+    - { texto: "Solo el nombre de cada servicio", explicacion: "Viaja el objeto completo." }
+    - { texto: "Un archivo temporal", explicacion: "Los objetos pasan en memoria." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Querés saber qué propiedades tiene lo que devuelve Get-Process. ¿Qué usás?
+  opciones:
+    - { texto: "Get-Process | Get-Member", correcta: true, explicacion: "Muestra el tipo, las propiedades y los métodos." }
+    - { texto: "Get-Help Get-Process", explicacion: "Explica el cmdlet, no los objetos que devuelve." }
+    - { texto: "Get-Process | Format-Table", explicacion: "Muestra una vista con pocas columnas." }
+    - { texto: "Get-Command Get-Process", explicacion: "Dice de dónde viene el comando." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí una tubería que muestre los servicios con StartType Automatic que estén detenidos (Status Stopped).
+  patrones:
+    - "^get-service\\s*\\|\\s*(where-object|where|\\?)\\s*\\{\\s*(\\$_|\\$psitem)\\.(starttype\\s+-eq\\s+['\"]?automatic['\"]?\\s+-and\\s+(\\$_|\\$psitem)\\.status\\s+-eq\\s+['\"]?stopped['\"]?|status\\s+-eq\\s+['\"]?stopped['\"]?\\s+-and\\s+(\\$_|\\$psitem)\\.starttype\\s+-eq\\s+['\"]?automatic['\"]?)\\s*\\}$"
+  aceptadas: ["Get-Service | Where-Object { $_.StartType -eq 'Automatic' -and $_.Status -eq 'Stopped' }"]
+  explicacion: "Con dos condiciones se usa la forma con llaves; $_ es el servicio que está pasando."
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Ejecutaste Get-Service | Format-Table Name, Status | Export-Csv servicios.csv y el archivo tiene columnas como ClassId2e4f51ef21dd47e99d3c952918aff9cd. ¿Qué pasó?
+  opciones:
+    - { texto: "Format-Table convirtió los objetos en instrucciones de formato; para elegir columnas antes de exportar se usa Select-Object", correcta: true, explicacion: "Formateá siempre al final, y nunca antes de exportar." }
+    - { texto: "Export-Csv está roto en Windows PowerShell 5.1", explicacion: "Funciona bien con objetos." }
+    - { texto: "Falta -NoTypeInformation", explicacion: "Eso quita la línea #TYPE, no las columnas raras." }
+    - { texto: "El archivo está dañado", explicacion: "Es lo que produce exportar la salida de Format-Table." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace @{Name='GB'; Expression={ $_.Length / 1GB }} dentro de Select-Object?
+  opciones:
+    - { texto: "Agrega una columna GB calculada a partir de la propiedad Length de cada objeto", correcta: true, explicacion: "Es una propiedad calculada; $_ es el objeto actual." }
+    - { texto: "Filtra los archivos de más de 1 GB", explicacion: "Para filtrar se usa Where-Object." }
+    - { texto: "Ordena por tamaño", explicacion: "Para ordenar se usa Sort-Object." }
+    - { texto: "Crea una variable llamada GB", explicacion: "Crea una columna en cada objeto de salida." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué Get-ChildItem C:\Logs -Filter *.log es mejor que Get-ChildItem C:\Logs | Where-Object Name -like *.log?
+  opciones:
+    - { texto: "Porque filtra al traer los datos, sin crear objetos para todo lo demás: es mucho más rápido con muchos archivos", correcta: true, explicacion: "Filtrá a la izquierda cuando el cmdlet tiene su propio filtro." }
+    - { texto: "Porque Where-Object no entiende comodines", explicacion: "-like acepta comodines." }
+    - { texto: "Porque el resultado es distinto", explicacion: "El resultado es el mismo; cambia cuánto cuesta." }
+    - { texto: "No hay diferencia", explicacion: "Con miles de archivos se nota mucho." }
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué comando produjo esta salida?
+  salida: |
+    Count Name    Group
+    ----- ----    -----
+       14 Running {CryptSvc, Dhcp, Dnscache, EventLog...}
+        3 Stopped {BITS, Netlogon, wuauserv}
+  opciones:
+    - { texto: "Get-Service | Group-Object Status", correcta: true, explicacion: "Group-Object junta los objetos por el valor de una propiedad y cuenta cuántos hay." }
+    - { texto: "Get-Service | Measure-Object", explicacion: "Measure-Object daría un solo total." }
+    - { texto: "Get-Service | Sort-Object Status", explicacion: "Ordenaría la lista, sin agrupar." }
+    - { texto: "Get-Service | Select-Object Status -Unique", explicacion: "Mostraría solo los estados." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená las partes de la tubería que muestra los 3 archivos más grandes de C:\Logs con su tamaño en MB.
+  pasos:
+    - "Get-ChildItem C:\\Logs -File"
+    - "Sort-Object Length -Descending"
+    - "Select-Object -First 3 Name, @{n='MB'; e={ [math]::Round($_.Length / 1MB, 1) }}"
+    - "Format-Table -AutoSize"
+  explicacion: "Traer, ordenar por la propiedad original, elegir y calcular columnas, y recién al final dar formato."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es $_ dentro de Where-Object { $_.Status -eq 'Running' }?
+  opciones:
+    - { texto: "El objeto que está pasando por la tubería en ese momento", correcta: true, explicacion: "También se puede escribir $PSItem." }
+    - { texto: "La última variable que creaste", explicacion: "Es automática y cambia con cada objeto." }
+    - { texto: "El resultado del comando anterior completo", explicacion: "Es uno por vez, no la lista entera." }
+    - { texto: "Un comodín de texto", explicacion: "Es una variable automática." }
+- id: p10
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué formatos de salida conviene usar en cada caso? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Export-Csv para una planilla o para volver a leerlo con Import-Csv", correcta: true, explicacion: "Cada fila vuelve como un objeto." }
+    - { texto: "ConvertTo-Html con Out-File para un informe que se manda por correo", correcta: true, explicacion: "Arma una tabla HTML." }
+    - { texto: "ConvertTo-Json para pasarle datos a otro programa o a una API", correcta: true, explicacion: "Es el formato de intercambio más común." }
+    - { texto: "Format-Table | Out-File para que otro script lo lea", explicacion: "Queda texto para la vista; otro script tendría que recortarlo." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué devuelve (Get-Service).Name?
+  opciones:
+    - { texto: "Una lista con el nombre de cada servicio, solo los textos", correcta: true, explicacion: "Desde PowerShell 3, pedir una propiedad sobre una lista la pide a cada elemento." }
+    - { texto: "Un error, porque una lista no tiene Name", explicacion: "PowerShell la aplica a cada elemento." }
+    - { texto: "El nombre del primer servicio", explicacion: "Devuelve todos." }
+    - { texto: "La palabra Name", explicacion: "Devuelve los valores." }

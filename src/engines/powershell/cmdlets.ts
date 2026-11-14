@@ -591,6 +591,14 @@ function csvLine(values: unknown[], delim: string) {
 
 function toCsv(items: unknown[], delim = ',', typeInfo = false): string[] {
   if (!items.length) return []
+  // Lo que sale de Format-Table/Format-List ya no son los objetos sino instrucciones de formato:
+  // exportarlo da esta "basura", igual que en Windows.
+  if ((items[0] as PsObject)?.__type === '__formatted') {
+    const cols = ['ClassId2e4f51ef21dd47e99d3c952918aff9cd', 'pageHeaderEntry', 'pageFooterEntry', 'autosizeInfo', 'shapeInfo', 'groupingEntry']
+    const row = (id: string) => csvLine([id, '', '', '', 'Microsoft.PowerShell.Commands.Internal.Format.TableHeaderInfo', ''], delim)
+    const lines = [csvLine(cols, delim), row('033ecb2bc07a4d43b5ef94ed5a35d280'), row('9e210fe47d09416682b841769c78b8a3'), row('27c87ef9bbda4f709f6b4002fa4af63c'), row('4ec4f0187cb04f4cb6973460dfe252df'), row('cf522b78d86c486691226b40aa69e95c')]
+    return typeInfo ? ['#TYPE Microsoft.PowerShell.Commands.Internal.Format.FormatStartData', ...lines] : lines
+  }
   const props = propNames(items[0])
   const lines = props.length ? [csvLine(props, delim), ...items.map((i) => csvLine(props.map((p) => getProp(i, p)), delim))] : items.map(toText)
   return typeInfo ? [`#TYPE ${typeName(items[0])}`, ...lines] : lines

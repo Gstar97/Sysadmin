@@ -182,6 +182,17 @@ export function parsePs(src: string): Stmt[] {
   }
 
   function parseStatements(endChar?: string): Stmt[] {
+    // Un bloque nuevo ({ } o @( )) dentro de los argumentos de un método vuelve a aceptar comas.
+    const saved = inCallArgs
+    inCallArgs = 0
+    try {
+      return parseStatementsInner(endChar)
+    } finally {
+      inCallArgs = saved
+    }
+  }
+
+  function parseStatementsInner(endChar?: string): Stmt[] {
     const out: Stmt[] = []
     while (true) {
       skipWs(true)
@@ -495,6 +506,11 @@ export function parsePs(src: string): Stmt[] {
       const name = nameExpr.k === 'str' || nameExpr.k === 'bare' ? nameExpr.v : ''
       return { k: 'cmd', name, args: parseArgs(), src: src.slice(start, pos) }
     }
+    // ? y % son alias de Where-Object y ForEach-Object cuando van al principio de un comando.
+    if ((c === '?' || c === '%') && /^[?%](\s|$)/.test(src.slice(pos))) {
+      pos++
+      return { k: 'cmd', name: c === '?' ? 'Where-Object' : 'ForEach-Object', args: parseArgs(), src: src.slice(start, pos) }
+    }
     if (/[A-Za-z]/.test(c) || ((c === '.' || c === '\\') && /[\\/A-Za-z]/.test(peek(1)))) {
       const m = /^[A-Za-z0-9_.\\/:-]+/.exec(src.slice(pos))!
       // "-not" o números no son comandos.
@@ -624,11 +640,14 @@ export function parsePs(src: string): Stmt[] {
     return left
   }
 
+  /** Dentro de los argumentos de un método la coma separa argumentos, no arma un array. */
+  let inCallArgs = 0
+
   function parseComma(): Expr {
     const items = [parseRange()]
     while (true) {
       skipWs()
-      if (peek() !== ',') break
+      if (peek() !== ',' || inCallArgs > 0) break
       pos++
       skipWs(true)
       items.push(parseRange())
@@ -675,7 +694,12 @@ export function parsePs(src: string): Stmt[] {
     }
     while (true) {
       skipWs(true)
-      args.push(parseComparison())
+      inCallArgs++
+      try {
+        args.push(parseComparison())
+      } finally {
+        inCallArgs--
+      }
       skipWs(true)
       if (peek() === ',') {
         pos++
@@ -802,7 +826,14 @@ export function parsePs(src: string): Stmt[] {
     if (c === '(') {
       pos++
       skipWs(true)
-      const st = parseStatement()
+      const saved = inCallArgs
+      inCallArgs = 0
+      let st: Stmt
+      try {
+        st = parseStatement()
+      } finally {
+        inCallArgs = saved
+      }
       expect(')')
       if (st.k === 'pipe' && st.elements.length === 1 && st.elements[0].k === 'expr') return st.elements[0].e
       return { k: 'sub', body: [st] }
@@ -818,7 +849,14 @@ export function parsePs(src: string): Stmt[] {
     }
     if (c === '@' && peek(1) === '(') {
       pos += 2
-      const body = parseStatements(')')
+      const saved = inCallArgs
+      inCallArgs = 0
+      let body: Stmt[]
+      try {
+        body = parseStatements(')')
+      } finally {
+        inCallArgs = saved
+      }
       pos++
       return { k: 'array', items: [{ k: 'sub', body }] }
     }
@@ -850,7 +888,12 @@ export function parsePs(src: string): Stmt[] {
         if (peek() !== '=') throw new PsParseError("Missing '=' operator after key in hash literal.")
         pos++
         skipWs(true)
-        entries.push({ key, value: parseExpr() })
+        // El valor puede ser una instrucción (if, switch, un comando con tubería), como en PowerShell.
+        skipWs()
+        if (/^(if|switch|foreach|for|while|try)\b/i.test(src.slice(pos)) || /^[A-Za-z][\w]*-[A-Za-z]/.test(src.slice(pos))) {
+          const st = parseStatement()
+          entries.push({ key, value: st.k === 'pipe' && st.elements.length === 1 && st.elements[0].k === 'expr' ? st.elements[0].e : { k: 'sub', body: [st] } })
+        } else entries.push({ key, value: parseExpr() })
       }
       return { k: 'hash', entries }
     }

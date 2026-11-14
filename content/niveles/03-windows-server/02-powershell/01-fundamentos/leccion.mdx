@@ -1,0 +1,144 @@
+---
+id: n3-m2-l1
+titulo: Fundamentos de PowerShell
+minutos: 120
+objetivos:
+  - Leer y escribir cmdlets (verbo-sustantivo) con parámetros con nombre, posicionales y de tipo switch.
+  - Encontrar el comando que hace falta y su ayuda con Get-Command y Get-Help, sin salir de la consola.
+  - Diferenciar Windows PowerShell 5.1 de PowerShell 7 y saber cuándo usar cada uno.
+glosario: [powershell, cmdlet, alias-powershell]
+verificado: 2026-11
+---
+
+import anatomia from './anatomia-cmdlet.svg?raw'
+import verbos from './verbos.yaml'
+import descubrir from './ej-descubrir.yaml'
+
+En el módulo anterior ya usaste PowerShell para configurar servidores. Ahora toca aprenderlo en serio, porque es la herramienta con la que se administra todo lo que viene: Active Directory, DNS, DHCP, archivos, actualizaciones. Si venís de Bash, la buena noticia es que muchas ideas se repiten (comandos, parámetros, tuberías, scripts). La sorpresa, que vas a ver en la lección que viene, es que PowerShell no pasa texto entre comandos sino objetos.
+
+<AntesDeEmpezar>
+- La terminal, el shell y el prompt (lección 1.1.2), para comparar.
+- Scripting en Bash (módulo 1.7), si ya lo hiciste.
+- Herramientas de administración y PowerShell remoto (lección 3.1.3).
+</AntesDeEmpezar>
+
+## Cmdlets: verbo y sustantivo
+
+Los comandos propios de PowerShell se llaman **cmdlets** y tienen siempre la misma forma: un **verbo**, un guion y un **sustantivo** en singular. `Get-Service`, `Stop-Process`, `New-Item`, `Restart-Computer`, `Get-ADUser`.
+
+<Diagrama svg={anatomia} alt="El comando Get-Service -Name Spooler -ComputerName SRV01 desarmado: Get es el verbo (qué se hace), Service es el sustantivo (sobre qué), -Name es un parámetro con su valor Spooler, y -ComputerName otro parámetro con el valor SRV01. Debajo, los tres tipos de parámetro: con nombre (-Name Spooler), posicional (Get-Service Spooler, el valor sin el nombre porque va en el primer lugar) y switch (-Force, que no lleva valor: está o no está). A la derecha, los verbos más comunes agrupados: Get, Set, New, Remove para ver, cambiar, crear y borrar; Start, Stop, Restart, Enable, Disable para el ciclo de vida; Test y Measure para diagnosticar; Import, Export, ConvertTo para datos." pie="Si sabés el verbo y el sustantivo, sabés el nombre del comando." />
+
+Los verbos son una lista cerrada (`Get-Verb` la muestra): **Get** para ver, **Set** para cambiar, **New** para crear, **Remove** para borrar, **Start**, **Stop**, **Restart**, **Enable**, **Disable**, **Test**, **Import**, **Export**… Y eso tiene un premio enorme: si sabés qué querés hacer y sobre qué, casi siempre podés adivinar el nombre. ¿Ver las reglas del firewall? `Get-NetFirewallRule`. ¿Crear un usuario de AD? `New-ADUser`. ¿Probar una conexión? `Test-NetConnection`.
+
+Es como un idioma con una gramática muy estricta: aprendés veinte verbos y cien sustantivos y ya podés decir miles de cosas. Donde no llega la comparación: un idioma acepta sinónimos; PowerShell no. Es `Remove-Item`, nunca `Delete-Item`.
+
+PowerShell **no distingue mayúsculas**: `get-service`, `Get-Service` y `GET-SERVICE` son lo mismo. Por convención se escribe con mayúscula inicial en cada parte, y la tecla **Tab** completa los nombres de comandos, parámetros y hasta valores.
+
+<Emparejar ejercicio={verbos} />
+
+## Parámetros
+
+```powershell
+Get-Service -Name Spooler                 # con nombre
+Get-Service Spooler                       # posicional: el primer valor va a -Name
+Stop-Service -Name Spooler -Force         # switch: -Force no lleva valor
+Get-ChildItem -Path C:\Windows -Filter *.log -Recurse
+```
+
+- **Con nombre**: `-Nombre valor`. Se pueden abreviar mientras no haya ambigüedad (`-Comp SRV01` por `-ComputerName`), pero en un script escribilos completos.
+- **Posicionales**: algunos parámetros aceptan el valor sin el nombre si va en su lugar. La ayuda dice cuáles.
+- **Switch**: un interruptor sin valor; si está, se activa.
+- **Varios valores**: separados por comas, `Get-Service -Name Spooler, WinRM, W32Time`.
+
+Hay parámetros que tienen **todos** los cmdlets (los "parámetros comunes"): `-Verbose` para que cuente lo que hace, `-ErrorAction` para decidir qué hacer con un error, y dos que te van a salvar más de una vez en los que cambian cosas:
+
+- **`-WhatIf`**: muestra qué haría, sin hacerlo.
+- **`-Confirm`**: pregunta antes de cada cambio.
+
+```powershell
+Get-ChildItem C:\Temp\*.log | Remove-Item -WhatIf
+# What if: Performing the operation "Remove File" on target "C:\Temp\viejo.log".
+```
+
+<Pregunta id="p03" />
+
+## Alias
+
+Para escribir menos en la consola, muchos cmdlets tienen **alias**: `gsv` es `Get-Service`, `gci` es `Get-ChildItem`, `?` es `Where-Object`, `%` es `ForEach-Object`. Y para que los que vienen de otros sistemas se sientan en casa, también están `ls`, `dir`, `cd`, `cat`, `cp`, `mv`, `rm`, `ps`, `kill`.
+
+```powershell
+Get-Alias ls                          # ¿qué es ls?
+Get-Alias -Definition Get-ChildItem   # ¿qué alias tiene Get-ChildItem?
+```
+
+Ojo: `ls` es `Get-ChildItem`, no el `ls` de Linux. Acepta `ls C:\Windows`, pero no `ls -la`. Y la regla de oro: **alias en la consola sí, en los scripts no**. Un script con `gci | ? {...} | % {...}` es ilegible para quien no sabe PowerShell de memoria.
+
+## Encontrar comandos y ayuda
+
+Las dos herramientas más importantes no hacen nada: te dicen qué hacer.
+
+```powershell
+Get-Command -Noun Service              # todo lo que trabaja con servicios
+Get-Command -Verb Test                 # todo lo que "prueba" algo
+Get-Command *firewall*                 # por una parte del nombre
+Get-Command -Module ActiveDirectory    # todo lo de un módulo
+
+Get-Help Get-Service                   # resumen y sintaxis
+Get-Help Get-Service -Examples         # solo los ejemplos
+Get-Help Get-Service -Parameter Name   # un parámetro en detalle
+Get-Help about_Comparison_Operators    # temas de ayuda "about_"
+```
+
+En un servidor recién instalado, la ayuda viene **recortada**: `Get-Help` muestra solo la sintaxis y avisa que falta la ayuda completa. Se baja con **`Update-Help`** (como administrador y con salida a internet), o se lee en el navegador con `Get-Help Get-Service -Online`.
+
+<EnSimple>
+No hace falta memorizar comandos: con Get-Command encontrás el nombre (por verbo o sustantivo) y con Get-Help -Examples ves cómo se usa.
+</EnSimple>
+
+<Terminal ejercicio={descubrir} />
+
+## Windows PowerShell 5.1 y PowerShell 7
+
+Hay dos PowerShell, y conviven en el mismo equipo:
+
+- **Windows PowerShell 5.1** viene con Windows (también con Windows Server 2025) y es el que abre el ícono azul. Se basa en .NET Framework y no tiene versiones nuevas: solo correcciones. Todo módulo de Microsoft para Windows funciona con él.
+- **PowerShell 7** se instala aparte (`winget install Microsoft.PowerShell`, o el instalador MSI) y se abre con **`pwsh`**. Es de código abierto, corre también en Linux y macOS, es más rápido y tiene mejoras de lenguaje. La versión con soporte largo vigente es la **7.6 LTS** (de marzo de 2026, sobre .NET 10, con soporte hasta noviembre de 2028).
+
+¿Cuál usar? Para administrar Windows Server, los dos sirven y casi todos los módulos de Microsoft (ActiveDirectory, DnsServer, GroupPolicy…) andan en los dos. Algunos cmdlets viejos solo existen en 5.1 (por ejemplo, `Get-WmiObject`, que en 7 se reemplaza por `Get-CimInstance`). La recomendación práctica: aprendé con el que está (5.1), escribí scripts que funcionen en los dos, y usá 7 cuando lo tengas instalado. En este curso, las salidas que ves son de Windows PowerShell 5.1.
+
+```powershell
+$PSVersionTable.PSVersion     # 5.1.26100… en Windows PowerShell; 7.6.x en pwsh
+```
+
+### Dónde escribir
+
+La consola alcanza para comandos sueltos. Para scripts, el editor recomendado es **Visual Studio Code** con la extensión de PowerShell (resalta, completa, avisa errores y depura). El viejo **PowerShell ISE** todavía viene en Windows, pero no tiene versiones nuevas y no sirve para PowerShell 7.
+
+Para todo lo que cambia el sistema, abrí PowerShell **como administrador** (clic derecho, "Run as administrator"): el control de cuentas de usuario (UAC), que ya viste en el Nivel 0, hace que incluso un administrador trabaje sin privilegios hasta que los pide.
+
+<ErroresComunes>
+  <ErrorComun titulo="Inventar nombres de cmdlets">
+    Delete-Item o Show-Service no existen. Los verbos son una lista cerrada: Remove, Get. Con Get-Command -Noun encontrás el nombre real.
+  </ErrorComun>
+  <ErrorComun titulo="Usar ls -la porque así se hace en Linux">
+    En PowerShell, ls es un alias de Get-ChildItem y no entiende -la. Para ver ocultos, Get-ChildItem -Force.
+  </ErrorComun>
+  <ErrorComun titulo="Scripts llenos de alias">
+    gci, ?, % y sls ahorran tiempo en la consola, pero en un script nadie los entiende. Nombres completos.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que Get-Help está roto">
+    En un servidor nuevo la ayuda viene recortada. Update-Help (con internet) o -Online.
+  </ErrorComun>
+  <ErrorComun titulo="Probar algo destructivo sin -WhatIf">
+    Remove-Item con comodines o un filtro mal escrito pueden borrar de más. Primero -WhatIf, después sin.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Los cmdlets son verbo-sustantivo (Get-Service); los verbos son una lista cerrada (Get-Verb), así que se pueden adivinar.
+- Parámetros con nombre, posicionales y switch; -WhatIf y -Confirm en todo lo que cambia algo.
+- Los alias (gsv, gci, ls) son para la consola, no para los scripts.
+- Get-Command encuentra comandos por verbo, sustantivo, módulo o nombre; Get-Help -Examples muestra cómo se usan; Update-Help baja la ayuda completa.
+- Windows PowerShell 5.1 viene con Windows; PowerShell 7.6 LTS (pwsh) se instala aparte y conviven.
+- Para cambiar el sistema, PowerShell como administrador.
+</Resumen>

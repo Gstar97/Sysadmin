@@ -1,0 +1,203 @@
+tipo: troubleshooting
+titulo: El script funciona en mi equipo y falla en el servidor
+descripcion: >-
+  Incidente simulado en una empresa de logística. Martina, de IT, escribió en su notebook
+  (Windows 11 con PowerShell 7.6 y las herramientas RSAT) el script Reporte-Cuentas.ps1, que
+  lista las cuentas de AD inactivas y arma una planilla de Excel con el módulo ImportExcel. Lo
+  copió a SRV-TAREAS, un Windows Server 2025, para que corra todos los lunes con el Programador de
+  tareas. El lunes no llegó ninguna planilla. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:30. Martina: "En mi notebook anda perfecto, lo probé mil veces. En el servidor la
+      tarea dice que terminó, pero no hay planilla. ¿Será el servidor?". Tenés acceso a
+      SRV-TAREAS por PowerShell remoto.
+    opciones:
+      - { texto: "Ejecutar el script a mano en SRV-TAREAS, igual que lo ejecuta la tarea, y leer el error", ir_a: n_manual, minutos: 5 }
+      - texto: Copiarlo de nuevo, por si se dañó al copiarlo
+        ir_a: n_copiar
+        minutos: 5
+      - texto: Cambiar la directiva de ejecución del servidor a Unrestricted para que corra cualquier script
+        ir_a: n_unrestricted
+        minutos: 3
+  n_copiar:
+    situacion: >-
+      Lo copiás de nuevo desde el mensaje del chat donde Martina lo compartió. La tarea vuelve a
+      "terminar bien" sin planilla. El archivo nunca estuvo dañado: falta ver qué dice cuando
+      corre.
+    opciones:
+      - { texto: "Ejecutarlo a mano y leer el error", ir_a: n_manual, minutos: 5 }
+  n_unrestricted:
+    situacion: >-
+      Todavía no sabés si el problema es la directiva. Y con Unrestricted en todo el servidor,
+      cualquier script bajado de internet corre con una sola advertencia. Lo dejás como estaba
+      (RemoteSigned) y primero mirás el error.
+    opciones:
+      - { texto: "Ejecutarlo a mano y leer el error", ir_a: n_manual, minutos: 5 }
+  n_manual:
+    situacion: >-
+      La tarea ejecuta "powershell.exe -File C:\Scripts\Reporte-Cuentas.ps1". Hacés lo mismo
+      desde una sesión remota.
+    evidencia:
+      - titulo: En SRV-TAREAS
+        contenido: |
+          PS C:\Scripts> powershell.exe -File .\Reporte-Cuentas.ps1
+          File C:\Scripts\Reporte-Cuentas.ps1 cannot be loaded. The file
+          C:\Scripts\Reporte-Cuentas.ps1 is not digitally signed. You cannot run this script on
+          the current system.
+              + CategoryInfo          : SecurityError: (:) [], PSSecurityException
+              + FullyQualifiedErrorId : UnauthorizedAccess
+
+          PS C:\Scripts> Get-ExecutionPolicy
+          RemoteSigned
+    opciones:
+      - { texto: "Con RemoteSigned los scripts locales corren: este viene marcado como bajado de internet. Revisarlo y desbloquearlo con Unblock-File", ir_a: n_unblock, minutos: 4 }
+      - texto: Agregar -ExecutionPolicy Bypass a la tarea programada
+        ir_a: n_bypass
+        minutos: 3
+  n_bypass:
+    situacion: >-
+      Con Bypass ese error desaparece, pero salteás la única protección contra ejecutar algo que
+      llegó de afuera, y para todos los scripts que esa tarea llame en el futuro. El archivo es
+      de una compañera y lo podés leer: lo que corresponde es sacarle la marca de internet
+      a ese archivo, después de revisarlo.
+    opciones:
+      - { texto: "Revisarlo y usar Unblock-File", ir_a: n_unblock, minutos: 4 }
+  n_unblock:
+    situacion: >-
+      El archivo vino por el chat, así que Windows le puso la marca de "bajado de internet"
+      (Zone.Identifier). Lo leés entero y lo desbloqueás. Volvés a ejecutar.
+    evidencia:
+      - titulo: En SRV-TAREAS
+        contenido: |
+          PS C:\Scripts> Get-Item .\Reporte-Cuentas.ps1 -Stream Zone.Identifier
+          Stream : Zone.Identifier     Length : 26
+          PS C:\Scripts> Unblock-File .\Reporte-Cuentas.ps1
+          PS C:\Scripts> powershell.exe -File .\Reporte-Cuentas.ps1
+          At C:\Scripts\Reporte-Cuentas.ps1:18 char:46
+          +     $estado = $_.Enabled ? 'Activa' : 'Deshabilitada'
+          +                          ~
+          Unexpected token '?' in expression or statement.
+              + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+              + FullyQualifiedErrorId : UnexpectedToken
+    opciones:
+      - { texto: "El operador ? : es de PowerShell 7 y powershell.exe es la 5.1: ver qué versión tiene el servidor", ir_a: n_version, minutos: 4 }
+      - texto: Es un error de tipeo de Martina; borrar la línea 18
+        ir_a: n_borrar
+        minutos: 5
+  n_borrar:
+    situacion: >-
+      Borrás la línea y aparece otro error en la línea 25 (un ForEach-Object -Parallel), y otro en
+      la 31 (el operador ??). No es un error de tipeo: el script está escrito para PowerShell 7 y
+      la tarea lo ejecuta con Windows PowerShell 5.1.
+    opciones:
+      - { texto: "Ver qué versión tiene el servidor", ir_a: n_version, minutos: 4 }
+  n_version:
+    situacion: >-
+      Comparás las dos máquinas.
+    evidencia:
+      - titulo: Notebook de Martina
+        contenido: |
+          PS> $PSVersionTable.PSVersion
+          Major  Minor  Patch
+          -----  -----  -----
+          7      6      0
+      - titulo: SRV-TAREAS
+        contenido: |
+          PS> $PSVersionTable.PSVersion
+          Major  Minor  Build  Revision
+          -----  -----  -----  --------
+          5      1      26100  2161
+          PS> pwsh
+          pwsh : The term 'pwsh' is not recognized as the name of a cmdlet, function, script
+          file, or operable program.
+    opciones:
+      - { texto: "Instalar PowerShell 7.6 LTS en SRV-TAREAS y que la tarea use pwsh.exe", ir_a: n_pwsh, minutos: 10 }
+      - texto: Reescribir el script para PowerShell 5.1
+        ir_a: n_reescribir
+        minutos: 30
+  n_reescribir:
+    situacion: >-
+      Es una opción válida (y la que conviene si el script tiene que correr en muchos servidores
+      viejos), pero lleva tiempo y Martina ya lo probó en 7. Como es un único servidor de tareas,
+      decidís instalar PowerShell 7, que convive con el 5.1.
+    opciones:
+      - { texto: "Instalar PowerShell 7.6 LTS", ir_a: n_pwsh, minutos: 10 }
+  n_pwsh:
+    situacion: >-
+      Instalás PowerShell 7.6 con el MSI (o winget), cambiás la tarea para que ejecute
+      "pwsh.exe -File C:\Scripts\Reporte-Cuentas.ps1" y probás a mano.
+    evidencia:
+      - titulo: En SRV-TAREAS, con pwsh
+        contenido: |
+          PS C:\Scripts> pwsh -File .\Reporte-Cuentas.ps1
+          Get-ADUser: The term 'Get-ADUser' is not recognized as a name of a cmdlet, function,
+          script file, or executable program.
+          Export-Excel: The term 'Export-Excel' is not recognized as a name of a cmdlet,
+          function, script file, or executable program.
+    opciones:
+      - { texto: "Faltan los dos módulos: ActiveDirectory (RSAT) e ImportExcel. Ver dónde están instalados en la notebook", ir_a: n_modulos, minutos: 4 }
+      - texto: Copiar a mano la carpeta de módulos de la notebook al servidor
+        ir_a: n_copiar_modulos
+        minutos: 10
+  n_copiar_modulos:
+    situacion: >-
+      Copiar ImportExcel puede funcionar, pero el módulo ActiveDirectory no se copia: viene con
+      las herramientas RSAT del sistema. Y copiar a mano la carpeta del perfil de Martina deja
+      módulos sin versión controlada en un servidor. Mejor ver qué hay y cómo se instala cada uno.
+    opciones:
+      - { texto: "Ver dónde está instalado cada módulo", ir_a: n_modulos, minutos: 4 }
+  n_modulos:
+    situacion: >-
+      En la notebook de Martina, cada módulo vino de un lado distinto.
+    evidencia:
+      - titulo: Notebook de Martina
+        contenido: |
+          PS> Get-Module -ListAvailable ActiveDirectory, ImportExcel | Select-Object Name, Version, Path
+          Name            Version  Path
+          ----            -------  ----
+          ActiveDirectory 1.0.1.0  C:\Windows\system32\WindowsPowerShell\v1.0\Modules\ActiveDirectory\...
+          ImportExcel     7.8.10   C:\Users\martina\Documents\PowerShell\Modules\ImportExcel\7.8.10\...
+    opciones:
+      - { texto: "En el servidor: instalar RSAT-AD-PowerShell e ImportExcel para todos los usuarios (la tarea corre con otra cuenta), con la versión fija", ir_a: n_instalar, minutos: 8 }
+      - texto: Install-Module ImportExcel -Scope CurrentUser en el servidor, con tu usuario
+        ir_a: n_currentuser
+        minutos: 4
+  n_currentuser:
+    situacion: >-
+      Funciona cuando lo probás vos, pero la tarea corre con la cuenta de servicio, que no ve
+      los módulos de tu perfil: el lunes que viene fallaría igual. Es lo mismo que le pasó a
+      Martina con su notebook.
+    opciones:
+      - { texto: "Instalarlo para todos los usuarios", ir_a: n_instalar, minutos: 8 }
+  n_instalar:
+    situacion: >-
+      Instalás el módulo de AD como característica y ImportExcel para todos los usuarios, en la
+      misma versión que usó Martina. Y le agregás al script, arriba de todo, una línea #Requires
+      para que, si algún día falta algo, el error sea claro desde la primera línea.
+    evidencia:
+      - titulo: En SRV-TAREAS
+        contenido: |
+          PS> Install-WindowsFeature RSAT-AD-PowerShell
+          PS> Install-Module ImportExcel -RequiredVersion 7.8.10 -Scope AllUsers
+      - titulo: Primera línea del script
+        contenido: |
+          #Requires -Version 7.4 -Modules ActiveDirectory, @{ ModuleName = 'ImportExcel'; RequiredVersion = '7.8.10' }
+    opciones:
+      - { texto: "Ejecutar la tarea programada y revisar la planilla", ir_a: n_fin, minutos: 5 }
+  n_fin:
+    final: exito
+    situacion: >-
+      La tarea corre con pwsh, encuentra los dos módulos y deja la planilla en la carpeta
+      compartida. En el cuaderno técnico anotás qué necesita el script (PowerShell 7.4 o más,
+      ActiveDirectory e ImportExcel 7.8.10) y que SRV-TAREAS es el único servidor con pwsh.
+    resumen: >-
+      "Anda en mi equipo" casi siempre quiere decir "mi equipo tiene algo que el servidor no".
+      Acá eran tres cosas, y cada error tapaba al siguiente: el archivo llegó por el chat con la
+      marca de internet y RemoteSigned no lo dejaba correr (se revisa y se desbloquea con
+      Unblock-File, en vez de Bypass para todo); el script usaba sintaxis de PowerShell 7 (? :,
+      ??, -Parallel) y la tarea lo corría con Windows PowerShell 5.1; y los módulos estaban en la
+      notebook (ImportExcel en el perfil de Martina, ActiveDirectory por RSAT) y no en el
+      servidor. La línea #Requires al principio convierte esos tres problemas en un mensaje claro
+      apenas arranca el script.

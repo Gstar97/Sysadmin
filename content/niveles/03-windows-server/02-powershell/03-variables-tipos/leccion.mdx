@@ -1,0 +1,178 @@
+---
+id: n3-m2-l3
+titulo: Variables, tipos y estructuras
+minutos: 120
+objetivos:
+  - Guardar datos en variables y armar textos con comillas dobles, subexpresiones y el operador -f.
+  - Usar arrays, tablas hash y objetos personalizados ([PSCustomObject]) para ordenar los datos de un script.
+  - Comparar con -eq, -like, -match, -in y -contains, sabiendo que no distinguen mayúsculas.
+glosario: [tabla-hash, pscustomobject]
+verificado: 2026-11
+---
+
+import estructuras from './estructuras.svg?raw'
+import operadores from './operadores.yaml'
+import ejercicio from './ej-estructuras.yaml'
+
+Con lo de la lección anterior podés resolver muchísimo en una sola línea. Pero cuando un trabajo tiene varios pasos (recorrer servidores, juntar datos, decidir qué hacer con cada uno), hace falta guardar cosas en el camino. Esta lección es la caja de herramientas para eso: variables, textos, listas, tablas y objetos propios. Es corta en conceptos y larga en práctica: casi todo lo que viene usa esto.
+
+<AntesDeEmpezar>
+- Variables en Bash (lección 1.7.2), para comparar.
+- Objetos y pipeline (lección anterior).
+</AntesDeEmpezar>
+
+## Variables
+
+Empiezan con `$` y no hace falta declararlas: se crean al asignarles algo. Guardan cualquier cosa, incluido el resultado de un comando (objetos, no texto).
+
+```powershell
+$nombre   = 'SRV-ARCH01'
+$limiteGB = 20
+$servicio = Get-Service Spooler       # el objeto completo
+$servicio.Status                      # Running
+$servicio | Stop-Service              # se usa como cualquier objeto
+```
+
+Los nombres no distinguen mayúsculas (`$Nombre` y `$nombre` son la misma) y conviene que digan qué guardan: `$servidores`, no `$x`. Hay variables que ya existen y que vas a usar seguido: `$true`, `$false`, `$null`, `$_` (el objeto actual en una tubería), `$PSVersionTable`, `$env:COMPUTERNAME` (las variables de entorno van con `$env:`).
+
+## Textos
+
+Dos tipos de comillas, igual que en Bash:
+
+- **Simples**: el texto tal cual. `'Costó $100'` muestra `$100`.
+- **Dobles**: reemplazan las variables. `"Servidor: $nombre"` muestra `Servidor: SRV-ARCH01`.
+
+Para meter una propiedad o una cuenta dentro de comillas dobles, va en una **subexpresión** `$( )`:
+
+```powershell
+"El servicio está $($servicio.Status)"        # sin $( ) mostraría el objeto entero y ".Status"
+"Quedan $($limiteGB - 5) GB"
+```
+
+El carácter de escape es la **comilla invertida** (`` ` ``): `` `n `` es un salto de línea, `` `t `` una tabulación y `` `" `` una comilla dentro de comillas dobles. Y para armar textos con formato, el operador **`-f`**:
+
+```powershell
+'{0} tiene {1:N1} GB libres ({2:P0})' -f 'C:', 12.345, 0.21
+# C: tiene 12,3 GB libres (21 %)
+```
+
+## Tipos
+
+Cada valor tiene un tipo: texto (`String`), número entero (`Int32`) o con decimales (`Double`), verdadero o falso (`Boolean`), fecha (`DateTime`). `.GetType()` te dice cuál es. PowerShell convierte solo cuando puede, y se puede forzar un tipo poniéndolo entre corchetes:
+
+```powershell
+[int]'42' + 1                        # 43 (sin [int], '42' + 1 daría el texto 421)
+[datetime]'2026-11-01'
+((Get-Date) - [datetime]'2026-11-01').Days     # días desde esa fecha
+(Get-Date).AddDays(-30)                         # hace 30 días
+```
+
+Restar dos fechas da un intervalo (`TimeSpan`) con `Days`, `Hours` y `TotalHours`; es lo que vas a usar para encontrar cuentas que no inician sesión hace 90 días o archivos viejos.
+
+## Arrays, tablas hash y objetos propios
+
+<Diagrama svg={estructuras} alt="Tres estructuras. Array: una fila de cajas numeradas desde 0 con DC01, SRV-ARCH01, SRV-WEB01; se crea con @('DC01','SRV-ARCH01','SRV-WEB01'), se lee con $servidores[0] o $servidores[-1] (el último) y .Count dice cuántos hay. Tabla hash: pares clave y valor (DC01 → 192.168.10.10, SRV-WEB01 → 192.168.10.30), se crea con @{ DC01 = '192.168.10.10' } y se lee con $ips['SRV-WEB01'] o $ips.DC01. PSCustomObject: un objeto con propiedades con nombre (Servidor, IP, Online), se crea con [PSCustomObject]@{ Servidor = 'DC01'; IP = '…'; Online = $true }, y una lista de ellos se muestra como tabla y se exporta a CSV como cualquier objeto de un cmdlet." pie="Array para listas, tabla hash para buscar por nombre, PSCustomObject para las filas de un informe." />
+
+### Arrays
+
+Una lista ordenada. Se arma con `@( )` o con comas, y se lee por posición desde 0:
+
+```powershell
+$servidores = @('DC01', 'SRV-ARCH01', 'SRV-WEB01')
+$servidores[0]          # DC01
+$servidores[-1]         # el último: SRV-WEB01
+$servidores.Count       # 3
+$servidores += 'SRV-APP01'
+1..5                    # 1, 2, 3, 4, 5 (un rango)
+```
+
+Cuando un comando devuelve varios objetos y lo guardás en una variable, también es un array. Si devuelve **uno solo**, no lo es (no tiene `[0]` en Windows PowerShell 5.1); para estar seguro, envolvelo: `$discos = @(Get-Disk)`.
+
+### Tablas hash
+
+Pares **clave = valor**, para buscar por nombre en lugar de por posición. Como un diccionario: buscás la palabra y te da la definición.
+
+```powershell
+$ips = @{ DC01 = '192.168.10.10'; 'SRV-WEB01' = '192.168.10.30' }
+$ips['SRV-WEB01']           # 192.168.10.30
+$ips.DC01                   # también así, si la clave no tiene guiones
+$ips['SRV-APP01'] = '192.168.10.40'     # agregar o cambiar
+$ips.ContainsKey('DC02')    # False
+$ips.Keys                   # las claves
+```
+
+Las tablas hash no guardan el orden; si te importa (por ejemplo, para las columnas de un informe), usá `[ordered]@{ … }`. Y ya las usaste sin saberlo: la propiedad calculada de la lección anterior era una tabla hash.
+
+### Objetos propios: [PSCustomObject]
+
+Es la forma de armar tus propios objetos, con las propiedades que quieras. Se ven como tabla, se filtran con `Where-Object` y se exportan con `Export-Csv`, igual que los de cualquier cmdlet:
+
+```powershell
+$informe = foreach ($s in $servidores) {
+    [PSCustomObject]@{
+        Servidor = $s
+        IP       = $ips[$s]
+        Online   = Test-Connection $s -Count 1 -Quiet
+    }
+}
+$informe | Export-Csv C:\Informes\servidores.csv -NoTypeInformation
+```
+
+Este patrón (recorrer, armar un objeto por elemento, exportar la lista) es el corazón de casi todos los scripts de inventario.
+
+<EnSimple>
+Array para una lista, tabla hash para buscar un valor por su nombre, y PSCustomObject para cada fila de un informe.
+</EnSimple>
+
+<Pregunta id="p05" />
+
+## Operadores de comparación
+
+En PowerShell `=` asigna y `>` manda la salida a un archivo; para comparar se usan operadores con guion. Y **no distinguen mayúsculas** salvo que les agregues una `c` adelante (`-ceq`, `-clike`).
+
+| Operador | Qué compara | Ejemplo que da True |
+|---|---|---|
+| `-eq`, `-ne` | igual, distinto | `'DC01' -eq 'dc01'` |
+| `-gt`, `-ge`, `-lt`, `-le` | mayor, menor (o igual) | `25 -gt 20` |
+| `-like`, `-notlike` | comodines `*` y `?` | `'SRV-WEB01' -like 'SRV-*'` |
+| `-match`, `-notmatch` | expresión regular | `'error 404' -match '\d{3}'` |
+| `-contains`, `-notcontains` | la lista contiene el valor | `$servidores -contains 'DC01'` |
+| `-in`, `-notin` | el valor está en la lista | `'DC01' -in $servidores` |
+
+Tres detalles que confunden al principio:
+
+- **-like** usa comodines (como `dir *.log`); **-match** usa expresiones regulares (como `grep`, que viste en el módulo 1.7). Después de un `-match`, lo que coincidió queda en **`$Matches`**.
+- **-contains** e **-in** son lo mismo al revés: la lista va a la izquierda en `-contains` y a la derecha en `-in`.
+- Si a la izquierda hay una **lista**, el operador **filtra**: `$servidores -like 'SRV-*'` devuelve los que coinciden, no True o False.
+
+Se combinan con `-and`, `-or` y `-not` (o `!`). Y hay tres operadores de texto muy útiles: `-replace` (reemplaza con una expresión regular), `-split` (corta en una lista) y `-join` (une una lista).
+
+<Emparejar ejercicio={operadores} />
+
+<Terminal ejercicio={ejercicio} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Comparar con = o con >">
+    if ($x = 5) asigna 5 y siempre es verdadero; if ($x > 5) crea un archivo llamado 5. Se usa -eq y -gt.
+  </ErrorComun>
+  <ErrorComun titulo="Escribir $obj.Propiedad dentro de comillas sin $( )">
+    "Estado: $servicio.Status" muestra el objeto y el texto .Status. Va "Estado: $($servicio.Status)".
+  </ErrorComun>
+  <ErrorComun titulo="Sumar un texto y un número">
+    '42' + 1 da '421' (gana el tipo de la izquierda). Convertí antes: [int]'42' + 1.
+  </ErrorComun>
+  <ErrorComun titulo="Usar -like con una expresión regular">
+    -like solo entiende * y ?. Para patrones como `\d{3}`, -match.
+  </ErrorComun>
+  <ErrorComun titulo="Suponer que siempre hay un array">
+    Si el comando devuelve un solo objeto, no es una lista. @( ) alrededor te asegura que lo sea.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Las variables empiezan con $, no se declaran y guardan objetos; $env: da las variables de entorno.
+- Comillas simples: texto literal; dobles: reemplazan variables, y $( ) para propiedades o cuentas. -f para formatear.
+- Tipos: [int], [string], [datetime]…; restar fechas da un TimeSpan con Days.
+- Array `@( )` para listas (desde 0, `[-1]` el último), tabla hash `@{ }` para buscar por clave, `[PSCustomObject]@{ }` para las filas de un informe.
+- Comparación con -eq, -gt, -like (comodines), -match (expresiones regulares), -contains e -in; no distinguen mayúsculas.
+</Resumen>

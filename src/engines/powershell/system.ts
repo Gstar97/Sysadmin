@@ -1307,3 +1307,72 @@ cmdlet('Select-String', {
   },
 }, ['sls'])
 VIEWS['Microsoft.PowerShell.Commands.MatchInfo'] = { kind: 'lines', columns: [] }
+
+// Verbos aprobados de PowerShell (los más usados, con su grupo).
+const VERBS: [string, string, string][] = [
+  ['Add', 'a', 'Common'], ['Clear', 'cl', 'Common'], ['Copy', 'cp', 'Common'], ['Enter', 'et', 'Common'], ['Exit', 'ex', 'Common'], ['Find', 'fd', 'Common'], ['Get', 'g', 'Common'], ['Move', 'm', 'Common'], ['New', 'n', 'Common'], ['Remove', 'r', 'Common'], ['Rename', 'rn', 'Common'], ['Select', 'sc', 'Common'], ['Set', 's', 'Common'],
+  ['ConvertFrom', 'cf', 'Data'], ['ConvertTo', 'ct', 'Data'], ['Export', 'ep', 'Data'], ['Import', 'ip', 'Data'], ['Initialize', 'in', 'Data'], ['Update', 'ud', 'Data'],
+  ['Disable', 'd', 'Lifecycle'], ['Enable', 'e', 'Lifecycle'], ['Install', 'is', 'Lifecycle'], ['Invoke', 'i', 'Lifecycle'], ['Register', 'rg', 'Lifecycle'], ['Restart', 'rt', 'Lifecycle'], ['Start', 'sa', 'Lifecycle'], ['Stop', 'sp', 'Lifecycle'], ['Uninstall', 'us', 'Lifecycle'],
+  ['Test', 't', 'Diagnostic'], ['Measure', 'ms', 'Diagnostic'], ['Resolve', 'rv', 'Diagnostic'], ['Trace', 'tr', 'Diagnostic'],
+  ['Connect', 'cc', 'Communications'], ['Disconnect', 'dc', 'Communications'], ['Receive', 'rc', 'Communications'], ['Send', 'sd', 'Communications'],
+  ['Backup', 'ba', 'Data'], ['Restore', 'rr', 'Data'], ['Grant', 'gr', 'Security'], ['Revoke', 'rk', 'Security'], ['Protect', 'pt', 'Security'], ['Unprotect', 'up', 'Security'], ['Block', 'bl', 'Security'], ['Unblock', 'ul', 'Security'],
+  ['Format', 'f', 'Common'], ['Write', 'wr', 'Communications'], ['Read', 'rd', 'Communications'], ['Out', 'o', 'Data'], ['Wait', 'w', 'Lifecycle'], ['Show', 'sh', 'Common'], ['Search', 'sr', 'Common'], ['Join', 'j', 'Common'], ['Split', 'sl', 'Common'], ['Compare', 'cr', 'Data'], ['Group', 'gp', 'Data'], ['Sort', 'so', 'Data'],
+]
+
+cmdlet('Get-Verb', {
+  params: ['Verb', 'Group'],
+  positional: ['Verb'],
+  synopsis: 'Gets approved PowerShell verbs.',
+  module: 'Microsoft.PowerShell.Utility',
+  run(ctx) {
+    const want = list(ctx, 'Verb').map(toText)
+    return VERBS.filter(([v, , g]) => (!want.length || want.some((w) => wildcardToRegex(w).test(v))) && (!has(ctx, 'Group') || psEquals(g, param(ctx, 'Group'))))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([Verb, AliasPrefix, Group]) => psObject('System.Management.Automation.VerbInfo', { Verb, AliasPrefix, Group, Description: '' }))
+  },
+})
+VIEWS['System.Management.Automation.VerbInfo'] = {
+  kind: 'table',
+  columns: [
+    { label: 'Verb', value: (o) => o.Verb },
+    { label: 'AliasPrefix', value: (o) => o.AliasPrefix },
+    { label: 'Group', value: (o) => o.Group },
+  ],
+}
+
+// ---------------------------------------------------------------------------------------
+// Rutas: Join-Path y Split-Path
+// ---------------------------------------------------------------------------------------
+
+cmdlet('Join-Path', {
+  params: ['Path', 'ChildPath', 'AdditionalChildPath'],
+  switches: ['Resolve'],
+  positional: ['Path', 'ChildPath'],
+  synopsis: 'Combines a path and a child path into a single path.',
+  module: 'Microsoft.PowerShell.Management',
+  run(ctx) {
+    const child = [str(ctx, 'ChildPath') ?? '', ...list(ctx, 'AdditionalChildPath').map(toText), ...ctx.positional.slice(2).map(toText)].filter(Boolean)
+    return list(ctx, 'Path').map((p) => [toText(p).replace(/[\\/]+$/, ''), ...child.map((c) => c.replace(/^[\\/]+|[\\/]+$/g, ''))].join('\\'))
+  },
+})
+
+cmdlet('Split-Path', {
+  params: ['Path'],
+  switches: ['Leaf', 'Parent', 'Qualifier', 'NoQualifier', 'Extension', 'LeafBase'],
+  positional: ['Path'],
+  synopsis: 'Returns the specified part of a path.',
+  module: 'Microsoft.PowerShell.Management',
+  run(ctx) {
+    return [...list(ctx, 'Path'), ...ctx.input].map((x) => {
+      const p = toText((x as PsObject)?.FullName ?? x).replace(/[\\/]+$/, '')
+      const i = p.lastIndexOf('\\')
+      const leaf = i >= 0 ? p.slice(i + 1) : p
+      if (has(ctx, 'Leaf')) return leaf
+      if (has(ctx, 'Extension')) return /\.[^.]+$/.exec(leaf)?.[0] ?? ''
+      if (has(ctx, 'LeafBase')) return leaf.replace(/\.[^.]+$/, '')
+      if (has(ctx, 'Qualifier')) return /^[A-Za-z]:/.exec(p)?.[0] ?? ''
+      if (has(ctx, 'NoQualifier')) return p.replace(/^[A-Za-z]:/, '')
+      return i > 2 ? p.slice(0, i) : i === 2 ? p.slice(0, 3) : ''
+    })
+  },
+})

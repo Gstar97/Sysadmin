@@ -1,0 +1,160 @@
+---
+id: n3-m2-l2
+titulo: Objetos y pipeline
+minutos: 180
+objetivos:
+  - Entender que PowerShell pasa objetos y no texto, y explorarlos con Get-Member.
+  - Filtrar, seleccionar, ordenar, agrupar y medir con Where-Object, Select-Object, Sort-Object, Group-Object y Measure-Object.
+  - Dar formato al final y exportar a CSV, HTML y JSON sin perder los datos.
+glosario: [objeto-powershell, propiedad-calculada]
+verificado: 2026-11
+---
+
+import tuberia from './tuberia-objetos.svg?raw'
+import orden from './orden-pipeline.yaml'
+import pipeline from './ej-pipeline.yaml'
+
+Esta es la lección más importante del módulo. En Bash, cuando encadenás comandos con `|`, cada uno le pasa **texto** al siguiente, y el siguiente tiene que recortarlo con `grep`, `awk` o `cut` para sacar lo que necesita. En PowerShell, lo que viaja por la tubería son **objetos**: cosas con datos adentro que el comando siguiente puede usar por su nombre. Cuando lo entendés, PowerShell deja de parecer "Bash con nombres largos" y se vuelve mucho más fácil.
+
+<AntesDeEmpezar>
+- Tuberías y redirecciones en Bash (lección 1.1.5).
+- Fundamentos de PowerShell (lección anterior).
+</AntesDeEmpezar>
+
+## Objetos, no texto
+
+Pensá en dos formas de pasarle a un compañero la lista de clientes. Una: le mandás una foto de la planilla impresa; para saber el teléfono de alguien, tiene que leer la foto y adivinar en qué columna está. Otra: le mandás la planilla misma, con sus columnas; pide "la columna Teléfono" y listo. Bash pasa la foto; PowerShell pasa la planilla.
+
+Donde no llega la comparación: un objeto puede tener además **acciones** (métodos) que se le piden, como `.Stop()` en un servicio. Una planilla no hace nada sola.
+
+```powershell
+Get-Service Spooler
+# Status   Name     DisplayName
+# ------   ----     -----------
+# Running  Spooler  Print Spooler
+```
+
+Eso que ves es solo una **vista**: tres de las propiedades, armadas en una tabla para que la leas. El objeto tiene muchas más. Para ver qué hay adentro:
+
+```powershell
+Get-Service | Get-Member                 # tipo, propiedades y métodos
+Get-Service Spooler | Select-Object *    # todas las propiedades con su valor
+(Get-Service Spooler).StartType          # una sola propiedad
+```
+
+`Get-Member` es el `Get-Help` de los objetos: cada vez que no sepas qué propiedad usar, preguntale.
+
+<Diagrama svg={tuberia} alt="Arriba, Bash: ps aux pasa texto a grep, que pasa texto a awk, que tiene que adivinar en qué columna está cada dato. Abajo, PowerShell: Get-Process pasa objetos con propiedades (Name, Id, WorkingSet, CPU) a Where-Object, que filtra por WorkingSet; los objetos que quedan pasan a Sort-Object, que los ordena por WorkingSet; después Select-Object se queda con Name y una propiedad calculada en MB; recién al final Format-Table los convierte en texto para la pantalla, o Export-Csv los guarda en un archivo. Una nota: filtrá a la izquierda, formateá a la derecha." pie="Filtrá lo antes posible; dale formato recién al final." />
+
+<EnSimple>
+Lo que pasa de un comando a otro no es lo que ves en pantalla: es el objeto entero. Lo que ves es una vista armada al final.
+</EnSimple>
+
+## Filtrar: Where-Object
+
+Se queda con los objetos que cumplen una condición. Tiene dos formas:
+
+```powershell
+Get-Service | Where-Object Status -eq Stopped                 # forma simple: una condición
+Get-Service | Where-Object { $_.Status -eq 'Stopped' -and $_.StartType -eq 'Automatic' }
+```
+
+Dentro de las llaves, **`$_`** (o `$PSItem`) es "el objeto que está pasando ahora". Las comparaciones usan operadores con guion (`-eq`, `-ne`, `-gt`, `-lt`, `-like`, `-match`); los vas a ver en detalle en la lección que viene.
+
+Una regla de rendimiento: **filtrá a la izquierda**. Si el cmdlet que trae los datos tiene su propio filtro, usalo, porque filtra antes de traer todo:
+
+```powershell
+Get-ChildItem C:\Logs -Filter *.log          # filtra el sistema de archivos
+Get-ChildItem C:\Logs | Where-Object Name -like *.log   # trae todo y después filtra
+Get-ADUser -Filter "Department -eq 'Ventas'"            # filtra el controlador de dominio
+```
+
+Con cien archivos no se nota; con cien mil usuarios de Active Directory, es la diferencia entre un segundo y varios minutos.
+
+## Elegir, ordenar, agrupar y medir
+
+```powershell
+Get-Process | Select-Object Name, Id, CPU               # solo esas propiedades
+Get-Process | Select-Object -First 5                    # los primeros 5
+(Get-Service).Name                                      # solo los valores (un array de textos)
+Get-Service | Select-Object -ExpandProperty Name        # lo mismo, dentro de una tubería
+
+Get-Process | Sort-Object WorkingSet -Descending        # de mayor a menor
+Get-Service | Group-Object Status                       # cuántos hay de cada estado
+Get-ChildItem C:\Logs | Measure-Object Length -Sum -Average -Maximum
+```
+
+### Propiedades calculadas
+
+A veces la propiedad que querés no existe: la memoria está en bytes y la querés en MB, o querés renombrar una columna. `Select-Object` acepta una **propiedad calculada**: una tabla con el nombre de la columna y un bloque que la calcula a partir de `$_`.
+
+```powershell
+Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 5 Name,
+    @{Name = 'MB'; Expression = { [math]::Round($_.WorkingSet / 1MB, 1) }}
+```
+
+`1MB`, `1GB` y `1TB` son números que PowerShell entiende directamente (1048576, etc.). `Name` y `Expression` se pueden abreviar como `n` y `e`.
+
+<Pregunta id="p05" />
+
+## Hacer algo con cada uno
+
+Muchos cmdlets aceptan objetos por la tubería y actúan sobre cada uno: `Get-Service ... | Start-Service`, `Get-ChildItem ... | Remove-Item`, `Get-ADUser ... | Disable-ADAccount`. Cuando no hay un cmdlet que lo haga, **ForEach-Object** ejecuta un bloque por cada objeto:
+
+```powershell
+Get-ChildItem C:\Logs -Filter *.log | ForEach-Object { "{0} pesa {1:N0} KB" -f $_.Name, ($_.Length / 1KB) }
+```
+
+## Formatear al final, exportar sin formatear
+
+`Format-Table` (`ft`) y `Format-List` (`fl`) eligen cómo se **ve** el resultado:
+
+```powershell
+Get-Service | Format-Table Name, Status, StartType -AutoSize
+Get-Service Spooler | Format-List *
+```
+
+Pero convierten los objetos en instrucciones de dibujo. Después de un `Format-*`, ya no hay objetos: por eso la regla es **formateá a la derecha**, siempre último. Si exportás después de `Format-Table`, el CSV sale lleno de basura (`ClassId2e4f51ef…`).
+
+Para sacar datos, en cambio, se usan los objetos:
+
+```powershell
+Get-Service | Select-Object Name, Status | Export-Csv C:\Informes\servicios.csv -NoTypeInformation
+Import-Csv C:\Informes\servicios.csv | Where-Object Status -eq Running
+Get-Service | Select-Object Name, Status | ConvertTo-Html -Title "Servicios" | Out-File C:\Informes\servicios.html
+Get-Service Spooler | Select-Object Name, Status | ConvertTo-Json
+```
+
+- **CSV** para planillas y para volver a leer con `Import-Csv` (cada fila vuelve como un objeto). En Windows PowerShell 5.1, `-NoTypeInformation` evita una primera línea `#TYPE …` que molesta en Excel; en PowerShell 7 ya no hace falta.
+- **HTML** para informes que se mandan por correo o se publican.
+- **JSON** para hablar con otros programas y con APIs web.
+
+<Ordenar ejercicio={orden} />
+
+<Terminal ejercicio={pipeline} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Recortar texto como en Bash">
+    En PowerShell no hace falta cortar columnas: pedí la propiedad por su nombre ($_.Status, Select-Object Name).
+  </ErrorComun>
+  <ErrorComun titulo="Formatear antes de exportar">
+    Format-Table | Export-Csv da un archivo inservible. Select-Object para elegir columnas; Format-* solo para la pantalla y siempre al final.
+  </ErrorComun>
+  <ErrorComun titulo="Buscar una propiedad que no aparece en la tabla">
+    La tabla es una vista con pocas columnas. Get-Member o Select-Object * muestran todas.
+  </ErrorComun>
+  <ErrorComun titulo="Traer todo y filtrar después">
+    Get-ADUser -Filter * | Where-Object … trae todo el directorio. Si el cmdlet tiene -Filter, filtrá ahí.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir comparadores">
+    En PowerShell, = asigna y > redirige a un archivo. Para comparar: -eq, -gt, -lt.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- La tubería pasa objetos con propiedades y métodos; lo que ves en pantalla es una vista.
+- Get-Member muestra el tipo, las propiedades y los métodos; Select-Object * muestra todos los valores.
+- Where-Object filtra ($_ es el objeto actual); filtrá a la izquierda usando el -Filter del cmdlet cuando existe.
+- Select-Object elige propiedades (y calcula nuevas con `@{Name=…; Expression=…}`), Sort-Object ordena, Group-Object agrupa, Measure-Object cuenta y suma.
+- Format-Table y Format-List van siempre al final; para exportar, Export-Csv, ConvertTo-Html y ConvertTo-Json sobre los objetos.
+</Resumen>

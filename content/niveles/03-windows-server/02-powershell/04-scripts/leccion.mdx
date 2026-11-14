@@ -1,0 +1,208 @@
+---
+id: n3-m2-l4
+titulo: Scripts
+minutos: 180
+objetivos:
+  - Escribir scripts .ps1 con parámetros, if, foreach, switch y funciones, que devuelvan objetos.
+  - Manejar errores con try/catch/finally y -ErrorAction, distinguiendo los errores que cortan de los que no.
+  - Entender qué es la directiva de ejecución, por qué no es una barrera de seguridad y cómo configurarla.
+glosario: [script-powershell, politica-ejecucion, try-catch]
+verificado: 2026-11
+---
+
+import partes from './partes-script.svg?raw'
+import editor from './ej-editor.yaml'
+import ejecutar from './ej-ejecutar.yaml'
+
+Un script es una receta guardada en un archivo: los mismos comandos que escribís en la consola, en orden, con lugar para decisiones ("si el disco tiene menos de 10 GB, avisá") y repeticiones ("para cada servidor…"). En el módulo 1.7 escribiste scripts de Bash; acá vas a ver que en PowerShell las ideas son las mismas, con dos ventajas grandes: los parámetros se declaran solos, con tipos y validación, y lo que el script devuelve son objetos que se pueden seguir procesando.
+
+<AntesDeEmpezar>
+- Scripting en Bash: condicionales, bucles y funciones (módulo 1.7).
+- Variables, arrays, tablas hash y [PSCustomObject] (lección anterior).
+</AntesDeEmpezar>
+
+## La forma de un script
+
+<Diagrama svg={partes} alt="Un script de PowerShell de arriba hacia abajo: primero la ayuda en un comentario de bloque (.SYNOPSIS, .EXAMPLE), que Get-Help muestra igual que la de un cmdlet; después el bloque param con los parámetros, sus tipos, valores por defecto y validaciones ([Parameter(Mandatory)], [ValidateSet()]); después las funciones auxiliares; después el cuerpo con foreach, if, switch y try/catch; y al final la salida: objetos ([PSCustomObject]) que se pueden exportar, filtrar u ordenar. A la derecha, cómo se ejecuta: .\script.ps1 -Parametro valor desde la carpeta, con la directiva de ejecución permitiendo scripts." pie="Ayuda, parámetros, funciones, cuerpo y salida en objetos." />
+
+```powershell
+<#
+.SYNOPSIS
+Revisa el espacio libre de los discos y avisa los que están por debajo de un límite.
+.EXAMPLE
+.\Revisar-Discos.ps1 -LimiteGB 20
+#>
+param(
+    [int]$LimiteGB = 10,
+    [string[]]$Equipos = $env:COMPUTERNAME
+)
+
+foreach ($equipo in $Equipos) {
+    $discos = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ComputerName $equipo
+    foreach ($d in $discos) {
+        $libre = [math]::Round($d.FreeSpace / 1GB, 1)
+        [PSCustomObject]@{
+            Equipo  = $equipo
+            Unidad  = $d.DeviceID
+            LibreGB = $libre
+            Estado  = if ($libre -lt $LimiteGB) { 'BAJO' } else { 'OK' }
+        }
+    }
+}
+```
+
+Se guarda con extensión **.ps1** y se ejecuta con su ruta: `.\Revisar-Discos.ps1 -LimiteGB 20` (el `.\` es obligatorio para la carpeta actual, igual que el `./` de Linux). El comentario del principio no es decoración: `Get-Help .\Revisar-Discos.ps1 -Examples` lo muestra como la ayuda de un cmdlet.
+
+### Parámetros
+
+El bloque **`param()`** va al principio y declara qué recibe el script. Cada parámetro puede tener un tipo, un valor por defecto y validaciones:
+
+```powershell
+param(
+    [Parameter(Mandatory)]           # obligatorio: si falta, PowerShell lo pide
+    [string]$Ruta,
+
+    [int]$Dias = 30,                  # con valor por defecto
+
+    [ValidateSet('Ventas', 'Compras', 'IT')]
+    [string]$Area = 'IT',             # solo esos valores
+
+    [switch]$Simular                  # interruptor: $true si se escribe -Simular
+)
+```
+
+Es lo que en Bash hacías a mano con `$1`, `$2` y un `if` para validar. Acá PowerShell lo hace solo, con mensajes de error claros y Tab para completar.
+
+## Decidir y repetir
+
+```powershell
+if ($libre -lt 5) { 'CRÍTICO' } elseif ($libre -lt $LimiteGB) { 'BAJO' } else { 'OK' }
+
+foreach ($s in $servidores) { Test-Connection $s -Count 1 -Quiet }
+
+switch ($rol) {
+    'DC'      { 'Controlador de dominio' }
+    'FS'      { 'Servidor de archivos' }
+    default   { 'Otro' }
+}
+```
+
+- **`foreach ($x in $lista) { }`** es la instrucción del lenguaje; **`ForEach-Object`** es el cmdlet de la tubería. Hacen lo mismo; en un script, `foreach` suele leerse mejor y es más rápido con listas grandes.
+- **`switch`** compara un valor con varios casos; con `-Wildcard` acepta comodines y con `-Regex`, expresiones regulares.
+- También existen `for ($i = 0; $i -lt 10; $i++)`, `while` y `do { } until ()`, para cuando hace falta un contador o esperar algo.
+
+## Funciones
+
+Una función es un pedacito de script con nombre, que se usa como un cmdlet. Conviene nombrarlas verbo-sustantivo y darles un `param()` igual que al script:
+
+```powershell
+function Get-EspacioLibre {
+    param([Parameter(Mandatory)][string]$Equipo)
+    Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ComputerName $Equipo |
+        Select-Object DeviceID, @{n='LibreGB'; e={ [math]::Round($_.FreeSpace / 1GB, 1) }}
+}
+
+Get-EspacioLibre -Equipo SRV-ARCH01
+```
+
+Un detalle que sorprende a todos al principio: **todo lo que una función (o un script) produce y no se guarda en una variable, sale como resultado**. No hace falta `return`; y si llamás a algo que devuelve un valor que no querés (`$lista.Add(1)` devuelve un número), ese valor se mezcla con tu salida. Para descartarlo: `$null = $lista.Add(1)` o `| Out-Null`.
+
+### Mostrar o devolver
+
+- **`Write-Output`** (o simplemente escribir el valor) **devuelve** objetos: van a la tubería y se pueden exportar.
+- **`Write-Host`** solo **muestra** en pantalla, con colores; no se puede guardar ni exportar. Usalo para mensajes al usuario, nunca para los datos.
+- **`Write-Verbose`** y **`Write-Warning`** dan mensajes que se ven con `-Verbose` o en amarillo, sin mezclarse con los datos.
+
+<Pregunta id="p04" />
+
+## Errores
+
+Hay dos clases de errores, y la diferencia importa:
+
+- **Los que no cortan** (*non-terminating*): la mayoría de los errores de cmdlets. `Get-Service Inventado, Spooler` muestra un error rojo para el primero y sigue con el segundo.
+- **Los que cortan** (*terminating*): errores de sintaxis, `throw`, o cualquier error cuando se usa `-ErrorAction Stop`.
+
+**`try/catch`** solo atrapa los que cortan. Por eso el patrón es siempre el mismo: **`-ErrorAction Stop`** en el comando que puede fallar, y el manejo en el `catch`:
+
+```powershell
+foreach ($archivo in $viejos) {
+    try {
+        Remove-Item $archivo.FullName -ErrorAction Stop
+    }
+    catch {
+        Write-Warning "No se pudo borrar $($archivo.Name): $($_.Exception.Message)"
+    }
+    finally {
+        # Se ejecuta siempre, haya error o no (cerrar una conexión, borrar un temporal…)
+    }
+}
+```
+
+Dentro del `catch`, `$_` es el error: `$_.Exception.Message` tiene el mensaje. Todos los errores de la sesión quedan además en **`$Error`** (el más reciente en `$Error[0]`). Si querés que un script entero se detenga ante cualquier error, poné al principio `$ErrorActionPreference = 'Stop'`.
+
+<EnSimple>
+try/catch solo atrapa lo que corta. Para que un error de un cmdlet corte (y lo atrapes), agregale -ErrorAction Stop.
+</EnSimple>
+
+<EditorConfig ejercicio={editor} />
+
+## La directiva de ejecución
+
+Cuando ejecutás un script por primera vez, puede aparecer: *"cannot be loaded because running scripts is disabled on this system"*. Es la **directiva de ejecución** (*execution policy*), que decide qué scripts se pueden ejecutar:
+
+| Directiva | Qué permite |
+|---|---|
+| Restricted | Ningún script (por defecto en Windows 11) |
+| RemoteSigned | Scripts locales sí; los bajados de internet, solo firmados (por defecto en Windows Server) |
+| AllSigned | Solo scripts firmados |
+| Unrestricted | Todos, con una advertencia para los de internet |
+| Bypass | Todos, sin preguntar (para automatizaciones) |
+
+Se configura por **ámbito**, y los de más arriba le ganan a los de más abajo: las directivas de grupo (MachinePolicy y UserPolicy), la sesión actual (Process), tu usuario (CurrentUser) y el equipo (LocalMachine).
+
+```powershell
+Get-ExecutionPolicy -List
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+powershell.exe -ExecutionPolicy Bypass -File .\script.ps1     # solo para esa ejecución
+```
+
+Y lo más importante: **no es una barrera de seguridad**. Cualquiera puede saltearla con `-ExecutionPolicy Bypass`, o pegando el contenido del script en la consola. Es un cinturón para no ejecutar algo sin querer (por ejemplo, un adjunto de correo), no una cerradura. La seguridad real está en los permisos de la cuenta que ejecuta y en lo que hacés antes de ejecutar: **leer el script**.
+
+Un detalle de RemoteSigned: un archivo bajado de internet lleva una marca (la "zona de internet") y no corre hasta que lo firmes o, si confiás en él después de leerlo, le saques la marca con `Unblock-File .\script.ps1`. *Para más adelante*: firmar tus propios scripts con un certificado de firma de código.
+
+<Terminal ejercicio={ejecutar} />
+
+### Buenas costumbres
+
+- Ayuda al principio, parámetros con tipos y nombres que digan qué son.
+- Nombres completos de cmdlets, nunca alias.
+- Devolver objetos y dejar que quien llama decida si los exporta, los filtra o los muestra.
+- `-WhatIf` en los scripts que borran o cambian cosas (con `[CmdletBinding(SupportsShouldProcess)]` tu script hereda `-WhatIf` y `-Confirm`, *para más adelante*).
+- Guardar los scripts en un repositorio con control de versiones (módulo 6), no en el escritorio de un servidor.
+
+<ErroresComunes>
+  <ErrorComun titulo="Poner try/catch sin -ErrorAction Stop">
+    La mayoría de los errores de los cmdlets no cortan, y el catch nunca se ejecuta. -ErrorAction Stop en el comando que puede fallar.
+  </ErrorComun>
+  <ErrorComun titulo="Devolver texto con Write-Host">
+    Lo que se escribe con Write-Host no se puede guardar ni exportar. Los datos, como objetos; Write-Host solo para mensajes.
+  </ErrorComun>
+  <ErrorComun titulo="Poner Unrestricted o Bypass para todo el equipo">
+    No hace falta y saca la protección contra ejecuciones accidentales. RemoteSigned para tu usuario alcanza.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que la directiva de ejecución protege el servidor">
+    Se saltea con un parámetro. La protección está en los permisos y en leer antes de ejecutar.
+  </ErrorComun>
+  <ErrorComun titulo="Valores inesperados en la salida de una función">
+    Todo lo que no se guarda sale como resultado. Descartá lo que no querés con $null = … o | Out-Null.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Un script .ps1 lleva ayuda en un comentario, param() con tipos, valores por defecto y validaciones, y devuelve objetos.
+- Se ejecuta con su ruta (.\script.ps1) y sus parámetros por nombre.
+- if/elseif/else, foreach, switch, for y while para decidir y repetir; funciones verbo-sustantivo con su propio param().
+- Todo lo que no se guarda sale como resultado; Write-Host solo muestra.
+- try/catch/finally atrapa los errores que cortan: -ErrorAction Stop en el comando, $_.Exception.Message en el catch.
+- La directiva de ejecución (RemoteSigned en Windows Server) evita ejecuciones accidentales, pero no es una barrera de seguridad.
+</Resumen>

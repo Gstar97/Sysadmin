@@ -1,0 +1,145 @@
+---
+id: n3-m2-l5
+titulo: Administración remota y módulos
+minutos: 120
+objetivos:
+  - Ejecutar comandos y scripts en muchos servidores a la vez con Invoke-Command, sesiones persistentes y $using.
+  - Conectarse con PowerShell sobre SSH y conocer el límite del "segundo salto".
+  - Encontrar, revisar e instalar módulos de la PowerShell Gallery con criterio.
+glosario: [sesion-powershell, psgallery]
+verificado: 2026-11
+---
+
+import remoto from './remoto-sesiones.svg?raw'
+import cual from './cual-remoto.yaml'
+import ejercicio from './ej-remoto-modulos.yaml'
+
+En el módulo 3.1 usaste PowerShell remoto para manejar un Server Core. Ahora que sabés escribir scripts, vas a ver por qué es la herramienta que más tiempo ahorra en Windows: el mismo bloque de código corre en cincuenta servidores a la vez y te devuelve los resultados ordenados, como si fueran locales. Y como no todo viene con Windows, la segunda mitad es sobre módulos: cómo sumar comandos nuevos sin meter en el servidor algo que no revisaste.
+
+<AntesDeEmpezar>
+- WinRM, TrustedHosts y las herramientas de administración (lección 3.1.3).
+- Scripts, parámetros y objetos (lecciones anteriores).
+</AntesDeEmpezar>
+
+## Invoke-Command en muchos equipos
+
+```powershell
+Invoke-Command -ComputerName DC01, SRV01, SRV02 -ScriptBlock { Get-Service W32Time }
+Invoke-Command -ComputerName (Get-Content C:\Listas\servidores.txt) -FilePath .\Revisar-Discos.ps1
+```
+
+- Corre **en paralelo**: por defecto, en hasta 32 equipos a la vez (`-ThrottleLimit` lo cambia).
+- Cada resultado vuelve con **`PSComputerName`**, para saber de quién es. Se ordena, filtra y exporta como cualquier objeto.
+- Si un equipo falla (apagado, sin WinRM, firewall), muestra el error de ese equipo y **sigue con los demás**.
+- **`-FilePath`** manda un script local a correr en los remotos: no hace falta copiarlo antes.
+
+Los objetos que vuelven son **copias deserializadas**: tienen las propiedades, pero no los métodos (no podés hacer `.Stop()` sobre un servicio que volvió de otro equipo). Si querés detener algo, hacelo **dentro** del bloque remoto.
+
+### Variables locales en el bloque remoto
+
+El bloque corre en el otro equipo, donde tus variables no existen. Para llevar una, se antepone **`$using:`**:
+
+```powershell
+$servicio = 'Spooler'
+Invoke-Command -ComputerName SRV01 -ScriptBlock { Restart-Service -Name $using:servicio }
+```
+
+## Sesiones persistentes
+
+<Diagrama svg={remoto} alt="A la izquierda, SRV-ADMIN. Arriba, Invoke-Command con -ComputerName: abre una conexión con SRV01, ejecuta el bloque, devuelve los resultados y cierra; la variable creada adentro se pierde. Abajo, New-PSSession: abre una sesión que queda viva en SRV01; varios Invoke-Command con -Session usan la misma sesión y las variables se mantienen, hasta Remove-PSSession. A la derecha, Enter-PSSession: una consola interactiva en el otro equipo, con el prompt [SRV01]: PS C:\>, como SSH; exit vuelve. Abajo, una nota: los objetos que vuelven son copias sin métodos, con la propiedad PSComputerName." pie="-ComputerName para algo puntual; una sesión para varios pasos; Enter-PSSession para trabajar a mano." />
+
+Con `-ComputerName`, cada llamada abre una conexión, hace el trabajo y la cierra. Para varios pasos sobre el mismo equipo (o para no pagar el costo de conectar cada vez), se abre una **sesión** que queda viva:
+
+```powershell
+$s = New-PSSession -ComputerName SRV01, SRV02
+Invoke-Command -Session $s -ScriptBlock { $inicio = Get-Date }
+Invoke-Command -Session $s -ScriptBlock { (Get-Date) - $inicio }   # $inicio sigue ahí
+Remove-PSSession $s
+```
+
+Y para trabajar a mano, como con SSH, **`Enter-PSSession SRV01`**: el prompt pasa a `[SRV01]: PS C:\>` y todo lo que escribas corre allá, hasta `exit`.
+
+<Emparejar ejercicio={cual} />
+
+### El segundo salto
+
+Si desde una sesión remota en SRV01 intentás acceder a un tercer equipo (una carpeta compartida en SRV-ARCH01, por ejemplo), aparece "Access is denied". Es el problema del **segundo salto**: tus credenciales llegan a SRV01 pero, por seguridad, SRV01 no las puede usar para ir a otro lado. La solución más simple es no saltar: hacer el trabajo desde tu equipo contra cada servidor por separado. Las soluciones con delegación (Kerberos con delegación restringida, o CredSSP, que tiene sus riesgos) son *para más adelante*.
+
+### PowerShell sobre SSH
+
+PowerShell 7 también puede usar **SSH** en lugar de WinRM. Sirve para administrar Linux con PowerShell y para equipos fuera del dominio, sin TrustedHosts. Windows Server 2025 trae el servidor OpenSSH incluido; se habilita el servicio `sshd` y se agrega PowerShell como subsistema en su configuración:
+
+```powershell
+Enter-PSSession -HostName srv01.empresa.local -UserName admin.it
+Invoke-Command -HostName rocky01 -UserName admin -ScriptBlock { Get-Process }
+```
+
+Ojo con la diferencia: con WinRM se usa `-ComputerName`; con SSH, `-HostName` y `-UserName`. *Para más adelante*: Just Enough Administration (JEA), que limita qué comandos puede ejecutar cada persona en una sesión remota.
+
+<EnSimple>
+Invoke-Command corre lo mismo en muchos equipos a la vez; $using: lleva tus variables; una sesión recuerda lo que hiciste entre llamadas.
+</EnSimple>
+
+<Pregunta id="p04" />
+
+## Módulos
+
+Los cmdlets vienen en **módulos**: `ActiveDirectory`, `DnsServer`, `Storage`, `NetTCPIP`. Algunos vienen con Windows, otros con cada rol o con RSAT, y otros se bajan de internet.
+
+```powershell
+Get-Module                          # los cargados en esta sesión
+Get-Module -ListAvailable           # todos los instalados
+Get-Command -Module DnsServer       # qué trae un módulo
+Import-Module ActiveDirectory       # cargarlo (casi nunca hace falta)
+```
+
+PowerShell carga los módulos solos la primera vez que usás uno de sus comandos (si están en alguna carpeta de `$env:PSModulePath`), así que `Import-Module` casi nunca hace falta. Si un cmdlet "no existe", lo primero es preguntarse si su módulo está instalado: `Get-ADUser` no existe en un servidor sin las herramientas de AD (`RSAT-AD-PowerShell`).
+
+### La PowerShell Gallery
+
+La **PowerShell Gallery** (PSGallery) es el repositorio público de módulos, como PyPI para Python o npm para JavaScript. Tiene miles: para planillas de Excel sin Excel (ImportExcel), para administrar SQL Server (dbatools), para pruebas (Pester), para Windows Update (PSWindowsUpdate).
+
+```powershell
+Find-Module ImportExcel
+Install-Module ImportExcel -Scope CurrentUser       # solo para tu usuario, sin ser administrador
+Update-Module ImportExcel
+```
+
+La primera vez, Windows PowerShell 5.1 pide instalar el **proveedor NuGet** y avisa que PSGallery es un **repositorio que no es de confianza**. Ese aviso tiene sentido: cualquiera puede publicar en la galería, y un módulo corre con tus permisos (en un servidor, muchas veces de administrador). Por eso, **con criterio**:
+
+- **Quién lo publica**: los de Microsoft o de proyectos conocidos, con su código en GitHub.
+- **Cuánto se usa**: descargas, fecha de la última versión, si tiene mantenimiento.
+- **Revisalo antes en algo importante**: `Save-Module ImportExcel -Path C:\Revision` lo baja sin instalarlo, para leerlo.
+- **Fijá la versión** en los scripts de producción (`-RequiredVersion`), para que una actualización no te cambie el comportamiento de un día para el otro.
+- **Servidores sin internet**: `Save-Module` en un equipo con salida y copiar la carpeta a `C:\Program Files\WindowsPowerShell\Modules` del servidor.
+
+En PowerShell 7 está además **PSResourceGet** (`Find-PSResource`, `Install-PSResource`), la versión nueva de las mismas herramientas.
+
+<Terminal ejercicio={ejercicio} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar una variable local dentro del bloque remoto sin $using:">
+    El bloque corre en el otro equipo, donde esa variable no existe (queda vacía). $using:variable la lleva.
+  </ErrorComun>
+  <ErrorComun titulo="Llamar métodos sobre lo que volvió del otro equipo">
+    Vuelven copias sin métodos. Lo que haya que hacer, hacelo adentro del bloque remoto.
+  </ErrorComun>
+  <ErrorComun titulo="Saltar a un tercer equipo desde una sesión remota">
+    Es el segundo salto: tus credenciales no siguen. Trabajá desde tu equipo contra cada servidor.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar cualquier módulo de la galería en un servidor">
+    Corre con tus permisos. Mirá quién lo publica, bajalo con Save-Module y revisalo, y fijá la versión.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que un cmdlet no existe">
+    Muchas veces falta su módulo (o las herramientas RSAT del rol). Get-Command y Get-Module -ListAvailable lo confirman.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Invoke-Command corre un bloque o un script (-FilePath) en muchos equipos en paralelo; cada resultado trae PSComputerName.
+- $using:variable lleva una variable local al bloque remoto; los objetos que vuelven no tienen métodos.
+- New-PSSession abre una sesión que recuerda las variables; Enter-PSSession da una consola interactiva; Remove-PSSession cierra.
+- El segundo salto (de un remoto a un tercero) no lleva tus credenciales.
+- PowerShell 7 también se conecta por SSH (-HostName, -UserName).
+- Los módulos se cargan solos; la PowerShell Gallery tiene miles, pero se instalan con criterio: autor, uso, revisión, versión fija.
+</Resumen>

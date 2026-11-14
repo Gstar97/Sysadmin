@@ -1,0 +1,115 @@
+tipo: terminal
+shell: powershell
+titulo: El inventario en el laboratorio simulado
+descripcion: >-
+  Estás en SRV-ADMIN, en el dominio empresa.local, con DC01, SRV01 y SRV02. En C:\Scripts está
+  Inventario.ps1, el script del laboratorio. Vas a correrlo, leer lo que encuentra y arreglar lo
+  que se pueda arreglar desde acá.
+estado_inicial:
+  equipo: SRV-ADMIN
+  dominio: empresa.local
+  directorio: C:\Scripts
+  red: { ip: 192.168.10.5, dns: [192.168.10.10] }
+  archivos:
+    C:\Informes: { tipo: directorio }
+    C:\Scripts\Inventario.ps1: |
+      <#
+      .SYNOPSIS
+      Inventario de discos, servicios automáticos detenidos y actualizaciones de varios servidores.
+      .EXAMPLE
+      .\Inventario.ps1 -Servidores DC01, SRV01 -Carpeta C:\Informes
+      #>
+      param(
+          [Parameter(Mandatory)]
+          [string[]]$Servidores,
+
+          [string]$Carpeta = 'C:\Informes',
+
+          [int]$LimiteGB = 10
+      )
+
+      $datos = Invoke-Command -ComputerName $Servidores -ErrorAction SilentlyContinue -ErrorVariable fallas -ScriptBlock {
+          $limite = $using:LimiteGB
+          $discos = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+          $detenidos = Get-Service | Where-Object { $_.StartType -eq 'Automatic' -and $_.Status -ne 'Running' }
+          $ultima = Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 1
+          foreach ($d in $discos) {
+              $libre = [math]::Round($d.FreeSpace / 1GB, 1)
+              [PSCustomObject]@{
+                  Unidad            = $d.DeviceID
+                  LibreGB           = $libre
+                  Estado            = if ($libre -lt $limite) { 'BAJO' } else { 'OK' }
+                  ServiciosCaidos   = ($detenidos.Name -join ', ')
+                  UltimaActualizacion = $ultima.HotFixID
+                  Fecha             = $ultima.InstalledOn
+              }
+          }
+      }
+
+      $informe = $datos | Select-Object @{n = 'Servidor'; e = { $_.PSComputerName }}, Unidad, LibreGB, Estado, ServiciosCaidos, UltimaActualizacion, Fecha
+
+      $informe | Export-Csv (Join-Path $Carpeta 'inventario.csv') -NoTypeInformation
+      $informe | ConvertTo-Html -Title 'Inventario de servidores' -PreContent "<h1>Inventario del $(Get-Date -Format 'dd/MM/yyyy HH:mm')</h1>" |
+          Out-File (Join-Path $Carpeta 'inventario.html')
+
+      foreach ($f in $fallas) {
+          Write-Warning "No se pudo consultar $($f.TargetObject)"
+      }
+      $informe
+  servidores:
+    - { equipo: DC01, dominio: empresa.local, red: { ip: 192.168.10.10, dns: [127.0.0.1] }, ad: {} }
+    - equipo: SRV01
+      dominio: empresa.local
+      red: { ip: 192.168.10.11, dns: [192.168.10.10] }
+      servicios:
+        - { nombre: Spooler, nombre_visible: Print Spooler, estado: Stopped, inicio: Automatic }
+      discos:
+        - numero: 1
+          tamano_gb: 50
+          modelo: Msft Virtual Disk
+          estilo: GPT
+          offline: false
+          bus: SCSI
+          particiones:
+            - { letra: D, tamano_gb: 50, sistema: NTFS, etiqueta: Datos, tipo: Basic, usado_gb: 46 }
+    - { equipo: SRV02, dominio: empresa.local, red: { ip: 192.168.10.12, dns: [192.168.10.10] }, remoting: false }
+pasos:
+  - consigna: Leé el script y su bloque param() antes de ejecutarlo.
+    verificar:
+      - { comando_usado: "get-content.*inventario|gc .*inventario|cat .*inventario" }
+    solucion: [Get-Content .\Inventario.ps1]
+  - consigna: Ejecutalo contra DC01, SRV01 y SRV02.
+    verificar:
+      - { archivo: C:\Informes\inventario.csv, contenido_incluye: '"SRV01"' }
+      - { salida_contiene: "SRV02" }
+    solucion: [".\\Inventario.ps1 -Servidores DC01, SRV01, SRV02"]
+    explicacion: >-
+      El aviso dice que SRV02 no respondió: el script lo anota y sigue con los demás, gracias a
+      -ErrorAction SilentlyContinue y -ErrorVariable. En el informe quedan DC01 y SRV01.
+  - consigna: >-
+      Leé el CSV con Import-Csv y quedate con las filas en estado BAJO.
+    verificar:
+      - { comando_usado: "import-csv" }
+      - { salida_regex: "BAJO" }
+    solucion: [Import-Csv C:\Informes\inventario.csv | Where-Object Estado -eq BAJO]
+    explicacion: >-
+      La unidad D: de SRV01 tiene 4 GB libres. Ese dato es para el ticket: alguien tiene que
+      liberar espacio o agrandar el disco.
+  - consigna: >-
+      El informe también dice que en SRV01 el servicio Spooler debería estar corriendo y no lo
+      está. Arrancalo desde acá, sin entrar a SRV01.
+    verificar:
+      - en: SRV01
+        verificar: { servicio: Spooler, estado: Running }
+    solucion: ["Invoke-Command -ComputerName SRV01 -ScriptBlock { Start-Service Spooler }"]
+  - consigna: >-
+      Volvé a correr el inventario contra DC01 y SRV01 para comprobar que SRV01 ya no tiene
+      servicios caídos.
+    verificar:
+      - { comando_usado: "inventario\\.ps1.*dc01.*srv01" }
+      - { archivo: C:\Informes\inventario.html, contenido_incluye: "Inventario del" }
+    solucion: [".\\Inventario.ps1 -Servidores DC01, SRV01"]
+    explicacion: >-
+      Para SRV02 no hay arreglo desde acá: sin WinRM no se puede administrar a distancia. Hay que
+      entrar por la consola de la máquina virtual y ejecutar Enable-PSRemoting -Force. Es lo que
+      vas a hacer en la parte 2.

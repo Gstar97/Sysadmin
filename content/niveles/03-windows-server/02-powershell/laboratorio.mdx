@@ -1,0 +1,40 @@
+---
+titulo: Script de inventario de varios servidores
+horas: 3
+verificacion:
+  - Leí el script y puedo explicar el bloque param, el Invoke-Command con $using y cómo maneja los errores.
+  - Lo corrí en el simulador, encontré el disco con poco espacio y arranqué el servicio caído sin entrar al servidor.
+  - Lo corrí en mi laboratorio contra SRV-CORE01, con credenciales, y abrí el informe HTML.
+  - Provoqué un hallazgo (servicio caído y disco lleno), el inventario lo detectó y dejé todo como estaba.
+  - Le hice al menos una mejora al script y la anoté en el cuaderno técnico.
+---
+
+import sim from './lab-inventario-sim.yaml'
+import pasos from './lab-inventario.yaml'
+
+## Objetivo
+
+Juntar todo el módulo en una herramienta que vas a usar de verdad: un script que recorre varios servidores y arma un informe en CSV (para filtrar y procesar) y en HTML (para mandar por correo) con los discos, los servicios automáticos que no están corriendo y la última actualización instalada. Es el tipo de script que todo equipo de sistemas tiene, y que después se programa para que corra solo todas las mañanas.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: SRV-ADMIN y SRV-CORE01 del laboratorio del módulo 3.1 (con el segundo disco D: en SRV-CORE01), y Visual Studio Code con la extensión de PowerShell en SRV-ADMIN (o el ISE).
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus servidores
+
+<PasosGuiados ejercicio={pasos} />
+
+<Consejo>
+Una vez que el script te convence, se programa con el Programador de tareas (Register-ScheduledTask) para que corra solo, con una cuenta de servicio. Lo vas a ver en el módulo 3.5, junto con las cuentas de servicio administradas del módulo 3.3.
+</Consejo>
+
+## Para pensar
+
+1. ¿Qué pasaría con el informe si en lugar de devolver [PSCustomObject] el bloque remoto usara Write-Host? ¿Y si Format-Table estuviera antes de Export-Csv?
+2. El script usa $using:LimiteGB. ¿Qué devolvería la columna Estado si te olvidaras del $using:?
+3. Con 200 servidores, ¿qué parte del script tardaría más? ¿Qué cambiarías (ThrottleLimit, sesiones, filtrar en el remoto)?

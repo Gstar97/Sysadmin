@@ -5,6 +5,7 @@ import { nginx } from '@codemirror/legacy-modes/mode/nginx'
 import { properties } from '@codemirror/legacy-modes/mode/properties'
 import { javascript } from '@codemirror/legacy-modes/mode/javascript'
 import { shell } from '@codemirror/legacy-modes/mode/shell'
+import { powerShell } from '@codemirror/legacy-modes/mode/powershell'
 import { linter, lintGutter, type Diagnostic as CmDiagnostic } from '@codemirror/lint'
 import type { Extension, Text } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
@@ -36,6 +37,7 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   frr: '/etc/frr/frr.conf',
   nftables: '/etc/nftables.conf',
   wireguard: '/etc/wireguard/wg0.conf',
+  powershell: 'C:\\Scripts\\script.ps1',
   texto: 'archivo.txt',
 }
 
@@ -61,6 +63,8 @@ function languageFor(lang: ConfigLanguage): Extension {
       return StreamLanguage.define(properties)
     case 'kea':
       return StreamLanguage.define(javascript)
+    case 'powershell':
+      return StreamLanguage.define(powerShell)
     case 'texto':
       return []
   }

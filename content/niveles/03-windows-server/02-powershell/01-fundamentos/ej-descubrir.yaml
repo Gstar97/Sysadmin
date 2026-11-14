@@ -1,0 +1,61 @@
+tipo: terminal
+shell: powershell
+titulo: Encontrar comandos y su ayuda sin salir de la consola
+descripcion: >-
+  Estás en SRV-ADMIN y te piden reiniciar el servicio de impresión (Spooler), que está trabado.
+  No sabés de memoria cómo se llama el cmdlet. La idea es encontrarlo, leer cómo se usa y
+  hacerlo, todo con PowerShell.
+estado_inicial:
+  equipo: SRV-ADMIN
+pasos:
+  - consigna: >-
+      Buscá todos los cmdlets que trabajan con servicios: tienen el sustantivo Service.
+    verificar:
+      - { comando_usado: "get-command.*(-noun\\s+\\*?service|\\*-service)" }
+      - { salida_contiene: "Restart-Service" }
+    pistas:
+      - "Get-Command -Noun Service, o Get-Command *-Service."
+    solucion: [Get-Command -Noun Service]
+    explicacion: >-
+      Como todos los cmdlets son verbo-sustantivo, buscar por el sustantivo te da todo lo que se
+      puede hacer con algo: obtener, iniciar, detener, reiniciar, configurar.
+  - consigna: Mirá los ejemplos de uso de Restart-Service.
+    verificar:
+      - { comando_usado: "get-help\\s+restart-service.*-ex|help\\s+restart-service.*-ex" }
+    pistas:
+      - "Get-Help tiene el parámetro -Examples."
+    solucion: [Get-Help Restart-Service -Examples]
+    explicacion: >-
+      En un servidor recién instalado la ayuda viene incompleta hasta que corrés Update-Help (con
+      salida a internet). -Examples va directo a lo que más se usa.
+  - consigna: >-
+      Antes de tocarlo, mirá el estado del servicio Spooler usando el alias corto de Get-Service.
+      Si no sabés cuál es, averigualo con Get-Alias.
+    verificar:
+      - { comando_usado: "^gsv" }
+    pistas:
+      - "Get-Alias -Definition Get-Service muestra sus alias."
+    solucion:
+      - Get-Alias -Definition Get-Service
+      - gsv Spooler
+    explicacion: >-
+      Los alias sirven para escribir rápido en la consola. En un script, escribí siempre el
+      nombre completo: el que lo lea después (o vos en seis meses) lo va a entender sin buscarlo.
+  - consigna: Reiniciá el servicio Spooler y comprobá que quedó en ejecución.
+    verificar:
+      - { comando_usado: "restart-service" }
+      - { servicio: Spooler, estado: Running }
+    solucion:
+      - Restart-Service -Name Spooler
+      - Get-Service Spooler
+  - consigna: >-
+      Por último, fijate qué versión de PowerShell es esta consola (la propiedad PSVersion de
+      $PSVersionTable).
+    verificar:
+      - { salida_regex: "^5\\.1" }
+    solucion: [$PSVersionTable.PSVersion.ToString()]
+    pistas:
+      - "$PSVersionTable es una tabla; con .PSVersion te quedás con la versión."
+    explicacion: >-
+      5.1 es Windows PowerShell, el que viene en Windows. PowerShell 7 (pwsh) se instala aparte y
+      convive con él.

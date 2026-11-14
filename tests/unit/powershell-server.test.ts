@@ -166,3 +166,26 @@ describe('PowerShell: configuración de un servidor', () => {
     expect((await run(s, 'Install-Module ImportExcel')).err).toMatch(/Unable to resolve package source/)
   })
 })
+
+describe('PowerShell: detalles del lenguaje usados en el Nivel 3', () => {
+  it('alias ? y %, [math]::Round con dos argumentos, if como valor y rutas', async () => {
+    const s = createPsSession()
+    expect((await run(s, '1,2,3 | ? { $_ -gt 1 } | % { $_ * 10 }')).out).toBe('20\n30\n')
+    expect((await run(s, '[math]::Round(1500000 / 1MB, 2)')).out.trim()).toBe('1.43')
+    expect((await run(s, '$h = @{ Estado = if (5 -lt 10) { "BAJO" } else { "OK" } }; $h.Estado')).out.trim()).toBe('BAJO')
+    expect((await run(s, 'Join-Path C:\\Informes inventario.csv')).out.trim()).toBe('C:\\Informes\\inventario.csv')
+    expect((await run(s, 'Split-Path C:\\Informes\\a.csv -Leaf')).out.trim()).toBe('a.csv')
+    expect((await run(s, '(Get-Date).GetType().Name')).out.trim()).toBe('DateTime')
+    expect((await run(s, '((Get-Date) - (Get-Date).AddDays(-3)).Days')).out.trim()).toBe('3')
+    expect((await run(s, '[string]::Join("-", @("a","b"))')).out.trim()).toBe('a-b')
+    expect((await run(s, 'Get-Service | Format-Table Name | Export-Csv C:\\Temp\\x.csv; Get-Content C:\\Temp\\x.csv | Select-Object -First 1')).out).toMatch(/FormatStartData/)
+  })
+
+  it('el editor marca errores de sintaxis y alias en un script', async () => {
+    const { validateConfig } = await import('@/engines/config')
+    const bad = validateConfig('powershell', 'param([int]$x = 1)\n$y = gci | ? { $_.Length -gt $x }\nif ($y {\n')
+    expect(bad.diagnostics.some((d) => d.severity === 'error')).toBe(true)
+    expect(bad.diagnostics.filter((d) => d.severity === 'warning').map((d) => d.message).join(' ')).toMatch(/gci.*Get-ChildItem|Where-Object/)
+    expect(validateConfig('powershell', 'foreach ($a in 1..3) { Write-Output $a }').diagnostics).toEqual([])
+  })
+})

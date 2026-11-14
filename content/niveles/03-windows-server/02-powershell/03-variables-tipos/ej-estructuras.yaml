@@ -1,0 +1,70 @@
+tipo: terminal
+shell: powershell
+titulo: Una lista de servidores, sus IP y un informe
+descripcion: >-
+  Vas a armar en memoria los datos que después usaría un script de inventario: la lista de
+  servidores, una tabla con la IP de cada uno y un informe con un objeto por servidor. Estás en
+  SRV-ADMIN.
+estado_inicial:
+  equipo: SRV-ADMIN
+pasos:
+  - consigna: >-
+      Guardá en la variable $servidores un array con DC01, SRV-ARCH01 y SRV-WEB01.
+    verificar:
+      - { variable: servidores }
+      - { comando_usado: "\\$servidores\\s*=\\s*@?\\(?\\s*['\"]?dc01" }
+    pistas:
+      - "$servidores = @('DC01', 'SRV-ARCH01', 'SRV-WEB01')"
+    solucion: ["$servidores = @('DC01', 'SRV-ARCH01', 'SRV-WEB01')"]
+  - consigna: Agregale SRV-APP01 y mostrá cuántos servidores quedaron.
+    verificar:
+      - { comando_usado: "\\+=" }
+      - { salida_regex: "^4$" }
+    solucion:
+      - $servidores += 'SRV-APP01'
+      - $servidores.Count
+    explicacion: >-
+      += arma un array nuevo con un elemento más. Para unos pocos está perfecto; para miles de
+      elementos dentro de un bucle es lento, y conviene juntar la salida del bucle en la variable
+      directamente ($lista = foreach (...) { ... }).
+  - consigna: >-
+      Creá la tabla hash $ips con la IP de cada servidor (DC01 192.168.10.10, SRV-ARCH01
+      192.168.10.21, SRV-WEB01 192.168.10.30, SRV-APP01 192.168.10.40) y mostrá la de SRV-WEB01.
+    verificar:
+      - { variable: ips }
+      - { salida_contiene: "192.168.10.30" }
+    pistas:
+      - "Las claves con guion van entre comillas: @{ DC01 = '192.168.10.10'; 'SRV-ARCH01' = '192.168.10.21' }"
+      - "$ips['SRV-WEB01'] devuelve el valor de esa clave."
+    solucion:
+      - "$ips = @{ DC01 = '192.168.10.10'; 'SRV-ARCH01' = '192.168.10.21'; 'SRV-WEB01' = '192.168.10.30'; 'SRV-APP01' = '192.168.10.40' }"
+      - $ips['SRV-WEB01']
+  - consigna: >-
+      Preguntá si SRV-BD01 está en la lista de servidores (tiene que dar False).
+    verificar:
+      - { comando_usado: "-in\\b|-contains\\b|-notin|-notcontains" }
+      - { salida_contiene: "False" }
+    solucion: ["'SRV-BD01' -in $servidores"]
+  - consigna: >-
+      Mostrá solo los servidores cuyo nombre empieza con SRV-.
+    verificar:
+      - { comando_usado: "-like|-match" }
+      - { salida_contiene: "SRV-APP01" }
+    pistas:
+      - "Con un array, -like filtra: devuelve los elementos que coinciden."
+    solucion: ["$servidores -like 'SRV-*'"]
+  - consigna: >-
+      Armá en $informe una lista con un [PSCustomObject] por servidor, con las propiedades
+      Servidor e IP, recorriendo $servidores con foreach. Mostrala.
+    verificar:
+      - { variable: informe }
+      - { salida_regex: "SRV-ARCH01\\s+192\\.168\\.10\\.21" }
+    pistas:
+      - "$informe = foreach ($s in $servidores) { [PSCustomObject]@{ Servidor = $s; IP = $ips[$s] } }"
+    solucion:
+      - "$informe = foreach ($s in $servidores) { [PSCustomObject]@{ Servidor = $s; IP = $ips[$s] } }"
+      - $informe
+    explicacion: >-
+      Este es el patrón de casi todos los informes en PowerShell: recorrer algo, armar un objeto
+      por elemento con las columnas que querés y, al final, pasar la lista a Export-Csv o
+      ConvertTo-Html.
