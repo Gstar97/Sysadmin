@@ -1,0 +1,161 @@
+---
+id: n3-m3-l8
+titulo: Operación de Active Directory
+minutos: 180
+objetivos:
+  - Sumar un segundo controlador de dominio y comprobar que la replicación funciona.
+  - Reconocer los roles FSMO, saber cuándo transferirlos y cuándo tomarlos a la fuerza.
+  - Proteger el dominio con la papelera de reciclaje y respaldos del estado del sistema, y leer dcdiag y repadmin.
+glosario: [fsmo, replicacion-ad, papelera-ad, estado-sistema]
+verificado: 2026-11
+---
+
+import fsmo from './roles-fsmo.svg?raw'
+import salidas from './salidas.yaml'
+import operacion from './ej-operacion.yaml'
+
+Armar un dominio lleva una tarde. Mantenerlo sano durante diez años es otra cosa: sumar controladores, reemplazar los viejos, recuperar lo que alguien borró sin querer y darte cuenta a tiempo cuando algo deja de replicar. Esta lección es el manual de mantenimiento: lo que se hace una vez al año, lo que se revisa todas las semanas y lo que salva el día cuando algo sale mal.
+
+<AntesDeEmpezar>
+- Crear el primer dominio y dcdiag (lección 3.3.2).
+- La hora y NTP (lección 1.5.4).
+- Respaldos: la regla 3-2-1 (módulo 1.4).
+</AntesDeEmpezar>
+
+## El segundo controlador
+
+Un dominio con un solo DC es un dominio con un punto único de falla: si ese servidor se rompe, nadie inicia sesión con datos nuevos, no llegan directivas y, si no hay respaldo, se pierde todo. **Siempre al menos dos.** El segundo se suma con un comando parecido al del primero, pero en lugar de crear un bosque, se une a uno que existe:
+
+```powershell
+Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+Install-ADDSDomainController -DomainName empresa.local -InstallDns `
+    -Credential (Get-Credential EMPRESA\Administrador)
+```
+
+Los requisitos son los mismos del primero (IP fija, nombre definitivo, hora correcta), con una diferencia: el DNS del servidor apunta a un **DC que ya existe**, porque lo necesita para encontrar el dominio. Por defecto, el nuevo DC también es **catálogo global** y, con `-InstallDns`, **servidor DNS** con la zona del dominio (que viene integrada en AD y se replica sola). Después, agregá su IP como segundo DNS en el DHCP y en los servidores con IP fija: si los equipos solo conocen a DC01 como DNS, el segundo DC no les sirve de nada cuando DC01 se cae.
+
+## La replicación
+
+Todos los DC de un dominio son iguales: se puede crear un usuario en cualquiera, y el cambio **se replica** a los demás. Dentro de una misma sede, en segundos (unos 15); entre sedes, según un horario que se configura en *Sitios y servicios de Active Directory* (*para más adelante*). Algunos cambios viajan de urgencia, como el bloqueo de una cuenta. La carpeta SYSVOL (las directivas y los scripts) se replica aparte, con **DFS-R**.
+
+La herramienta para revisarla es **repadmin**:
+
+```powershell
+repadmin /replsummary     # resumen: errores y demora máxima por DC
+repadmin /showrepl        # detalle: cada vecino y el resultado del último intento
+repadmin /syncall /AdeP   # forzar la replicación de todo, ya (para probar)
+```
+
+En `/replsummary` mirá dos columnas: **fails/total**, que tiene que estar en 0, y **largest delta**, la demora más grande desde la última replicación buena, que tiene que estar en minutos. Horas o días significan que algo está roto, y el código de **error** dice qué: 1722 (el servidor RPC no está disponible: el otro DC está apagado, con el servicio caído o bloqueado por un firewall), 1256 o 1908 (problemas de red o de DNS para encontrarlo), 8453 (permisos).
+
+Y una advertencia que viene de esto: un DC que estuvo **más de 180 días** sin replicar (por ejemplo, una máquina virtual apagada y olvidada) no puede volver a la red. Los demás ya olvidaron los objetos borrados en ese tiempo, y si vuelve, los reintroduce. Si te pasa, no lo prendas en la red: se elimina y se crea uno nuevo.
+
+<EnSimple>
+Dos DC como mínimo, los dos con DNS y los dos en la configuración de DNS de los equipos. Replicación sana: repadmin /replsummary con 0 errores y demoras de minutos.
+</EnSimple>
+
+## Los roles FSMO
+
+Casi todo en AD se puede hacer en cualquier DC, pero hay cinco tareas que necesitan un único responsable para no chocar. Son los **roles FSMO** (*Flexible Single Master Operations*, operaciones de maestro único):
+
+<Diagrama svg={fsmo} alt="Los cinco roles FSMO en dos grupos. Uno por bosque: el maestro de esquema (aprueba cambios al esquema; si se cae, no se puede ampliar, casi nadie lo nota) y el maestro de nombres de dominio (aprueba agregar o quitar dominios; si se cae, no se pueden crear dominios, casi nadie lo nota). Uno por dominio: el emulador de PDC, el que más se nota (reloj de referencia del dominio, recibe enseguida los cambios de contraseña y los bloqueos, y es el DC que usa por defecto la consola de directivas; si se cae, la hora deriva y una contraseña recién cambiada puede fallar en otro DC); el maestro de RID (reparte bloques de 500 números para crear objetos con SID único; si se cae, se puede seguir creando hasta que a un DC se le acabe el bloque); y el maestro de infraestructura (actualiza referencias a objetos de otros dominios; con un solo dominio no tiene trabajo)." pie="En una PyME, los cinco suelen estar en el mismo DC. El que más se nota cuando falta es el emulador de PDC." />
+
+Al crear el bosque, los cinco quedan en el primer DC. En una empresa chica está bien dejarlos juntos. Lo importante es **saber dónde están** (`netdom query fsmo`) y moverlos antes de apagar ese servidor:
+
+```powershell
+netdom query fsmo
+Move-ADDirectoryServerOperationMasterRole -Identity DC02 `
+    -OperationMasterRole SchemaMaster, DomainNamingMaster, PDCEmulator, RIDMaster, InfrastructureMaster
+```
+
+Hay dos formas de moverlos:
+
+- **Transferir**: con los dos DC encendidos. Es la forma normal, sin riesgo. Se hace antes de retirar un DC o para mantenimiento largo.
+- **Tomar a la fuerza** (*seize*): el mismo comando con `-Force`, cuando el DC que los tenía **murió sin remedio**. Después de eso, ese DC **no puede volver a la red nunca más**: se borra de AD y, si se recupera el hardware, se reinstala de cero. Si solo va a estar caído unas horas, no hace falta tomar nada.
+
+Y lo que nunca hay que olvidar después de mover el **emulador de PDC**: es el reloj del dominio. El DC nuevo tiene que tomar la hora de una fuente externa confiable, y el viejo, volver a la jerarquía del dominio:
+
+```powershell
+w32tm /config /manualpeerlist:"0.ar.pool.ntp.org 1.ar.pool.ntp.org" /syncfromflags:manual /reliable:yes /update
+w32tm /query /source
+```
+
+<Pregunta id="p04" />
+
+## Cuando alguien borra algo: la papelera de reciclaje
+
+El accidente más común en AD es borrar un usuario, un grupo o una OU entera por error. La **papelera de reciclaje de AD** hace que lo borrado quede guardado entero (con sus grupos, sus atributos y su ubicación) durante 180 días, y se pueda restaurar con un comando. Viene **desactivada**, y se activa una vez para todo el bosque; no se puede desactivar, y no tiene contras:
+
+```powershell
+Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target empresa.local
+Get-ADObject -Filter 'isDeleted -eq $true' -IncludeDeletedObjects | Select-Object Name, LastKnownParent
+Get-ADObject -Filter 'SamAccountName -eq "mlopez"' -IncludeDeletedObjects | Restore-ADObject
+```
+
+Sin papelera, un objeto borrado también se puede recuperar, pero vuelve casi vacío: sin grupos, sin la mayoría de sus atributos y deshabilitado. El Centro de administración de AD (`dsac.exe`) muestra la papelera como un contenedor más, con un botón Restaurar. Si se borró una OU con cosas adentro, restaurá primero la OU y después lo de adentro.
+
+## Respaldar un controlador de dominio
+
+La papelera cubre los borrados. Para el resto (una base dañada, un servidor perdido, un ataque) hace falta **respaldo**. En un DC, lo que se respalda es el **estado del sistema** (*system state*): la base de AD, SYSVOL, el registro y los archivos de arranque. Con la herramienta incluida en Windows Server:
+
+```powershell
+Install-WindowsFeature Windows-Server-Backup
+wbadmin start systemstatebackup -backupTarget:E: -quiet
+wbadmin get versions
+```
+
+Tres reglas:
+
+- **Todos los días**, programado, y con una **copia fuera del servidor** (el 3-2-1 de siempre). El destino no puede ser el mismo disco que se respalda.
+- **Un respaldo de más de 180 días no sirve** para restaurar un DC: trae objetos que los demás ya olvidaron.
+- **No restaures un DC desde una instantánea vieja** de la máquina virtual "porque es más rápido". Los hipervisores actuales lo detectan en muchos casos, pero restaurar así puede desincronizar la replicación de una forma muy difícil de arreglar.
+
+¿Y cómo se restaura? Si tenés otro DC sano, la respuesta casi siempre es **no restaurar**: si un DC se rompe, se lo borra de AD, se toman sus roles si los tenía, y se instala uno nuevo, que copia todo del que quedó. Restaurar desde un respaldo (arrancando en modo DSRM, con la contraseña que definiste al promover) es para cuando se perdieron **todos** los DC, o para recuperar algo que ya no está en la papelera. Esos procedimientos, el autoritativo y el no autoritativo, quedan *para más adelante*.
+
+## La revisión de cada semana
+
+Cinco minutos por semana evitan la mayoría de los sustos:
+
+```powershell
+dcdiag /q                     # solo los errores; si no muestra nada, está todo bien
+repadmin /replsummary         # 0 errores, demoras de minutos
+w32tm /query /source          # el PDC con hora externa; los demás, del dominio
+wbadmin get versions          # el último respaldo es de anoche
+```
+
+Y el **Visor de eventos** de cada DC: los registros *Directory Service*, *DNS Server* y *DFS Replication*, buscando errores y advertencias nuevas.
+
+<Emparejar ejercicio={salidas} />
+
+<Terminal ejercicio={operacion} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Un solo DC “porque la empresa es chica”">
+    Si se rompe, nadie trabaja hasta reconstruirlo. Un segundo DC puede ser una máquina virtual chica en otro servidor físico.
+  </ErrorComun>
+  <ErrorComun titulo="Apagar el DC viejo sin transferir los roles">
+    Después hay que tomarlos a la fuerza y el viejo no puede volver. Transferí siempre antes de retirar.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar la hora del nuevo PDC">
+    Si el nuevo emulador de PDC no toma la hora de afuera, todo el dominio deriva con él. w32tm /config al mover el rol.
+  </ErrorComun>
+  <ErrorComun titulo="No activar la papelera de AD">
+    No tiene contras. Sin ella, lo borrado vuelve sin grupos y sin la mayoría de sus datos.
+  </ErrorComun>
+  <ErrorComun titulo="Prender un DC apagado hace meses">
+    Con más de 180 días sin replicar, reintroduce objetos borrados. Se elimina y se crea uno nuevo.
+  </ErrorComun>
+  <ErrorComun titulo="Restaurar un DC desde una instantánea de la VM">
+    Puede romper la replicación de forma muy difícil de arreglar. Si hay otro DC sano, mejor instalar uno nuevo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Siempre al menos dos DC, con DNS y catálogo global, y los dos configurados como DNS en los equipos.
+- La replicación sana se ve con repadmin /replsummary: 0 errores y demoras de minutos. 1722 = el otro DC no responde.
+- Cinco roles FSMO: dos por bosque (esquema, nombres de dominio) y tres por dominio (PDC, RID, infraestructura). netdom query fsmo los muestra.
+- Transferir con los dos DC vivos; tomar a la fuerza (-Force) solo si el DC murió, y ese DC no vuelve. El PDC nuevo, con hora externa.
+- Papelera de AD: se activa una vez, sin contras, y restaura objetos enteros por 180 días.
+- Respaldo diario del estado del sistema con wbadmin, fuera del servidor; si hay otro DC sano, un DC roto se reemplaza, no se restaura.
+- Revisión semanal: dcdiag /q, repadmin /replsummary, w32tm /query /source, wbadmin get versions y el Visor de eventos.
+</Resumen>

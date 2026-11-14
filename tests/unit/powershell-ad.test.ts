@@ -141,6 +141,25 @@ describe('Active Directory: crear el dominio y operarlo', () => {
     expect((await run(s, 'gpupdate /force')).out).toMatch(/User Policy update has completed successfully/)
   })
 
+  it('wbadmin: hace falta la característica, no acepta C: y deja la versión', async () => {
+    const s = createPsSession({
+      equipo: 'DC01',
+      dominio: 'empresa.local',
+      ad: {},
+      discos: [
+        { numero: 0, tamano_gb: 127, estilo: 'GPT', particiones: [{ letra: 'C', tamano_gb: 126, sistema: 'NTFS' }] },
+        { numero: 1, tamano_gb: 200, estilo: 'GPT', particiones: [{ letra: 'E', tamano_gb: 199, sistema: 'NTFS', etiqueta: 'Respaldos' }] },
+      ],
+    })
+    expect((await run(s, 'wbadmin get versions')).err).toMatch(/not recognized/)
+    await run(s, 'Install-WindowsFeature Windows-Server-Backup')
+    expect((await run(s, 'wbadmin start systemstatebackup -backupTarget:C: -quiet')).out).toMatch(/included in the backup/)
+    expect((await run(s, 'wbadmin start systemstatebackup -backupTarget:F: -quiet')).out).toMatch(/could not be found/)
+    expect((await run(s, 'wbadmin start systemstatebackup -backupTarget:E: -quiet')).out).toMatch(/successfully completed/)
+    expect((await run(s, 'wbadmin get versions')).out).toMatch(/Respaldos\(E:\)[\s\S]*Can recover: System State/)
+    expect(verifyPs(s, { archivo: 'E:\\WindowsImageBackup\\DC01', existe: true }).ok).toBe(true)
+  })
+
   it('papelera de reciclaje: sin activarla el objeto vuelve vacío; activada vuelve entero', async () => {
     const s = createPsSession({ equipo: 'DC01', dominio: 'empresa.local', ad: { usuarios: [{ sam: 'mlopez', nombre: 'María', departamento: 'Ventas', grupos: ['GG-Ventas'] }, { sam: 'jperez', nombre: 'Juan', departamento: 'Compras', grupos: ['GG-Compras'] }] } })
     await run(s, 'Remove-ADUser mlopez -Confirm:$false')

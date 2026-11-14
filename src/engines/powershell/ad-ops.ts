@@ -40,6 +40,7 @@ import { domainControllers, isDc, labStates, locateDc, resolveName } from './dns
 import { DC_RULES, reach, ruleObject } from './machine'
 import { asArray, cmdlet, PsError, PsSession, psEquals, type CmdletContext } from './session'
 import { restart } from './system'
+import { disks } from './verify-system'
 import { psObject, toText, type PsObject } from './values'
 
 const param = (ctx: CmdletContext, n: string) => ctx.params.get(n.toLowerCase())
@@ -1408,5 +1409,73 @@ cmdlet('dsacls', {
       'The command completed successfully',
     ]
     return [formatted(lines.join('\n') + '\n')]
+  },
+})
+
+// ---------------------------------------------------------------------------------------
+// wbadmin: copias de seguridad del estado del sistema (lo que se usa para restaurar un DC)
+// ---------------------------------------------------------------------------------------
+
+interface WbVersion {
+  when: Date
+  target: string
+  label: string
+  kind: 'systemstate'
+}
+
+const WB_HEAD = 'wbadmin 1.0 - Backup command-line tool\n(C) Copyright Microsoft Corporation. All rights reserved.\n\n'
+
+function wbDate(d: Date): string {
+  return d.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(',', '')
+}
+
+cmdlet('wbadmin', {
+  native: true,
+  synopsis: 'wbadmin.exe',
+  run(ctx) {
+    const s = ctx.s
+    const installed = ((s.data.features ?? []) as PsObject[]).some((f) => toText(f.Name).toLowerCase() === 'windows-server-backup' && f.Installed)
+    if (!installed) throw notRecognized('wbadmin')
+    const args = ctx.positional.map((a) => toText(a))
+    const lower = args.map((a) => a.toLowerCase())
+    const versions = (s.data.wbVersions ??= []) as WbVersion[]
+    if (lower[0] === 'start' && lower[1] === 'systemstatebackup') {
+      const targetArg = args.find((a) => /^-backuptarget:/i.test(a))?.replace(/^-backuptarget:/i, '')
+      if (!targetArg) return [formatted(`${WB_HEAD}ERROR - The parameter backupTarget is missing.\n[simulador] Ejemplo: wbadmin start systemstatebackup -backupTarget:E: -quiet\n`)]
+      const letter = targetArg.replace(/[:\\]+$/, '').toUpperCase()
+      if (letter === 'C') return [formatted(`${WB_HEAD}ERROR - The backup storage location is invalid. You cannot use a volume that is included in the backup as a storage location.\n`)]
+      const part = disks(s).flatMap((d) => (d.offline ? [] : d.particiones)).find((p) => p.letra?.toUpperCase() === letter && p.sistema)
+      if (!part) return [formatted(`${WB_HEAD}ERROR - The specified backup storage location could not be found or is not a supported backup storage location.\n`)]
+      const when = new Date(Date.now() + s.state.desfase_reloj_min * 60_000)
+      const end = new Date(when.getTime() + 14 * 60_000)
+      versions.push({ when, target: letter, label: part.etiqueta, kind: 'systemstate' })
+      part.usado_gb = Math.min(part.tamano_gb, part.usado_gb + 18)
+      s.fs.mkdirp(`${letter}:\\WindowsImageBackup\\${s.state.equipo}\\SystemStateBackup`)
+      const confirm = lower.includes('-quiet') ? '' : 'Do you want to start the backup operation?\n[Y] Yes [N] No y\n[simulador] Se respondió que sí. En un script, agregá -quiet.\n\n'
+      return [
+        formatted(
+          `${WB_HEAD}${confirm}Starting a system state backup...\nRetrieving volume information...\nThis will back up the system state from volume(s) Local Disk(C:) to ${letter}:.\nStarting a system state backup [${wbDate(when)}]...\nCreating a backup of files reported by 'System Writer'...\nCreating a backup of files reported by 'NTDS'...\nCreating a backup of files reported by 'Registry Writer'...\nCreating a backup of files reported by 'COM+ REGDB Writer'...\nFound (${isDc(s.state, s.lab) ? '91,214' : '73,560'}) files.\nScanning the file system...\n\nSummary of the backup operation:\n------------------\n\nThe backup of the system state successfully completed [${wbDate(end)}].\nLog of files successfully backed up:\nC:\\Windows\\Logs\\WindowsServerBackup\\Backup-${when.toISOString().slice(0, 10).split('-').reverse().join('-')}_${when.toTimeString().slice(0, 8).replace(/:/g, '-')}.log\n`,
+        ),
+      ]
+    }
+    if (lower[0] === 'get' && lower[1] === 'versions') {
+      if (!versions.length) return [formatted(`${WB_HEAD}[simulador] Todavía no hay copias de seguridad en este equipo.\n`)]
+      return [
+        formatted(
+          WB_HEAD +
+            versions
+              .map((v) => {
+                const utc = v.when.toISOString()
+                const id = `${utc.slice(5, 7)}/${utc.slice(8, 10)}/${utc.slice(0, 4)}-${utc.slice(11, 16)}`
+                return `Backup time: ${wbDate(v.when)}\nBackup location: Fixed Disk labeled ${v.label || 'Local Disk'}(${v.target}:)\nVersion identifier: ${id}\nCan recover: System State\nSnapshot ID: {${stableGuid(`wb-${utc}`)}}\n`
+              })
+              .join('\n'),
+        ),
+      ]
+    }
+    if (lower[0] === 'start' && lower[1] === 'systemstaterecovery') {
+      return [formatted(`${WB_HEAD}[simulador] Restaurar el estado del sistema de un DC se hace arrancando en el modo de restauración de servicios de directorio (DSRM), con la contraseña que definiste al promoverlo. Ese procedimiento no se simula aquí.\n`)]
+    }
+    return [formatted(`${WB_HEAD}---- Commands Supported ----\n\nSTART SYSTEMSTATEBACKUP -- Create a system state backup.\nSTART SYSTEMSTATERECOVERY -- Run a system state recovery.\nGET VERSIONS    -- List details of backups that can be recovered.\n[simulador] Lo habitual: wbadmin start systemstatebackup -backupTarget:E: -quiet y wbadmin get versions.\n`)]
   },
 })

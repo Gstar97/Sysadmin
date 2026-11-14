@@ -483,7 +483,8 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     Test-NetConnection, Resolve-DnsName), usuarios y grupos locales, roles y
     características (Install-WindowsFeature) y ActiveDirectory (usuarios, grupos, OU,
     equipos, filtros -Filter y -LDAPFilter, contraseñas como SecureString). Los módulos
-    Hyper-V, DnsServer y DhcpServer se suman con las lecciones del Nivel 3 que los usan.
+    DnsServer, DhcpServer y Hyper-V se suman con los módulos 3.4 y 3.5. El detalle del
+    Nivel 3 está más abajo.
   - Consola tipo IOS: modos (usuario, privilegiado, configuración global, interfaz,
     subinterfaz, VLAN, router OSPF y línea), abreviaturas, ayuda con "?", autocompletado
     con Tab, mensajes de error con el ^ en la posición exacta, eventos del sistema
@@ -641,6 +642,38 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       arping -D que detecta equipos "alcanzables", nc con puertos abiertos por equipo
       (red.puertos_abiertos) y la salida de ncat en Rocky.
     · Validadores nuevos del editor (ver 6.7): FRR, nftables y WireGuard.
+  - Nivel 3, parte 1 (módulos 3.1 a 3.3, Windows Server), en src/engines/powershell:
+    · Lenguaje: try/catch/finally, switch, for, do, param con atributos, splatting,
+      alcances, [math]::Round, GetType(), restas de fechas (TimeSpan), [string]::Join,
+      ? y % como alias, comas que separan argumentos de métodos, asignación a una
+      propiedad de una expresión entre paréntesis ((Get-GPO X).GpoStatus = ...) y
+      objetos "vivos" (withSetter en values.ts) que escriben el cambio en el origen.
+    · Varios equipos en un mismo laboratorio (estado_inicial.servidores): Invoke-Command,
+      Enter-PSSession, credenciales, TrustedHosts, y todos los servidores se arman al
+      empezar.
+    · Sistema (system.ts): red y DNS del cliente, firewall, perfiles de red, nombre del
+      equipo y reinicio (BOOT_HOOKS), zona horaria, discos y volúmenes, CIM, Get-HotFix,
+      módulos y PowerShell 7, Select-String, Join-Path y Split-Path; comandos clásicos
+      como ipconfig, ping, nslookup y sconfig (native: los argumentos pasan como texto).
+    · DNS (dns.ts): cada equipo resuelve según el DNS que tiene configurado (el del DC
+      con sus registros SRV, uno público o uno viejo); así se reproduce "el cliente no
+      encuentra el dominio".
+    · Active Directory (ad.ts, ad-ops.ts): bosque y DC adicionales, unir equipos, OU con
+      protección, redircmp/redirusr, dsacls, usuarios, grupos (ámbitos y AGDLP), equipos,
+      gMSA, contraseñas del dominio y PSO, papelera, FSMO, niveles funcionales, -WhatIf
+      en los cmdlets que cambian objetos, y diagnóstico con dcdiag, repadmin, netdom,
+      nltest, w32tm y klist (la hora desfasada rompe Kerberos). wbadmin respalda el
+      estado del sistema en un volumen con letra (no en C:) y lista las versiones.
+    · Directivas de grupo (gpo.ts y src/engines/gpo/rsop.ts): GPO, vínculos, herencia,
+      exigido, filtrado de seguridad (con la regla MS16-072), filtros WMI, valores del
+      registro, respaldo y restauración, informes, gpupdate, gpresult y RSoP. Las PC
+      reciben las directivas al reiniciar o con gpupdate, y gpresult muestra lo que
+      llegó y lo filtrado con el motivo.
+    · Verificaciones nuevas: gpo, herencia_bloqueada, gpo_aplicada, gpo_ganadora,
+      es_controlador, unido_a, papelera_ad, reloj_desfase_max, dns_cliente, fsmo,
+      cuenta_servicio, politica_contrasenas y politica_resultante.
+    · Validador de PowerShell para el editor (src/engines/config/powershell.ts): errores
+      de sintaxis con la línea y avisos por alias en scripts.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -748,6 +781,10 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     cualquier filtro equivalente), de marcar un paquete y de pregunta. Los escenarios
     de tráfico (visita web, retransmisiones, MTU y DNS) viven en src/engines/captura y
     los usan también tcpdump y mtr.
+  - Hechos en la Etapa 6a (Nivel 3): calculadora de licencias de Windows Server
+    (núcleos, Standard contra Datacenter y punto de equilibrio en máquinas virtuales) y
+    simulador de directivas de grupo (SimuladorGPO: vincular, bloquear, exigir y filtrar,
+    con el resultado por persona), los dos sobre motores con pruebas.
   - Pendientes, con el nivel que los usa: simuladores de RAID, quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; constructor de rack y calculadoras (UPS, disponibilidad, cron, costos).

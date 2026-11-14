@@ -1,0 +1,12 @@
+tipo: emparejar
+consigna: Uní cada salida con lo que significa.
+pares:
+  - { a: "repadmin /replsummary → DC01  02h:14m:07s  5 / 5  100  (1722) The RPC server is unavailable.", b: "DC01 no responde: apagado, con el servicio NTDS caído o bloqueado por un firewall" }
+  - { a: "repadmin /replsummary → DC02  03m:12s  0 / 5  0", b: "Replicación sana: sin errores y con demora de minutos" }
+  - { a: "dcdiag /q → (sin ninguna línea)", b: "Todas las pruebas pasaron" }
+  - { a: "dcdiag /q → Warning: DC01 is the PDC Owner, but is not responding to DS RPC Bind.", b: "El DC que tiene un rol FSMO no responde" }
+  - { a: "netdom query fsmo → PDC  DC02.empresa.local", b: "DC02 es el emulador de PDC: tiene que tomar la hora de una fuente externa" }
+  - { a: "w32tm /query /source → Local CMOS Clock", b: "El equipo usa su propio reloj, sin sincronizar con nadie" }
+explicacion: >-
+  Con estas cuatro herramientas (repadmin, dcdiag, netdom y w32tm) se resuelve la revisión semanal de
+  un dominio. Si dcdiag /q no muestra nada, es buena noticia.

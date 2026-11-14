@@ -1,0 +1,210 @@
+tipo: pasos
+titulo: empresa.local en tus máquinas virtuales
+descripcion: >-
+  Vas a armar el dominio de verdad, con dos controladores Server Core (DC01 y DC02), SRV-ADMIN y
+  SRV-CORE01 del módulo 3.1 como miembros, y una PC con Windows 11 (PC01). Usan la red del
+  laboratorio (192.168.10.0/24). Calculá unas cuatro horas. Para el laboratorio usamos
+  empresa.local; en una empresa real, preferí un subdominio de un dominio propio (lección 3.3.2).
+pasos:
+  - titulo: Crear las máquinas
+    detalle: >-
+      DC01 y DC02: Windows Server 2025 Standard Evaluation sin escritorio (Server Core), 2 vCPU,
+      2 GB de RAM, 60 GB de disco; DC01 con un segundo disco de 40 GB para respaldos. PC01:
+      Windows 11 Enterprise de evaluación (90 días, del Centro de evaluación de Microsoft), 2 vCPU,
+      4 GB de RAM, 64 GB de disco, con TPM virtual y arranque seguro. Windows 11 Home no se puede
+      unir a un dominio: tiene que ser Pro, Enterprise o Education.
+    variantes:
+      - nombre: Hyper-V
+        detalle: En PowerShell como administrador, en tu equipo con Hyper-V. Repetí para DC02 sin el segundo disco.
+        comandos:
+          - New-VM -Name DC01 -Generation 2 -MemoryStartupBytes 2GB -NewVHDPath D:\VM\DC01.vhdx -NewVHDSizeBytes 60GB -SwitchName Labred
+          - New-VHD -Path D:\VM\DC01-respaldos.vhdx -SizeBytes 40GB -Dynamic
+          - Add-VMHardDiskDrive -VMName DC01 -Path D:\VM\DC01-respaldos.vhdx
+          - New-VM -Name PC01 -Generation 2 -MemoryStartupBytes 4GB -NewVHDPath D:\VM\PC01.vhdx -NewVHDSizeBytes 64GB -SwitchName Labred
+          - Set-VMKeyProtector -VMName PC01 -NewLocalKeyProtector
+          - Enable-VMTPM -VMName PC01
+      - nombre: VirtualBox
+        detalle: >-
+          Con EFI activado. Para PC01, tipo Windows 11 (64-bit): VirtualBox 7 agrega solo el TPM 2.0
+          y el arranque seguro que pide Windows 11.
+    comprobar: Las tres máquinas arrancan desde su ISO.
+  - titulo: Preparar DC01
+    detalle: >-
+      Instalá DC01 como Server Core. Con sconfig o con PowerShell (opción 15): nombre, IP fija,
+      DNS del laboratorio por ahora (lo cambia la promoción), zona horaria y actualizaciones. Poné
+      en línea el segundo disco como E:, con la etiqueta Respaldos.
+    comandos:
+      - Rename-Computer DC01 -Restart
+      - New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.10.10 -PrefixLength 24 -DefaultGateway 192.168.10.1
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.53
+      - Set-TimeZone -Id 'Argentina Standard Time'
+      - Get-Disk | Where-Object PartitionStyle -eq RAW | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -DriveLetter E -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel Respaldos
+    comprobar: hostname dice DC01, Test-NetConnection 192.168.10.1 da True y Get-Volume E muestra Respaldos.
+  - titulo: Crear el bosque
+    detalle: >-
+      Instalá el rol y promové DC01. Guardá la contraseña de DSRM en tu gestor de contraseñas
+      antes de escribirla. El servidor se reinicia solo.
+    comandos:
+      - Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+      - Install-ADDSForest -DomainName empresa.local -DomainNetbiosName EMPRESA -ForestMode Win2025 -DomainMode Win2025 -InstallDns
+    comprobar: >-
+      Después del reinicio, iniciás sesión como EMPRESA\Administrator; Get-ADDomain muestra
+      empresa.local y dcdiag /q no muestra nada.
+    si_falla: >-
+      Si Test-ADDSForestInstallation da error, leé el mensaje: casi siempre es la IP por DHCP, una
+      contraseña local sin complejidad o un nombre de dominio de una sola palabra.
+  - titulo: Reenviadores y hora de DC01
+    detalle: >-
+      DC01 resuelve empresa.local; para internet, que le pregunte al DNS del laboratorio. Y como
+      tiene el rol de emulador de PDC, que tome la hora de afuera.
+    comandos:
+      - Add-DnsServerForwarder -IPAddress 192.168.10.53
+      - w32tm /config /manualpeerlist:"0.ar.pool.ntp.org 1.ar.pool.ntp.org" /syncfromflags:manual /reliable:yes /update
+      - w32tm /resync
+    comprobar: Resolve-DnsName www.microsoft.com responde, y w32tm /query /source muestra un servidor de pool.ntp.org.
+  - titulo: El segundo controlador
+    detalle: >-
+      Instalá DC02 como Core, con IP 192.168.10.11 y DNS 192.168.10.10. Instalá el rol y
+      promovelo. Después, dejá en cada DC como primer DNS al otro y como segundo, a sí mismo.
+    comandos:
+      - Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+      - Install-ADDSDomainController -DomainName empresa.local -InstallDns -Credential (Get-Credential EMPRESA\Administrator)
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.10, 127.0.0.1
+    comprobar: En DC01, repadmin /replsummary muestra los dos DC con 0 errores, y Get-ADDomainController -Filter * los lista.
+  - titulo: Unir SRV-ADMIN y SRV-CORE01
+    detalle: >-
+      En los dos servidores del módulo 3.1: DNS a los dos DC y unir al dominio. En SRV-ADMIN,
+      instalá las consolas. Desde ahora administrás todo desde SRV-ADMIN, con una cuenta del
+      dominio, y ya no hace falta TrustedHosts: sacá la entrada que agregaste en el módulo 3.1.
+    comandos:
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.10, 192.168.10.11
+      - Add-Computer -DomainName empresa.local -Credential (Get-Credential EMPRESA\Administrator) -Restart
+      - Install-WindowsFeature GPMC, RSAT-AD-Tools, RSAT-DNS-Server
+      - Clear-Item WSMan:\localhost\Client\TrustedHosts -Force
+    comprobar: En SRV-ADMIN, Get-ADComputer -Filter * muestra DC01, DC02, SRV-ADMIN y SRV-CORE01.
+  - titulo: Tu cuenta de administrador
+    detalle: >-
+      No uses la cuenta Administrator para el trabajo diario. Creá la OU Admin (y la estructura
+      completa en el paso siguiente) y una cuenta personal, por ejemplo admin.tunombre, en Domain
+      Admins. Cerrá sesión en SRV-ADMIN y entrá con ella.
+    comandos:
+      - New-ADOrganizationalUnit -Name Empresa -Path 'DC=empresa,DC=local'
+      - New-ADOrganizationalUnit -Name Admin -Path 'OU=Empresa,DC=empresa,DC=local'
+      - New-ADUser -Name 'Admin Tu Nombre' -SamAccountName admin.tunombre -UserPrincipalName admin.tunombre@empresa.local -Path 'OU=Admin,OU=Empresa,DC=empresa,DC=local' -AccountPassword (Read-Host -AsSecureString 'Contraseña') -Enabled $true
+      - Add-ADGroupMember 'Domain Admins' -Members admin.tunombre
+    comprobar: whoami en SRV-ADMIN muestra empresa\admin.tunombre.
+  - titulo: Estructura, altas y grupos con un script
+    detalle: >-
+      Guardá el CSV del laboratorio simulado como C:\Altas\personal.csv en SRV-ADMIN (agregá
+      personas si querés) y este script como C:\Scripts\Estructura.ps1. Leelo antes de correrlo y
+      probalo primero con -WhatIf en los New-AD (o en una copia de la VM).
+    archivo:
+      ruta: C:\Scripts\Estructura.ps1
+      contenido: |
+        param([string]$Csv = 'C:\Altas\personal.csv')
+        $base = 'OU=Empresa,DC=empresa,DC=local'
+
+        # OU (las que ya existen se saltean)
+        foreach ($ou in 'Usuarios', 'Equipos', 'Grupos') {
+            if (-not (Get-ADOrganizationalUnit -Filter "Name -eq '$ou'" -SearchBase $base -SearchScope OneLevel)) {
+                New-ADOrganizationalUnit -Name $ou -Path $base
+            }
+        }
+        $personas = Import-Csv $Csv
+        foreach ($area in $personas.Area | Sort-Object -Unique) {
+            if (-not (Get-ADOrganizationalUnit -Filter "Name -eq '$area'" -SearchBase "OU=Usuarios,$base" -SearchScope OneLevel)) {
+                New-ADOrganizationalUnit -Name $area -Path "OU=Usuarios,$base"
+            }
+        }
+        redircmp "OU=Equipos,$base"
+        redirusr "OU=Usuarios,$base"
+
+        # Altas
+        $clave = Read-Host -AsSecureString 'Contraseña inicial'
+        foreach ($p in $personas) {
+            if (Get-ADUser -Filter "SamAccountName -eq '$($p.Usuario)'") { Write-Warning "$($p.Usuario) ya existe"; continue }
+            New-ADUser -Name "$($p.Nombre) $($p.Apellido)" -GivenName $p.Nombre -Surname $p.Apellido `
+                -SamAccountName $p.Usuario -UserPrincipalName "$($p.Usuario)@empresa.local" `
+                -Department $p.Area -Title $p.Puesto -Path "OU=$($p.Area),OU=Usuarios,$base" `
+                -AccountPassword $clave -ChangePasswordAtLogon $true -Enabled $true
+        }
+
+        # Grupos AGDLP: un global por área y un local de dominio de lectura por área
+        foreach ($area in $personas.Area | Sort-Object -Unique) {
+            $gg = "GG-$area"; $dl = "DL-$area-Lectura"
+            if (-not (Get-ADGroup -Filter "Name -eq '$gg'")) { New-ADGroup $gg -GroupScope Global -GroupCategory Security -Path "OU=Grupos,$base" }
+            if (-not (Get-ADGroup -Filter "Name -eq '$dl'")) { New-ADGroup $dl -GroupScope DomainLocal -GroupCategory Security -Path "OU=Grupos,$base" }
+            Add-ADGroupMember $gg -Members (Get-ADUser -Filter "Department -eq '$area'")
+            Add-ADGroupMember $dl -Members $gg
+        }
+    comandos:
+      - C:\Scripts\Estructura.ps1
+    comprobar: >-
+      Get-ADUser -Filter * -SearchBase 'OU=Usuarios,OU=Empresa,DC=empresa,DC=local' lista a todos, y
+      Get-ADGroupMember DL-Ventas-Lectura -Recursive muestra a las personas de Ventas.
+  - titulo: Directivas de seguridad
+    detalle: >-
+      Contraseñas del dominio, bloqueo de pantalla para los usuarios y bloqueo de pendrives para
+      los equipos (las mismas del laboratorio simulado). Hacelas con PowerShell y después abrilas
+      en la consola de Administración de directivas de grupo para ver cómo se ven.
+    comandos:
+      - Set-ADDefaultDomainPasswordPolicy -Identity empresa.local -MinPasswordLength 12 -LockoutThreshold 5
+      - New-GPO 'Usuarios - Bloqueo de pantalla' | New-GPLink -Target 'OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+      - Set-GPRegistryValue 'Usuarios - Bloqueo de pantalla' -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -ValueName ScreenSaveTimeOut -Type String -Value 600
+      - Set-GPRegistryValue 'Usuarios - Bloqueo de pantalla' -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -ValueName ScreenSaverIsSecure -Type String -Value 1
+      - New-GPO 'Equipos - Sin almacenamiento extraíble' | New-GPLink -Target 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+      - Set-GPRegistryValue 'Equipos - Sin almacenamiento extraíble' -Key 'HKLM\Software\Policies\Microsoft\Windows\RemovableStorageDevices' -ValueName Deny_All -Type DWord -Value 1
+    comprobar: En la consola, cada GPO aparece vinculada a su OU, y la pestaña Configuración muestra los valores.
+  - titulo: La carpeta de Ventas y su unidad de red
+    detalle: >-
+      En SRV-CORE01, creá la carpeta y compartila con lectura para DL-Ventas-Lectura (los permisos
+      NTFS, a fondo, en el módulo 3.4). Después, en SRV-ADMIN, en la consola de directivas: nueva
+      GPO "Usuarios - Unidades de red", vinculada a Usuarios. Editala: Configuración del usuario,
+      Preferencias, Configuración de Windows, Asignaciones de unidades, Nueva, Unidad asignada.
+      Acción Actualizar, ubicación \\SRV-CORE01\Ventas, letra S, etiqueta Ventas. En la pestaña
+      Común, marcá Segmentación a nivel de elemento y agregá Grupo de seguridad EMPRESA\GG-Ventas.
+    comandos:
+      - Invoke-Command SRV-CORE01 { New-Item -ItemType Directory D:\Ventas; New-SmbShare -Name Ventas -Path D:\Ventas -ReadAccess 'EMPRESA\DL-Ventas-Lectura' -FullAccess 'EMPRESA\Domain Admins' }
+    comprobar: Get-GPOReport 'Usuarios - Unidades de red' -ReportType Html -Path C:\Informes\unidades.html muestra la unidad S con la segmentación.
+  - titulo: Unir PC01
+    detalle: >-
+      Instalá Windows 11 en PC01 con una cuenta local. En PowerShell como administrador: IP fija
+      (en el módulo 3.4 la va a dar un DHCP), DNS a los dos DC y unir al dominio. Por redircmp,
+      cae directo en la OU Equipos.
+    comandos:
+      - New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.10.50 -PrefixLength 24 -DefaultGateway 192.168.10.1
+      - Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 192.168.10.10, 192.168.10.11
+      - Add-Computer -DomainName empresa.local -Credential (Get-Credential EMPRESA\admin.tunombre) -Restart
+    comprobar: En SRV-ADMIN, Get-ADComputer PC01 muestra DistinguishedName en OU=Equipos.
+    si_falla: >-
+      "No se pudo contactar con un controlador de dominio": revisá el DNS de PC01 (tiene que ser
+      el de los DC, no el del router) y Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.empresa.local.
+  - titulo: Probar como usuario
+    detalle: >-
+      En PC01, iniciá sesión como EMPRESA\mlopez (te pide cambiar la contraseña). Comprobá que
+      aparece la unidad S, que las opciones del protector de pantalla están bloqueadas y,
+      en una consola como administrador, que llegó la directiva de equipo.
+    comandos:
+      - gpresult /r
+      - gpresult /h $env:TEMP\directivas.html
+    comprobar: >-
+      gpresult /r muestra Usuarios - Bloqueo de pantalla y Usuarios - Unidades de red aplicadas;
+      gpresult /r /scope computer (como administrador) muestra Equipos - Sin almacenamiento
+      extraíble.
+    si_falla: Seguí el orden de la lección 3.3.7. Empezá por la primera línea de gpresult (dónde está el objeto).
+  - titulo: Papelera, respaldo y prueba de recuperación
+    detalle: >-
+      Activá la papelera, instalá Copias de seguridad de Windows Server en DC01 y hacé el primer
+      respaldo del estado del sistema. Después borrá una cuenta de prueba y recuperala.
+    comandos:
+      - Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target empresa.local
+      - "Invoke-Command DC01 { Install-WindowsFeature Windows-Server-Backup; wbadmin start systemstatebackup -backupTarget:E: -quiet }"
+      - Remove-ADUser jperez -Confirm:$false
+      - Get-ADObject -Filter 'SamAccountName -eq "jperez"' -IncludeDeletedObjects | Restore-ADObject
+    comprobar: Get-ADUser jperez -Properties MemberOf muestra la cuenta habilitada y en GG-Compras; wbadmin get versions en DC01 muestra el respaldo.
+  - titulo: Documentar y guardar
+    detalle: >-
+      Anotá en tu cuaderno técnico los nombres, las IP, dónde está cada rol FSMO (netdom query
+      fsmo), dónde guardaste la contraseña DSRM y qué hace cada GPO. Apagá todo en orden (PC01,
+      miembros, DC02, DC01) y tomá una instantánea de cada máquina: dominio-listo.
+    comprobar: Tenés las cinco instantáneas y la documentación.

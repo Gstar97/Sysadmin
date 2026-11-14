@@ -1,0 +1,48 @@
+---
+titulo: Un dominio completo para una PyME
+horas: 5
+verificacion:
+  - Armé el dominio en el simulador, de punta a punta, sin mirar la solución en más de dos pasos.
+  - DC01 y DC02 replican sin errores (repadmin /replsummary) y sé dónde están los roles FSMO.
+  - Las cuentas se crearon desde el CSV con mi script, cada una en la OU de su área, y los permisos van por grupos AGDLP.
+  - PC01 con Windows 11 está unida al dominio y quedó en la OU Equipos sin moverla a mano.
+  - Inicié sesión en PC01 como un usuario de Ventas y gpresult muestra las tres directivas; la unidad S aparece sola.
+  - Borré una cuenta, la recuperé de la papelera con sus grupos, y tengo un respaldo del estado del sistema de DC01.
+  - Documenté nombres, IP, roles FSMO, dónde está la contraseña DSRM y qué hace cada GPO, y tomé las instantáneas.
+---
+
+import sim from './lab-dominio-sim.yaml'
+import pasos from './lab-dominio.yaml'
+
+## Objetivo
+
+Juntar todo el módulo en lo que vas a hacer de verdad cuando una empresa te pida "armá el dominio": dos controladores, una estructura de OU que sirva para administrar, cuentas creadas desde la planilla de Recursos Humanos, permisos por grupos, directivas de seguridad, unidades de red y una PC con Windows 11 que funciona con todo eso. Al terminar, tenés la base de los módulos 3.4 (archivos, DHCP y DNS) y 3.5 (actualizaciones y mantenimiento), y del proyecto del nivel.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: tu hipervisor con lugar para tres máquinas virtuales más (DC01, DC02 y PC01, unos 8 GB de RAM entre las tres), SRV-ADMIN y SRV-CORE01 del módulo 3.1, y los ISO de evaluación de Windows Server 2025 y Windows 11 Enterprise.
+
+## Parte 1: en el laboratorio simulado
+
+Hacelo de corrido, como si fuera el primer día en la empresa. Si te trabás, usá las pistas antes que la solución.
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Las máquinas virtuales de los DC no se restauran desde instantáneas una vez que el dominio está en uso: las instantáneas de este laboratorio son para volver a un punto de partida limpio, con todas las máquinas apagadas y restauradas juntas. En una empresa, un DC se respalda con el estado del sistema (lección 3.3.8).
+</Advertencia>
+
+<Consejo>
+Guardá Estructura.ps1 en tu repositorio de scripts. Con cambios mínimos (el dominio y la ruta de las OU como parámetros) te sirve para la próxima empresa, y es la base del proyecto del Nivel 3.
+</Consejo>
+
+## Para pensar
+
+1. Creaste una cuenta personal en Domain Admins para el trabajo diario. ¿Qué cosas del día a día podrías hacer con una cuenta sin privilegios, y cuándo usarías la administrativa? ¿Qué cambiarías si la empresa tuviera una mesa de ayuda (lección 3.3.3)?
+2. La unidad S usa segmentación por grupo dentro de una GPO vinculada a Usuarios. ¿Qué pasaría con alguien de Ventas que está en la OU de Compras? ¿Y con alguien de Compras que agregás a GG-Ventas?
+3. Si mañana DC01 no arranca más, ¿qué funciona y qué no? Escribí los pasos que harías, en orden, con lo que viste en la lección 3.3.8.

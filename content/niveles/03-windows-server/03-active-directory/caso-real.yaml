@@ -1,0 +1,173 @@
+tipo: troubleshooting
+titulo: Nadie puede iniciar sesión esta mañana
+descripcion: >-
+  Incidente simulado en Distribuidora del Litoral (empresa.local, 60 personas). DC01 y DC02 son
+  máquinas virtuales en dos servidores físicos distintos. El domingo hubo un corte de luz largo
+  en la sede. Cada decisión suma minutos, y a las 9 abre la atención al público.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 8:05. La mesa de ayuda tiene doce llamados: "no puedo iniciar sesión". No es todo el
+      mundo: algunos entraron sin problemas, otros no. Los que no pueden ven el mismo mensaje.
+    evidencia:
+      - titulo: El mensaje en la pantalla de inicio de sesión
+        contenido: |
+          The system cannot log you on due to the following error: There is a time
+          and/or date difference between the client and server. Please try again or
+          consult your system administrator.
+    opciones:
+      - { texto: "Comparar la hora de los dos DC y la de una PC que falla", ir_a: n_hora, minutos: 4 }
+      - texto: Reiniciar los dos controladores de dominio
+        ir_a: n_reinicio
+        minutos: 15
+      - texto: Restablecer la contraseña de los que llamaron
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Les das contraseñas nuevas y siguen sin poder entrar: el mensaje no habla de la
+          contraseña sino de la hora. Ahora además tienen que cambiarla.
+  n_reinicio:
+    situacion: >-
+      Los dos DC vuelven a los 10 minutos. Durante ese tiempo no entró nadie, ni siquiera los que
+      antes podían. Al volver, el problema sigue igual.
+    opciones:
+      - { texto: "Comparar la hora de los DC y de una PC que falla", ir_a: n_hora, minutos: 4 }
+  n_hora:
+    situacion: >-
+      DC01 tiene la hora corrida 47 minutos hacia atrás. DC02 y las PC tienen la hora correcta. Las
+      PC que le piden el ticket a DC01 fallan; las que le piden a DC02, no: por eso a algunos sí y
+      a otros no.
+    evidencia:
+      - titulo: w32tm /stripchart /computer:DC01 /samples:3 /dataonly (desde PC07)
+        contenido: |
+          Tracking DC01 [192.168.10.10:123].
+          Collecting 3 samples.
+          The current time is 11/16/2026 8:09:12 AM.
+          08:09:12, +2822.4471037s
+          08:09:14, +2822.4469812s
+          08:09:16, +2822.4470533s
+      - titulo: Invoke-Command DC01 { w32tm /query /source; netdom query fsmo | Select-String PDC }
+        contenido: |
+          VM IC Time Synchronization Provider
+          PDC                         DC01.empresa.local
+    opciones:
+      - { texto: "Ver por qué DC01 toma la hora del hipervisor y no de internet", ir_a: n_causa_hora, minutos: 5 }
+      - texto: Cambiar la hora de DC01 a mano con Set-Date
+        ir_a: n_set_date
+        minutos: 2
+      - texto: Pasarle todos los roles a DC02 a la fuerza
+        ir_a: n_hora
+        minutos: 8
+        consecuencia: >-
+          DC01 está vivo: tomar los roles a la fuerza lo deja inutilizable para siempre. Y la hora
+          seguiría mal en DC01, que sigue atendiendo inicios de sesión.
+  n_set_date:
+    situacion: >-
+      La hora se corrige y la gente empieza a entrar. Pero a los 20 minutos DC01 vuelve a
+      atrasarse: algo le sigue imponiendo la hora equivocada.
+    opciones:
+      - { texto: "Ver de dónde toma la hora DC01", ir_a: n_causa_hora, minutos: 5 }
+  n_causa_hora:
+    situacion: >-
+      DC01 es el emulador de PDC: el reloj de referencia de todo el dominio. Pero nunca se lo
+      configuró con una fuente externa, y como es una máquina virtual, toma la hora del servidor
+      físico donde corre (el servicio de integración de sincronización de hora). Con el corte de
+      luz, el servidor físico arrancó con la pila del reloj agotada y la hora atrasada, y le pasó
+      el error a DC01.
+    evidencia:
+      - titulo: Get-VMIntegrationService -VMName DC01 -Name 'Time Synchronization' (en el servidor físico)
+        contenido: |
+          VMName Name                 Enabled PrimaryStatusDescription
+          ------ ----                 ------- ------------------------
+          DC01   Time Synchronization True    OK
+    opciones:
+      - { texto: "Desactivar la sincronización con el hipervisor en DC01 y configurarle NTP externo", ir_a: n_hora_ok, minutos: 8 }
+      - texto: Corregir la hora del servidor físico y listo
+        ir_a: n_causa_hora
+        minutos: 6
+        consecuencia: >-
+          DC01 se corrige solo, porque toma la hora del físico. Pero la próxima vez que el físico
+          pierda la hora, el dominio entero vuelve a caer. El reloj del dominio tiene que venir de
+          afuera.
+  n_hora_ok:
+    situacion: >-
+      Con DC01 tomando la hora de pool.ntp.org, el reloj se corrige y las PC empiezan a entrar.
+      Son las 8:35. Queda un solo llamado: la PC de recepción (PC-RECEP) dice algo distinto.
+    evidencia:
+      - titulo: Lo que se ejecutó
+        contenido: |
+          # En el servidor físico:
+          Disable-VMIntegrationService -VMName DC01, DC02 -Name 'Time Synchronization'
+          # En DC01:
+          w32tm /config /manualpeerlist:"0.ar.pool.ntp.org 1.ar.pool.ntp.org" /syncfromflags:manual /reliable:yes /update
+          w32tm /resync /rediscover
+          w32tm /query /source
+          0.ar.pool.ntp.org
+      - titulo: El mensaje en PC-RECEP
+        contenido: |
+          We can't sign you in with this credential because your domain isn't
+          available. Make sure your device is connected to your organization's
+          network and try again.
+    opciones:
+      - { texto: "Entrar a PC-RECEP con una cuenta local de administrador y revisar su red", ir_a: n_recep, minutos: 6 }
+      - texto: Sacar PC-RECEP del dominio y volver a unirla
+        ir_a: n_hora_ok
+        minutos: 15
+        consecuencia: >-
+          Add-Computer falla: "No se pudo contactar con un controlador de dominio para el dominio
+          empresa.local". El problema está antes: la PC no encuentra al dominio.
+  n_recep:
+    situacion: >-
+      PC-RECEP tiene el DNS fijo en 8.8.8.8. El viernes, un técnico externo lo cambió "porque
+      internet andaba lento". El DNS público no conoce empresa.local ni sus registros SRV: la PC
+      no encuentra ningún DC. Hasta hoy nadie lo notó porque la recepcionista nunca cerró sesión y
+      Windows la dejaba entrar con las credenciales guardadas.
+    evidencia:
+      - titulo: ipconfig /all | Select-String DNS
+        contenido: |
+          DNS Servers . . . . . . . . . . . : 8.8.8.8
+      - titulo: nltest /dsgetdc:empresa.local
+        contenido: |
+          Getting DC name failed: Status = 1355 0x54b ERROR_NO_SUCH_DOMAIN
+    opciones:
+      - { texto: "Volver el DNS a automático (o a los dos DC) y comprobar", ir_a: n_recep_ok, minutos: 4 }
+      - texto: Agregar empresa.local al archivo hosts de la PC
+        ir_a: n_recep
+        minutos: 6
+        consecuencia: >-
+          El archivo hosts no tiene registros SRV: la PC sigue sin poder localizar un DC. Y
+          además deja una configuración escondida que alguien va a sufrir dentro de un año.
+  n_recep_ok:
+    situacion: >-
+      Con el DNS en los DC, nltest encuentra DC02 y la recepcionista entra. Son las 8:50.
+      Queda decidir qué hacer para que no vuelva a pasar.
+    evidencia:
+      - titulo: Set-DnsClientServerAddress -InterfaceAlias Ethernet -ResetServerAddresses; nltest /dsgetdc:empresa.local
+        contenido: |2
+                     DC: \\DC02.empresa.local
+                Address: \\192.168.10.11
+               Dom Name: empresa.local
+          The command completed successfully
+    opciones:
+      - { texto: "Cerrar el incidente con medidas para que no se repita", ir_a: n_ok, minutos: 15 }
+      - texto: Cerrar el incidente y listo
+        ir_a: n_recep_ok
+        minutos: 1
+        consecuencia: >-
+          Funciona, pero el próximo corte de luz o el próximo técnico apurado repiten la mañana.
+          Falta lo que evita la próxima vez.
+  n_ok:
+    final: exito
+    resumen: >-
+      Fueron dos problemas que se vieron juntos. El principal: DC01, emulador de PDC, tomaba la
+      hora del hipervisor en lugar de una fuente externa. Con el corte de luz, el servidor físico
+      arrancó atrasado 47 minutos y DC01 lo copió. Kerberos rechaza diferencias de más de 5
+      minutos, así que las PC que pedían su ticket a DC01 no podían entrar, y las que se lo pedían
+      a DC02, sí (por eso fallaba "a algunos"). El segundo, independiente: una PC con DNS público,
+      que no puede encontrar el dominio y quedó expuesta en cuanto tuvo que autenticarse de
+      verdad. Las medidas: sincronización con el hipervisor desactivada en los DC; el PDC con NTP
+      externo y /reliable:yes (y verificarlo después de cada cambio de roles); una alerta del
+      monitoreo si el desfase de un DC supera 1 minuto (w32tm /stripchart); el DNS siempre por
+      DHCP con los dos DC, y usuarios sin permisos de administrador local para que nadie lo
+      cambie. Y un pendiente para la compra: cambiar la pila del reloj del servidor físico.

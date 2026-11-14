@@ -1,0 +1,134 @@
+tipo: terminal
+shell: powershell
+titulo: Un dominio para una empresa, de cero a funcionando
+descripcion: >-
+  Distribuidora del Litoral acaba de armar empresa.local con dos controladores, DC01 y DC02, y
+  una PC con Windows 11 (PC01) ya unida, pero nadie ordenó nada: todo está en Users y Computers.
+  Recursos Humanos te pasó C:\Altas\personal.csv. Te toca dejar el dominio listo para trabajar.
+  Las unidades de red se configuran con la consola gráfica, en la parte 2. Estás en DC01.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1, 192.168.10.11] }
+  ad:
+    equipos:
+      - { nombre: PC01, so: Windows 11 Pro }
+  archivos:
+    C:\Altas\personal.csv: |
+      Nombre,Apellido,Usuario,Area,Puesto
+      María,López,mlopez,Ventas,Vendedora
+      Pablo,Ruiz,pruiz,Ventas,Vendedor
+      Sofía,Díaz,sdiaz,Ventas,Supervisora
+      Juan,Pérez,jperez,Compras,Comprador
+      Raúl,Sosa,rsosa,Compras,Jefe de compras
+  servidores:
+    - { equipo: DC02, dominio: empresa.local, controlador_dominio: true, red: { ip: 192.168.10.11, dns: [192.168.10.10, 127.0.0.1] } }
+    - { equipo: PC01, dominio: empresa.local, usuario: mlopez, red: { ip: 192.168.10.50, dns: [192.168.10.10, 192.168.10.11] } }
+pasos:
+  - consigna: >-
+      Armá la estructura de OU. Dentro de una OU raíz Empresa, creá Usuarios (con Ventas y
+      Compras adentro), Equipos, Grupos y Admin.
+    verificar:
+      - { ou: Empresa/Usuarios/Ventas }
+      - { ou: Empresa/Usuarios/Compras }
+      - { ou: Empresa/Equipos }
+      - { ou: Empresa/Grupos }
+      - { ou: Empresa/Admin }
+    pistas:
+      - "New-ADOrganizationalUnit -Name Empresa -Path 'DC=empresa,DC=local', y así con cada una (el -Path es la OU de arriba)."
+    solucion:
+      - New-ADOrganizationalUnit -Name Empresa -Path 'DC=empresa,DC=local'
+      - "'Usuarios','Equipos','Grupos','Admin' | ForEach-Object { New-ADOrganizationalUnit -Name $_ -Path 'OU=Empresa,DC=empresa,DC=local' }"
+      - "'Ventas','Compras' | ForEach-Object { New-ADOrganizationalUnit -Name $_ -Path 'OU=Usuarios,OU=Empresa,DC=empresa,DC=local' }"
+  - consigna: >-
+      Que nada nuevo vuelva a caer en Users y Computers: redirigí los equipos nuevos a Equipos y
+      los usuarios nuevos a Usuarios. Y mové PC01 a la OU Equipos.
+    verificar:
+      - { comando_usado: "redircmp" }
+      - { comando_usado: "redirusr" }
+      - { comando_usado: "move-adobject|set-adcomputer" }
+    pistas:
+      - "redircmp 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'"
+      - "Get-ADComputer PC01 | Move-ADObject -TargetPath 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'"
+    solucion:
+      - redircmp 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+      - redirusr 'OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+      - Get-ADComputer PC01 | Move-ADObject -TargetPath 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+  - consigna: >-
+      Dá de alta a las cinco personas del CSV, cada una en la OU de su área, habilitadas, con UPN
+      usuario@empresa.local, departamento, puesto, la contraseña inicial Inicio.2026! y la
+      obligación de cambiarla al entrar.
+    verificar:
+      - { usuario_ad: mlopez, ou: Empresa/Usuarios/Ventas, habilitado: true, departamento: Ventas }
+      - { usuario_ad: sdiaz, ou: Empresa/Usuarios/Ventas, habilitado: true }
+      - { usuario_ad: rsosa, ou: Empresa/Usuarios/Compras, habilitado: true, departamento: Compras }
+    pistas:
+      - "$clave = ConvertTo-SecureString 'Inicio.2026!' -AsPlainText -Force"
+      - "El -Path sale de la columna Area: \"OU=$($_.Area),OU=Usuarios,OU=Empresa,DC=empresa,DC=local\""
+    solucion:
+      - "$clave = ConvertTo-SecureString 'Inicio.2026!' -AsPlainText -Force"
+      - "Import-Csv C:\\Altas\\personal.csv | ForEach-Object { New-ADUser -Name \"$($_.Nombre) $($_.Apellido)\" -GivenName $_.Nombre -Surname $_.Apellido -SamAccountName $_.Usuario -UserPrincipalName \"$($_.Usuario)@empresa.local\" -Department $_.Area -Title $_.Puesto -Path \"OU=$($_.Area),OU=Usuarios,OU=Empresa,DC=empresa,DC=local\" -AccountPassword $clave -ChangePasswordAtLogon $true -Enabled $true }"
+  - consigna: >-
+      Grupos según AGDLP, en la OU Grupos. Globales GG-Ventas y GG-Compras, con las personas de
+      cada área. Locales de dominio DL-Ventas-Lectura y DL-Compras-Modificar, y adentro de cada
+      uno, el global de su área.
+    verificar:
+      - { grupo_ad: GG-Ventas, miembros: [mlopez, pruiz, sdiaz] }
+      - { grupo_ad: GG-Compras, miembros: [jperez, rsosa] }
+      - { grupo_ad: DL-Ventas-Lectura, miembros: [GG-Ventas] }
+      - { grupo_ad: DL-Compras-Modificar, miembros: [GG-Compras] }
+    pistas:
+      - "New-ADGroup GG-Ventas -GroupScope Global -GroupCategory Security -Path 'OU=Grupos,OU=Empresa,DC=empresa,DC=local'"
+      - "Get-ADUser -Filter \"Department -eq 'Ventas'\" | ForEach-Object { Add-ADGroupMember GG-Ventas -Members $_ }"
+    solucion:
+      - "'GG-Ventas','GG-Compras' | ForEach-Object { New-ADGroup $_ -GroupScope Global -GroupCategory Security -Path 'OU=Grupos,OU=Empresa,DC=empresa,DC=local' }"
+      - "'DL-Ventas-Lectura','DL-Compras-Modificar' | ForEach-Object { New-ADGroup $_ -GroupScope DomainLocal -GroupCategory Security -Path 'OU=Grupos,OU=Empresa,DC=empresa,DC=local' }"
+      - Add-ADGroupMember GG-Ventas -Members (Get-ADUser -Filter "Department -eq 'Ventas'")
+      - Add-ADGroupMember GG-Compras -Members (Get-ADUser -Filter "Department -eq 'Compras'")
+      - Add-ADGroupMember DL-Ventas-Lectura -Members GG-Ventas
+      - Add-ADGroupMember DL-Compras-Modificar -Members GG-Compras
+  - consigna: >-
+      Seguridad de las cuentas: contraseñas de 12 caracteres como mínimo y bloqueo a los 5
+      intentos fallidos para todo el dominio.
+    verificar:
+      - { politica_contrasenas: { longitud_minima: 12, umbral_bloqueo: 5 } }
+    solucion: ["Set-ADDefaultDomainPasswordPolicy -Identity empresa.local -MinPasswordLength 12 -LockoutThreshold 5"]
+  - consigna: >-
+      Dos directivas. "Usuarios - Bloqueo de pantalla": protector a los 10 minutos (ScreenSaveTimeOut
+      600, String) y con contraseña (ScreenSaverIsSecure 1, String), en
+      HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop, vinculada a Usuarios.
+      "Equipos - Sin almacenamiento extraíble": Deny_All 1 (DWord) en
+      HKLM\Software\Policies\Microsoft\Windows\RemovableStorageDevices, vinculada a Equipos.
+    verificar:
+      - { gpo_aplicada: Usuarios - Bloqueo de pantalla, a: mlopez }
+      - { gpo: Usuarios - Bloqueo de pantalla, configura: { clave: "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop", valor_nombre: ScreenSaverIsSecure, valor: "1" } }
+      - { gpo_aplicada: Equipos - Sin almacenamiento extraíble, a: PC01 }
+    pistas:
+      - "New-GPO, Set-GPRegistryValue (una vez por valor) y New-GPLink."
+      - "La de pendrives es de equipo: si no le llega a PC01, revisá en qué OU está PC01."
+    solucion:
+      - New-GPO -Name 'Usuarios - Bloqueo de pantalla'
+      - Set-GPRegistryValue -Name 'Usuarios - Bloqueo de pantalla' -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -ValueName ScreenSaveTimeOut -Type String -Value 600
+      - Set-GPRegistryValue -Name 'Usuarios - Bloqueo de pantalla' -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -ValueName ScreenSaverIsSecure -Type String -Value 1
+      - New-GPLink -Name 'Usuarios - Bloqueo de pantalla' -Target 'OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+      - New-GPO -Name 'Equipos - Sin almacenamiento extraíble'
+      - Set-GPRegistryValue -Name 'Equipos - Sin almacenamiento extraíble' -Key 'HKLM\Software\Policies\Microsoft\Windows\RemovableStorageDevices' -ValueName Deny_All -Type DWord -Value 1
+      - New-GPLink -Name 'Equipos - Sin almacenamiento extraíble' -Target 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+  - consigna: Activá la papelera de reciclaje de AD.
+    verificar:
+      - { papelera_ad: true }
+    solucion: ["Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target empresa.local -Confirm:$false"]
+  - consigna: >-
+      Comprobá que los dos DC replican bien y que PC01 recibe la directiva de equipo (forzá la
+      actualización en PC01 y mirá la parte de equipo).
+    verificar:
+      - { comando_usado: "repadmin" }
+      - { comando_usado: "gpupdate" }
+      - { salida_contiene: "Equipos - Sin almacenamiento" }
+    solucion:
+      - repadmin /replsummary
+      - Invoke-Command PC01 { gpupdate /force; gpresult /r /scope computer }
+    explicacion: >-
+      Con esto el dominio está ordenado: nada en los contenedores por defecto, cuentas en sus
+      OU, permisos por grupos, dos directivas con un propósito cada una, papelera activada y
+      replicación sana. Es la base de los módulos 3.4 y 3.5.

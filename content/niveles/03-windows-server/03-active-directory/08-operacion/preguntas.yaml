@@ -1,0 +1,117 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una empresa de 30 personas tiene un solo controlador de dominio. ¿Cuál es el riesgo principal?
+  opciones:
+    - { texto: "Si ese servidor se rompe, nadie inicia sesión con datos nuevos ni recibe directivas hasta reconstruirlo", correcta: true, explicacion: "Es un punto único de falla. Siempre al menos dos." }
+    - { texto: "Que se llene el disco", explicacion: "Es un riesgo menor y se monitorea." }
+    - { texto: "Que el dominio sea más lento", explicacion: "Con 30 personas, un DC alcanza en rendimiento." }
+    - { texto: "Ninguno, con respaldos alcanza", explicacion: "Restaurar lleva horas; un segundo DC atiende al instante." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Antes de promover DC02 como segundo controlador, ¿a qué DNS tiene que apuntar?
+  opciones:
+    - { texto: "A un DC que ya existe (DC01), para encontrar el dominio", correcta: true, explicacion: "Después de promoverlo, puede apuntar a sí mismo y al otro." }
+    - { texto: "A sí mismo, 127.0.0.1", explicacion: "Todavía no tiene la zona del dominio." }
+    - { texto: "A 8.8.8.8", explicacion: "El DNS público no conoce empresa.local." }
+    - { texto: "A ninguno", explicacion: "Sin DNS no encuentra el dominio." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice esta salida?
+  salida: |
+    Source DSA          largest delta    fails/total %%   error
+     DC02                       03m:12s      0 /   5    0
+     DC01                   02h:14m:07s      5 /   5  100  (1722) The RPC server is unavailable.
+  opciones:
+    - { texto: "DC01 no responde desde hace más de dos horas: hay que revisar si está prendido, si NTDS corre y si un firewall lo bloquea", correcta: true, explicacion: "1722 es el error clásico de un DC que no contesta." }
+    - { texto: "La replicación está sana", explicacion: "DC01 tiene 5 fallas de 5." }
+    - { texto: "DC02 está caído", explicacion: "DC02 replica sin errores." }
+    - { texto: "Hay un problema de permisos", explicacion: "Ese sería otro código (8453)." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Vas a apagar para siempre DC01, que tiene los cinco roles FSMO. DC02 está sano. ¿Qué hacés con los roles?
+  opciones:
+    - { texto: "Los transferís a DC02 con los dos encendidos, antes de apagar DC01", correcta: true, explicacion: "La transferencia ordenada no tiene riesgo." }
+    - { texto: "Apagás DC01 y después los tomás a la fuerza desde DC02", explicacion: "Funciona, pero es el camino de emergencia, no el normal." }
+    - { texto: "No hace falta: se mueven solos", explicacion: "Los roles nunca se mueven solos." }
+    - { texto: "Los dejás en DC01; si hace falta, se reinstala", explicacion: "Sin los roles, cosas como el PDC dejan de funcionar." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Tomaste a la fuerza los roles de DC01 porque se quemó la placa madre. Una semana después llega la placa nueva. ¿Qué hacés con DC01?
+  opciones:
+    - { texto: "No lo conectás a la red: se borra de AD y se reinstala de cero; si hace falta, se lo vuelve a promover", correcta: true, explicacion: "Un DC al que le tomaron los roles no puede volver tal como estaba." }
+    - { texto: "Lo encendés y le devolvés los roles", explicacion: "Habría dos DC creyéndose dueños de los mismos roles." }
+    - { texto: "Lo encendés y dejás que replique", explicacion: "Mismo problema: cree que todavía tiene los roles." }
+    - { texto: "Lo restaurás desde el respaldo de antes de la falla", explicacion: "Restaurar un DC cuando hay otro sano casi nunca es la mejor opción." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Moviste el emulador de PDC a DC02. ¿Qué tenés que configurar enseguida?
+  opciones:
+    - { texto: "Que DC02 tome la hora de una fuente NTP externa (w32tm /config … /update)", correcta: true, explicacion: "El PDC es el reloj de referencia de todo el dominio." }
+    - { texto: "Las directivas de contraseñas", explicacion: "Viven en AD, no en el PDC." }
+    - { texto: "Las unidades de red", explicacion: "No dependen del PDC." }
+    - { texto: "Nada", explicacion: "Sin hora externa, el dominio entero deriva." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Alguien borró por error la cuenta de un gerente. La papelera de AD está activada. ¿Qué pasa al restaurarla con Restore-ADObject?
+  opciones:
+    - { texto: "Vuelve entera: con sus grupos, sus atributos y en su OU", correcta: true, explicacion: "Para eso está la papelera; dura 180 días." }
+    - { texto: "Vuelve deshabilitada y sin grupos", explicacion: "Eso pasa sin la papelera activada." }
+    - { texto: "Hay que restaurar todo el DC desde el respaldo", explicacion: "Con la papelera, alcanza con un comando." }
+    - { texto: "No se puede: hay que crearla de nuevo", explicacion: "Se puede restaurar." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que muestra qué controlador tiene cada uno de los roles FSMO (con netdom).
+  aceptadas: ["netdom query fsmo"]
+  patrones: ["^netdom\\s+query\\s+fsmo$"]
+  explicacion: "También se ven con Get-ADDomain y Get-ADForest."
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son buenas prácticas para respaldar un controlador de dominio? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Respaldar el estado del sistema todos los días, programado", correcta: true, explicacion: "Incluye la base de AD y SYSVOL." }
+    - { texto: "Guardar una copia fuera del servidor", correcta: true, explicacion: "La regla 3-2-1." }
+    - { texto: "Tener en cuenta que un respaldo de más de 180 días no sirve para restaurar un DC", correcta: true, explicacion: "Reintroduciría objetos ya olvidados." }
+    - { texto: "Restaurar desde una instantánea de la VM cuando algo falla", explicacion: "Puede romper la replicación." }
+- id: p10
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Corrés dcdiag /q en un DC y esta es toda la salida. ¿Qué significa?
+  salida: |
+    PS C:\> dcdiag /q
+    PS C:\>
+  opciones:
+    - { texto: "Todas las pruebas pasaron: /q solo muestra errores", correcta: true, explicacion: "Sin nada que mostrar, está sano." }
+    - { texto: "dcdiag no se pudo ejecutar", explicacion: "Si fallara, mostraría un error." }
+    - { texto: "Faltan permisos", explicacion: "Mostraría un error de acceso." }
+    - { texto: "El DC no tiene roles", explicacion: "No tiene relación." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Encontrás una VM con un DC viejo que estuvo apagada ocho meses. ¿Qué hacés?
+  opciones:
+    - { texto: "No la conectás a la red: pasó la vida de los objetos borrados (180 días); se elimina de AD y se crea uno nuevo si hace falta", correcta: true, explicacion: "Si replica, puede reintroducir objetos borrados." }
+    - { texto: "La prendés y dejás que se ponga al día", explicacion: "Con más de 180 días, no puede ponerse al día sin riesgo." }
+    - { texto: "La prendés y forzás repadmin /syncall", explicacion: "Mismo problema." }
+    - { texto: "Le transferís los roles FSMO", explicacion: "Es el último DC al que le darías roles." }
+- id: p12
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para retirar DC01 y dejar todo en DC02.
+  pasos:
+    - "Promover DC02 y comprobar con repadmin que replica sin errores"
+    - "Agregar DC02 como DNS en el DHCP y en los equipos con IP fija"
+    - "Transferir los cinco roles FSMO a DC02"
+    - "Configurar la hora externa en DC02 (el nuevo PDC)"
+    - "Degradar DC01 con Uninstall-ADDSDomainController"
+    - "Sacar DC01 de la configuración de DNS de los equipos y apagarlo"
+  explicacion: "Primero que el nuevo funcione y lo conozcan los equipos; después los roles y la hora; recién al final, degradar y apagar el viejo."

@@ -1,0 +1,127 @@
+tipo: terminal
+shell: powershell
+titulo: Segundo controlador, roles, papelera y respaldo
+descripcion: >-
+  empresa.local tiene un solo controlador, DC01, que además tiene cinco años y se va a reemplazar
+  el mes que viene. Te toca dejar el dominio en condiciones. DC02 ya tiene Windows Server 2025,
+  IP fija, el DNS apuntando a DC01, el rol AD DS instalado (sin promover) y un disco E: para
+  respaldos. Estás en DC02.
+estado_inicial:
+  equipo: DC02
+  red: { ip: 192.168.10.11, dns: [192.168.10.10] }
+  caracteristicas:
+    - { nombre: AD-Domain-Services, nombre_visible: Active Directory Domain Services, instalada: true }
+  modulos: [ADDSDeployment]
+  discos:
+    - { numero: 0, tamano_gb: 127, estilo: GPT, particiones: [{ letra: C, tamano_gb: 126, sistema: NTFS, usado_gb: 24 }] }
+    - { numero: 1, tamano_gb: 200, estilo: GPT, particiones: [{ letra: E, tamano_gb: 199, sistema: NTFS, etiqueta: Respaldos }] }
+  servidores:
+    - equipo: DC01
+      dominio: empresa.local
+      red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+      ad:
+        ous: [Empresa/Usuarios/Ventas]
+        usuarios:
+          - { sam: mlopez, nombre: María, apellido: López, ou: Empresa/Usuarios/Ventas, grupos: [GG-Ventas], departamento: Ventas }
+          - { sam: jprueba, nombre: Juan, apellido: Prueba, ou: Empresa/Usuarios/Ventas, grupos: [GG-Ventas], departamento: Ventas }
+        grupos:
+          - { nombre: GG-Ventas }
+pasos:
+  - consigna: >-
+      Promové DC02 como segundo controlador de empresa.local, con DNS. Vas a necesitar una
+      credencial de administrador del dominio (EMPRESA\Administrador).
+    verificar:
+      - { es_controlador: true }
+    pistas:
+      - "Install-ADDSDomainController -DomainName empresa.local -InstallDns -Credential (Get-Credential EMPRESA\\Administrador)"
+    solucion: ["Install-ADDSDomainController -DomainName empresa.local -InstallDns -Credential (Get-Credential EMPRESA\\Administrador) -Force"]
+    explicacion: >-
+      A diferencia del primero, este no crea nada: copia la base del dominio desde DC01 y
+      empieza a replicar. Desde ahora, si uno se cae, el otro atiende.
+  - consigna: >-
+      Comprobá que los dos controladores se replican sin errores (el resumen de replicación).
+    verificar:
+      - { comando_usado: "repadmin\\s+/replsum" }
+      - { salida_contiene: "Source DSA" }
+    pistas:
+      - "repadmin /replsummary"
+    solucion: ["repadmin /replsummary"]
+    explicacion: >-
+      La columna fails tiene que estar en 0 y largest delta en minutos, no en horas o días.
+      repadmin /showrepl muestra el detalle de cada conexión.
+  - consigna: >-
+      Mirá quién tiene los cinco roles FSMO y pasalos todos a DC02, porque DC01 se va.
+    verificar:
+      - { fsmo: SchemaMaster, en_equipo: DC02 }
+      - { fsmo: DomainNamingMaster, en_equipo: DC02 }
+      - { fsmo: PDCEmulator, en_equipo: DC02 }
+      - { fsmo: RIDMaster, en_equipo: DC02 }
+      - { fsmo: InfrastructureMaster, en_equipo: DC02 }
+    pistas:
+      - "netdom query fsmo los muestra."
+      - "Move-ADDirectoryServerOperationMasterRole -Identity DC02 -OperationMasterRole SchemaMaster, DomainNamingMaster, PDCEmulator, RIDMaster, InfrastructureMaster"
+    solucion:
+      - netdom query fsmo
+      - Move-ADDirectoryServerOperationMasterRole -Identity DC02 -OperationMasterRole SchemaMaster, DomainNamingMaster, PDCEmulator, RIDMaster, InfrastructureMaster -Confirm:$false
+      - netdom query fsmo
+    explicacion: >-
+      Con DC01 encendido, esto es una transferencia ordenada. Si DC01 hubiera muerto sin
+      remedio, se agrega -Force y es una toma forzada (seizure); en ese caso DC01 no puede
+      volver a la red nunca más.
+  - consigna: >-
+      DC02 ahora es el emulador de PDC: es el reloj de referencia del dominio. Configurá que tome
+      la hora de 0.ar.pool.ntp.org y 1.ar.pool.ntp.org, como fuente confiable, y que lo aplique
+      ya.
+    verificar:
+      - { comando_usado: "w32tm.*manualpeerlist.*pool\\.ntp\\.org" }
+      - { comando_usado: "w32tm.*/update" }
+    pistas:
+      - "w32tm /config /manualpeerlist:\"0.ar.pool.ntp.org 1.ar.pool.ntp.org\" /syncfromflags:manual /reliable:yes /update"
+    solucion:
+      - w32tm /config /manualpeerlist:"0.ar.pool.ntp.org 1.ar.pool.ntp.org" /syncfromflags:manual /reliable:yes /update
+      - w32tm /resync
+      - w32tm /query /source
+    explicacion: >-
+      Si el emulador de PDC no toma la hora de una fuente externa, todo el dominio se va
+      atrasando o adelantando junto con él. Cuando DC01 deje de ser PDC, conviene volverlo a
+      sincronizar con la jerarquía del dominio (w32tm /config /syncfromflags:domhier /update).
+  - consigna: Activá la papelera de reciclaje de Active Directory.
+    verificar:
+      - { papelera_ad: true }
+    pistas:
+      - "Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target empresa.local"
+    solucion: ["Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target empresa.local -Confirm:$false"]
+    explicacion: >-
+      Es irreversible y no tiene contras: no hay motivo para no activarla. Sin papelera, un
+      objeto borrado se puede recuperar, pero vuelve sin sus grupos ni la mayoría de sus datos.
+  - consigna: >-
+      Probala: borrá la cuenta de prueba jprueba y después restaurala desde la papelera. Tiene que
+      volver habilitada y en GG-Ventas.
+    verificar:
+      - { usuario_ad: jprueba, habilitado: true, en_grupos: [GG-Ventas] }
+      - { comando_usado: "remove-aduser" }
+      - { comando_usado: "restore-adobject" }
+    pistas:
+      - "Remove-ADUser jprueba"
+      - "Get-ADObject -Filter 'SamAccountName -eq \"jprueba\"' -IncludeDeletedObjects | Restore-ADObject"
+    solucion:
+      - Remove-ADUser jprueba -Confirm:$false
+      - Get-ADObject -Filter 'isDeleted -eq $true' -IncludeDeletedObjects | Select-Object Name, ObjectClass
+      - Get-ADObject -Filter 'SamAccountName -eq "jprueba"' -IncludeDeletedObjects | Restore-ADObject
+  - consigna: >-
+      Por último, el respaldo: instalá Copias de seguridad de Windows Server y hacé un respaldo
+      del estado del sistema de DC02 en el disco E:.
+    verificar:
+      - { archivo: E:\WindowsImageBackup\DC02, existe: true }
+    pistas:
+      - "Install-WindowsFeature Windows-Server-Backup"
+      - "wbadmin start systemstatebackup -backupTarget:E: -quiet"
+    solucion:
+      - Install-WindowsFeature Windows-Server-Backup
+      - "wbadmin start systemstatebackup -backupTarget:E: -quiet"
+      - wbadmin get versions
+    explicacion: >-
+      El estado del sistema incluye la base de AD y SYSVOL. Un respaldo de un DC sirve mientras
+      tenga menos de 180 días (la vida de los objetos borrados); después, restaurarlo trae
+      objetos que los demás DC ya olvidaron. Programalo como tarea diaria y sacá una copia fuera
+      del servidor.
