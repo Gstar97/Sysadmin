@@ -1,0 +1,87 @@
+tipo: terminal
+shell: powershell
+titulo: Una mañana con el Visor de eventos
+descripcion: >-
+  Lunes, 9:00. Llegan tres mensajes: "el sistema de facturación no abre", "¿se reinició el
+  servidor de aplicaciones a la noche?" y "María García no puede iniciar sesión". Estás en
+  SRV-APP01, el servidor de aplicaciones; el DC es DC01.
+estado_inicial:
+  equipo: SRV-APP01
+  dominio: empresa.local
+  red: { ip: 192.168.10.30, dns: [192.168.10.10] }
+  rendimiento: { cpu: 35, memoria_disponible_mb: 210, memoria_total_mb: 8192, cola_disco: 0.4 }
+  servicios:
+    - { nombre: Facturacion, nombre_visible: Sistema de facturación, estado: Stopped }
+  eventos:
+    - { log: System, id: 41, nivel: Critical, origen: Microsoft-Windows-Kernel-Power, mensaje: "The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly.", hace_minutos: 355 }
+    - { log: System, id: 6008, nivel: Error, origen: EventLog, mensaje: "The previous system shutdown at 3:12:04 AM was unexpected.", hace_minutos: 354 }
+    - { log: System, id: 1074, nivel: Information, origen: User32, mensaje: "The process C:\\Windows\\system32\\svchost.exe (SRV-APP01) has initiated the restart of computer SRV-APP01 on behalf of user NT AUTHORITY\\SYSTEM for the following reason: Operating System: Service pack (Planned)", hace_minutos: 8000 }
+    - { log: System, id: 7034, nivel: Error, origen: Service Control Manager, mensaje: "The Sistema de facturación service terminated unexpectedly.  It has done this 3 time(s).", hace_minutos: 40 }
+    - { log: Application, id: 1000, nivel: Error, origen: Application Error, mensaje: "Faulting application name: facturacion.exe, version: 4.2.0.0. Exception code: 0xc0000017 (not enough memory)", hace_minutos: 40 }
+    - { log: System, id: 2004, nivel: Warning, origen: Microsoft-Windows-Resource-Exhaustion-Detector, mensaje: "Windows successfully diagnosed a low virtual memory condition. The following programs consumed the most virtual memory: facturacion.exe (4120) consumed 6912458752 bytes.", hace_minutos: 42 }
+  servidores:
+    - equipo: DC01
+      dominio: empresa.local
+      red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+      ad:
+        ous: [Empresa/Usuarios]
+        usuarios:
+          - { sam: mgarcia, nombre: María, apellido: García, ou: Empresa/Usuarios, bloqueado: true }
+      eventos:
+        - { log: Security, id: 4625, nivel: Information, origen: Microsoft-Windows-Security-Auditing, mensaje: "An account failed to log on. Account Name: mgarcia Workstation Name: PC07 Failure Reason: Unknown user name or bad password.", hace_minutos: 25 }
+        - { log: Security, id: 4740, nivel: Information, origen: Microsoft-Windows-Security-Auditing, mensaje: "A user account was locked out. Account That Was Locked Out: Account Name: mgarcia Additional Information: Caller Computer Name: PC07", hace_minutos: 24 }
+pasos:
+  - consigna: >-
+      Primero, el reinicio. Buscá en el registro System los eventos 41, 6008 y 1074 y decidí si
+      el reinicio de la noche fue planificado.
+    verificar:
+      - { comando_usado: "get-winevent" }
+      - { salida_contiene: "unexpected" }
+    pistas:
+      - "Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41, 6008, 1074 }"
+    solucion: ["Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41, 6008, 1074 } | Format-List TimeCreated, Id, ProviderName, Message"]
+    explicacion: >-
+      El 1074 (reinicio pedido por alguien o algo) es de hace días: fue el de las
+      actualizaciones. Lo de anoche es un 41 más un 6008: se apagó sin avisar. Corte de luz,
+      cuelgue o falla de hardware: hay que seguir mirando.
+  - consigna: >-
+      Ahora, la facturación. Listá los errores y advertencias de las últimas dos horas en System
+      y en Application.
+    verificar:
+      - { salida_contiene: "facturacion.exe" }
+    pistas:
+      - "Get-WinEvent -FilterHashtable @{ LogName = 'System', 'Application'; Level = 2, 3; StartTime = (Get-Date).AddHours(-2) }"
+    solucion: ["Get-WinEvent -FilterHashtable @{ LogName = 'System', 'Application'; Level = 2, 3; StartTime = (Get-Date).AddHours(-2) } | Format-List TimeCreated, Id, ProviderName, Message"]
+    explicacion: >-
+      Tres eventos cuentan la misma historia: facturacion.exe se quedó sin memoria (2004 y 1000)
+      y el servicio se cayó (7034).
+  - consigna: Mirá cuánta memoria libre tiene el servidor ahora.
+    verificar:
+      - { salida_contiene: "210" }
+    pistas:
+      - "Get-Counter '\\Memory\\Available MBytes'"
+    solucion: ["Get-Counter '\\Memory\\Available MBytes'"]
+    explicacion: >-
+      210 MB libres de 8 GB: muy poco. Facturación tiene una pérdida de memoria (crece hasta
+      agotarla). Se levanta el servicio para que la gente trabaje y se abre un caso con el
+      proveedor, con estos eventos de prueba.
+  - consigna: Volvé a iniciar el servicio Facturacion.
+    verificar:
+      - { servicio: Facturacion, estado: Running }
+    solucion: [Start-Service Facturacion]
+  - consigna: >-
+      Por último, María. En DC01, buscá el evento de cuenta bloqueada (4740) y fijate desde qué
+      equipo vinieron los intentos.
+    verificar:
+      - { salida_contiene: "PC07" }
+    pistas:
+      - "Invoke-Command DC01 { Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4740 } | Select-Object -ExpandProperty Message }"
+    solucion: ["Invoke-Command DC01 { Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4740 } | Select-Object -ExpandProperty Message }"]
+    explicacion: >-
+      Los intentos vienen de PC07. Si María no está en PC07, algo guardado ahí (una unidad de
+      red, una sesión vieja, el celular con el correo) sigue probando la contraseña anterior.
+      En un dominio con varios DC, el 4740 se registra en el que tiene el rol de emulador de PDC.
+  - consigna: Desbloqueá la cuenta de mgarcia.
+    verificar:
+      - { comando_usado: "unlock-adaccount" }
+    solucion: ["Invoke-Command DC01 { Unlock-ADAccount mgarcia }"]

@@ -1,0 +1,145 @@
+---
+id: n3-m5-l4
+titulo: Monitoreo y diagnóstico en Windows
+minutos: 150
+objetivos:
+  - Usar el Visor de eventos y Get-WinEvent con filtros, y reconocer los eventos clave.
+  - Medir el rendimiento con el Monitor de rendimiento y Get-Counter, y usar el Monitor de confiabilidad.
+  - Diagnosticar un reinicio inesperado y un servicio que se cae siguiendo la evidencia.
+glosario: [visor-eventos, id-evento, contador-rendimiento, monitor-confiabilidad, linea-base]
+verificado: 2026-11
+---
+
+import herramientas from './herramientas.svg?raw'
+import eventosClave from './eventos-clave.yaml'
+import eventos from './ej-eventos.yaml'
+import reinicio from './reinicio-solo.yaml'
+
+"El servidor anda lento", "se reinició solo", "no puedo entrar". Los llamados llegan así, sin más datos. Windows anota casi todo lo que pasa y mide casi todo lo que hace: el trabajo es saber dónde mirar y qué buscar. Esta lección es la versión Windows de lo que hiciste con journalctl y top en Linux.
+
+<AntesDeEmpezar>
+- Logs y journalctl (módulo 1.3) y rendimiento en Linux (módulo 1.5), para comparar.
+- Herramientas de administración remota (lección 3.1.3): el Visor de eventos remoto necesita su regla de firewall.
+- Get-WinEvent ya apareció en las lecciones de GPO; acá se usa a fondo.
+</AntesDeEmpezar>
+
+## Dónde mirar
+
+<Diagrama svg={herramientas} alt="Cuatro preguntas y su herramienta. ¿Qué pasó?: el Visor de eventos, con los registros System (Windows, servicios, controladores, reinicios), Application (los programas) y Security (inicios de sesión y bloqueos), y Get-WinEvent con filtros. ¿Cómo está?: el Monitor de rendimiento, con contadores de procesador, memoria, disco y red, en vivo o grabados durante días para comparar con lo normal, y Get-Counter. ¿Desde cuándo?: el Monitor de confiabilidad, una línea de tiempo por día con fallas, apagados inesperados e instalaciones. ¿Quién, ahora?: el Administrador de tareas y el Monitor de recursos, que muestran qué proceso usa cada recurso, y Get-Process. Abajo, valores que merecen una mirada si se sostienen: procesador por encima de 85-90% durante minutos; memoria disponible por debajo del 10%; disco con lecturas o escrituras de más de 20 ms o menos de 10-15% libre. Lo más útil es conocer los valores normales del servidor." pie="Primero qué pasó y desde cuándo; después cómo está y quién lo causa." />
+
+## El Visor de eventos
+
+El **Visor de eventos** (`eventvwr.msc`) muestra los **registros** (*logs*) de Windows. Los tres de siempre, en *Registros de Windows*:
+
+- **System**: lo que le pasa a Windows. Servicios que arrancan o se caen, controladores, discos, reinicios.
+- **Application**: lo que anotan los programas. Bases de datos, el antivirus, la aplicación de facturación.
+- **Security**: la **auditoría**. Inicios de sesión correctos y fallidos, bloqueos de cuentas, cambios de permisos. Qué se anota se decide con la directiva de auditoría (por GPO).
+
+Y en *Registros de aplicaciones y servicios* están los de cada rol (*Directory Service*, *DNS Server*, *DFS Replication*) y cientos de registros **Operational** de partes de Windows (`Microsoft-Windows-GroupPolicy/Operational`, el de las GPO, por ejemplo).
+
+Cada evento tiene un **nivel** (Crítico, Error, Advertencia, Información; en Security, *Auditoría correcta* o *Auditoría errónea*), un **origen** (*source* o *provider*: quién lo escribió), un **identificador** (*Event ID*) y un mensaje. Ojo: el identificador **depende del origen**; el 1000 de *Application Error* no tiene nada que ver con el 1000 de otro programa. Se busca por origen e identificador juntos.
+
+En la consola, **Filtrar registro actual** y las **vistas personalizadas** (por ejemplo, "errores y críticos de System, Application y DNS de las últimas 24 horas") ahorran mucho tiempo.
+
+Una advertencia práctica: los registros tienen un **tamaño máximo** y, cuando se llenan, se pisan los eventos más viejos. En un servidor con mucho movimiento, Security puede cubrir solo horas. Se agranda por GPO (*Registro de eventos* en la configuración del equipo).
+
+## Get-WinEvent
+
+Lo mismo, desde PowerShell, y contra cualquier servidor:
+
+```powershell
+Get-WinEvent -LogName System -MaxEvents 20
+Get-WinEvent -FilterHashtable @{ LogName = 'System'; Level = 1, 2; StartTime = (Get-Date).AddDays(-1) }
+Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41, 6008, 1074 } -ComputerName SRV-ARCH01
+Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Application Error' } |
+    Format-List TimeCreated, Id, Message
+```
+
+Las claves de **FilterHashtable** que más se usan: **LogName**, **Id**, **Level** (1 crítico, 2 error, 3 advertencia, 4 información), **ProviderName**, **StartTime** y **EndTime**. Filtrar ahí es mucho más rápido que traer todo y filtrar con Where-Object: el filtro lo aplica Windows antes de mandar los eventos. **Get-EventLog** es el comando viejo: solo existe en Windows PowerShell 5.1 y no lee los registros nuevos. Usá Get-WinEvent.
+
+## Los eventos que conviene reconocer
+
+| Evento | Registro y origen | Qué dice |
+|---|---|---|
+| **4624** | Security | Inicio de sesión correcto (con el tipo: 2 en la consola, 3 por la red, 10 por escritorio remoto) |
+| **4625** | Security | Inicio de sesión fallido. Muchos seguidos: alguien probando contraseñas |
+| **4740** | Security, en el DC | Cuenta bloqueada, con el equipo desde donde vinieron los intentos |
+| **7034** | System, Service Control Manager | Un servicio terminó de forma inesperada |
+| **41** | System, Kernel-Power | Se reinició sin haberse apagado bien |
+| **6008** | System, EventLog | El apagado anterior fue inesperado |
+| **1074** | System, User32 | Alguien (una persona o un proceso) pidió reiniciar o apagar, y por qué |
+| **1001** | System, BugCheck | Se reinició por una pantalla azul; dice dónde quedó el volcado |
+
+La combinación es lo que cuenta la historia: un **1074** es un reinicio pedido (las actualizaciones, alguien). Un **41** con un **6008** y sin 1074 es un apagado sin aviso: corte de luz, cuelgue o falla. Si además hay un **1001**, fue una pantalla azul.
+
+<Emparejar ejercicio={eventosClave} />
+
+<Terminal ejercicio={eventos} />
+
+<EnSimple>
+Para saber qué pasó, el Visor de eventos o Get-WinEvent con filtros. Un reinicio con 1074 fue pedido; con 41 y 6008, no.
+</EnSimple>
+
+## El Monitor de rendimiento
+
+El **Monitor de rendimiento** (`perfmon`) muestra **contadores**: cientos de mediciones que Windows lleva todo el tiempo. Los básicos:
+
+- **Procesador**: `\Processor(_Total)\% Processor Time` y `\System\Processor Queue Length` (cuántos esperan turno).
+- **Memoria**: `\Memory\Available MBytes` (libre de verdad) y `\Memory\% Committed Bytes In Use`.
+- **Disco**: `\PhysicalDisk(*)\Avg. Disk sec/Transfer` (cuánto tarda cada lectura o escritura) y `\LogicalDisk(*)\% Free Space`.
+- **Red**: `\Network Interface(*)\Bytes Total/sec`.
+
+```powershell
+Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 2 -MaxSamples 5
+Get-Counter '\Memory\Available MBytes' -ComputerName SRV-APP01
+```
+
+Mirar en vivo sirve en el momento del problema. Para lo demás están los **conjuntos de recopiladores de datos** (*Data Collector Sets*): graban contadores durante horas o días a un archivo. Así se arma la **línea de base**: cómo se ve el servidor un día normal. "El procesador está al 70%" no dice nada; "un martes normal está al 20% y hoy está al 70%" dice mucho.
+
+Un pico de un segundo no es un problema: se mira lo **sostenido**. Y un solo número rara vez alcanza: procesador alto con un proceso al 100% es ese proceso; memoria disponible casi en cero con el disco muy ocupado es falta de memoria (Windows está usando el archivo de paginación).
+
+## El Monitor de confiabilidad
+
+Escondido en el Panel de control (o con `perfmon /rel`), el **Monitor de confiabilidad** muestra **una línea de tiempo por día** con un índice de 1 a 10 y, abajo, todo lo que pasó: fallas de programas, apagados inesperados, **e instalaciones** (actualizaciones, controladores, programas). Es la herramienta para contestar "¿desde cuándo pasa?" y, casi siempre, "¿qué cambió justo antes?".
+
+En algunos servidores aparece vacío: los datos los junta una tarea programada (en la carpeta `Microsoft\Windows\RAC` del Programador de tareas) que puede estar deshabilitada, y también se puede apagar por GPO. Si lo vas a necesitar, revisalo antes del día del problema. Y si no hay datos, la misma historia se arma con el Visor de eventos: los apagados en System y las instalaciones en `Setup` y en el historial de Windows Update.
+
+## Ahora mismo: Administrador de tareas y Monitor de recursos
+
+El **Administrador de tareas** (Ctrl+Shift+Esc) muestra qué proceso usa más; el **Monitor de recursos** (`resmon`) va más fino: qué proceso está leyendo qué archivo, qué conexiones de red tiene cada uno. En un Server Core, `Get-Process | Sort-Object CPU -Descending | Select-Object -First 10`.
+
+## Cuando hay muchos servidores
+
+Revisar el Visor de eventos de veinte servidores a mano no escala. El paso siguiente es **centralizar**: el **reenvío de eventos** de Windows (*Windows Event Forwarding*) junta los eventos elegidos en un servidor recolector, y un sistema de monitoreo avisa cuando algo pasa un umbral (Zabbix, PRTG o Azure Monitor, entre otros). *Para más adelante* (Nivel 6).
+
+<Troubleshooting escenario={reinicio} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Buscar un evento solo por número">
+    El identificador depende del origen. Buscá origen e identificador juntos.
+  </ErrorComun>
+  <ErrorComun titulo="Traer todo y filtrar con Where-Object">
+    En un registro grande tarda minutos. Filtrá con FilterHashtable.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que todo reinicio es un corte de luz">
+    Un 1074 dice quién lo pidió; un 1001 dice que fue una pantalla azul. Leé los eventos antes de suponer.
+  </ErrorComun>
+  <ErrorComun titulo="Reaccionar a un pico">
+    Un segundo al 100% es normal. Lo que importa es lo sostenido, comparado con la línea de base.
+  </ErrorComun>
+  <ErrorComun titulo="No mirar qué cambió">
+    El Monitor de confiabilidad muestra fallas e instalaciones en la misma línea de tiempo. Casi siempre, el problema empezó después de un cambio.
+  </ErrorComun>
+  <ErrorComun titulo="Registros chicos">
+    Cuando hacen falta, los eventos ya se pisaron. Agrandalos por GPO, sobre todo Security.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Cuatro preguntas: qué pasó (Visor de eventos), cómo está (Monitor de rendimiento), desde cuándo (Monitor de confiabilidad) y quién, ahora (Administrador de tareas y Monitor de recursos).
+- Registros System, Application y Security, más los de cada rol; cada evento tiene nivel, origen, identificador y mensaje.
+- Get-WinEvent -FilterHashtable con LogName, Id, Level, ProviderName, StartTime; -ComputerName para otro servidor. Get-EventLog es viejo.
+- Eventos clave: 4624, 4625, 4740, 7034, 41, 6008, 1074 y 1001. Con 1074 el reinicio fue pedido; 41 y 6008 sin 1074, no.
+- Contadores de procesador, memoria, disco y red con Get-Counter; lo sostenido y comparado con la línea de base.
+- Con muchos servidores, centralizar eventos y alertas.
+</Resumen>

@@ -1,0 +1,121 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿En qué registro buscás los inicios de sesión fallidos?
+  opciones:
+    - { texto: "Security", correcta: true, explicacion: "Evento 4625." }
+    - { texto: "System", explicacion: "System es lo de Windows: servicios, controladores, reinicios." }
+    - { texto: "Application", explicacion: "Es lo de los programas." }
+    - { texto: "Setup", explicacion: "Es lo de las instalaciones." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué se busca un evento por origen e identificador, y no solo por identificador?
+  opciones:
+    - { texto: "Porque el identificador depende del origen: el mismo número puede significar cosas distintas en programas distintos", correcta: true, explicacion: "Por eso FilterHashtable acepta ProviderName." }
+    - { texto: "Porque el identificador cambia con cada versión de Windows", explicacion: "Los identificadores de un origen son estables." }
+    - { texto: "Porque Get-WinEvent no acepta Id", explicacion: "Lo acepta." }
+    - { texto: "No hace falta, el número alcanza", explicacion: "Puede confundir eventos de orígenes distintos." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que trae los eventos críticos y de error (niveles 1 y 2) del registro System de las últimas 24 horas, usando FilterHashtable.
+  aceptadas:
+    - "Get-WinEvent -FilterHashtable @{ LogName = 'System'; Level = 1, 2; StartTime = (Get-Date).AddDays(-1) }"
+    - "Get-WinEvent -FilterHashtable @{ LogName = 'System'; Level = 1, 2; StartTime = (Get-Date).AddHours(-24) }"
+  patrones: ["^get-winevent\\s+-filterhashtable\\s+@\\{(?=.*logname\\s*=\\s*['\"]system['\"])(?=.*level\\s*=\\s*1\\s*,\\s*2)(?=.*starttime\\s*=\\s*\\(get-date\\)\\.add(days\\(-1\\)|hours\\(-24\\))).*\\}\\s*$"]
+  explicacion: "Filtrar en FilterHashtable es mucho más rápido que traer todo y usar Where-Object."
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Un servidor se reinició a la madrugada. ¿Qué te dicen estos eventos?
+  salida: |
+    TimeCreated          Id LevelDisplayName Message
+    -----------          -- ---------------- -------
+    16/11/2026 03:06:10  6005 Information    The Event log service was started.
+    16/11/2026 03:05:12  1074 Information    The process C:\Windows\system32\svchost.exe (SRV-APP01) has initiated the restart of computer SRV-APP01 on behalf of user NT AUTHORITY\SYSTEM for the following reason: Operating System: Service pack (Planned)
+  opciones:
+    - { texto: "Fue un reinicio pedido por Windows (las actualizaciones), planificado", correcta: true, explicacion: "Un 1074 dice quién lo pidió y por qué; no hay 41 ni 6008." }
+    - { texto: "Fue un corte de luz", explicacion: "Un corte deja 41 y 6008, no un 1074." }
+    - { texto: "Fue una pantalla azul", explicacion: "Dejaría un 1001." }
+    - { texto: "Alguien lo apagó del botón", explicacion: "Eso dejaría 41 y 6008." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Encontrás un 41 (Kernel-Power) y un 6008, sin 1074 ni 1001. ¿Qué pasó?
+  opciones:
+    - { texto: "Se apagó sin avisar: corte de luz, cuelgue total o falla de hardware", correcta: true, explicacion: "No lo pidió nadie y no hubo pantalla azul registrada." }
+    - { texto: "Se instalaron actualizaciones", explicacion: "Eso deja un 1074." }
+    - { texto: "Alguien reinició desde el menú Inicio", explicacion: "Eso deja un 1074." }
+    - { texto: "Un servicio se cayó", explicacion: "Eso es un 7034." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una cuenta se bloquea todas las mañanas. ¿Dónde y qué buscás primero?
+  opciones:
+    - { texto: "El evento 4740 en el DC con el rol de emulador de PDC: dice desde qué equipo vinieron los intentos", correcta: true, explicacion: "Después se busca en ese equipo qué guarda la contraseña vieja." }
+    - { texto: "El evento 4624 en la PC del usuario", explicacion: "Es de inicio correcto." }
+    - { texto: "El registro Application del servidor de archivos", explicacion: "Los bloqueos se registran en Security del DC." }
+    - { texto: "El Monitor de rendimiento", explicacion: "No mide bloqueos." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué valores sostenidos merecen una mirada? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Procesador por encima de 85-90% durante varios minutos", correcta: true, explicacion: "Un pico de un segundo no cuenta." }
+    - { texto: "Memoria disponible por debajo del 10% del total", correcta: true, explicacion: "Windows empieza a usar el archivo de paginación." }
+    - { texto: "Lecturas o escrituras de disco que tardan más de 20 ms", correcta: true, explicacion: "El disco no da abasto." }
+    - { texto: "Procesador al 100% durante un segundo", explicacion: "Es normal." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve una línea de base?
+  opciones:
+    - { texto: "Para saber cómo se ve el servidor un día normal y comparar cuando algo anda mal", correcta: true, explicacion: "Se arma grabando contadores con un conjunto de recopiladores de datos." }
+    - { texto: "Para limitar el procesador", explicacion: "No limita nada." }
+    - { texto: "Para borrar los eventos viejos", explicacion: "No tiene relación." }
+    - { texto: "Para instalar actualizaciones", explicacion: "No tiene relación." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: '"Desde el martes, la aplicación se cierra sola." ¿Qué herramienta te muestra más rápido qué cambió?'
+  opciones:
+    - { texto: "El Monitor de confiabilidad: fallas e instalaciones en la misma línea de tiempo por día", correcta: true, explicacion: "Casi siempre el problema empieza después de un cambio." }
+    - { texto: "El Administrador de tareas", explicacion: "Muestra el momento actual." }
+    - { texto: "Get-Counter", explicacion: "Mide el rendimiento, no los cambios." }
+    - { texto: "El registro Security", explicacion: "Es auditoría de accesos." }
+- id: p10
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: El servidor está lento. ¿Qué sugieren estos valores?
+  salida: |
+    \\srv-app01\processor(_total)\% processor time :  22
+    \\srv-app01\memory\available mbytes :           150
+    \\srv-app01\memory\% committed bytes in use :   97
+    \\srv-app01\physicaldisk(_total)\avg. disk queue length : 9
+  opciones:
+    - { texto: "Falta memoria: está casi toda comprometida y Windows usa el disco como memoria, por eso el disco está saturado", correcta: true, explicacion: "Procesador bajo, memoria agotada y disco muy ocupado van juntos." }
+    - { texto: "Falta procesador", explicacion: "Está al 22%." }
+    - { texto: "El disco está roto", explicacion: "Está ocupado por la paginación." }
+    - { texto: "Todo normal", explicacion: "97% comprometido y 150 MB libres no es normal." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene Get-WinEvent en lugar de Get-EventLog?
+  opciones:
+    - { texto: "Get-EventLog es el comando viejo: solo existe en Windows PowerShell 5.1 y no lee los registros nuevos", correcta: true, explicacion: "Get-WinEvent lee todos y filtra en origen." }
+    - { texto: "Get-EventLog no puede leer System", explicacion: "Lo lee, pero es el viejo." }
+    - { texto: "Son iguales", explicacion: "No lo son." }
+    - { texto: "Get-WinEvent no necesita permisos", explicacion: "Necesita los mismos." }
+- id: p12
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená cómo encarar "el servidor se reinició solo".
+  pasos:
+    - "Buscar 1074, 41, 6008 y 1001 en System para saber si fue pedido"
+    - "Si no fue pedido, ver en el Monitor de confiabilidad desde cuándo pasa"
+    - "Buscar qué cambió justo antes (actualizaciones, controladores, programas)"
+    - "Confirmar con la evidencia (el volcado, los eventos del componente)"
+    - "Revertir o corregir el cambio y vigilar los días siguientes"
+  explicacion: "Primero qué pasó, después desde cuándo y qué cambió; recién después se toca algo."

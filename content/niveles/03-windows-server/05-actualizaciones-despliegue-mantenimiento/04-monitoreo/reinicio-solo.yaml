@@ -1,0 +1,84 @@
+tipo: troubleshooting
+titulo: El servidor se reinició solo
+descripcion: >-
+  Incidente simulado. SRV-ARCH01, el servidor de archivos, se reinició tres veces esta semana en
+  horario de trabajo, sin que nadie lo pidiera. La gente pierde lo que tenía abierto. Cada
+  decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: Jueves, 14:15. Se acaba de reiniciar de nuevo. Abrís una consola contra SRV-ARCH01.
+    evidencia:
+      - titulo: Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41, 6008, 1074, 1001 } -MaxEvents 4
+        contenido: |
+          TimeCreated            Id LevelDisplayName Message
+          -----------            -- ---------------- -------
+          14/11/2026 14:11:52  1001 Error            The computer has rebooted from a bugcheck. The bugcheck was: 0x000000d1 (0x0000000000000000, 0x0000000000000002, 0x0000000000000000, 0xfffff8061a2b4c10). A dump was saved in: C:\Windows\MEMORY.DMP.
+          14/11/2026 14:11:41  6008 Error            The previous system shutdown at 14:09:58 on 14/11/2026 was unexpected.
+          14/11/2026 14:11:40    41 Critical         The system has rebooted without cleanly shutting down first...
+          09/11/2026 03:05:12  1074 Information      The process C:\Windows\system32\svchost.exe (SRV-ARCH01) has initiated the restart... Operating System: Service pack (Planned)
+    opciones:
+      - { texto: "No es un reinicio pedido (no hay 1074 hoy): es una pantalla azul (1001). Buscar qué cambió antes de que empezara", ir_a: n_cuando, minutos: 5 }
+      - texto: Es un corte de luz; pedir que revisen la UPS
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          La UPS no registró cortes y el resto del rack no se reinició. Además, un corte no deja un
+          1001: eso es una pantalla azul.
+      - texto: Desactivar las actualizaciones automáticas, por las dudas
+        ir_a: n1
+        minutos: 5
+        consecuencia: >-
+          El último reinicio por actualizaciones (el 1074) fue el domingo a la madrugada, como
+          estaba planificado. Los de esta semana son otra cosa, y dejar de parchear abre otro
+          problema.
+  n_cuando:
+    situacion: >-
+      El Monitor de confiabilidad muestra la semana día por día. Hasta el lunes, el índice estaba
+      en 10. Desde el martes, una falla crítica por día.
+    evidencia:
+      - titulo: Monitor de confiabilidad (Ver todos los informes técnicos)
+        contenido: |
+          Lun 10/11  Información  Instalación correcta: Intel - Net - 1.0.2.45 (actualización de controlador)
+          Mar 11/11  Crítico      Apagado inesperado de Windows
+          Mié 12/11  Crítico      Apagado inesperado de Windows
+          Jue 14/11  Crítico      Apagado inesperado de Windows
+    opciones:
+      - { texto: "Empezó justo después de la actualización del controlador de red. Confirmarlo con el volcado de memoria", ir_a: n_volcado, minutos: 6 }
+      - texto: Agregarle memoria RAM al servidor
+        ir_a: n_cuando
+        minutos: 30
+        consecuencia: >-
+          Funcionó un año sin problemas con la misma memoria. Lo que cambió el lunes fue un
+          controlador.
+  n_volcado:
+    situacion: >-
+      Abrís el volcado con WinDbg y el comando de análisis automático. El detalle de cómo se lee
+      un volcado es para más adelante; alcanza con la línea que nombra al culpable.
+    evidencia:
+      - titulo: "!analyze -v (resumen)"
+        contenido: |
+          DRIVER_IRQL_NOT_LESS_OR_EQUAL (d1)
+          An attempt was made to access a pageable (or completely invalid) address at an
+          interrupt request level (IRQL) that is too high.
+          ...
+          MODULE_NAME: e1i68x64
+          IMAGE_NAME:  e1i68x64.sys
+    opciones:
+      - { texto: "Volver al controlador de red anterior y que WSUS no vuelva a ofrecer ese controlador", ir_a: n_ok, minutos: 10 }
+      - texto: Reinstalar Windows en el servidor
+        ir_a: n_volcado
+        minutos: 120
+        consecuencia: >-
+          Medio día sin servidor de archivos para un problema que tiene nombre y apellido: un
+          controlador. Y si Windows Update lo vuelve a instalar, vuelve el problema.
+  n_ok:
+    final: exito
+    resumen: >-
+      La secuencia de eventos lo decía: sin 1074 (nadie pidió reiniciar), con 41 y 6008 (se
+      apagó sin avisar) y con 1001 (pantalla azul). El Monitor de confiabilidad mostró desde
+      cuándo y qué había cambiado justo antes: un controlador de red nuevo. El volcado lo
+      confirmó (e1i68x64.sys). Se volvió al controlador anterior desde el Administrador de
+      dispositivos (Revertir controlador) y se dejó fuera de la sincronización de WSUS la
+      clasificación de controladores, que en servidores se instalan a mano, probados y en una
+      ventana de mantenimiento.
