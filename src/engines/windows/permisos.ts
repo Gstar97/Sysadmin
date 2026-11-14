@@ -206,3 +206,26 @@ export function icaclsText(e: AceView | Ace, inherited = false): string {
   const code = lvl === 'FullControl' ? 'F' : lvl === 'Modify' ? 'M' : lvl === 'ReadAndExecute' ? 'RX' : lvl === 'Read' ? 'R' : lvl === 'Write' ? 'W' : e.rights.map((r) => ({ R: 'RD', X: 'X', W: 'WD', A: 'AD', D: 'D', P: 'WDAC', O: 'WO' })[r]).join(',')
   return `${e.identity}:${flags}${e.type === 'Deny' ? '(DENY)' : ''}(${code})`
 }
+
+/** Para cada derecho: si queda permitido y qué entrada lo decidió (o ninguna: no se menciona). */
+export function explainRights(acl: AceView[], principals: string[], owner?: string): Record<Right, { ok: boolean; ace?: AceView; owner?: boolean }> {
+  const who = new Set(principals.map((p) => p.toLowerCase()))
+  if (owner && who.has(owner.toLowerCase())) who.add('creator owner')
+  const out = {} as Record<Right, { ok: boolean; ace?: AceView; owner?: boolean }>
+  for (const r of ALL_RIGHTS) {
+    const e = applicable(acl).find((x) => who.has(x.identity.toLowerCase()) && x.rights.includes(r))
+    out[r] = e ? { ok: e.type === 'Allow', ace: e } : { ok: false }
+    if (r === 'P' && !out[r].ok && owner && who.has(owner.toLowerCase())) out[r] = { ok: true, owner: true }
+  }
+  return out
+}
+
+export const RIGHT_ES: Record<Right, string> = {
+  R: 'Leer y listar',
+  X: 'Recorrer y ejecutar',
+  W: 'Crear archivos y escribir',
+  A: 'Crear carpetas',
+  D: 'Eliminar',
+  P: 'Cambiar permisos',
+  O: 'Tomar posesión',
+}

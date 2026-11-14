@@ -67,3 +67,15 @@ describe('permisos NTFS', () => {
     expect(icaclsText(ace('CREATOR OWNER', 'FullControl', 'Allow', { oi: true, ci: true, io: true }), true)).toBe('CREATOR OWNER:(I)(OI)(CI)(IO)(F)')
   })
 })
+
+describe('explicación de derechos', () => {
+  it('dice qué entrada decidió cada derecho', async () => {
+    const { explainRights } = await import('@/engines/windows/permisos')
+    const t = tree({ 'd:\\': { owner: 'x', protected: true, entries: [ace('EMPRESA\\GG-Ventas', 'Modify'), ace('EMPRESA\\mlopez', ['D'], 'Deny')] } })
+    const e = explainRights(effectiveAcl(t, 'D:\\a'), maria)
+    expect(e.D.ok).toBe(false)
+    expect(e.D.ace?.identity).toBe('EMPRESA\\mlopez')
+    expect(e.W.ok).toBe(true)
+    expect(e.P.ace).toBeUndefined()
+  })
+})
