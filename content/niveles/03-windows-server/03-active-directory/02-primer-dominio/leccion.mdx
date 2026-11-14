@@ -1,0 +1,130 @@
+---
+id: n3-m3-l2
+titulo: Crear el primer dominio
+minutos: 150
+objetivos:
+  - Planificar el nombre del dominio, el nombre NetBIOS y los niveles funcionales antes de instalar.
+  - Instalar AD DS y promover el primer controlador de un bosque nuevo con PowerShell.
+  - Verificar la salud del controlador con dcdiag y la resolución DNS de sus registros SRV.
+glosario: [nivel-funcional, dsrm, registro-srv]
+verificado: 2026-11
+---
+
+import promo from './promocion.svg?raw'
+import orden from './orden-dominio.yaml'
+import promover from './ej-promover.yaml'
+
+Crear un dominio lleva diez minutos de comandos y una hora de decisiones que después cuesta mucho cambiar. Esta lección empieza por esas decisiones (el nombre, sobre todo), sigue con la instalación en PowerShell y termina con lo que hay que comprobar antes de unir el primer equipo.
+
+<AntesDeEmpezar>
+- Conceptos de Active Directory (lección anterior).
+- Instalación y primeros pasos de un servidor, y roles con Install-WindowsFeature (módulo 3.1).
+- Zonas y registros DNS (lección 2.3.4).
+</AntesDeEmpezar>
+
+## Antes de instalar: el nombre
+
+El nombre del dominio es casi imposible de cambiar después: está en cada equipo, cada cuenta, cada configuración. Hay tres opciones habituales:
+
+- **Un subdominio de un dominio propio**, como `ad.empresa.com.ar` o `corp.empresa.com.ar`. Es la **recomendada**: el nombre es tuyo de verdad en internet (nadie puede registrarlo), no choca con tu sitio web y sirve para certificados públicos si algún día los necesitás.
+- **El mismo dominio público** (`empresa.com.ar` adentro y afuera). Funciona, pero obliga a mantener a mano en el DNS interno los registros públicos (la web, el correo), porque el DNS del dominio se cree dueño de todo `empresa.com.ar`.
+- **Un nombre inventado**, como `empresa.local`. Es lo que vas a ver en muchísimas empresas armadas hace años, y lo que usa este curso por simplicidad. Tiene dos problemas: `.local` choca con mDNS (lo que usan las impresoras y los Mac para encontrarse en la red), y nunca vas a poder tener un certificado público con ese nombre.
+
+Otras reglas: el nombre **no puede ser de una sola palabra** (`empresa` a secas no se admite), y el **nombre NetBIOS** (el corto, `EMPRESA`) tiene hasta 15 caracteres. Ese es el que la gente va a ver al escribir `EMPRESA\mlopez`.
+
+<EnSimple>
+Si podés, usá un subdominio de un dominio que ya es tuyo (ad.empresa.com.ar). Nunca un nombre de una sola palabra. Pensalo bien: cambiarlo después es casi rehacer todo.
+</EnSimple>
+
+## Niveles funcionales
+
+El **nivel funcional** del bosque y del dominio dice qué funciones de AD se pueden usar, y qué versión de Windows Server tienen que tener, como mínimo, todos los controladores. Windows Server 2025 trae uno nuevo, **Windows Server 2025** (nivel 10), que habilita funciones nuevas como las páginas de base de datos de 32 KB (*para más adelante*).
+
+La regla: elegí el nivel más alto que permitan **todos** los controladores que vayan a existir. Si todos van a ser 2025, nivel 2025. Si tenés que sumar un DC con Windows Server 2022, el nivel tiene que ser 2016 (el máximo que entiende 2022). Un bosque nuevo con Windows Server 2025 acepta como mínimo el nivel 2016. Subirlo después se puede (`Set-ADForestMode`); bajarlo, en general, no.
+
+## Los requisitos del servidor
+
+El primer DC es el que más importa. Antes de promoverlo:
+
+- **IP fija.** Los equipos lo buscan por su dirección.
+- **Nombre definitivo.** Cambiar el nombre de un DC es una tarea delicada. Elegilo ahora (DC01).
+- **DNS apuntando a sí mismo** (o a otro DC, cuando haya). La promoción instala el rol DNS y crea la zona del dominio; el servidor tiene que usarla.
+- **La hora correcta** y las **actualizaciones** al día.
+- **Server Core**, si podés: un DC no necesita escritorio.
+
+<Diagrama svg={promo} alt="Los pasos para crear el bosque, de izquierda a derecha. Antes: IP fija, nombre definitivo, DNS hacia sí mismo, hora y actualizaciones. 1: Install-WindowsFeature AD-Domain-Services -IncludeManagementTools (instala el rol; todavía no es DC). 2: Install-ADDSForest con el nombre del dominio, el NetBIOS, los niveles funcionales, -InstallDns y la contraseña DSRM. 3: reinicio automático. Después, lo que queda armado: la base de AD (NTDS), la carpeta SYSVOL compartida, la zona DNS empresa.local con sus registros SRV, el DNS del servidor apuntando a 127.0.0.1, y los servicios NTDS, DNS, Kdc, Netlogon y ADWS corriendo. Al final, las comprobaciones: Get-ADDomain, Resolve-DnsName -Type SRV y dcdiag." pie="Instalar el rol, promover, reiniciar y comprobar." />
+
+## Instalar y promover
+
+Dos pasos con PowerShell. Primero el rol:
+
+```powershell
+Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+```
+
+Después, la promoción. Crea el bosque, el dominio, la zona DNS y deja el servidor como controlador:
+
+```powershell
+$dsrm = Read-Host -AsSecureString "Contraseña de DSRM"
+Install-ADDSForest `
+    -DomainName empresa.local `
+    -DomainNetbiosName EMPRESA `
+    -ForestMode Win2025 `
+    -DomainMode Win2025 `
+    -InstallDns `
+    -SafeModeAdministratorPassword $dsrm
+```
+
+(El acento grave al final de cada línea dice "el comando sigue en la línea de abajo".)
+
+- **`-InstallDns`** instala el DNS en el mismo servidor y crea la zona `empresa.local` **integrada en AD**: la zona se guarda en la base de AD y se replica sola a los demás DC. Es lo recomendado.
+- **`-SafeModeAdministratorPassword`** es la contraseña del **modo de restauración de servicios de directorio** (DSRM): una cuenta local que se usa para arrancar el DC sin AD, por ejemplo para restaurar la base. Guardala en un lugar seguro, distinta de la del Administrador del dominio. Muchas empresas se dan cuenta de que no la tienen justo el día que la necesitan.
+
+Aparecen dos advertencias que son normales: una sobre criptografía de Windows NT 4.0 (un cambio de seguridad de 2025) y otra que dice que no se pudo crear una delegación DNS (porque `empresa.local` no existe en internet). Después pide confirmar y **reinicia solo**. Al volver, iniciás sesión como `EMPRESA\Administrator`: la cuenta de Administrador local pasó a ser el administrador del dominio.
+
+Si preferís probar antes sin cambiar nada, `Test-ADDSForestInstallation` con los mismos parámetros revisa los requisitos.
+
+<Ordenar ejercicio={orden} />
+
+## Comprobar
+
+Antes de unir el primer equipo, revisá cuatro cosas:
+
+```powershell
+Get-ADDomain | Select-Object DNSRoot, NetBIOSName, DomainMode
+Get-Service NTDS, DNS, Kdc, Netlogon, ADWS        # todos Running
+Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.empresa.local
+dcdiag                                             # todas las pruebas "passed"
+```
+
+**dcdiag** es la revisión general de un controlador: conectividad, servicios, replicación, registros DNS, roles. En un DC recién creado todo tiene que pasar; con `dcdiag /q` muestra solo los errores, y con `dcdiag /test:dns` hace una revisión a fondo del DNS.
+
+Y un último ajuste que casi todos olvidan: el DNS del DC resuelve el dominio, pero para los nombres de internet necesita saber a quién preguntar. Configurale **reenviadores** (el DNS del proveedor o uno público) con `Add-DnsServerForwarder -IPAddress 1.1.1.1, 8.8.8.8`. Los equipos del dominio siempre usan al DC como DNS; el DC es el que sale a internet. Lo vas a ver en detalle en el módulo 3.4.
+
+<Terminal ejercicio={promover} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Elegir el nombre del dominio a la ligera">
+    Cambiarlo después es casi rehacer todo. Preferí un subdominio de un dominio propio; nunca una sola palabra.
+  </ErrorComun>
+  <ErrorComun titulo="Promover un servidor con IP por DHCP">
+    La promoción avisa y sigue, pero el día que cambie la IP, el dominio deja de encontrar a su DC. IP fija antes de promover.
+  </ErrorComun>
+  <ErrorComun titulo="Perder la contraseña DSRM">
+    Es la que se necesita para restaurar AD. Guardala en el gestor de contraseñas el mismo día.
+  </ErrorComun>
+  <ErrorComun titulo="Subir el nivel funcional sin mirar los DC">
+    Si después tenés que sumar un DC con una versión anterior, no vas a poder. Nivel 2025 solo si todos los DC van a ser 2025.
+  </ErrorComun>
+  <ErrorComun titulo="Darlo por terminado sin dcdiag">
+    Un DC que "parece andar" puede tener el DNS mal o un servicio caído. dcdiag y los registros SRV antes de unir equipos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El nombre del dominio casi no se cambia: mejor un subdominio de un dominio propio; nunca de una sola palabra; NetBIOS de hasta 15 caracteres.
+- Nivel funcional: el más alto que permitan todos los DC que vas a tener (2025 si todos son 2025; mínimo 2016).
+- Requisitos: IP fija, nombre definitivo, DNS hacia sí mismo, hora y actualizaciones.
+- Install-WindowsFeature AD-Domain-Services y después Install-ADDSForest con -InstallDns y la contraseña DSRM; reinicia solo.
+- Comprobar: Get-ADDomain, los servicios, el registro SRV y dcdiag; después, reenviadores en el DNS.
+</Resumen>

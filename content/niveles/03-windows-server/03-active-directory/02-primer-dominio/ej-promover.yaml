@@ -1,0 +1,64 @@
+tipo: terminal
+shell: powershell
+titulo: Crear el bosque empresa.local
+descripcion: >-
+  DC01 es un Windows Server 2025 recién configurado: IP fija 192.168.10.10, nombre definitivo,
+  zona horaria y actualizaciones al día. Todavía no es nada. Vas a convertirlo en el primer
+  controlador de dominio de un bosque nuevo, empresa.local, con DNS integrado.
+estado_inicial:
+  equipo: DC01
+  experiencia: core
+  red: { ip: 192.168.10.10, prefijo: 24, puerta_enlace: 192.168.10.1, dns: [192.168.10.10] }
+  zona_horaria: Argentina Standard Time
+pasos:
+  - consigna: Instalá el rol de Servicios de dominio de Active Directory con sus herramientas.
+    verificar:
+      - { caracteristica: AD-Domain-Services, instalada: true }
+    solucion: [Install-WindowsFeature AD-Domain-Services -IncludeManagementTools]
+    explicacion: >-
+      Con el rol instalado, el servidor todavía no es controlador: aparece el módulo
+      ADDSDeployment con los cmdlets para promoverlo.
+  - consigna: >-
+      Guardá en $dsrm la contraseña del modo de restauración de servicios de directorio (DSRM)
+      como SecureString. En el laboratorio, usá ConvertTo-SecureString; en un servidor de verdad,
+      Read-Host -AsSecureString para no dejarla escrita.
+    verificar:
+      - { variable: dsrm }
+    pistas:
+      - "$dsrm = ConvertTo-SecureString 'Restauracion.2026!' -AsPlainText -Force"
+    solucion: ["$dsrm = ConvertTo-SecureString 'Restauracion.2026!' -AsPlainText -Force"]
+  - consigna: >-
+      Creá el bosque empresa.local (NetBIOS EMPRESA), con nivel funcional de bosque y de dominio
+      Windows Server 2025, el DNS integrado y la contraseña DSRM. Usá -Force para que no pregunte.
+    verificar:
+      - { es_controlador: true }
+    pistas:
+      - "Install-ADDSForest -DomainName empresa.local -DomainNetbiosName EMPRESA -ForestMode Win2025 -DomainMode Win2025 -InstallDns -SafeModeAdministratorPassword $dsrm -Force"
+    solucion:
+      - Install-ADDSForest -DomainName empresa.local -DomainNetbiosName EMPRESA -ForestMode Win2025 -DomainMode Win2025 -InstallDns -SafeModeAdministratorPassword $dsrm -Force
+    explicacion: >-
+      Las advertencias son normales: la de criptografía de NT 4.0 avisa de un cambio de seguridad
+      y la de delegación DNS dice que no hay una zona padre (empresa.local no existe en internet).
+      Al terminar, el servidor se reinicia solo y vuelve como controlador de dominio.
+  - consigna: Comprobá el nivel funcional del bosque y del dominio.
+    verificar:
+      - { salida_contiene: "Windows2025Forest" }
+    solucion:
+      - Get-ADDomain | Select-Object DNSRoot, NetBIOSName, DomainMode
+      - Get-ADForest | Select-Object Name, ForestMode, SchemaMaster
+  - consigna: >-
+      Verificá que el DNS publica el registro SRV con el que los equipos van a encontrar este
+      controlador.
+    verificar:
+      - { salida_contiene: "dc01.empresa.local" }
+    solucion: [Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.empresa.local]
+  - consigna: >-
+      Corré el diagnóstico completo del controlador y fijate que pasen todas las pruebas.
+    verificar:
+      - { comando_usado: "^dcdiag" }
+      - { salida_contiene: "passed test Services" }
+    solucion: [dcdiag]
+    explicacion: >-
+      dcdiag recorre decenas de pruebas: conectividad, servicios, replicación, DNS, roles. En un
+      controlador recién creado, todo debería decir "passed". Es lo primero que se mira cuando
+      algo del dominio anda raro.

@@ -1,0 +1,58 @@
+tipo: terminal
+shell: powershell
+titulo: Recorrer un dominio que ya existe
+descripcion: >-
+  Entraste a trabajar a una empresa que ya tiene Active Directory. Antes de tocar nada, vas a
+  mirar cómo está armado, desde DC01 (uno de sus controladores de dominio).
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+  ad:
+    ous: [Empresa/Ventas, Empresa/IT, Empresa/Equipos]
+    usuarios:
+      - { sam: mlopez, nombre: María, apellido: López, ou: Empresa/Ventas, departamento: Ventas, grupos: [GG-Ventas] }
+      - { sam: jperez, nombre: Juan, apellido: Pérez, ou: Empresa/IT, departamento: IT }
+    equipos:
+      - { nombre: PC01, ou: Empresa/Equipos }
+  servidores:
+    - { equipo: DC02, dominio: empresa.local, controlador_dominio: true, red: { ip: 192.168.10.11, dns: [192.168.10.10, 127.0.0.1] } }
+pasos:
+  - consigna: >-
+      Mirá los datos del dominio: su nombre DNS, el NetBIOS y el nivel funcional.
+    verificar:
+      - { comando_usado: "get-addomain" }
+      - { salida_contiene: "Windows2025Domain" }
+    solucion: ["Get-ADDomain | Select-Object DNSRoot, NetBIOSName, DomainMode"]
+  - consigna: ¿Cuántos controladores de dominio hay y cuáles son catálogo global?
+    verificar:
+      - { comando_usado: "get-addomaincontroller.*-filter" }
+      - { salida_contiene: "DC02" }
+    pistas:
+      - "Get-ADDomainController -Filter * trae todos; elegí Name, IPv4Address e IsGlobalCatalog."
+    solucion: ["Get-ADDomainController -Filter * | Select-Object Name, IPv4Address, IsGlobalCatalog"]
+  - consigna: >-
+      Mirá el nombre distinguido (DistinguishedName) de la cuenta mlopez y leelo de izquierda a
+      derecha: ¿en qué OU está?
+    verificar:
+      - { salida_contiene: "OU=Ventas,OU=Empresa,DC=empresa,DC=local" }
+    solucion: ["Get-ADUser mlopez | Select-Object Name, DistinguishedName"]
+    explicacion: >-
+      CN=María López,OU=Ventas,OU=Empresa,DC=empresa,DC=local se lee de lo particular a lo
+      general: la cuenta María López, dentro de la OU Ventas, dentro de la OU Empresa, en el
+      dominio empresa.local.
+  - consigna: Listá las unidades organizativas del dominio.
+    verificar:
+      - { comando_usado: "get-adorganizationalunit" }
+      - { salida_contiene: "Equipos" }
+    solucion: ["Get-ADOrganizationalUnit -Filter * | Select-Object Name, DistinguishedName"]
+  - consigna: >-
+      Los clientes encuentran a los controladores por DNS. Preguntá por el registro SRV que
+      anuncia los DC de empresa.local (_ldap._tcp.dc._msdcs.empresa.local).
+    verificar:
+      - { salida_contiene: "dc02.empresa.local" }
+    solucion: [Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.empresa.local]
+    explicacion: >-
+      Sin este registro, una PC no sabe a quién pedirle el inicio de sesión. Por eso Active
+      Directory depende tanto del DNS: un cliente con un DNS que no sea el del dominio no lo
+      encuentra.

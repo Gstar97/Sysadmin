@@ -1,0 +1,112 @@
+---
+id: n3-m3-l1
+titulo: Conceptos de Active Directory
+minutos: 120
+objetivos:
+  - Explicar para qué sirve Active Directory y qué cambia entre un grupo de trabajo y un dominio.
+  - Reconocer las piezas de un bosque (dominio, OU, objetos, controladores, catálogo global, esquema) y leer un nombre distinguido.
+  - Entender por qué AD depende del DNS y de la hora, y en qué se diferencia de Microsoft Entra ID.
+glosario: [active-directory, dominio-ad, bosque-ad, controlador-dominio, unidad-organizativa, kerberos, distinguished-name]
+verificado: 2026-11
+---
+
+import bosque from './bosque.svg?raw'
+import bosqueDatos from './bosque.yaml'
+import piezas from './piezas.yaml'
+import explorar from './ej-explorar.yaml'
+
+Casi todas las empresas con computadoras Windows tienen **Active Directory**, aunque la gente que trabaja ahí nunca haya escuchado el nombre: es lo que hace que puedas sentarte en cualquier PC de la oficina y entrar con tu usuario, que la impresora del piso aparezca sola y que al irte de la empresa te desactiven la cuenta en un solo lugar. Este módulo es el corazón del Nivel 3. En esta primera lección no vas a instalar nada: vas a entender las piezas, para que todo lo que viene tenga sentido.
+
+<AntesDeEmpezar>
+- DNS: zonas, registros y resolución (lecciones 2.3.3 y 2.3.4).
+- Usuarios, grupos y permisos en Linux (módulo 1.2), para comparar.
+- La hora y NTP (lección 1.5.4).
+</AntesDeEmpezar>
+
+## Sin dominio: un grupo de trabajo
+
+Hasta ahora tus servidores Windows estaban en un **grupo de trabajo**: cada equipo tiene sus propios usuarios y contraseñas, y no sabe nada de los demás. Con tres equipos se aguanta. Con cincuenta, cada persona nueva son cincuenta cuentas, cada cambio de contraseña hay que hacerlo en cada máquina, y cuando alguien se va nadie está seguro de haberle sacado todos los accesos.
+
+**Active Directory Domain Services** (AD DS, o simplemente AD) resuelve eso con una base de datos central de **identidades**: usuarios, grupos y equipos viven en un solo lugar, y todos los equipos del **dominio** le preguntan a esa base quién es quién.
+
+Pensalo como la recepción de un edificio de oficinas. En lugar de que cada oficina tenga su propia lista de quién puede entrar, hay una sola recepción con el registro de todos, que entrega una credencial al llegar; cada oficina mira la credencial y decide. Donde no llega la comparación: AD no solo dice quién sos, también reparte configuraciones a cada equipo (las directivas de grupo, que vas a ver en este módulo) y guarda datos de las computadoras, no solo de las personas.
+
+<EnSimple>
+En un grupo de trabajo, cada equipo tiene sus propios usuarios. En un dominio, hay una base central de usuarios, grupos y equipos que todos consultan.
+</EnSimple>
+
+## Las piezas
+
+<DiagramaInteractivo datos={bosqueDatos} svg={bosque} alt="Un bosque llamado empresa.local. Adentro, el dominio raíz empresa.local con sus unidades organizativas (Empresa con Ventas, IT, Equipos y Servidores, y Domain Controllers) y dos controladores de dominio, DC01 y DC02, los dos con DNS y catálogo global, que se replican entre sí. A la derecha, un dominio hijo cordoba.empresa.local con su propio controlador, unido al raíz por una confianza de doble sentido. Abajo, el esquema y la configuración, compartidos por todo el bosque." />
+
+Tocá cada parte del diagrama para ver qué es. En resumen:
+
+- **Objetos**: cada usuario, grupo, equipo, impresora publicada o carpeta compartida publicada es un objeto con **atributos** (nombre, departamento, teléfono, último inicio de sesión…).
+- **Unidades organizativas (OU)**: carpetas para ordenar los objetos según cómo se administran. Sirven para aplicar directivas y delegar tareas. Las vas a diseñar en la lección 3.
+- **Dominio**: el conjunto de objetos que comparten una base y unas reglas. Tiene un nombre DNS (empresa.local) y uno corto, NetBIOS (EMPRESA).
+- **Árbol y bosque**: varios dominios que comparten un nombre forman un árbol; uno o varios árboles forman un **bosque**, que es el verdadero límite de seguridad. Para una PyME, **un bosque con un solo dominio** es lo normal y lo recomendado.
+- **Controlador de dominio (DC)**: un Windows Server con la base de AD. Todos los DC de un dominio son iguales y se **replican** entre sí; se puede escribir en cualquiera. Siempre al menos dos.
+- **Catálogo global**: un DC que además sabe un poco de todo el bosque, para búsquedas e inicios de sesión.
+- **Esquema**: la definición de qué objetos y atributos pueden existir. Es uno para todo el bosque.
+
+<Emparejar ejercicio={piezas} />
+
+## Cómo se nombra un objeto: LDAP y el nombre distinguido
+
+AD habla **LDAP**, el protocolo estándar de directorios (puertos 389 y, cifrado, 636). En LDAP, cada objeto tiene un **nombre distinguido** (*distinguished name*, DN) que dice dónde está, de lo particular a lo general:
+
+```
+CN=María López,OU=Ventas,OU=Empresa,DC=empresa,DC=local
+```
+
+Se lee de izquierda a derecha: el objeto María López (CN, *common name*), dentro de la OU Ventas, dentro de la OU Empresa, en el dominio empresa.local (cada parte del nombre DNS es un DC, *domain component*). Es como una dirección postal escrita al revés de como la dirías: primero el nombre, después la calle, la ciudad y el país. Vas a escribir DN todo el tiempo en PowerShell (`-Path "OU=Ventas,OU=Empresa,DC=empresa,DC=local"`), así que conviene leerlos sin pensar.
+
+Además del DN, cada usuario tiene un **nombre de inicio de sesión**, en dos formatos: el antiguo, `EMPRESA\mlopez` (el NetBIOS del dominio y el *sAMAccountName*), y el moderno, `mlopez@empresa.local` (el UPN, que se parece a un correo).
+
+<Pregunta id="p04" />
+
+## Kerberos, el DNS y la hora
+
+Cuando iniciás sesión en una PC del dominio, no le mandás tu contraseña a cada servidor que usás. La PC habla con un DC usando **Kerberos**: le demostrás que sabés tu contraseña una sola vez y recibís un **ticket**, que después presentás ante cada servidor (de archivos, de impresión…) sin volver a escribir nada. Es la "credencial de la recepción" de la comparación de antes.
+
+Kerberos tiene dos dependencias que vas a encontrar detrás de muchísimas fallas:
+
+- **El DNS.** Los equipos encuentran a los DC preguntando al DNS por registros especiales (**SRV**), como `_ldap._tcp.dc._msdcs.empresa.local`. Esos registros solo los tiene el DNS del dominio. Un equipo que usa como DNS el del proveedor o 8.8.8.8 **no encuentra el dominio**: no puede unirse, ni iniciar sesión con datos nuevos, ni recibir directivas.
+- **La hora.** Los tickets llevan la hora. Si el reloj de un equipo y el del DC difieren en **más de 5 minutos**, Kerberos los rechaza. Por eso en un dominio todos sincronizan la hora con los DC, y el DC principal (el que tiene el rol de emulador de PDC) con una fuente externa confiable.
+
+Las dos van a aparecer en el caso real de este módulo.
+
+<Terminal ejercicio={explorar} />
+
+## Active Directory y Microsoft Entra ID
+
+**Microsoft Entra ID** (antes Azure Active Directory) es el servicio de identidades en la nube de Microsoft: el que usan Microsoft 365, Teams y miles de aplicaciones web. A pesar del nombre parecido, **no es AD en la nube**: no tiene OU ni directivas de grupo como las de AD, no habla Kerberos ni LDAP con tus servidores, y las PC se "unen" a él de otra forma.
+
+Muchas empresas tienen los dos: AD en la oficina para los equipos, los archivos y las aplicaciones internas, y Entra ID para Microsoft 365, sincronizados con una herramienta (Microsoft Entra Connect) para que cada persona tenga una sola cuenta. Esa identidad híbrida es *para más adelante*, en el Nivel 7. En este nivel trabajás con AD DS, que es lo que tiene la gran mayoría de las PyME en sus servidores.
+
+<ErroresComunes>
+  <ErrorComun titulo="Armar un dominio por sede o por área">
+    Para una PyME, un solo dominio con OU por sede o área es más simple y igual de ordenado. Los dominios extra suman controladores y administración.
+  </ErrorComun>
+  <ErrorComun titulo="Tener un solo controlador de dominio">
+    Si se cae, nadie puede iniciar sesión con datos nuevos ni recibir directivas. Siempre al menos dos.
+  </ErrorComun>
+  <ErrorComun titulo="Usar un DNS público en los equipos del dominio">
+    El DNS público no tiene los registros SRV del dominio: los equipos no encuentran a los DC.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir Active Directory con Entra ID">
+    Uno vive en tus servidores y habla Kerberos y LDAP; el otro es un servicio en la nube para Microsoft 365 y aplicaciones web. Se complementan.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar todo en Users y Computers">
+    Son contenedores, no OU: no admiten directivas de grupo ni delegación fina. Conviene ordenar todo en OU propias.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Active Directory centraliza usuarios, grupos y equipos: una cuenta para entrar a cualquier PC del dominio y un solo lugar para darla de baja.
+- Piezas: objetos con atributos, OU para ordenarlos, dominio, árbol y bosque (el límite de seguridad), controladores de dominio que se replican y catálogo global.
+- Para una PyME: un bosque, un dominio y al menos dos DC.
+- El nombre distinguido se lee de lo particular a lo general: CN=María López,OU=Ventas,OU=Empresa,DC=empresa,DC=local.
+- Kerberos da tickets para no repetir la contraseña; depende del DNS del dominio (registros SRV) y de que los relojes no difieran en más de 5 minutos.
+- Microsoft Entra ID es la identidad en la nube de Microsoft: no es lo mismo que AD, y muchas empresas usan los dos.
+</Resumen>

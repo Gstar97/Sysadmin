@@ -46,6 +46,11 @@ export interface AdStore {
   fgpp?: PsObject[]
   serviceAccounts?: PsObject[]
   kdsKeys?: { id: string; effective: Date; created: Date }[]
+  /** Dónde se crean los equipos que se unen al dominio (redircmp) y los usuarios nuevos (redirusr). */
+  defaultComputers?: string
+  defaultUsers?: string
+  /** Permisos delegados sobre OU (dsacls / asistente de delegación). */
+  delegations?: { dn: string; trustee: string; right: string; objectType: string }[]
 }
 
 export const DOMAIN_SID = 'S-1-5-21-3623811015-3361044348-30300820'
@@ -523,7 +528,7 @@ adCmdlet('New-ADUser', {
     const st = store(ctx.s)
     const name = str(ctx, 'Name')
     if (!name) throw new PsError("Cannot validate argument on parameter 'Name'. The argument is null or empty.", 'InvalidData', `ParameterArgumentValidationError,${NS}.Commands.NewADUser`)
-    const path = str(ctx, 'Path') ?? `CN=Users,${st.domainDn}`
+    const path = str(ctx, 'Path') ?? st.defaultUsers ?? `CN=Users,${st.domainDn}`
     if (!containerExists(st, path)) throw new PsError('Directory object not found', 'ObjectNotFound', `ActiveDirectoryCmdlet:${NS}.ADIdentityNotFoundException,${NS}.Commands.NewADUser`, path)
     const sam = str(ctx, 'SamAccountName') ?? `$${stableGuid(name).replace(/-/g, '').slice(0, 6).toUpperCase()}-${stableGuid(name + 'x').replace(/-/g, '').slice(0, 12).toUpperCase()}`
     if (sam.length > 20) throw new PsError('The name provided is not a properly formed account name', 'NotSpecified', `ActiveDirectoryServer:1315,${NS}.Commands.NewADUser`, name)

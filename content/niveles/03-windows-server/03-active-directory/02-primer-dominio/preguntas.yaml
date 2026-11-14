@@ -1,0 +1,96 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: La empresa tiene el dominio público distribuidora.com.ar. ¿Qué nombre le recomendás para el dominio de Active Directory?
+  opciones:
+    - { texto: "ad.distribuidora.com.ar (un subdominio del propio)", correcta: true, explicacion: "Es tuyo en internet, no choca con la web y sirve para certificados." }
+    - { texto: "distribuidora (una sola palabra)", explicacion: "Los nombres de una sola palabra no se admiten." }
+    - { texto: "distribuidora.local", explicacion: "Funciona, pero choca con mDNS y no sirve para certificados públicos." }
+    - { texto: "google.com, que nunca falla", explicacion: "No es tuyo: los nombres internos chocarían con los de Google." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El bosque va a tener dos DC con Windows Server 2025 y, por un programa viejo, uno con Windows Server 2022. ¿Qué nivel funcional elegís?
+  opciones:
+    - { texto: "Windows Server 2016, el más alto que entiende 2022", correcta: true, explicacion: "El nivel no puede superar la versión del DC más viejo." }
+    - { texto: "Windows Server 2025", explicacion: "El DC con 2022 no podría unirse." }
+    - { texto: "Windows Server 2012 R2", explicacion: "Un bosque nuevo con 2025 acepta como mínimo 2016." }
+    - { texto: "No importa", explicacion: "Importa: define qué DC pueden existir." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve la contraseña DSRM que pide Install-ADDSForest?
+  opciones:
+    - { texto: "Para arrancar el controlador en el modo de restauración, sin AD, por ejemplo para restaurar la base", correcta: true, explicacion: "Es una cuenta local del DC; guardala en un lugar seguro." }
+    - { texto: "Es la contraseña del Administrador del dominio", explicacion: "Son cuentas distintas." }
+    - { texto: "Es la contraseña del DNS", explicacion: "El DNS no tiene contraseña propia." }
+    - { texto: "Para unir equipos al dominio", explicacion: "Para eso se usa una cuenta del dominio." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que instala el rol de Active Directory con sus herramientas de administración.
+  aceptadas: ["Install-WindowsFeature AD-Domain-Services -IncludeManagementTools", "Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools"]
+  patrones: ["^(install|add)-windowsfeature\\s+(-name\\s+)?ad-domain-services\\s+-includemanagementtools$"]
+  explicacion: "El rol se llama AD-Domain-Services; la promoción viene después, con Install-ADDSForest."
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace -InstallDns en Install-ADDSForest?
+  opciones:
+    - { texto: "Instala el DNS en el mismo servidor y crea la zona del dominio integrada en AD, que se replica sola a los demás DC", correcta: true, explicacion: "Es lo recomendado: el DNS del dominio vive en los DC." }
+    - { texto: "Configura 8.8.8.8 como DNS del servidor", explicacion: "El DC pasa a usarse a sí mismo." }
+    - { texto: "Registra el dominio en internet", explicacion: "No registra nada afuera." }
+    - { texto: "Nada: el DNS se instala aparte siempre", explicacion: "Con -InstallDns se instala en la promoción." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Durante la promoción aparece esta advertencia. ¿Qué hacés?
+  salida: |
+    WARNING: A delegation for this DNS server cannot be created because the authoritative parent
+    zone cannot be found or it does not run Windows DNS server. If you are integrating with an
+    existing DNS infrastructure, you should manually create a delegation to this DNS server in the
+    parent zone to ensure reliable name resolution from outside the domain "empresa.local".
+    Otherwise, no action is required.
+  opciones:
+    - { texto: "Nada: empresa.local no existe en internet, así que no hay una zona padre donde delegar", correcta: true, explicacion: "Es una advertencia normal en un dominio interno." }
+    - { texto: "Cancelar la promoción", explicacion: "No hay ningún problema." }
+    - { texto: "Registrar empresa.local en un proveedor", explicacion: ".local no se puede registrar." }
+    - { texto: "Desinstalar el DNS", explicacion: "El dominio necesita su DNS." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Terminó la promoción y el servidor se reinició. ¿Qué comando hace la revisión general de salud del controlador?
+  opciones:
+    - { texto: "dcdiag", correcta: true, explicacion: "Prueba conectividad, servicios, replicación, DNS y roles." }
+    - { texto: "ipconfig /all", explicacion: "Muestra la red, no la salud de AD." }
+    - { texto: "Get-ADUser", explicacion: "Consulta usuarios." }
+    - { texto: "gpresult", explicacion: "Muestra las directivas aplicadas." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué tiene que tener el servidor antes de promoverlo a controlador? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "IP fija", correcta: true, explicacion: "Los equipos lo buscan por su dirección." }
+    - { texto: "Nombre definitivo", correcta: true, explicacion: "Renombrar un DC es delicado." }
+    - { texto: "DNS apuntando a sí mismo (o a otro DC)", correcta: true, explicacion: "Va a usar la zona del dominio." }
+    - { texto: "Experiencia de escritorio", explicacion: "Un DC funciona perfectamente en Server Core." }
+    - { texto: "Un DNS público como 8.8.8.8", explicacion: "No conocería el dominio." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Los equipos del dominio usan al DC como DNS. ¿Cómo resuelve el DC los nombres de internet, como www.afip.gob.ar?
+  opciones:
+    - { texto: "Con reenviadores configurados en su DNS (el del proveedor o uno público)", correcta: true, explicacion: "Add-DnsServerForwarder; si no hay, usa las sugerencias de raíz." }
+    - { texto: "No puede: hay que poner 8.8.8.8 en cada PC", explicacion: "Las PC perderían el dominio." }
+    - { texto: "Con el archivo hosts", explicacion: "No escala ni se mantiene." }
+    - { texto: "Copiando la zona de internet", explicacion: "No existe tal cosa." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Después de la promoción, ¿con qué cuenta iniciás sesión en el DC?
+  opciones:
+    - { texto: "EMPRESA\\Administrator: el administrador local pasó a ser el administrador del dominio", correcta: true, explicacion: "Con la misma contraseña que tenía." }
+    - { texto: "Con la cuenta DSRM", explicacion: "Esa es solo para el modo de restauración." }
+    - { texto: "Con una cuenta nueva que hay que crear antes", explicacion: "No hace falta." }
+    - { texto: "Con Guest", explicacion: "Está deshabilitada." }

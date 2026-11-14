@@ -1,0 +1,90 @@
+tipo: terminal
+shell: powershell
+titulo: Ordenar un dominio en unidades organizativas
+descripcion: >-
+  El dominio empresa.local se armó hace poco y todo quedó en los contenedores por defecto: los
+  usuarios en Users y las PC en Computers. Vas a crear la estructura de OU que acordó el equipo,
+  mover las cuentas, hacer que los equipos nuevos caigan en su OU y delegar el restablecimiento
+  de contraseñas a la mesa de ayuda. Estás en DC01.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+  ad:
+    usuarios:
+      - { sam: mlopez, nombre: María, apellido: López, departamento: Ventas }
+      - { sam: jperez, nombre: Juan, apellido: Pérez, departamento: Compras }
+    grupos:
+      - { nombre: GG-MesaAyuda }
+    equipos:
+      - { nombre: PC01 }
+pasos:
+  - consigna: >-
+      Creá la OU Empresa en la raíz del dominio y, adentro, las OU Usuarios, Equipos, Servidores
+      y Grupos.
+    verificar:
+      - { ou: Empresa/Usuarios }
+      - { ou: Empresa/Equipos }
+      - { ou: Empresa/Servidores }
+      - { ou: Empresa/Grupos }
+    pistas:
+      - "New-ADOrganizationalUnit -Name Empresa -Path 'DC=empresa,DC=local'"
+      - "Para las de adentro, -Path 'OU=Empresa,DC=empresa,DC=local'. Con un foreach se hacen las cuatro de una vez."
+    solucion:
+      - New-ADOrganizationalUnit -Name Empresa -Path 'DC=empresa,DC=local'
+      - "foreach ($ou in 'Usuarios','Equipos','Servidores','Grupos') { New-ADOrganizationalUnit -Name $ou -Path 'OU=Empresa,DC=empresa,DC=local' }"
+  - consigna: Dentro de Usuarios, creá las OU Ventas y Compras.
+    verificar:
+      - { ou: Empresa/Usuarios/Ventas }
+      - { ou: Empresa/Usuarios/Compras }
+    solucion:
+      - "'Ventas','Compras' | ForEach-Object { New-ADOrganizationalUnit -Name $_ -Path 'OU=Usuarios,OU=Empresa,DC=empresa,DC=local' }"
+  - consigna: >-
+      Mové a mlopez a Ventas y a jperez a Compras, y PC01 a Equipos.
+    verificar:
+      - { usuario_ad: mlopez, ou: Empresa/Usuarios/Ventas }
+      - { usuario_ad: jperez, ou: Empresa/Usuarios/Compras }
+      - { comando_usado: "move-adobject.*pc01|get-adcomputer.*pc01.*move-adobject" }
+    pistas:
+      - "Get-ADUser mlopez | Move-ADObject -TargetPath 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'"
+    solucion:
+      - Get-ADUser mlopez | Move-ADObject -TargetPath 'OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+      - Get-ADUser jperez | Move-ADObject -TargetPath 'OU=Compras,OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+      - Get-ADComputer PC01 | Move-ADObject -TargetPath 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+  - consigna: >-
+      Hacé que los equipos que se unan al dominio de ahora en más queden en la OU Equipos, y no en
+      el contenedor Computers.
+    verificar:
+      - { comando_usado: "redircmp" }
+      - { salida_contiene: "Redirection was successful" }
+    solucion:
+      - redircmp "OU=Equipos,OU=Empresa,DC=empresa,DC=local"
+    explicacion: >-
+      Computers es un contenedor, no una OU: no admite directivas de grupo. Si los equipos nuevos
+      caen ahí, se quedan sin las directivas hasta que alguien se acuerde de moverlos.
+  - consigna: >-
+      Delegá al grupo GG-MesaAyuda el permiso de restablecer contraseñas de los usuarios que
+      estén dentro de la OU Usuarios.
+    verificar:
+      - { comando_usado: "dsacls.*ou=usuarios.*/g.*mesaayuda.*reset password" }
+      - { salida_contiene: "RESET PASSWORD" }
+    pistas:
+      - "dsacls \"OU=Usuarios,OU=Empresa,DC=empresa,DC=local\" /G \"EMPRESA\\GG-MesaAyuda:CA;Reset Password;user\""
+    solucion:
+      - dsacls "OU=Usuarios,OU=Empresa,DC=empresa,DC=local" /G "EMPRESA\GG-MesaAyuda:CA;Reset Password;user"
+    explicacion: >-
+      CA es un "derecho de control de acceso"; Reset Password es cuál, y user, a qué objetos se
+      hereda. Con esto, la mesa de ayuda resuelve los olvidos de contraseña sin ser
+      administradora del dominio. Es lo mismo que hace el asistente de delegación de la consola.
+  - consigna: >-
+      Te equivocaste y creaste una OU de más, Prueba, dentro de Empresa. Creala y después borrala
+      (va a pedir un paso extra).
+    verificar:
+      - { ou: Empresa/Prueba, existe: false }
+      - { comando_usado: "protectedfromaccidentaldeletion\\s+\\$false" }
+    pistas:
+      - "Las OU nuevas vienen protegidas contra el borrado accidental: Set-ADOrganizationalUnit … -ProtectedFromAccidentalDeletion $false"
+    solucion:
+      - New-ADOrganizationalUnit -Name Prueba -Path 'OU=Empresa,DC=empresa,DC=local'
+      - Set-ADOrganizationalUnit 'OU=Prueba,OU=Empresa,DC=empresa,DC=local' -ProtectedFromAccidentalDeletion $false
+      - Remove-ADOrganizationalUnit 'OU=Prueba,OU=Empresa,DC=empresa,DC=local' -Confirm:$false

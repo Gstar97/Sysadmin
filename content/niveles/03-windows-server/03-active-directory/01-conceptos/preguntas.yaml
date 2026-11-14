@@ -1,0 +1,91 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una empresa con 40 PC tiene cada equipo en un grupo de trabajo. ¿Cuál es el problema principal?
+  opciones:
+    - { texto: "Cada equipo tiene sus propias cuentas: altas, cambios de contraseña y bajas hay que hacerlos en cada uno", correcta: true, explicacion: "Un dominio centraliza las identidades." }
+    - { texto: "Que no pueden navegar por internet", explicacion: "Internet no depende del dominio." }
+    - { texto: "Que no pueden compartir impresoras", explicacion: "Se puede, aunque es más incómodo." }
+    - { texto: "Ninguno", explicacion: "Con 40 equipos, administrar cuentas por separado es inmanejable." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PyME de 80 personas con dos sedes en la misma ciudad quiere Active Directory. ¿Qué estructura le recomendás?
+  opciones:
+    - { texto: "Un bosque con un solo dominio, OU por sede y al menos dos controladores", correcta: true, explicacion: "Es lo más simple de mantener y alcanza de sobra." }
+    - { texto: "Un dominio por sede", explicacion: "Suma controladores y administración sin necesidad." }
+    - { texto: "Un bosque por sede", explicacion: "Separaría la seguridad: tendrían que crear confianzas a mano." }
+    - { texto: "Un solo controlador para ahorrar", explicacion: "Si se cae, nadie inicia sesión con datos nuevos." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es el verdadero límite de seguridad en Active Directory?
+  opciones:
+    - { texto: "El bosque", correcta: true, explicacion: "Dentro del bosque, todos los dominios confían entre sí y comparten el esquema." }
+    - { texto: "El dominio", explicacion: "Los dominios de un bosque confían entre sí automáticamente." }
+    - { texto: "La unidad organizativa", explicacion: "Es una carpeta para administrar, no un límite de seguridad." }
+    - { texto: "El controlador de dominio", explicacion: "Es un servidor, no un límite." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde está la cuenta CN=Juan Pérez,OU=Compras,OU=Rosario,DC=empresa,DC=local?
+  opciones:
+    - { texto: "En la OU Compras, que está dentro de la OU Rosario, en el dominio empresa.local", correcta: true, explicacion: "El DN se lee de lo particular a lo general." }
+    - { texto: "En la OU Rosario, dentro de Compras", explicacion: "Es al revés: el que está más a la izquierda es el más interno." }
+    - { texto: "En el dominio rosario.empresa.local", explicacion: "Rosario es una OU, no un dominio (sería DC=rosario)." }
+    - { texto: "En el contenedor Users", explicacion: "Estaría como CN=Users." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC del dominio tiene configurado como DNS el 8.8.8.8. ¿Qué va a pasar?
+  opciones:
+    - { texto: "No va a encontrar los controladores de dominio, porque los registros SRV del dominio solo están en el DNS del dominio", correcta: true, explicacion: "Navegar por internet anda; el dominio no." }
+    - { texto: "Nada: Google resuelve todo", explicacion: "Google no conoce empresa.local." }
+    - { texto: "Va a andar más rápido", explicacion: "Va a fallar todo lo del dominio." }
+    - { texto: "Solo va a fallar internet", explicacion: "Es al revés." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El reloj de una PC está 12 minutos adelantado respecto del controlador de dominio. ¿Qué se rompe?
+  opciones:
+    - { texto: "Kerberos rechaza los tickets (la tolerancia es 5 minutos): fallan los inicios de sesión y el acceso a recursos", correcta: true, explicacion: "Por eso en un dominio todos sincronizan la hora con los DC." }
+    - { texto: "Nada: la hora es solo para mostrar", explicacion: "Los tickets de Kerberos llevan la hora." }
+    - { texto: "Solo los registros quedan con otra hora", explicacion: "Además falla la autenticación." }
+    - { texto: "El DNS deja de responder", explicacion: "El DNS no depende de la hora." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Por qué conviene tener al menos dos controladores de dominio?
+  opciones:
+    - { texto: "Para que, si uno se cae, la gente pueda seguir iniciando sesión y los cambios se repliquen al otro", correcta: true, explicacion: "Todos los DC son iguales y se replican." }
+    - { texto: "Porque uno es de lectura y otro de escritura", explicacion: "En AD se puede escribir en cualquier DC." }
+    - { texto: "Porque lo exige la licencia", explicacion: "No lo exige." }
+    - { texto: "Para tener dos dominios", explicacion: "Son dos DC del mismo dominio." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre Active Directory y Microsoft Entra ID?
+  opciones:
+    - { texto: "AD vive en tus servidores y usa Kerberos, LDAP, OU y directivas de grupo; Entra ID es la identidad en la nube de Microsoft 365 y aplicaciones web", correcta: true, explicacion: "Muchas empresas usan los dos, sincronizados." }
+    - { texto: "Son lo mismo con otro nombre", explicacion: "Funcionan muy distinto." }
+    - { texto: "Entra ID reemplazó a AD y ya no se usa AD", explicacion: "AD sigue siendo la base de la mayoría de las redes Windows." }
+    - { texto: "Entra ID es la versión gratuita de AD", explicacion: "Son productos distintos." }
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son nombres válidos para iniciar sesión con la cuenta mlopez del dominio empresa.local (NetBIOS EMPRESA)? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "EMPRESA\\mlopez", correcta: true, explicacion: "El formato antiguo, con el nombre NetBIOS." }
+    - { texto: "mlopez@empresa.local", correcta: true, explicacion: "El UPN, el formato moderno." }
+    - { texto: "CN=María López,OU=Ventas,DC=empresa,DC=local", explicacion: "Es el nombre distinguido: identifica el objeto, pero no se usa para iniciar sesión." }
+    - { texto: "empresa.local/mlopez", explicacion: "No es un formato de inicio de sesión." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirven las unidades organizativas?
+  opciones:
+    - { texto: "Para ordenar los objetos según cómo se administran, aplicarles directivas de grupo y delegar tareas", correcta: true, explicacion: "Users y Computers no permiten directivas: por eso se usan OU." }
+    - { texto: "Para dar permisos sobre carpetas", explicacion: "Los permisos se dan a grupos, no a OU." }
+    - { texto: "Para separar la seguridad entre áreas", explicacion: "El límite de seguridad es el bosque." }
+    - { texto: "Para que los usuarios inicien sesión", explicacion: "Eso no depende de la OU." }

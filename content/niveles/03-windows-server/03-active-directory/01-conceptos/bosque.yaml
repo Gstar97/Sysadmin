@@ -1,0 +1,43 @@
+tipo: diagrama
+titulo: Un bosque de Active Directory
+puntos:
+  - id: bosque
+    titulo: Bosque
+    area: { x: 1.2, y: 8.5, ancho: 97.7, alto: 7.5 }
+    texto: >-
+      El bosque es el contenedor más grande de Active Directory y el verdadero límite de seguridad: todos sus dominios confían entre sí automáticamente y comparten el mismo esquema y la misma configuración. Se llama como su primer dominio (acá, empresa.local). Si dos empresas no deben confiar una en otra, van en bosques separados.
+  - id: dominio
+    titulo: Dominio
+    area: { x: 2.8, y: 17.5, ancho: 62.8, alto: 7.0 }
+    texto: >-
+      Un dominio es un grupo de usuarios, grupos y equipos que se administran juntos y comparten una base de datos y unas reglas (por ejemplo, la directiva de contraseñas). Tiene un nombre DNS (empresa.local) y otro corto, NetBIOS (EMPRESA). Para una PyME, un dominio en un bosque es todo lo que hace falta.
+  - id: ou
+    titulo: Unidades organizativas (OU)
+    area: { x: 4.7, y: 26.5, ancho: 29.1, alto: 50.0 }
+    texto: >-
+      Las OU son carpetas dentro del dominio para ordenar los objetos (usuarios, grupos, equipos) según cómo se administran: por área, por sede o por tipo. Sirven para dos cosas: aplicarles directivas de grupo (GPO) y delegar tareas. Users y Computers, en cambio, son contenedores: no admiten GPO, por eso conviene mover todo a OU propias.
+  - id: dc
+    titulo: Controladores de dominio
+    area: { x: 35.6, y: 26.5, ancho: 28.4, alto: 32.0 }
+    texto: >-
+      Un controlador de dominio (DC) es un Windows Server que guarda una copia completa de la base de AD y atiende los inicios de sesión. Todos los DC de un dominio son iguales (multimaestro): se puede cambiar algo en cualquiera y se replica a los demás. Siempre conviene tener al menos dos, para que la caída de uno no deje a nadie sin poder entrar.
+  - id: gc
+    titulo: Catálogo global
+    area: { x: 35.6, y: 58.5, ancho: 28.4, alto: 18.0 }
+    texto: >-
+      El catálogo global es un DC que, además de su dominio, guarda una copia parcial de todos los objetos del bosque. Se usa para buscar en todo el bosque y para iniciar sesión con nombres del tipo usuario@empresa.local. En un dominio único, conviene que todos los DC sean catálogo global (es lo que hace la instalación por defecto).
+  - id: hijo
+    titulo: Dominio hijo
+    area: { x: 68.8, y: 17.5, ancho: 28.4, alto: 62.5 }
+    texto: >-
+      Un dominio hijo (cordoba.empresa.local) comparte el nombre y el bosque, pero tiene sus propios usuarios, DC y administradores. Se usaba mucho para separar sedes o filiales; hoy casi siempre alcanza con OU dentro de un solo dominio, que es más simple de mantener.
+  - id: confianza
+    titulo: Confianza
+    area: { x: 65.6, y: 30.0, ancho: 3.5, alto: 10.0 }
+    texto: >-
+      Una confianza (trust) deja que los usuarios de un dominio usen recursos de otro. Dentro de un bosque se crean solas, son de doble sentido y transitivas (si A confía en B y B en C, A confía en C). Con otro bosque se crean a mano; eso es para más adelante.
+  - id: esquema
+    titulo: Esquema y configuración
+    area: { x: 2.8, y: 82.5, ancho: 94.4, alto: 12.5 }
+    texto: >-
+      El esquema define qué tipos de objetos existen y qué atributos tienen (un usuario tiene nombre, apellido, departamento…). La partición de configuración guarda los sitios, la topología de replicación y los servicios del bosque. Las dos son una sola para todo el bosque y se replican a todos los DC.

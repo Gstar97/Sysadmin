@@ -1,0 +1,123 @@
+---
+id: n3-m3-l3
+titulo: Unidades organizativas y delegación
+minutos: 120
+objetivos:
+  - Diseñar una estructura de OU pensada para administrar y aplicar directivas, no para copiar el organigrama.
+  - Crear, mover, proteger y borrar OU con PowerShell, y redirigir los contenedores por defecto.
+  - Delegar una tarea (restablecer contraseñas) sin dar permisos de administrador del dominio.
+glosario: [delegacion-control, proteccion-borrado]
+verificado: 2026-11
+---
+
+import estructura from './estructura-ou.svg?raw'
+import ubicar from './ubicar.yaml'
+import ou from './ej-ou.yaml'
+
+Con el dominio creado, lo primero no es dar de alta usuarios: es decidir **dónde** van a vivir. Las unidades organizativas son las carpetas del dominio, y la forma en que las armes decide qué tan fácil va a ser aplicar directivas, delegar tareas y encontrar cosas dentro de dos años, cuando haya 300 cuentas. Esta lección es corta en comandos y larga en criterio.
+
+<AntesDeEmpezar>
+- Conceptos de Active Directory: dominio, OU y objetos (lección 3.3.1).
+- El principio de mínimo privilegio (lección 0.4.3).
+</AntesDeEmpezar>
+
+## Para qué sirven las OU
+
+Una OU sirve para dos cosas, y ninguna es "reflejar el organigrama":
+
+1. **Aplicar directivas de grupo (GPO).** Una GPO se vincula a una OU y afecta a los usuarios y equipos que están adentro. Si las notebooks necesitan una configuración distinta de las PC de escritorio, conviene que estén en OU distintas.
+2. **Delegar.** Se puede dar permiso sobre una OU (por ejemplo, "restablecer contraseñas de los usuarios de esta OU") sin darlo sobre todo el dominio.
+
+El organigrama cambia todos los años: un área se divide, otra se fusiona, un gerente se va. Si la estructura de OU lo copia, vas a pasar la vida moviendo cosas. La pregunta para cada OU es: **¿la necesito para aplicar algo distinto o para delegar algo distinto?** Si la respuesta es no, probablemente sobra.
+
+Es como las cajas de una mudanza: no las armás por quién te regaló cada cosa, sino por dónde va cada cosa en la casa nueva y quién la va a desembalar. Donde no llega la comparación: en AD, mover algo de caja es instantáneo, pero al moverlo cambian las directivas que le llegan. Moverlo sin pensar tiene consecuencias.
+
+## Un diseño que funciona para una PyME
+
+<Diagrama svg={estructura} alt="Una estructura de OU para una PyME. En la raíz del dominio empresa.local, una OU Empresa con cinco OU adentro: Usuarios (con Ventas, Compras y Administración adentro, para aplicar directivas por área), Equipos (con Escritorio y Notebooks, porque tienen configuraciones distintas), Servidores, Grupos y Cuentas de servicio. Aparte, una OU Admin para las cuentas administrativas, con directivas más estrictas y delegación separada. Al costado, los contenedores por defecto Users y Computers, tachados, con la nota: no admiten GPO; redircmp y redirusr hacen que lo nuevo caiga en una OU. Una nota final: tres o cuatro niveles como máximo." pie="Primero por tipo de objeto (usuarios, equipos, servidores), después por lo que se administra distinto." />
+
+- **Una OU raíz propia** (Empresa) separa lo tuyo de lo que trae el dominio (Domain Controllers, los contenedores) y te deja vincular directivas "a toda la empresa" sin tocar el dominio.
+- **Por tipo de objeto primero**: usuarios, equipos, servidores, grupos. Las directivas de usuario y las de equipo son distintas, y separar los tipos hace todo más simple.
+- **Después, por lo que se administra distinto**: áreas que tienen configuraciones propias, notebooks frente a PC de escritorio, una sede con su propio técnico.
+- **Las cuentas administrativas, aparte** (Admin), para aplicarles directivas más estrictas y que nadie con permisos sobre Usuarios pueda tocarlas.
+- **Tres o cuatro niveles como máximo.** Más profundidad no ordena: confunde, y hace más difícil razonar qué directiva le llega a cada uno.
+
+Y una regla para los contenedores por defecto: **Users** y **Computers** no son OU y **no admiten directivas**. Todo lo que caiga ahí queda sin las GPO de la empresa. Con `redircmp` y `redirusr` se cambia dónde caen los equipos que se unen al dominio y los usuarios que se crean sin indicar una ruta.
+
+<EnSimple>
+Una OU existe si hace falta para aplicar directivas distintas o delegar algo distinto. Primero por tipo (usuarios, equipos, servidores), después por lo que se administra diferente, y no más de tres o cuatro niveles.
+</EnSimple>
+
+<Emparejar ejercicio={ubicar} />
+
+## Crear, mover y borrar OU
+
+```powershell
+New-ADOrganizationalUnit -Name Empresa -Path "DC=empresa,DC=local"
+New-ADOrganizationalUnit -Name Usuarios -Path "OU=Empresa,DC=empresa,DC=local"
+Get-ADOrganizationalUnit -Filter * | Select-Object Name, DistinguishedName
+
+Get-ADUser mlopez | Move-ADObject -TargetPath "OU=Ventas,OU=Usuarios,OU=Empresa,DC=empresa,DC=local"
+redircmp "OU=Equipos,OU=Empresa,DC=empresa,DC=local"     # los equipos nuevos van a Equipos
+```
+
+Las OU que se crean con PowerShell o con la consola vienen **protegidas contra el borrado accidental**: un intento de borrarlas da "Access is denied". Es a propósito: borrar una OU borra todo lo que tiene adentro. Para borrar una a propósito, primero se le saca la protección:
+
+```powershell
+Set-ADOrganizationalUnit "OU=Prueba,OU=Empresa,DC=empresa,DC=local" -ProtectedFromAccidentalDeletion $false
+Remove-ADOrganizationalUnit "OU=Prueba,OU=Empresa,DC=empresa,DC=local"
+```
+
+Y si la OU no está vacía, `Remove-ADOrganizationalUnit` se niega salvo que agregues `-Recursive`. Ese es el momento de frenar y mirar qué hay adentro.
+
+<Pregunta id="p05" />
+
+## Delegar sin dar de más
+
+Lo más común en cualquier empresa: la mesa de ayuda recibe diez pedidos por semana de "me olvidé la contraseña". Si para resolverlos los técnicos tienen que ser **administradores del dominio**, tenés diez personas con la llave de todo. La **delegación** permite darles exactamente lo que necesitan: restablecer contraseñas (y desbloquear cuentas) de los usuarios de la OU Usuarios, y nada más.
+
+Hay dos formas:
+
+- **El Asistente para delegación de control** de la consola Usuarios y equipos de Active Directory: clic derecho en la OU, Delegar control, elegís el grupo y la tarea ("Restablecer contraseñas de usuario y forzar el cambio de contraseña en el siguiente inicio de sesión").
+- **dsacls**, la herramienta de línea de comandos, que hace lo mismo y queda escrita:
+
+```powershell
+dsacls "OU=Usuarios,OU=Empresa,DC=empresa,DC=local" /G "EMPRESA\GG-MesaAyuda:CA;Reset Password;user"
+dsacls "OU=Usuarios,OU=Empresa,DC=empresa,DC=local" /G "EMPRESA\GG-MesaAyuda:RPWP;lockoutTime;user"
+```
+
+La primera línea da el derecho de restablecer la contraseña (CA, *control access*) sobre los objetos usuario; la segunda deja leer y escribir el atributo de bloqueo, para desbloquear cuentas. Tres reglas:
+
+- **Siempre a un grupo**, nunca a una persona. Cuando entra un técnico nuevo, se lo suma al grupo.
+- **Sobre la OU más chica que alcance.** Si la mesa de ayuda solo atiende a la sede Rosario, sobre Usuarios de Rosario.
+- **Nunca sobre la OU de las cuentas administrativas.** Si un técnico puede cambiarle la contraseña a un administrador del dominio, puede convertirse en él.
+
+*Para más adelante*: el modelo de niveles (*tiering*) para separar del todo las cuentas administrativas, y las cuentas de equipo y los grupos protegidos (AdminSDHolder).
+
+<Terminal ejercicio={ou} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Copiar el organigrama en las OU">
+    Cambia todos los años y no dice nada de cómo se administra. Las OU son para directivas y delegación.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar usuarios y equipos en Users y Computers">
+    Son contenedores sin directivas. Movelos a OU y usá redircmp y redirusr para lo nuevo.
+  </ErrorComun>
+  <ErrorComun titulo="Hacer administradores del dominio a los de la mesa de ayuda">
+    Para restablecer contraseñas alcanza con delegar ese permiso sobre la OU de usuarios.
+  </ErrorComun>
+  <ErrorComun titulo="Delegar a personas en lugar de a grupos">
+    Cuando alguien cambia de puesto, el permiso queda olvidado. Siempre a un grupo.
+  </ErrorComun>
+  <ErrorComun titulo="Sacar la protección de borrado “por las dudas”">
+    Está para salvarte de borrar media empresa con un clic. Se saca justo antes de borrar a propósito, nunca en general.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Las OU sirven para aplicar directivas y delegar; no para copiar el organigrama.
+- Una OU raíz propia; adentro, primero por tipo de objeto y después por lo que se administra distinto; tres o cuatro niveles como máximo.
+- Users y Computers no admiten GPO: redircmp y redirusr mandan lo nuevo a OU.
+- Las OU nuevas vienen protegidas contra el borrado: se saca la protección solo para borrar a propósito.
+- La delegación da tareas puntuales (restablecer contraseñas) a un grupo sobre una OU, con el asistente o con dsacls.
+</Resumen>

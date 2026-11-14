@@ -285,7 +285,7 @@ cmdlet('Add-Computer', {
     if (existing) {
       existing.Enabled = true
       if (ou) existing.__parent = ou
-    } else st.computers.push(computerObject(st, name, ou ?? `CN=Computers,${st.domainDn}`, s.state.experiencia === 'core' || /server/i.test(s.state.edicion) ? `Windows Server 2025 ${s.state.edicion}` : 'Windows 11 Pro'))
+    } else st.computers.push(computerObject(st, name, ou ?? st.defaultComputers ?? `CN=Computers,${st.domainDn}`, s.state.experiencia === 'core' || /server/i.test(s.state.edicion) ? `Windows Server 2025 ${s.state.edicion}` : 'Windows 11 Pro'))
     if (str(ctx, 'NewName')) s.pending.name = name
     s.data.pendingDomain = [domain]
     onRestart(s, () => {
@@ -1339,3 +1339,74 @@ cmdlet('klist', {
   },
 })
 
+
+// ---------------------------------------------------------------------------------------
+// redircmp / redirusr y delegación con dsacls
+// ---------------------------------------------------------------------------------------
+
+for (const [tool, key, label] of [['redircmp', 'defaultComputers', 'computers'], ['redirusr', 'defaultUsers', 'users']] as const) {
+  cmdlet(tool, {
+    native: true,
+    synopsis: `${tool}.exe`,
+    run(ctx) {
+      if (!hasAdTools(ctx.s)) throw notRecognized(tool)
+      const st = store(ctx.s)
+      const dn = ctx.positional.map(toText).join(' ').replace(/^"|"$/g, '')
+      if (!dn) return [formatted(`Usage: ${tool} container-dn\n\n[simulador] Ejemplo: ${tool} "OU=Equipos,OU=Empresa,${st.domainDn}"\n`)]
+      if (!containerExists(st, dn) || !/^OU=/i.test(dn)) return [formatted(`Error, unable to modify the wellKnownObjects attribute. Verify that the domain functional level of the domain is at least Windows Server 2003.\n[simulador] Revisá que la OU exista: ${dn}\n`)]
+      st[key] = dn
+      return [formatted(`Redirection was successful.\n[simulador] Los ${label === 'computers' ? 'equipos que se unan' : 'usuarios que se creen sin -Path'} al dominio van a quedar en ${dn}.\n`)]
+    },
+  })
+}
+
+const RIGHTS: Record<string, string> = { 'reset password': 'Reset Password', 'change password': 'Change Password' }
+
+cmdlet('dsacls', {
+  native: true,
+  synopsis: 'dsacls.exe',
+  run(ctx) {
+    if (!hasAdTools(ctx.s)) throw notRecognized('dsacls')
+    const st = store(ctx.s)
+    const args = ctx.positional.map(toText)
+    const dn = (args[0] ?? '').replace(/^"|"$/g, '')
+    if (!dn) return [formatted('Displays or modifies permissions (ACLS) of an Active Directory Domain Services (AD DS) Object\n\nDSACLS object [/I:TSP] [/N] [/P:YN] [/G <group/user>:<perms> [...]] [/R <group/user> [...]]\n')]
+    if (!containerExists(st, dn) && !allObjects(st).some((o) => sameDn(dnOf(o), dn))) return [formatted(`The specified directory service attribute or value does not exist.\nThe command failed to complete successfully.\n`)]
+    const g = args.findIndex((a) => /^\/G$/i.test(a))
+    const r = args.findIndex((a) => /^\/R$/i.test(a))
+    if (g >= 0) {
+      // /G "EMPRESA\Mesa-Ayuda:CA;Reset Password;user"
+      const spec = args.slice(g + 1).join(' ').replace(/^"|"$/g, '')
+      const m = /^([^:]+):([A-Z]+)(?:;([^;]+))?(?:;([^;]+))?$/i.exec(spec)
+      if (!m) return [formatted('The parameter is incorrect.\nThe command failed to complete successfully.\n')]
+      const trustee = m[1].replace(/^[^\\]+\\/, '')
+      if (!st.groups.some((x) => psEquals(x.Name, trustee)) && !st.users.some((x) => psEquals(x.SamAccountName, trustee))) return [formatted(`No mapping between account names and security IDs was done.\nThe command failed to complete successfully.\n`)]
+      const right = m[2].toUpperCase() === 'CA' ? (RIGHTS[(m[3] ?? '').toLowerCase()] ?? m[3] ?? 'Control Access') : m[2].toUpperCase() === 'GA' ? 'Full Control' : m[2].toUpperCase() === 'RP' ? 'Read Property' + (m[3] ? ` ${m[3]}` : '') : m[2].toUpperCase() === 'WP' ? 'Write Property' + (m[3] ? ` ${m[3]}` : '') : m[2]
+      ;(st.delegations ??= []).push({ dn, trustee, right, objectType: m[4] ?? m[3] ?? '' })
+    }
+    if (r >= 0) {
+      const who = (args[r + 1] ?? '').replace(/^"|"$/g, '').replace(/^[^\\]+\\/, '')
+      st.delegations = (st.delegations ?? []).filter((d) => !(sameDn(d.dn, dn) && psEquals(d.trustee, who)))
+    }
+    const mine = (st.delegations ?? []).filter((d) => sameDn(d.dn, dn) || dn.toLowerCase().endsWith(`,${d.dn.toLowerCase()}`))
+    const lines = [
+      'Owner: EMPRESA\\Domain Admins',
+      'Group: EMPRESA\\Domain Admins',
+      '',
+      'Access list:',
+      'Allow EMPRESA\\Domain Admins          FULL CONTROL',
+      'Allow NT AUTHORITY\\SYSTEM             FULL CONTROL',
+      'Allow NT AUTHORITY\\Authenticated Users  SPECIAL ACCESS',
+      '                                       READ PERMISSONS',
+      '                                       LIST CONTENTS',
+      '                                       READ PROPERTY',
+      ...mine.map((d) => `Allow ${st.netbios}\\${d.trustee.padEnd(25)} ${d.right.toUpperCase()}${d.objectType ? `  <Inherited to ${d.objectType}>` : ''}`),
+      'Deny  Everyone                        SPECIAL ACCESS',
+      '                                       DELETE',
+      '                                       DELETE TREE',
+      '',
+      'The command completed successfully',
+    ]
+    return [formatted(lines.join('\n') + '\n')]
+  },
+})

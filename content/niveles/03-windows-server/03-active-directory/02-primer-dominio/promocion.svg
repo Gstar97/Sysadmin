@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 330" font-family="system-ui, sans-serif" font-size="12.5">
+  <defs>
+    <marker id="pr-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+  </defs>
+  <text x="430" y="22" text-anchor="middle" font-weight="700" fill="currentColor">Del servidor vacío al primer controlador de dominio</text>
+  <g stroke="currentColor" stroke-width="1.5">
+    <rect x="10" y="40" width="150" height="150" rx="10" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="186" y="40" width="190" height="150" rx="10" fill="var(--surface, #fff)"/>
+    <rect x="402" y="40" width="250" height="150" rx="10" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="678" y="40" width="170" height="150" rx="10" fill="var(--surface, #fff)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.8" marker-end="url(#pr-a)"><line x1="160" y1="115" x2="184" y2="115"/><line x1="376" y1="115" x2="400" y2="115"/><line x1="652" y1="115" x2="676" y2="115"/></g>
+  <g fill="currentColor">
+    <text x="22" y="62" font-weight="700">Antes</text>
+    <text x="22" y="86" font-size="12">• IP fija</text><text x="22" y="106" font-size="12">• nombre definitivo</text>
+    <text x="22" y="126" font-size="12">• DNS hacia sí mismo</text><text x="22" y="146" font-size="12">• hora y parches</text>
+    <text x="22" y="166" font-size="12">• Server Core</text>
+    <text x="198" y="62" font-weight="700">1. El rol</text>
+    <text x="198" y="86" font-family="ui-monospace, monospace" font-size="10.5">Install-WindowsFeature</text>
+    <text x="198" y="102" font-family="ui-monospace, monospace" font-size="10.5">  AD-Domain-Services</text>
+    <text x="198" y="118" font-family="ui-monospace, monospace" font-size="10.5">  -IncludeManagementTools</text>
+    <text x="198" y="150" font-size="11.5" fill="var(--muted, #5b6675)">instalado, pero todavía</text>
+    <text x="198" y="166" font-size="11.5" fill="var(--muted, #5b6675)">no es controlador</text>
+    <text x="414" y="62" font-weight="700">2. La promoción</text>
+    <text x="414" y="86" font-family="ui-monospace, monospace" font-size="10.5">Install-ADDSForest</text>
+    <text x="414" y="100" font-family="ui-monospace, monospace" font-size="10.5">  -DomainName empresa.local</text>
+    <text x="414" y="114" font-family="ui-monospace, monospace" font-size="10.5">  -DomainNetbiosName EMPRESA</text>
+    <text x="414" y="128" font-family="ui-monospace, monospace" font-size="10.5">  -ForestMode Win2025</text><text x="414" y="142" font-family="ui-monospace, monospace" font-size="10.5">  -DomainMode Win2025 -InstallDns</text>
+    
+    <text x="414" y="156" font-family="ui-monospace, monospace" font-size="10.5">  -SafeModeAdministratorPassword</text><text x="414" y="170" font-family="ui-monospace, monospace" font-size="10.5">    $dsrm</text>
+    <text x="690" y="62" font-weight="700">3. Reinicio</text>
+    <text x="690" y="86" font-size="12">automático; al volver,</text>
+    <text x="690" y="104" font-size="12">EMPRESA\Administrator</text>
+    <text x="690" y="122" font-size="12">es el administrador</text>
+    <text x="690" y="140" font-size="12">del dominio</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1.5">
+    <rect x="10" y="210" width="530" height="110" rx="10" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="560" y="210" width="288" height="110" rx="10" fill="var(--warn-soft, #fbf0d0)"/>
+  </g>
+  <g fill="currentColor">
+    <text x="22" y="232" font-weight="700">Lo que queda armado</text>
+    <text x="22" y="256" font-size="12">• La base de AD (servicio NTDS) y la carpeta compartida SYSVOL</text>
+    <text x="22" y="276" font-size="12">• La zona DNS empresa.local, integrada en AD, con los registros SRV</text>
+    <text x="22" y="296" font-size="12">• Servicios NTDS, DNS, Kdc, Netlogon y ADWS corriendo</text>
+    <text x="22" y="314" font-size="12">• El DNS del propio servidor apuntando a 127.0.0.1</text>
+    <text x="572" y="232" font-weight="700">Comprobar antes de seguir</text>
+    <text x="572" y="256" font-family="ui-monospace, monospace" font-size="11">Get-ADDomain</text>
+    <text x="572" y="276" font-family="ui-monospace, monospace" font-size="11">Resolve-DnsName -Type SRV …</text>
+    <text x="572" y="296" font-family="ui-monospace, monospace" font-size="11">dcdiag</text>
+    <text x="572" y="314" font-size="11.5">y después: reenviadores DNS</text>
+  </g>
+</svg>

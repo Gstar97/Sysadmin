@@ -1,0 +1,87 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál es la mejor razón para crear una OU nueva?
+  opciones:
+    - { texto: "Que los objetos de adentro necesitan directivas distintas o una delegación distinta", correcta: true, explicacion: "Las OU sirven para eso." }
+    - { texto: "Que se creó un área nueva en el organigrama", explicacion: "Solo si esa área se administra distinto." }
+    - { texto: "Que hay más de diez usuarios", explicacion: "La cantidad no es un motivo." }
+    - { texto: "Dar permisos sobre carpetas", explicacion: "Los permisos se dan a grupos." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Las PC nuevas que se unen al dominio no reciben ninguna de las directivas de la empresa. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "Caen en el contenedor Computers, que no admite GPO; hay que moverlas y usar redircmp para las próximas", correcta: true, explicacion: "Computers es un contenedor, no una OU." }
+    - { texto: "Las directivas tardan una semana en aplicarse", explicacion: "Se aplican en minutos o al reiniciar." }
+    - { texto: "Las PC no tienen Windows Pro", explicacion: "Podría ser, pero lo típico es el contenedor." }
+    - { texto: "El DNS está mal", explicacion: "Si estuviera mal, no se habrían podido unir." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La mesa de ayuda necesita restablecer contraseñas de los usuarios. ¿Qué hacés?
+  opciones:
+    - { texto: "Delegarle a su grupo el permiso de restablecer contraseñas sobre la OU Usuarios", correcta: true, explicacion: "Mínimo privilegio: solo lo que necesitan, y donde lo necesitan." }
+    - { texto: "Sumar a los técnicos a Domain Admins", explicacion: "Les das la llave de todo el dominio." }
+    - { texto: "Darles la contraseña del Administrador", explicacion: "Una cuenta compartida no deja rastro de quién hizo qué." }
+    - { texto: "Hacerlo vos siempre", explicacion: "No escala y no hace falta." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Querés borrar una OU vacía y aparece esto. ¿Qué pasa?
+  salida: |
+    Remove-ADOrganizationalUnit : Access is denied
+        + CategoryInfo          : PermissionDenied: (OU=Prueba,OU=Empresa,DC=empresa,DC=local:String)
+        + FullyQualifiedErrorId : ActiveDirectoryCmdlet:System.UnauthorizedAccessException
+  opciones:
+    - { texto: "La OU está protegida contra el borrado accidental; hay que sacarle la protección con Set-ADOrganizationalUnit antes de borrarla", correcta: true, explicacion: "Las OU nuevas vienen protegidas a propósito." }
+    - { texto: "No sos administrador del dominio", explicacion: "Con la protección, ni el administrador puede borrarla sin sacarla antes." }
+    - { texto: "La OU tiene objetos adentro", explicacion: "Ese sería otro error (leaf object)." }
+    - { texto: "El DC está caído", explicacion: "No daría Access is denied." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene una OU raíz propia (Empresa) en lugar de crear todo directamente en el dominio?
+  opciones:
+    - { texto: "Separa lo tuyo de lo que trae el dominio y permite vincular directivas a toda la empresa sin tocar el dominio", correcta: true, explicacion: "Las directivas del dominio afectan también a los DC y a otros objetos." }
+    - { texto: "Es obligatorio", explicacion: "No lo es; es una buena práctica." }
+    - { texto: "Hace que AD ande más rápido", explicacion: "No cambia el rendimiento." }
+    - { texto: "Para que los usuarios no vean otras OU", explicacion: "No oculta nada." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que crea la OU Ventas dentro de OU=Usuarios,OU=Empresa,DC=empresa,DC=local.
+  aceptadas:
+    - New-ADOrganizationalUnit -Name Ventas -Path "OU=Usuarios,OU=Empresa,DC=empresa,DC=local"
+    - New-ADOrganizationalUnit -Name Ventas -Path 'OU=Usuarios,OU=Empresa,DC=empresa,DC=local'
+    - New-ADOrganizationalUnit Ventas -Path "OU=Usuarios,OU=Empresa,DC=empresa,DC=local"
+  patrones: ["^new-adorganizationalunit\\s+(-name\\s+)?ventas\\s+-path\\s+['\"]ou=usuarios,ou=empresa,dc=empresa,dc=local['\"]$"]
+  explicacion: "-Path es el DN de la OU donde se crea la nueva."
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son buenas prácticas de delegación? (Marcá todas las correctas.)
+  opciones:
+    - { texto: "Delegar siempre a un grupo, nunca a una persona", correcta: true, explicacion: "Cuando alguien cambia de puesto, se lo saca del grupo." }
+    - { texto: "Delegar sobre la OU más chica que alcance", correcta: true, explicacion: "Mínimo privilegio." }
+    - { texto: "No delegar nunca sobre la OU de las cuentas administrativas", correcta: true, explicacion: "Quien cambia la contraseña de un administrador puede ser ese administrador." }
+    - { texto: "Delegar control total para no tener que volver a hacerlo", explicacion: "Es dar de más." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El año que viene, Ventas y Marketing se van a fusionar en un área Comercial. Si las OU copiaban el organigrama, ¿qué pasa?
+  opciones:
+    - { texto: "Hay que mover cuentas y revisar qué directivas les llegan, porque al cambiar de OU cambian las GPO", correcta: true, explicacion: "Por eso las OU se arman según cómo se administra, no según el organigrama." }
+    - { texto: "Nada: las OU se actualizan solas", explicacion: "No hay nada automático." }
+    - { texto: "Hay que crear un dominio nuevo", explicacion: "Para nada." }
+    - { texto: "Se pierden las contraseñas", explicacion: "Mover un usuario no cambia su contraseña." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Dónde conviene poner las cuentas administrativas (como admin.it)?
+  opciones:
+    - { texto: "En una OU aparte (Admin), con directivas más estrictas y sin delegaciones de la mesa de ayuda", correcta: true, explicacion: "Así nadie con permisos sobre Usuarios puede tocarlas." }
+    - { texto: "Junto con los usuarios de IT", explicacion: "Quedarían alcanzadas por las delegaciones sobre Usuarios." }
+    - { texto: "En Users, que es el contenedor por defecto", explicacion: "No admite directivas." }
+    - { texto: "En Domain Controllers", explicacion: "Esa OU es para los DC." }
