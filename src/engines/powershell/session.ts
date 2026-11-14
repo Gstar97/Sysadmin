@@ -865,7 +865,13 @@ export class PsSession {
     const canonical = canonicalName(name)
     const found = canonical ? CMDLETS.get(canonical.toLowerCase()) : undefined
     // Un cmdlet de un módulo que no está instalado no existe para este equipo.
-    const def = found && moduleAvailable(this, found.module) ? found : undefined
+    let def = found && moduleAvailable(this, found.module) ? found : undefined
+    // Un programa llamado con su ruta o con .exe (C:\Windows\System32\ipconfig.exe, wsusutil.exe).
+    if (!def && (/[\\/]/.test(name) || /\.exe$/i.test(name))) {
+      const base = /([\w.-]+?)(?:\.exe)?$/i.exec(name)?.[1].toLowerCase()
+      const exe = base ? CMDLETS.get(base) : undefined
+      if (exe?.native) def = exe
+    }
     if (!def) {
       if (/\.ps1$/i.test(name)) return this.runScript(name, err, host, args, input, hasInput)
       throw new PsError(

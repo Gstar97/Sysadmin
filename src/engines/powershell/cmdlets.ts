@@ -1655,13 +1655,19 @@ cmdlet('whoami', {
 // ---------------------------------------------------------------------------------------
 
 cmdlet('Get-WinEvent', {
-  params: ['LogName', 'MaxEvents', 'FilterHashtable', 'ProviderName'],
+  params: ['LogName', 'MaxEvents', 'FilterHashtable', 'ProviderName', 'ComputerName'],
   switches: ['Oldest', 'ListLog'],
   positional: ['LogName'],
   synopsis: 'Gets events from event logs and event tracing log files on local and remote computers.',
   module: 'Microsoft.PowerShell.Diagnostics',
   run(ctx) {
-    let events = [...data(ctx.s, 'events')].sort((a, b) => (b.TimeCreated as Date).getTime() - (a.TimeCreated as Date).getTime())
+    let src = ctx.s
+    if (has(ctx, 'ComputerName')) {
+      const t = connect(ctx.s, str(ctx, 'ComputerName')!)
+      if (t instanceof PsError) throw new PsError('The RPC server is unavailable', 'NotSpecified', 'System.Diagnostics.Eventing.Reader.EventLogException,Microsoft.PowerShell.Commands.GetWinEventCommand', str(ctx, 'ComputerName'))
+      src = t
+    }
+    let events = [...data(src, 'events')].sort((a, b) => (b.TimeCreated as Date).getTime() - (a.TimeCreated as Date).getTime())
     const fh = param(ctx, 'FilterHashtable')
     const logName = fh instanceof Map ? getProp(fh, 'LogName') : param(ctx, 'LogName')
     if (logName !== null && logName !== undefined) events = events.filter((e) => asArray(logName).some((l) => psEquals(e.LogName, l)))
@@ -1672,6 +1678,10 @@ cmdlet('Get-WinEvent', {
       if (id !== null) events = events.filter((e) => asArray(id).some((x) => Number(x) === e.Id))
       if (level !== null) events = events.filter((e) => asArray(level).some((l) => ({ 1: 'Critical', 2: 'Error', 3: 'Warning', 4: 'Information' })[Number(l) as 1] === e.LevelDisplayName))
       if (start instanceof Date) events = events.filter((e) => (e.TimeCreated as Date) >= start)
+      const end = getProp(fh, 'EndTime')
+      if (end instanceof Date) events = events.filter((e) => (e.TimeCreated as Date) <= end)
+      const prov = getProp(fh, 'ProviderName')
+      if (prov !== null && prov !== undefined) events = events.filter((e) => asArray(prov).some((p) => psEquals(e.ProviderName, p)))
     }
     if (has(ctx, 'ProviderName')) events = events.filter((e) => matchesAny(toText(e.ProviderName), list(ctx, 'ProviderName')))
     if (has(ctx, 'Oldest')) events.reverse()

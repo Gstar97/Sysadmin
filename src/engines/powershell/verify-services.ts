@@ -163,6 +163,17 @@ export function verifyServices(s: PsSession, check: PsCheck): Result | undefined
     const ok = !!folder && (!check.destino || folder.targets.some((t) => t.toLowerCase() === check.destino!.toLowerCase()))
     return { ok, label: `existe la carpeta DFS ${check.carpeta_dfs}${check.destino ? ` → ${check.destino}` : ''}` }
   }
+  if ('respaldo_en' in check) {
+    const vs = (s.data.wbVersions ?? []) as { target: string; kind: string; includes?: string[] }[]
+    const vol = check.respaldo_en.replace(/[:\\]+$/, '').toUpperCase()
+    const ok = vs.some((v) => v.target === vol && (!check.incluye || (v.includes ?? []).some((i) => i.toLowerCase() === s.resolvePath(check.incluye!).toLowerCase())) && (check.estado_sistema === undefined || (v.kind === 'systemstate') === check.estado_sistema))
+    return { ok, label: `hay un respaldo en ${vol}:${check.incluye ? ` que incluye ${check.incluye}` : ''}${check.estado_sistema ? ' con el estado del sistema' : ''}` }
+  }
+  if ('respaldo_programado' in check) {
+    const sch = s.data.wbSchedule?.[0] as { schedule: string } | undefined
+    const ok = !!sch === check.respaldo_programado && (!check.hora || sch?.schedule === check.hora)
+    return { ok, label: `el respaldo ${check.respaldo_programado ? `está programado${check.hora ? ` a las ${check.hora}` : ''}` : 'no está programado'}` }
+  }
   if ('nla' in check) return { ok: nlaEnabled(s) === check.nla, label: `la autenticación a nivel de red (NLA) está ${check.nla ? 'activada' : 'desactivada'} en ${s.state.equipo}` }
   if ('grupo_local' in check) {
     const g = ((s.data.localGroups ?? []) as { Name: unknown; __members?: unknown }[]).find((x) => toText(x.Name).toLowerCase() === check.grupo_local.toLowerCase())

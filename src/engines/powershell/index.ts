@@ -5,6 +5,8 @@ import './dns'
 import { initialDnsServer } from './dnsserver'
 import { verifyServices } from './verify-services'
 import { initialFiles, installFiles } from './files'
+import { initialWsus, verifyWsus } from './wsus'
+import './monitor'
 import { dhcpAcquire, initialDhcp } from './dhcp'
 import './ad-ops'
 import { initialGroupPolicy } from './gpo'
@@ -299,6 +301,7 @@ function buildComputer(state: PsServerState, lab: Lab): PsSession {
   initialDhcp(s)
   installFiles(s)
   initialFiles(s)
+  initialWsus(s)
   initialGroupPolicy(s)
   return s
 }
@@ -401,7 +404,7 @@ export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
     const re = safeRegex(check.comando_usado, 'i')
     return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
   }
-  return verifyAd(s, check) ?? verifyServices(s, check) ?? verifySystem(s, check)
+  return verifyAd(s, check) ?? verifyServices(s, check) ?? verifyWsus(s, check as Record<string, unknown>) ?? verifySystem(s, check)
 }
 
 function safeRegex(pattern: string, flags: string): RegExp | undefined {

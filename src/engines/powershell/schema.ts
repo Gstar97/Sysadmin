@@ -194,6 +194,33 @@ const stateShape = {
   unidades_red: z.record(z.string(), z.string()).default({}),
   /** Espacio de nombres DFS de dominio (se guarda en AD). */
   dfs: z.strictObject({ espacio: z.string(), destinos: z.array(z.string()), carpetas: z.array(z.strictObject({ nombre: z.string(), destinos: z.array(z.string()) })).default([]) }).optional(),
+  /** Valores de los contadores de rendimiento (Get-Counter). */
+  rendimiento: z
+    .strictObject({
+      cpu: z.number().optional(),
+      memoria_disponible_mb: z.number().optional(),
+      memoria_total_mb: z.number().optional(),
+      cola_disco: z.number().optional(),
+      red_bytes_seg: z.number().optional(),
+      cola_procesador: z.number().optional(),
+    })
+    .optional(),
+  /** Servidor WSUS ya instalado (para casos que empiezan con WSUS funcionando). */
+  wsus: z
+    .strictObject({
+      configurado: z.boolean().default(true),
+      sincronizado: z.boolean().default(true),
+      productos: z.array(z.string()).default(['Windows Server 2025', 'Windows 11', 'Microsoft Defender Antivirus']),
+      clasificaciones: z.array(z.string()).default(['Critical Updates', 'Security Updates', 'Definition Updates', 'Update Rollups']),
+      grupos: z.array(z.string()).default([]),
+      segmentacion_cliente: z.boolean().default(true),
+      aprobaciones: z.array(z.strictObject({ kb: z.string(), grupo: z.string(), accion: z.enum(['instalar', 'no_aprobada']).default('instalar') })).default([]),
+      rechazadas: z.array(z.string()).default([]),
+      equipos: z.array(z.strictObject({ nombre: z.string(), grupo: z.string(), ip: z.string().optional(), hace_dias: z.number().optional() })).default([]),
+    })
+    .optional(),
+  /** Cliente de Windows Update apuntando a un WSUS sin GPO (lo normal es la GPO). */
+  wsus_cliente: z.strictObject({ servidor: z.string(), grupo: z.string().optional() }).optional(),
   /** Rol de servidor DHCP con sus ámbitos (autorizado en AD si el equipo es de un dominio). */
   dhcp_servidor: z
     .strictObject({
@@ -245,7 +272,7 @@ const stateShape = {
       z.strictObject({
         log: z.enum(['System', 'Application', 'Security']),
         id: z.number().int(),
-        nivel: z.enum(['Information', 'Warning', 'Error']).default('Information'),
+        nivel: z.enum(['Information', 'Warning', 'Error', 'Critical']).default('Information'),
         origen: z.string(),
         mensaje: z.string(),
         hace_minutos: z.number().default(30),
@@ -360,6 +387,16 @@ const psSingleCheckSchema = z.union([
   z.strictObject({ unidad_red: z.string(), ruta: z.string().optional() }),
   z.strictObject({ nla: z.boolean() }),
   z.strictObject({ grupo_local: z.string(), miembro: z.string(), es_miembro: z.boolean().default(true) }),
+  z.strictObject({ respaldo_en: z.string(), incluye: z.string().optional(), estado_sistema: z.boolean().optional() }),
+  z.strictObject({ respaldo_programado: z.boolean(), hora: z.string().optional() }),
+  z.strictObject({ wsus_listo: z.boolean() }),
+  z.strictObject({ wsus_grupo: z.string() }),
+  z.strictObject({ wsus_clasificacion: z.string(), habilitada: z.boolean().optional() }),
+  z.strictObject({ wsus_producto: z.string(), habilitado: z.boolean().optional() }),
+  z.strictObject({ wsus_aprobacion: z.string(), grupo: z.string(), accion: z.enum(['Install', 'NotApproved']).optional(), aprobada: z.boolean().optional() }),
+  z.strictObject({ wsus_rechazada: z.string(), rechazada: z.boolean().optional() }),
+  z.strictObject({ wsus_equipo: z.string(), grupo: z.string().optional() }),
+  z.strictObject({ actualizacion: z.string(), instalada: z.boolean().optional() }),
   /** Cliente: tiene una concesión de DHCP (no una dirección APIPA). */
   z.strictObject({ concesion_dhcp: z.boolean(), direccion: z.string().optional(), de: z.string().optional() }),
 ])

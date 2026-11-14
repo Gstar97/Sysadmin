@@ -1421,7 +1421,15 @@ interface WbVersion {
   when: Date
   target: string
   label: string
-  kind: 'systemstate'
+  kind: 'systemstate' | 'files'
+  /** Copia de los archivos respaldados (ruta → contenido), para recuperar. */
+  files?: { path: string; type: 'file' | 'dir'; content: string }[]
+  includes?: string[]
+}
+
+function versionId(v: WbVersion): string {
+  const utc = v.when.toISOString()
+  return `${utc.slice(5, 7)}/${utc.slice(8, 10)}/${utc.slice(0, 4)}-${utc.slice(11, 16)}`
 }
 
 const WB_HEAD = 'wbadmin 1.0 - Backup command-line tool\n(C) Copyright Microsoft Corporation. All rights reserved.\n\n'
@@ -1467,12 +1475,83 @@ cmdlet('wbadmin', {
             versions
               .map((v) => {
                 const utc = v.when.toISOString()
-                const id = `${utc.slice(5, 7)}/${utc.slice(8, 10)}/${utc.slice(0, 4)}-${utc.slice(11, 16)}`
-                return `Backup time: ${wbDate(v.when)}\nBackup location: Fixed Disk labeled ${v.label || 'Local Disk'}(${v.target}:)\nVersion identifier: ${id}\nCan recover: System State\nSnapshot ID: {${stableGuid(`wb-${utc}`)}}\n`
+                return `Backup time: ${wbDate(v.when)}\nBackup location: Fixed Disk labeled ${v.label || 'Local Disk'}(${v.target}:)\nVersion identifier: ${versionId(v)}\nCan recover: ${v.kind === 'systemstate' ? (v.includes?.length ? 'Volume(s), File(s), Application(s), Bare Metal Recovery, System State' : 'System State') : 'Volume(s), File(s)'}\nSnapshot ID: {${stableGuid(`wb-${utc}`)}}\n`
               })
               .join('\n'),
         ),
       ]
+    }
+    const opt = (n: string) => args.find((a) => new RegExp(`^-${n}:`, 'i').test(a))?.replace(new RegExp(`^-${n}:`, 'i'), '')
+    const targetVolume = (raw: string | undefined) => {
+      if (!raw) return undefined
+      const letter = raw.replace(/[:\\]+$/, '').toUpperCase()
+      return { letter, part: disks(s).flatMap((d) => (d.offline ? [] : d.particiones)).find((p) => p.letra?.toUpperCase() === letter && p.sistema) }
+    }
+    if (lower[0] === 'start' && lower[1] === 'backup') {
+      const tv = targetVolume(opt('backupTarget'))
+      if (!tv) return [formatted(`${WB_HEAD}ERROR - The parameter backupTarget is missing.\n[simulador] Ejemplo: wbadmin start backup -backupTarget:E: -include:D:\\Datos -allCritical -quiet\n`)]
+      if (!tv.part) return [formatted(`${WB_HEAD}ERROR - The specified backup storage location could not be found or is not a supported backup storage location.\n`)]
+      const includes = (opt('include') ?? '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => s.resolvePath(x))
+      if (includes.some((i) => i.toUpperCase().startsWith(`${tv.letter}:`))) return [formatted(`${WB_HEAD}ERROR - The backup storage location is invalid. You cannot use a volume that is included in the backup as a storage location.\n`)]
+      const all = lower.includes('-allcritical')
+      if (!includes.length && !all) return [formatted(`${WB_HEAD}ERROR - Specify what to back up with -include or -allCritical.\n`)]
+      const files: WbVersion['files'] = []
+      for (const inc of includes) {
+        const walk = (p: string) => {
+          const node = s.fs.get(p)
+          if (!node) return
+          files.push({ path: p, type: node.type, content: node.content })
+          if (node.type === 'dir') for (const c of s.fs.children(p)) walk(c.path)
+        }
+        walk(inc)
+      }
+      const when = new Date(Date.now() + s.state.desfase_reloj_min * 60_000)
+      versions.push({ when, target: tv.letter, label: tv.part.etiqueta, kind: all ? 'systemstate' : 'files', files, includes })
+      s.fs.mkdirp(`${tv.letter}:\\WindowsImageBackup\\${s.state.equipo}`)
+      const vols = [...new Set([...(all ? ['C:'] : []), ...includes.map((i) => i.slice(0, 2).toUpperCase())])]
+      return [formatted(`${WB_HEAD}${lower.includes('-quiet') ? '' : 'Do you want to start the backup operation?\n[Y] Yes [N] No y\n\n'}Retrieving volume information...\nThis will back up ${vols.map((v) => `(${v})`).join(',')}${all ? ' (Selected Files),EFI System Partition' : ''} to ${tv.letter}:.\nThe backup operation to ${tv.letter}: is starting.\nCreating a shadow copy of the volumes specified for backup...\n${vols.map((v) => `Creating a backup of volume (${v}), copied (100%).`).join('\n')}\nThe backup operation successfully completed.\nSummary of the backup operation:\n------------------\n\nThe backup operation successfully completed.\n`)]
+    }
+    if (lower[0] === 'enable' && lower[1] === 'backup') {
+      const tv = targetVolume(opt('addtarget'))
+      const sched = opt('schedule')
+      if (!tv?.part || !sched) return [formatted(`${WB_HEAD}ERROR - Specify -addtarget:<volumen> and -schedule:HH:MM.\n[simulador] Ejemplo: wbadmin enable backup -addtarget:E: -schedule:21:00 -include:D:\\Datos -allCritical -quiet\n`)]
+      s.data.wbSchedule = [{ target: tv.letter, schedule: sched, includes: opt('include') ?? '', allCritical: lower.includes('-allcritical') }]
+      return [formatted(`${WB_HEAD}Retrieving volume information...\nThe scheduled backup is enabled.\n[simulador] Programado todos los días a las ${sched}, en ${tv.letter}:.\n`)]
+    }
+    if (lower[0] === 'get' && lower[1] === 'items') {
+      const id = opt('version')
+      const v = versions.find((x) => versionId(x) === id)
+      if (!v) return [formatted(`${WB_HEAD}ERROR - The version identifier is not valid. Use wbadmin get versions.\n`)]
+      const vols = [...new Set((v.includes ?? []).map((i) => i.slice(0, 2).toUpperCase()))]
+      return [formatted(WB_HEAD + vols.map((vol) => `Volume ID = {${stableGuid(`vol-${vol}`)}}\nVolume '${vol}', mounted at ${vol}\\\nVolume size = 199.00 GB\nCan recover = Selected files\n`).join('\n') + (v.kind === 'systemstate' ? '\nApplication = Registry\nComponent = Registry (\\Registry)\n' : ''))]
+    }
+    if (lower[0] === 'start' && lower[1] === 'recovery') {
+      const id = opt('version')
+      const v = versions.find((x) => versionId(x) === id)
+      if (!v) return [formatted(`${WB_HEAD}ERROR - The version identifier is not valid. Use wbadmin get versions.\n`)]
+      const items = (opt('items') ?? '').split(',').map((x) => s.resolvePath(x.trim())).filter(Boolean)
+      const target = opt('recoveryTarget') ? s.resolvePath(opt('recoveryTarget')!) : undefined
+      const overwrite = (opt('overwrite') ?? 'CreateCopy').toLowerCase()
+      const recursive = lower.includes('-recursive')
+      let count = 0
+      for (const item of items) {
+        const base = item.toLowerCase()
+        const matches = (v.files ?? []).filter((f) => f.path.toLowerCase() === base || (recursive && f.path.toLowerCase().startsWith(base + '\\')))
+        if (!matches.length) return [formatted(`${WB_HEAD}ERROR - The item ${item} was not found in the backup.\n`)]
+        for (const f of matches) {
+          const parent = item.slice(0, item.lastIndexOf('\\'))
+          const dest = target ? `${target}\\${f.path.slice(parent.length + 1)}` : f.path
+          if (f.type === 'dir') s.fs.mkdirp(dest)
+          else {
+            let final = dest
+            if (s.fs.get(dest) && overwrite === 'skip') continue
+            if (s.fs.get(dest) && overwrite === 'createcopy') final = dest.replace(/(\.[^.\\]+)?$/, ' - Copy$1')
+            s.fs.write(final, f.content)
+            count++
+          }
+        }
+      }
+      return [formatted(`${WB_HEAD}Retrieving volume information...\nYou have chosen to recover the file(s) ${items.join(', ')} from the backup created on ${wbDate(v.when)} to ${target ?? 'the original location'}.\nPreparing to recover files...\nSuccessfully recovered ${count} file(s).\nThe recovery operation completed.\n`)]
     }
     if (lower[0] === 'start' && lower[1] === 'systemstaterecovery') {
       return [formatted(`${WB_HEAD}[simulador] Restaurar el estado del sistema de un DC se hace arrancando en el modo de restauración de servicios de directorio (DSRM), con la contraseña que definiste al promoverlo. Ese procedimiento no se simula aquí.\n`)]
