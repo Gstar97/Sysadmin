@@ -1,0 +1,114 @@
+---
+id: n3-m4-l2
+titulo: DHCP en Windows Server
+minutos: 120
+objetivos:
+  - Autorizar un servidor DHCP en AD y crear ámbitos con exclusiones, reservas y opciones.
+  - Configurar la conmutación por error entre dos servidores y elegir entre carga compartida y espera activa.
+  - Diagnosticar una PC que no obtiene dirección.
+glosario: [ambito-dhcp, reserva-dhcp, conmutacion-dhcp, apipa]
+verificado: 2026-11
+---
+
+import dora from './dora-failover.svg?raw'
+import sinIp from './sin-ip.yaml'
+import dhcp from './ej-dhcp.yaml'
+
+En muchas oficinas, las direcciones las da el router del proveedor. Funciona hasta que hace falta algo más: que las PC usen los DC como DNS, reservar direcciones para impresoras, ver qué equipo tiene qué IP, o que el servicio no dependa de un aparato que nadie administra. Ahí entra el **servidor DHCP de Windows**, que en una PyME suele vivir en los mismos controladores de dominio.
+
+<AntesDeEmpezar>
+- Cómo funciona DHCP (lección 2.3.5).
+- VLAN y routing entre VLAN (módulo 2.4 y 2.5), para el reenvío de DHCP.
+</AntesDeEmpezar>
+
+## Repaso rápido: cómo pide dirección una PC
+
+<Diagrama svg={dora} alt="PC01, sin dirección, manda un Discover a todos; DC01 (autorizado en AD) responde con un Offer de 192.168.10.110; PC01 manda el Request y DC01 confirma con el Ack: es suya por 8 días con sus opciones. DC01 y DC02 intercambian concesiones y estado del ámbito (conmutación por error). Abajo: las opciones que recibe (003 puerta de enlace, 006 DNS, 015 dominio; renueva a la mitad de la concesión); la conmutación por error (carga compartida 50 y 50, o espera activa con reserva del 5%; si uno se cae, el otro sigue); y si nadie contesta, la PC se pone una 169.254.x.x (APIPA), reintenta cada 5 minutos y no llega a nada fuera de su cable." pie="Discover, Offer, Request, Ack. Con conmutación por error, dos servidores comparten el mismo ámbito." />
+
+Una PC sin dirección grita (*broadcast*) "¿hay algún DHCP?". El servidor le ofrece una dirección, la PC la pide y el servidor se la confirma por un tiempo: la **concesión** (*lease*). A la mitad de ese tiempo, la PC la renueva. Si nadie contesta, Windows se pone una dirección **APIPA** (169.254.x.x) y sigue intentando cada 5 minutos. Una PC con 169.254 es, casi siempre, un problema de DHCP.
+
+## Autorizar y crear el ámbito
+
+En un dominio, un servidor DHCP de Windows **no entrega direcciones hasta que está autorizado en AD**. Es una protección: si alguien instala el rol en un servidor cualquiera, no empieza a repartir direcciones equivocadas.
+
+```powershell
+Install-WindowsFeature DHCP -IncludeManagementTools
+Add-DhcpServerInDC -DnsName dc01.empresa.local -IPAddress 192.168.10.10
+```
+
+El **ámbito** (*scope*) es el rango de direcciones de una red que el servidor puede entregar. Uno por red (por VLAN). Conviene crearlo **inactivo**, terminar de configurarlo y recién ahí activarlo, para que nadie reciba una dirección sin puerta de enlace ni DNS.
+
+```powershell
+Add-DhcpServerv4Scope -Name Oficina -StartRange 192.168.10.100 -EndRange 192.168.10.199 `
+    -SubnetMask 255.255.255.0 -State InActive -LeaseDuration 8.00:00:00
+Set-DhcpServerv4OptionValue -ScopeId 192.168.10.0 -Router 192.168.10.1 `
+    -DnsServer 192.168.10.10, 192.168.10.11 -DnsDomain empresa.local
+Add-DhcpServerv4ExclusionRange -ScopeId 192.168.10.0 -StartRange 192.168.10.100 -EndRange 192.168.10.109
+Add-DhcpServerv4Reservation -ScopeId 192.168.10.0 -IPAddress 192.168.10.60 -ClientId 00-1B-A9-4C-22-10 -Name impresora-p1
+Set-DhcpServerv4Scope -ScopeId 192.168.10.0 -State Active
+```
+
+- Las **opciones** más importantes son la **003** (puerta de enlace), la **006** (servidores DNS: los DC, nunca un DNS público en un dominio) y la **015** (sufijo DNS). Se configuran por ámbito o para todo el servidor. `Set-DhcpServerv4OptionValue` comprueba que cada DNS conteste; si te da error, revisá la IP.
+- Las **exclusiones** sacan direcciones del rango (por ejemplo, las que ya usa algún equipo con IP fija dentro del rango).
+- Las **reservas** atan una dirección a una placa de red (su MAC): la impresora recibe siempre la misma, pero la configuración sigue centralizada. Pueden estar dentro o fuera del rango, siempre que sea en la red del ámbito.
+- La **duración** de la concesión: 8 días es lo normal en una oficina; en una red de invitados con mucha rotación, horas.
+
+`Get-DhcpServerv4Lease` muestra quién tiene cada dirección, y `Get-DhcpServerv4ScopeStatistics`, cuánto queda libre.
+
+<EnSimple>
+Autorizar en AD, un ámbito por red, opciones 003, 006 y 015, exclusiones para lo fijo, reservas para impresoras, y activar al final.
+</EnSimple>
+
+<Pregunta id="p04" />
+
+## Conmutación por error
+
+Con un solo servidor DHCP, si se cae, las PC que arranquen no reciben dirección (las que ya tenían siguen hasta que se les vence la concesión). La **conmutación por error** (*DHCP failover*) hace que dos servidores compartan el mismo ámbito y se avisen qué dirección dio cada uno:
+
+- **Carga compartida** (*load balance*): los dos atienden, repartiendo los pedidos (50 y 50 por defecto). Lo habitual cuando los dos están en el mismo lugar.
+- **Espera activa** (*hot standby*): uno atiende y el otro guarda un porcentaje de reserva (5% por defecto) y solo entra si el primero se cae. Lo habitual cuando el segundo está en otra sede.
+
+```powershell
+Add-DhcpServerv4Failover -Name dc01-dc02 -PartnerServer dc02.empresa.local -ScopeId 192.168.10.0 `
+    -LoadBalancePercent 50 -SharedSecret 'Una.Clave.Larga'
+Invoke-DhcpServerv4FailoverReplication -Name dc01-dc02      # después de cambiar opciones o reservas
+```
+
+Al crearla, el ámbito se copia al compañero. Las concesiones se replican solas, pero **la configuración no**: si cambiás una opción o una reserva en uno, replicala con `Invoke-DhcpServerv4FailoverReplication`. Es un olvido clásico.
+
+## Otras redes: el reenvío de DHCP
+
+El pedido de una PC sin dirección es un **broadcast**, y los broadcast no cruzan un router. Si tenés varias VLAN y un solo par de servidores DHCP, el router tiene que **reenviar** los pedidos (*DHCP relay*; en Cisco, `ip helper-address`, una línea por servidor). El servidor elige el ámbito según la red por donde llegó el pedido. Lo viste en el Nivel 2; acá aparece en el diagnóstico.
+
+<Troubleshooting escenario={sinIp} />
+
+<Terminal ejercicio={dhcp} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Instalar DHCP y olvidarse de autorizarlo">
+    En un dominio, sin autorización no entrega nada. Add-DhcpServerInDC y Get-DhcpServerInDC para comprobar.
+  </ErrorComun>
+  <ErrorComun titulo="Activar el ámbito antes de las opciones">
+    Las primeras PC reciben dirección sin puerta de enlace ni DNS. Crealo inactivo y activalo al final.
+  </ErrorComun>
+  <ErrorComun titulo="Dar un DNS público por DHCP en un dominio">
+    Las PC no encuentran los DC. La opción 006 siempre con los DNS del dominio.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar una opción en un solo servidor de la conmutación">
+    La configuración no se replica sola: Invoke-DhcpServerv4FailoverReplication.
+  </ErrorComun>
+  <ErrorComun titulo="Una VLAN nueva sin reenvío de DHCP">
+    El broadcast no cruza el router. ip helper-address hacia los dos servidores.
+  </ErrorComun>
+  <ErrorComun titulo="Dos servidores DHCP sin conmutación en la misma red">
+    Se pisan: los dos dan direcciones sin saber del otro. O conmutación por error, o rangos que no se solapen.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una PC sin dirección pide por broadcast (Discover, Offer, Request, Ack) y renueva a la mitad de la concesión; sin respuesta, APIPA 169.254.x.x.
+- En un dominio, el servidor tiene que estar autorizado en AD.
+- Un ámbito por red, creado inactivo; opciones 003, 006 y 015; exclusiones para lo fijo y reservas por MAC.
+- Conmutación por error: carga compartida o espera activa; las concesiones se replican solas y la configuración, con Invoke-DhcpServerv4FailoverReplication.
+- Otras VLAN necesitan reenvío de DHCP (ip helper-address) hacia los dos servidores.
+</Resumen>

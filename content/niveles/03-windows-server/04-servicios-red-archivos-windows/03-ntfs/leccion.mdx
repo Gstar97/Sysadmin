@@ -1,0 +1,136 @@
+---
+id: n3-m4-l3
+titulo: Permisos NTFS
+minutos: 150
+objetivos:
+  - Aplicar permisos básicos y avanzados, entender la herencia y la propiedad.
+  - Calcular los permisos efectivos de una persona, con grupos anidados, herencia y denegaciones.
+  - Administrar permisos con icacls y con Get-Acl y Set-Acl.
+glosario: [permiso-ntfs, herencia-ntfs, permiso-efectivo, icacls]
+verificado: 2026-11
+---
+
+import evaluacion from './evaluacion.svg?raw'
+import ntfs from './ej-ntfs.yaml'
+
+El servidor de archivos es, probablemente, lo que más vas a tocar en una PyME: carpetas por área, alguien que no puede abrir un archivo, alguien que puede abrir uno que no debería. Todo eso se resuelve con dos capas de permisos. Esta lección es la primera y la más importante: los **permisos NTFS**, los del disco. En la que sigue se suma la segunda, la del recurso compartido.
+
+<AntesDeEmpezar>
+- Permisos en Linux (módulo 1.2), para comparar ideas.
+- Grupos y AGDLP (lección 3.3.4): los permisos se dan siempre a grupos locales de dominio.
+</AntesDeEmpezar>
+
+## Cómo están armados
+
+Cada archivo y carpeta de un disco NTFS tiene una **lista de control de acceso** (ACL): una lista de entradas (ACE), cada una con **quién** (un usuario o grupo), **qué** (los derechos), **permitir o denegar** y **a qué se aplica** (esta carpeta, las subcarpetas, los archivos). También tiene un **dueño**: quien lo creó (o el grupo Administradores, si lo creó un administrador). El dueño siempre puede cambiar los permisos, aunque no tenga ninguno.
+
+En Linux hay tres casilleros (dueño, grupo, otros). En Windows, la lista puede ser tan larga como haga falta, con cualquier cantidad de grupos. Eso da flexibilidad y también la forma más rápida de armar un lío.
+
+## Los permisos básicos
+
+<Diagrama svg={evaluacion} alt="A la izquierda, el orden en que Windows decide: 1, denegaciones explícitas (puestas en el mismo archivo o carpeta); 2, permisos explícitos; 3, denegaciones heredadas, de la carpeta más cercana a la más lejana; 4, permisos heredados, en el mismo orden. Para cada derecho, la primera entrada que lo menciona decide; un permiso explícito le gana a una denegación heredada; si ninguna lo menciona, no se tiene. A la derecha, los permisos básicos uno dentro del otro: Control total (agrega cambiar permisos y tomar posesión) contiene a Modificar (agrega crear, escribir y borrar), que contiene a Lectura y ejecución (agrega ejecutar), que contiene a Lectura (ver archivos, carpetas y su contenido). Escritura va aparte. Para la gente, Modificar; Control total solo para administradores y SYSTEM." pie="Cuatro escalones de permiso y un orden fijo para decidir." />
+
+En la pestaña **Seguridad** de las propiedades de una carpeta ves los permisos **básicos**, que son paquetes de derechos más finos (los **avanzados**, en el botón Opciones avanzadas):
+
+- **Lectura**: ver el contenido.
+- **Lectura y ejecución**: además, ejecutar programas y atravesar carpetas.
+- **Escritura**: crear y modificar, sin poder leer ni borrar (raro de usar solo).
+- **Modificar**: leer, crear, cambiar y **borrar**. Es lo que necesita la gente para trabajar.
+- **Control total**: además, **cambiar permisos** y **tomar posesión**. Solo para administradores y SYSTEM: un usuario con control total puede sacarle el acceso a todos los demás.
+
+## Herencia
+
+Una carpeta nueva **hereda** los permisos de la carpeta donde se crea, y los pasa a lo que tenga adentro. En la lista, las heredadas aparecen con **(I)** en icacls o grisadas en la consola: no se pueden quitar donde están, solo donde nacen.
+
+Para que una carpeta tenga permisos distintos de su "madre", se **deshabilita la herencia**. Windows pregunta qué hacer con lo heredado: **convertirlo en explícito** (queda igual, pero ahora se puede editar) o **quitarlo** (queda vacía, cuidado). Lo normal es convertir y después ajustar.
+
+Y una advertencia sobre el punto de partida: la **raíz de un disco de datos** (D:\) viene con **Users** (todos los usuarios del dominio, en un servidor miembro) con lectura y ejecución, y además pudiendo crear carpetas. Si creás D:\Datos y empezás a compartir sin tocar nada, **todos leen todo**. Por eso el primer paso de un servidor de archivos es cortar la herencia en la carpeta raíz de los datos.
+
+<EnSimple>
+Cada carpeta tiene una lista de quién puede qué. Lo de arriba baja solo (herencia), salvo que lo cortes. Para la gente, Modificar; control total, solo para administradores.
+</EnSimple>
+
+## Permisos efectivos: cómo decide Windows
+
+Una persona puede estar en varios grupos, y cada uno puede tener entradas distintas. Windows junta **todas las entradas que aplican a sus grupos** y, para cada derecho, mira en el orden del diagrama: primero las denegaciones explícitas, después los permisos explícitos, después lo heredado, de lo más cercano a lo más lejano. **La primera entrada que menciona ese derecho decide.**
+
+Tres consecuencias que conviene tener claras:
+
+- **Los permisos se suman** entre grupos: si un grupo da lectura y otro modificar, la persona tiene modificar.
+- **Una denegación le gana a un permiso del mismo nivel** (las dos explícitas, o las dos heredadas de la misma carpeta).
+- **Un permiso explícito le gana a una denegación heredada**: si arriba se denegó y en esta carpeta se dio, vale lo de esta carpeta.
+
+Y la regla de diseño: **casi nunca hace falta denegar**. Lo que no se permite, no se tiene. Las denegaciones sirven para excepciones puntuales (el pasante que está en el grupo de Ventas pero no tiene que borrar nada) y, si se acumulan, nadie entiende por qué alguien no puede entrar.
+
+En la consola, **Opciones avanzadas → Acceso efectivo** calcula el resultado para una persona. Probalo acá:
+
+<SimuladorPermisos />
+
+<Pregunta id="p05" />
+
+## icacls
+
+**icacls** es la herramienta de línea de comandos para ver y cambiar permisos. Lo más usado:
+
+```powershell
+icacls D:\Datos\Ventas                                        # ver la lista
+icacls D:\Datos /inheritance:d                                # cortar la herencia, copiando lo heredado
+icacls D:\Datos /inheritance:r                                # cortarla quitando lo heredado (cuidado)
+icacls D:\Datos\Ventas /grant 'DL-Ventas-Modificar:(OI)(CI)M' # dar Modificar con herencia
+icacls D:\Datos /remove Users                                 # quitar las entradas de un grupo
+icacls D:\Datos\Ventas\Precios /deny 'GG-Pasantes:(OI)(CI)(W,D)'
+icacls D:\Datos\Ventas /reset /T                              # volver a heredar todo (y en lo de adentro)
+```
+
+Las marcas dicen a qué se aplica: **(OI)** a los archivos de adentro, **(CI)** a las subcarpetas, **(IO)** solo a lo de adentro y no a la carpeta misma, **(I)** heredada. Sin marcas, vale solo para esa carpeta. Los permisos: **F** (control total), **M** (modificar), **RX** (lectura y ejecución), **R**, **W**, **D** (borrar).
+
+## Get-Acl y Set-Acl
+
+Desde PowerShell, el camino es leer la ACL, cambiarla en memoria y escribirla:
+
+```powershell
+$acl = Get-Acl D:\Datos\RRHH
+$acl.SetAccessRuleProtection($true, $true)       # sin herencia, convirtiendo lo heredado en explícito
+$regla = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    'EMPRESA\DL-RRHH-Modificar', 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+$acl.AddAccessRule($regla)
+Set-Acl -Path D:\Datos\RRHH -AclObject $acl
+(Get-Acl D:\Datos\RRHH).Access | Format-Table IdentityReference, FileSystemRights, IsInherited
+```
+
+Es más largo que icacls, pero se lleva mejor con un script que recorre un CSV de carpetas y grupos. Para una carpeta suelta, icacls; para cincuenta, PowerShell.
+
+## Propiedad
+
+El **dueño** puede cambiar los permisos siempre. Por eso, cuando un administrador se queda afuera de una carpeta (alguien le sacó todos los permisos), la salida es **tomar posesión** (`takeown /f ruta /a`, que pone como dueño al grupo Administradores) y después darse permiso. Queda registrado y no es algo para hacer "porque sí": si la carpeta es de RRHH, se pide autorización.
+
+<Terminal ejercicio={ntfs} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Compartir D:\Datos sin cortar la herencia">
+    La raíz del disco le da lectura a Users: todos leen todo. Primer paso, cortar la herencia en la carpeta de datos.
+  </ErrorComun>
+  <ErrorComun titulo="Dar control total a la gente">
+    Pueden cambiar los permisos y dejar afuera a los demás. Para trabajar alcanza con Modificar.
+  </ErrorComun>
+  <ErrorComun titulo="Dar permisos a usuarios sueltos">
+    Siempre a grupos locales de dominio (AGDLP). Cuando alguien cambia de área, se lo mueve de grupo y listo.
+  </ErrorComun>
+  <ErrorComun titulo="Llenar de denegaciones">
+    Lo que no se permite, no se tiene. Denegar es para excepciones puntuales.
+  </ErrorComun>
+  <ErrorComun titulo="Usar /inheritance:r sin pensar">
+    Quita todo lo heredado, incluidos los administradores y SYSTEM. Usá /inheritance:d (copia) y después ajustá.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar que los grupos nuevos llegan al iniciar sesión">
+    Si sumaste a alguien a un grupo, tiene que cerrar sesión y volver a entrar para que el permiso le valga.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Cada archivo y carpeta tiene una ACL (quién, qué, permitir o denegar, a qué se aplica) y un dueño que siempre puede cambiar los permisos.
+- Básicos: Lectura, Lectura y ejecución, Escritura, Modificar y Control total. Para la gente, Modificar.
+- La herencia baja sola; se corta convirtiendo lo heredado en explícito. La raíz de D: da lectura a Users: cortala en la carpeta de datos.
+- Efectivos: se suman los grupos; orden de evaluación denegar/permitir explícito, después heredado; la primera entrada que menciona el derecho decide.
+- icacls con marcas (OI)(CI)(IO)(I) y niveles F, M, RX, R, W, D; Get-Acl y Set-Acl para scripts; takeown para recuperar una carpeta.
+</Resumen>

@@ -1,0 +1,107 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una PC tiene la dirección 169.254.88.14. ¿Qué significa?
+  opciones:
+    - { texto: "Pidió dirección por DHCP y nadie le contestó: se puso una APIPA", correcta: true, explicacion: "Con esa dirección no llega a nada fuera de su red local." }
+    - { texto: "Tiene una IP fija mal configurada", explicacion: "Las 169.254 las pone Windows solo." }
+    - { texto: "Está conectada a internet por otra red", explicacion: "No tiene relación." }
+    - { texto: "El DNS no responde", explicacion: "El DNS no asigna direcciones." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Instalaste DHCP en un servidor del dominio, creaste y activaste el ámbito, y las PC no reciben dirección. El servicio está corriendo. ¿Qué falta?
+  opciones:
+    - { texto: "Autorizar el servidor en AD (Add-DhcpServerInDC)", correcta: true, explicacion: "Sin autorización, un DHCP de un dominio no entrega direcciones." }
+    - { texto: "Reiniciar el servidor", explicacion: "No hace falta." }
+    - { texto: "Crear una zona DNS", explicacion: "No tiene relación con DHCP." }
+    - { texto: "Abrir el puerto 53", explicacion: "DHCP usa UDP 67 y 68; el firewall se abre solo con el rol." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué opción de DHCP le dice a las PC qué servidores DNS usar?
+  opciones:
+    - { texto: "006", correcta: true, explicacion: "003 es la puerta de enlace y 015 el sufijo DNS." }
+    - { texto: "003", explicacion: "Es la puerta de enlace (router)." }
+    - { texto: "015", explicacion: "Es el nombre de dominio (sufijo)." }
+    - { texto: "051", explicacion: "Es la duración de la concesión." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La impresora tiene que tener siempre la misma dirección, pero querés seguir administrándola desde el DHCP. ¿Qué usás?
+  opciones:
+    - { texto: "Una reserva con la MAC de la impresora", correcta: true, explicacion: "Recibe siempre la misma IP, con las opciones del ámbito." }
+    - { texto: "Una exclusión", explicacion: "La exclusión saca la dirección del rango; no se la da a nadie." }
+    - { texto: "Una IP fija en la impresora", explicacion: "Funciona, pero queda fuera del DHCP." }
+    - { texto: "Un ámbito solo para la impresora", explicacion: "Cada ámbito es una red entera." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene crear un ámbito nuevo inactivo?
+  opciones:
+    - { texto: "Para configurar las opciones antes de que alguna PC reciba una dirección incompleta", correcta: true, explicacion: "Se activa recién cuando está todo." }
+    - { texto: "Porque activo no se puede modificar", explicacion: "Se puede modificar." }
+    - { texto: "Porque así no hace falta autorizarlo", explicacion: "La autorización es del servidor." }
+    - { texto: "Para que no se replique", explicacion: "No tiene relación." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tenés dos DC en la misma sede y querés que los dos repartan direcciones del mismo ámbito. ¿Qué modo de conmutación por error usás?
+  opciones:
+    - { texto: "Carga compartida (load balance)", correcta: true, explicacion: "Los dos atienden, 50 y 50 por defecto." }
+    - { texto: "Espera activa (hot standby)", explicacion: "Uno solo atiende; es para un respaldo en otra sede." }
+    - { texto: "Dos ámbitos iguales sin conmutación", explicacion: "Se pisarían las direcciones." }
+    - { texto: "Ninguno: DHCP no se puede duplicar", explicacion: "Para eso está la conmutación por error." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Cambiaste la puerta de enlace del ámbito en DC01, que está en conmutación por error con DC02. Algunas PC reciben la vieja. ¿Por qué?
+  opciones:
+    - { texto: "La configuración no se replica sola: falta Invoke-DhcpServerv4FailoverReplication", correcta: true, explicacion: "Las concesiones se replican; las opciones y reservas no." }
+    - { texto: "Las PC tienen la puerta de enlace en caché", explicacion: "La reciben en cada concesión." }
+    - { texto: "DC02 no está autorizado", explicacion: "Si no lo estuviera, no entregaría direcciones." }
+    - { texto: "Hay que reiniciar los dos DC", explicacion: "No hace falta." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Agregaste la VLAN 20 con su ámbito en el DHCP, pero las PC de esa VLAN no reciben dirección. ¿Qué falta casi siempre?
+  opciones:
+    - { texto: "El reenvío de DHCP en el router (ip helper-address) hacia los servidores", correcta: true, explicacion: "El pedido es un broadcast y no cruza el router." }
+    - { texto: "Una zona DNS para la VLAN", explicacion: "No impide recibir dirección." }
+    - { texto: "Otro servidor DHCP en la VLAN", explicacion: "Funciona, pero lo habitual es el reenvío." }
+    - { texto: "Autorizar la VLAN en AD", explicacion: "Se autoriza el servidor, no la red." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que autoriza en AD el servidor dc02.empresa.local (192.168.10.11).
+  aceptadas:
+    - "Add-DhcpServerInDC -DnsName dc02.empresa.local -IPAddress 192.168.10.11"
+    - "Add-DhcpServerInDC dc02.empresa.local 192.168.10.11"
+  patrones: ["^add-dhcpserverindc\\s+(-dnsname\\s+)?dc02\\.empresa\\.local\\s+(-ipaddress\\s+)?192\\.168\\.10\\.11$"]
+  explicacion: "Get-DhcpServerInDC lista los servidores autorizados."
+- id: p10
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    ScopeId      Free InUse PercentageInUse Reserved Pending
+    -------      ---- ----- --------------- -------- -------
+    192.168.10.0 0    100   100             2        0
+  opciones:
+    - { texto: "El ámbito está lleno: las PC nuevas no van a recibir dirección", correcta: true, explicacion: "Hay que agrandarlo, bajar la duración de la concesión o revisar equipos que ya no existen." }
+    - { texto: "El ámbito está inactivo", explicacion: "Si estuviera inactivo no tendría direcciones en uso." }
+    - { texto: "El servidor no está autorizado", explicacion: "Si no estuviera autorizado, no habría concesiones." }
+    - { texto: "Todo normal", explicacion: "100% en uso es un problema." }
+- id: p11
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para poner en marcha DHCP en un DC.
+  pasos:
+    - "Instalar el rol DHCP con sus herramientas"
+    - "Autorizar el servidor en AD"
+    - "Crear el ámbito inactivo"
+    - "Configurar opciones, exclusiones y reservas"
+    - "Activar el ámbito"
+    - "Configurar la conmutación por error con el segundo servidor"
+  explicacion: "La conmutación se arma con el ámbito listo, así se copia completo al compañero."

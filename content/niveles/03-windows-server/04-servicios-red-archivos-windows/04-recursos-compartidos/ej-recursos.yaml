@@ -1,0 +1,117 @@
+tipo: terminal
+shell: powershell
+titulo: Publicar el servidor de archivos
+descripcion: >-
+  Los permisos NTFS de D:\Datos ya están armados por área (los de la lección anterior). Falta
+  publicarlo en la red: un recurso compartido, que cada uno vea solo sus carpetas, una cuota para
+  Ventas, nada de música ni películas, y un nombre que no dependa del servidor
+  (\\empresa.local\Empresa). PC01 es la PC de María (Ventas). Estás en SRV-ARCH01.
+estado_inicial:
+  equipo: SRV-ARCH01
+  dominio: empresa.local
+  red: { ip: 192.168.10.20, dns: [192.168.10.10] }
+  archivos:
+    D:\Datos\Ventas\clientes.xlsx: { tipo: archivo, contenido: clientes, tamano_mb: 120 }
+    D:\Datos\Compras\proveedores.xlsx: proveedores
+    D:\Datos\RRHH\sueldos.xlsx: sueldos
+  permisos:
+    D:\Datos:
+      herencia: false
+      reglas:
+        - { quien: Administrators, nivel: FullControl }
+        - { quien: SYSTEM, nivel: FullControl }
+        - { quien: EMPRESA\Domain Users, nivel: ReadAndExecute, aplica: carpeta }
+    D:\Datos\Ventas:
+      reglas: [{ quien: DL-Ventas-Modificar, nivel: Modify }]
+    D:\Datos\Compras:
+      reglas: [{ quien: DL-Compras-Modificar, nivel: Modify }]
+    D:\Datos\RRHH:
+      reglas: [{ quien: DL-RRHH-Modificar, nivel: Modify }]
+  servidores:
+    - equipo: DC01
+      dominio: empresa.local
+      red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+      ad:
+        usuarios:
+          - { sam: mlopez, nombre: María, apellido: López, grupos: [GG-Ventas] }
+          - { sam: jperez, nombre: Juan, apellido: Pérez, grupos: [GG-Compras] }
+        grupos:
+          - { nombre: GG-Ventas }
+          - { nombre: GG-Compras }
+          - { nombre: GG-RRHH }
+          - { nombre: DL-Ventas-Modificar, ambito: DomainLocal, miembros: [GG-Ventas] }
+          - { nombre: DL-Compras-Modificar, ambito: DomainLocal, miembros: [GG-Compras] }
+          - { nombre: DL-RRHH-Modificar, ambito: DomainLocal, miembros: [GG-RRHH] }
+    - { equipo: PC01, dominio: empresa.local, usuario: mlopez, red: { ip: 192.168.10.50, dns: [192.168.10.10] } }
+pasos:
+  - consigna: >-
+      Compartí D:\Datos con el nombre Datos: Control total para Authenticated Users en el recurso
+      (que decida NTFS) y enumeración basada en acceso.
+    verificar:
+      - { recurso_compartido: Datos, ruta: D:\Datos, abe: true }
+      - { acceso_compartido: Datos, cuenta: Authenticated Users, nivel: Full }
+      - { acceso_compartido: Datos, cuenta: Everyone, nivel: None }
+    pistas:
+      - "New-SmbShare -Name Datos -Path D:\\Datos -FullAccess 'Authenticated Users' -FolderEnumerationMode AccessBased"
+      - "Sin -FullAccess/-ChangeAccess/-ReadAccess, New-SmbShare le da Lectura a Everyone."
+    solucion:
+      - New-SmbShare -Name Datos -Path D:\Datos -FullAccess 'Authenticated Users' -FolderEnumerationMode AccessBased
+      - Get-SmbShareAccess Datos
+  - consigna: Comprobá desde PC01 (con la sesión de María) qué carpetas ve en \\SRV-ARCH01\Datos y que puede guardar en Ventas.
+    verificar:
+      - { acceso_red: \\SRV-ARCH01\Datos\Ventas, usuario: mlopez, nivel: Modify }
+      - { comando_usado: "invoke-command.*pc01" }
+      - { salida_contiene: "Ventas" }
+    pistas:
+      - "Invoke-Command PC01 { Get-ChildItem \\\\SRV-ARCH01\\Datos }"
+    solucion:
+      - Invoke-Command PC01 { Set-Content \\SRV-ARCH01\Datos\Ventas\prueba.txt 'hola' }
+      - Invoke-Command PC01 { Get-ChildItem \\SRV-ARCH01\Datos }
+    explicacion: >-
+      Con la enumeración basada en acceso, María solo ve las carpetas a las que puede entrar.
+      Las demás siguen existiendo; solo no aparecen en su lista.
+  - consigna: >-
+      Instalá el Administrador de recursos del servidor de archivos (FSRM) y poné una cuota estricta
+      de 500 MB en D:\Datos\Ventas. Después bloqueá los archivos de audio y video en todo D:\Datos.
+    verificar:
+      - { cuota: D:\Datos\Ventas, limite_mb: 500, blanda: false }
+      - { filtro_archivos: D:\Datos, grupo: Audio and Video Files }
+    pistas:
+      - "Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools"
+      - "New-FsrmQuota -Path D:\\Datos\\Ventas -Size 500MB"
+      - "New-FsrmFileScreen -Path D:\\Datos -IncludeGroup 'Audio and Video Files' -Active"
+    solucion:
+      - Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools
+      - New-FsrmQuota -Path D:\Datos\Ventas -Size 500MB
+      - New-FsrmFileScreen -Path D:\Datos -IncludeGroup 'Audio and Video Files' -Active
+      - Get-FsrmQuota
+  - consigna: >-
+      Armá el espacio de nombres DFS \\empresa.local\Empresa (en SRV-ARCH01) y adentro una carpeta
+      Datos que apunte a \\SRV-ARCH01\Datos. La raíz necesita su propia carpeta y recurso
+      compartido (D:\DFSRoots\Empresa, compartida como Empresa).
+    verificar:
+      - { carpeta_dfs: \\empresa.local\Empresa\Datos, destino: \\SRV-ARCH01\Datos }
+    pistas:
+      - "Install-WindowsFeature FS-DFS-Namespace -IncludeManagementTools"
+      - "New-Item -ItemType Directory D:\\DFSRoots\\Empresa; New-SmbShare -Name Empresa -Path D:\\DFSRoots\\Empresa -ReadAccess 'Authenticated Users'"
+      - "New-DfsnRoot -Path \\\\empresa.local\\Empresa -TargetPath \\\\SRV-ARCH01\\Empresa -Type DomainV2"
+      - "New-DfsnFolder -Path \\\\empresa.local\\Empresa\\Datos -TargetPath \\\\SRV-ARCH01\\Datos"
+    solucion:
+      - Install-WindowsFeature FS-DFS-Namespace -IncludeManagementTools
+      - New-Item -ItemType Directory D:\DFSRoots\Empresa
+      - New-SmbShare -Name Empresa -Path D:\DFSRoots\Empresa -ReadAccess 'Authenticated Users'
+      - New-DfsnRoot -Path \\empresa.local\Empresa -TargetPath \\SRV-ARCH01\Empresa -Type DomainV2
+      - New-DfsnFolder -Path \\empresa.local\Empresa\Datos -TargetPath \\SRV-ARCH01\Datos
+  - consigna: >-
+      En PC01, mapeá la unidad S: a la carpeta de Ventas usando el nombre DFS (no el del servidor),
+      y listá su contenido.
+    verificar:
+      - { en: PC01, verificar: { unidad_red: 'S:', ruta: \\empresa.local\Empresa\Datos\Ventas } }
+      - { salida_contiene: "clientes.xlsx" }
+    pistas:
+      - "Invoke-Command PC01 { net use S: \\\\empresa.local\\Empresa\\Datos\\Ventas; Get-ChildItem S:\\ }"
+    solucion: ["Invoke-Command PC01 { net use S: \\\\empresa.local\\Empresa\\Datos\\Ventas; Get-ChildItem S:\\ }"]
+    explicacion: >-
+      Si mañana Ventas se muda a otro servidor, se cambia el destino de la carpeta DFS y la unidad
+      S: de todas las PC sigue andando sin tocar nada. En la vida real, la unidad la mapea la GPO
+      de unidades de red (lección 3.3.7) con esta misma ruta.

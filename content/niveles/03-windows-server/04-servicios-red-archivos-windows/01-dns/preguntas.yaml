@@ -1,0 +1,110 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué ventaja tiene una zona integrada en Active Directory frente a una zona en un archivo?
+  opciones:
+    - { texto: "Se replica con AD a todos los DC con DNS y se puede modificar en cualquiera", correcta: true, explicacion: "Además acepta actualizaciones dinámicas seguras." }
+    - { texto: "Resuelve más rápido los nombres de internet", explicacion: "La velocidad para internet depende de los reenviadores." }
+    - { texto: "No necesita controladores de dominio", explicacion: "Al revés: vive en la base de AD de los DC." }
+    - { texto: "Se puede usar desde cualquier empresa", explicacion: "No tiene relación." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿En qué zona y con qué nombre va el registro PTR de 192.168.10.25?
+  opciones:
+    - { texto: "En 10.168.192.in-addr.arpa, con el nombre 25", correcta: true, explicacion: "En la zona inversa se escriben los octetos al revés." }
+    - { texto: "En 192.168.10.in-addr.arpa, con el nombre 25", explicacion: "El orden está al revés." }
+    - { texto: "En empresa.local, con el nombre 192.168.10.25", explicacion: "Los PTR van en la zona inversa." }
+    - { texto: "En _msdcs.empresa.local", explicacion: "Esa zona es para los registros de los DC." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué está pasando?
+  salida: |
+    PS C:\> nslookup srv-web01
+    Server:  UnKnown
+    Address:  192.168.10.10
+
+    Name:    srv-web01.empresa.local
+    Address:  192.168.10.30
+  opciones:
+    - { texto: "La resolución funciona; falta la zona inversa (o el PTR) del servidor DNS", correcta: true, explicacion: "nslookup busca el nombre del servidor con una consulta inversa." }
+    - { texto: "El servidor DNS está caído", explicacion: "Si estuviera caído no habría respuesta." }
+    - { texto: "srv-web01 no existe", explicacion: "Lo resolvió: 192.168.10.30." }
+    - { texto: "La PC usa un DNS público", explicacion: "La dirección del servidor es la del DC." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La empresa compró a otra que usa el dominio comercial.local, conectada por VPN. Desde tu red nadie resuelve sus nombres. ¿Qué configurás en tu DNS?
+  opciones:
+    - { texto: "Un reenviador condicional para comercial.local que apunte a sus servidores DNS", correcta: true, explicacion: "Para ese dominio, tu DNS le pregunta a los de ellos." }
+    - { texto: "Un reenviador común a sus servidores", explicacion: "Mandaría todas las consultas de internet a ellos." }
+    - { texto: "Una zona primaria comercial.local con registros copiados a mano", explicacion: "Se desactualiza en cuanto cambien algo." }
+    - { texto: "Cambiar el DNS de las PC a los servidores de ellos", explicacion: "Dejarían de encontrar tu dominio." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué registros borra la limpieza (scavenging) del DNS?
+  opciones:
+    - { texto: "Los dinámicos que no se refrescaron durante el intervalo de no actualización más el de actualización", correcta: true, explicacion: "Por defecto, 7 + 7 días." }
+    - { texto: "Todos los que tienen más de 14 días", explicacion: "Los estáticos no se borran nunca." }
+    - { texto: "Los creados a mano", explicacion: "Esos son estáticos: no se tocan." }
+    - { texto: "Los que no responden a ping", explicacion: "La limpieza mira la fecha, no si el equipo responde." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: Vas a activar la limpieza de registros viejos. ¿Qué conviene hacer? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Activarla en un solo servidor", correcta: true, explicacion: "Los demás reciben los borrados por replicación." }
+    - { texto: "Revisar que servidores e impresoras tengan registros estáticos o se registren solos", correcta: true, explicacion: "Así no se borra nada que haga falta." }
+    - { texto: "Mirar antes las fechas con Get-DnsServerResourceRecord", correcta: true, explicacion: "Para ver qué se borraría." }
+    - { texto: "Bajar los intervalos a 1 día para que limpie más rápido", explicacion: "Borraría registros de equipos que estuvieron apagados un fin de semana largo." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que crea el alias intranet (en la zona empresa.local) apuntando a srv-web01.empresa.local.
+  aceptadas:
+    - "Add-DnsServerResourceRecordCName -ZoneName empresa.local -Name intranet -HostNameAlias srv-web01.empresa.local"
+    - "Add-DnsServerResourceRecordCName -Name intranet -ZoneName empresa.local -HostNameAlias srv-web01.empresa.local"
+  patrones: ["^add-dnsserverresourcerecordcname\\s+(?=.*-zonename\\s+empresa\\.local)(?=.*-name\\s+intranet)(?=.*-hostnamealias\\s+srv-web01\\.empresa\\.local).*$"]
+  explicacion: "CNAME es un alias: el nombre nuevo apunta a otro nombre, no a una IP."
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: >-
+    Una PC dice que intranet.empresa.local no existe, pero en el DC el registro está bien. ¿Qué
+    probás primero?
+  opciones:
+    - { texto: "Get-DnsClientServerAddress en la PC, para ver a qué DNS le pregunta", correcta: true, explicacion: "Si usa un DNS público o un servidor viejo, ahí está el problema." }
+    - { texto: "Borrar y crear de nuevo el registro", explicacion: "El registro está bien." }
+    - { texto: "Reiniciar el servicio DNS del DC", explicacion: "El servidor tiene el registro; falta ver si la PC le pregunta a él." }
+    - { texto: "Activar la limpieza", explicacion: "No tiene relación." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve Resolve-DnsName nombre -Server 192.168.10.11?
+  opciones:
+    - { texto: "Para preguntarle a ese servidor en particular, sin depender de la configuración ni la memoria del cliente", correcta: true, explicacion: "Así sabés qué contesta cada servidor." }
+    - { texto: "Para cambiar el DNS de la PC", explicacion: "Eso es Set-DnsClientServerAddress." }
+    - { texto: "Para registrar el nombre en ese servidor", explicacion: "Eso es ipconfig /registerdns." }
+    - { texto: "Para borrar la memoria del servidor", explicacion: "Eso es Clear-DnsServerCache." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué son las actualizaciones dinámicas seguras?
+  opciones:
+    - { texto: "Que solo los equipos del dominio puedan registrar o cambiar su nombre en la zona", correcta: true, explicacion: "Solo existen en zonas integradas en AD." }
+    - { texto: "Que el DNS use cifrado", explicacion: "No tiene relación con el cifrado." }
+    - { texto: "Que los registros se borren solos", explicacion: "Eso es la limpieza." }
+    - { texto: "Que los reenviadores se actualicen solos", explicacion: "No tiene relación." }
+- id: p11
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená cómo diagnosticar un nombre que no resuelve en una PC.
+  pasos:
+    - "Ver a qué servidor DNS le pregunta la PC (Get-DnsClientServerAddress)"
+    - "Preguntarle directo a ese servidor (Resolve-DnsName -Server)"
+    - "Revisar en el servidor que el registro exista y apunte a lo correcto"
+    - "Borrar la memoria del cliente (ipconfig /flushdns) y probar de nuevo"
+  explicacion: "Primero quién responde, después qué responde, después el registro; la memoria del cliente al final."

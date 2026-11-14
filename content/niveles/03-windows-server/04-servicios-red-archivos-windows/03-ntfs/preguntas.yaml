@@ -1,0 +1,110 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué permiso NTFS conviene darle a la gente de un área sobre su carpeta?
+  opciones:
+    - { texto: "Modificar", correcta: true, explicacion: "Leer, crear, cambiar y borrar: lo que hace falta para trabajar." }
+    - { texto: "Control total", explicacion: "Les permitiría cambiar los permisos y dejar afuera a otros." }
+    - { texto: "Escritura", explicacion: "Sin lectura, no pueden abrir lo que guardan." }
+    - { texto: "Lectura", explicacion: "No podrían guardar nada." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Creaste D:\Datos\RRHH en un servidor miembro, sin tocar permisos. ¿Quién puede leer los archivos de RRHH?
+  opciones:
+    - { texto: "Todos los usuarios del dominio: heredan la lectura que la raíz de D: le da a Users", correcta: true, explicacion: "Por eso se corta la herencia en la carpeta de datos." }
+    - { texto: "Nadie salvo los administradores", explicacion: "La raíz de un disco de datos le da lectura a Users." }
+    - { texto: "Solo quien creó la carpeta", explicacion: "El dueño tiene control total, pero no es el único." }
+    - { texto: "Solo los de RRHH", explicacion: "Nadie configuró eso todavía." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    María está en GG-Ventas (con Lectura sobre la carpeta) y en GG-Supervisores (con Modificar
+    sobre la misma carpeta). No hay denegaciones. ¿Qué puede hacer?
+  opciones:
+    - { texto: "Modificar: los permisos de sus grupos se suman", correcta: true, explicacion: "Sin denegaciones, vale el mayor." }
+    - { texto: "Solo leer: gana el más restrictivo", explicacion: "Entre grupos NTFS se suman; lo de 'el más restrictivo' es entre recurso compartido y NTFS." }
+    - { texto: "Nada, porque hay un conflicto", explicacion: "No hay conflicto: se suman." }
+    - { texto: "Depende del orden de los grupos", explicacion: "El orden de los grupos no importa." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: >-
+    En D:\Datos hay una denegación heredable de Escritura para GG-Pasantes. En D:\Datos\Ventas hay
+    un permiso explícito de Modificar para GG-Pasantes. ¿Puede un pasante escribir en Ventas?
+  opciones:
+    - { texto: "Sí: un permiso explícito se evalúa antes que una denegación heredada", correcta: true, explicacion: "El orden es: explícito (denegar, permitir) y después heredado." }
+    - { texto: "No: una denegación siempre gana", explicacion: "Solo gana sobre permisos del mismo nivel o más lejanos." }
+    - { texto: "Solo si es dueño de la carpeta", explicacion: "El dueño solo tiene garantizado cambiar permisos." }
+    - { texto: "Depende de cuál se creó primero", explicacion: "Importa el orden de evaluación, no la fecha." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés que D:\Datos\Gerencia no herede nada de D:\Datos, pero sin quedarte vacío de golpe. ¿Qué hacés?
+  opciones:
+    - { texto: "Deshabilitar la herencia convirtiendo lo heredado en explícito, y después ajustar", correcta: true, explicacion: "En icacls, /inheritance:d." }
+    - { texto: "Deshabilitar la herencia quitando lo heredado", explicacion: "Te quedás sin administradores ni SYSTEM." }
+    - { texto: "Agregar una denegación para todos", explicacion: "Denegaría también a los administradores." }
+    - { texto: "Mover la carpeta a otro disco", explicacion: "No hace falta." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice esta salida?
+  salida: |
+    D:\Datos\Ventas EMPRESA\DL-Ventas-Modificar:(OI)(CI)(M)
+                    NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
+                    BUILTIN\Administrators:(I)(OI)(CI)(F)
+  opciones:
+    - { texto: "DL-Ventas-Modificar tiene Modificar puesto en Ventas y se hereda a todo lo de adentro; SYSTEM y Administradores vienen heredados", correcta: true, explicacion: "(I) es heredado; (OI)(CI), que pasa a archivos y subcarpetas." }
+    - { texto: "Todos los permisos son heredados", explicacion: "La primera línea no tiene (I): es explícita." }
+    - { texto: "DL-Ventas-Modificar solo tiene permiso sobre la carpeta, no sobre los archivos", explicacion: "(OI) la pasa a los archivos." }
+    - { texto: "La herencia está deshabilitada", explicacion: "Hay entradas con (I): hereda." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando de icacls que le da Modificar a DL-Compras-Modificar sobre D:\Datos\Compras, heredable a subcarpetas y archivos.
+  aceptadas:
+    - "icacls D:\\Datos\\Compras /grant DL-Compras-Modificar:(OI)(CI)M"
+    - "icacls D:\\Datos\\Compras /grant 'DL-Compras-Modificar:(OI)(CI)M'"
+    - "icacls D:\\Datos\\Compras /grant \"DL-Compras-Modificar:(OI)(CI)M\""
+    - "icacls D:\\Datos\\Compras /grant 'EMPRESA\\DL-Compras-Modificar:(OI)(CI)M'"
+  patrones: ["^icacls\\s+d:\\\\datos\\\\compras\\s+/grant\\s+['\"]?(empresa\\\\)?dl-compras-modificar:\\(oi\\)\\(ci\\)\\(?m\\)?['\"]?$"]
+  explicacion: "(OI)(CI) lo hereda a archivos y subcarpetas; M es Modificar."
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no conviene dar Control total a los usuarios de un área?
+  opciones:
+    - { texto: "Porque pueden cambiar los permisos y tomar posesión: dejar afuera a otros o dar acceso a quien no corresponde", correcta: true, explicacion: "Modificar alcanza para trabajar." }
+    - { texto: "Porque gasta más espacio en disco", explicacion: "No tiene relación." }
+    - { texto: "Porque Windows no lo permite en carpetas compartidas", explicacion: "Lo permite; es una mala práctica." }
+    - { texto: "Porque los archivos se abren más lento", explicacion: "No tiene relación." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un administrador no puede entrar a una carpeta porque alguien le sacó todos los permisos. ¿Qué hace?
+  opciones:
+    - { texto: "Toma posesión (takeown /f … /a) y después se da los permisos que hacen falta, con autorización", correcta: true, explicacion: "El dueño siempre puede cambiar los permisos." }
+    - { texto: "Formatea el disco", explicacion: "Perdería todo." }
+    - { texto: "Reinicia el servidor en modo seguro", explicacion: "No cambia los permisos." }
+    - { texto: "No hay forma", explicacion: "Para eso está la toma de posesión." }
+- id: p10
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas son buenas prácticas con permisos NTFS? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Dar permisos a grupos locales de dominio, nunca a usuarios sueltos", correcta: true, explicacion: "AGDLP." }
+    - { texto: "Cortar la herencia en la carpeta raíz de los datos", correcta: true, explicacion: "Si no, la raíz del disco le da lectura a todos." }
+    - { texto: "Mantener a los administradores y SYSTEM con control total", correcta: true, explicacion: "Para administrar y respaldar." }
+    - { texto: "Usar denegaciones para todo lo que no corresponde", explicacion: "Lo que no se permite, no se tiene; denegar es para excepciones." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: En icacls, ¿qué quiere decir (I) en una entrada?
+  opciones:
+    - { texto: "Que es heredada", correcta: true, explicacion: "Viene de una carpeta de arriba." }
+    - { texto: "Que es una denegación", explicacion: "Las denegaciones dicen (DENY)." }
+    - { texto: "Que solo se aplica a lo de adentro", explicacion: "Eso es (IO)." }
+    - { texto: "Que es del dueño", explicacion: "No tiene relación." }

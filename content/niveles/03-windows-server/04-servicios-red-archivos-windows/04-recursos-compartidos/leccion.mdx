@@ -1,0 +1,129 @@
+---
+id: n3-m4-l4
+titulo: Recursos compartidos y servidor de archivos
+minutos: 180
+objetivos:
+  - Compartir carpetas por SMB y combinar permisos de recurso compartido y NTFS (gana el más restrictivo).
+  - Usar la enumeración basada en acceso, las cuotas y los filtros de archivos (FSRM).
+  - Publicar los datos con un espacio de nombres DFS y conocer la replicación DFS.
+glosario: [recurso-compartido, abe, fsrm, dfs]
+verificado: 2026-11
+---
+
+import capas from './dos-capas.svg?raw'
+import recursos from './ej-recursos.yaml'
+
+Con los permisos NTFS armados, falta lo que la gente ve: la unidad S: que aparece en el Explorador. Esta lección cubre cómo se publica una carpeta en la red, la segunda capa de permisos que eso agrega, y las herramientas que convierten un disco compartido en un servidor de archivos de verdad: que cada uno vea lo suyo, que nadie llene el disco con películas, y un nombre que no cambie el día que se reemplaza el servidor.
+
+<AntesDeEmpezar>
+- Permisos NTFS (lección anterior).
+- Unidades de red con directivas (lección 3.3.7).
+- El protocolo SMB y el puerto 445 (Nivel 2).
+</AntesDeEmpezar>
+
+## Compartir una carpeta
+
+Un **recurso compartido** publica una carpeta con un nombre: `\\SRV-ARCH01\Datos`. Se crea desde las propiedades de la carpeta (pestaña Compartir, Uso compartido avanzado), desde el Administrador del servidor o con PowerShell:
+
+```powershell
+New-SmbShare -Name Datos -Path D:\Datos -FullAccess 'Authenticated Users' -FolderEnumerationMode AccessBased
+Get-SmbShare
+Get-SmbShareAccess Datos
+Grant-SmbShareAccess -Name Datos -AccountName 'GG-Auditores' -AccessRight Read
+```
+
+Al crear el primero, Windows abre en el firewall la regla de **Compartir archivos e impresoras (SMB-In)**. Y ya hay algunos recursos de fábrica: **C$**, **ADMIN$** e **IPC$** (los administrativos, terminados en $ y ocultos de la lista), y en los DC, **SYSVOL** y **NETLOGON**.
+
+Un nombre terminado en **$** no aparece al explorar el servidor, pero cualquiera que lo conozca puede escribirlo. Ocultar no es proteger: lo que protege son los permisos.
+
+## Dos capas de permisos
+
+<Diagrama svg={capas} alt="María, en PC01, abre \\SRV-ARCH01\Datos\Ventas\clientes.xlsx. Primero pasa por el permiso del recurso compartido (Control total, Cambiar o Leer, para todo el recurso; por ejemplo, Authenticated Users con control total) y después por NTFS (carpeta por carpeta y archivo por archivo; por ejemplo, DL-Ventas-Modificar en Ventas). El resultado es lo que permiten los dos: gana el más restrictivo. Ejemplos: recurso Leer y NTFS Modificar da Leer; recurso Control total y NTFS Modificar da Modificar; sentada en el servidor solo cuenta NTFS. Abajo, el espacio de nombres DFS: \\empresa.local\Empresa se guarda en AD y tiene carpetas (Datos, Proyectos) que apuntan a recursos de distintos servidores." pie="El recurso compartido es la puerta de calle; NTFS, la llave de cada oficina. Para entrar, hacen falta las dos." />
+
+Quien entra por la red pasa por **dos controles**: el permiso del **recurso compartido** (solo tres niveles: Leer, Cambiar y Control total, y para todo el recurso) y el **NTFS** (fino, carpeta por carpeta). El resultado es lo que permiten **los dos a la vez**: el más restrictivo. Si el recurso da Leer, nadie puede guardar por la red, por más que NTFS diga Modificar.
+
+Como manejar dos listas es el doble de trabajo y el doble de errores, la práctica recomendada es simple: **en el recurso, Control total (o Cambiar) para Authenticated Users, y que NTFS haga todo el trabajo**. Así hay una sola lista que mirar. Lo que no conviene es el permiso por defecto de New-SmbShare sin parámetros: **Leer para Everyone**, que deja a todos en solo lectura y obliga a buscar el problema en dos lugares.
+
+<SimuladorPermisos modo="red" />
+
+## Que cada uno vea lo suyo: enumeración basada en acceso
+
+Por defecto, cualquiera que entra a `\\SRV-ARCH01\Datos` ve **todas** las carpetas, aunque al abrir la de RRHH reciba "Acceso denegado". La **enumeración basada en acceso** (*access-based enumeration*, ABE) esconde de la lista lo que la persona no puede abrir: María ve Ventas, y nada más. No cambia ningún permiso, solo lo que se muestra; evita llamados ("¿qué es esa carpeta de Gerencia?") y curiosidad.
+
+```powershell
+Set-SmbShare -Name Datos -FolderEnumerationMode AccessBased
+```
+
+<EnSimple>
+En el recurso, control total para los usuarios autenticados y enumeración basada en acceso. Todo lo demás, en NTFS.
+</EnSimple>
+
+## Cuotas y filtros: FSRM
+
+El **Administrador de recursos del servidor de archivos** (*File Server Resource Manager*, FSRM) es un rol que agrega dos cosas que todo servidor de archivos necesita:
+
+- **Cuotas** por carpeta: un límite de espacio. Las **estrictas** (*hard*) no dejan pasar el límite ("No hay espacio suficiente en el disco"); las **blandas** (*soft*) solo avisan, y sirven para medir antes de limitar. Se pueden armar con **plantillas** y aplicar como **cuota automática** a cada subcarpeta (una por usuario, por ejemplo).
+- **Filtros de archivos** (*file screens*): bloquean tipos de archivo por grupo (audio y video, ejecutables, comprimidos…). Los **activos** bloquean; los **pasivos**, solo avisan. Son una buena barrera contra la colección de películas de alguien, y una más contra programas que no deberían estar ahí.
+
+```powershell
+Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools
+New-FsrmQuota -Path D:\Datos\Ventas -Size 500MB
+New-FsrmFileScreen -Path D:\Datos -IncludeGroup 'Audio and Video Files' -Active
+Get-FsrmQuota
+```
+
+Los filtros miran la **extensión**, no el contenido: cambiar `.mp3` por `.dat` los saltea. Son una regla de uso, no una medida de seguridad fuerte.
+
+## DFS: un nombre que no depende del servidor
+
+Si las unidades de red apuntan a `\\SRV-ARCH01\Datos`, el día que reemplazás ese servidor tenés que cambiar la GPO, los accesos directos, las macros de Excel y la cabeza de la gente. Un **espacio de nombres DFS** (*DFS Namespaces*) agrega una capa de nombres: la gente usa `\\empresa.local\Empresa\Datos`, y DFS sabe que hoy eso está en `\\SRV-ARCH01\Datos`. Mañana se cambia el destino y nadie se entera.
+
+```powershell
+Install-WindowsFeature FS-DFS-Namespace -IncludeManagementTools
+New-Item -ItemType Directory D:\DFSRoots\Empresa
+New-SmbShare -Name Empresa -Path D:\DFSRoots\Empresa -ReadAccess 'Authenticated Users'
+New-DfsnRoot -Path \\empresa.local\Empresa -TargetPath \\SRV-ARCH01\Empresa -Type DomainV2
+New-DfsnFolder -Path \\empresa.local\Empresa\Datos -TargetPath \\SRV-ARCH01\Datos
+```
+
+Un espacio de nombres **de dominio** se guarda en AD; si tiene la raíz en dos servidores, sigue andando aunque uno se caiga. Y una carpeta puede tener **dos destinos** (dos servidores con la misma información): para mantenerlos iguales está la **replicación DFS** (*DFS Replication*, DFS-R), que copia solo los cambios. Es la misma tecnología que replica SYSVOL entre los DC. Armarla queda *para más adelante*; lo importante ahora es saber que existe y que **no es un respaldo**: si alguien borra un archivo, se borra en los dos lados.
+
+## SMB hoy
+
+Un par de cosas actuales que vas a encontrar:
+
+- **SMB 1** está obsoleto y no viene instalado desde hace años (Windows 10 1709 y Windows Server 2019). Si un equipo viejo (un escáner, un NAS antiguo) solo habla SMB 1, la solución es reemplazarlo o actualizarlo, no reactivar SMB 1.
+- **La firma SMB** (que protege contra que alguien modifique los paquetes en el camino) es obligatoria por defecto en más conexiones desde Windows 11 24H2 y Windows Server 2025. Algunos NAS o equipos viejos sin firma dejan de funcionar con eso; la solución es actualizarlos.
+- **Cifrado SMB** (`-EncryptData` en el recurso) para datos sensibles, y **SMB sobre QUIC** para acceder desde afuera sin VPN: *para más adelante*.
+
+<Terminal ejercicio={recursos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Dejar el recurso con Leer para Everyone">
+    Nadie puede guardar por la red aunque NTFS lo permita. Control total para Authenticated Users y que decida NTFS.
+  </ErrorComun>
+  <ErrorComun titulo="Buscar el problema solo en NTFS">
+    Por la red gana el más restrictivo. Si alguien no puede escribir, mirá también Get-SmbShareAccess.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que un recurso con $ está protegido">
+    Solo no aparece en la lista. Lo que protege son los permisos.
+  </ErrorComun>
+  <ErrorComun titulo="Apuntar todo al nombre del servidor">
+    El día que se reemplaza, hay que cambiar todo. Con DFS se cambia el destino y listo.
+  </ErrorComun>
+  <ErrorComun titulo="Usar la replicación DFS como respaldo">
+    Replica también los borrados y los archivos cifrados por un ransomware. El respaldo es otra cosa (módulo 3.5).
+  </ErrorComun>
+  <ErrorComun titulo="Reactivar SMB 1 por un equipo viejo">
+    Expone toda la red. Actualizá o reemplazá el equipo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- New-SmbShare publica una carpeta; sin parámetros de acceso, da Leer a Everyone. Los recursos con $ solo están ocultos.
+- Por la red valen el recurso y NTFS a la vez: gana el más restrictivo. Recomendado: Control total para Authenticated Users en el recurso y todo el control en NTFS.
+- La enumeración basada en acceso muestra a cada uno solo lo que puede abrir.
+- FSRM: cuotas estrictas o blandas y filtros de archivos activos o pasivos (por extensión).
+- DFS: un espacio de nombres de dominio (\\empresa.local\Empresa) desacopla el nombre del servidor; DFS-R replica, pero no es un respaldo.
+- SMB 1 no se reactiva; la firma SMB es obligatoria en más casos desde Windows 11 24H2 y Windows Server 2025.
+</Resumen>

@@ -170,6 +170,7 @@ export function treeOf(s: PsSession): FsTree {
     sd: (p) => getSd(s, p),
     isDir: (p) => /^[a-z]:\\?$/i.test(p) || s.fs.get(p)?.type !== 'file',
     parent: (p) => (/^[a-z]:\\?$/i.test(p) ? undefined : s.fs.parent(p)),
+    owner: (p) => ownerOf(s, p),
   }
 }
 

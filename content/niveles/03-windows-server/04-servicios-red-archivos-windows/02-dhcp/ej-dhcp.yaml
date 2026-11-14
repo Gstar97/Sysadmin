@@ -1,0 +1,99 @@
+tipo: terminal
+shell: powershell
+titulo: DHCP para la oficina, con un compañero de respaldo
+descripcion: >-
+  Hasta hoy, las direcciones de la oficina las daba el router del proveedor. Desde ahora las va a
+  dar Windows: DC01 y DC02, en conmutación por error. La red es 192.168.10.0/24; de .1 a .49 son
+  equipos con IP fija y de .100 a .199 son para las PC. La impresora del primer piso tiene que
+  tener siempre la .60. PC01 ya está configurada por DHCP y, como el router dejó de darlas,
+  quedó con una dirección 169.254.x.x. Estás en DC01.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1, 192.168.10.11] }
+  ad: {}
+  servidores:
+    - { equipo: DC02, dominio: empresa.local, controlador_dominio: true, red: { ip: 192.168.10.11, dns: [192.168.10.10, 127.0.0.1] } }
+    - { equipo: PC01, dominio: empresa.local, red: { ip: 169.254.20.31, prefijo: 16, puerta_enlace: '', dns: [], dhcp: true } }
+pasos:
+  - consigna: Instalá el rol DHCP con sus herramientas y autorizá a DC01 en Active Directory.
+    verificar:
+      - { caracteristica: DHCP }
+      - { dhcp_autorizado: true }
+    pistas:
+      - "Install-WindowsFeature DHCP -IncludeManagementTools"
+      - "Add-DhcpServerInDC -DnsName dc01.empresa.local -IPAddress 192.168.10.10"
+    solucion:
+      - Install-WindowsFeature DHCP -IncludeManagementTools
+      - Add-DhcpServerInDC -DnsName dc01.empresa.local -IPAddress 192.168.10.10
+      - Get-DhcpServerInDC
+    explicacion: >-
+      En un dominio, un servidor DHCP de Windows no entrega direcciones hasta que está autorizado
+      en AD. Es una protección contra servidores "piratas" que alguien instala sin querer.
+  - consigna: >-
+      Creá el ámbito Oficina de .100 a .199 con máscara 255.255.255.0, todavía inactivo, y con
+      concesiones de 8 días.
+    verificar:
+      - { ambito_dhcp: 192.168.10.0, activo: false, inicio: 192.168.10.100, fin: 192.168.10.199 }
+    pistas:
+      - "Add-DhcpServerv4Scope -Name Oficina -StartRange 192.168.10.100 -EndRange 192.168.10.199 -SubnetMask 255.255.255.0 -State InActive -LeaseDuration 8.00:00:00"
+    solucion: ["Add-DhcpServerv4Scope -Name Oficina -StartRange 192.168.10.100 -EndRange 192.168.10.199 -SubnetMask 255.255.255.0 -State InActive -LeaseDuration 8.00:00:00"]
+    explicacion: >-
+      Inactivo para terminar de configurarlo antes de que alguien reciba una dirección sin puerta
+      de enlace ni DNS.
+  - consigna: >-
+      Configurá las opciones del ámbito: puerta de enlace 192.168.10.1, DNS DC01 y DC02, y el
+      dominio empresa.local. Reservá la .60 para la impresora (MAC 00-1B-A9-4C-22-10).
+    verificar:
+      - { ambito_dhcp: 192.168.10.0, puerta_enlace: 192.168.10.1, dns: [192.168.10.10, 192.168.10.11] }
+      - { reserva_dhcp: 192.168.10.60, mac: 00-1B-A9-4C-22-10 }
+    pistas:
+      - "Set-DhcpServerv4OptionValue -ScopeId 192.168.10.0 -Router 192.168.10.1 -DnsServer 192.168.10.10, 192.168.10.11 -DnsDomain empresa.local"
+      - "La .60 está fuera del rango .100-.199: las reservas pueden ir en cualquier dirección de la red del ámbito."
+    solucion:
+      - Set-DhcpServerv4OptionValue -ScopeId 192.168.10.0 -Router 192.168.10.1 -DnsServer 192.168.10.10, 192.168.10.11 -DnsDomain empresa.local
+      - Add-DhcpServerv4Reservation -ScopeId 192.168.10.0 -IPAddress 192.168.10.60 -ClientId 00-1B-A9-4C-22-10 -Name impresora-p1
+  - consigna: Activá el ámbito y comprobá que PC01 obtuvo una dirección con la configuración completa.
+    verificar:
+      - { ambito_dhcp: 192.168.10.0, activo: true }
+      - { en: PC01, verificar: { concesion_dhcp: true, de: DC01 } }
+      - { en: PC01, verificar: { dns_cliente: [192.168.10.10, 192.168.10.11] } }
+    pistas:
+      - "Set-DhcpServerv4Scope -ScopeId 192.168.10.0 -State Active"
+      - "Get-DhcpServerv4Lease -ScopeId 192.168.10.0, o Invoke-Command PC01 { ipconfig /all }"
+    solucion:
+      - Set-DhcpServerv4Scope -ScopeId 192.168.10.0 -State Active
+      - Get-DhcpServerv4Lease -ScopeId 192.168.10.0
+      - Invoke-Command PC01 { ipconfig /all }
+  - consigna: >-
+      Ahora el respaldo: instalá DHCP en DC02, autorizalo y armá la conmutación por error
+      "dc01-dc02" del ámbito, repartiendo la carga 50 y 50.
+    verificar:
+      - { conmutacion_dhcp: DC02, modo: LoadBalance }
+      - { en: DC02, verificar: { ambito_dhcp: 192.168.10.0, puerta_enlace: 192.168.10.1 } }
+    pistas:
+      - "Invoke-Command DC02 { Install-WindowsFeature DHCP -IncludeManagementTools }"
+      - "Add-DhcpServerInDC -DnsName dc02.empresa.local -IPAddress 192.168.10.11"
+      - "Add-DhcpServerv4Failover -Name dc01-dc02 -PartnerServer DC02 -ScopeId 192.168.10.0 -LoadBalancePercent 50 -SharedSecret 'Una.Clave.Larga'"
+    solucion:
+      - Invoke-Command DC02 { Install-WindowsFeature DHCP -IncludeManagementTools }
+      - Add-DhcpServerInDC -DnsName dc02.empresa.local -IPAddress 192.168.10.11
+      - Add-DhcpServerv4Failover -Name dc01-dc02 -PartnerServer DC02 -ScopeId 192.168.10.0 -LoadBalancePercent 50 -SharedSecret 'Una.Clave.Larga'
+      - Get-DhcpServerv4Failover
+    explicacion: >-
+      El ámbito se copia a DC02 con sus opciones y reservas, y desde ahora las concesiones se
+      replican entre los dos. Si cambiás una opción en uno, replicala con
+      Invoke-DhcpServerv4FailoverReplication.
+  - consigna: >-
+      Probalo: detené el servicio DHCP de DC01 y reiniciá PC01 (al arrancar pide dirección de
+      nuevo). Tiene que atenderla DC02. Después volvé a arrancar el servicio.
+    verificar:
+      - { en: PC01, verificar: { concesion_dhcp: true, de: DC02 } }
+      - { servicio: DHCPServer, estado: Running }
+    pistas:
+      - "Stop-Service DHCPServer; Restart-Computer -ComputerName PC01 -Force"
+    solucion:
+      - Stop-Service DHCPServer
+      - Restart-Computer -ComputerName PC01 -Force
+      - Invoke-Command PC01 { ipconfig /all }
+      - Start-Service DHCPServer

@@ -1,0 +1,98 @@
+tipo: troubleshooting
+titulo: El segundo piso no tiene red
+descripcion: >-
+  Incidente simulado. El fin de semana se mudó Administración al segundo piso, que es una VLAN
+  nueva (192.168.20.0/24). El lunes, ninguna PC de ese piso tiene red. Las del primer piso andan
+  bien. El DHCP está en DC01 y DC02, en conmutación por error. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: Lunes, 8:20. Seis personas de Administración sin red. Te sentás en una de las PC.
+    evidencia:
+      - titulo: ipconfig (en PC-ADM02)
+        contenido: |
+          Ethernet adapter Ethernet:
+
+             Connection-specific DNS Suffix  . :
+             Autoconfiguration IPv4 Address. . : 169.254.88.14
+             Subnet Mask . . . . . . . . . . . : 255.255.0.0
+             Default Gateway . . . . . . . . . :
+    opciones:
+      - { texto: "Es una APIPA: nadie le contestó al pedido de DHCP. Revisar si existe un ámbito para esa red", ir_a: n_ambito, minutos: 4 }
+      - texto: Ponerle IP fija a mano a las seis PC
+        ir_a: n1
+        minutos: 20
+        consecuencia: >-
+          Funcionan, pero quedan seis IP fijas sin registrar, que van a chocar con el DHCP el día
+          que alguien lo arregle. Y la causa sigue ahí.
+      - texto: Reiniciar el switch del segundo piso
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Vuelve igual. Las PC tienen enlace (el cable anda): lo que falta es la dirección.
+  n_ambito:
+    situacion: El servidor tiene un solo ámbito, el del primer piso. Nadie creó el de la VLAN nueva.
+    evidencia:
+      - titulo: Get-DhcpServerv4Scope (en DC01)
+        contenido: |
+          ScopeId      SubnetMask    Name    State  StartRange     EndRange       LeaseDuration
+          -------      ----------    ----    -----  ----------     --------       -------------
+          192.168.10.0 255.255.255.0 Oficina Active 192.168.10.100 192.168.10.199 8.00:00:00
+    opciones:
+      - { texto: "Crear el ámbito 192.168.20.0/24 con sus opciones, sumarlo a la conmutación por error y activarlo", ir_a: n_relay, minutos: 8 }
+      - texto: Agrandar el ámbito del primer piso para que alcance
+        ir_a: n_ambito
+        minutos: 5
+        consecuencia: >-
+          Las PC del segundo piso están en otra red: aunque recibieran una 192.168.10.x, su puerta
+          de enlace no estaría en su VLAN. Cada red necesita su ámbito.
+  n_relay:
+    situacion: >-
+      El ámbito está activo y en conmutación por error, pero las PC siguen con 169.254. Y en el
+      servidor no aparece ningún pedido de esa red.
+    evidencia:
+      - titulo: Get-DhcpServerv4ScopeStatistics -ScopeId 192.168.20.0
+        contenido: |
+          ScopeId      Free InUse PercentageInUse Reserved Pending
+          -------      ---- ----- --------------- -------- -------
+          192.168.20.0 100  0     0               0        0
+      - titulo: show running-config interface vlan 20 (en el router del core)
+        contenido: |
+          interface Vlan20
+           description Administracion
+           ip address 192.168.20.1 255.255.255.0
+    opciones:
+      - { texto: "Falta el reenvío de DHCP en la VLAN 20: el Discover es un broadcast y no cruza el router", ir_a: n_helper, minutos: 6 }
+      - texto: Instalar un tercer servidor DHCP en el segundo piso
+        ir_a: n_relay
+        minutos: 30
+        consecuencia: >-
+          Funcionaría, pero suma un servidor que mantener. Lo habitual es que el router reenvíe los
+          pedidos a los servidores que ya tenés.
+  n_helper:
+    situacion: >-
+      En redes de Cisco, el reenvío se configura con ip helper-address en la interfaz de la VLAN,
+      una línea por cada servidor DHCP (los dos de la conmutación por error).
+    evidencia:
+      - titulo: La configuración del router
+        contenido: |
+          interface Vlan20
+           ip helper-address 192.168.10.10
+           ip helper-address 192.168.10.11
+    opciones:
+      - { texto: "Aplicarla y pedir dirección de nuevo en una PC (ipconfig /renew)", ir_a: n_ok, minutos: 4 }
+      - texto: Configurar solo DC01 como helper
+        ir_a: n_helper
+        minutos: 2
+        consecuencia: >-
+          Anda hoy, pero si DC01 se cae, el piso se queda sin DHCP aunque DC02 esté sano: el router
+          no le manda los pedidos. Los dos servidores van como helper.
+  n_ok:
+    final: exito
+    resumen: >-
+      Faltaban dos cosas para la red nueva. Un ámbito propio (cada red necesita el suyo, con su
+      puerta de enlace) y el reenvío de DHCP en el router: el pedido de una PC sin dirección es un
+      broadcast, que no sale de su VLAN. Con ip helper-address hacia los dos servidores, el
+      router reenvía los pedidos y el servidor elige el ámbito por la red de la interfaz que lo
+      reenvió. Para la próxima mudanza, en la lista del cambio van: la VLAN, la interfaz del
+      router, el helper con los dos servidores y el ámbito en la conmutación por error.

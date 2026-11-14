@@ -1,0 +1,134 @@
+---
+id: n3-m4-l1
+titulo: DNS en Windows Server
+minutos: 120
+objetivos:
+  - Crear zonas integradas en AD, zonas inversas, alias y reenviadores condicionales.
+  - Configurar la antigüedad y la limpieza de registros viejos sin perder los que importan.
+  - Diagnosticar registros con Resolve-DnsName y nslookup, y leer bien sus respuestas.
+glosario: [zona-integrada-ad, zona-inversa, reenviador-condicional, limpieza-dns]
+verificado: 2026-11
+---
+
+import responde from './como-responde.svg?raw'
+import salidas from './salidas-dns.yaml'
+import dns from './ej-dns.yaml'
+
+En el Nivel 2 viste cómo funciona el DNS y en el módulo anterior viste que, sin él, Active Directory no encuentra ni a sus propios controladores. Al crear el dominio, el DNS quedó instalado en cada DC y ya resuelve los nombres del dominio. Esta lección es lo que viene después: mantenerlo ordenado. Zona inversa, alias para los servicios, la empresa socia por la VPN, y los registros viejos que se acumulan y un día hacen que una PC se conecte a otra.
+
+<AntesDeEmpezar>
+- Zonas, registros y resolución DNS (lecciones 2.3.3 y 2.3.4).
+- Por qué AD depende del DNS y los registros SRV (lección 3.3.1).
+</AntesDeEmpezar>
+
+## Las zonas de un DC
+
+En un controlador de dominio, la consola **DNS** (`dnsmgmt.msc`) o `Get-DnsServerZone` muestran:
+
+- **empresa.local**: la zona del dominio, con un registro A por cada equipo y los SRV de los servicios de AD.
+- **_msdcs.empresa.local**: los registros que usan los equipos para encontrar los DC de todo el bosque.
+- Zonas creadas solas por el servidor (0, 127 y 255.in-addr.arpa) y **TrustAnchors**, que podés ignorar.
+
+Las dos primeras son **zonas integradas en Active Directory**: en lugar de vivir en un archivo de un servidor, se guardan en la base de AD y se replican con ella. Ventajas: todos los DC con DNS tienen la misma copia, se puede modificar en cualquiera (no hay un "primario" que si se cae deja todo en solo lectura) y aceptan **actualizaciones dinámicas seguras**: solo los equipos del dominio pueden registrar o cambiar su propio nombre. El **alcance de replicación** dice a qué DC llega la zona: a todos los servidores DNS del dominio (`Domain`, lo habitual) o del bosque (`Forest`).
+
+Cada equipo del dominio registra su propio nombre al arrancar y lo refresca cada día. Por eso casi nunca vas a crear registros A de PC a mano: solo de lo que no se registra solo (una impresora, un equipo Linux, un servicio con nombre propio).
+
+## Cómo contesta el servidor
+
+<Diagrama svg={responde} alt="PC01, que usa los DC como DNS, pregunta por intranet. El DNS de DC01 revisa en orden: 1, sus zonas (empresa.local, _msdcs, la inversa 10.168.192.in-addr.arpa), donde contesta con autoridad y, si el nombre es de su zona y no está, responde que no existe; 2, los reenviadores condicionales (socio.local se le pregunta a 10.20.0.5, el DNS de la empresa socia por la VPN); 3, su memoria; 4, los reenviadores o las sugerencias de raíz para todo lo demás, que va a internet. Al costado: una zona integrada en AD se guarda en la base de AD y viaja con su replicación." pie="Primero lo propio, después las excepciones (condicionales), y al final internet." />
+
+## Zona inversa
+
+La **zona inversa** responde la pregunta al revés: "¿qué nombre tiene 192.168.10.10?". Los registros son **PTR** y los nombres se escriben al revés, dentro de `in-addr.arpa`: 192.168.10.10 es el registro `10` de la zona `10.168.192.in-addr.arpa`.
+
+No es obligatoria para que AD funcione, pero la vas a extrañar: los registros de muchos programas muestran IP en lugar de nombres, algunas aplicaciones la exigen, y `nslookup` dice **Server: UnKnown** cuando no la encuentra (la respuesta es correcta igual; solo no sabe cómo se llama el servidor).
+
+```powershell
+Add-DnsServerPrimaryZone -NetworkId 192.168.10.0/24 -ReplicationScope Domain
+Add-DnsServerResourceRecordPtr -ZoneName 10.168.192.in-addr.arpa -Name 10 -PtrDomainName dc01.empresa.local
+Add-DnsServerResourceRecordA -ZoneName empresa.local -Name impresora-p1 -IPv4Address 192.168.10.40 -CreatePtr
+```
+
+El parámetro `-CreatePtr` crea el registro inverso junto con el A, si la zona inversa existe.
+
+## Alias y reenviadores condicionales
+
+Un **CNAME** (alias) da un nombre fácil a un servicio: `intranet.empresa.local` apunta a `srv-web01.empresa.local`. Si la intranet se muda, se cambia un registro y nadie se entera.
+
+```powershell
+Add-DnsServerResourceRecordCName -ZoneName empresa.local -Name intranet -HostNameAlias srv-web01.empresa.local
+```
+
+Un **reenviador condicional** dice: "los nombres de este dominio, preguntáselos a estos servidores". Es el caso típico de una empresa socia o recién comprada conectada por VPN: sus nombres (`socio.local`) no están en internet, y sin el condicional tu DNS no tiene a quién preguntar.
+
+```powershell
+Add-DnsServerConditionalForwarderZone -Name socio.local -MasterServers 10.20.0.5 -ReplicationScope Forest
+```
+
+No confundir con los **reenviadores** a secas (`Add-DnsServerForwarder`, lección 3.3.2), que son para todo lo que no es tuyo: internet.
+
+<EnSimple>
+Zonas integradas en AD para lo tuyo, zona inversa para que las IP tengan nombre, alias para los servicios y reenviadores condicionales para los dominios de otros.
+</EnSimple>
+
+## Registros viejos: antigüedad y limpieza
+
+Cada PC registra su nombre cuando arranca. Cuando la notebook de alguien se va de la empresa, o cambia de IP, el registro viejo queda. Con los años se juntan cientos, y el problema aparece el día que esa IP la toma otra PC: escribís `notebook-ventas3` y te conectás a la máquina equivocada.
+
+La solución es la **antigüedad y limpieza** (*aging and scavenging*): cada registro dinámico tiene una fecha (*timestamp*), que el equipo refresca. Si un registro no se refresca durante dos períodos seguidos (por defecto 7 días de "no actualizar" más 7 de "actualizar"), el servidor lo borra. Los registros estáticos (los que creaste a mano, con fecha 0) no se borran nunca.
+
+```powershell
+Get-DnsServerResourceRecord -ZoneName empresa.local -RRType A     # mirá la columna Timestamp
+Set-DnsServerScavenging -ScavengingState $true -ScavengingInterval 7.00:00:00 -ApplyOnAllZones
+Start-DnsServerScavenging
+```
+
+Dos reglas: actívala en **un solo servidor** (el que hace la limpieza; los demás reciben los borrados por replicación) y, antes de activarla, revisá que lo importante (servidores, impresoras, equipos con IP fija que no se registran) tenga registros estáticos o se registre solo. Así no borrás nada que haga falta.
+
+<Pregunta id="p05" />
+
+## Diagnosticar
+
+Tres herramientas, del lado del cliente:
+
+```powershell
+Resolve-DnsName intranet.empresa.local                     # con el DNS configurado en la placa
+Resolve-DnsName intranet.empresa.local -Server 192.168.10.11  # preguntándole a un servidor en particular
+nslookup intranet
+ipconfig /flushdns                                          # borrar la memoria del cliente
+```
+
+Cuando algo "no resuelve", preguntate en orden: **¿a qué servidor le pregunta la PC?** (`Get-DnsClientServerAddress`; si es 8.8.8.8, ahí está el problema), **¿qué contesta ese servidor?** (con `-Server`, para descartar la memoria del cliente) y **¿el registro existe y apunta a lo correcto?** (`Get-DnsServerResourceRecord` en el servidor).
+
+Y sabé leer lo que contesta: "Non-authoritative answer" en nslookup quiere decir que la respuesta vino de la memoria del servidor o de otro servidor (lo normal para internet); "DNS name does not exist" es que el servidor sabe que ese nombre no existe; "timeout" es que no hubo respuesta.
+
+<Emparejar ejercicio={salidas} />
+
+<Terminal ejercicio={dns} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Crear registros A de las PC a mano">
+    Se registran solas. Uno a mano queda estático y, si la PC cambia de IP, apunta a la equivocada para siempre.
+  </ErrorComun>
+  <ErrorComun titulo="Activar la limpieza sin revisar los estáticos">
+    Lo que se registró solo una vez y nunca más (un equipo viejo, una impresora) puede borrarse. Revisá antes y pasá lo importante a estático.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir reenviador con reenviador condicional">
+    El reenviador es para todo internet; el condicional, para un dominio puntual que no está en internet.
+  </ErrorComun>
+  <ErrorComun titulo="Asustarse por “Server: UnKnown”">
+    Es solo que falta la zona inversa (o el PTR del servidor). La respuesta de abajo es válida.
+  </ErrorComun>
+  <ErrorComun titulo="Probar sin -Server">
+    El cliente puede estar respondiendo de memoria. Preguntale directo al servidor que querés probar.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Las zonas del dominio están integradas en AD: se replican con AD, se modifican en cualquier DC y aceptan actualizaciones seguras.
+- El servidor revisa: sus zonas, los reenviadores condicionales, su memoria y, al final, los reenviadores o la raíz.
+- Zona inversa (PTR en in-addr.arpa) para que las IP tengan nombre; -CreatePtr al crear un A.
+- CNAME para servicios; reenviador condicional para dominios de otros (socio.local).
+- Antigüedad y limpieza borran los registros dinámicos que no se refrescan en 7 + 7 días; los estáticos no se tocan.
+- Diagnóstico: a qué servidor pregunta la PC, qué contesta ese servidor (-Server) y si el registro existe.
+</Resumen>

@@ -1,0 +1,98 @@
+tipo: terminal
+shell: powershell
+titulo: Ordenar el DNS de empresa.local
+descripcion: >-
+  El DNS de empresa.local funciona, pero nadie lo mantuvo: no hay zona inversa, falta el nombre de
+  la intranet, la empresa socia (socio.local) no se resuelve por la VPN y hay registros viejos de
+  equipos que ya no existen. Estás en DC01, que es servidor DNS. PC01 es una PC del dominio.
+estado_inicial:
+  equipo: DC01
+  dominio: empresa.local
+  red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+  ad: {}
+  dns:
+    - { nombre: www.socio.local, valor: 10.20.0.80 }
+  dns_servidor:
+    zonas:
+      - nombre: empresa.local
+        registros:
+          - { nombre: pc-vieja, valor: 192.168.10.77, hace_dias: 45 }
+          - { nombre: notebook-ventas3, valor: 192.168.10.81, hace_dias: 60 }
+          - { nombre: srv-web01, valor: 192.168.10.30 }
+          - { nombre: impresora-p1, valor: 192.168.10.40 }
+  servidores:
+    - { equipo: PC01, dominio: empresa.local, red: { ip: 192.168.10.50, dns: [192.168.10.10] } }
+pasos:
+  - consigna: >-
+      Mirá qué zonas tiene el servidor. Después preguntá con nslookup por dc01 y fijate qué dice en
+      "Server".
+    verificar:
+      - { comando_usado: "get-dnsserverzone" }
+      - { comando_usado: "nslookup" }
+      - { salida_contiene: "UnKnown" }
+    solucion:
+      - Get-DnsServerZone
+      - nslookup dc01
+    explicacion: >-
+      nslookup busca el nombre del servidor DNS con una consulta inversa. Sin zona inversa no lo
+      encuentra y muestra UnKnown, aunque la respuesta sea correcta.
+  - consigna: >-
+      Creá la zona inversa de 192.168.10.0/24, integrada en AD con alcance de dominio, y agregale el
+      registro PTR de DC01 (192.168.10.10 → dc01.empresa.local).
+    verificar:
+      - { zona_dns: 10.168.192.in-addr.arpa, inversa: true, integrada_ad: true }
+      - { registro_dns: 10.10.168.192.in-addr.arpa, tipo: PTR, valor: dc01.empresa.local }
+    pistas:
+      - "Add-DnsServerPrimaryZone -NetworkId 192.168.10.0/24 -ReplicationScope Domain"
+      - "Add-DnsServerResourceRecordPtr -ZoneName 10.168.192.in-addr.arpa -Name 10 -PtrDomainName dc01.empresa.local"
+    solucion:
+      - Add-DnsServerPrimaryZone -NetworkId 192.168.10.0/24 -ReplicationScope Domain
+      - Add-DnsServerResourceRecordPtr -ZoneName 10.168.192.in-addr.arpa -Name 10 -PtrDomainName dc01.empresa.local
+      - nslookup dc01
+    explicacion: >-
+      En la zona inversa los nombres van al revés: el registro "10" de la zona
+      10.168.192.in-addr.arpa es la dirección 192.168.10.10.
+  - consigna: >-
+      La intranet corre en srv-web01. Creá el alias intranet.empresa.local que apunte a
+      srv-web01.empresa.local, y comprobá desde PC01 que resuelve.
+    verificar:
+      - { registro_dns: intranet.empresa.local, tipo: CNAME, valor: srv-web01.empresa.local }
+      - { en: PC01, verificar: { resuelve: intranet.empresa.local, valor: 192.168.10.30 } }
+    pistas:
+      - "Add-DnsServerResourceRecordCName -ZoneName empresa.local -Name intranet -HostNameAlias srv-web01.empresa.local"
+    solucion:
+      - Add-DnsServerResourceRecordCName -ZoneName empresa.local -Name intranet -HostNameAlias srv-web01.empresa.local
+      - Invoke-Command PC01 { Resolve-DnsName intranet.empresa.local }
+    explicacion: >-
+      Con un alias, si la intranet se muda a otro servidor, se cambia un solo registro y la gente
+      sigue escribiendo el mismo nombre.
+  - consigna: >-
+      Por la VPN con la empresa socia, sus servidores DNS están en 10.20.0.5. Hacé que los nombres
+      de socio.local se le pregunten a ese servidor, en todos los DNS del bosque.
+    verificar:
+      - { zona_dns: socio.local, reenviador_condicional: true }
+      - { resuelve: www.socio.local, valor: 10.20.0.80 }
+    pistas:
+      - "Add-DnsServerConditionalForwarderZone -Name socio.local -MasterServers 10.20.0.5 -ReplicationScope Forest"
+    solucion:
+      - Add-DnsServerConditionalForwarderZone -Name socio.local -MasterServers 10.20.0.5 -ReplicationScope Forest
+      - Resolve-DnsName www.socio.local
+  - consigna: >-
+      Hay registros de equipos que ya no existen (mirá las fechas de los registros A). Activá la
+      antigüedad y la limpieza en el servidor (con -ApplyOnAllZones) y lanzá una limpieza.
+    verificar:
+      - { limpieza_dns: true }
+      - { zona_dns: empresa.local, antiguedad: true }
+      - { registro_dns: pc-vieja.empresa.local, existe: false }
+      - { registro_dns: srv-web01.empresa.local, valor: 192.168.10.30 }
+    pistas:
+      - "Get-DnsServerResourceRecord -ZoneName empresa.local -RRType A muestra el Timestamp: 0 es un registro estático."
+      - "Set-DnsServerScavenging -ScavengingState $true -ScavengingInterval 7.00:00:00 -ApplyOnAllZones"
+    solucion:
+      - Get-DnsServerResourceRecord -ZoneName empresa.local -RRType A
+      - Set-DnsServerScavenging -ScavengingState $true -ScavengingInterval 7.00:00:00 -ApplyOnAllZones
+      - Start-DnsServerScavenging -Force
+    explicacion: >-
+      Solo se borran los registros dinámicos (con fecha) más viejos que los dos intervalos (7 + 7
+      días). Los estáticos, como srv-web01 o la impresora, no se tocan nunca: por eso conviene que
+      los servidores y las impresoras tengan registros estáticos o se registren solos.

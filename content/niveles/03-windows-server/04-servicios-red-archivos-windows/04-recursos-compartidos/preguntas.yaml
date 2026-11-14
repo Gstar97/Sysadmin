@@ -1,0 +1,106 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: El recurso compartido da Leer a Everyone y NTFS da Modificar a GG-Ventas. ¿Qué puede hacer alguien de Ventas por la red?
+  opciones:
+    - { texto: "Leer: por la red gana el más restrictivo", correcta: true, explicacion: "Para guardar, el recurso también tiene que permitirlo." }
+    - { texto: "Modificar: NTFS manda", explicacion: "Por la red pasan los dos controles." }
+    - { texto: "Nada", explicacion: "Los dos permiten leer." }
+    - { texto: "Control total", explicacion: "Ninguno de los dos lo da." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la configuración recomendada para el permiso del recurso compartido?
+  opciones:
+    - { texto: "Control total (o Cambiar) para Authenticated Users, y todo el detalle en NTFS", correcta: true, explicacion: "Una sola lista que administrar." }
+    - { texto: "El mismo detalle que en NTFS, grupo por grupo", explicacion: "Duplica el trabajo y los errores." }
+    - { texto: "Leer para Everyone", explicacion: "Nadie podría guardar por la red." }
+    - { texto: "Control total para Everyone y NTFS abierto", explicacion: "Sin NTFS, todos entran a todo." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace la enumeración basada en acceso?
+  opciones:
+    - { texto: "Esconde de la lista las carpetas que la persona no puede abrir", correcta: true, explicacion: "No cambia permisos; cambia lo que se ve." }
+    - { texto: "Bloquea el acceso a las carpetas ocultas", explicacion: "No bloquea nada: oculta de la lista." }
+    - { texto: "Cifra las carpetas", explicacion: "No tiene relación." }
+    - { texto: "Da permisos automáticamente según el área", explicacion: "Los permisos los ponés vos." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Compartiste una carpeta como Gerencia$ para que no la vean. ¿Está protegida?
+  opciones:
+    - { texto: "No: solo no aparece en la lista; cualquiera que escriba el nombre llega, si los permisos lo dejan", correcta: true, explicacion: "Lo que protege son los permisos." }
+    - { texto: "Sí: los recursos con $ solo los ven los administradores", explicacion: "El $ solo los oculta." }
+    - { texto: "Sí, si además está en otro disco", explicacion: "No cambia nada." }
+    - { texto: "No, porque los $ son de Windows", explicacion: "Podés crear los tuyos; el problema es que no protegen." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés medir cuánto usa cada área antes de ponerle un límite. ¿Qué cuota usás?
+  opciones:
+    - { texto: "Blanda (soft): avisa sin bloquear", correcta: true, explicacion: "Sirve para medir y avisar." }
+    - { texto: "Estricta (hard)", explicacion: "Bloquearía al llegar al límite." }
+    - { texto: "Un filtro de archivos pasivo", explicacion: "Los filtros miran tipos de archivo, no espacio." }
+    - { texto: "Ninguna: se mide a mano", explicacion: "FSRM lo hace solo." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con un filtro activo de 'Audio and Video Files', ¿qué pasa si alguien renombra pelicula.mp4 a pelicula.dat?
+  opciones:
+    - { texto: "Lo puede guardar: los filtros miran la extensión", correcta: true, explicacion: "Son una regla de uso, no una seguridad fuerte." }
+    - { texto: "FSRM lo detecta por el contenido", explicacion: "Miran la extensión." }
+    - { texto: "Se bloquea el usuario", explicacion: "No hay bloqueo de cuentas por esto." }
+    - { texto: "Se borra el archivo", explicacion: "No borra nada." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ventaja tiene que la gente use \\empresa.local\Empresa\Datos en lugar de \\SRV-ARCH01\Datos?
+  opciones:
+    - { texto: "Si se cambia el servidor, se actualiza el destino de la carpeta DFS y nada más", correcta: true, explicacion: "El nombre no depende del servidor." }
+    - { texto: "Es más rápido", explicacion: "No es más rápido." }
+    - { texto: "No necesita permisos NTFS", explicacion: "Los permisos son los mismos." }
+    - { texto: "Hace un respaldo automático", explicacion: "DFS no es un respaldo." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una carpeta DFS tiene dos destinos con replicación DFS. Un ransomware cifra los archivos en uno. ¿Qué pasa en el otro?
+  opciones:
+    - { texto: "Se replican los archivos cifrados: DFS-R no es un respaldo", correcta: true, explicacion: "Replica los cambios, buenos o malos." }
+    - { texto: "Quedan a salvo", explicacion: "La replicación los copia." }
+    - { texto: "DFS detiene la replicación", explicacion: "No detecta ransomware." }
+    - { texto: "Se restauran solos", explicacion: "No hay restauración automática." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que comparte D:\Datos como Datos, con Control total para Authenticated Users.
+  aceptadas:
+    - "New-SmbShare -Name Datos -Path D:\\Datos -FullAccess 'Authenticated Users'"
+    - "New-SmbShare -Name Datos -Path D:\\Datos -FullAccess \"Authenticated Users\""
+  patrones: ["^new-smbshare\\s+(?=.*-name\\s+datos)(?=.*-path\\s+d:\\\\datos)(?=.*-fullaccess\\s+['\"](nt authority\\\\)?authenticated users['\"]).*$"]
+  explicacion: "Agregar -FolderEnumerationMode AccessBased suma la enumeración basada en acceso."
+- id: p10
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: María no puede guardar en \\SRV-ARCH01\Datos\Ventas, aunque NTFS le da Modificar. ¿Qué ves acá?
+  salida: |
+    PS C:\> Get-SmbShareAccess Datos
+
+    Name  ScopeName AccountName AccessControlType AccessRight
+    ----  --------- ----------- ----------------- -----------
+    Datos *         Everyone    Allow             Read
+  opciones:
+    - { texto: "El recurso solo da Leer: por la red, gana el más restrictivo", correcta: true, explicacion: "Dale Control total o Cambiar a Authenticated Users." }
+    - { texto: "Todo bien: el problema está en NTFS", explicacion: "NTFS da Modificar; el recurso lo limita." }
+    - { texto: "María no está en Everyone", explicacion: "Everyone incluye a todos." }
+    - { texto: "El recurso está oculto", explicacion: "No tiene relación." }
+- id: p11
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas afirmaciones sobre SMB hoy son correctas? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "SMB 1 está obsoleto y no viene instalado", correcta: true, explicacion: "Desde Windows 10 1709 y Windows Server 2019." }
+    - { texto: "Windows 11 24H2 y Windows Server 2025 exigen la firma SMB en más conexiones", correcta: true, explicacion: "Algunos equipos viejos dejan de funcionar con eso." }
+    - { texto: "Para un escáner viejo conviene reactivar SMB 1", explicacion: "Conviene actualizarlo o reemplazarlo." }
+    - { texto: "SMB usa el puerto 445", correcta: true, explicacion: "Es el que se abre en el firewall." }

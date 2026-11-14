@@ -150,6 +150,7 @@ cmdlet('Add-DhcpServerInDC', {
     const fqdn = name.includes('.') ? name : `${name}.${st.domain}`
     st.dhcpAuthorized ??= []
     if (!st.dhcpAuthorized.some((x) => x.name === fqdn)) st.dhcpAuthorized.push({ name: fqdn, ip })
+    retryApipaClients(ctx)
     return []
   },
 })
@@ -219,6 +220,7 @@ cmdlet('Add-DhcpServerv4Scope', {
     const state = /^inactive$/i.test(str(ctx, 'State') ?? 'Active') ? 'Inactive' : 'Active'
     const sc: DhcpScope = { id, name: str(ctx, 'Name') ?? id, mask, start, end, state, leaseSeconds: has(ctx, 'LeaseDuration') ? parseSpan(str(ctx, 'LeaseDuration')!) : 8 * 86400, exclusions: [], reservations: [], options: {}, leases: [] }
     d.scopes.push(sc)
+    retryApipaClients(ctx)
     return has(ctx, 'PassThru') ? [scopeObject(sc)] : []
   },
 })
@@ -249,6 +251,7 @@ cmdlet('Set-DhcpServerv4Scope', {
     if (has(ctx, 'LeaseDuration')) sc.leaseSeconds = parseSpan(str(ctx, 'LeaseDuration')!)
     if (has(ctx, 'StartRange')) sc.start = str(ctx, 'StartRange')!
     if (has(ctx, 'EndRange')) sc.end = str(ctx, 'EndRange')!
+    retryApipaClients(ctx)
     return has(ctx, 'PassThru') ? [scopeObject(sc)] : []
   },
 })
@@ -661,6 +664,24 @@ export function dhcpRelease(client: PsSession) {
 /** Datos de la concesión actual para ipconfig /all. */
 export function leaseInfo(client: PsSession): { server: string; obtained: Date; expires: Date; suffix: string } | undefined {
   return (client.data.dhcpLease as { server: string; obtained: Date; expires: Date; suffix: string }[] | undefined)?.[0]
+}
+
+/** Las PC con APIPA reintentan pedir dirección cada 5 minutos: se simula el reintento cuando el servidor queda listo. */
+export function retryApipaClients(ctx: CmdletContext) {
+  const lab = ctx.s.lab
+  if (!lab) return
+  const all = new Set<PsSession>(lab.sessions.values())
+  for (const st of lab.states.values()) {
+    const x = lab.find(st.equipo)
+    if (x) all.add(x)
+  }
+  const got: string[] = []
+  for (const c of all) {
+    if (!c.state.red.dhcp || !c.state.red.ip.startsWith('169.254.')) continue
+    const r = dhcpAcquire(c)
+    if (r.ok) got.push(`${c.state.equipo} obtuvo ${r.ip}`)
+  }
+  if (got.length) ctx.host(`[simulador] Las PC con dirección APIPA reintentan cada 5 minutos: ${got.join(', ')}.\n`)
 }
 
 /** Al arrancar, un equipo con DHCP pide dirección. */

@@ -1,0 +1,119 @@
+tipo: terminal
+shell: powershell
+titulo: Permisos por área en el servidor de archivos
+descripcion: >-
+  SRV-ARCH01 tiene un disco D: con D:\Datos y una carpeta por área (Ventas, Compras y RRHH).
+  Hoy todos ven todo, porque nadie cambió los permisos de fábrica. Los grupos ya existen según
+  AGDLP: DL-Ventas-Modificar (con GG-Ventas adentro), DL-Compras-Modificar y DL-RRHH-Modificar.
+  Pablo (pruiz) es pasante de Ventas: está en GG-Ventas y en GG-Pasantes. Estás en SRV-ARCH01.
+estado_inicial:
+  equipo: SRV-ARCH01
+  dominio: empresa.local
+  red: { ip: 192.168.10.20, dns: [192.168.10.10] }
+  archivos:
+    D:\Datos\Ventas\Precios\lista-2026.xlsx: lista
+    D:\Datos\Ventas\clientes.xlsx: clientes
+    D:\Datos\Compras\proveedores.xlsx: proveedores
+    D:\Datos\RRHH\sueldos.xlsx: sueldos
+  servidores:
+    - equipo: DC01
+      dominio: empresa.local
+      red: { ip: 192.168.10.10, dns: [127.0.0.1] }
+      ad:
+        usuarios:
+          - { sam: mlopez, nombre: María, apellido: López, grupos: [GG-Ventas] }
+          - { sam: pruiz, nombre: Pablo, apellido: Ruiz, grupos: [GG-Ventas, GG-Pasantes] }
+          - { sam: jperez, nombre: Juan, apellido: Pérez, grupos: [GG-Compras] }
+          - { sam: lgarcia, nombre: Lucía, apellido: García, grupos: [GG-RRHH] }
+        grupos:
+          - { nombre: GG-Ventas }
+          - { nombre: GG-Compras }
+          - { nombre: GG-RRHH }
+          - { nombre: GG-Pasantes }
+          - { nombre: DL-Ventas-Modificar, ambito: DomainLocal, miembros: [GG-Ventas] }
+          - { nombre: DL-Compras-Modificar, ambito: DomainLocal, miembros: [GG-Compras] }
+          - { nombre: DL-RRHH-Modificar, ambito: DomainLocal, miembros: [GG-RRHH] }
+pasos:
+  - consigna: Mirá los permisos de D:\Datos y de D:\Datos\RRHH con icacls. ¿Puede Juan, de Compras, leer los sueldos?
+    verificar:
+      - { comando_usado: "icacls" }
+      - { salida_contiene: "BUILTIN\\Users" }
+    solucion:
+      - icacls D:\Datos
+      - icacls D:\Datos\RRHH
+    explicacion: >-
+      (I) quiere decir heredado. Todo viene de la raíz de D:, donde Users (todos los usuarios del
+      dominio, en un servidor miembro) tiene lectura y ejecución, y además puede crear carpetas.
+      Sí: Juan puede leer los sueldos.
+  - consigna: >-
+      Cortá la herencia en D:\Datos copiando los permisos (/inheritance:d), sacá a Users y a
+      CREATOR OWNER, y dale a Domain Users lectura y ejecución solo en esa carpeta (sin marcas de
+      herencia), para que vean las carpetas de las áreas pero no su contenido.
+    verificar:
+      - { herencia_ntfs: D:\Datos, habilitada: false }
+      - { permiso_ntfs: D:\Datos, para: mlopez, nivel: ReadAndExecute }
+      - { permiso_ntfs: D:\Datos\RRHH, para: jperez, nivel: None }
+      - { permiso_ntfs: D:\Datos\RRHH, para: Administrators, nivel: FullControl }
+    pistas:
+      - "icacls D:\\Datos /inheritance:d"
+      - "icacls D:\\Datos /remove Users 'CREATOR OWNER'"
+      - "icacls D:\\Datos /grant 'EMPRESA\\Domain Users:RX'"
+    solucion:
+      - icacls D:\Datos /inheritance:d
+      - icacls D:\Datos /remove Users 'CREATOR OWNER'
+      - icacls D:\Datos /grant 'EMPRESA\Domain Users:RX'
+      - icacls D:\Datos
+    explicacion: >-
+      Sin (OI)(CI), el permiso de Domain Users vale solo para D:\Datos: ven los nombres de las
+      carpetas, pero adentro de cada una no les llega nada. Los administradores y SYSTEM siguen
+      heredando control total, que es lo que hace falta para administrar y respaldar.
+  - consigna: >-
+      Dale Modificar a DL-Ventas-Modificar sobre Ventas y a DL-Compras-Modificar sobre Compras, con
+      herencia a subcarpetas y archivos.
+    verificar:
+      - { permiso_ntfs: D:\Datos\Ventas, para: mlopez, nivel: Modify }
+      - { permiso_ntfs: D:\Datos\Compras, para: jperez, nivel: Modify }
+      - { permiso_ntfs: D:\Datos\Compras, para: mlopez, nivel: None }
+    pistas:
+      - "icacls D:\\Datos\\Ventas /grant 'DL-Ventas-Modificar:(OI)(CI)M'"
+    solucion:
+      - icacls D:\Datos\Ventas /grant 'DL-Ventas-Modificar:(OI)(CI)M'
+      - icacls D:\Datos\Compras /grant 'DL-Compras-Modificar:(OI)(CI)M'
+    explicacion: >-
+      Modificar alcanza para trabajar (leer, crear, cambiar y borrar). Control total agrega
+      cambiar permisos y tomar posesión: no se lo des a usuarios comunes.
+  - consigna: >-
+      RRHH lo hacés con PowerShell: con Get-Acl, una regla nueva de Modificar para
+      DL-RRHH-Modificar (ContainerInherit,ObjectInherit) y Set-Acl. Además, que RRHH no herede
+      nada de arriba (convertí lo heredado en explícito).
+    verificar:
+      - { permiso_ntfs: D:\Datos\RRHH, para: lgarcia, nivel: Modify }
+      - { herencia_ntfs: D:\Datos\RRHH, habilitada: false }
+      - { permiso_ntfs: D:\Datos\RRHH, para: Administrators, nivel: FullControl }
+    pistas:
+      - "$acl = Get-Acl D:\\Datos\\RRHH"
+      - "$acl.SetAccessRuleProtection($true, $true)   # sin herencia, copiando lo heredado"
+      - "$regla = New-Object System.Security.AccessControl.FileSystemAccessRule('EMPRESA\\DL-RRHH-Modificar', 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')"
+      - "$acl.AddAccessRule($regla); Set-Acl D:\\Datos\\RRHH $acl"
+    solucion:
+      - $acl = Get-Acl D:\Datos\RRHH
+      - $acl.SetAccessRuleProtection($true, $true)
+      - $regla = New-Object System.Security.AccessControl.FileSystemAccessRule('EMPRESA\DL-RRHH-Modificar', 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+      - $acl.AddAccessRule($regla)
+      - Set-Acl -Path D:\Datos\RRHH -AclObject $acl
+      - (Get-Acl D:\Datos\RRHH).Access | Format-Table IdentityReference, FileSystemRights, IsInherited
+  - consigna: >-
+      Pablo, el pasante, puede leer Precios pero no cambiar ni borrar nada ahí. Denegale a
+      GG-Pasantes escribir y eliminar en D:\Datos\Ventas\Precios, sin sacarlo de GG-Ventas.
+    verificar:
+      - { permiso_ntfs: D:\Datos\Ventas\Precios, para: pruiz, nivel: ReadAndExecute }
+      - { permiso_ntfs: D:\Datos\Ventas\Precios, para: mlopez, nivel: Modify }
+    pistas:
+      - "icacls D:\\Datos\\Ventas\\Precios /deny 'GG-Pasantes:(OI)(CI)(W,D)'"
+    solucion:
+      - icacls D:\Datos\Ventas\Precios /deny 'GG-Pasantes:(OI)(CI)(W,D)'
+      - icacls D:\Datos\Ventas\Precios
+    explicacion: >-
+      La denegación explícita en Precios se evalúa antes que el Modificar heredado de Ventas, así
+      que a Pablo le gana. Usá las denegaciones con medida: son difíciles de seguir cuando se
+      acumulan. Muchas veces es mejor no dar el permiso que dar y después negar.

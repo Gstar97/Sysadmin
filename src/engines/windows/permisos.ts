@@ -87,6 +87,8 @@ export interface FsTree {
   sd(path: string): SecurityDescriptor | undefined
   isDir(path: string): boolean
   parent(path: string): string | undefined
+  /** Dueño de un objeto (para las entradas de CREATOR OWNER que hereda). */
+  owner?(path: string): string | undefined
 }
 
 /** Todas las entradas que aplican a una ruta, en orden canónico (con las heredadas). */
@@ -113,9 +115,19 @@ export function effectiveAcl(tree: FsTree, path: string): AceView[] {
     }
     const childIsDir = tree.isDir(chain[i - 1].path)
     const next: AceView[] = []
+    const childPath = chain[i - 1].path
     for (const e of here) {
       const inh = inheritTo(e, childIsDir)
-      if (inh) next.push({ ...inh, inherited: true, from: e.inherited ? e.from : node.path, depth: e.depth + 1 })
+      if (!inh) continue
+      const from = e.inherited ? e.from : node.path
+      if (e.identity.toUpperCase() === 'CREATOR OWNER') {
+        // Como Windows: una entrada para el dueño real y la de CREATOR OWNER sigue solo para los hijos.
+        const owner = tree.owner?.(childPath)
+        if (owner && !inh.io) next.push({ ...inh, identity: owner, oi: false, ci: false, io: false, np: false, inherited: true, from, depth: e.depth + 1 })
+        if (childIsDir && (inh.oi || inh.ci) && !e.np) next.push({ ...inh, io: true, inherited: true, from, depth: e.depth + 1 })
+        continue
+      }
+      next.push({ ...inh, inherited: true, from, depth: e.depth + 1 })
     }
     carried = next
   }
