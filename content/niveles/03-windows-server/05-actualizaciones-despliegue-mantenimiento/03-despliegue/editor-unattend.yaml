@@ -1,0 +1,53 @@
+tipo: configuracion
+titulo: Corregir el archivo de respuestas
+consigna: >-
+  Este unattend.xml (la parte que importa) se usa al primer arranque de cada PC clonada. Tiene
+  cuatro problemas: todas las PC salen con el mismo nombre, la zona horaria es de otro país, une
+  al dominio con la cuenta de administrador del dominio y deja la PC en el contenedor Computers.
+  Corregilo así: nombre generado por Windows (*), zona "Argentina Standard Time", la cuenta
+  svc-unir (que solo puede unir equipos) y la OU Equipos dentro de Empresa
+  (OU=Equipos,OU=Empresa,DC=empresa,DC=local).
+lenguaje: texto
+nombre_archivo: unattend.xml
+archivo_inicial: |
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup">
+      <ComputerName>PC-VENTAS</ComputerName>
+      <TimeZone>Pacific Standard Time</TimeZone>
+    </component>
+    <component name="Microsoft-Windows-UnattendedJoin">
+      <Identification>
+        <JoinDomain>empresa.local</JoinDomain>
+        <Credentials>
+          <Domain>empresa.local</Domain>
+          <Username>Administrador</Username>
+          <Password>P@ssw0rd2026</Password>
+        </Credentials>
+      </Identification>
+    </component>
+  </settings>
+reglas:
+  - { tipo: contiene, regex: "<ComputerName>\\*</ComputerName>", mensaje: "El nombre lo genera Windows (*): cada PC sale con uno distinto" }
+  - { tipo: contiene, regex: "<TimeZone>Argentina Standard Time</TimeZone>", mensaje: "La zona horaria es la de Argentina" }
+  - { tipo: contiene, regex: "<Username>svc-unir</Username>", mensaje: "Une al dominio con svc-unir" }
+  - { tipo: no_contiene, regex: "<Username>Administrador</Username>", mensaje: "No usa la cuenta Administrador del dominio" }
+  - { tipo: contiene, regex: "<MachineObjectOU>OU=Equipos,OU=Empresa,DC=empresa,DC=local</MachineObjectOU>", mensaje: "La cuenta del equipo se crea en la OU Equipos" }
+  - { tipo: contiene, regex: "^\\s*</Identification>\\s*$", mensaje: "El bloque Identification sigue cerrado" }
+solucion: |
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup">
+      <ComputerName>*</ComputerName>
+      <TimeZone>Argentina Standard Time</TimeZone>
+    </component>
+    <component name="Microsoft-Windows-UnattendedJoin">
+      <Identification>
+        <JoinDomain>empresa.local</JoinDomain>
+        <MachineObjectOU>OU=Equipos,OU=Empresa,DC=empresa,DC=local</MachineObjectOU>
+        <Credentials>
+          <Domain>empresa.local</Domain>
+          <Username>svc-unir</Username>
+          <Password>P@ssw0rd2026</Password>
+        </Credentials>
+      </Identification>
+    </component>
+  </settings>

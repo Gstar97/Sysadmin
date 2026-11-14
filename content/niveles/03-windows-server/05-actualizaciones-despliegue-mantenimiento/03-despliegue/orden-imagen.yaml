@@ -1,0 +1,15 @@
+tipo: ordenar
+consigna: Ordená los pasos, desde la PC de referencia hasta una PC nueva lista para trabajar.
+pasos:
+  - Instalar Windows 11 en la PC de referencia y entrar en modo auditoría (Ctrl+Shift+F3 en la primera pantalla)
+  - Instalar las actualizaciones y las aplicaciones comunes, sin unir la PC al dominio
+  - Ejecutar Sysprep con /generalize /oobe /shutdown
+  - Arrancar desde WinPE y capturar el disco con DISM /Capture-Image
+  - En la PC nueva, arrancar desde WinPE, particionar y aplicar la imagen con DISM /Apply-Image
+  - Crear el arranque con bcdboot y reiniciar
+  - En el primer arranque, el unattend.xml pone el nombre, la zona horaria y une la PC al dominio
+explicacion: >-
+  La referencia se arma en modo auditoría y sin dominio; Sysprep la generaliza y la apaga para
+  que nadie la vuelva a arrancar antes de capturarla. Capturar y aplicar se hace desde WinPE,
+  porque no se puede copiar un Windows que está funcionando. El unattend.xml completa lo que
+  Sysprep borró.

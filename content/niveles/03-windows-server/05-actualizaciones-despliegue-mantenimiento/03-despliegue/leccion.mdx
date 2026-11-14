@@ -1,0 +1,154 @@
+---
+id: n3-m5-l3
+titulo: Despliegue de equipos
+minutos: 180
+objetivos:
+  - Preparar una imagen de Windows 11 con Sysprep, capturarla y aplicarla con DISM desde WinPE.
+  - Escribir un archivo de respuestas (unattend.xml) que complete la instalación sin preguntas.
+  - Elegir la herramienta de despliegue que corresponde hoy (imagen, Configuration Manager o Autopilot).
+glosario: [sysprep, winpe, dism, unattend, autopilot]
+verificado: 2026-11
+---
+
+import imagen from './imagen.svg?raw'
+import orden from './orden-imagen.yaml'
+import unattend from './editor-unattend.yaml'
+
+El lunes llegan treinta PC nuevas para Ventas. Instalar Windows a mano en cada una, con sus actualizaciones, sus programas y sus ajustes, son días de trabajo y treinta PC que quedan un poco distintas entre sí. **Desplegar** es tener un proceso que deja cualquier PC lista para trabajar, igual a las demás, en poco tiempo y con poca intervención.
+
+<AntesDeEmpezar>
+- Arranque, UEFI y particiones GPT (módulo 1.4 y Nivel 0).
+- Unidades organizativas y delegación (lección 3.3.3) y cuentas de equipo (lección 3.3.4).
+- WSUS (lección anterior): la PC desplegada se actualiza desde ahí.
+</AntesDeEmpezar>
+
+## Tres formas de tener una PC lista
+
+- **A mano**: instalar desde el USB de Windows y configurar. Para una o dos PC está bien; para treinta, no.
+- **Con una imagen**: se prepara **una** PC como querés que queden todas, se la "congela" en un archivo y se copia ese archivo a las demás. Es la forma clásica y la que sigue en muchísimas empresas, aulas y laboratorios.
+- **Con aprovisionamiento**: no se toca el Windows que trae la PC de fábrica; al encenderla y conectarla a internet, se transforma sola en una PC de la empresa (se une, recibe configuración y aplicaciones). Es lo que hace **Windows Autopilot**, y lo que Microsoft recomienda hoy para equipos nuevos.
+
+En esta lección vas a hacer el camino de la imagen de punta a punta, porque te enseña cómo funciona todo por debajo, y vas a ver dónde encaja cada herramienta actual.
+
+## El camino de la imagen
+
+<Diagrama svg={imagen} alt="Cinco pasos. 1, referencia: Windows 11 limpio más las aplicaciones de toda la empresa y ajustes, en modo auditoría y sin unir al dominio. 2, Sysprep con /generalize /oobe /shutdown: borra lo que hace único al equipo (SID, nombre, identificadores, controladores). 3, capturar: arrancar desde WinPE y DISM /Capture-Image a empresa.wim, un archivo con el disco entero. 4, aplicar en cada PC, desde USB o la red: particionar, DISM /Apply-Image y bcdboot. 5, primer arranque: la configuración inicial lee unattend.xml (idioma, nombre, cuenta, unirse al dominio) y después llegan las GPO y WSUS. Abajo, qué meter en la imagen: delgada (Windows actualizado y poco más, las aplicaciones después) o gruesa (todo adentro, más rápida de aplicar pero hay que rehacerla con cada cambio). Y las herramientas en 2026: Windows Autopilot, Configuration Manager; MDT retirado en enero de 2026; WDS obsoleto y con límites para Windows 11." pie="Una PC de referencia, generalizada y copiada; el archivo de respuestas completa lo que se borró." />
+
+### 1. La PC de referencia
+
+Se instala Windows 11 en una PC (o, mejor, en una **máquina virtual**: no arrastra controladores de un modelo en particular). En la primera pantalla de configuración, con **Ctrl+Shift+F3** se entra al **modo auditoría**: una sesión de administrador para instalar actualizaciones y programas **sin crear usuarios**. La PC de referencia **no se une al dominio**.
+
+### 2. Sysprep
+
+**Sysprep** (`C:\Windows\System32\Sysprep\sysprep.exe`) prepara la instalación para ser copiada:
+
+```powershell
+C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /shutdown
+```
+
+- **/generalize** borra lo que hace único al equipo: el identificador de seguridad de la máquina (SID), el nombre, los identificadores de Windows Update (el SusClientId de la lección anterior) y otros, y el registro de controladores del hardware.
+- **/oobe** hace que el próximo arranque muestre la configuración inicial, como una PC recién comprada (*out-of-box experience*).
+- **/shutdown** la apaga: **no** se vuelve a encender desde el disco, porque se "gastaría" la generalización.
+
+Si Sysprep falla, el motivo está en `C:\Windows\System32\Sysprep\Panther\setupact.log`. Los dos clásicos de hoy: una **aplicación de la Microsoft Store** que se actualizó para un usuario y no para todos, y **BitLocker** activo en el disco (Windows 11 lo activa solo en muchos equipos): hay que apagarlo antes.
+
+### 3. Capturar con DISM desde WinPE
+
+Un Windows que está funcionando no se puede copiar a sí mismo. Para capturarlo se arranca desde **WinPE** (*Windows Preinstallation Environment*), un Windows mínimo que corre desde un USB o desde la red. Se arma con el **Windows ADK** (el kit de despliegue de Microsoft) y su complemento de WinPE. Desde ahí, **DISM** guarda el disco en un archivo **.wim**:
+
+```powershell
+DISM /Capture-Image /ImageFile:E:\Imagenes\empresa.wim /CaptureDir:C:\ /Name:"Empresa 2026-11"
+```
+
+### 4. Aplicar en cada PC
+
+En la PC nueva, también desde WinPE: se crean las particiones (con diskpart, para UEFI: una de sistema EFI, una reservada y la de Windows), se aplica la imagen y se crea el arranque:
+
+```powershell
+DISM /Apply-Image /ImageFile:E:\Imagenes\empresa.wim /Index:1 /ApplyDir:W:\
+bcdboot W:\Windows /s S:
+```
+
+DISM hace mucho más: agregar controladores o actualizaciones a una imagen sin arrancarla (`/Mount-Image`, `/Add-Driver`, `/Add-Package`). Eso queda *para más adelante*.
+
+<Ordenar ejercicio={orden} />
+
+## El archivo de respuestas: unattend.xml
+
+Sysprep borró el nombre, la zona horaria, el dominio. Para que nadie tenga que contestar esas preguntas en cada PC, se usa un **archivo de respuestas**: `unattend.xml`. Se arma con el **Administrador de imágenes de sistema de Windows** (*Windows System Image Manager*, viene en el ADK), que valida que cada opción exista, y se divide en **pasadas** (*passes*), que son los momentos de la instalación:
+
+- **specialize**: cuando la PC arranca por primera vez después de Sysprep. Acá van el **nombre** (`*` hace que Windows genere uno distinto en cada PC), la **zona horaria** y la **unión al dominio** (con la OU donde crear la cuenta).
+- **oobeSystem**: la configuración inicial. Idioma, teclado, saltear pantallas, cuenta local de emergencia.
+
+Se le pasa a Sysprep con `/unattend:ruta`, o se deja en `C:\Windows\Panther\unattend.xml` dentro de la imagen.
+
+Ojo con un detalle: la contraseña de la cuenta que une al dominio queda **escrita en el archivo** (apenas disfrazada) y el archivo queda copiado en la PC. Por eso se usa una **cuenta que solo puede unir equipos** a una OU (con el asistente de **Delegar control** de la lección 3.3.3), nunca un administrador del dominio, y se borra el archivo al terminar.
+
+<EditorConfig ejercicio={unattend} />
+
+<EnSimple>
+Una PC de referencia en modo auditoría, Sysprep para borrar lo que la hace única, DISM desde WinPE para capturarla y aplicarla, y un unattend.xml para que el primer arranque se complete solo.
+</EnSimple>
+
+## Preparar el dominio
+
+Dos cosas en AD antes del primer despliegue:
+
+- **Dónde caen las PC nuevas**: si se unen sin indicar OU, quedan en el contenedor **Computers**, donde no se vinculan GPO (y no les llega, por ejemplo, la configuración de WSUS). Se indica la OU en el unattend.xml y, por las dudas, se cambia el destino por defecto:
+
+```powershell
+redircmp "OU=Equipos,OU=Empresa,DC=empresa,DC=local"
+```
+
+- **La cuenta de unión**: una cuenta de servicio con permiso delegado para crear y administrar objetos equipo en esa OU, y nada más.
+
+## Qué meter en la imagen
+
+- Una imagen **gruesa** lleva todo adentro: Windows, Office, el sistema de gestión, el antivirus, el lector de PDF. Se aplica rápido, pero cada vez que cambia una versión hay que rehacerla.
+- Una imagen **delgada** lleva Windows actualizado y casi nada más; las aplicaciones se instalan después (con GPO, un script, Intune). Se rehace poco.
+
+Lo habitual hoy es **delgada**, más las aplicaciones por otro camino. Y en cualquier caso, la imagen **se actualiza cada pocos meses**: una imagen de hace un año instala un Windows con un año de parches pendientes.
+
+## Las herramientas, en 2026
+
+- **USB con WinPE y la imagen**: para una PyME que despliega de a pocas PC, alcanza y sobra.
+- **WDS** (*Windows Deployment Services*): el rol que arranca equipos por la red (**PXE**). Está **obsoleto**: desde hace años no admite desplegar con la imagen de arranque de Windows 11 tal como viene en el medio de instalación, y solo se usa para arrancar entornos WinPE armados con otras herramientas.
+- **MDT** (*Microsoft Deployment Toolkit*): la herramienta gratuita clásica para automatizar todo este proceso. **Microsoft la retiró en enero de 2026**: no tiene más soporte ni actualizaciones. Si la encontrás funcionando, es para planificar el reemplazo.
+- **Configuration Manager** (antes SCCM): despliegue de sistema operativo con **secuencias de tareas**, por la red, para empresas grandes con infraestructura propia.
+- **Windows Autopilot** con **Intune**: la PC llega de fábrica, la persona la enciende, se conecta a internet e inicia sesión con su cuenta de la empresa, y se configura sola. No hay imagen propia. Necesita Microsoft Entra ID e Intune (Nivel 7); *para más adelante*.
+
+Y las **máquinas virtuales** usan exactamente la misma idea: una VM de plantilla con Sysprep, que se copia para cada servidor nuevo (Nivel 5).
+
+<ErroresComunes>
+  <ErrorComun titulo="Clonar un disco sin Sysprep">
+    Las copias comparten identificadores: aparecen y desaparecen en WSUS, se confunden en el antivirus y en otras herramientas. Siempre Sysprep.
+  </ErrorComun>
+  <ErrorComun titulo="Unir al dominio la PC de referencia">
+    La imagen arrastra una cuenta de equipo que ya existe. La referencia se arma sin dominio; la unión la hace el unattend.xml.
+  </ErrorComun>
+  <ErrorComun titulo="Volver a encender la referencia después de Sysprep">
+    Arranca la configuración inicial y la generalización se pierde. Se apaga con /shutdown y se captura desde WinPE.
+  </ErrorComun>
+  <ErrorComun titulo="Sysprep falla y nadie mira el log">
+    El motivo está en Sysprep\Panther\setupact.log: casi siempre una app de la Store o BitLocker activo.
+  </ErrorComun>
+  <ErrorComun titulo="Unir con un administrador del dominio en el unattend.xml">
+    La contraseña queda en el archivo. Una cuenta que solo une equipos a una OU.
+  </ErrorComun>
+  <ErrorComun titulo="Todas las PC con el mismo nombre">
+    Un nombre fijo en specialize lo repite en cada PC. Usá * o renombrá en el despliegue.
+  </ErrorComun>
+  <ErrorComun titulo="Una imagen de hace un año">
+    Instala Windows con un año de parches pendientes. Se actualiza cada pocos meses.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Desplegar es dejar cualquier PC lista, igual a las demás, con poca intervención. Tres formas: a mano, imagen o aprovisionamiento (Autopilot).
+- Imagen: referencia en modo auditoría y sin dominio; Sysprep /generalize /oobe /shutdown; capturar con DISM desde WinPE; aplicar con DISM y bcdboot.
+- Si Sysprep falla, setupact.log: apps de la Store o BitLocker.
+- unattend.xml (con el Administrador de imágenes de sistema): specialize para nombre, zona horaria y dominio con OU; oobeSystem para la configuración inicial. Cuenta de unión con permisos delegados.
+- En AD: redircmp a la OU de equipos.
+- Imagen delgada y actualizada cada pocos meses.
+- Herramientas: USB para una PyME; WDS obsoleto; MDT retirado en enero de 2026; Configuration Manager; Autopilot con Intune.
+</Resumen>

@@ -1,0 +1,114 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué sirve Sysprep?
+  opciones:
+    - { texto: "Para preparar una instalación de Windows para ser copiada, borrando lo que hace único al equipo", correcta: true, explicacion: "SID, nombre, identificadores, controladores." }
+    - { texto: "Para actualizar Windows", explicacion: "Eso es Windows Update o WSUS." }
+    - { texto: "Para hacer un respaldo", explicacion: "Prepara para copiar, no respalda." }
+    - { texto: "Para formatear el disco", explicacion: "No toca las particiones." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace cada opción en sysprep /generalize /oobe /shutdown?
+  opciones:
+    - { texto: "Generaliza (borra lo único), muestra la configuración inicial en el próximo arranque y apaga el equipo", correcta: true, explicacion: "Y apagada se captura desde WinPE." }
+    - { texto: "Une al dominio, instala Office y reinicia", explicacion: "Sysprep no hace nada de eso." }
+    - { texto: "Borra el disco, instala Windows y apaga", explicacion: "No borra el disco." }
+    - { texto: "Entra al modo auditoría y reinicia", explicacion: "Eso sería /audit /reboot." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué la imagen se captura arrancando desde WinPE y no desde el Windows de la PC de referencia?
+  opciones:
+    - { texto: "Porque un Windows que está funcionando no puede copiarse a sí mismo de forma consistente, y encenderlo gastaría la generalización", correcta: true, explicacion: "WinPE es un Windows mínimo que corre desde USB o red." }
+    - { texto: "Porque DISM solo existe en WinPE", explicacion: "DISM está en cualquier Windows." }
+    - { texto: "Porque WinPE es más rápido", explicacion: "El motivo es otro." }
+    - { texto: "Por licencias", explicacion: "No tiene relación." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Sysprep falló. ¿Qué dice este fragmento de setupact.log?
+  salida: |
+    Error  SYSPRP BitLocker-Sysprep: BitLocker is on for the OS volume. Turn BitLocker off to run Sysprep. (0x80310039)
+    Error  [0x0f0082] SYSPRP ActionPlatform::LaunchModule: Failure occurred while executing 'ValidateBitLockerState' from C:\Windows\System32\BdeSysprep.dll
+  opciones:
+    - { texto: "El disco está cifrado con BitLocker; hay que desactivarlo (y esperar que termine de descifrar) antes de Sysprep", correcta: true, explicacion: "Windows 11 activa el cifrado solo en muchos equipos." }
+    - { texto: "Falta una aplicación de la Store", explicacion: "Ese es otro error clásico, con otro mensaje." }
+    - { texto: "El disco está lleno", explicacion: "El mensaje habla de BitLocker." }
+    - { texto: "La PC está unida al dominio", explicacion: "El mensaje habla de BitLocker." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué va en la pasada specialize del unattend.xml? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "El nombre del equipo", correcta: true, explicacion: "Con * Windows genera uno distinto." }
+    - { texto: "La zona horaria", correcta: true, explicacion: "Microsoft-Windows-Shell-Setup." }
+    - { texto: "La unión al dominio con la OU", correcta: true, explicacion: "Microsoft-Windows-UnattendedJoin." }
+    - { texto: "Las particiones del disco", explicacion: "Eso es de la pasada windowsPE o de diskpart." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué cuenta conviene usar en el unattend.xml para unir las PC al dominio?
+  opciones:
+    - { texto: "Una cuenta que solo puede crear y administrar equipos en la OU de destino", correcta: true, explicacion: "La contraseña queda en el archivo: que sirva para lo mínimo." }
+    - { texto: "El Administrador del dominio", explicacion: "Su contraseña quedaría en cada PC." }
+    - { texto: "La cuenta del usuario de la PC", explicacion: "Los usuarios no deberían unir equipos." }
+    - { texto: "Ninguna: se une sola", explicacion: "Hace falta una cuenta con permiso." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que hace que los equipos que se unan al dominio sin OU queden en OU=Equipos,OU=Empresa,DC=empresa,DC=local.
+  aceptadas:
+    - 'redircmp "OU=Equipos,OU=Empresa,DC=empresa,DC=local"'
+    - "redircmp OU=Equipos,OU=Empresa,DC=empresa,DC=local"
+  patrones: ["^redircmp\\s+[\"']?ou=equipos,ou=empresa,dc=empresa,dc=local[\"']?$"]
+  explicacion: "Desde ahí, Add-Computer sin -OUPath crea la cuenta en esa OU."
+- id: p08
+  tipo: completar_comando
+  dificultad: 3
+  enunciado: Desde WinPE, escribí el comando DISM que aplica el índice 1 de E:\Imagenes\empresa.wim en la unidad W:.
+  aceptadas:
+    - 'DISM /Apply-Image /ImageFile:E:\Imagenes\empresa.wim /Index:1 /ApplyDir:W:\'
+    - 'DISM /Apply-Image /ImageFile:E:\Imagenes\empresa.wim /Index:1 /ApplyDir:W:'
+  patrones: ["^dism(\\.exe)?\\s+(?=.*/apply-image)(?=.*/imagefile:e:\\\\imagenes\\\\empresa\\.wim)(?=.*/index:1)(?=.*/applydir:w:\\\\?(\\s|$)).*$"]
+  explicacion: "Después, bcdboot W:\\Windows /s S: crea el arranque."
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos del camino de la imagen.
+  pasos:
+    - "Armar la PC de referencia en modo auditoría"
+    - "Ejecutar Sysprep /generalize /oobe /shutdown"
+    - "Capturar con DISM desde WinPE"
+    - "Aplicar la imagen en cada PC y crear el arranque"
+    - "Primer arranque con unattend.xml"
+  explicacion: "Referencia, generalizar, capturar, aplicar y completar con el archivo de respuestas."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PyME encuentra MDT funcionando en un servidor viejo. ¿Qué le decís?
+  opciones:
+    - { texto: "Que Microsoft lo retiró en enero de 2026, sin más soporte ni actualizaciones: hay que planificar el reemplazo", correcta: true, explicacion: "Por un USB con WinPE, Configuration Manager o Autopilot, según el tamaño." }
+    - { texto: "Que es la herramienta recomendada para Windows 11", explicacion: "Ya no tiene soporte." }
+    - { texto: "Que se actualiza solo con WSUS", explicacion: "No hay más versiones." }
+    - { texto: "Que no hay ninguna alternativa", explicacion: "Hay varias." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia a Windows Autopilot del camino de la imagen?
+  opciones:
+    - { texto: "No hay imagen propia: la PC usa el Windows de fábrica y se configura sola desde internet al iniciar sesión con la cuenta de la empresa", correcta: true, explicacion: "Con Intune y Microsoft Entra ID." }
+    - { texto: "Copia la imagen más rápido por la red", explicacion: "No copia ninguna imagen." }
+    - { texto: "Es un reemplazo de Sysprep para servidores", explicacion: "Es para PC, y no usa Sysprep." }
+    - { texto: "Solo sirve para máquinas virtuales", explicacion: "Es para PC físicas nuevas." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué hoy se prefiere una imagen delgada?
+  opciones:
+    - { texto: "Porque con las aplicaciones fuera de la imagen, un cambio de versión no obliga a rehacerla", correcta: true, explicacion: "Las aplicaciones van por GPO, script o Intune." }
+    - { texto: "Porque ocupa menos en el disco de la PC", explicacion: "Al final la PC tiene lo mismo." }
+    - { texto: "Porque se aplica más rápido", explicacion: "La gruesa es más rápida de aplicar." }
+    - { texto: "Porque Sysprep no admite aplicaciones", explicacion: "Las admite, con cuidado." }
