@@ -1,0 +1,133 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace WSUS?
+  opciones:
+    - { texto: "Descarga las actualizaciones de Microsoft una vez y reparte a los equipos solo las aprobadas para su grupo", correcta: true, explicacion: "Ahorra tráfico y da control sobre qué se instala y cuándo." }
+    - { texto: "Escribe parches propios para Windows", explicacion: "Reparte los de Microsoft." }
+    - { texto: "Instala Windows en equipos nuevos", explicacion: "Eso es el despliegue (lección que sigue)." }
+    - { texto: "Hace respaldos de los servidores", explicacion: "Eso es Windows Server Backup." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Microsoft declaró a WSUS obsoleto en 2024. ¿Qué significa para una empresa que lo usa en Windows Server 2025?
+  opciones:
+    - { texto: "No va a tener funciones nuevas, pero sigue incluido y con soporte; conviene conocer las alternativas en la nube", correcta: true, explicacion: "Azure Update Manager para servidores e Intune con Autopatch para PC." }
+    - { texto: "Deja de funcionar el mes que viene", explicacion: "Sigue incluido y con soporte." }
+    - { texto: "Ya no recibe parches de seguridad", explicacion: "Los recibe; en 2025 tuvo uno de urgencia." }
+    - { texto: "Hay que pasarse a Linux", explicacion: "No tiene relación." }
+- id: p03
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: Configurás qué sincronizar en una PyME con Windows 11 y Windows Server 2025, todo en español. ¿Qué conviene? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Solo los productos Windows 11, Windows Server 2025 y Microsoft Defender Antivirus", correcta: true, explicacion: "Solo lo que tenés." }
+    - { texto: "Las clasificaciones críticas, de seguridad, definiciones y acumulativos", correcta: true, explicacion: "Lo que trae de fábrica más Update Rollups." }
+    - { texto: "Solo el idioma español", correcta: true, explicacion: "Cada idioma de más ocupa disco." }
+    - { texto: "Los controladores, por las dudas", explicacion: "Son miles y llenan la base; se manejan por otra vía." }
+    - { texto: "Todos los productos, por si algún día los usás", explicacion: "Disco y base de datos para nada." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es la segmentación del lado del cliente?
+  opciones:
+    - { texto: "Que cada equipo diga a qué grupo de WSUS pertenece, con una GPO", correcta: true, explicacion: "Como las GPO van por OU, el grupo sale de dónde está la cuenta del equipo." }
+    - { texto: "Que cada usuario elija qué actualizaciones instalar", explicacion: "Lo decide el administrador al aprobar." }
+    - { texto: "Mover los equipos a mano en la consola de WSUS", explicacion: "Eso es la segmentación del lado del servidor." }
+    - { texto: "Instalar WSUS en cada PC", explicacion: "Hay un solo servidor." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Una PC no aparece en WSUS. Mirás el registro. ¿Qué está mal?
+  salida: |
+    PS> Get-ItemProperty HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate
+
+    WUServer           : http://srv-wsus.empresa.local
+    WUStatusServer     : http://srv-wsus.empresa.local
+    TargetGroupEnabled : 1
+    TargetGroup        : Produccion
+  opciones:
+    - { texto: "Falta el puerto: sin :8530, la PC busca WSUS en el puerto 80", correcta: true, explicacion: "La dirección tiene que ser http://srv-wsus.empresa.local:8530." }
+    - { texto: "El grupo tiene que estar en mayúsculas", explicacion: "No distingue mayúsculas." }
+    - { texto: "TargetGroupEnabled tiene que valer 0", explicacion: "Con 0, no toma el grupo." }
+    - { texto: "Nada, está bien", explicacion: "Falta el puerto." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que aprueba para el grupo Piloto las actualizaciones de seguridad sin aprobar que algún equipo necesita (empezá con Get-WsusUpdate y usá una canalización).
+  aceptadas:
+    - "Get-WsusUpdate -Classification Security -Approval Unapproved -Status FailedOrNeeded | Approve-WsusUpdate -Action Install -TargetGroupName Piloto"
+  patrones: ["^get-wsusupdate\\s+(?=[^|]*-classification\\s+security)(?=[^|]*-approval\\s+unapproved)(?=[^|]*-status\\s+failedorneeded)[^|]*\\|\\s*approve-wsusupdate\\s+(?=.*-action\\s+install)(?=.*-targetgroupname\\s+'?piloto'?).*$"]
+  explicacion: "FailedOrNeeded filtra lo que algún equipo necesita; -Action Install con el grupo es la aprobación."
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Aprobaste el acumulativo para Piloto. ¿Cómo hacés que PC01 lo busque e instale ya, sin esperar?
+  opciones:
+    - { texto: "UsoClient StartScan y después UsoClient StartInstall (o desde la configuración de Windows Update)", correcta: true, explicacion: "En Windows 10 y 11, wuauclt /detectnow ya no sirve." }
+    - { texto: "wuauclt /detectnow", explicacion: "Es de versiones viejas; en Windows 10 y 11 ya no hace nada útil." }
+    - { texto: "Reiniciar el servidor WSUS", explicacion: "Las demás PC no lo necesitan y PC01 tampoco." }
+    - { texto: "Copiar el archivo de la actualización a la PC", explicacion: "Para eso está WSUS." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená la puesta en marcha de WSUS.
+  pasos:
+    - "Instalar el rol UpdateServices y correr wsusutil postinstall"
+    - "Elegir productos, clasificaciones e idiomas"
+    - "Sincronizar con Microsoft Update"
+    - "Crear los grupos y elegir la segmentación del lado del cliente"
+    - "Crear y vincular las GPO de Windows Update"
+    - "Aprobar para el grupo Piloto"
+  explicacion: "Primero el servidor y el catálogo, después los grupos y las GPO para que los equipos se reporten, y recién ahí aprobar."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: >-
+    PC02 y PC03 aparecen y desaparecen en la consola de WSUS: cuando se reporta una, se va la otra. ¿Qué pasa?
+  opciones:
+    - { texto: "Una es un clon de la otra sin Sysprep: tienen el mismo SusClientId y WSUS las ve como un solo equipo", correcta: true, explicacion: "Se arregla borrando SusClientId en una; se evita con Sysprep." }
+    - { texto: "Tienen el mismo nombre", explicacion: "Tienen nombres distintos; WSUS identifica por SusClientId." }
+    - { texto: "El servidor WSUS está lleno", explicacion: "Afectaría a todos." }
+    - { texto: "Están en grupos distintos", explicacion: "Eso no hace que se pisen." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una PC nueva no recibe ninguna GPO de Windows Update. gpresult dice CN=PC07,CN=Computers,DC=empresa,DC=local. ¿Qué hacés?
+  opciones:
+    - { texto: "Moverla a la OU que corresponde: en el contenedor Computers no se vinculan GPO", correcta: true, explicacion: "Y, si pasa seguido, cambiar el contenedor por defecto con redircmp." }
+    - { texto: "Vincular la GPO de Windows Update a la raíz del dominio", explicacion: "Les llegaría también a los servidores y DC." }
+    - { texto: "Reinstalar Windows", explicacion: "Es un tema de ubicación en AD." }
+    - { texto: "Aprobar las actualizaciones para Todos los equipos", explicacion: "La PC ni le pregunta a WSUS." }
+- id: p11
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace Invoke-WsusServerCleanup con estos parámetros? -DeclineSupersededUpdates -CleanupUnneededContentFiles -CleanupObsoleteComputers (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Rechaza las actualizaciones reemplazadas", correcta: true, explicacion: "El acumulativo nuevo trae todo lo anterior." }
+    - { texto: "Borra archivos de contenido que ya no hacen falta", correcta: true, explicacion: "Libera disco." }
+    - { texto: "Quita equipos que no se reportan hace 30 días", correcta: true, explicacion: "Equipos dados de baja o que ya no existen." }
+    - { texto: "Aprueba las actualizaciones nuevas", explicacion: "La limpieza no aprueba nada." }
+- id: p12
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Esta configuración debería mandar las PC de la OU Piloto al grupo Piloto de WSUS, pero las PC van directo a Microsoft Update. Marcá la línea que falta corregir.
+  lenguaje: powershell
+  archivo: |
+    $k = 'HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate'
+    Set-GPRegistryValue 'Equipos - WU' -Key $k -ValueName WUServer -Type String -Value 'http://srv-wsus.empresa.local:8530'
+    Set-GPRegistryValue 'Equipos - WU' -Key $k -ValueName TargetGroupEnabled -Type DWord -Value 1
+    Set-GPRegistryValue 'Equipos - WU' -Key "$k\AU" -ValueName UseWUServer -Type DWord -Value 0
+    Set-GPRegistryValue 'Piloto - Grupo' -Key $k -ValueName TargetGroup -Type String -Value 'Piloto'
+  lineas_con_error: [4]
+  explicacion: "UseWUServer tiene que valer 1: con 0, la PC ignora WUServer y va a Microsoft Update."
+- id: p13
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no se publica un servidor WSUS en internet?
+  opciones:
+    - { texto: "Es para la red interna, y un servidor expuesto es un blanco: en 2025 se explotó una vulnerabilidad grave en WSUS accesibles desde afuera", correcta: true, explicacion: "Para equipos fuera de la oficina se usan VPN o herramientas en la nube." }
+    - { texto: "Porque es muy lento", explicacion: "El problema es la seguridad." }
+    - { texto: "Porque la licencia no lo permite", explicacion: "El problema es la seguridad." }
+    - { texto: "No hay problema en publicarlo", explicacion: "Sí lo hay." }

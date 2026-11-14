@@ -1,0 +1,175 @@
+---
+id: n3-m5-l2
+titulo: WSUS
+minutos: 180
+objetivos:
+  - Instalar y configurar WSUS (qué sincronizar, grupos de equipos y segmentación).
+  - Configurar los equipos con directivas de grupo y aprobar actualizaciones por anillos.
+  - Mantener WSUS sano y diagnosticar un equipo que no se reporta.
+glosario: [wsus, wsus-grupo, segmentacion-cliente, susclientid]
+verificado: 2026-11
+---
+
+import flujo from './flujo-wsus.svg?raw'
+import flujoDatos from './flujo-wsus.yaml'
+import wsus from './ej-wsus.yaml'
+import noAparece from './no-aparece.yaml'
+
+En la lección anterior armaste la política: anillos, calendario y medición. Ahora falta la herramienta que la lleve a la práctica. **WSUS** (*Windows Server Update Services*) es un rol de Windows Server que descarga las actualizaciones de Microsoft una sola vez y las reparte a los equipos del dominio, pero solo las que vos aprobaste y solo a los grupos que elegiste. En muchísimas PyME es la forma en que se actualiza todo.
+
+<AntesDeEmpezar>
+- Actualizaciones en la empresa y anillos (lección anterior).
+- Directivas de grupo y valores de registro con Set-GPRegistryValue (lecciones 3.3.6 y 3.3.7).
+- Unidades organizativas (lección 3.3.2).
+</AntesDeEmpezar>
+
+## Antes de empezar: dónde está WSUS hoy
+
+Microsoft declaró a WSUS **obsoleto** (*deprecated*) en 2024. Eso quiere decir que **no va a tener funciones nuevas**, pero **sigue incluido y con soporte** en Windows Server 2025, recibe parches de seguridad y sigue funcionando para lo que hace. La dirección que marca Microsoft es la nube: **Azure Update Manager** para servidores (también los de tu sala, con Azure Arc) e **Intune con Windows Autopatch** para las PC.
+
+¿Por qué aprenderlo, entonces? Porque está en una enorme cantidad de empresas y lo vas a encontrar funcionando durante años; porque muchas no pueden o no quieren depender de la nube para actualizar; y porque las ideas (catálogo, aprobación por grupos, anillos, informes) son las mismas en cualquier herramienta.
+
+<Advertencia>
+WSUS no se expone a internet. En octubre de 2025 recibió un parche de urgencia, fuera de banda, por una vulnerabilidad grave (CVE-2025-59287) que se estaba explotando en servidores WSUS accesibles desde afuera. Solo lo usan los equipos de tu red.
+</Advertencia>
+
+## Cómo funciona
+
+Tocá cada parte del diagrama:
+
+<DiagramaInteractivo datos={flujoDatos} svg={flujo} alt="A la izquierda, Microsoft Update. SRV-WSUS sincroniza con él los metadatos y el contenido de los productos y clasificaciones elegidos, y abajo se aprueban las actualizaciones por grupo. A la derecha, una GPO de Windows Update les dice a los equipos dónde está el servidor y en qué grupo están: Piloto (PC01) y Producción (PC02). Los equipos instalan lo aprobado y reportan su estado al servidor. Abajo a la izquierda, el mantenimiento mensual: rechazar reemplazadas, limpiar archivos y equipos que no se reportan." />
+
+Resumido: **WSUS sincroniza** con Microsoft Update, **vos aprobás** por grupo, **una GPO** les dice a los equipos dónde está el servidor y **los equipos instalan y reportan**.
+
+## Instalar
+
+WSUS necesita un servidor miembro (no conviene ponerlo en un DC), con un disco aparte para el contenido: con pocas versiones de Windows y un solo idioma, se arranca con 100 a 200 GB y se mira cómo crece.
+
+```powershell
+Install-WindowsFeature UpdateServices -IncludeManagementTools
+& 'C:\Program Files\Update Services\Tools\wsusutil.exe' postinstall CONTENT_DIR=D:\WSUS
+```
+
+El paso **postinstall** crea la base de datos y la carpeta del contenido. Por defecto, la base es **WID** (*Windows Internal Database*, una base de datos que viene con Windows y alcanza para una PyME); con muchos miles de equipos se usa SQL Server. El servidor escucha en el **puerto 8530** (HTTP) o **8531** si se configura HTTPS, que es lo recomendado y queda *para más adelante*.
+
+## Qué sincronizar
+
+Lo primero que se decide es **de qué productos** y **de qué clasificaciones** traer actualizaciones. La regla: **solo lo que tenés**. Cada producto o idioma de más son gigas de disco y miles de filas en la base.
+
+- **Productos**: las versiones de Windows y Windows Server que existen en tu red, Microsoft Defender Antivirus, .NET, Office si lo administrás así.
+- **Clasificaciones**: de fábrica vienen las **críticas**, las **de seguridad** y las **definiciones**. Se suelen sumar los **acumulativos** (*Update Rollups*). Los **controladores** (*Drivers*) no: son muchísimos y se manejan mejor por otra vía.
+- **Idiomas**: solo los que usás.
+
+```powershell
+Get-WsusProduct | Where-Object { $_.Product.Title -in 'Windows Server 2025', 'Windows 11' } | Set-WsusProduct
+Get-WsusClassification | Where-Object { $_.Classification.Title -eq 'Update Rollups' } | Set-WsusClassification
+(Get-WsusServer).GetSubscription().StartSynchronization()
+```
+
+La primera sincronización tarda: está bajando el catálogo. Después se programa una por día.
+
+## Grupos y segmentación
+
+En WSUS los equipos se organizan en **grupos** (*computer groups*), que son tus anillos: Piloto, Produccion, Servidores. Hay dos formas de decir quién va en cada uno:
+
+- **Del lado del servidor**: movés cada equipo a mano en la consola. Para diez PC anda; para cien, nadie lo mantiene.
+- **Del lado del cliente** (*client-side targeting*): cada equipo dice a qué grupo pertenece, por GPO. Como las GPO van por OU, la pertenencia sale sola de dónde está la cuenta del equipo en AD. Es lo recomendado.
+
+```powershell
+$w = Get-WsusServer
+$w.CreateComputerTargetGroup('Piloto')
+$c = $w.GetConfiguration(); $c.TargetingMode = 'Client'; $c.Save()
+```
+
+## La GPO de Windows Update
+
+Las opciones están en *Configuración del equipo → Directivas → Plantillas administrativas → Componentes de Windows → Windows Update*. Las que importan: **Especificar la ubicación del servicio de actualización** (la dirección del servidor, con el puerto), **Configurar actualizaciones automáticas** (cuándo instalar y reiniciar) y **Habilitar la segmentación del lado del cliente** (el grupo). Por debajo, son valores en `HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate`, y por eso también se pueden cargar con PowerShell:
+
+```powershell
+$k = 'HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate'
+Set-GPRegistryValue 'Equipos - Windows Update' -Key $k -ValueName WUServer -Type String -Value 'http://srv-wsus.empresa.local:8530'
+Set-GPRegistryValue 'Equipos - Windows Update' -Key "$k\AU" -ValueName UseWUServer -Type DWord -Value 1
+Set-GPRegistryValue 'Piloto - Grupo WSUS' -Key $k -ValueName TargetGroup -Type String -Value 'Piloto'
+```
+
+El armado práctico: **una GPO general** vinculada a la OU de todos los equipos (servidor, horarios, segmentación habilitada) y **una chica por OU** que solo dice el grupo. Mover una PC de OU la cambia de anillo.
+
+<EnSimple>
+WSUS baja las actualizaciones, vos las aprobás para un grupo, y una GPO por OU le dice a cada PC a qué servidor preguntar y en qué grupo está.
+</EnSimple>
+
+## Aprobar
+
+Nada se instala sin aprobación. Cada mes, la rutina es la de los anillos: aprobar para Piloto, esperar, aprobar para Produccion, y al final para Servidores.
+
+```powershell
+Get-WsusUpdate -Classification Security -Approval Unapproved -Status FailedOrNeeded |
+    Approve-WsusUpdate -Action Install -TargetGroupName Piloto
+```
+
+El filtro **FailedOrNeeded** muestra solo lo que algún equipo necesita: no tiene sentido aprobar parches de productos que nadie tiene. Las **definiciones del antivirus** se aprueban solas con una **regla de aprobación automática** de la consola (salen varias veces por día). Y se puede poner una **fecha límite** (*deadline*): pasada esa fecha, el equipo instala y reinicia aunque el usuario lo venga postergando.
+
+## Del lado del equipo
+
+Una PC con la GPO busca actualizaciones varias veces por día. Para no esperar:
+
+```powershell
+gpupdate /force          # que tome la directiva
+UsoClient StartScan      # que busque ya
+UsoClient StartInstall   # que instale lo aprobado
+Get-WindowsUpdateLog     # arma el registro de Windows Update en el escritorio, para leerlo
+```
+
+Vas a ver en documentación vieja `wuauclt /detectnow`: en Windows 10 y 11 ya no hace nada útil; el reemplazo es UsoClient (o la configuración de Windows Update, que hace lo mismo).
+
+<Terminal ejercicio={wsus} />
+
+## Mantenimiento
+
+WSUS que no se mantiene se pone lento hasta que la consola no abre. Una vez por mes:
+
+```powershell
+Invoke-WsusServerCleanup -DeclineSupersededUpdates -CleanupUnneededContentFiles -CleanupObsoleteComputers -CleanupObsoleteUpdates
+```
+
+Rechaza las reemplazadas, borra archivos que ya no hacen falta, quita equipos que no se reportan hace 30 días y saca de la base las actualizaciones viejas. Además, la base se **reindexa** cada tanto con un script de Microsoft (*para más adelante*). Si se automatiza con una tarea programada, mejor.
+
+## Cuando una PC no aparece
+
+Las causas típicas, en orden: **la GPO no le llega** (la PC está en el contenedor Computers o en otra OU), **la dirección del servidor está mal** (falta el puerto 8530, o el nombre no resuelve), **el firewall** bloquea el puerto, o **es un clon sin Sysprep** y comparte el identificador de Windows Update (**SusClientId**) con otra PC, y WSUS las ve como un solo equipo.
+
+<Troubleshooting escenario={noAparece} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Sincronizar todo">
+    Todos los productos, idiomas y controladores llenan el disco y vuelven la base inmanejable. Solo lo que tenés.
+  </ErrorComun>
+  <ErrorComun titulo="Aprobar para Todos los equipos">
+    Te saltás los anillos. Se aprueba por grupo, de a uno.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar el puerto en la dirección del servidor">
+    Sin :8530, el equipo busca en el puerto 80 y no encuentra nada.
+  </ErrorComun>
+  <ErrorComun titulo="Equipos en el contenedor Computers">
+    Ahí no llegan las GPO de las OU. Sin directiva, la PC va directo a Microsoft Update.
+  </ErrorComun>
+  <ErrorComun titulo="Clonar PC sin Sysprep">
+    Comparten el SusClientId y aparecen y desaparecen en WSUS. Las imágenes se preparan con Sysprep.
+  </ErrorComun>
+  <ErrorComun titulo="No hacer mantenimiento">
+    La base crece hasta que la consola no abre. Limpieza mensual.
+  </ErrorComun>
+  <ErrorComun titulo="Publicar WSUS en internet">
+    Es para la red interna. En 2025 tuvo una vulnerabilidad grave explotada en servidores expuestos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- WSUS descarga una vez y reparte lo aprobado. Está obsoleto desde 2024 (sin funciones nuevas), pero con soporte en Windows Server 2025; la dirección de Microsoft es Azure Update Manager e Intune con Autopatch.
+- Instalación: el rol UpdateServices y wsusutil postinstall con CONTENT_DIR en un disco aparte; base WID; puerto 8530 (8531 con HTTPS).
+- Sincronizar solo los productos, clasificaciones e idiomas que tenés; sin controladores.
+- Grupos = anillos. Segmentación del lado del cliente: una GPO general con WUServer y UseWUServer, y una por OU con TargetGroup.
+- Aprobar por grupo con Approve-WsusUpdate y FailedOrNeeded; definiciones con aprobación automática; fechas límite.
+- En el equipo: gpupdate /force, UsoClient StartScan y Get-WindowsUpdateLog.
+- Mantenimiento mensual con Invoke-WsusServerCleanup. Si una PC no aparece: la GPO, la dirección y el puerto, el firewall, o un clon sin Sysprep.
+</Resumen>

@@ -1,0 +1,53 @@
+tipo: terminal
+shell: powershell
+titulo: ¿Quién tiene el parche de este mes?
+descripcion: >-
+  Es el jueves después del segundo martes de noviembre de 2026. El acumulativo de este mes para
+  Windows Server 2025 es KB5072033 (el número es de ejemplo). La gerencia pregunta si todos los
+  servidores lo tienen. Estás en SRV-ADMIN; existe C:\Informes.
+estado_inicial:
+  equipo: SRV-ADMIN
+  dominio: empresa.local
+  red: { ip: 192.168.10.5, dns: [192.168.10.10] }
+  archivos:
+    C:\Informes: { tipo: directorio }
+  actualizaciones:
+    - { id: KB5072033, descripcion: Security Update, hace_dias: 2 }
+    - { id: KB5071948, descripcion: Security Update, hace_dias: 30 }
+  servidores:
+    - { equipo: DC01, dominio: empresa.local, red: { ip: 192.168.10.10, dns: [127.0.0.1] }, ad: {}, actualizaciones: [{ id: KB5072033, descripcion: Security Update, hace_dias: 1 }, { id: KB5071948, hace_dias: 31, descripcion: Security Update }] }
+    - { equipo: SRV-ARCH01, dominio: empresa.local, red: { ip: 192.168.10.20, dns: [192.168.10.10] }, actualizaciones: [{ id: KB5072033, descripcion: Security Update, hace_dias: 2 }] }
+    - { equipo: SRV-APP01, dominio: empresa.local, red: { ip: 192.168.10.30, dns: [192.168.10.10] }, actualizaciones: [{ id: KB5071948, descripcion: Security Update, hace_dias: 31 }, { id: KB5070011, descripcion: Security Update, hace_dias: 60 }] }
+pasos:
+  - consigna: Mirá las tres últimas actualizaciones instaladas en este equipo, de la más nueva a la más vieja.
+    verificar:
+      - { comando_usado: "get-hotfix.*sort-object.*installedon" }
+      - { salida_contiene: "KB5072033" }
+    pistas:
+      - "Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 3"
+    solucion: ["Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 3"]
+  - consigna: Averiguá cuál de DC01, SRV-ARCH01 y SRV-APP01 no tiene KB5072033.
+    verificar:
+      - { comando_usado: "get-hotfix.*-computername" }
+      - { salida_contiene: "SRV-APP01" }
+    pistas:
+      - "Get-HotFix -ComputerName DC01, SRV-ARCH01, SRV-APP01 | Group-Object Source | ..."
+      - "Más simple: preguntá servidor por servidor y fijate a cuál le falta."
+    solucion:
+      - "$servidores = 'DC01', 'SRV-ARCH01', 'SRV-APP01'"
+      - "$servidores | Where-Object { -not (Get-HotFix -Id KB5072033 -ComputerName $_ -ErrorAction SilentlyContinue) }"
+    explicacion: >-
+      SRV-APP01 tiene el acumulativo de octubre, pero no el de noviembre. Puede que esté en el anillo
+      de producción y todavía no le toque, o que algo falló: el informe sirve para preguntarlo.
+  - consigna: >-
+      Armá el informe para la gerencia: un CSV en C:\Informes\cumplimiento.csv con una fila por
+      servidor (Servidor y Tiene, verdadero o falso).
+    verificar:
+      - { archivo: C:\Informes\cumplimiento.csv, contenido_incluye: SRV-APP01 }
+      - { archivo: C:\Informes\cumplimiento.csv, contenido_incluye: "False" }
+    pistas:
+      - "$servidores | ForEach-Object { [PSCustomObject]@{ Servidor = $_; Tiene = [bool](Get-HotFix -Id KB5072033 -ComputerName $_ -ErrorAction SilentlyContinue) } } | Export-Csv C:\\Informes\\cumplimiento.csv -NoTypeInformation"
+    solucion:
+      - "$servidores = 'DC01', 'SRV-ARCH01', 'SRV-APP01'"
+      - "$servidores | ForEach-Object { [PSCustomObject]@{ Servidor = $_; Tiene = [bool](Get-HotFix -Id KB5072033 -ComputerName $_ -ErrorAction SilentlyContinue) } } | Export-Csv C:\\Informes\\cumplimiento.csv -NoTypeInformation"
+      - Import-Csv C:\Informes\cumplimiento.csv

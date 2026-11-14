@@ -1,0 +1,63 @@
+tipo: diagrama
+titulo: Cómo funciona WSUS
+puntos:
+  - id: mu
+    titulo: Microsoft Update
+    area: { x: 1.2, y: 11.8, ancho: 19.8, alto: 23.5 }
+    texto: >-
+      El catálogo de Microsoft con todas las actualizaciones de todos sus productos. Sin WSUS, cada
+      equipo descarga de acá por su cuenta. Con WSUS, solo el servidor habla con Microsoft Update y
+      los equipos le piden al servidor: menos tráfico de internet y control de qué se instala.
+  - id: sync
+    titulo: Sincronizar
+    area: { x: 29.1, y: 11.8, ancho: 23.3, alto: 35.3 }
+    texto: >-
+      WSUS baja la lista (los metadatos) de las actualizaciones de los productos y clasificaciones
+      que elegiste, y descarga el contenido de las que aprobás a su carpeta (D:\WSUS). Elegir de
+      más (todos los idiomas, todos los productos, controladores) es la forma más rápida de
+      llenar el disco y volverlo lento. Lo habitual es sincronizar una vez por día.
+  - id: aprobar
+    titulo: Aprobar por grupo
+    area: { x: 29.1, y: 52.9, ancho: 23.3, alto: 23.5 }
+    texto: >-
+      Nada se instala sin aprobación. Cada actualización se aprueba para instalar en un grupo de
+      equipos (Piloto, Producción, Servidores…), y así se arman los anillos. También se puede
+      rechazar (decline): las reemplazadas y las que no hacen falta se rechazan para que no
+      molesten. Las definiciones del antivirus se suelen aprobar solas con una regla automática.
+  - id: gpo
+    titulo: GPO de Windows Update
+    area: { x: 60.5, y: 11.8, ancho: 38.4, alto: 23.5 }
+    texto: >-
+      Los equipos se enteran de que existe WSUS por una directiva de grupo: la dirección del servidor
+      (http://srv-wsus.empresa.local:8530), cuándo instalar y, si usás segmentación del lado del
+      cliente, a qué grupo pertenecen. Lo práctico es una GPO general para todos y una por OU
+      que solo dice el grupo.
+  - id: piloto
+    titulo: Grupo Piloto
+    area: { x: 60.5, y: 44.1, ancho: 18.0, alto: 20.6 }
+    texto: >-
+      Los equipos del primer anillo. Reciben lo aprobado apenas sale, y su gente sabe que si algo
+      anda raro, avisa. Con segmentación del lado del cliente, entran a este grupo porque su GPO
+      dice TargetGroup = Piloto.
+  - id: prod
+    titulo: Grupo Producción
+    area: { x: 80.8, y: 44.1, ancho: 18.0, alto: 20.6 }
+    texto: >-
+      El resto de los equipos. Las actualizaciones se les aprueban una semana después, si el piloto
+      no reportó problemas. Los servidores críticos suelen ir en un grupo aparte, con aprobación y
+      reinicio manuales.
+  - id: reporte
+    titulo: Instalar y reportar
+    area: { x: 60.5, y: 73.5, ancho: 38.4, alto: 20.6 }
+    texto: >-
+      Cada equipo busca actualizaciones varias veces por día, instala las aprobadas para su grupo y
+      le cuenta a WSUS su estado: qué tiene, qué le falta, qué falló. Con eso se arman los informes
+      de cumplimiento. Un equipo que no se reporta hace días está apagado, roto o mal configurado.
+  - id: mant
+    titulo: Mantenimiento
+    area: { x: 1.2, y: 52.9, ancho: 19.8, alto: 41.2 }
+    texto: >-
+      WSUS se degrada si no se lo cuida: la base crece, la consola tarda minutos en abrir y el
+      disco se llena. Una vez por mes, Invoke-WsusServerCleanup rechaza las reemplazadas, borra
+      archivos que no hacen falta y saca equipos que no se reportan. Además, cada tanto se
+      reindexa la base (para más adelante).

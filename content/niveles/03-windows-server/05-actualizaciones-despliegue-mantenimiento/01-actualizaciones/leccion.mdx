@@ -1,0 +1,105 @@
+---
+id: n3-m5-l1
+titulo: Actualizaciones en la empresa
+minutos: 90
+objetivos:
+  - Distinguir los tipos de actualizaciones de Windows y saber cuándo se publican.
+  - Diseñar una política de parches por anillos (pruebas, piloto, producción y críticos).
+  - Medir quién tiene y quién no tiene una actualización.
+glosario: [patch-tuesday, actualizacion-acumulativa, anillos-despliegue, hotpatch]
+verificado: 2026-11
+---
+
+import anillos from './anillos.svg?raw'
+import orden from './orden-anillos.yaml'
+import cumplimiento from './ej-cumplimiento.yaml'
+
+Casi todos los ataques exitosos aprovechan una vulnerabilidad que ya tenía parche: el problema no es que no exista la solución, sino que nadie la instaló. Al mismo tiempo, cualquiera que haya trabajado en una empresa vio una actualización que rompió algo. Esta lección es sobre cómo vivir entre esos dos riesgos: instalar rápido, pero no a ciegas.
+
+<AntesDeEmpezar>
+- Actualizaciones en Linux y ventanas de mantenimiento (lección 1.3.2).
+- Ciclo de vida de Windows Server (lección 3.1.1).
+- Directivas de grupo (lecciones 3.3.6 y 3.3.7), porque así se configuran los equipos.
+</AntesDeEmpezar>
+
+## Qué se actualiza y cuándo
+
+Microsoft publica las actualizaciones de seguridad el **segundo martes de cada mes** (*Patch Tuesday*, el "martes de parches"). Ese día salen:
+
+- **Actualizaciones acumulativas** (*cumulative updates*): una por versión de Windows, con todos los arreglos de seguridad y calidad hasta ese mes. Instalar la de noviembre deja el equipo como si tuviera todas las anteriores; por eso, la de octubre queda **reemplazada** (*superseded*).
+- Actualizaciones de **.NET**, de **Office** y de otros productos.
+
+Además hay:
+
+- **Vista previa opcional** (a fin de mes): los arreglos que no son de seguridad que vienen en el acumulativo del mes siguiente. En empresas, se dejan para los equipos de prueba.
+- **Fuera de banda** (*out-of-band*): un parche de urgencia fuera del calendario, porque hay un ataque en curso o un problema grave. Cuando aparece uno, se lee con atención.
+- **Definiciones del antivirus** (Microsoft Defender): varias veces por día, sin reinicio. Estas no esperan a nadie.
+- **Actualizaciones de características** (*feature updates*): versiones nuevas de Windows 11 (una por año) o una versión nueva de Windows Server. Son proyectos, no parches.
+- **Controladores** (*drivers*) y firmware: se tratan aparte, con más cuidado.
+
+Y cada acumulativo, en general, **pide reiniciar**. En los servidores con Windows Server 2025 conectados a Azure Arc existe el **hotpatch**: parches que se aplican en memoria sin reiniciar, salvo en los meses de base (cada tres meses). Fuera de Azure requiere Azure Arc; desde mayo de 2026 no tiene costo adicional (antes era un pago por núcleo). Revisá la página oficial antes de planificar con él: es *para más adelante*.
+
+## Anillos de despliegue
+
+<Diagrama svg={anillos} alt="Un mes de parches en cuatro anillos, a partir del segundo martes. Anillo 0, pruebas (laboratorio e IT): el mismo día o al otro, ¿arranca, abren las aplicaciones? Anillo 1, piloto (5 a 10% de cada área): desde los dos días, gente real, esperar quejas y revisar. Anillo 2, producción (el resto de las PC): a la semana, si el piloto anduvo bien, a todos con ventana de reinicio. Anillo 3, críticos (controladores de dominio, facturación): a las dos o tres semanas, de a uno, fuera de horario y con respaldo previo. Si algo sale mal en un anillo, se frena ahí antes de que llegue al siguiente." pie="Instalar rápido, pero primero donde un problema duele menos." />
+
+La idea es simple: no todo el mundo recibe la actualización el mismo día. Se arma por **anillos** (*rings*):
+
+1. **Pruebas**: algunos equipos de laboratorio y de IT. Reciben todo el mismo día.
+2. **Piloto**: un 5 a 10% de las PC, **de todas las áreas** (no solo IT: la aplicación de Contabilidad la usa Contabilidad). Un par de días después.
+3. **Producción**: el resto, una semana después, si el piloto no reportó problemas.
+4. **Servidores críticos**: los DC, el servidor de facturación, la base de datos. De a uno, en una **ventana de mantenimiento** acordada, con un respaldo hecho justo antes.
+
+Dos reglas que se olvidan: el anillo piloto tiene que **saber** que es piloto (y a quién avisar), y la demora tiene un **techo**. Una vulnerabilidad que se está explotando no puede esperar tres semanas: para esos casos se acorta todo el calendario.
+
+<EnSimple>
+El segundo martes de cada mes sale el acumulativo. Primero lo reciben los equipos de prueba, después un piloto de cada área, después el resto, y al final los servidores críticos, de a uno y con respaldo.
+</EnSimple>
+
+<Ordenar ejercicio={orden} />
+
+## Herramientas
+
+Cómo se reparten los anillos depende de la herramienta:
+
+- **WSUS** (la próxima lección): un servidor propio que descarga las actualizaciones y las aprueba por **grupos de equipos**. Es lo clásico en empresas con dominio y lo que vas a usar en este módulo.
+- **Directivas de Windows Update** (las de "Windows Update para empresas"): sin servidor propio, cada grupo de equipos se configura para **demorar** las actualizaciones una cantidad de días.
+- En la nube: **Azure Update Manager** para servidores, e **Intune** con **Windows Autopatch** para PC. *Para más adelante*.
+
+## Medir
+
+Sin medir, la política es una expresión de deseo. Las preguntas de cada mes: **¿quién tiene el acumulativo?**, **¿quién está pendiente de reinicio?** y **¿quién no se reporta hace semanas?** Con PowerShell, `Get-HotFix` contesta la primera en cualquier servidor; WSUS y las herramientas de la nube dan el informe completo.
+
+```powershell
+Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 3
+Get-HotFix -Id KB5072033 -ComputerName DC01, SRV-ARCH01, SRV-APP01
+```
+
+<Terminal ejercicio={cumplimiento} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Instalar todo en todos el mismo día">
+    Si la actualización rompe algo, lo rompe en toda la empresa a la vez. Anillos.
+  </ErrorComun>
+  <ErrorComun titulo="Un piloto solo con gente de IT">
+    No usan la aplicación de facturación ni la de RRHH. El piloto tiene que tener de todas las áreas.
+  </ErrorComun>
+  <ErrorComun titulo="Demorar sin techo">
+    Una vulnerabilidad que se está explotando no espera tres semanas. Para esos casos, se acorta el calendario.
+  </ErrorComun>
+  <ErrorComun titulo="Aprobar los reemplazados">
+    El acumulativo nuevo ya trae todo lo anterior. Los reemplazados se rechazan.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar y no reiniciar">
+    La actualización no queda aplicada hasta el reinicio. Medí también los pendientes de reinicio.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El segundo martes de cada mes Microsoft publica los acumulativos de seguridad; cada uno reemplaza al anterior.
+- Hay además vista previa opcional, parches fuera de banda, definiciones del antivirus, actualizaciones de características y controladores.
+- Anillos: pruebas, piloto (de todas las áreas), producción y servidores críticos de a uno con respaldo; si algo falla, se frena en ese anillo.
+- La demora tiene techo: lo que se está explotando se instala ya.
+- Herramientas: WSUS, las directivas de Windows Update y, en la nube, Azure Update Manager e Intune con Autopatch. El hotpatch de Windows Server 2025 evita reinicios con Azure Arc.
+- Medir cada mes: quién lo tiene, quién espera reinicio y quién no se reporta.
+</Resumen>

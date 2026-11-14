@@ -1,0 +1,112 @@
+tipo: troubleshooting
+titulo: PC03 no aparece en WSUS
+descripcion: >-
+  Incidente simulado. Hace un mes que la empresa usa WSUS. Las PC del piloto y de producción se
+  reportan bien. La semana pasada llegó PC03, una PC nueva para Ventas, y en la consola de WSUS
+  no aparece. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: Martes, 10:00. El informe de cumplimiento no muestra a PC03. Revisás en SRV-WSUS.
+    evidencia:
+      - titulo: Get-WsusComputer (en SRV-WSUS)
+        contenido: |
+          FullDomainName       IPAddress      LastReportedStatusTime  RequestedTargetGroupName
+          --------------       ---------      ----------------------  ------------------------
+          pc01.empresa.local   192.168.10.51  14/11/2026 08:12        Piloto
+          pc02.empresa.local   192.168.10.52  14/11/2026 08:40        Produccion
+    opciones:
+      - { texto: "El problema está del lado de la PC: revisar qué directivas le llegan a PC03", ir_a: n_ou, minutos: 4 }
+      - texto: Reiniciar el servicio de WSUS en el servidor
+        ir_a: n1
+        minutos: 8
+        consecuencia: >-
+          Las demás PC se siguen reportando bien antes y después. El servidor anda: el que no le
+          habla es PC03.
+      - texto: Aprobar todas las actualizaciones para Todos los equipos
+        ir_a: n1
+        minutos: 5
+        consecuencia: >-
+          No cambia nada para PC03, que ni siquiera le pregunta al servidor, y te saltaste los
+          anillos para todas las demás. Deshacés la aprobación.
+  n_ou:
+    situacion: >-
+      En PC03 corrés gpresult. Solo le llega la directiva del dominio: ninguna de Windows Update.
+    evidencia:
+      - titulo: gpresult /r /scope computer (en PC03)
+        contenido: |
+          CONFIGURACIÓN DEL EQUIPO
+          -------------------------
+              Nombre de CN=PC03,CN=Computers,DC=empresa,DC=local
+
+              Objetos de directiva de grupo aplicados
+              ----------------------------------------
+                  Default Domain Policy
+    opciones:
+      - { texto: "PC03 quedó en el contenedor Computers. Moverla a la OU Equipos/Produccion y aplicar las directivas", ir_a: n_clon, minutos: 5 }
+      - texto: Vincular la GPO de Windows Update a la raíz del dominio
+        ir_a: n_ou
+        minutos: 6
+        consecuencia: >-
+          Les llegaría a todos, incluidos los DC y los servidores, que pasarían a actualizarse con
+          la configuración de las PC. Y el contenedor Computers igual va a seguir recibiendo
+          equipos olvidados. Lo correcto es poner la PC en su OU.
+  n_clon:
+    situacion: >-
+      PC03 ya recibe las GPO y busca actualizaciones. Pero ahora pasa algo raro: en la consola,
+      PC02 y PC03 aparecen y desaparecen. Cuando se reporta una, la otra se esfuma.
+    evidencia:
+      - titulo: Get-WsusComputer, a las 11:00 y a las 11:30
+        contenido: |
+          11:00  pc02.empresa.local   192.168.10.52  Produccion
+          11:30  pc03.empresa.local   192.168.10.53  Produccion
+      - titulo: El identificador de Windows Update (en las dos PC)
+        contenido: |
+          PS> Invoke-Command PC02, PC03 { (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate').SusClientId }
+          8f2c1e44-3b7a-4d2e-9c61-0a5b7d93e210
+          8f2c1e44-3b7a-4d2e-9c61-0a5b7d93e210
+      - titulo: Lo que cuenta el técnico que la instaló
+        contenido: |
+          "La clonamos del disco de PC02, que ya estaba lista con todo. Le cambié el nombre y la uní al dominio."
+    opciones:
+      - { texto: "Las dos tienen el mismo identificador porque PC03 es un clon sin Sysprep. Generarle uno nuevo a PC03", ir_a: n_fix, minutos: 6 }
+      - texto: Borrar PC02 de la consola de WSUS
+        ir_a: n_clon
+        minutos: 3
+        consecuencia: >-
+          En la siguiente búsqueda, PC02 vuelve y PC03 desaparece de nuevo. WSUS identifica a los
+          equipos por ese número, no por el nombre: para él son el mismo equipo.
+      - texto: Cambiarle de nuevo el nombre a PC03
+        ir_a: n_clon
+        minutos: 10
+        consecuencia: >-
+          El nombre no es el problema. El identificador sigue repetido.
+  n_fix:
+    situacion: >-
+      En PC03 se detiene Windows Update, se borran SusClientId y SusClientIdValidation, se vuelve
+      a iniciar el servicio y se fuerza una búsqueda. Al rato aparecen las dos.
+    evidencia:
+      - titulo: En PC03
+        contenido: |
+          Stop-Service wuauserv
+          $k = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate'
+          Remove-ItemProperty $k -Name SusClientId, SusClientIdValidation
+          Start-Service wuauserv
+          UsoClient StartScan
+    opciones:
+      - { texto: "Listo. Y avisar que las imágenes se preparan con Sysprep antes de capturarlas", ir_a: n_ok, minutos: 3 }
+      - texto: Listo, cerrar el caso sin decir nada más
+        ir_a: n_fix
+        minutos: 2
+        consecuencia: >-
+          La próxima PC clonada igual va a tener el mismo problema (y otros: el mismo identificador
+          de equipo de Windows). La causa es el procedimiento, no esta PC.
+  n_ok:
+    final: exito
+    resumen: >-
+      Fueron dos problemas uno detrás del otro. Primero, PC03 quedó en el contenedor Computers,
+      donde no llega ninguna GPO de las OU: sin la directiva, no sabe que existe WSUS. Segundo, era
+      un clon del disco de otra PC sin pasar por Sysprep, así que tenía el mismo SusClientId que
+      PC02 y WSUS las veía como un solo equipo. Para que no se repita: la cuenta del equipo se crea
+      en su OU (o se cambia el contenedor por defecto con redircmp), y las imágenes se preparan
+      con Sysprep antes de capturarlas, que es el tema de la lección que sigue.
