@@ -1,0 +1,107 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué dice la regla 3-2-1?
+  opciones:
+    - { texto: "Tres copias de los datos, en dos medios distintos, una fuera del lugar", correcta: true, explicacion: "Y contra el ransomware, una desconectada o inmutable." }
+    - { texto: "Tres respaldos por día, dos por semana y uno por mes", explicacion: "Habla de copias y lugares, no de frecuencia." }
+    - { texto: "Tres discos en RAID", explicacion: "Un RAID no es un respaldo." }
+    - { texto: "Respaldar a las 3, a las 2 y a la 1", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El respaldo es a las 21:00 y el disco muere a las 18:00. ¿Qué concepto mide lo que se perdió?
+  opciones:
+    - { texto: "El RPO: cuántos datos se pueden perder", correcta: true, explicacion: "Acá, casi un día de trabajo." }
+    - { texto: "El RTO", explicacion: "Es cuánto se tarda en volver a funcionar." }
+    - { texto: "La retención", explicacion: "Es cuántas versiones se guardan." }
+    - { texto: "El estado del sistema", explicacion: "Es una parte que se respalda." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué agrega -allCritical a un respaldo con wbadmin?
+  opciones:
+    - { texto: "Lo necesario para recuperar el servidor completo en un disco vacío: volúmenes de sistema y arranque y estado del sistema", correcta: true, explicacion: "Es la recuperación completa (bare metal)." }
+    - { texto: "Todos los discos del servidor", explicacion: "Solo los críticos; los de datos se agregan con -include." }
+    - { texto: "Avisos por correo", explicacion: "No." }
+    - { texto: "Cifrado", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Programaste el respaldo diario a una carpeta compartida de la red. ¿Qué problema tiene?
+  opciones:
+    - { texto: "Guarda solo la última versión: si el respaldo de hoy sale mal, no queda ninguno bueno", correcta: true, explicacion: "Un disco dedicado guarda muchas versiones." }
+    - { texto: "No se puede respaldar a la red", explicacion: "Se puede, con esa limitación." }
+    - { texto: "Es más rápido", explicacion: "No es el problema." }
+    - { texto: "Ninguno", explicacion: "Tiene uno importante." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que programa un respaldo diario a las 22:00 en E:, de D:\Datos y con lo necesario para la recuperación completa.
+  aceptadas:
+    - 'wbadmin enable backup -addtarget:E: -schedule:22:00 -include:D:\Datos -allCritical -quiet'
+    - 'wbadmin enable backup -addtarget:E: -schedule:22:00 -include:D:\Datos -allCritical'
+  patrones: ["^wbadmin\\s+enable\\s+backup\\s+(?=.*-addtarget:e:)(?=.*-schedule:22:00)(?=.*-include:d:\\\\datos)(?=.*-allcritical).*$"]
+  explicacion: "enable backup programa; start backup hace uno ahora."
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una persona necesita la versión de ayer de un Excel, pero también quiere conservar la de hoy. ¿Qué hacés?
+  opciones:
+    - { texto: "Recuperar la versión de ayer a otra carpeta (-recoveryTarget) y pasársela", correcta: true, explicacion: "Así no se pisa el archivo actual." }
+    - { texto: "Recuperar a su lugar con sobreescritura", explicacion: "Pierde la de hoy." }
+    - { texto: "Recuperar el servidor completo", explicacion: "Es desproporcionado." }
+    - { texto: "No se puede", explicacion: "Se puede." }
+- id: p07
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená la recuperación completa de un servidor cuyo disco del sistema murió.
+  pasos:
+    - "Conectar el disco de respaldos"
+    - "Arrancar desde el medio de instalación de Windows Server"
+    - "Reparar el equipo, Solucionar problemas, Recuperación de imagen del sistema"
+    - "Elegir la versión y dejar afuera el disco de respaldos"
+    - "Reiniciar y comprobar servicios, recursos compartidos y eventos"
+  explicacion: "Sin Windows que arranque, se recupera desde el entorno del medio de instalación."
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Por qué las versiones anteriores (instantáneas de carpetas compartidas) no son un respaldo? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Viven en el mismo disco: si muere, se van con él", correcta: true, explicacion: "Una copia tiene que estar en otro lado." }
+    - { texto: "El ransomware suele borrarlas primero", correcta: true, explicacion: "Es de lo primero que intenta." }
+    - { texto: "Los usuarios no pueden usarlas", explicacion: "Sí pueden, con Restaurar versiones anteriores; es su ventaja." }
+    - { texto: "No funcionan en Windows Server 2025", explicacion: "Funcionan." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Por qué una copia de respaldo tiene que estar desconectada o ser inmutable?
+  opciones:
+    - { texto: "Porque los atacantes buscan y borran los respaldos con las credenciales robadas antes de cifrar", correcta: true, explicacion: "Una copia que no se puede borrar desde la red sobrevive." }
+    - { texto: "Porque así el respaldo es más rápido", explicacion: "No tiene que ver con la velocidad." }
+    - { texto: "Por una regla de licencias", explicacion: "No." }
+    - { texto: "Porque Windows Server Backup lo exige", explicacion: "No lo exige; es una buena práctica." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cada cuánto conviene probar una restauración?
+  opciones:
+    - { texto: "Archivos sueltos todos los meses, y una recuperación completa una o dos veces por año", correcta: true, explicacion: "Y mirar todos los días que el respaldo terminó bien." }
+    - { texto: "Nunca: si el respaldo dice que terminó bien, alcanza", explicacion: "Un respaldo sin probar es una suposición." }
+    - { texto: "Solo cuando hace falta", explicacion: "Ese día es tarde para descubrir que no sirve." }
+    - { texto: "Una vez, al instalarlo", explicacion: "Las cosas cambian; hay que repetirlo." }
+- id: p11
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué podés recuperar de esta versión?
+  salida: |
+    Backup time: 11/14/2026 9:00 PM
+    Backup location: Fixed Disk labeled Respaldos(E:)
+    Version identifier: 11/15/2026-00:00
+    Can recover: Volume(s), File(s), Application(s), Bare Metal Recovery, System State
+  opciones:
+    - { texto: "Archivos, volúmenes y también el servidor completo y el estado del sistema", correcta: true, explicacion: "Se hizo con -allCritical." }
+    - { texto: "Solo archivos", explicacion: "Dice también Bare Metal Recovery y System State." }
+    - { texto: "Nada: el identificador tiene otra fecha", explicacion: "El identificador está en UTC; la hora del respaldo, en hora local." }
+    - { texto: "Solo el estado del sistema", explicacion: "Dice también archivos y volúmenes." }

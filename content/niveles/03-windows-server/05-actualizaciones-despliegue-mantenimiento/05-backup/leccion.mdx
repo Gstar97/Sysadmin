@@ -1,0 +1,135 @@
+---
+id: n3-m5-l5
+titulo: Backup en Windows Server
+minutos: 120
+objetivos:
+  - Configurar Windows Server Backup con un destino propio, una programación y la recuperación completa.
+  - Restaurar archivos sueltos, a su lugar o a otro, y conocer la recuperación completa del servidor.
+  - Diseñar los respaldos de una PyME con la regla 3-2-1, el ransomware y las pruebas de restauración en mente.
+glosario: [regla-321, rpo-rto, recuperacion-completa, versiones-anteriores]
+verificado: 2026-11
+---
+
+import respaldo from './respaldo.svg?raw'
+import backup from './ej-backup.yaml'
+import orden from './orden-restauracion.yaml'
+
+Todo lo de este nivel (el dominio, las GPO, los permisos, el servidor de archivos) vale lo que vale su último respaldo **que se pueda restaurar**. Un disco que se rompe, alguien que borra la carpeta equivocada, un ransomware que cifra todo: en los tres casos, la única pregunta es "¿de cuándo es la copia y cuánto tardo en volver?". Esta lección arma los respaldos de los servidores Windows de una PyME con lo que trae el propio Windows Server.
+
+<AntesDeEmpezar>
+- Respaldos en Linux y la rotación (lección 1.7.7).
+- El respaldo del estado del sistema de un DC (lección 3.3.8).
+- Discos y volúmenes en Windows Server (módulo 3.1).
+</AntesDeEmpezar>
+
+## Antes de la herramienta: cuánto podés perder y cuánto podés tardar
+
+Dos preguntas, para hacerle a quien decide, no a IT:
+
+- **¿Cuántos datos se pueden perder?** Si el respaldo es a las 21:00 y el disco muere a las 18:00, se pierde un día de trabajo. Eso es el **RPO** (*recovery point objective*). Si un día es demasiado, hacen falta respaldos más seguidos (o las versiones anteriores, más abajo).
+- **¿Cuánto puede estar parado?** Volver a tener el servidor andando lleva horas: conseguir el disco, restaurar, comprobar. Eso es el **RTO** (*recovery time objective*). Si medio día sin facturar es inaceptable, hace falta otro plan (un segundo servidor, la nube).
+
+Con esas dos respuestas se elige qué, cada cuánto y dónde.
+
+<Diagrama svg={respaldo} alt="A la izquierda, lo que Windows Server Backup puede respaldar: archivos y carpetas (D:\Datos, para recuperar lo que alguien borró), volúmenes enteros, el estado del sistema (registro, arranque, y AD y SYSVOL en un DC) y la recuperación completa o bare metal (todo lo necesario para levantar el servidor en un disco vacío, con -allCritical). A la derecha, la regla 3-2-1: tres copias, en dos medios distintos, una fuera del lugar; por ejemplo, los datos originales, el disco de respaldo del servidor y una copia en la nube, otra sede o un disco que se lleva alguien. Contra el ransomware, además, una copia que no se pueda borrar ni cifrar desde la red. Y lo que nunca se salta: probar que se puede restaurar." pie="Qué respaldar lo decide lo que querés poder recuperar; dónde, la regla 3-2-1." />
+
+## Windows Server Backup
+
+Es una característica que viene con Windows Server (no instalada): `Install-WindowsFeature Windows-Server-Backup`. Se maneja con la consola `wbadmin.msc`, con la herramienta `wbadmin` o con el módulo de PowerShell **WindowsServerBackup**. Puede respaldar cuatro cosas:
+
+- **Archivos y carpetas** elegidos (`-include:D:\Datos`).
+- **Volúmenes** enteros.
+- **Estado del sistema**: registro, archivos de arranque y, en un DC, la base de AD y SYSVOL (`wbadmin start systemstatebackup`).
+- **Recuperación completa** (*bare metal recovery*): todo lo necesario para levantar el servidor en un disco vacío. Se pide con `-allCritical`.
+
+**Dónde guardar.** Tres opciones, con diferencias que importan:
+
+- **Un disco dedicado** (lo recomendado para el respaldo programado): Windows lo toma para él solo y guarda **muchas versiones** una al lado de la otra; cuando se llena, borra solas las más viejas.
+- **Un volumen** de un disco que también se usa para otra cosa: anda, pero más lento.
+- **Una carpeta compartida de la red**: guarda **solo la última versión**; cada respaldo pisa al anterior. Si el respaldo de hoy sale mal, te quedaste sin ninguno.
+
+Y una regla obvia que se rompe seguido: el destino **no puede ser el mismo disco** que se respalda.
+
+```powershell
+Install-WindowsFeature Windows-Server-Backup -IncludeManagementTools
+wbadmin start backup -backupTarget:E: -include:D:\Datos -allCritical -quiet       # uno ahora
+wbadmin enable backup -addtarget:E: -schedule:21:00 -include:D:\Datos -allCritical -quiet   # todos los días
+wbadmin get versions                                                              # qué hay para recuperar
+```
+
+## Restaurar
+
+**Un archivo o una carpeta** es lo que más vas a hacer. Se elige la versión (fecha y hora) y qué recuperar, a su lugar o a otro:
+
+```powershell
+wbadmin start recovery -version:11/14/2026-21:00 -itemType:File -items:D:\Datos\Ventas\precios.xlsx
+wbadmin start recovery -version:11/14/2026-21:00 -itemType:File -items:D:\Datos\RRHH -recursive -recoveryTarget:D:\Prueba
+```
+
+Recuperar **a otro lugar** sirve para dos cosas: devolverle a alguien la versión de ayer sin pisar la de hoy, y **probar** el respaldo sin riesgo.
+
+**El servidor completo**, cuando no arranca (el disco del sistema murió): se arranca desde el medio de instalación de Windows Server, **Reparar el equipo → Solucionar problemas → Recuperación de imagen del sistema**, y se elige la versión. Restaura todos los volúmenes críticos en el disco nuevo.
+
+<Ordenar ejercicio={orden} />
+
+**Un controlador de dominio** es un caso aparte: si hay otro DC sano, casi nunca se restaura (se instala uno nuevo, lección 3.3.8). Y un respaldo del estado del sistema de más de **180 días** no sirve para restaurar un DC.
+
+<Terminal ejercicio={backup} />
+
+<EnSimple>
+Un disco aparte para los respaldos, todos los días con -allCritical, una copia fuera del servidor, y probar seguido que se puede recuperar un archivo.
+</EnSimple>
+
+## Versiones anteriores: útiles, pero no son un respaldo
+
+Las **instantáneas de carpetas compartidas** (*Shadow Copies of Shared Folders*) se activan por volumen, en las propiedades del disco (pestaña Instantáneas). Por defecto toman una foto de los cambios dos veces por día hábil (7:00 y 12:00), y la gente puede recuperar sola la versión de la mañana de un archivo, con clic derecho → **Restaurar versiones anteriores**. Ahorran muchos llamados y bajan el RPO del día a día.
+
+Pero **viven en el mismo disco**: si el disco muere, se van con él. Y lo primero que hace casi cualquier ransomware es borrarlas. Son una comodidad, no un respaldo.
+
+## La regla 3-2-1 y el ransomware
+
+El disco E: dentro del servidor no alcanza: un incendio, un robo o un ransomware se llevan el servidor y el disco de respaldos juntos. La regla **3-2-1**: **tres** copias de los datos, en **dos** medios distintos, **una fuera del lugar**.
+
+El ransomware agrega una condición: los atacantes buscan los respaldos **antes** de cifrar, y los borran con las mismas credenciales de administrador que robaron. Por eso, al menos una copia tiene que estar **desconectada** (un disco que se rota y se guarda en otro lado) o ser **inmutable** (un almacenamiento que no deja borrar durante un tiempo, como ofrecen la mayoría de los servicios de respaldo en la nube). Y las credenciales del sistema de respaldo no deberían ser las del dominio.
+
+Windows Server Backup es simple y alcanza para un servidor. Con varios servidores y máquinas virtuales se pasa a herramientas especializadas (Azure Backup, Veeam y otras) que agregan la copia fuera del lugar, la inmutabilidad y los informes. *Para más adelante* (Nivel 5).
+
+## Probar que se puede restaurar
+
+Un respaldo que nunca se restauró es una suposición. Lo mínimo:
+
+- **Todos los meses**, recuperar un par de archivos al azar a otra carpeta y abrirlos.
+- **Una o dos veces por año**, una recuperación completa en un equipo o una máquina virtual de prueba, midiendo cuánto tardó (tu RTO real).
+- **Todas las mañanas**, mirar que el respaldo de anoche terminó bien: el evento en `Microsoft-Windows-Backup` o `wbadmin get versions`. Mejor si avisa solo cuando falla.
+
+<ErroresComunes>
+  <ErrorComun titulo="Respaldar en el mismo disco">
+    Si el disco muere, se lleva los datos y el respaldo. El destino es otro disco, y una copia fuera del servidor.
+  </ErrorComun>
+  <ErrorComun titulo="Confiar solo en una carpeta de red como destino">
+    Guarda una sola versión; si el respaldo de hoy falla, no queda ninguno.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar -allCritical">
+    Con solo D:\Datos, el día que muere el disco del sistema hay que reinstalar y reconfigurar todo a mano.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que las versiones anteriores son un respaldo">
+    Están en el mismo disco y el ransomware las borra primero.
+  </ErrorComun>
+  <ErrorComun titulo="Todas las copias a mano de un administrador del dominio">
+    Si roban esa cuenta, borran los respaldos antes de cifrar. Una copia desconectada o inmutable.
+  </ErrorComun>
+  <ErrorComun titulo="No probar nunca">
+    El día que hace falta, la copia está vacía o no arranca. Restauraciones de prueba, con fecha en el calendario.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Primero RPO (cuánto se puede perder) y RTO (cuánto se puede tardar); de ahí sale el plan.
+- Windows Server Backup: archivos y carpetas, volúmenes, estado del sistema y recuperación completa (-allCritical).
+- Destino: un disco dedicado guarda muchas versiones; una carpeta de red, solo la última. Nunca el mismo disco.
+- wbadmin start backup, enable backup -schedule, get versions y start recovery (a su lugar o con -recoveryTarget).
+- El servidor completo se recupera desde el medio de instalación: Recuperación de imagen del sistema.
+- Las versiones anteriores ayudan, pero no son un respaldo.
+- 3-2-1, con una copia desconectada o inmutable contra el ransomware.
+- Restauraciones de prueba todos los meses, y una completa una o dos veces por año.
+</Resumen>

@@ -1,0 +1,74 @@
+tipo: terminal
+shell: powershell
+titulo: Respaldar el servidor de archivos y recuperar un archivo
+descripcion: >-
+  SRV-ARCH01 tiene los datos en D: y un disco nuevo, E: (etiqueta Respaldos), solo para los
+  respaldos. Hoy no tiene ningún respaldo. Estás en SRV-ARCH01.
+estado_inicial:
+  equipo: SRV-ARCH01
+  dominio: empresa.local
+  red: { ip: 192.168.10.20, dns: [192.168.10.10] }
+  discos:
+    - { numero: 1, tamano_gb: 200, estilo: GPT, particiones: [{ letra: D, tamano_gb: 199, sistema: NTFS, etiqueta: Datos }] }
+    - { numero: 2, tamano_gb: 500, estilo: GPT, particiones: [{ letra: E, tamano_gb: 499, sistema: NTFS, etiqueta: Respaldos }] }
+  archivos:
+    D:\Datos\Ventas\precios.xlsx: "Lista de precios de noviembre"
+    D:\Datos\Ventas\clientes.xlsx: "Clientes"
+    D:\Datos\RRHH\legajos.docx: "Legajos"
+pasos:
+  - consigna: Instalá la característica de Windows Server Backup.
+    verificar:
+      - { caracteristica: Windows-Server-Backup }
+    solucion: [Install-WindowsFeature Windows-Server-Backup -IncludeManagementTools]
+  - consigna: >-
+      Hacé un primer respaldo en E: de D:\Datos y de todo lo necesario para recuperar el servidor
+      completo (los volúmenes críticos).
+    verificar:
+      - { respaldo_en: "E:", incluye: D:\Datos }
+    pistas:
+      - "wbadmin start backup -backupTarget:E: -include:D:\\Datos -allCritical -quiet"
+    solucion: ["wbadmin start backup -backupTarget:E: -include:D:\\Datos -allCritical -quiet"]
+    explicacion: >-
+      -allCritical suma lo que hace falta para una recuperación completa: el volumen del
+      sistema, el de arranque y el estado del sistema.
+  - consigna: Programá el respaldo todos los días a las 21:00, en E:, con lo mismo.
+    verificar:
+      - { respaldo_programado: true, hora: "21:00" }
+    pistas:
+      - "wbadmin enable backup -addtarget:E: -schedule:21:00 -include:D:\\Datos -allCritical -quiet"
+    solucion: ["wbadmin enable backup -addtarget:E: -schedule:21:00 -include:D:\\Datos -allCritical -quiet"]
+  - consigna: >-
+      Mirá qué versiones hay para recuperar y guardá el identificador de la última en $id.
+    verificar:
+      - { variable: id }
+    pistas:
+      - "wbadmin get versions"
+      - "$id = ((wbadmin get versions | Select-String 'Version identifier') -split ': ')[-1]"
+    solucion:
+      - wbadmin get versions
+      - "$id = ((wbadmin get versions | Select-String 'Version identifier') -split ': ')[-1]"
+    explicacion: >-
+      En la vida real se lee el identificador y se copia; acá lo guardamos en una variable para
+      no tipearlo.
+  - consigna: >-
+      Para simular el accidente, borrá D:\Datos\Ventas\precios.xlsx. Después, recuperalo desde el
+      respaldo a su lugar original.
+    verificar:
+      - { archivo: D:\Datos\Ventas\precios.xlsx, contenido_incluye: noviembre }
+      - { comando_usado: "wbadmin start recovery" }
+    pistas:
+      - "wbadmin start recovery -version:$id -itemType:File -items:D:\\Datos\\Ventas\\precios.xlsx -quiet"
+    solucion:
+      - Remove-Item D:\Datos\Ventas\precios.xlsx
+      - "wbadmin start recovery -version:$id -itemType:File -items:D:\\Datos\\Ventas\\precios.xlsx -quiet"
+  - consigna: >-
+      Probá también una recuperación a otro lugar: recuperá la carpeta D:\Datos\RRHH completa en
+      D:\Prueba-restauracion, sin tocar la original.
+    verificar:
+      - { archivo: D:\Prueba-restauracion\RRHH\legajos.docx }
+    pistas:
+      - "wbadmin start recovery -version:$id -itemType:File -items:D:\\Datos\\RRHH -recursive -recoveryTarget:D:\\Prueba-restauracion -quiet"
+    solucion: ["wbadmin start recovery -version:$id -itemType:File -items:D:\\Datos\\RRHH -recursive -recoveryTarget:D:\\Prueba-restauracion -quiet"]
+    explicacion: >-
+      Recuperar a otra carpeta sirve para probar el respaldo sin riesgo y para devolverle a
+      alguien una versión vieja sin pisar la actual.
