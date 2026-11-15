@@ -1,0 +1,143 @@
+---
+id: n4-m1-l3
+titulo: Apache HTTP Server
+minutos: 120
+objetivos:
+  - Configurar hosts virtuales, módulos y archivos .htaccess.
+  - Entender los MPM (prefork, worker, event) y las diferencias con nginx.
+glosario: [apache-httpd, virtualhost, htaccess, mpm]
+verificado: 2026-11
+---
+
+import camino from './camino.svg?raw'
+import apache from './ej-apache.yaml'
+
+**Apache HTTP Server** (o simplemente Apache, o httpd) es el servidor web con más historia: desde 1995 sigue en una enorme cantidad de servidores, sobre todo en hosting compartido y en aplicaciones PHP como WordPress, que dependen de sus archivos **.htaccess**. Hoy la única rama con soporte es la **2.4**, que recibe versiones de mantenimiento y seguridad seguido. No hace falta elegir "Apache o nginx" para siempre: vas a encontrar los dos, y muchas veces juntos (nginx adelante, Apache atrás).
+
+<AntesDeEmpezar>
+- Nginx (lección anterior): las ideas de sitio, nombre y carpeta son las mismas.
+- Paquetes y servicios en las dos familias (módulo 1.3).
+</AntesDeEmpezar>
+
+## Rocky y Ubuntu, dos formas de organizarlo
+
+El mismo Apache, empaquetado distinto:
+
+| | Rocky Linux | Ubuntu |
+|---|---|---|
+| Paquete y servicio | `httpd` | `apache2` |
+| Configuración principal | `/etc/httpd/conf/httpd.conf` | `/etc/apache2/apache2.conf` |
+| Sitios | un `.conf` en `/etc/httpd/conf.d/` | `sites-available/` y `a2ensite` (que crea el enlace en `sites-enabled/`) |
+| Módulos | `LoadModule` en `/etc/httpd/conf.modules.d/` | `mods-available/` y `a2enmod` |
+| Probar la configuración | `apachectl configtest` | `apache2ctl configtest` |
+| Logs | `/var/log/httpd/access_log`, `error_log` | `/var/log/apache2/access.log`, `error.log` |
+| Usuario | `apache` | `www-data` |
+
+## Hosts virtuales
+
+Un **host virtual** es un sitio, como el `server` de nginx:
+
+```apache
+<VirtualHost *:80>
+    ServerName intranet.empresa.local
+    ServerAlias intra
+    DocumentRoot /var/www/intranet
+
+    <Directory /var/www/intranet>
+        Options -Indexes
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/intranet-error.log
+    CustomLog ${APACHE_LOG_DIR}/intranet-access.log combined
+</VirtualHost>
+```
+
+Apache elige el host virtual por puerto y por `ServerName`/`ServerAlias`; si ninguno coincide, contesta **el primero** definido para ese puerto (por eso Ubuntu llama al suyo `000-default.conf`: para que se lea primero). `apachectl -S` muestra cuál es cuál y en qué archivo y línea está.
+
+Dentro, las secciones **&lt;Directory&gt;** dicen qué se permite en cada carpeta del disco:
+
+- **Require**: quién puede entrar (`all granted`, `all denied`, `ip 192.168.10.0/24`). Las dos distribuciones traen `<Directory />` con `Require all denied`: si ponés un sitio fuera de `/var/www` y no le das su propio `Require all granted`, todo da 403.
+- **Options**: `Indexes` (listar la carpeta si no hay index: casi siempre conviene `-Indexes`) y `FollowSymLinks`.
+- **AllowOverride**: qué pueden cambiar los .htaccess.
+
+<Diagrama svg={camino} alt="El camino de un pedido en Apache, en cinco pasos: 1, el VirtualHost por puerto y ServerName o ServerAlias (si nada coincide, el primero del puerto); 2, Redirect, RewriteRule y ProxyPass, antes de buscar archivos; 3, la sección Directory más específica para la ruta en el disco dice Require y Options; 4, los .htaccess de cada carpeta del camino, solo si AllowOverride lo permite, leídos en cada pedido; 5, contestar con el archivo, el índice, la lista de la carpeta o un 403 o 404. Abajo, los errores típicos: 403 con AH01630 (un Require no deja pasar), 403 con AH01276 (carpeta sin index y sin Indexes), 500 con Invalid command RewriteEngine (falta el módulo), un .htaccess que no hace nada (AllowOverride None) y 503 con AH00957 (ProxyPass hacia un backend que no responde)." pie="Host virtual, redirecciones, Directory, .htaccess y recién ahí el archivo." />
+
+## .htaccess y AllowOverride
+
+Un **.htaccess** es un archivo de configuración dentro de la carpeta del sitio: el que maneja el sitio puede cambiar redirecciones o permisos sin tocar la configuración del servidor ni reiniciarlo. Es lo que hizo popular a Apache en el hosting compartido, y lo que usan WordPress y muchas aplicaciones PHP para sus "enlaces amigables".
+
+Tiene tres costos que conviene conocer:
+
+- Apache lo lee **en cada pedido**, en cada carpeta del camino. Con muchas carpetas y mucho tráfico, se nota.
+- Lo que está en un .htaccess vale **para esa carpeta y todas las de abajo**.
+- Solo funciona si **AllowOverride** lo permite: con `None`, Apache ni lo lee; con `All`, se puede poner cualquier cosa; con `AuthConfig` o `FileInfo`, solo algunas.
+
+Si el servidor es tuyo, lo prolijo es poner esas reglas en el host virtual y dejar `AllowOverride None`. Si la aplicación necesita su .htaccess (WordPress), `AllowOverride All` solo en su carpeta.
+
+## Módulos
+
+Casi todo lo que hace Apache es un **módulo**: `rewrite` (reescribir direcciones), `headers`, `ssl`, `proxy` y `proxy_http` (proxy inverso), `proxy_fcgi` (PHP-FPM). Una directiva de un módulo que no está cargado da un error claro:
+
+```
+AH00526: Syntax error on line 3 of /etc/apache2/sites-enabled/app.conf:
+Invalid command 'ProxyPass', perhaps misspelled or defined by a module not included in the server configuration
+```
+
+```bash
+sudo apachectl -M                   # qué módulos están cargados
+sudo a2enmod rewrite headers        # Ubuntu: habilitar (después, restart)
+sudo a2dismod status
+```
+
+## MPM: cómo atiende las conexiones
+
+El **MPM** (módulo de multiprocesamiento) decide cómo Apache reparte el trabajo:
+
+- **prefork**: un proceso por conexión, sin hilos. Es el más pesado en memoria. Existía porque el viejo **mod_php** no se llevaba bien con los hilos.
+- **worker**: procesos con varios hilos cada uno.
+- **event**: como worker, pero las conexiones que esperan sin hacer nada (keep-alive) no ocupan un hilo. **Es el de fábrica** en las dos distribuciones y el que conviene.
+
+Hoy PHP se conecta a Apache por **PHP-FPM** (lección 4.1.5), así que no hace falta prefork. `apachectl -V | grep MPM` muestra cuál está activo.
+
+## Apache o nginx
+
+- **nginx**: delante de todo como proxy inverso, para archivos estáticos y para muchas conexiones a la vez con poca memoria. Su configuración es central (no hay .htaccess).
+- **Apache**: cuando la aplicación depende de .htaccess o de un módulo propio, cuando el hosting lo exige, o cuando ya está y anda.
+
+Una combinación muy común: nginx recibe todo (HTTPS, archivos, balanceo) y le pasa a Apache solo la aplicación PHP.
+
+<EnSimple>
+Un VirtualHost por sitio; Directory dice quién entra; los .htaccess solo valen si AllowOverride lo permite; los módulos se habilitan y después se reinicia.
+</EnSimple>
+
+<Terminal ejercicio={apache} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Un .htaccess que no hace nada">
+    AllowOverride None en esa carpeta: Apache no lo lee. Mirá AllowOverride antes de reescribir el .htaccess.
+  </ErrorComun>
+  <ErrorComun titulo="Sitio fuera de /var/www sin Require">
+    La configuración de fábrica niega todo en /. Agregá su Directory con Require all granted (y en Rocky, la etiqueta de SELinux).
+  </ErrorComun>
+  <ErrorComun titulo="Habilitar un módulo y hacer reload">
+    Los módulos se cargan al arrancar: restart.
+  </ErrorComun>
+  <ErrorComun titulo="Options Indexes en producción">
+    Una carpeta sin index muestra todos sus archivos. Options -Indexes.
+  </ErrorComun>
+  <ErrorComun titulo="Apache y nginx en el mismo puerto">
+    El segundo en arrancar falla con "Address already in use". Si van juntos, uno escucha en otro puerto (Apache en 8080, por ejemplo) y el otro le pasa los pedidos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Apache 2.4 es la rama vigente. Rocky: httpd, conf.d y conf.modules.d. Ubuntu: apache2, sites-available/enabled y mods-available/enabled con a2ensite y a2enmod.
+- VirtualHost con ServerName/ServerAlias y DocumentRoot; si nada coincide, el primero del puerto (apachectl -S).
+- Directory: Require, Options (-Indexes) y AllowOverride.
+- .htaccess: se lee en cada pedido, vale para las subcarpetas y solo si AllowOverride lo permite.
+- "Invalid command ... defined by a module not included": falta un módulo (apachectl -M, a2enmod y restart).
+- MPM event es el de fábrica; PHP va por PHP-FPM, sin prefork.
+- nginx adelante y Apache atrás es una combinación común.
+</Resumen>

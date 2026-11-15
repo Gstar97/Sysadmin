@@ -1,0 +1,99 @@
+tipo: terminal
+shell: bash
+titulo: La intranet en Apache
+descripcion: >-
+  srv-intra (Ubuntu) tiene Apache con el sitio de fábrica. El equipo de RRHH dejó lista la
+  intranet en /var/www/intranet y la configuración del sitio en sites-available, pero nadie la
+  activó. También dejaron dos .htaccess: uno que esconde la carpeta privado y otro con una
+  redirección. El DNS interno ya resuelve intranet.empresa.local a este servidor.
+estado_inicial:
+  distro: ubuntu
+  hostname: srv-intra
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [apache2] }
+  red:
+    registros_dns: { intranet.empresa.local: 127.0.0.1 }
+  archivos:
+    /var/www/intranet/index.html: "<h1>Intranet</h1>\n"
+    /var/www/intranet/privado/index.html: "<h1>Sueldos</h1>\n"
+    /var/www/intranet/privado/.htaccess: "Require all denied\n"
+    /var/www/intranet/.htaccess: |
+      RewriteEngine On
+      RewriteRule ^novedades$ /index.html [R=301,L]
+    /etc/apache2/sites-available/intranet.conf: |
+      <VirtualHost *:80>
+          ServerName intranet.empresa.local
+          DocumentRoot /var/www/intranet
+
+          <Directory /var/www/intranet>
+              AllowOverride None
+          </Directory>
+
+          ErrorLog ${APACHE_LOG_DIR}/intranet-error.log
+          CustomLog ${APACHE_LOG_DIR}/intranet-access.log combined
+      </VirtualHost>
+pasos:
+  - consigna: Mirá qué hosts virtuales tiene cargados Apache ahora.
+    verificar:
+      - { comando_usado: 'apache2ctl\s+-S|apachectl\s+-S' }
+      - { salida_contiene: '000-default.conf' }
+    pistas:
+      - "`sudo apache2ctl -S`"
+    solucion: [sudo apache2ctl -S]
+    explicacion: Solo el sitio de fábrica. La intranet está en sites-available, pero no en sites-enabled.
+  - consigna: Activá el sitio de la intranet y recargá Apache.
+    verificar:
+      - { http: 'http://intranet.empresa.local/', contiene: '<h1>Intranet</h1>' }
+    pistas:
+      - "`sudo a2ensite intranet && sudo systemctl reload apache2`"
+    solucion:
+      - sudo a2ensite intranet
+      - sudo systemctl reload apache2
+      - curl -s http://intranet.empresa.local/
+  - consigna: Pedí /privado/. ¿El .htaccess que la esconde funciona?
+    verificar:
+      - { salida_contiene: '<h1>Sueldos</h1>' }
+    solucion: [curl -s http://intranet.empresa.local/privado/]
+    explicacion: >-
+      No: se ven los sueldos. Con AllowOverride None, Apache ni siquiera lee los .htaccess de esa
+      carpeta. Por eso hay que mirar AllowOverride antes de culpar al .htaccess.
+  - consigna: >-
+      Cambiá AllowOverride None por AllowOverride All en el sitio de la intranet, probá la
+      configuración y recargá. Después pedí /privado/ de nuevo: ¿qué código da? Mirá el registro
+      de errores del sitio.
+    verificar:
+      - { comando_usado: 'intranet-error\.log' }
+      - { salida_contiene: "Invalid command 'RewriteEngine'" }
+    pistas:
+      - "`sudo sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/sites-available/intranet.conf`"
+      - "`sudo apache2ctl configtest && sudo systemctl reload apache2`"
+      - "`sudo tail -n 3 /var/log/apache2/intranet-error.log`"
+    solucion:
+      - sudo sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/sites-available/intranet.conf
+      - sudo apache2ctl configtest && sudo systemctl reload apache2
+      - curl -s -o /dev/null -w '%{http_code}\n' http://intranet.empresa.local/privado/
+      - sudo tail -n 3 /var/log/apache2/intranet-error.log
+    explicacion: >-
+      500. Ahora Apache lee los .htaccess, y los de las carpetas de arriba también valen para las
+      de abajo: el de /var/www/intranet usa RewriteEngine, que es de mod_rewrite, y en Ubuntu ese
+      módulo viene instalado pero deshabilitado. "Invalid command ... perhaps misspelled or defined
+      by a module not included" casi siempre quiere decir eso: falta habilitar un módulo.
+  - consigna: >-
+      Habilitá mod_rewrite y reiniciá Apache. Comprobá que /privado/ queda bloqueada (403) y que
+      /novedades redirige a la portada (301).
+    verificar:
+      - { modulo_apache: rewrite }
+      - { http: 'http://intranet.empresa.local/privado/', estado: 403 }
+      - { http: 'http://intranet.empresa.local/novedades', estado: 301 }
+    pistas:
+      - "`sudo a2enmod rewrite && sudo systemctl restart apache2`"
+    solucion:
+      - sudo a2enmod rewrite
+      - sudo systemctl restart apache2
+      - curl -sI http://intranet.empresa.local/novedades
+    explicacion: >-
+      Los módulos se cargan al arrancar: después de a2enmod va restart, no reload (a2enmod te lo
+      recuerda). En Rocky no hay a2enmod: los módulos se cargan con LoadModule en
+      /etc/httpd/conf.modules.d/, y rewrite ya viene cargado.

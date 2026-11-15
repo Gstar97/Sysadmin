@@ -1,0 +1,120 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En Ubuntu, ¿cómo se activa un sitio que está en /etc/apache2/sites-available/blog.conf?
+  opciones:
+    - { texto: "sudo a2ensite blog y después systemctl reload apache2", correcta: true, explicacion: "a2ensite crea el enlace en sites-enabled." }
+    - { texto: "Copiándolo a /etc/apache2/conf.d/", explicacion: "Esa carpeta es de Rocky." }
+    - { texto: "Reiniciando el servidor", explicacion: "No alcanza: hay que activarlo." }
+    - { texto: "Con a2enmod blog", explicacion: "a2enmod es para módulos." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Escribiste un .htaccess con "Require all denied" y la carpeta se sigue viendo. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "AllowOverride None en esa carpeta: Apache no lee el .htaccess", correcta: true, explicacion: "Cambiá AllowOverride o poné la regla en el host virtual." }
+    - { texto: "Falta reiniciar Apache", explicacion: "Los .htaccess se leen en cada pedido, sin reiniciar." }
+    - { texto: "El archivo tiene que llamarse htaccess.conf", explicacion: "Se llama .htaccess." }
+    - { texto: "Require no existe en Apache 2.4", explicacion: "Es la forma de 2.4." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice este error al probar la configuración?
+  salida: |
+    AH00526: Syntax error on line 4 of /etc/apache2/sites-enabled/app.conf:
+    Invalid command 'ProxyPass', perhaps misspelled or defined by a module not included in the server configuration
+  opciones:
+    - { texto: "ProxyPass es del módulo proxy, que no está cargado: a2enmod proxy_http y restart", correcta: true, explicacion: "proxy_http arrastra a proxy como dependencia." }
+    - { texto: "ProxyPass está mal escrito", explicacion: "Está bien escrito: el problema es el módulo." }
+    - { texto: "El backend está caído", explicacion: "Eso daría un 503 al pedir, no un error de sintaxis." }
+    - { texto: "Falta el archivo app.conf", explicacion: "Lo leyó: el error es dentro." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un sitio nuevo con DocumentRoot /srv/web da 403 en todo, y el error.log dice "AH01630 client denied by server configuration". ¿Por qué?
+  opciones:
+    - { texto: "La configuración de fábrica niega todo en / y /srv/web no tiene su Directory con Require all granted", correcta: true, explicacion: "/var/www ya viene permitido; otras carpetas, no." }
+    - { texto: "Falta el index.html", explicacion: "Eso daría AH01276 o un 404." }
+    - { texto: "El puerto está cerrado en el firewall", explicacion: "Si contestó 403, el pedido llegó." }
+    - { texto: "Falta un módulo", explicacion: "Sería Invalid command." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué es cierto de los .htaccess? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Apache los lee en cada pedido", correcta: true, explicacion: "Por eso cuestan rendimiento." }
+    - { texto: "Valen para su carpeta y todas las de abajo", correcta: true, explicacion: "Uno en la raíz afecta a todo el sitio." }
+    - { texto: "Solo funcionan si AllowOverride lo permite", correcta: true, explicacion: "Con None, ni los lee." }
+    - { texto: "Requieren reiniciar Apache al cambiarlos", explicacion: "Se aplican en el siguiente pedido." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué MPM conviene hoy en Apache y por qué?
+  opciones:
+    - { texto: "event: atiende con hilos y las conexiones que esperan no ocupan uno; PHP va por PHP-FPM", correcta: true, explicacion: "Es el de fábrica en las dos familias." }
+    - { texto: "prefork: es el más rápido", explicacion: "Es el más pesado; existía por mod_php." }
+    - { texto: "worker: es el único compatible con HTTPS", explicacion: "Todos soportan HTTPS." }
+    - { texto: "Ninguno, el MPM es de nginx", explicacion: "Es un concepto de Apache." }
+- id: p07
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este host virtual tiene que servir /srv/catalogo con el nombre catalogo.ejemplo.com, sin listar carpetas. Apache da 403 en todo. Marcá la línea a corregir.
+  lenguaje: apache
+  archivo: |
+    <VirtualHost *:80>
+        ServerName catalogo.ejemplo.com
+        DocumentRoot /srv/catalogo
+        <Directory /srv/catalogo>
+            Options -Indexes
+            Require all denied
+        </Directory>
+    </VirtualHost>
+  lineas_con_error: [6]
+  explicacion: "Require all denied niega a todos; tiene que ser Require all granted."
+- id: p08
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Con esta configuración, catalogo.ejemplo.com muestra la página de otro sitio. Marcá la línea con el error.
+  lenguaje: apache
+  archivo: |
+    <VirtualHost *:80>
+        ServerName ventas.ejemplo.com
+        ServerAlias catalogo.ejemplo.com
+        DocumentRoot /var/www/ventas
+    </VirtualHost>
+    <VirtualHost *:80>
+        ServerName catalogo.ejemplo.com
+        DocumentRoot /var/www/catalogo
+    </VirtualHost>
+  lineas_con_error: [3]
+  explicacion: "El sitio de ventas también dice llamarse catalogo.ejemplo.com (ServerAlias), y como está primero, Apache se lo da a ventas. El alias sobra."
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando de Rocky que lista los hosts virtuales que cargó Apache, con su archivo y línea.
+  aceptadas:
+    - "apachectl -S"
+    - "sudo apachectl -S"
+    - "httpd -S"
+    - "sudo httpd -S"
+  patrones: ["^(sudo\\s+)?(apachectl|httpd)\\s+-S$"]
+  explicacion: "En Ubuntu es apache2ctl -S."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Después de a2enmod headers, ¿qué hacés?
+  opciones:
+    - { texto: "systemctl restart apache2: los módulos se cargan al arrancar", correcta: true, explicacion: "a2enmod lo recuerda al terminar." }
+    - { texto: "Nada, ya está aplicado", explicacion: "Hace falta reiniciar." }
+    - { texto: "Reiniciar el servidor completo", explicacion: "Alcanza con Apache." }
+    - { texto: "a2ensite headers", explicacion: "headers es un módulo, no un sitio." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿En qué caso conviene Apache antes que nginx?
+  opciones:
+    - { texto: "Cuando la aplicación depende de sus .htaccess, como muchos WordPress con complementos", correcta: true, explicacion: "nginx no lee .htaccess." }
+    - { texto: "Para servir miles de archivos estáticos con poca memoria", explicacion: "Ahí brilla nginx." }
+    - { texto: "Como proxy inverso delante de todo", explicacion: "Lo habitual es nginx." }
+    - { texto: "Nunca", explicacion: "Sigue siendo muy usado." }

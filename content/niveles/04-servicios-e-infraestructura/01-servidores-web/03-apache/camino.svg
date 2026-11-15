@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 330" font-family="system-ui, sans-serif" font-size="12">
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">El camino de un pedido dentro de Apache</text>
+  <g stroke="currentColor" stroke-width="1.2">
+    <rect x="10" y="42" width="152" height="120" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="180" y="42" width="152" height="120" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="350" y="42" width="152" height="120" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+    <rect x="520" y="42" width="152" height="120" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+    <rect x="690" y="42" width="160" height="120" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.4" fill="currentColor">
+    <line x1="162" y1="102" x2="176" y2="102"/><path d="M180 102 l-6 -4 v8 z"/>
+    <line x1="332" y1="102" x2="346" y2="102"/><path d="M350 102 l-6 -4 v8 z"/>
+    <line x1="502" y1="102" x2="516" y2="102"/><path d="M520 102 l-6 -4 v8 z"/>
+    <line x1="672" y1="102" x2="686" y2="102"/><path d="M690 102 l-6 -4 v8 z"/>
+  </g>
+  <g fill="currentColor">
+    <text x="86" y="62" text-anchor="middle" font-weight="700">1. VirtualHost</text>
+    <text x="20" y="84">por puerto y por</text>
+    <text x="20" y="102">ServerName o</text>
+    <text x="20" y="120">ServerAlias (Host);</text>
+    <text x="20" y="138">si nada coincide,</text>
+    <text x="20" y="156">el primero del puerto</text>
+    <text x="256" y="62" text-anchor="middle" font-weight="700">2. Redirigir o pasar</text>
+    <text x="190" y="84">Redirect, RewriteRule</text>
+    <text x="190" y="102">(mod_rewrite) y</text>
+    <text x="190" y="120">ProxyPass (mod_proxy)</text>
+    <text x="190" y="138">se resuelven antes de</text>
+    <text x="190" y="156">buscar archivos</text>
+    <text x="426" y="62" text-anchor="middle" font-weight="700">3. &lt;Directory&gt;</text>
+    <text x="360" y="84">la ruta en el disco</text>
+    <text x="360" y="102">(DocumentRoot + URI);</text>
+    <text x="360" y="120">la sección más</text>
+    <text x="360" y="138">específica dice</text>
+    <text x="360" y="156">Require y Options</text>
+    <text x="596" y="62" text-anchor="middle" font-weight="700">4. .htaccess</text>
+    <text x="530" y="84">en cada carpeta del</text>
+    <text x="530" y="102">camino, solo si</text>
+    <text x="530" y="120">AllowOverride lo</text>
+    <text x="530" y="138">permite; se lee en</text>
+    <text x="530" y="156">cada pedido</text>
+    <text x="770" y="62" text-anchor="middle" font-weight="700">5. Contestar</text>
+    <text x="700" y="84">el archivo, el índice</text>
+    <text x="700" y="102">(DirectoryIndex), la</text>
+    <text x="700" y="120">lista de la carpeta</text>
+    <text x="700" y="138">(Options Indexes) o</text>
+    <text x="700" y="156">403 / 404</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1.2">
+    <rect x="10" y="180" width="840" height="140" rx="8" fill="var(--surface-2, #eef1f5)"/>
+  </g>
+  <g fill="currentColor">
+    <text x="430" y="202" text-anchor="middle" font-weight="700">Lo que suele explicar un error</text>
+    <text x="24" y="226">403 con "AH01630: client denied by server configuration": un Require (de &lt;Directory&gt; o de .htaccess) no deja pasar.</text>
+    <text x="24" y="246">403 con "AH01276: Cannot serve directory": la carpeta no tiene index y Options no permite listarla.</text>
+    <text x="24" y="266">500 con "Invalid command 'RewriteEngine'": el .htaccess usa un módulo que no está cargado (a2enmod rewrite).</text>
+    <text x="24" y="286">El .htaccess "no hace nada": AllowOverride None en esa carpeta (Apache ni lo lee).</text>
+    <text x="24" y="306">503 con "AH00957: attempt to connect ... failed": ProxyPass apunta a un backend que no responde.</text>
+  </g>
+</svg>
