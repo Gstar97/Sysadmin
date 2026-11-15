@@ -56,9 +56,14 @@ export function readMyCnf(sys: System): Map<string, string> {
 
 /** Opciones de cliente de ~/.my.cnf ([client], [mysql]). */
 export function readClientCnf(sys: System, home: string): Map<string, string> {
+  return parseClientCnf(read(sys, `${home}/.my.cnf`))
+}
+
+/** Opciones de cliente de un archivo con el formato de my.cnf. */
+export function parseClientCnf(text: string): Map<string, string> {
   const out = new Map<string, string>()
   let section = ''
-  for (const raw of read(sys, `${home}/.my.cnf`).split('\n')) {
+  for (const raw of text.split('\n')) {
     const line = raw.replace(/^[#;].*$/, '').trim()
     if (!line) continue
     const sec = /^\[([^\]]+)\]$/.exec(line)

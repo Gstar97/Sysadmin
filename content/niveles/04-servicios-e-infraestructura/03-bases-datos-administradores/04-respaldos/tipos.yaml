@@ -1,0 +1,12 @@
+tipo: emparejar
+consigna: Uní cada forma de respaldar una base con lo que la caracteriza.
+pares:
+  - { a: "mysqldump o pg_dump (lógico)", b: "Un archivo de SQL: se lee, se restaura en otra versión, pero tarda en bases grandes" }
+  - { a: "mariadb-backup o pg_basebackup (físico)", b: "Copia los archivos de datos en caliente: rápido en bases grandes, misma versión para restaurar" }
+  - { a: "Binlog de MariaDB o WAL de PostgreSQL", b: "Cada cambio en orden: permite volver a un minuto exacto" }
+  - { a: "Instantánea del disco o de la máquina virtual", b: "Rápida, pero sin avisarle a la base puede quedar a medias, como un corte de luz" }
+  - { a: "Una réplica en otro servidor", b: "Sirve si se rompe el servidor, pero no es un respaldo: copia también el DELETE equivocado" }
+explicacion: >-
+  Lo habitual es combinar: un respaldo completo diario (lógico en bases chicas y medianas, físico
+  en las grandes) más el binlog o el WAL para recuperar al minuto, guardado en otro lugar. La
+  réplica ayuda a la disponibilidad, no reemplaza al respaldo.

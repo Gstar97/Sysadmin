@@ -1,0 +1,96 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Por qué no conviene respaldar MariaDB copiando /var/lib/mysql mientras funciona?
+  opciones:
+    - { texto: "Los archivos están cambiando y la copia queda inconsistente, muchas veces inservible", correcta: true, explicacion: "Hay que pedirle el respaldo a la base o detenerla." }
+    - { texto: "Porque los archivos están cifrados", explicacion: "No lo están." }
+    - { texto: "Porque es más lento que mysqldump", explicacion: "El problema es la consistencia." }
+    - { texto: "No hay problema", explicacion: "Lo hay." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace --single-transaction en mysqldump?
+  opciones:
+    - { texto: "Toma una foto consistente de las tablas InnoDB sin bloquear a la aplicación", correcta: true, explicacion: "Todas las tablas quedan del mismo instante." }
+    - { texto: "Respalda una sola tabla", explicacion: "Respalda todas las de la base." }
+    - { texto: "Comprime el respaldo", explicacion: "Eso lo hace gzip." }
+    - { texto: "Restaura el respaldo en una transacción", explicacion: "Es para respaldar." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El script de respaldo hace "mysqldump ... | gzip > archivo.gz" y un día mysqldump falla por una contraseña vencida. ¿Qué pasa sin set -o pipefail?
+  opciones:
+    - { texto: "El script termina bien (gzip no falló) y deja un archivo vacío sin que nadie se entere", correcta: true, explicacion: "El código de salida de una tubería es el del último comando." }
+    - { texto: "El script falla y avisa", explicacion: "Sin pipefail, no." }
+    - { texto: "gzip reintenta", explicacion: "No hace eso." }
+    - { texto: "MariaDB se detiene", explicacion: "No tiene relación." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Restauraste el respaldo de las 02:30 y querés aplicar lo que pasó después, hasta antes del error. ¿Desde qué posición arrancás?
+  salida: |
+    $ zcat tienda-2026-11-15-0230.sql.gz | grep 'CHANGE MASTER'
+    -- CHANGE MASTER TO MASTER_LOG_FILE='mariadb-bin.000042', MASTER_LOG_POS=88231;
+  opciones:
+    - { texto: "Desde la posición 88231 del archivo mariadb-bin.000042", correcta: true, explicacion: "Es donde estaba el binlog cuando se tomó la foto." }
+    - { texto: "Desde el principio del binlog", explicacion: "Repetirías cambios que ya están en el respaldo." }
+    - { texto: "Desde el final del binlog", explicacion: "No aplicarías nada." }
+    - { texto: "Desde la posición del error", explicacion: "Ahí es donde hay que parar." }
+- id: p05
+  tipo: ordenar_pasos
+  dificultad: 3
+  enunciado: Ordená la recuperación de una tabla borrada por error a las 11:42.
+  pasos:
+    - Restaurar el último respaldo completo en otro servidor (o en otra base)
+    - Leer en el respaldo la posición del binlog (MASTER_LOG_POS)
+    - Buscar en el binlog la posición del DELETE equivocado
+    - Aplicar el binlog desde MASTER_LOG_POS hasta justo antes del DELETE
+    - Comprobar los datos y llevarlos a producción
+  explicacion: "Trabajar en otro servidor evita perder lo que pasó en producción después del error."
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Restaurás en un servidor nuevo un pg_dump de la base inventario y falla con "role inventario_app does not exist". ¿Qué faltó?
+  opciones:
+    - { texto: "Respaldar los roles con pg_dumpall --globals-only y restaurarlos antes", correcta: true, explicacion: "pg_dump no incluye roles." }
+    - { texto: "Usar -Fc", explicacion: "El formato no cambia eso." }
+    - { texto: "Restaurar con psql en vez de pg_restore", explicacion: "Faltarían igual." }
+    - { texto: "Ejecutar initdb", explicacion: "El cluster ya existe." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La gerencia dice que pueden perder "como mucho una hora de pedidos". ¿Qué estás definiendo?
+  opciones:
+    - { texto: "El RPO", correcta: true, explicacion: "Cuántos datos se pueden perder; con un respaldo por noche no alcanza: hace falta el binlog." }
+    - { texto: "El RTO", explicacion: "Ese es cuánto tiempo pueden estar sin servicio." }
+    - { texto: "La regla 3-2-1", explicacion: "Es sobre dónde guardar las copias." }
+    - { texto: "El tamaño del binlog", explicacion: "Es una consecuencia." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué tiene que tener un buen esquema de respaldo de bases de datos? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Restauraciones de prueba periódicas, con el tiempo medido", correcta: true, explicacion: "Es la única forma de saber que sirve." }
+    - { texto: "Una copia fuera del servidor y del edificio", correcta: true, explicacion: "Regla 3-2-1." }
+    - { texto: "Un aviso si una noche no se hizo", correcta: true, explicacion: "El journal del timer o el monitoreo." }
+    - { texto: "Una réplica en lugar de respaldos", explicacion: "La réplica copia también los errores." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que restaura la base inventario desde el archivo inventario.dump (formato custom de pg_dump).
+  aceptadas:
+    - "pg_restore -d inventario inventario.dump"
+    - "sudo -u postgres pg_restore -d inventario inventario.dump"
+  patrones: ["^(sudo -u postgres\\s+)?pg_restore\\s+(-d\\s+inventario|--dbname=inventario)\\s+inventario\\.dump$"]
+  explicacion: "Un respaldo de texto (sin -Fc) se restaura con psql -f."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una base de 300 GB tarda 9 horas en restaurarse desde mysqldump, y el negocio no puede estar más de 2 horas sin ella. ¿Qué proponés?
+  opciones:
+    - { texto: "Un respaldo físico (mariadb-backup), que restaura mucho más rápido, más el binlog; y medir de nuevo", correcta: true, explicacion: "El respaldo lógico es lento en bases grandes." }
+    - { texto: "Comprimir más el mysqldump", explicacion: "Lo lento es cargarlo, no leerlo." }
+    - { texto: "Hacer el mysqldump dos veces por día", explicacion: "Mejora el RPO, no el RTO." }
+    - { texto: "No hacer respaldos y usar una réplica", explicacion: "La réplica no es un respaldo." }

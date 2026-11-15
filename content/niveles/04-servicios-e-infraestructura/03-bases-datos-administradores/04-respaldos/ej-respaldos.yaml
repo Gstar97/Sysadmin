@@ -1,0 +1,143 @@
+tipo: terminal
+shell: bash
+titulo: Respaldos automáticos, una restauración de prueba y un rescate
+descripcion: >-
+  db01 (Rocky Linux 10) tiene MariaDB con la base tienda y el binlog activado. No tiene ningún
+  respaldo. Vas a dejar uno automático, probar que se puede restaurar y, cuando alguien borre lo
+  que no tenía que borrar, recuperar los datos hasta un segundo antes del error.
+estado_inicial:
+  distro: rocky
+  hostname: db01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [mariadb-server, gzip] }
+  servicios:
+    mariadb: { activo: true, habilitado: true }
+  bases_datos:
+    mariadb:
+      binlog: true
+      bases:
+        tienda: |
+          CREATE TABLE clientes (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL);
+          INSERT INTO clientes (nombre) VALUES ('Muebles del Sur'), ('Oficinas Norte'), ('Estudio Ríos');
+          CREATE TABLE pedidos (id INT AUTO_INCREMENT PRIMARY KEY, cliente_id INT NOT NULL, total DECIMAL(10,2) NOT NULL);
+          INSERT INTO pedidos (cliente_id, total) VALUES (2, 185000.00), (1, 42500.00), (2, 96000.00), (3, 31000.00);
+  archivos:
+    /var/backups/db/.keep: ''
+pasos:
+  - consigna: >-
+      Creá en MariaDB la cuenta respaldos@localhost (clave Rsp-2026-bk) con los permisos que necesita
+      mysqldump y nada más: SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER y RELOAD sobre todas las
+      bases. Guardá sus credenciales en /etc/respaldo-bd.cnf, solo legible por root.
+    verificar:
+      - { usuario_bd: respaldos, host: localhost, motor: mariadb, permiso: SELECT, base: tienda }
+      - { usuario_bd: respaldos, host: localhost, motor: mariadb, permiso: DELETE, base: tienda, tiene: false }
+      - { archivo: /etc/respaldo-bd.cnf, contenido_incluye: 'user=respaldos', modo: '0600', dueno: root }
+    pistas:
+      - "`sudo mysql -e \"CREATE USER 'respaldos'@'localhost' IDENTIFIED BY 'Rsp-2026-bk'; GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, RELOAD ON *.* TO 'respaldos'@'localhost';\"`"
+      - "`printf '[client]\\nuser=respaldos\\npassword=Rsp-2026-bk\\n' | sudo tee /etc/respaldo-bd.cnf` y `sudo chmod 600 /etc/respaldo-bd.cnf`"
+    solucion:
+      - "sudo mysql -e \"CREATE USER 'respaldos'@'localhost' IDENTIFIED BY 'Rsp-2026-bk'; GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, RELOAD ON *.* TO 'respaldos'@'localhost';\""
+      - "printf '[client]\\nuser=respaldos\\npassword=Rsp-2026-bk\\n' | sudo tee /etc/respaldo-bd.cnf > /dev/null"
+      - sudo chmod 600 /etc/respaldo-bd.cnf
+    explicacion: >-
+      Una cuenta solo para respaldar: si alguien roba sus credenciales, puede leer, pero no borrar
+      ni cambiar nada. RELOAD le permite anotar la posición del binlog en el respaldo.
+  - consigna: >-
+      Escribí el script /usr/local/sbin/respaldo-bd.sh (ejecutable) que respalde la base tienda con
+      mysqldump, usando ese archivo de credenciales, de forma consistente (--single-transaction),
+      anotando la posición del binlog (--source-data=2), comprimido con gzip en
+      /var/backups/db/tienda-AAAA-MM-DD-HHMM.sql.gz, y que borre los de más de 14 días. Ejecutalo.
+    verificar:
+      - { archivo: /usr/local/sbin/respaldo-bd.sh, contenido_incluye: '--single-transaction', modo: '0755' }
+      - { salida_regex: 'tienda-\d{4}-\d{2}-\d{2}-\d{4}\.sql\.gz' }
+    pistas:
+      - "El corazón del script: `mysqldump --defaults-extra-file=/etc/respaldo-bd.cnf --single-transaction --source-data=2 --routines --events tienda | gzip > \"$DESTINO/tienda-$(date +%F-%H%M).sql.gz\"`"
+      - "Para la limpieza: `find \"$DESTINO\" -name 'tienda-*.sql.gz' -mtime +14 -delete`. Después `sudo chmod 755`, ejecutalo con sudo y listá /var/backups/db."
+    solucion:
+      - "printf '#!/bin/bash\\nset -euo pipefail\\nDESTINO=/var/backups/db\\nmysqldump --defaults-extra-file=/etc/respaldo-bd.cnf --single-transaction --source-data=2 --routines --events tienda | gzip > \"$DESTINO/tienda-$(date +%%F-%%H%%M).sql.gz\"\\nfind \"$DESTINO\" -name \"tienda-*.sql.gz\" -mtime +14 -delete\\n' | sudo tee /usr/local/sbin/respaldo-bd.sh > /dev/null"
+      - sudo chmod 755 /usr/local/sbin/respaldo-bd.sh
+      - sudo /usr/local/sbin/respaldo-bd.sh
+      - sudo ls /var/backups/db
+    explicacion: >-
+      --single-transaction toma una foto consistente de las tablas InnoDB sin bloquear a la
+      aplicación. set -o pipefail hace que el script falle si falla mysqldump (sin eso, gzip
+      terminaría bien y el error pasaría inadvertido, con un respaldo vacío).
+  - consigna: >-
+      Programalo con systemd para todas las noches a las 02:30 (respaldo-bd.service y
+      respaldo-bd.timer, con Persistent=true) y dejá el timer activo.
+    verificar:
+      - { archivo: /etc/systemd/system/respaldo-bd.timer, contenido_incluye: 'OnCalendar=*-*-* 02:30' }
+      - { servicio: respaldo-bd.timer, activo: true, habilitado: true }
+    pistas:
+      - "El service: `[Service]` con `Type=oneshot` y `ExecStart=/usr/local/sbin/respaldo-bd.sh`."
+      - "El timer: `[Timer]` con `OnCalendar=*-*-* 02:30:00` y `Persistent=true`, y `[Install]` con `WantedBy=timers.target`. Después `daemon-reload` y `enable --now respaldo-bd.timer`."
+    solucion:
+      - "printf '[Unit]\\nDescription=Respaldo de la base tienda\\n\\n[Service]\\nType=oneshot\\nExecStart=/usr/local/sbin/respaldo-bd.sh\\n' | sudo tee /etc/systemd/system/respaldo-bd.service > /dev/null"
+      - "printf '[Unit]\\nDescription=Respaldo nocturno de la base tienda\\n\\n[Timer]\\nOnCalendar=*-*-* 02:30:00\\nPersistent=true\\n\\n[Install]\\nWantedBy=timers.target\\n' | sudo tee /etc/systemd/system/respaldo-bd.timer > /dev/null"
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now respaldo-bd.timer
+    explicacion: >-
+      Persistent=true hace que, si el servidor estaba apagado a las 02:30, el respaldo se haga al
+      arrancar. Y el journal de respaldo-bd.service queda como registro de cada noche.
+  - consigna: >-
+      Un respaldo que nunca se restauró no es un respaldo. Restaurá el que acabás de hacer en una
+      base nueva, tienda_prueba, y comprobá que tiene los 4 pedidos.
+    verificar:
+      - { consulta_bd: 'SELECT count(*) FROM pedidos', motor: mariadb, base: tienda_prueba, resultado: '4' }
+    pistas:
+      - "`sudo mysql -e 'CREATE DATABASE tienda_prueba'` y `sudo zcat /var/backups/db/tienda-*.sql.gz | sudo mysql tienda_prueba`"
+    solucion:
+      - sudo mysql -e 'CREATE DATABASE tienda_prueba'
+      - sudo zcat /var/backups/db/tienda-*.sql.gz | sudo mysql tienda_prueba
+      - sudo mysql tienda_prueba -e 'SELECT count(*) FROM pedidos'
+    explicacion: >-
+      Como el respaldo es de una sola base (sin --databases), no trae CREATE DATABASE ni USE, y se
+      puede cargar con otro nombre sin tocar la original. En una empresa, esta prueba se hace en
+      otro servidor y se anota cuánto tardó: ese es tu tiempo real de recuperación.
+  - consigna: >-
+      La tienda sigue funcionando: entra un pedido nuevo (cliente 1 por 64000). Minutos después,
+      alguien corre un DELETE sin WHERE. Simulá las dos cosas.
+    verificar:
+      - { consulta_bd: 'SELECT count(*) FROM pedidos', motor: mariadb, base: tienda, resultado: '0' }
+    pistas:
+      - "`sudo mysql tienda -e 'INSERT INTO pedidos (cliente_id, total) VALUES (1, 64000)'` y después `sudo mysql tienda -e 'DELETE FROM pedidos'`"
+    solucion:
+      - "sudo mysql tienda -e 'INSERT INTO pedidos (cliente_id, total) VALUES (1, 64000)'"
+      - "sudo mysql tienda -e 'DELETE FROM pedidos'"
+    explicacion: >-
+      El respaldo de la noche no alcanza: no tiene el pedido nuevo. Pero el binlog registró todo lo
+      que pasó después del respaldo, incluido el DELETE, y con su posición exacta.
+  - consigna: >-
+      Encontrá en el binlog la posición del DELETE ("# at N" justo antes) y la posición de inicio
+      que anotó el respaldo (MASTER_LOG_POS). Guardalas en las variables INICIO y FIN.
+    verificar:
+      - { comando_usado: 'mysqlbinlog' }
+      - { comando_usado: 'MASTER_LOG_POS' }
+    pistas:
+      - "`sudo zcat /var/backups/db/tienda-*.sql.gz | grep 'CHANGE MASTER'` y `sudo mysqlbinlog /var/lib/mysql/mariadb-bin.000001 | grep -B4 'DELETE FROM pedidos'`"
+      - "Para guardarlas: `INICIO=$(sudo zcat /var/backups/db/tienda-*.sql.gz | grep -o 'MASTER_LOG_POS=[0-9]*' | cut -d= -f2)` y `FIN=$(sudo mysqlbinlog /var/lib/mysql/mariadb-bin.000001 | grep -B4 'DELETE FROM pedidos' | grep -o '^# at [0-9]*' | tail -1 | cut -d' ' -f3)`"
+    solucion:
+      - "INICIO=$(sudo zcat /var/backups/db/tienda-*.sql.gz | grep -o 'MASTER_LOG_POS=[0-9]*' | cut -d= -f2)"
+      - "FIN=$(sudo mysqlbinlog /var/lib/mysql/mariadb-bin.000001 | grep -B4 'DELETE FROM pedidos' | grep -o '^# at [0-9]*' | tail -1 | cut -d' ' -f3)"
+      - echo "desde $INICIO hasta $FIN"
+    explicacion: >-
+      El respaldo dice desde dónde seguir (lo que pasó después de la foto), y el "# at" del DELETE
+      dice dónde parar. Entre esas dos posiciones está el pedido nuevo, que queremos recuperar.
+  - consigna: >-
+      Recuperá: cargá el respaldo en tienda y aplicá encima el binlog desde INICIO hasta FIN, solo
+      con los cambios de la base tienda. Comprobá que hay 5 pedidos.
+    verificar:
+      - { consulta_bd: 'SELECT count(*) FROM pedidos', motor: mariadb, base: tienda, resultado: '5' }
+    pistas:
+      - "`sudo zcat /var/backups/db/tienda-*.sql.gz | sudo mysql tienda`"
+      - "`sudo mysqlbinlog --database=tienda --start-position=$INICIO --stop-position=$FIN /var/lib/mysql/mariadb-bin.000001 | sudo mysql tienda`"
+    solucion:
+      - sudo zcat /var/backups/db/tienda-*.sql.gz | sudo mysql tienda
+      - sudo mysqlbinlog --database=tienda --start-position=$INICIO --stop-position=$FIN /var/lib/mysql/mariadb-bin.000001 | sudo mysql tienda
+      - sudo mysql tienda -e 'SELECT count(*) FROM pedidos'
+    explicacion: >-
+      Volvieron los 4 pedidos del respaldo más el de 64000, y el DELETE no se repitió. Esto es la
+      recuperación a un punto en el tiempo: respaldo completo más binlog. En producción se hace
+      primero en otro servidor, para no perder lo que pasó después del error.

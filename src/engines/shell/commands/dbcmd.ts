@@ -3,7 +3,7 @@
  * mysqladmin/mariadb-admin, sobre el motor de db/engine.ts.
  */
 import { cell, listensOn, mysqlBatch, mysqlInteractive, mysqlTable, mysqlVertical, resolveTarget } from '../db/client'
-import { ensureLoaded, readClientCnf } from '../db/config'
+import { ensureLoaded, parseClientCnf, readClientCnf } from '../db/config'
 import { dbServer, execute, hasPriv, matchUser, materialize, mysqlDdl, rowsOf, splitSql, tablesOf, unterminated, versionOf, type BinlogEvent, type DbServer, type Session } from '../db/engine'
 import { loadSql } from '../db/sqlite'
 import { register, type CommandContext, type Foreground, type IO } from '../shell'
@@ -66,7 +66,18 @@ function socketPath(sys: System): string {
 /** Conecta al servidor MariaDB: devuelve la sesión o el mensaje de error del cliente. */
 export function connectMy(ctx: CommandContext, o: MyOpts): Session | string {
   const home = ctx.sys.users.get(ctx.sh.user)?.home ?? `/home/${ctx.sh.user}`
-  const cnf = readClientCnf(ctx.sys, home)
+  const only = o.vals.get('--defaults-file')
+  const extra = o.vals.get('--defaults-extra-file')
+  let cnf = only ? new Map<string, string>() : readClientCnf(ctx.sys, home)
+  for (const f of [only, extra].filter((x): x is string => !!x)) {
+    let text: string
+    try {
+      text = ctx.sys.vfs.readFile(ctx.sh.resolve(f), ctx.sh.cred)
+    } catch {
+      return `${ctx.name}: [ERROR] Could not open required defaults file: ${ctx.sh.resolve(f)}\n${ctx.name}: [ERROR] Fatal error in defaults handling. Program aborted`
+    }
+    cnf = new Map([...cnf, ...parseClientCnf(text)])
+  }
   const host = o.host ?? cnf.get('host')
   const port = o.port ?? Number(cnf.get('port') ?? 3306)
   const t = resolveTarget(ctx.sys, host, port)

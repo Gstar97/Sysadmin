@@ -1,0 +1,8 @@
+- { id: t1, frente: "mysqldump consistente", dorso: "mysqldump --single-transaction --source-data=2 --routines --events base | gzip > archivo.sql.gz" }
+- { id: t2, frente: "Cuenta de respaldo en MariaDB", dorso: "SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, RELOAD; credenciales en un archivo de root 600 (--defaults-extra-file)." }
+- { id: t3, frente: "Restaurar MariaDB", dorso: "zcat archivo.sql.gz | mysql base (sin --databases se puede usar otro nombre)." }
+- { id: t4, frente: "PostgreSQL", dorso: "pg_dump -Fc -f archivo.dump base; pg_restore -d base archivo.dump; pg_dumpall --globals-only para los roles." }
+- { id: t5, frente: "PITR en MariaDB", dorso: "Respaldo + mysqlbinlog --start-position=MASTER_LOG_POS --stop-position=antes_del_error | mysql base." }
+- { id: t6, frente: "RPO y RTO", dorso: "RPO: cuántos datos se pueden perder. RTO: cuánto se puede estar sin servicio (se mide restaurando)." }
+- { id: t7, frente: "Script de respaldo", dorso: "set -euo pipefail, fecha en el nombre, find -mtime +N -delete, timer de systemd con Persistent=true." }
+- { id: t8, frente: "La regla", dorso: "Un respaldo que nunca se restauró no es un respaldo. Y la réplica no es un respaldo." }

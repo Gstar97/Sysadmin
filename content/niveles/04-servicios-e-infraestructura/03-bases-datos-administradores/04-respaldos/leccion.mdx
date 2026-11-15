@@ -1,0 +1,118 @@
+---
+id: n4-m3-l4
+titulo: Backup y restauración de bases de datos
+minutos: 180
+objetivos:
+  - Respaldar MariaDB y PostgreSQL de forma consistente y automática, con una cuenta propia y sin contraseñas a la vista.
+  - Restaurar un respaldo en otra base o en otro servidor, y medir cuánto tarda.
+  - Recuperar una base hasta un momento exacto con el respaldo y el binlog.
+glosario: [respaldo-logico, binlog, pitr, rpo-rto]
+verificado: 2026-11
+---
+
+import linea from './linea.svg?raw'
+import respaldos from './ej-respaldos.yaml'
+import tipos from './tipos.yaml'
+
+De todo lo que hace el administrador con una base de datos, los respaldos son lo único que no admite errores. Un servidor caído se arregla; una tabla borrada sin respaldo no vuelve. Y hay una trampa clásica: el respaldo que "se hacía todas las noches" y que, el día que hizo falta, estaba vacío, incompleto o no se podía restaurar. La regla de esta lección es simple: **un respaldo que nunca se restauró no es un respaldo**.
+
+<AntesDeEmpezar>
+- Respaldo y la regla 3-2-1 (lección 3.5.5).
+- Timers de systemd (lección 1.3.4) y scripts (módulo 1.7).
+- MySQL y MariaDB (lección 4.3.2) y PostgreSQL (lección 4.3.3).
+</AntesDeEmpezar>
+
+## Por qué no alcanza con copiar /var/lib/mysql
+
+La base tiene sus archivos abiertos y los está cambiando todo el tiempo, con datos a medio escribir en memoria. Copiarlos con `cp` o `rsync` mientras funciona da una copia **inconsistente**, que muchas veces no arranca. Hay que pedirle a la base el respaldo, o detenerla antes de copiar.
+
+<Emparejar ejercicio={tipos} />
+
+## Respaldo lógico de MariaDB
+
+```bash
+mysqldump --defaults-extra-file=/etc/respaldo-bd.cnf \
+  --single-transaction --source-data=2 --routines --events tienda \
+  | gzip > /var/backups/db/tienda-$(date +%F-%H%M).sql.gz
+```
+
+- `--single-transaction` toma una foto consistente de las tablas InnoDB (las de casi todas las aplicaciones) sin frenar a nadie.
+- `--source-data=2` (antes `--master-data`) anota en el archivo, como comentario, la posición del binlog en el momento de la foto: es el punto de partida para recuperar lo que vino después.
+- `--routines --events` incluye los procedimientos y tareas programadas de la base.
+- Sin `--databases`, el respaldo es de una base y se puede restaurar con otro nombre. Con `--databases` o `--all-databases` trae `CREATE DATABASE` y `USE`.
+- La cuenta de respaldo necesita `SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER` y `RELOAD`, y sus credenciales van en un archivo de root con permisos 600.
+
+Restaurar es pasarle el archivo al cliente:
+
+```bash
+zcat tienda-2026-11-15-0230.sql.gz | mysql tienda
+```
+
+## Respaldo lógico de PostgreSQL
+
+```bash
+sudo -u postgres pg_dump -Fc -f /var/backups/db/inventario.dump inventario
+sudo -u postgres pg_dumpall --globals-only > /var/backups/db/roles.sql
+```
+
+`-Fc` es el formato "custom": comprimido y con un índice, se restaura con **pg_restore** (`pg_restore -d inventario archivo.dump`) y permite elegir tablas sueltas. `pg_dump` no guarda los roles ni sus contraseñas: para eso es `pg_dumpall --globals-only`. Sin ese archivo, al restaurar en un servidor nuevo los dueños y permisos no existen.
+
+## Recuperar hasta un minuto antes del error
+
+<Diagrama svg={linea} alt="Una línea de tiempo de 00:00 a 12:00. A las 02:30, el respaldo completo. Durante todo el día, el binlog registra cada cambio con su hora y su posición: pedidos, cambios de precios, clientes nuevos. A las 11:42, un DELETE equivocado. Para recuperar: cargar el respaldo de las 02:30 y aplicar el binlog desde la posición que anotó el respaldo hasta justo antes del DELETE, con mysqlbinlog --start-position y --stop-position. Al lado, las dos preguntas del negocio: RPO, cuántos datos podemos perder (solo con el respaldo, hasta un día; con el binlog, casi nada), y RTO, cuánto podemos estar sin servicio (lo que tarda la restauración, que se mide probándola)." pie="El respaldo diario es la base; el binlog, lo que pasó después." />
+
+En MariaDB, el **binlog** (`log_bin` en la configuración) registra cada cambio con su hora y su posición. Para recuperar:
+
+1. Restaurar el último respaldo completo (mejor en otro servidor o en otra base, para no perder lo que pasó después del error).
+2. Buscar dónde arrancar: el `MASTER_LOG_POS` que anotó el respaldo.
+3. Buscar dónde parar: la posición (`# at N`) o la hora del error, con `mysqlbinlog archivo | grep -B4 "DELETE FROM"`.
+4. Aplicar: `mysqlbinlog --database=tienda --start-position=INICIO --stop-position=FIN binlog.000001 | mysql tienda`.
+
+Esto se llama **recuperación a un punto en el tiempo** (PITR). En PostgreSQL es lo mismo con el **WAL** archivado y un respaldo físico; se arma con herramientas como pgBackRest o Barman, y queda para más adelante.
+
+El binlog ocupa espacio: se borra solo a los días que diga `binlog_expire_logs_seconds` (o `expire_logs_days`), y ese plazo tiene que ser más largo que la distancia entre dos respaldos completos.
+
+## Cuánto podemos perder y cuánto podemos esperar
+
+Antes de diseñar los respaldos hay que hacerle dos preguntas al negocio:
+
+- **RPO** (punto de recuperación): ¿cuántos datos podemos perder? Un respaldo por noche significa hasta un día de pedidos perdidos; con binlog, minutos.
+- **RTO** (tiempo de recuperación): ¿cuánto podemos estar sin el sistema? Lo que tarda restaurar, que solo se sabe **probándolo**. Una base de 200 GB puede tardar horas en restaurarse desde un volcado lógico.
+
+Y la regla 3-2-1 de siempre: tres copias, en dos medios distintos, una fuera del edificio (y al menos una que un atacante con acceso al servidor no pueda borrar). Un respaldo en el mismo disco que la base no sobrevive a la rotura de ese disco.
+
+<EnSimple>
+Respaldo consistente (mysqldump --single-transaction, pg_dump -Fc) todos los días con un timer, una cuenta propia, credenciales en un archivo protegido, copia fuera del servidor y una restauración de prueba cada tanto. Con el binlog, se puede volver hasta justo antes del error.
+</EnSimple>
+
+<Terminal ejercicio={respaldos} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Copiar /var/lib/mysql con la base funcionando">
+    Da una copia inconsistente. mysqldump, mariadb-backup, o detener el servicio antes.
+  </ErrorComun>
+  <ErrorComun titulo="Un script sin set -o pipefail">
+    Si mysqldump falla, gzip igual termina bien y el script "funciona", con un respaldo vacío. pipefail, y revisar el tamaño del archivo.
+  </ErrorComun>
+  <ErrorComun titulo="Nunca probar la restauración">
+    El día que hace falta descubrís que el archivo está vacío o que falta una base. Restaurar en otro servidor, cada mes, y anotar cuánto tardó.
+  </ErrorComun>
+  <ErrorComun titulo="Respaldar PostgreSQL sin los roles">
+    pg_dump no los incluye. pg_dumpall --globals-only.
+  </ErrorComun>
+  <ErrorComun titulo="Los respaldos en el mismo servidor y nada más">
+    Si se rompe el disco o un ransomware cifra el servidor, se pierden con todo. Copia a otro lugar, y una fuera del alcance del servidor.
+  </ErrorComun>
+  <ErrorComun titulo="Una réplica en lugar de respaldo">
+    La réplica copia también el DELETE equivocado, en segundos. Sirve para la disponibilidad, no para volver atrás.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Respaldar pidiéndole a la base: lógico (mysqldump --single-transaction, pg_dump -Fc) o físico (mariadb-backup, pg_basebackup).
+- Una cuenta de respaldo con lo justo, credenciales en un archivo de root 600, un script con pipefail y un timer de systemd.
+- Restaurar: zcat archivo | mysql base, pg_restore -d base archivo.dump; pg_dumpall --globals-only para los roles.
+- PITR: respaldo completo más binlog desde MASTER_LOG_POS hasta justo antes del error (mysqlbinlog --start-position --stop-position).
+- RPO (cuánto se puede perder) y RTO (cuánto se puede esperar); se miden probando la restauración.
+- 3-2-1: una copia fuera del servidor y del edificio. La réplica no es respaldo.
+</Resumen>
