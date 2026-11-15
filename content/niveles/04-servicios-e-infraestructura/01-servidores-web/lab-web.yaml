@@ -1,0 +1,144 @@
+tipo: pasos
+titulo: Los dos sitios en rocky01, con una aplicación de verdad
+descripcion: >-
+  En rocky01 (Rocky Linux 10, red solo-anfitrión) y desde tu PC. Vas a usar dos nombres de
+  prueba, www.ejemplo.test y tienda.ejemplo.test (.test es un dominio reservado para pruebas, que
+  no existe en internet). Hace falta conexión a internet en rocky01 para instalar paquetes.
+  Calculá unas dos horas y media.
+pasos:
+  - titulo: Instantánea
+    detalle: >-
+      Apagá rocky01 y sacale una instantánea ("antes del módulo 4.1"). Si algo se complica, volvés
+      a ella en un minuto.
+    comprobar: La instantánea aparece en tu hipervisor.
+  - titulo: Los nombres en tu PC
+    detalle: >-
+      Para que tu navegador sepa adónde ir, agregá los dos nombres al archivo hosts de tu PC con la
+      IP de rocky01 (ip -br a en rocky01). En Windows es C:\Windows\System32\drivers\etc\hosts
+      (abrí el Bloc de notas como administrador); en Linux y macOS, /etc/hosts.
+    comandos:
+      - "192.168.56.103  www.ejemplo.test tienda.ejemplo.test"
+    comprobar: Desde tu PC, ping www.ejemplo.test responde con la IP de rocky01.
+  - titulo: nginx y el firewall
+    detalle: En rocky01.
+    comandos:
+      - sudo dnf install -y nginx
+      - sudo systemctl enable --now nginx
+      - sudo firewall-cmd --permanent --add-service=http && sudo firewall-cmd --reload
+    comprobar: Desde tu PC, http://www.ejemplo.test muestra la página de prueba de nginx.
+    si_falla: >-
+      Si el navegador tarda y no carga, es el firewall (firewall-cmd --list-services tiene que
+      mostrar http). Si dice que no encuentra el sitio, revisá el archivo hosts de tu PC.
+  - titulo: El sitio estático
+    detalle: >-
+      Un index.html y un 404.html cualquiera en /srv/www/ejemplo, y su server en conf.d. Usá el
+      mismo www.conf del laboratorio simulado, con server_name www.ejemplo.test.
+    comandos:
+      - sudo mkdir -p /srv/www/ejemplo
+      - echo '<h1>Ejemplo S.A.</h1>' | sudo tee /srv/www/ejemplo/index.html
+      - echo '<h1>No encontramos esa página</h1>' | sudo tee /srv/www/ejemplo/404.html
+      - ls -Z /srv/www/ejemplo
+      - sudo vi /etc/nginx/conf.d/www.conf
+      - sudo nginx -t && sudo systemctl reload nginx
+    comprobar: http://www.ejemplo.test muestra tu página, y http://www.ejemplo.test/nada, tu 404.
+    si_falla: >-
+      Un 403 con "Permission denied" en /var/log/nginx/error.log es SELinux o permisos: ls -Z tiene
+      que decir httpd_sys_content_t (si no, sudo restorecon -Rv /srv/www).
+  - titulo: La aplicación
+    detalle: >-
+      Una aplicación chica en Flask que muestra qué instancia contestó y qué encabezados le llegaron.
+      Va con su usuario y su entorno virtual.
+    comandos:
+      - sudo useradd --system --home-dir /opt/tienda --create-home --shell /sbin/nologin tienda
+      - sudo -u tienda python3 -m venv /opt/tienda/venv
+      - sudo -u tienda /opt/tienda/venv/bin/pip install flask gunicorn
+      - |
+        sudo -u tienda tee /opt/tienda/tienda.py <<'EOF'
+        import os
+        from flask import Flask, request
+
+        app = Flask(__name__)
+
+        @app.route("/")
+        def inicio():
+            return (f"<h1>Tienda</h1> instancia {os.environ.get('INSTANCIA', '?')}<br>\n"
+                    f"Host: {request.host}<br>\n"
+                    f"IP de la conexión: {request.remote_addr}<br>\n"
+                    f"X-Forwarded-For: {request.headers.get('X-Forwarded-For')}\n")
+        EOF
+    comprobar: /opt/tienda/venv/bin/gunicorn --version muestra la versión (23 o posterior).
+    si_falla: >-
+      Si pip no llega a internet, revisá que rocky01 tenga salida (ping 1.1.1.1 y la red NAT del
+      hipervisor).
+  - titulo: Dos instancias con una plantilla de systemd
+    detalle: >-
+      En lugar de dos archivos, una plantilla: tienda@.service. Lo que va después de la @ al
+      arrancarla (1 o 2) reemplaza a %i, así que tienda@1 escucha en 8001 y tienda@2 en 8002.
+    comandos:
+      - |
+        sudo tee /etc/systemd/system/tienda@.service <<'EOF'
+        [Unit]
+        Description=Tienda (instancia %i)
+        After=network.target
+
+        [Service]
+        User=tienda
+        WorkingDirectory=/opt/tienda
+        Environment=INSTANCIA=%i
+        ExecStart=/opt/tienda/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:800%i tienda:app
+        Restart=on-failure
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now tienda@1 tienda@2
+      - curl -s 127.0.0.1:8001; curl -s 127.0.0.1:8002
+    comprobar: Cada curl muestra su número de instancia, y ss -tlnp muestra 127.0.0.1:8001 y 127.0.0.1:8002.
+    si_falla: >-
+      journalctl -u tienda@1 -n 30 dice por qué no arrancó. "203/EXEC" es la ruta de gunicorn;
+      "ModuleNotFoundError" es el nombre del módulo (tienda:app) o la carpeta de trabajo.
+  - titulo: El proxy con balanceo
+    detalle: >-
+      El tienda.conf del laboratorio simulado, con server_name tienda.ejemplo.test. Agregale un
+      formato de log que diga a qué instancia fue cada pedido y cuánto tardó: va en el bloque http
+      de /etc/nginx/nginx.conf.
+    comandos:
+      - sudo vi /etc/nginx/conf.d/tienda.conf
+      - "# en nginx.conf, dentro de http { }:"
+      - "log_format conapp '$remote_addr [$time_local] \"$request\" $status $upstream_addr $request_time';"
+      - "# y en el server de la tienda: access_log /var/log/nginx/tienda.log conapp;"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - sudo setsebool -P httpd_can_network_connect 1
+    comprobar: http://tienda.ejemplo.test muestra la tienda; al recargar varias veces, cambia la instancia.
+    si_falla: >-
+      Un 502 con "(13: Permission denied)" es el booleano de SELinux. Con "(111: Connection
+      refused)", las instancias no están corriendo.
+  - titulo: Que se caiga una
+    detalle: Mientras recargás la página en el navegador, detené una instancia, mirá los logs y volvé a arrancarla.
+    comandos:
+      - sudo systemctl stop tienda@1
+      - sudo tail -f /var/log/nginx/tienda.log
+      - sudo tail -n 3 /var/log/nginx/error.log
+      - sudo systemctl start tienda@1
+    comprobar: >-
+      Con tienda@1 detenida la página sigue cargando (siempre la instancia 2), tienda.log muestra
+      127.0.0.1:8002 en todos los pedidos, y el error.log tiene el "Connection refused" de 8001.
+  - titulo: Que vuelva sola
+    detalle: >-
+      Simulá que la aplicación se cuelga y muere: matala con kill -9 y mirá cómo systemd la levanta.
+      Después reiniciá rocky01 y comprobá que todo arranca sin tocar nada.
+    comandos:
+      - sudo systemctl kill -s KILL tienda@2
+      - systemctl status tienda@2
+      - journalctl -u tienda@2 -n 5
+      - sudo reboot
+    comprobar: >-
+      A los pocos segundos tienda@2 está "active (running)" con otro PID, y el journal dice
+      "Scheduled restart job". Después del reinicio, los dos sitios responden desde tu PC.
+  - titulo: Documentar
+    detalle: >-
+      En tu carpeta de documentación: qué sitios hay, en qué archivos está cada uno, en qué puertos
+      escuchan las instancias y con qué usuario, el booleano de SELinux que activaste y por qué, y
+      cómo se ve en los logs que una instancia se cayó.
+    comprobar: Alguien que no sos vos podría encontrar y reiniciar cada pieza leyendo tu documento.

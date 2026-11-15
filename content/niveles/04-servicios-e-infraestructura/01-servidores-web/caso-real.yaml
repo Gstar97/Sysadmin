@@ -1,0 +1,157 @@
+tipo: troubleshooting
+titulo: La web devuelve 502 después de una actualización
+descripcion: >-
+  Incidente simulado en web01, un Rocky Linux 10 de una distribuidora. Tiene nginx con dos sitios:
+  el portal de clientes (una aplicación de Python con gunicorn, portal.service, en 127.0.0.1:8001)
+  y el catálogo en PHP (con PHP-FPM). El sábado a la noche, Julián, el técnico de guardia, aplicó
+  las actualizaciones pendientes con dnf update y reinició. El lunes a las 8:00, los dos sitios dan
+  502. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: Lunes, 8:05. Los vendedores llaman porque no pueden cargar pedidos. Entrás a web01.
+    evidencia:
+      - titulo: Desde tu PC
+        contenido: |
+          $ curl -sI https://portal.distribuidora.com.ar | head -1
+          HTTP/2 502
+          $ curl -sI https://catalogo.distribuidora.com.ar | head -1
+          HTTP/2 502
+      - titulo: Lo que dejó Julián en el registro de cambios
+        contenido: |
+          Sáb 23:10  dnf update (212 paquetes, incluye nginx, php-fpm y selinux-policy). Reinicio.
+          Sáb 23:20  Había un www.conf.rpmnew de php-fpm: lo copié sobre www.conf para tener la configuración nueva.
+          Sáb 23:25  Las páginas de prueba de nginx cargan. Cierro.
+    opciones:
+      - { texto: "Leer el error.log de nginx: dice a qué no pudo conectarse en cada sitio", ir_a: n_log, minutos: 2 }
+      - texto: Volver a la instantánea de antes de la actualización
+        ir_a: n1
+        minutos: 20
+        consecuencia: >-
+          Se perderían los pedidos del fin de semana que entraron por el portal antes de la
+          actualización... y la base está en el mismo servidor. Y las actualizaciones eran de
+          seguridad: habría que volver a hacerlas. Mejor entender qué se rompió.
+      - texto: Reiniciar nginx
+        ir_a: n1
+        minutos: 3
+        consecuencia: >-
+          nginx arranca sin errores y los dos sitios siguen en 502. Un 502 es nginx avisando que lo
+          de atrás no respondió.
+  n_log:
+    situacion: El error.log tiene dos mensajes distintos, uno por sitio.
+    evidencia:
+      - titulo: sudo tail -n 2 /var/log/nginx/error.log
+        contenido: |
+          2026/11/16 08:04:51 [error] 1102#1102: *14 connect() failed (111: Connection refused) while connecting to upstream, client: 190.12.4.77, server: portal.distribuidora.com.ar, request: "GET / HTTP/2.0", upstream: "http://127.0.0.1:8001/", host: "portal.distribuidora.com.ar"
+          2026/11/16 08:05:02 [error] 1102#1102: *17 connect() failed (111: Connection refused) while connecting to upstream, client: 190.12.4.77, server: catalogo.distribuidora.com.ar, request: "GET / HTTP/2.0", upstream: "fastcgi://127.0.0.1:9000", host: "catalogo.distribuidora.com.ar"
+    opciones:
+      - { texto: "Empezar por el portal: ver si portal.service está corriendo", ir_a: n_portal, minutos: 2 }
+      - texto: Habilitar httpd_can_network_connect
+        ir_a: n_log
+        minutos: 2
+        consecuencia: >-
+          Los dos mensajes dicen "(111: Connection refused)": nginx llega, pero nadie escucha. Si
+          fuera SELinux diría "(13: Permission denied)". No toca todavía.
+  n_portal:
+    situacion: >-
+      portal.service no está corriendo. No falló: directamente no arrancó con el reinicio.
+    evidencia:
+      - titulo: systemctl status portal
+        contenido: |
+          ○ portal.service - Portal de clientes
+               Loaded: loaded (/etc/systemd/system/portal.service; disabled; preset: disabled)
+               Active: inactive (dead)
+      - titulo: Lo que recuerda la persona que lo instaló, hace un año
+        contenido: |
+          "Lo arranqué con systemctl start y anduvo perfecto."
+    opciones:
+      - { texto: "Habilitarlo y arrancarlo: systemctl enable --now portal", ir_a: n_selinux, minutos: 2 }
+      - texto: Arrancarlo con systemctl start portal
+        ir_a: n_portal
+        minutos: 2
+        consecuencia: >-
+          Arrancaría ahora, y en el próximo reinicio estaríamos igual. "disabled" quiere decir que
+          no arranca solo: en un año nadie había reiniciado el servidor, por eso no se notó.
+  n_selinux:
+    situacion: >-
+      portal.service queda "active (running)" y escucha en 127.0.0.1:8001. Pero el portal sigue en
+      502, ahora con otro mensaje.
+    evidencia:
+      - titulo: sudo tail -n 1 /var/log/nginx/error.log
+        contenido: |
+          2026/11/16 08:11:30 [error] 1102#1102: *31 connect() to 127.0.0.1:8001 failed (13: Permission denied) while connecting to upstream, client: 190.12.4.77, server: portal.distribuidora.com.ar, upstream: "http://127.0.0.1:8001/"
+      - titulo: getsebool httpd_can_network_connect y el historial de comandos de hace un año
+        contenido: |
+          httpd_can_network_connect --> off
+
+          $ sudo grep setsebool /root/.bash_history
+          setsebool httpd_can_network_connect 1
+    opciones:
+      - { texto: "El booleano se había activado sin -P y se perdió con el reinicio: setsebool -P httpd_can_network_connect 1", ir_a: n_php, minutos: 2 }
+      - texto: Poner SELinux en permissive
+        ir_a: n_selinux
+        minutos: 2
+        consecuencia: >-
+          Andaría, pero apagás la protección de todo el servidor por un solo permiso que ya sabés
+          cuál es. Y la actualización de selinux-policy no tuvo nada que ver: el valor guardado del
+          booleano siempre fue off.
+      - texto: Cambiar el portal al puerto 80 para que SELinux lo permita
+        ir_a: n_selinux
+        minutos: 4
+        consecuencia: >-
+          El 80 ya lo usa nginx. El permiso que falta es para que nginx se conecte a otros
+          puertos, y es un booleano.
+  n_php:
+    situacion: >-
+      El portal anda. Queda el catálogo: nginx busca PHP-FPM en 127.0.0.1:9000 y ahí no hay nada.
+      PHP-FPM está corriendo.
+    evidencia:
+      - titulo: sudo ss -tlnp | grep -E '9000|php' y la línea listen del pool
+        contenido: |
+          (nada en el puerto 9000)
+
+          $ grep ^listen /etc/php-fpm.d/www.conf
+          listen = /run/php-fpm/www.sock
+          listen.acl_users = apache,nginx
+      - titulo: La location del catálogo en /etc/nginx/conf.d/catalogo.conf
+        contenido: |
+          location ~ \.php$ {
+              include fastcgi.conf;
+              fastcgi_pass 127.0.0.1:9000;
+          }
+      - titulo: Los archivos del pool
+        contenido: |
+          $ ls /etc/php-fpm.d/
+          www.conf
+          $ sudo ls -l /root/respaldo-etc/php-fpm.d/www.conf
+          -rw-r--r--. 1 root root 1631 sep  3 10:12 /root/respaldo-etc/php-fpm.d/www.conf
+    opciones:
+      - texto: Copiar el www.conf nuevo sobre los cambios fue lo que borró "listen = 127.0.0.1:9000". Comparar con el respaldo y recuperar los ajustes
+        ir_a: n_ok
+        minutos: 6
+      - texto: Cambiar fastcgi_pass al socket nuevo (unix:/run/php-fpm/www.sock)
+        ir_a: n_php
+        minutos: 3
+        consecuencia: >-
+          El catálogo vuelve a cargar... pero muy lento a las 9:00: el www.conf de fábrica tiene
+          los valores de pm de fábrica, y el viejo tenía pm.max_children ajustado para este
+          servidor. Copiar el .rpmnew borró todos los cambios, no solo el listen. Hay que
+          comparar.
+      - texto: Reinstalar php-fpm
+        ir_a: n_php
+        minutos: 8
+        consecuencia: >-
+          El www.conf que deja es el de fábrica, igual que ahora. El problema no es el paquete:
+          es la configuración que se pisó.
+  n_ok:
+    final: exito
+    resumen: >-
+      Una actualización con reinicio destapó tres problemas que ya estaban, y agregó uno nuevo. El
+      portal nunca había estado habilitado (systemctl start sin enable) y el booleano de SELinux se
+      había activado sin -P: los dos funcionaban solo hasta el primer reinicio. El nuevo fue
+      copiar el .rpmnew sobre www.conf: dnf no pisa una configuración modificada y deja la nueva al
+      lado para que la compares, no para reemplazarla; al copiarla se perdieron listen =
+      127.0.0.1:9000 y los ajustes de pm. Con diff contra el respaldo se recuperaron. Para que no se
+      repita: después de configurar algo, probar con un reinicio planificado; activar los
+      booleanos siempre con -P; comparar los .rpmnew (o .dpkg-dist en Ubuntu) con diff en lugar de
+      copiarlos; y al cerrar una actualización, probar los sitios reales, no la página de prueba.

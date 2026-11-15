@@ -1,0 +1,43 @@
+---
+titulo: Dos sitios en nginx, uno estático y la tienda balanceada entre dos instancias
+horas: 3
+verificacion:
+  - Resolví el laboratorio simulado completo, incluido el corte de una instancia.
+  - Desde mi PC, http://www.ejemplo.test muestra el sitio y una página que no existe muestra mi 404.
+  - http://tienda.ejemplo.test reparte entre tienda@1 y tienda@2, que escuchan solo en 127.0.0.1.
+  - Con una instancia detenida, la tienda sigue respondiendo y el error.log lo registra.
+  - tienda.log muestra a qué instancia fue cada pedido y cuánto tardó.
+  - Después de matar una instancia y de reiniciar rocky01, todo vuelve solo.
+  - SELinux sigue en enforcing (getenforce) y el firewall solo deja pasar ssh y http.
+  - Documenté sitios, archivos, puertos, usuarios y el booleano de SELinux.
+---
+
+import sim from './lab-web-sim.yaml'
+import pasos from './lab-web.yaml'
+
+## Objetivo
+
+Dejar un servidor web como se deja en una empresa: un sitio institucional servido por nginx, y una aplicación que corre como servicio, en dos copias detrás de un proxy inverso, para que una caída no se note. Con SELinux activo, el firewall cerrado a lo justo y los logs diciendo qué pasa.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01 (de los laboratorios del Nivel 1) con salida a internet, y tu PC con permisos para editar su archivo hosts.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tu máquina virtual
+
+<PasosGuiados ejercicio={pasos} />
+
+<Consejo>
+Dejá abierta una segunda terminal con sudo tail -f /var/log/nginx/error.log mientras trabajás. La mayoría de los problemas de este laboratorio se explican solos ahí, en el momento en que pasan.
+</Consejo>
+
+## Para pensar
+
+1. Las dos instancias corren en el mismo servidor. ¿De qué te protege eso y de qué no? ¿Qué cambiarías en el upstream si la segunda estuviera en ubuntu01?
+2. Si la tienda guardara el carrito en la memoria de cada instancia, ¿qué notaría un cliente? ¿Cómo lo resolverías hoy con nginx, y cómo lo resolverían los programadores?
+3. ¿Qué pasaría después de un reinicio si hubieras usado setsebool sin -P? ¿Cuánto tardarían en darse cuenta, y por dónde lo verían?

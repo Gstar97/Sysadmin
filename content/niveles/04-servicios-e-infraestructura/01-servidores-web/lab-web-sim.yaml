@@ -1,0 +1,161 @@
+tipo: terminal
+shell: bash
+titulo: Dos sitios en web01, uno estático y la tienda con dos instancias
+descripcion: >-
+  web01 es un Rocky Linux 10 recién instalado, con nginx y firewalld funcionando. En tu carpeta
+  personal está el sitio institucional (sitio/), y en /opt/tienda, la aplicación de la tienda en
+  Python con su entorno virtual. El usuario tienda ya existe. El DNS interno apunta
+  www.ejemplo.com y tienda.ejemplo.com a web01. Hay que dejar los dos publicados como en
+  producción.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: tienda, uid: 990, shell: /sbin/nologin, home: /opt/tienda }
+  paquetes: { instalados: [nginx, firewalld] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+    firewalld: { activo: true, habilitado: true }
+  red:
+    registros_dns: { www.ejemplo.com: 127.0.0.1, tienda.ejemplo.com: 127.0.0.1 }
+  archivos:
+    /home/ana/sitio/index.html: "<h1>Ejemplo S.A.</h1>\n<p>Muebles de oficina desde 1987.</p>\n"
+    /home/ana/sitio/404.html: "<h1>No encontramos esa página</h1>\n"
+    /opt/tienda/tienda.py: { contenido: "from flask import Flask\napp = Flask(__name__)\n", dueno: tienda }
+    /opt/tienda/venv/bin/python3: { contenido: "#!/bin/sh\n", modo: "0755", dueno: tienda }
+    /opt/tienda/venv/bin/gunicorn: { contenido: "#!/opt/tienda/venv/bin/python3\n# gunicorn 23.0.0\n", modo: "0755", dueno: tienda }
+  web:
+    aplicaciones:
+      tienda1: { cuerpo: "<h1>Tienda</h1> (instancia 1)", eco_encabezados: true }
+      tienda2: { cuerpo: "<h1>Tienda</h1> (instancia 2)", eco_encabezados: true }
+pasos:
+  - consigna: >-
+      El sitio institucional va en /srv/www/ejemplo. Creá la carpeta, copiá ahí los archivos de
+      ~/sitio y comprobá con qué etiqueta de SELinux quedaron.
+    verificar:
+      - { archivo: /srv/www/ejemplo/index.html, contenido_incluye: 'Ejemplo S.A.' }
+      - { salida_contiene: 'httpd_sys_content_t' }
+    pistas:
+      - "`sudo mkdir -p /srv/www/ejemplo`, `sudo cp ~/sitio/* /srv/www/ejemplo/` y `ls -Z /srv/www/ejemplo`"
+    solucion:
+      - sudo mkdir -p /srv/www/ejemplo
+      - sudo cp ~/sitio/* /srv/www/ejemplo/
+      - ls -Z /srv/www/ejemplo
+    explicacion: >-
+      La política de SELinux de Rocky ya trae una regla para /srv/www (y /srv/algo/www): lo que se
+      crea o se copia ahí queda como httpd_sys_content_t, el tipo que nginx puede leer. Si lo
+      hubieras movido con mv desde tu carpeta, habría conservado user_home_t y daría 403; en ese
+      caso, restorecon -Rv lo corrige.
+  - consigna: >-
+      Creá /etc/nginx/conf.d/www.conf para www.ejemplo.com con esa raíz, try_files y la página
+      404.html propia para los errores 404. Probá, recargá y comprobá la portada y una página que
+      no existe.
+    verificar:
+      - { http: 'http://www.ejemplo.com/', contiene: 'Ejemplo S.A.' }
+      - { http: 'http://www.ejemplo.com/no-existe', estado: 404, contiene: 'No encontramos esa página' }
+    pistas:
+      - "Adentro del server: `root /srv/www/ejemplo;`, `error_page 404 /404.html;` y `location / { try_files $uri $uri/ =404; }`."
+    solucion:
+      - "printf 'server {\\n    listen 80;\\n    server_name www.ejemplo.com;\\n    root /srv/www/ejemplo;\\n    error_page 404 /404.html;\\n\\n    location / {\\n        try_files $uri $uri/ =404;\\n    }\\n}\\n' | sudo tee /etc/nginx/conf.d/www.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - "curl -s http://www.ejemplo.com/ | head -1; curl -si http://www.ejemplo.com/no-existe | head -1"
+    explicacion: >-
+      try_files busca el archivo, después una carpeta con ese nombre, y si no hay nada devuelve
+      404, que error_page cambia por la página propia (con el código 404 igual, para que los
+      buscadores no la indexen como si existiera).
+  - consigna: >-
+      Ahora la tienda. Creá la unidad /etc/systemd/system/tienda1.service: usuario tienda,
+      carpeta /opt/tienda, gunicorn del entorno virtual con 2 workers en 127.0.0.1:8001
+      (aplicación tienda:app) y reinicio si se cae. Después creá tienda2.service igual, pero en el
+      puerto 8002.
+    verificar:
+      - { archivo: /etc/systemd/system/tienda1.service, contenido_incluye: 'User=tienda' }
+      - { archivo: /etc/systemd/system/tienda2.service, contenido_incluye: '127.0.0.1:8002' }
+    pistas:
+      - "La línea clave: `ExecStart=/opt/tienda/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8001 tienda:app`."
+      - "Para la segunda, copiala cambiando el puerto: `sed 's/8001/8002/; s/instancia 1/instancia 2/' /etc/systemd/system/tienda1.service | sudo tee /etc/systemd/system/tienda2.service`."
+    solucion:
+      - "printf '[Unit]\\nDescription=Tienda (instancia 1)\\nAfter=network.target\\n\\n[Service]\\nUser=tienda\\nWorkingDirectory=/opt/tienda\\nExecStart=/opt/tienda/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8001 tienda:app\\nRestart=on-failure\\n\\n[Install]\\nWantedBy=multi-user.target\\n' | sudo tee /etc/systemd/system/tienda1.service"
+      - "sed 's/8001/8002/; s/instancia 1/instancia 2/' /etc/systemd/system/tienda1.service | sudo tee /etc/systemd/system/tienda2.service"
+    explicacion: >-
+      Dos copias de la misma aplicación en dos puertos. En un sistema real también podrías usar
+      una plantilla (tienda@.service con %i en el puerto), que es lo mismo con un solo archivo.
+  - consigna: Cargá las unidades, habilitá y arrancá las dos, y comprobá que cada una contesta en su puerto.
+    verificar:
+      - { servicio: tienda1, activo: true, habilitado: true }
+      - { servicio: tienda2, activo: true, habilitado: true }
+      - { salida_contiene: 'instancia 2' }
+    pistas:
+      - "`sudo systemctl daemon-reload`, `sudo systemctl enable --now tienda1 tienda2` y un curl a cada puerto con `head -1`."
+    solucion:
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now tienda1 tienda2
+      - "curl -s 127.0.0.1:8001 | head -1; curl -s 127.0.0.1:8002 | head -1"
+    explicacion: Las dos escuchan solo en 127.0.0.1, así que desde la red no se ven. El único camino va a ser nginx.
+  - consigna: >-
+      Creá /etc/nginx/conf.d/tienda.conf con un upstream tienda (las dos instancias, con keepalive 16)
+      y un server para tienda.ejemplo.com que le pase todo con Host, X-Real-IP, X-Forwarded-For y
+      X-Forwarded-Proto, usando HTTP/1.1 y Connection vacío para el keepalive. Probá y recargá.
+    verificar:
+      - { archivo: /etc/nginx/conf.d/tienda.conf, contenido_incluye: 'keepalive 16' }
+      - { archivo: /etc/nginx/conf.d/tienda.conf, contenido_incluye: 'proxy_http_version 1.1' }
+      - { comando_usado: 'nginx\s+-t' }
+    pistas:
+      - "El upstream: `upstream tienda { server 127.0.0.1:8001; server 127.0.0.1:8002; keepalive 16; }`. En la location: `proxy_pass http://tienda;`, `proxy_http_version 1.1;`, `proxy_set_header Connection \"\";` y los cuatro encabezados."
+    solucion:
+      - "printf 'upstream tienda {\\n    server 127.0.0.1:8001;\\n    server 127.0.0.1:8002;\\n    keepalive 16;\\n}\\n\\nserver {\\n    listen 80;\\n    server_name tienda.ejemplo.com;\\n\\n    location / {\\n        proxy_pass http://tienda;\\n        proxy_http_version 1.1;\\n        proxy_set_header Connection \"\";\\n        proxy_set_header Host $host;\\n        proxy_set_header X-Real-IP $remote_addr;\\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\\n        proxy_set_header X-Forwarded-Proto $scheme;\\n    }\\n}\\n' | sudo tee /etc/nginx/conf.d/tienda.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+    explicacion: >-
+      nginx 1.26 (el de Rocky 10) todavía necesita proxy_http_version 1.1 y Connection vacío para
+      reusar las conexiones hacia atrás; desde la 1.30 viene así de fábrica.
+  - consigna: >-
+      Pedí la portada de la tienda. Si falla, resolvelo de forma que sobreviva a un reinicio y
+      volvé a probar.
+    verificar:
+      - { booleano_selinux: httpd_can_network_connect }
+      - { http: 'http://tienda.ejemplo.com/', contiene: 'host: tienda.ejemplo.com' }
+    pistas:
+      - "`sudo tail -n 1 /var/log/nginx/error.log` dice el motivo. Ya lo viste en la lección 4.1.4."
+      - "`sudo setsebool -P httpd_can_network_connect 1`"
+    solucion:
+      - curl -s http://tienda.ejemplo.com/ | head -3
+      - sudo tail -n 1 /var/log/nginx/error.log
+      - sudo setsebool -P httpd_can_network_connect 1
+      - curl -s http://tienda.ejemplo.com/
+    explicacion: >-
+      "(13: Permission denied)" al conectar es SELinux. Con -P queda guardado: sin -P funcionaría
+      hoy y fallaría después del próximo reinicio, cuando nadie se acuerde de este día.
+  - consigna: >-
+      Comprobá el reparto pidiendo cuatro veces la portada (la primera línea) y después detené
+      tienda1 y comprobá que la tienda sigue respondiendo.
+    verificar:
+      - { servicio: tienda1, activo: false }
+      - { http: 'http://tienda.ejemplo.com/', contiene: 'instancia 2' }
+    pistas:
+      - "`for i in 1 2 3 4; do curl -s http://tienda.ejemplo.com/ | head -1; done`, `sudo systemctl stop tienda1` y el mismo for."
+    solucion:
+      - "for i in 1 2 3 4; do curl -s http://tienda.ejemplo.com/ | head -1; done"
+      - sudo systemctl stop tienda1
+      - "for i in 1 2 3 4; do curl -s http://tienda.ejemplo.com/ | head -1; done"
+    explicacion: >-
+      Con una instancia caída, nginx manda todo a la otra y anota el error en su log. Para el
+      cliente no pasó nada; para vos, el error.log y systemctl status avisan.
+  - consigna: >-
+      Volvé a arrancar tienda1. Por último, abrí el servicio http en firewalld de forma permanente
+      (hasta ahora probaste desde el propio servidor) y comprobá que quedó.
+    verificar:
+      - { servicio: tienda1, activo: true }
+      - { salida_contiene: 'http' }
+      - { comando_usado: 'firewall-cmd.*--permanent' }
+    pistas:
+      - "`sudo systemctl start tienda1`, `sudo firewall-cmd --permanent --add-service=http`, `sudo firewall-cmd --reload` y `sudo firewall-cmd --list-services`."
+    solucion:
+      - sudo systemctl start tienda1
+      - sudo firewall-cmd --permanent --add-service=http
+      - sudo firewall-cmd --reload
+      - sudo firewall-cmd --list-services
+    explicacion: >-
+      Solo el 80 (y el 443, cuando agregues HTTPS en el módulo que sigue). Los puertos 8001 y 8002
+      no se abren: las instancias solo hablan con nginx.
