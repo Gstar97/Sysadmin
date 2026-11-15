@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 360" font-family="system-ui, sans-serif" font-size="12">
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">Cómo decide nginx quién contesta un pedido</text>
+  <g stroke="currentColor" stroke-width="1.2">
+    <rect x="10" y="40" width="250" height="310" rx="8" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="280" y="40" width="570" height="310" rx="8" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="22" y="70" width="226" height="56" rx="6" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="22" y="136" width="226" height="74" rx="6" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="22" y="220" width="226" height="74" rx="6" fill="var(--warn-soft, #fbf0d0)"/>
+    <rect x="292" y="70" width="546" height="46" rx="6" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="292" y="124" width="546" height="46" rx="6" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="292" y="178" width="546" height="46" rx="6" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="292" y="232" width="546" height="46" rx="6" fill="var(--warn-soft, #fbf0d0)"/>
+  </g>
+  <g fill="currentColor">
+    <text x="135" y="60" text-anchor="middle" font-weight="700">1. ¿Qué server?</text>
+    <text x="34" y="90" font-weight="700">Por puerto (listen)</text>
+    <text x="34" y="108">solo los server que escuchan ahí</text>
+    <text x="34" y="156" font-weight="700">Por nombre (server_name)</text>
+    <text x="34" y="174">contra el encabezado Host:</text>
+    <text x="34" y="192">exacto, *.comodín, regex</text>
+    <text x="34" y="240" font-weight="700">Si ninguno coincide</text>
+    <text x="34" y="258">el default_server; si no hay,</text>
+    <text x="34" y="276">el primero que leyó nginx</text>
+    <text x="565" y="60" text-anchor="middle" font-weight="700">2. ¿Qué location, dentro de ese server? (la URI sin la consulta)</text>
+    <text x="304" y="90" font-weight="700">location = /salud</text>
+    <text x="304" y="108">Exacta: si coincide, gana y se termina la búsqueda.</text>
+    <text x="304" y="144" font-weight="700">location ^~ /estaticos/</text>
+    <text x="304" y="162">Si es el prefijo más largo que coincide, gana y no se prueban las regex.</text>
+    <text x="304" y="198" font-weight="700">location ~ \.php$   ·   location ~* \.(jpg|png)$</text>
+    <text x="304" y="216">Regex (~ distingue mayúsculas, ~* no), en orden: gana la primera que coincide.</text>
+    <text x="304" y="252" font-weight="700">location /   ·   location /api/</text>
+    <text x="304" y="270">Si ninguna regex coincidió: el prefijo más largo (location / atrapa todo lo demás).</text>
+    <text x="292" y="306">Ejemplo con /api/clientes.php: no hay exacta; el prefijo más largo es /api/ (sin ^~), así</text>
+    <text x="292" y="324">que se prueban las regex; ~ \.php$ coincide y gana. Con /api/clientes, gana /api/.</text>
+    <text x="292" y="342" font-size="11">Las location no se suman: contesta una sola, con su configuración (y lo que herede del server).</text>
+  </g>
+</svg>

@@ -1,0 +1,81 @@
+tipo: terminal
+shell: bash
+titulo: Un segundo sitio en el mismo nginx
+descripcion: >-
+  web01 (Rocky Linux) ya tiene nginx funcionando con la página por defecto. Te piden publicar el
+  blog de la empresa, blog.ejemplo.com, en el mismo servidor. El DNS ya apunta los dos nombres
+  (www.ejemplo.com y blog.ejemplo.com) a web01.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nginx] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+  red:
+    registros_dns: { www.ejemplo.com: 127.0.0.1, blog.ejemplo.com: 127.0.0.1 }
+pasos:
+  - consigna: >-
+      Mirá la configuración completa que carga nginx (con todos los include), filtrando las líneas
+      de server_name, listen e include.
+    verificar:
+      - { comando_usado: 'nginx\s+-T' }
+      - { salida_contiene: 'include /etc/nginx/conf.d/*.conf' }
+    pistas:
+      - "`sudo nginx -T | grep -E 'server_name|listen|include'`"
+    solucion: ["sudo nginx -T | grep -E 'server_name|listen|include'"]
+    explicacion: >-
+      En Rocky, los sitios van en /etc/nginx/conf.d/ con extensión .conf. Fijate el orden: el
+      include de conf.d está antes del server que trae nginx.conf. Eso va a importar enseguida.
+  - consigna: >-
+      Creá la carpeta /var/www/blog con un index.html que diga <h1>Blog</h1>.
+    verificar:
+      - { archivo: /var/www/blog/index.html, contenido_incluye: '<h1>Blog</h1>' }
+    solucion:
+      - sudo mkdir -p /var/www/blog
+      - "echo '<h1>Blog</h1>' | sudo tee /var/www/blog/index.html"
+  - consigna: >-
+      Creá /etc/nginx/conf.d/blog.conf con un server que escuche en el 80, con server_name
+      blog.ejemplo.com, root /var/www/blog y su propio access_log en /var/log/nginx/blog.access.log
+      (formato main). Probalo con nginx -t y recargá.
+    verificar:
+      - { archivo: /etc/nginx/conf.d/blog.conf, contenido_incluye: 'server_name blog.ejemplo.com' }
+      - { http: 'http://blog.ejemplo.com/', contiene: '<h1>Blog</h1>' }
+    pistas:
+      - "printf 'server {\\n    listen 80;\\n    server_name blog.ejemplo.com;\\n    root /var/www/blog;\\n    access_log /var/log/nginx/blog.access.log main;\\n}\\n' | sudo tee /etc/nginx/conf.d/blog.conf"
+      - "`sudo nginx -t && sudo systemctl reload nginx`"
+    solucion:
+      - "printf 'server {\\n    listen 80;\\n    server_name blog.ejemplo.com;\\n    root /var/www/blog;\\n    access_log /var/log/nginx/blog.access.log main;\\n}\\n' | sudo tee /etc/nginx/conf.d/blog.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -s http://blog.ejemplo.com/
+  - consigna: Ahora pedí http://www.ejemplo.com/. ¿Qué sitio contesta?
+    verificar:
+      - { salida_contiene: '<h1>Blog</h1>' }
+    solucion: [curl -s http://www.ejemplo.com/]
+    explicacion: >-
+      ¡Contesta el blog! Ningún server tiene server_name www.ejemplo.com, así que nginx usa el
+      server por defecto del puerto 80. Como ninguno dice default_server, el por defecto es el
+      primero que leyó: el de conf.d/blog.conf, que se incluye antes que el de nginx.conf.
+  - consigna: >-
+      Arreglalo: que el server de nginx.conf (el de server_name _) sea el por defecto, agregando
+      default_server a su listen 80. Probá, recargá y volvé a pedir www.ejemplo.com.
+    verificar:
+      - { archivo: /etc/nginx/nginx.conf, contenido_incluye: 'listen       80 default_server;' }
+      - { http: 'http://www.ejemplo.com/', contiene: 'Welcome to nginx' }
+      - { http: 'http://blog.ejemplo.com/', contiene: '<h1>Blog</h1>' }
+    pistas:
+      - "`sudo sed -i 's/listen       80;/listen       80 default_server;/' /etc/nginx/nginx.conf`"
+    solucion:
+      - "sudo sed -i 's/listen       80;/listen       80 default_server;/' /etc/nginx/nginx.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -s http://www.ejemplo.com/
+    explicacion: >-
+      En producción conviene que el server por defecto no muestre ningún sitio real (por ejemplo,
+      return 444, que cierra la conexión sin contestar): así un nombre mal escrito o un robot que
+      entra por IP no ven el sitio de nadie.
+  - consigna: Mirá las dos últimas líneas del registro de accesos del blog.
+    verificar:
+      - { salida_contiene: '"GET / HTTP/1.1" 200' }
+    solucion: [sudo tail -n 2 /var/log/nginx/blog.access.log]

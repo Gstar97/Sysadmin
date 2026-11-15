@@ -1,0 +1,116 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Cambiaste la configuración de nginx. ¿Qué hacés antes de recargar?
+  opciones:
+    - { texto: "sudo nginx -t, para probar la sintaxis y los archivos", correcta: true, explicacion: "Después, systemctl reload nginx." }
+    - { texto: "Reiniciar el servidor", explicacion: "No hace falta y corta todo." }
+    - { texto: "Borrar los logs", explicacion: "No tiene relación." }
+    - { texto: "Nada: reload ya avisa", explicacion: "Avisa fallando; mejor saberlo antes." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué pasa si recargás nginx con un error en la configuración nueva?
+  opciones:
+    - { texto: "El reload falla y nginx sigue funcionando con la configuración anterior", correcta: true, explicacion: "No se cae, pero tu cambio no se aplicó." }
+    - { texto: "nginx se apaga", explicacion: "Eso puede pasar con restart, no con reload." }
+    - { texto: "nginx aplica solo las líneas buenas", explicacion: "Es todo o nada." }
+    - { texto: "nginx borra el archivo con error", explicacion: "No toca los archivos." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En Rocky Linux, ¿dónde va la configuración de un sitio nuevo?
+  opciones:
+    - { texto: "En un archivo .conf dentro de /etc/nginx/conf.d/", correcta: true, explicacion: "nginx.conf incluye conf.d/*.conf." }
+    - { texto: "En /etc/nginx/sites-enabled/", explicacion: "Esa es la forma de Ubuntu." }
+    - { texto: "Al final de /etc/nginx/mime.types", explicacion: "Ese archivo son tipos de contenido." }
+    - { texto: "En /var/www/html", explicacion: "Ahí van los archivos del sitio, no la configuración." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En Ubuntu querés desactivar el sitio "default". ¿Qué hacés?
+  opciones:
+    - { texto: "Borrar el enlace /etc/nginx/sites-enabled/default y recargar", correcta: true, explicacion: "El archivo de sites-available queda por si lo necesitás." }
+    - { texto: "Borrar /etc/nginx/sites-available/default", explicacion: "El enlace queda roto y nginx -t falla." }
+    - { texto: "Comentar el include de nginx.conf", explicacion: "Desactivás todos los sitios." }
+    - { texto: "Detener nginx", explicacion: "Se apagan todos los sitios." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Hay dos sitios (blog.ejemplo.com y tienda.ejemplo.com), ninguno con default_server. Alguien entra por la IP del servidor. ¿Qué ve?
+  opciones:
+    - { texto: "El primer server que leyó nginx para el puerto 80", correcta: true, explicacion: "Es el por defecto si nadie dice default_server." }
+    - { texto: "Un error 404", explicacion: "Contesta un server: el por defecto." }
+    - { texto: "Los dos sitios", explicacion: "Contesta uno solo." }
+    - { texto: "nginx rechaza la conexión", explicacion: "Solo si el por defecto hace return 444." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: "Con location /api/ { } y location ~ \\.php$ { }, ¿quién atiende /api/clientes.php?"
+  opciones:
+    - { texto: "La regex de PHP: /api/ es un prefijo sin ^~, así que se prueban las regex y esa coincide", correcta: true, explicacion: "Con location ^~ /api/ ganaría /api/." }
+    - { texto: "location /api/, porque está primero", explicacion: "El orden importa entre regex, no entre prefijos y regex." }
+    - { texto: "Las dos, una después de la otra", explicacion: "Contesta una sola." }
+    - { texto: "Ninguna: da 404", explicacion: "Coincide con la regex." }
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice este nginx -t?
+  salida: |
+    nginx: [emerg] unknown directive "servername" in /etc/nginx/conf.d/blog.conf:3
+    nginx: configuration file /etc/nginx/nginx.conf test failed
+  opciones:
+    - { texto: "En la línea 3 de blog.conf hay una directiva mal escrita: es server_name", correcta: true, explicacion: "nginx no conoce servername." }
+    - { texto: "Falta el archivo blog.conf", explicacion: "Lo leyó: el error es dentro de él." }
+    - { texto: "El puerto está ocupado", explicacion: "Eso dice bind() failed." }
+    - { texto: "nginx no está instalado", explicacion: "Si está corriendo nginx -t, está instalado." }
+- id: p08
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: El sitio da 403. ¿Qué dice el error.log?
+  salida: |
+    2026/11/15 10:12:01 [error] 1234#1234: *7 open() "/srv/blog/index.html" failed (13: Permission denied), client: 192.168.1.10, server: blog.ejemplo.com, request: "GET / HTTP/1.1"
+  opciones:
+    - { texto: "nginx no puede leer el archivo: permisos de la carpeta o del archivo, o la etiqueta de SELinux", correcta: true, explicacion: "Revisá ls -l y ls -Z de cada carpeta del camino." }
+    - { texto: "El archivo no existe", explicacion: "Eso sería (2: No such file or directory)." }
+    - { texto: "La configuración tiene un error de sintaxis", explicacion: "nginx arrancó y atendió el pedido." }
+    - { texto: "El cliente no tiene permiso en el firewall", explicacion: "Si llegó al log, pasó el firewall." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que muestra la configuración completa que carga nginx, con todos los include.
+  aceptadas:
+    - "nginx -T"
+    - "sudo nginx -T"
+  patrones: ["^(sudo\\s+)?nginx\\s+-T(\\s*\\|.*)?$"]
+  explicacion: "-T prueba y además imprime todos los archivos que se cargaron."
+- id: p10
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace try_files $uri $uri/ =404? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Busca un archivo con el nombre de la ruta", correcta: true, explicacion: "$uri." }
+    - { texto: "Si no, busca una carpeta con ese nombre", correcta: true, explicacion: "$uri/ (y sirve su index)." }
+    - { texto: "Si no encuentra nada, contesta 404", correcta: true, explicacion: "=404." }
+    - { texto: "Pasa el pedido a PHP", explicacion: "Eso sería un fallback como /index.php?$args." }
+- id: p11
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para publicar un sitio nuevo en Rocky.
+  pasos:
+    - "Crear la carpeta del sitio con sus archivos"
+    - "Crear /etc/nginx/conf.d/sitio.conf con su server"
+    - "Probar con nginx -t"
+    - "Recargar con systemctl reload nginx"
+    - "Probar con curl y mirar los logs del sitio"
+  explicacion: "Primero lo que el server nombra, después el server, la prueba y recién ahí el reload."
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la diferencia entre systemctl reload nginx y systemctl restart nginx?
+  opciones:
+    - { texto: "reload aplica la configuración sin cortar las conexiones; restart corta y, si hay un error, nginx queda apagado", correcta: true, explicacion: "Para cambios de configuración, reload." }
+    - { texto: "Son iguales", explicacion: "No lo son." }
+    - { texto: "restart no lee la configuración", explicacion: "La lee al arrancar." }
+    - { texto: "reload reinicia el servidor completo", explicacion: "Solo nginx, y sin cortar." }

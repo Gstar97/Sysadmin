@@ -1,0 +1,48 @@
+tipo: configuracion
+titulo: Corregir el sitio del blog
+consigna: >-
+  Este archivo, /etc/nginx/conf.d/blog.conf, no pasa nginx -t. Corregilo (el editor marca los
+  errores como nginx -t) y además agregá una location exacta /salud que devuelva 200 con el texto
+  ok, para que el monitoreo pueda preguntar si el sitio está vivo.
+lenguaje: nginx
+nombre_archivo: /etc/nginx/conf.d/blog.conf
+archivo_inicial: |
+  server {
+      listen 80
+      server_name blog.ejemplo.com;
+      root /var/www/blog;
+      index index.html;
+
+      access_log /var/log/nginx/blog.access.log main;
+      error_log /var/log/nginx/blog.error.log;
+
+      location / {
+          try_files $uri $uri/ =404;
+
+      error_page 404 /404.html;
+  }
+reglas:
+  - { tipo: sin_errores, mensaje: "nginx -t no encuentra errores" }
+  - { tipo: contiene, regex: "^\\s*listen\\s+80\\s*;", mensaje: "listen 80 termina con punto y coma" }
+  - { tipo: contiene, regex: "try_files\\s+\\$uri\\s+\\$uri/\\s+=404\\s*;", mensaje: "La location / sigue probando el archivo, la carpeta y si no, 404" }
+  - { tipo: contiene, regex: "location\\s*=\\s*/salud\\s*\\{[^}]*return\\s+200", mensaje: "Hay una location exacta /salud que devuelve 200" }
+solucion: |
+  server {
+      listen 80;
+      server_name blog.ejemplo.com;
+      root /var/www/blog;
+      index index.html;
+
+      access_log /var/log/nginx/blog.access.log main;
+      error_log /var/log/nginx/blog.error.log;
+
+      location / {
+          try_files $uri $uri/ =404;
+      }
+
+      location = /salud {
+          return 200 "ok\n";
+      }
+
+      error_page 404 /404.html;
+  }

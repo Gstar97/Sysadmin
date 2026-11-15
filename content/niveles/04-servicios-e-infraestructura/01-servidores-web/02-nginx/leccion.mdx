@@ -1,0 +1,187 @@
+---
+id: n4-m1-l2
+titulo: Nginx
+minutos: 180
+objetivos:
+  - Instalar nginx y entender su configuración (contextos, server y location).
+  - Publicar varios sitios con bloques server y revisar sus logs.
+  - Validar la configuración con nginx -t y recargar sin cortar el servicio.
+glosario: [nginx, bloque-server, location-nginx, default-server]
+verificado: 2026-11
+---
+
+import eleccion from './eleccion.svg?raw'
+import editor from './editor-blog.yaml'
+import queLocation from './que-location.yaml'
+import sitio from './ej-sitio.yaml'
+
+**nginx** (se pronuncia "engine-ex") es el servidor web más usado del mundo junto con Apache, y el que más vas a ver en servidores nuevos: sirve archivos, hace de proxy inverso delante de aplicaciones, balancea carga y termina HTTPS. Atiende miles de conexiones con pocos procesos porque no dedica un proceso a cada conexión: cada proceso trabajador maneja muchas a la vez y pasa a otra mientras espera.
+
+<AntesDeEmpezar>
+- HTTP por dentro (lección anterior).
+- Servicios con systemd y sus logs (módulo 1.3).
+- Permisos y SELinux: el ejercicio del catálogo de la lección 1.6.6 es justamente con nginx.
+</AntesDeEmpezar>
+
+## Versiones e instalación
+
+nginx tiene dos ramas: la **estable** (1.30, desde abril de 2026) y la **mainline** (1.31), que recibe las novedades primero. Las distribuciones traen una versión anterior con los parches de seguridad aplicados: Rocky Linux 10 trae la 1.26 y Ubuntu 26.04, la 1.28. Para un servidor de empresa, la del sistema está bien; si necesitás algo nuevo, nginx.org tiene repositorios propios para las dos familias.
+
+```bash
+# Rocky Linux
+sudo dnf install nginx
+sudo systemctl enable --now nginx
+sudo firewall-cmd --permanent --add-service=http --add-service=https && sudo firewall-cmd --reload
+
+# Ubuntu (arranca solo al instalarse)
+sudo apt install nginx
+sudo ufw allow 'Nginx Full'
+```
+
+## Cómo está armada la configuración
+
+Todo empieza en `/etc/nginx/nginx.conf`. La configuración son **directivas** (una por línea, terminadas en **;**) y **bloques** entre llaves, uno dentro de otro. Los bloques se llaman **contextos**:
+
+```nginx
+user nginx;                 # contexto principal
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {                      # todo lo de HTTP
+    include /etc/nginx/mime.types;
+    access_log /var/log/nginx/access.log main;
+
+    server {                # un sitio
+        listen 80;
+        server_name www.ejemplo.com;
+        root /var/www/ejemplo;
+
+        location / {        # una parte del sitio
+            try_files $uri $uri/ =404;
+        }
+    }
+}
+```
+
+Lo que se pone en un contexto de afuera se **hereda** adentro: un `root` en el `server` vale para todas sus `location`, salvo que una defina el suyo.
+
+Cada sitio va en su propio archivo, que nginx.conf incluye. Las dos familias lo organizan distinto:
+
+- **Rocky Linux**: un archivo `.conf` por sitio en `/etc/nginx/conf.d/`. Lo que esté ahí con esa extensión se carga.
+- **Ubuntu**: el archivo va en `/etc/nginx/sites-available/` y se activa con un enlace en `sites-enabled/` (`sudo ln -s /etc/nginx/sites-available/blog /etc/nginx/sites-enabled/`). Para desactivarlo se borra el enlace, no el archivo. Ubuntu trae activado el sitio `default`.
+
+## Un sitio
+
+```nginx
+server {
+    listen 80;
+    server_name blog.ejemplo.com;
+    root /var/www/blog;
+    index index.html;
+
+    access_log /var/log/nginx/blog.access.log main;
+    error_log /var/log/nginx/blog.error.log;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    error_page 404 /404.html;
+}
+```
+
+- **root**: la carpeta del sitio. Un pedido de `/img/logo.png` busca `/var/www/blog/img/logo.png`.
+- **index**: qué archivo servir cuando se pide una carpeta.
+- **try_files**: probá el archivo, después la carpeta, y si no existe nada, 404. Las aplicaciones de una sola página (React, Vue) usan `try_files $uri /index.html;` para que todas las rutas carguen la aplicación.
+- **error_page**: una página propia para un error.
+- **return**: contestar sin buscar archivos: `return 301 https://$host$request_uri;` redirige, y `return 200 "ok\n";` responde un texto (útil para el monitoreo).
+
+<EditorConfig ejercicio={editor} />
+
+## Varios sitios en el mismo servidor
+
+Cada `server` con su `server_name`. Cuando llega un pedido, nginx primero se queda con los server que **escuchan en ese puerto**, y entre ellos elige por el encabezado **Host**: nombre exacto, después comodines (`*.ejemplo.com`), después expresiones regulares. Si ninguno coincide, contesta el **server por defecto** del puerto: el que tenga `default_server` en su `listen`, o, si ninguno lo tiene, **el primero que leyó nginx**. Ese último detalle es el que sorprende: en Rocky, `conf.d` se incluye antes que el server de nginx.conf, así que el primer sitio que agregues pasa a ser el por defecto sin que lo pidas. Lo vas a ver en el ejercicio.
+
+## Qué location contesta
+
+Dentro del server, nginx elige **una sola** location para cada pedido, con una regla fija:
+
+<Diagrama svg={eleccion} alt="Dos pasos. Primero, qué server: por puerto (solo los que escuchan ahí), después por nombre contra el encabezado Host (exacto, comodín o regex) y, si ninguno coincide, el default_server, o el primero que leyó nginx. Segundo, qué location: una exacta (location = /salud) gana y termina la búsqueda; un prefijo con ^~ que sea el más largo gana sin probar las regex; si no, se prueban las regex (~ distingue mayúsculas, ~* no) en orden y gana la primera que coincide; si ninguna coincide, gana el prefijo más largo (location / atrapa todo lo demás). Ejemplo: /api/clientes.php termina en la regex de PHP; /api/clientes, en location /api/. Las location no se suman: contesta una sola." pie="Primero el server, por puerto y nombre; después una sola location, por la regla de nginx." />
+
+Con estas cinco:
+
+```nginx
+location = / { ... }                  # A
+location / { ... }                    # B
+location /api/ { ... }                # C
+location ^~ /estaticos/ { ... }       # D
+location ~* \.(png|jpg)$ { ... }      # E
+```
+
+<Emparejar ejercicio={queLocation} />
+
+<EnSimple>
+Un archivo por sitio, con su server_name. nginx elige el server por puerto y nombre, y adentro una sola location. Siempre nginx -t antes de recargar.
+</EnSimple>
+
+## Probar y aplicar sin cortar
+
+Nunca se recarga sin probar:
+
+```bash
+sudo nginx -t                       # revisa la sintaxis y que existan los archivos que nombra
+sudo nginx -T | less                # muestra la configuración completa que cargaría, con los include
+sudo systemctl reload nginx         # aplica sin cortar
+```
+
+**reload** es lo normal: el proceso principal lee la configuración nueva, arranca trabajadores nuevos con ella y deja que los viejos terminen lo que estaban atendiendo. Nadie ve un corte. Si la configuración nueva tiene un error, **el reload falla y nginx sigue con la vieja**: el sitio no se cae, pero tu cambio tampoco se aplicó (por eso conviene mirar el resultado). **restart** detiene y arranca: corta las conexiones en curso, y si la configuración está mal, nginx queda apagado. Se usa para cambios que reload no toma, como algunos módulos.
+
+## Logs
+
+- **access.log**: una línea por pedido: IP, fecha, pedido, código, bytes, de dónde venía y el programa. En Rocky el formato `main` agrega al final la IP original si hay un proxy adelante.
+- **error.log**: lo que salió mal y **por qué**: "Permission denied", "No such file or directory", "connect() failed". Ante un 403, un 404 inesperado o un 5xx, es lo primero que se lee.
+
+```bash
+sudo tail -f /var/log/nginx/blog.access.log
+sudo tail -n 20 /var/log/nginx/error.log
+awk '{print $9}' /var/log/nginx/access.log | sort | uniq -c | sort -rn     # cuántos de cada código
+```
+
+Y un recordatorio del módulo 1.6: nginx corre como el usuario `nginx` (Rocky) o `www-data` (Ubuntu), que necesita permiso de lectura en los archivos y de paso (x) en cada carpeta del camino. En Rocky, además, SELinux: el contenido web tiene que tener la etiqueta `httpd_sys_content_t`. Lo que está en `/var/www` ya la tiene; si usás otra carpeta, `semanage fcontext` y `restorecon`.
+
+<Terminal ejercicio={sitio} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Olvidar el punto y coma">
+    "unexpected" o "directive is not terminated by ;" en nginx -t, con el número de línea. Cada directiva termina en ;.
+  </ErrorComun>
+  <ErrorComun titulo="Recargar sin nginx -t">
+    El reload falla, nginx sigue con la configuración vieja y creés que tu cambio está aplicado. Siempre nginx -t && systemctl reload nginx.
+  </ErrorComun>
+  <ErrorComun titulo="No definir el server por defecto">
+    El primer sitio que se lee atiende todos los nombres desconocidos (y los robots que entran por IP). Marcá uno con default_server, idealmente uno que no muestre nada.
+  </ErrorComun>
+  <ErrorComun titulo="Archivo sin .conf en Rocky">
+    conf.d solo carga *.conf. blog.conf.bak o blog no se cargan (útil para desactivar, peligroso por error).
+  </ErrorComun>
+  <ErrorComun titulo="En Ubuntu, editar sites-enabled en vez de sites-available">
+    Lo de sites-enabled son enlaces. Se edita el archivo de sites-available.
+  </ErrorComun>
+  <ErrorComun titulo="Buscar el 403 en la configuración">
+    Casi siempre son permisos (falta x en una carpeta), SELinux o una carpeta sin index. El error.log lo dice.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- nginx: estable 1.30 y mainline 1.31; Rocky 10 trae la 1.26 y Ubuntu 26.04, la 1.28, con parches.
+- Directivas con ; y contextos entre llaves (main, events, http, server, location); lo de afuera se hereda.
+- Un archivo por sitio: conf.d/*.conf en Rocky; sites-available más enlace en sites-enabled en Ubuntu.
+- server: listen, server_name, root, index, try_files, error_page, return y logs propios.
+- El server se elige por puerto y Host; si nada coincide, el default_server o el primero leído.
+- Una sola location por pedido: exacta, ^~, regex en orden, prefijo más largo.
+- nginx -t antes de reload; reload no corta y, si falla, deja la configuración vieja.
+- access.log para qué pasó, error.log para por qué.
+</Resumen>
