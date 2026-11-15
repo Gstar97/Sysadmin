@@ -573,8 +573,12 @@ function candidateServers(client: PsSession): { srv: PsSession; sc: DhcpScope }[
   for (const srv of all) {
     if (srv === client || !hasDhcpRole(srv) || !serviceRunning(srv, 'DHCPServer') || !srv.state.red.conectada || !isAuthorized(srv)) continue
     for (const sc of dhcpState(srv).scopes) {
-      // La misma red de difusión: el servidor está en la red del ámbito.
-      if (sc.state === 'Active' && networkOf(srv.state.red.ip, sc.mask) === sc.id) out.push({ srv, sc })
+      if (sc.state !== 'Active') continue
+      const relay = client.state.red.reenvio_dhcp
+      // Con reenvío (ip helper-address), el router manda el pedido a los servidores configurados y
+      // el servidor elige el ámbito por la red de la interfaz del router. Sin reenvío, el servidor
+      // tiene que estar en la misma red de difusión que el ámbito.
+      if (relay ? relay.servidores.includes(srv.state.red.ip) && relay.red === sc.id : networkOf(srv.state.red.ip, sc.mask) === sc.id) out.push({ srv, sc })
     }
   }
   // En espera activa, el servidor en standby contesta solo si el activo no responde.

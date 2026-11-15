@@ -1,0 +1,206 @@
+tipo: pasos
+titulo: Verificación final antes de entregar
+descripcion: >-
+  Recorré estos pasos desde la estación de administración, con todo encendido y, si podés,
+  después de reiniciar los DC de a uno: un dominio que anda hasta el primer reinicio no está
+  terminado. Cada paso comprueba un entregable con comandos que viste en el nivel.
+pasos:
+  - titulo: Los controladores y la replicación
+    comandos:
+      - dcdiag /s:DC01 /q
+      - dcdiag /s:DC02 /q
+      - repadmin /replsummary
+      - Get-ADDomainController -Filter * | Select-Object Name, IPv4Address, IsGlobalCatalog, OperatingSystem
+    comprobar: dcdiag no muestra nada (con /q solo muestra errores), repadmin dice 0 fallas y los dos DC son catálogo global.
+    si_falla: Si falla la replicación, mirá primero DNS (que cada DC use al otro) y la hora (w32tm /query /status en los dos).
+  - titulo: DNS y DHCP
+    comandos:
+      - Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.ad.estudiorios.example
+      - Get-DnsServerForwarder -ComputerName DC01
+      - Get-DhcpServerv4Failover -ComputerName DC01
+      - Get-DhcpServerv4ScopeStatistics -ComputerName DC01
+    comprobar: >-
+      Los dos DC aparecen en los registros SRV, los reenviadores apuntan a tu resolvedor, la
+      conmutación por error está en estado Normal y cada ámbito tiene direcciones libres.
+  - titulo: Una PC nueva en cada VLAN
+    detalle: >-
+      En una PC de prueba de cada VLAN (incluida la sucursal), con DHCP. Repetí con el servicio
+      DHCP detenido en DC01.
+    comandos:
+      - ipconfig /renew
+      - ipconfig /all
+      - nltest /dsgetdc:ad.estudiorios.example
+    comprobar: Recibe dirección de su red, los dos DC como DNS y el sufijo del dominio, y encuentra un DC; con DC01 sin DHCP, la entrega DC02.
+  - titulo: Cuentas, grupos y nada suelto
+    comandos:
+      - Get-ADUser -Filter * -SearchBase 'OU=Usuarios,OU=Estudio,DC=ad,DC=estudiorios,DC=example' | Measure-Object
+      - Get-ADComputer -Filter * -SearchBase 'CN=Computers,DC=ad,DC=estudiorios,DC=example'
+      - Get-ADUser -Filter * -SearchBase 'CN=Users,DC=ad,DC=estudiorios,DC=example' | Select-Object SamAccountName, Enabled
+      - Get-ADGroupMember 'Domain Admins' -Recursive | Select-Object SamAccountName
+      - Get-ADOptionalFeature 'Recycle Bin Feature' | Select-Object EnabledScopes
+    comprobar: >-
+      Están todas las personas del CSV, Computers está vacío, en Users solo quedan las cuentas de
+      fábrica, Domain Admins tiene solo tus cuentas administrativas y la papelera está activa.
+  - titulo: Las directivas, desde una PC
+    detalle: En una PC de Contabilidad, con la sesión de una persona de Contabilidad.
+    comandos:
+      - gpresult /r
+      - Get-PSDrive S
+      - Get-NetFirewallProfile | Select-Object Name, Enabled
+    comprobar: >-
+      gpresult muestra las GPO de equipo y de usuario que esperás (y ninguna "filtrada" por
+      sorpresa), S: apunta al espacio de nombres DFS y el firewall está encendido en los tres perfiles.
+  - titulo: Los archivos, persona por persona
+    detalle: >-
+      Con una persona de cada área (y una de la gerencia): abrir S:, ver qué carpetas aparecen,
+      guardar un archivo en la propia y en la de otra área.
+    comandos:
+      - Get-SmbShare -CimSession SRV-ARCH01 | Select-Object Name, Path, FolderEnumerationMode
+      - icacls \\SRV-ARCH01\D$\Datos\Contabilidad
+      - Get-FsrmQuota -CimSession SRV-ARCH01 | Select-Object Path, Size, Usage, SoftLimit
+      - Get-DfsnFolderTarget -Path \\ad.estudiorios.example\Estudio\Datos
+    comprobar: >-
+      Cada persona ve solo sus carpetas y guarda solo en la suya; la gerencia ve y lee
+      Contabilidad pero no guarda; las cuotas y el filtro están activos y DFS apunta a SRV-ARCH01.
+  - titulo: Actualizaciones
+    comandos:
+      - Get-WsusComputer -All | Select-Object FullDomainName, RequestedTargetGroupName, LastReportedStatusTime
+      - Get-WsusUpdate -Classification Security -Approval Approved -Status FailedOrNeeded
+      - Get-ScheduledTask | Where-Object TaskName -like '*WSUS*'
+    comprobar: >-
+      Todas las PC se reportaron en los últimos días, cada una en su grupo; no quedan
+      actualizaciones aprobadas sin instalar por más de una semana; la limpieza está programada.
+  - titulo: Respaldos y restauraciones
+    comandos:
+      - Invoke-Command DC01, SRV-ARCH01 { wbadmin get versions | Select-Object -Last 6 }
+      - Invoke-Command DC01, SRV-ARCH01 { Get-WBPolicy | Select-Object Schedule }
+    comprobar: >-
+      Los dos tienen un respaldo de anoche y la programación activa, y en el documento están las
+      cuatro restauraciones de prueba con fecha y tiempos.
+  - titulo: El script de salud
+    detalle: >-
+      Guardalo en la estación de administración, adaptalo a tu dominio y corrélo. Necesita el
+      módulo ActiveDirectory (RSAT) y, en los DC, el de Windows Server Backup.
+    archivo:
+      ruta: C:\Scripts\Test-Dominio.ps1
+      contenido: |
+        #Requires -Modules ActiveDirectory
+        <#
+          Test-Dominio.ps1 - chequeo de salud del dominio.
+          Uso: .\Test-Dominio.ps1 [-Carpeta C:\Informes] [-DiasRespaldo 1]
+          Devuelve 0 si todo está bien y 1 si alguna prueba falla (útil en una tarea programada).
+        #>
+        [CmdletBinding()]
+        param(
+            [string]$Carpeta = 'C:\Informes',
+            [int]$DiasRespaldo = 1,
+            [int]$MaxAdministradores = 3,
+            [int]$MinLibrePorciento = 15
+        )
+
+        $resultados = [System.Collections.Generic.List[object]]::new()
+        function Add-Resultado([string]$Prueba, [bool]$Ok, [string]$Detalle = '') {
+            $resultados.Add([pscustomobject]@{
+                Prueba  = $Prueba
+                Estado  = if ($Ok) { 'OK' } else { 'FALLA' }
+                Detalle = $Detalle
+            })
+        }
+
+        $dominio = Get-ADDomain
+        $dcs = Get-ADDomainController -Filter * | Sort-Object HostName
+
+        # 1. Servicios de cada DC
+        foreach ($dc in $dcs) {
+            try {
+                $caidos = Invoke-Command -ComputerName $dc.HostName -ErrorAction Stop -ScriptBlock {
+                    Get-Service NTDS, DNS, Netlogon, Kdc, DFSR, W32Time |
+                        Where-Object Status -ne 'Running' | Select-Object -ExpandProperty Name
+                }
+                Add-Resultado "Servicios de $($dc.Name)" (-not $caidos) ($caidos -join ', ')
+            } catch {
+                Add-Resultado "Servicios de $($dc.Name)" $false $_.Exception.Message
+            }
+        }
+
+        # 2. Replicación
+        $fallas = Get-ADReplicationFailure -Target $dominio.DNSRoot -Scope Domain -ErrorAction SilentlyContinue |
+            Where-Object FailureCount -gt 0
+        Add-Resultado 'Replicación' (-not $fallas) (($fallas | ForEach-Object { "$($_.Server) <- $($_.Partner): $($_.FailureCount)" }) -join '; ')
+
+        # 3. DNS: un registro SRV por DC
+        $srv = @(Resolve-DnsName -Type SRV "_ldap._tcp.dc._msdcs.$($dominio.DNSRoot)" -ErrorAction SilentlyContinue |
+            Where-Object Type -eq 'SRV')
+        Add-Resultado 'Registros SRV de los DC' ($srv.Count -ge $dcs.Count) "$($srv.Count) de $($dcs.Count)"
+
+        # 4. Hora: diferencia de cada DC con el emulador de PDC (menos de 1 segundo)
+        $pdc = $dominio.PDCEmulator
+        foreach ($dc in $dcs | Where-Object HostName -ne $pdc) {
+            $linea = Invoke-Command -ComputerName $dc.HostName -ScriptBlock {
+                w32tm /stripchart /computer:$using:pdc /samples:1 /dataonly
+            } | Select-Object -Last 1
+            $ok = $linea -match ',\s*([+-]\d+\.\d+)s' -and [math]::Abs([double]$Matches[1]) -lt 1
+            Add-Resultado "Hora de $($dc.Name)" $ok "$linea"
+        }
+
+        # 5. Espacio libre en los servidores
+        foreach ($servidor in Get-ADComputer -Filter 'OperatingSystem -like "*Server*"' -Properties DNSHostName) {
+            try {
+                $discos = Get-CimInstance Win32_LogicalDisk -ComputerName $servidor.DNSHostName -Filter 'DriveType=3' -ErrorAction Stop
+                foreach ($d in $discos) {
+                    $libre = [math]::Round(100 * $d.FreeSpace / $d.Size)
+                    Add-Resultado "Espacio $($servidor.Name) $($d.DeviceID)" ($libre -ge $MinLibrePorciento) "$libre% libre"
+                }
+            } catch {
+                Add-Resultado "Espacio $($servidor.Name)" $false $_.Exception.Message
+            }
+        }
+
+        # 6. Último respaldo de cada DC
+        foreach ($dc in $dcs) {
+            $ultimo = Invoke-Command -ComputerName $dc.HostName -ScriptBlock {
+                Get-WBBackupSet -ErrorAction SilentlyContinue | Sort-Object BackupTime | Select-Object -Last 1
+            }
+            $ok = $ultimo -and $ultimo.BackupTime -gt (Get-Date).AddDays(-$DiasRespaldo)
+            Add-Resultado "Respaldo de $($dc.Name)" $ok $(if ($ultimo) { "último: $($ultimo.BackupTime)" } else { 'ninguno' })
+        }
+
+        # 7. Cuentas
+        $admins = @(Get-ADGroupMember 'Domain Admins' -Recursive)
+        Add-Resultado 'Miembros de Domain Admins' ($admins.Count -le $MaxAdministradores) ($admins.SamAccountName -join ', ')
+        $bloqueadas = @(Search-ADAccount -LockedOut -UsersOnly)
+        Add-Resultado 'Cuentas bloqueadas' ($bloqueadas.Count -eq 0) ($bloqueadas.SamAccountName -join ', ')
+
+        # 8. Nada suelto en los contenedores por defecto
+        $equiposSueltos = @(Get-ADComputer -Filter * -SearchBase "CN=Computers,$($dominio.DistinguishedName)")
+        Add-Resultado 'Equipos en Computers' ($equiposSueltos.Count -eq 0) ($equiposSueltos.Name -join ', ')
+
+        # Informe
+        New-Item -ItemType Directory -Path $Carpeta -Force | Out-Null
+        $archivo = Join-Path $Carpeta "salud-$(Get-Date -Format yyyy-MM-dd).txt"
+        $resultados | Format-Table -AutoSize -Wrap | Out-String -Width 200 | Set-Content -Path $archivo -Encoding utf8
+        $resultados | Format-Table -AutoSize -Wrap
+
+        $conFalla = @($resultados | Where-Object Estado -eq 'FALLA').Count
+        if ($conFalla) {
+            Write-Warning "$conFalla prueba(s) con falla. Informe: $archivo"
+            exit 1
+        }
+        Write-Host "Todo en orden. Informe: $archivo"
+        exit 0
+    comandos:
+      - Set-Location C:\Scripts
+      - .\Test-Dominio.ps1
+    comprobar: >-
+      Todas las pruebas dan OK (o las que fallan tienen una explicación y quedaron en pendientes).
+      Probá apagar el servicio DNS de DC02 y correrlo de nuevo: tiene que aparecer la falla.
+  - titulo: Programarlo
+    detalle: Una vez por semana, los lunes a las 7:00, con una cuenta de servicio administrada o tu cuenta administrativa.
+    comandos:
+      - $accion = New-ScheduledTaskAction -Execute 'pwsh.exe' -Argument '-NoProfile -File C:\Scripts\Test-Dominio.ps1'
+      - $cuando = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 7am
+      - Register-ScheduledTask -TaskName 'Salud del dominio' -Action $accion -Trigger $cuando -User 'ESTUDIO\adm-tuusuario' -Password (Read-Host 'Contraseña') -RunLevel Highest
+    comprobar: Start-ScheduledTask 'Salud del dominio' genera el informe del día en C:\Informes.
+    variantes:
+      - nombre: Sin PowerShell 7
+        detalle: Si en la estación de administración no instalaste PowerShell 7, usá powershell.exe en lugar de pwsh.exe.

@@ -1,0 +1,178 @@
+---
+titulo: Dominio para una PyME
+horas: 20
+entregables:
+  - Dos controladores de dominio con DNS integrado y DHCP con conmutación por error.
+  - Unidades organizativas, alta masiva de usuarios con PowerShell desde CSV y grupos AGDLP.
+  - Directivas de seguridad, unidades de red y restricciones.
+  - Servidor de archivos con permisos NTFS, recursos compartidos, cuotas y DFS.
+  - WSUS con anillos, backup de AD y restauración probada.
+  - Documentación y script de verificación de salud del dominio.
+---
+
+import maqueta from './proyecto-maqueta.yaml'
+import verificacion from './proyecto-verificacion.yaml'
+
+## El pedido
+
+Este proyecto cierra el Nivel 3. La red de dos sedes que armaste en el Nivel 2 ya funciona, y el estudio vuelve a escribir:
+
+```text
+De: Lucía Ríos <lucia@estudioriosyasoc.example>
+Asunto: Ahora, las computadoras
+
+Hola. La red anda muy bien, gracias. Ahora el problema son las computadoras:
+
+- Cada PC tiene sus usuarios y contraseñas, y cuando alguien se va, nadie sabe en
+  cuántas PC tenía cuenta.
+- Los archivos están en una carpeta compartida donde todos ven todo, incluidos los
+  sueldos.
+- Cada uno actualiza Windows cuando se acuerda (o nunca).
+- Si se rompe el servidor, no sé si hay copia de algo.
+
+Somos 45 en contabilidad, 20 en administración, 5 en la gerencia y 18 en la sucursal
+(operaciones), y en marzo entran 10 más. Queremos:
+
+- Un usuario por persona, el mismo en cualquier PC, y que al irse se apague en un solo lugar.
+- Que cada área vea solo sus carpetas; la gerencia, además, lee lo de contabilidad.
+- Que las PC se actualicen solas, pero sin que una actualización nos deje sin facturar.
+- Saber que hay copia y que funciona.
+- Que si mañana te vas, otra persona entienda cómo está armado.
+
+¡Gracias de nuevo!
+```
+
+Vas a trabajar en tres lugares: el **papel** (el diseño), la **plataforma** (la maqueta) y tus **máquinas virtuales**, sobre la red del Nivel 2 (las VLAN, el firewall y el túnel con la sucursal).
+
+| Fase | Se apoya en | Tiempo estimado |
+| --- | --- | --- |
+| 1. Relevamiento y diseño | Todo el nivel | 2 h |
+| 2. Maqueta en la plataforma | Módulos 3.3 a 3.5 | 2 h |
+| 3. Controladores, DNS y DHCP | Módulos 3.1, 3.3 y 3.4 | 3 h |
+| 4. Cuentas, grupos y directivas | Módulos 3.2 y 3.3 | 3 h |
+| 5. Servidor de archivos | Módulo 3.4 | 3 h |
+| 6. Actualizaciones y despliegue | Módulo 3.5 | 3 h |
+| 7. Respaldo y restauración probada | Lecciones 3.3.8 y 3.5.5 | 2 h |
+| 8. Script de salud y documentación | Módulo 3.2 y todo el nivel | 2 h |
+
+## 1. Relevamiento y diseño
+
+En tu cuaderno, antes de crear nada:
+
+- **El nombre del dominio**: un subdominio de un dominio propio (lección 3.3.2). Para el proyecto, `ad.estudiorios.example` con NetBIOS `ESTUDIO`. Si tu computadora no da para un bosque nuevo y seguís en el `empresa.local` de los laboratorios, anotá en el documento por qué no es lo ideal.
+- **Los servidores y sus direcciones**, dentro de la VLAN de Servidores de tu plan del Nivel 2: DC01 y DC02 (con DNS y DHCP), SRV-ARCH01 (archivos), SRV-WSUS (puede ser SRV-ADMIN con un disco más) y la estación de administración.
+- **El árbol de OU**: una raíz con el nombre de la empresa; adentro, Usuarios (una por área, incluida Sucursal), Equipos (con Piloto y Produccion, y una para la sucursal), Servidores, Grupos, Cuentas de servicio y Admin. Que cada OU tenga un motivo: una directiva distinta o una delegación distinta.
+- **Convenciones de nombres**: usuarios (`aperez`), cuentas administrativas aparte (`adm-aperez`), grupos (`GG-Area`, `DL-Recurso-Permiso`), equipos (`PC-CONT01`, `NB-GER02`), GPO (`Ambito - Qué hace`).
+- **La matriz de permisos**: una tabla con cada carpeta, el grupo local de dominio que tiene cada permiso y qué globales están adentro. Es la parte que más se consulta después.
+- **Las directivas**: una lista con nombre, a qué OU se vincula, qué configura y por qué.
+- **DHCP**: un ámbito por VLAN de PC (con el reenvío del firewall o del switch central hacia los dos DC) y la decisión de la sucursal: ¿sus PC piden dirección a los DC por el túnel, o conviene un DHCP en la sucursal por si se cae el túnel? Anotá la decisión y el motivo.
+- **Anillos de actualización**: quién va en Piloto (de todas las áreas), cuándo se aprueba para Produccion y cómo se trata a los servidores.
+- **Respaldo**: el RPO y el RTO que acordás con Lucía, qué se respalda, dónde y cada cuánto, y dónde queda la copia fuera del lugar.
+
+**Criterio de calidad:** otra persona puede crear las OU, los grupos y los permisos solo con tus tablas, y cada decisión importante tiene su porqué escrito.
+
+## 2. Maqueta en la plataforma
+
+Con datos de referencia (seis personas, tres áreas), armás el dominio completo de punta a punta: estructura, alta masiva, grupos, directivas, DHCP redundante para otra VLAN, archivos con permisos y DFS, WSUS y respaldo. Sirve para ensayar la secuencia antes de hacerla con tu diseño.
+
+<Terminal ejercicio={maqueta} />
+
+## 3. Controladores, DNS y DHCP
+
+- **DC01 y DC02** con Windows Server 2025 (DC02 puede ser Server Core), IP fija, nombre definitivo y los dos con DNS integrado en AD. Cada DC usa al otro como primer DNS y a sí mismo como segundo.
+- **Reenviadores**: los DC reenvían lo que no es del dominio al resolvedor que armaste en el Nivel 2 (Unbound), y así siguen resolviendo los nombres de `empresa.internal`. Si preferís, un reenviador condicional solo para esa zona hacia BIND.
+- **Zonas inversas** de las redes de servidores y PC, y limpieza de registros viejos activada.
+- **DHCP** en los dos DC con conmutación por error, un ámbito por VLAN de PC, y el reenvío (`ip helper-address` o el relay de OPNsense) apuntando a los dos. Apagá los ámbitos de Kea que reemplazás: dos DHCP en la misma red se pisan.
+- **La hora**: el emulador de PDC sincroniza con una fuente externa; los demás, con la jerarquía del dominio.
+
+**Criterio de calidad:** `dcdiag /q` no muestra errores, `repadmin /replsummary` muestra cero fallas, una PC nueva de cualquier VLAN (incluida la sucursal) recibe dirección y los DC como DNS, y apagando el DHCP de uno de los DC sigue recibiendo.
+
+## 4. Cuentas, grupos y directivas
+
+- **Las OU** de tu diseño, con `redircmp` y `redirusr` apuntando a las tuyas.
+- **Alta masiva**: armá un CSV de prueba con al menos 20 personas de todas las áreas (inventadas) y un script `Alta-Usuarios.ps1` que lo procese: cada una en su OU, con UPN, departamento, puesto, contraseña inicial y cambio obligatorio, y en su grupo global. Que el script no falle si lo corrés dos veces (que saltee a quien ya existe) y que deje un registro de lo que hizo.
+- **AGDLP** según tu matriz.
+- **Cuentas administrativas** separadas para vos, en la OU Admin, y la cuenta Administrador del dominio guardada para emergencias.
+- **Directivas**: contraseñas y bloqueo (14 caracteres, 5 intentos), bloqueo de pantalla, sin almacenamiento extraíble (con una excepción por grupo si la gerencia lo pide), la unidad **S:** apuntando al espacio de nombres DFS, el firewall de Windows encendido en los tres perfiles, y la papelera de reciclaje de AD activada.
+- **Para investigar** (no lo vimos en el nivel): **Windows LAPS**, que viene incluido en Windows 11 y Windows Server 2025, para que cada PC tenga una contraseña de administrador local distinta y guardada en AD. Con la documentación oficial de Microsoft alcanza: el permiso para que los equipos escriban su contraseña (`Set-LapsADComputerSelfPermission`), la directiva y `Get-LapsADPassword` para leerla.
+
+**Criterio de calidad:** `gpresult /r` en una PC muestra las directivas esperadas para el equipo y para el usuario, ninguna cuenta ni equipo quedó en Users o Computers, y correr el script de alta dos veces no rompe nada.
+
+## 5. Servidor de archivos
+
+- **D:\Datos** en SRV-ARCH01, con una carpeta por área (y Sucursal), sin herencia de la raíz, sin Users ni CREATOR OWNER, y los permisos de tu matriz (lección 3.4.3).
+- El recurso **Datos** con control total para Authenticated Users y **enumeración basada en acceso**.
+- **FSRM**: una cuota por área (blanda primero, para medir, y estricta después) y un filtro activo de audio y video.
+- **DFS**: el espacio de nombres `\\ad.estudiorios.example\Estudio` con la carpeta Datos, y la unidad S: de la GPO apuntando ahí.
+- **Versiones anteriores** activadas en D:, para que la gente recupere sola lo que pisó.
+
+**Criterio de calidad:** con el **simulador de permisos** de la lección 3.4.3 o con la pestaña Acceso efectivo, una persona de cada área puede lo que dice la matriz y nada más; desde una PC, cada persona ve en S: solo sus carpetas; una persona de la gerencia lee Contabilidad pero no puede guardar ahí.
+
+## 6. Actualizaciones y despliegue
+
+- **WSUS** con los productos e idiomas que tenés, los grupos Piloto, Produccion y Servidores, segmentación del lado del cliente y las GPO por OU.
+- **La rutina mensual escrita**: qué día se aprueba para cada anillo, cómo se avisa al piloto y cómo se aprueban los servidores (de a uno, en una ventana y después de un respaldo). Hacé una vuelta completa con las actualizaciones del mes.
+- **Limpieza** de WSUS programada una vez por mes (una tarea programada que corra `Invoke-WsusServerCleanup`).
+- **Una PC desplegada desde una imagen** (lección 3.5.3) con un unattend.xml que la une al dominio en la OU de equipos con una cuenta delegada, y que aparece sola en WSUS.
+
+**Criterio de calidad:** el informe de WSUS muestra a todas las PC reportando en su grupo y con las actualizaciones del mes; la PC desplegada no necesitó que contestaras nada.
+
+## 7. Respaldo y restauración probada
+
+- **DC01**: estado del sistema todas las noches (con `-allCritical`) a un disco aparte. **SRV-ARCH01**: D:\Datos todas las noches.
+- **La copia fuera del lugar**: aunque sea simulada (un disco virtual que "se lleva" alguien, o una copia a la sucursal por el túnel), escribí cómo y cada cuánto se hace.
+- **Restauraciones de prueba**, documentadas con fecha, qué se restauró y cuánto tardó:
+  1. Un archivo borrado de Contabilidad, desde wbadmin.
+  2. Un archivo pisado, desde Versiones anteriores, hecho por un "usuario".
+  3. Un usuario y una OU borrados, desde la papelera de reciclaje de AD (lección 3.3.8).
+  4. SRV-ARCH01 completo en una VM nueva, con la recuperación de imagen del sistema (lección 3.5.5). Mediste tu RTO real.
+
+**Criterio de calidad:** las cuatro restauraciones funcionaron y están anotadas, y el RTO medido es compatible con lo que acordaste con Lucía (o el documento dice qué falta para lograrlo).
+
+## 8. Script de salud y documentación
+
+El **script de verificación** es lo que convierte "creo que anda" en "sé que anda". El de la verificación final (abajo) es un punto de partida: adaptalo a tu dominio, agregale al menos dos pruebas propias (por ejemplo, que WSUS sincronizó en las últimas 24 horas o que ninguna cuota está por encima del 90%) y programalo una vez por semana con una tarea programada.
+
+Y la documentación, en texto plano:
+
+```text
+DOMINIO ESTUDIO RÍOS Y ASOCIADOS — DOCUMENTO DE ENTREGA
+Fecha: ...   Preparado por: ...
+
+1. RESUMEN: qué se armó, qué NO incluye, dónde está cada cosa.
+2. SERVIDORES: nombre, IP, roles, discos, quién depende de cada uno.
+3. ACTIVE DIRECTORY: nombre, niveles funcionales, árbol de OU (con el motivo de cada una),
+   convenciones de nombres, cuentas administrativas y de servicio.
+4. GRUPOS Y PERMISOS: la matriz de permisos completa.
+5. DIRECTIVAS: cada GPO, dónde está vinculada, qué configura y por qué.
+6. RED: DNS (zonas, reenviadores), DHCP (ámbitos, conmutación, reenvío), hora.
+7. ARCHIVOS: carpetas, recurso, cuotas, filtros, DFS, versiones anteriores.
+8. ACTUALIZACIONES: WSUS, anillos, la rutina mensual, la limpieza.
+9. RESPALDO: qué, dónde, cuándo, la copia fuera del lugar, RPO y RTO, y el registro de
+   las restauraciones de prueba.
+10. PROCEDIMIENTOS: alta y baja de una persona, cambio de área, PC nueva, restaurar un
+    archivo, qué hacer si se cae un DC, la revisión semanal (el script).
+11. PENDIENTES Y RECOMENDACIONES.
+```
+
+**Criterio de calidad:** otra persona puede dar de baja a alguien, restaurar un archivo y aprobar las actualizaciones del mes siguiendo solo el documento.
+
+## Verificación final
+
+<PasosGuiados ejercicio={verificacion} />
+
+## Revisión antes de entregar
+
+| Criterio | Falta | Bien | Muy bien |
+| --- | --- | --- | --- |
+| Dominio y red | Un solo DC, o PC con DNS de internet | Dos DC con DNS integrado, reenviadores y DHCP redundante | Zonas inversas, limpieza, hora bien jerarquizada y la decisión de la sucursal justificada |
+| Cuentas y grupos | Usuarios creados a mano, permisos a personas | Alta desde CSV, OU con motivo y AGDLP | Script que se puede correr dos veces, cuentas administrativas separadas y LAPS |
+| Directivas | Todo en la Default Domain Policy | Una GPO por propósito, vinculada donde corresponde | Nombres consistentes, documentadas y comprobadas con gpresult |
+| Archivos | Todos ven todo | Permisos por área, recurso con ABE y DFS | Cuotas, filtros, versiones anteriores y matriz comprobada con el acceso efectivo |
+| Actualizaciones | Cada PC por su cuenta | WSUS con grupos y GPO | Rutina mensual escrita, limpieza programada y una PC desplegada sin intervención |
+| Respaldo | "Hay un disco" | Respaldo programado de DC y archivos | Copia fuera del lugar, cuatro restauraciones probadas y RTO medido |
+| Operación | Sin documentos | Documento completo | Script de salud programado y procedimientos probados por otra persona |
+
+<Consejo>
+Tomá una instantánea `entrega-nivel-3` de todas las máquinas y guardá el script de salud, el de altas y el documento juntos. En el Nivel 4 esta infraestructura suma servicios (web, certificados, bases de datos, correo y archivos compartidos también con Linux), y en el Nivel 5 se muda a un hipervisor de verdad, con una estrategia de respaldo más completa.
+</Consejo>

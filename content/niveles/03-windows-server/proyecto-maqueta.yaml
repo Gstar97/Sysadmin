@@ -1,0 +1,225 @@
+tipo: terminal
+shell: powershell
+titulo: "Maqueta: el dominio del estudio, de punta a punta"
+descripcion: >-
+  El estudio ya tiene el bosque ad.estudiorios.example (NetBIOS ESTUDIO) con dos controladores,
+  DC01 y DC02, recién promovidos y sin nada adentro. También están SRV-ARCH01 (archivos, con un
+  disco D:), SRV-WSUS (con un disco D:) y PC-CONT01, una PC de Contabilidad unida al dominio y
+  configurada por DHCP, que hoy tiene una 169.254.x.x porque el DHCP viejo se apagó. RRHH te dejó
+  C:\Altas\personal.csv. Estás en DC01.
+estado_inicial:
+  equipo: DC01
+  dominio: ad.estudiorios.example
+  red: { ip: 10.20.1.11, prefijo: 28, puerta_enlace: 10.20.1.1, dns: [127.0.0.1, 10.20.1.12] }
+  discos:
+    - { numero: 1, tamano_gb: 100, estilo: GPT, particiones: [{ letra: E, tamano_gb: 99, sistema: NTFS, etiqueta: Respaldos }] }
+  ad:
+    netbios: ESTUDIO
+    equipos:
+      - { nombre: PC-CONT01, so: Windows 11 Pro }
+      - { nombre: SRV-ARCH01, so: Windows Server 2025 Standard }
+      - { nombre: SRV-WSUS, so: Windows Server 2025 Standard }
+  archivos:
+    C:\Altas\personal.csv: |
+      Nombre,Apellido,Usuario,Area,Puesto
+      Ana,Pérez,aperez,Contabilidad,Contadora
+      Bruno,Gómez,bgomez,Contabilidad,Contador
+      Carla,Vega,cvega,Contabilidad,Asistente contable
+      Diego,Ruiz,druiz,Administracion,Administrativo
+      Elena,Sosa,esosa,Administracion,Recepcionista
+      Lucía,Ríos,lrios,Gerencia,Socia gerente
+  servidores:
+    - { equipo: DC02, dominio: ad.estudiorios.example, controlador_dominio: true, red: { ip: 10.20.1.12, prefijo: 28, puerta_enlace: 10.20.1.1, dns: [10.20.1.11, 127.0.0.1] } }
+    - equipo: SRV-ARCH01
+      dominio: ad.estudiorios.example
+      red: { ip: 10.20.1.13, prefijo: 28, puerta_enlace: 10.20.1.1, dns: [10.20.1.11, 10.20.1.12] }
+      discos:
+        - { numero: 1, tamano_gb: 500, estilo: GPT, particiones: [{ letra: D, tamano_gb: 499, sistema: NTFS, etiqueta: Datos }] }
+    - equipo: SRV-WSUS
+      dominio: ad.estudiorios.example
+      red: { ip: 10.20.1.14, prefijo: 28, puerta_enlace: 10.20.1.1, dns: [10.20.1.11, 10.20.1.12] }
+      discos:
+        - { numero: 1, tamano_gb: 200, estilo: GPT, particiones: [{ letra: D, tamano_gb: 199, sistema: NTFS, etiqueta: WSUS }] }
+    - { equipo: PC-CONT01, dominio: ad.estudiorios.example, usuario: aperez, red: { ip: 169.254.20.31, prefijo: 16, puerta_enlace: '', dns: [], dhcp: true, reenvio_dhcp: { red: 10.20.0.128, servidores: [10.20.1.11, 10.20.1.12] } } }
+pasos:
+  - consigna: >-
+      La estructura: una OU raíz Estudio con Usuarios (y adentro Contabilidad, Administracion y
+      Gerencia), Equipos, Servidores, Grupos y Admin. Que los equipos y usuarios nuevos caigan en
+      Equipos y Usuarios, y mové PC-CONT01 a Equipos y los dos servidores miembro a Servidores.
+    verificar:
+      - { ou: Estudio/Usuarios/Contabilidad }
+      - { ou: Estudio/Usuarios/Administracion }
+      - { ou: Estudio/Usuarios/Gerencia }
+      - { ou: Estudio/Servidores }
+      - { ou: Estudio/Admin }
+      - { comando_usado: "redircmp" }
+    solucion:
+      - New-ADOrganizationalUnit -Name Estudio -Path 'DC=ad,DC=estudiorios,DC=example'
+      - "'Usuarios','Equipos','Servidores','Grupos','Admin' | ForEach-Object { New-ADOrganizationalUnit -Name $_ -Path 'OU=Estudio,DC=ad,DC=estudiorios,DC=example' }"
+      - "'Contabilidad','Administracion','Gerencia' | ForEach-Object { New-ADOrganizationalUnit -Name $_ -Path 'OU=Usuarios,OU=Estudio,DC=ad,DC=estudiorios,DC=example' }"
+      - redircmp 'OU=Equipos,OU=Estudio,DC=ad,DC=estudiorios,DC=example'
+      - redirusr 'OU=Usuarios,OU=Estudio,DC=ad,DC=estudiorios,DC=example'
+      - Get-ADComputer PC-CONT01 | Move-ADObject -TargetPath 'OU=Equipos,OU=Estudio,DC=ad,DC=estudiorios,DC=example'
+      - "'SRV-ARCH01','SRV-WSUS' | ForEach-Object { Get-ADComputer $_ | Move-ADObject -TargetPath 'OU=Servidores,OU=Estudio,DC=ad,DC=estudiorios,DC=example' }"
+  - consigna: >-
+      Alta masiva desde el CSV: cada persona en la OU de su área, habilitada, con UPN
+      usuario@ad.estudiorios.example, departamento y puesto, contraseña inicial Inicio.2026! y
+      cambio obligatorio al entrar.
+    verificar:
+      - { usuario_ad: aperez, ou: Estudio/Usuarios/Contabilidad, habilitado: true, departamento: Contabilidad }
+      - { usuario_ad: esosa, ou: Estudio/Usuarios/Administracion, habilitado: true }
+      - { usuario_ad: lrios, ou: Estudio/Usuarios/Gerencia, departamento: Gerencia }
+    solucion:
+      - "$clave = ConvertTo-SecureString 'Inicio.2026!' -AsPlainText -Force"
+      - "Import-Csv C:\\Altas\\personal.csv | ForEach-Object { New-ADUser -Name \"$($_.Nombre) $($_.Apellido)\" -GivenName $_.Nombre -Surname $_.Apellido -SamAccountName $_.Usuario -UserPrincipalName \"$($_.Usuario)@ad.estudiorios.example\" -Department $_.Area -Title $_.Puesto -Path \"OU=$($_.Area),OU=Usuarios,OU=Estudio,DC=ad,DC=estudiorios,DC=example\" -AccountPassword $clave -ChangePasswordAtLogon $true -Enabled $true }"
+  - consigna: >-
+      Grupos AGDLP en la OU Grupos: un global por área (GG-Contabilidad, GG-Administracion,
+      GG-Gerencia) con su gente; un local de dominio DL-<Area>-Modificar por área con su global
+      adentro; y DL-Contabilidad-Lectura con GG-Gerencia (la gerencia lee lo de Contabilidad).
+    verificar:
+      - { grupo_ad: GG-Contabilidad, miembros: [aperez, bgomez, cvega] }
+      - { grupo_ad: GG-Gerencia, miembros: [lrios] }
+      - { grupo_ad: DL-Contabilidad-Modificar, miembros: [GG-Contabilidad] }
+      - { grupo_ad: DL-Administracion-Modificar, miembros: [GG-Administracion] }
+      - { grupo_ad: DL-Contabilidad-Lectura, miembros: [GG-Gerencia] }
+    solucion:
+      - $ou = 'OU=Grupos,OU=Estudio,DC=ad,DC=estudiorios,DC=example'
+      - "foreach ($a in 'Contabilidad','Administracion','Gerencia') { New-ADGroup \"GG-$a\" -GroupScope Global -GroupCategory Security -Path $ou; New-ADGroup \"DL-$a-Modificar\" -GroupScope DomainLocal -GroupCategory Security -Path $ou; Add-ADGroupMember \"GG-$a\" -Members (Get-ADUser -Filter \"Department -eq '$a'\"); Add-ADGroupMember \"DL-$a-Modificar\" -Members \"GG-$a\" }"
+      - New-ADGroup DL-Contabilidad-Lectura -GroupScope DomainLocal -GroupCategory Security -Path $ou; Add-ADGroupMember DL-Contabilidad-Lectura -Members GG-Gerencia
+  - consigna: >-
+      Seguridad de las cuentas: contraseñas de 14 caracteres como mínimo, bloqueo a los 5 intentos,
+      y la papelera de reciclaje de AD activada.
+    verificar:
+      - { politica_contrasenas: { longitud_minima: 14, umbral_bloqueo: 5 } }
+      - { papelera_ad: true }
+    solucion:
+      - Set-ADDefaultDomainPasswordPolicy -Identity ad.estudiorios.example -MinPasswordLength 14 -LockoutThreshold 5
+      - Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target ad.estudiorios.example -Confirm:$false
+  - consigna: >-
+      Las directivas de base: "Usuarios - Bloqueo de pantalla" (ScreenSaveTimeOut 600 y
+      ScreenSaverIsSecure 1, String, en HKCU\Software\Policies\Microsoft\Windows\Control
+      Panel\Desktop) vinculada a Usuarios, y "Equipos - Sin almacenamiento extraíble" (Deny_All 1,
+      DWord, en HKLM\Software\Policies\Microsoft\Windows\RemovableStorageDevices) vinculada a
+      Equipos.
+    verificar:
+      - { gpo_aplicada: Usuarios - Bloqueo de pantalla, a: aperez }
+      - { gpo_aplicada: Equipos - Sin almacenamiento extraíble, a: PC-CONT01 }
+    solucion:
+      - $k = 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop'
+      - New-GPO 'Usuarios - Bloqueo de pantalla' | New-GPLink -Target 'OU=Usuarios,OU=Estudio,DC=ad,DC=estudiorios,DC=example'
+      - Set-GPRegistryValue 'Usuarios - Bloqueo de pantalla' -Key $k -ValueName ScreenSaveTimeOut -Type String -Value 600
+      - Set-GPRegistryValue 'Usuarios - Bloqueo de pantalla' -Key $k -ValueName ScreenSaverIsSecure -Type String -Value 1
+      - New-GPO 'Equipos - Sin almacenamiento extraíble' | New-GPLink -Target 'OU=Equipos,OU=Estudio,DC=ad,DC=estudiorios,DC=example'
+      - Set-GPRegistryValue 'Equipos - Sin almacenamiento extraíble' -Key 'HKLM\Software\Policies\Microsoft\Windows\RemovableStorageDevices' -ValueName Deny_All -Type DWord -Value 1
+  - consigna: >-
+      DHCP para Contabilidad (10.20.0.128/26, la red de PC-CONT01) en DC01 y DC02 con conmutación
+      por error 50 y 50: rango .140 a .190, puerta de enlace .129, DNS los dos DC y dominio
+      ad.estudiorios.example. Que PC-CONT01 consiga dirección.
+    verificar:
+      - { dhcp_autorizado: true }
+      - { ambito_dhcp: 10.20.0.128, activo: true, puerta_enlace: 10.20.0.129, dns: [10.20.1.11, 10.20.1.12] }
+      - { conmutacion_dhcp: DC02, modo: LoadBalance }
+      - { en: PC-CONT01, verificar: { concesion_dhcp: true } }
+    pistas:
+      - "En la red real, las PC están en otra VLAN: el router reenvía los pedidos con ip helper-address a los dos DC (lección 3.4.2). Acá ya está hecho."
+    solucion:
+      - Install-WindowsFeature DHCP -IncludeManagementTools
+      - Add-DhcpServerInDC -DnsName dc01.ad.estudiorios.example -IPAddress 10.20.1.11
+      - Add-DhcpServerv4Scope -Name Contabilidad -StartRange 10.20.0.140 -EndRange 10.20.0.190 -SubnetMask 255.255.255.192 -State InActive
+      - Set-DhcpServerv4OptionValue -ScopeId 10.20.0.128 -Router 10.20.0.129 -DnsServer 10.20.1.11, 10.20.1.12 -DnsDomain ad.estudiorios.example
+      - Set-DhcpServerv4Scope -ScopeId 10.20.0.128 -State Active
+      - Invoke-Command DC02 { Install-WindowsFeature DHCP -IncludeManagementTools }
+      - Add-DhcpServerInDC -DnsName dc02.ad.estudiorios.example -IPAddress 10.20.1.12
+      - Add-DhcpServerv4Failover -Name dc01-dc02 -PartnerServer DC02 -ScopeId 10.20.0.128 -LoadBalancePercent 50 -SharedSecret 'Una.Clave.Larga.2026'
+      - Restart-Computer -ComputerName PC-CONT01
+  - consigna: >-
+      El servidor de archivos (en SRV-ARCH01, con Invoke-Command): D:\Datos con una carpeta por
+      área, sin herencia de la raíz (y sin Users ni CREATOR OWNER), Domain Users con lectura solo en
+      D:\Datos, cada DL-<Area>-Modificar con Modificar en su carpeta, y DL-Contabilidad-Lectura con
+      lectura en Contabilidad.
+    verificar:
+      - { en: SRV-ARCH01, verificar: { herencia_ntfs: D:\Datos, habilitada: false } }
+      - { en: SRV-ARCH01, verificar: { permiso_ntfs: D:\Datos\Contabilidad, para: aperez, nivel: Modify } }
+      - { en: SRV-ARCH01, verificar: { permiso_ntfs: D:\Datos\Contabilidad, para: lrios, nivel: ReadAndExecute } }
+      - { en: SRV-ARCH01, verificar: { permiso_ntfs: D:\Datos\Gerencia, para: aperez, nivel: None } }
+    solucion:
+      - "Invoke-Command SRV-ARCH01 { 'Contabilidad','Administracion','Gerencia' | ForEach-Object { New-Item -ItemType Directory \"D:\\Datos\\$_\" } }"
+      - Invoke-Command SRV-ARCH01 { icacls D:\Datos /inheritance:d; icacls D:\Datos /remove Users 'CREATOR OWNER'; icacls D:\Datos /grant 'ESTUDIO\Domain Users:RX' }
+      - "Invoke-Command SRV-ARCH01 { foreach ($a in 'Contabilidad','Administracion','Gerencia') { icacls \"D:\\Datos\\$a\" /grant \"DL-$a-Modificar:(OI)(CI)M\" }; icacls D:\\Datos\\Contabilidad /grant 'DL-Contabilidad-Lectura:(OI)(CI)RX' }"
+  - consigna: >-
+      Publicalo: el recurso Datos (Control total para Authenticated Users, enumeración basada en
+      acceso), una cuota estricta de 50 GB en Contabilidad y el espacio de nombres
+      \\ad.estudiorios.example\Estudio con la carpeta Datos (raíz en D:\DFSRoots\Estudio).
+    verificar:
+      - { en: SRV-ARCH01, verificar: { recurso_compartido: Datos, abe: true } }
+      - { en: SRV-ARCH01, verificar: { acceso_compartido: Datos, cuenta: Authenticated Users, nivel: Full } }
+      - { en: SRV-ARCH01, verificar: { cuota: D:\Datos\Contabilidad, limite_mb: 51200 } }
+      - { carpeta_dfs: \\ad.estudiorios.example\Estudio\Datos, destino: \\SRV-ARCH01\Datos }
+    solucion:
+      - Invoke-Command SRV-ARCH01 { New-SmbShare -Name Datos -Path D:\Datos -FullAccess 'Authenticated Users' -FolderEnumerationMode AccessBased }
+      - Invoke-Command SRV-ARCH01 { Install-WindowsFeature FS-Resource-Manager -IncludeManagementTools; New-FsrmQuota -Path D:\Datos\Contabilidad -Size 50GB }
+      - Invoke-Command SRV-ARCH01 { Install-WindowsFeature FS-DFS-Namespace -IncludeManagementTools; New-Item -ItemType Directory D:\DFSRoots\Estudio; New-SmbShare -Name Estudio -Path D:\DFSRoots\Estudio -ReadAccess 'Authenticated Users' }
+      - Invoke-Command SRV-ARCH01 { New-DfsnRoot -Path \\ad.estudiorios.example\Estudio -TargetPath \\SRV-ARCH01\Estudio -Type DomainV2; New-DfsnFolder -Path \\ad.estudiorios.example\Estudio\Datos -TargetPath \\SRV-ARCH01\Datos }
+  - consigna: >-
+      Prueba desde PC-CONT01, con la sesión de Ana: listá \\ad.estudiorios.example\Estudio\Datos
+      (tiene que ver solo Contabilidad) y guardá un archivo en Contabilidad.
+    verificar:
+      - { salida_contiene: "Contabilidad" }
+      - { en: SRV-ARCH01, verificar: { archivo: D:\Datos\Contabilidad\prueba.txt } }
+    solucion:
+      - Invoke-Command PC-CONT01 { Set-Content \\ad.estudiorios.example\Estudio\Datos\Contabilidad\prueba.txt 'hola' }
+      - Invoke-Command PC-CONT01 { Get-ChildItem \\ad.estudiorios.example\Estudio\Datos }
+  - consigna: >-
+      WSUS en SRV-WSUS (con Invoke-Command), con el contenido en D:\WSUS: Windows 11, Microsoft
+      Server Operating System-24H2 y Microsoft Defender Antivirus, más Update Rollups; sincronizado,
+      con los grupos Piloto y Produccion y segmentación del lado del cliente.
+    verificar:
+      - { en: SRV-WSUS, verificar: { wsus_listo: true } }
+      - { en: SRV-WSUS, verificar: { wsus_grupo: Piloto } }
+      - { en: SRV-WSUS, verificar: { wsus_producto: Microsoft Server Operating System-24H2 } }
+    solucion:
+      - "Invoke-Command SRV-WSUS { Install-WindowsFeature UpdateServices -IncludeManagementTools; & 'C:\\Program Files\\Update Services\\Tools\\wsusutil.exe' postinstall CONTENT_DIR=D:\\WSUS }"
+      - "Invoke-Command SRV-WSUS { Get-WsusProduct | Where-Object { $_.Product.Title -in 'Microsoft Server Operating System-24H2','Windows 11','Microsoft Defender Antivirus' } | Set-WsusProduct; Get-WsusClassification | Where-Object { $_.Classification.Title -eq 'Update Rollups' } | Set-WsusClassification; (Get-WsusServer).GetSubscription().StartSynchronization() }"
+      - "Invoke-Command SRV-WSUS { $w = Get-WsusServer; $w.CreateComputerTargetGroup('Piloto'); $w.CreateComputerTargetGroup('Produccion'); $c = $w.GetConfiguration(); $c.TargetingMode = 'Client'; $c.Save() }"
+  - consigna: >-
+      La GPO "Equipos - Windows Update" vinculada a Equipos: WUServer y WUStatusServer
+      http://srv-wsus.ad.estudiorios.example:8530, TargetGroupEnabled 1, TargetGroup Piloto (por
+      ahora, todo el estudio es piloto) y UseWUServer 1 en la subclave AU. Que PC-CONT01 la tome y
+      se reporte.
+    verificar:
+      - { gpo_aplicada: Equipos - Windows Update, a: PC-CONT01 }
+      - { en: SRV-WSUS, verificar: { wsus_equipo: PC-CONT01, grupo: Piloto } }
+    solucion:
+      - $k = 'HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate'; $g = 'Equipos - Windows Update'
+      - New-GPO $g | New-GPLink -Target 'OU=Equipos,OU=Estudio,DC=ad,DC=estudiorios,DC=example'
+      - Set-GPRegistryValue $g -Key $k -ValueName WUServer -Type String -Value 'http://srv-wsus.ad.estudiorios.example:8530'
+      - Set-GPRegistryValue $g -Key $k -ValueName WUStatusServer -Type String -Value 'http://srv-wsus.ad.estudiorios.example:8530'
+      - Set-GPRegistryValue $g -Key $k -ValueName TargetGroupEnabled -Type DWord -Value 1
+      - Set-GPRegistryValue $g -Key $k -ValueName TargetGroup -Type String -Value Piloto
+      - Set-GPRegistryValue $g -Key "$k\AU" -ValueName UseWUServer -Type DWord -Value 1
+      - Invoke-Command PC-CONT01 { gpupdate /force; UsoClient StartScan }
+  - consigna: >-
+      El respaldo de AD: Windows Server Backup en DC01, un respaldo del estado del sistema en E: ahora
+      y uno programado todas las noches a las 22:00 con lo necesario para la recuperación completa.
+    verificar:
+      - { caracteristica: Windows-Server-Backup }
+      - { respaldo_en: "E:", estado_sistema: true }
+      - { respaldo_programado: true, hora: "22:00" }
+    solucion:
+      - Install-WindowsFeature Windows-Server-Backup -IncludeManagementTools
+      - "wbadmin start systemstatebackup -backupTarget:E: -quiet"
+      - "wbadmin enable backup -addtarget:E: -schedule:22:00 -allCritical -quiet"
+  - consigna: >-
+      El chequeo de salud final: replicación entre los DC y una consulta de los registros SRV del
+      dominio.
+    verificar:
+      - { comando_usado: "repadmin" }
+      - { salida_contiene: "_ldap._tcp.dc._msdcs.ad.estudiorios.example" }
+    solucion:
+      - repadmin /replsummary
+      - Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.ad.estudiorios.example
+    explicacion: >-
+      Con eso queda el esqueleto completo del estudio: cuentas ordenadas y por grupos, directivas,
+      DHCP redundante, archivos con permisos y un nombre estable, parches controlados y un respaldo
+      del dominio. En tus máquinas virtuales lo vas a hacer con tu propio diseño, y vas a sumar lo
+      que la maqueta no cubre: la restauración probada y el script de verificación.

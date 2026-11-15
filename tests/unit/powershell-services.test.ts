@@ -95,6 +95,30 @@ describe('Servidor DHCP', () => {
     expect(verifyPs(pc, { concesion_dhcp: true, de: 'DC02' }).ok).toBe(true)
     expect(verifyPs(s, { conmutacion_dhcp: 'DC02', modo: 'LoadBalance' }).ok).toBe(true)
   })
+
+  it('una PC de otra red recibe dirección solo si el router reenvía el pedido (ip helper-address)', async () => {
+    const make = (relay: boolean) =>
+      createPsSession({
+        ...dcState,
+        servidores: [
+          { equipo: 'PC09', dominio: 'empresa.local', red: { ip: '169.254.1.9', prefijo: 16, dns: [], dhcp: true, ...(relay ? { reenvio_dhcp: { red: '192.168.20.0', servidores: ['192.168.10.10'] } } : {}) } },
+        ],
+      })
+    for (const relay of [false, true]) {
+      const s = make(relay)
+      const pc = s.lab!.find('PC09')!
+      for (const c of [
+        'Install-WindowsFeature DHCP -IncludeManagementTools',
+        'Add-DhcpServerInDC dc01.empresa.local 192.168.10.10',
+        'Add-DhcpServerv4Scope -Name Piso2 -StartRange 192.168.20.100 -EndRange 192.168.20.199 -SubnetMask 255.255.255.0',
+        'Set-DhcpServerv4OptionValue -ScopeId 192.168.20.0 -Router 192.168.20.1',
+      ])
+        await run(s, c)
+      await run(pc, 'ipconfig /renew')
+      expect(verifyPs(pc, { concesion_dhcp: true }).ok).toBe(relay)
+      if (relay) expect(pc.state.red.puerta_enlace).toBe('192.168.20.1')
+    }
+  })
 })
 
 describe('Servidor de archivos', () => {

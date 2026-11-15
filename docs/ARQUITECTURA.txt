@@ -288,7 +288,10 @@ reordenar carpetas no rompe el progreso guardado de nadie.
                 paquete, proceso, salida_contiene, salida_regex, comando_usado,
                 directorio_actual, usuario_actual
     powershell  archivo, servicio, proceso, caracteristica (roles de Windows Server),
-                usuario_ad, grupo_ad, ou, salida_contiene, salida_regex, comando_usado
+                usuario_ad, grupo_ad, ou, salida_contiene, salida_regex, comando_usado,
+                y las de cada servicio de Windows Server (AD, GPO, DNS, DHCP, archivos,
+                WSUS y respaldo; la lista está en 6.1). Con { en: EQUIPO, verificar: … }
+                se comprueba en otro equipo del laboratorio.
     ios         config_contiene, vlan, interfaz (modo, VLAN, apagada, IP), ruta, ping
                 (entre equipos de la topología), guardado, salida_contiene, comando_usado
 
@@ -674,6 +677,48 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       cuenta_servicio, politica_contrasenas y politica_resultante.
     · Validador de PowerShell para el editor (src/engines/config/powershell.ts): errores
       de sintaxis con la línea y avisos por alias en scripts.
+  - Nivel 3, parte 2 (módulos 3.4 y 3.5 y proyecto), en src/engines/powershell:
+    · Servidor DNS (dnsserver.ts, sobre dns.ts): zonas primarias integradas en AD o en
+      archivo, inversas, reenviadores condicionales, registros A (con -CreatePtr), CNAME,
+      PTR y MX, reenviadores, envejecimiento y limpieza. resolveName busca primero en las
+      zonas (la coincidencia más larga), sigue reenviadores condicionales y CNAME, y
+      nslookup muestra "UnKnown" cuando el servidor no tiene PTR.
+    · DHCP (dhcp.ts): autorización en AD, ámbitos, exclusiones, opciones (valida que el
+      DNS exista salvo con -Force), reservas, concesiones, estadísticas y conmutación por
+      error (carga compartida o espera activa, con las concesiones replicadas). Los
+      clientes con dhcp: true piden dirección al arrancar, con ipconfig /renew o con
+      Set-NetIPInterface -Dhcp; sin respuesta quedan en 169.254.x.x y se reintenta solo
+      al autorizar o activar un ámbito. Por defecto el servidor tiene que estar en la red
+      del ámbito; red.reenvio_dhcp ({ red, servidores }) representa el ip helper-address
+      del router para las PC de otra VLAN.
+    · Archivos (files.ts y src/engines/windows/permisos.ts): ACL de NTFS con herencia,
+      orden canónico, CREATOR OWNER, dueño y permisos efectivos; Get-Acl/Set-Acl con el
+      objeto ACL completo, icacls y takeown; recursos SMB con su propio permiso y
+      enumeración basada en acceso; rutas UNC en todo el sistema de archivos (la red
+      aplica recurso y NTFS a la vez, con la identidad de la sesión); net use, New-PSDrive
+      y SmbMapping; FSRM (cuotas, plantillas, grupos de archivos y filtros) y espacios de
+      nombres DFS de dominio.
+    · WSUS y Windows Update (wsus.ts): postinstall, productos (con los nombres reales:
+      Windows Server 2025 es "Microsoft Server Operating System-24H2") y clasificaciones,
+      sincronización, grupos, segmentación del lado del cliente, aprobaciones, rechazos,
+      limpieza y un catálogo de ejemplo con reemplazadas. El cliente lee WUServer,
+      UseWUServer y TargetGroup de sus GPO, y UsoClient StartScan/StartInstall instala
+      lo aprobado para su grupo; wusa /uninstall desinstala.
+    · Monitoreo (monitor.ts y cmdlets.ts): Get-Counter con los contadores básicos
+      (valores de estado_inicial.rendimiento) y Get-WinEvent con FilterHashtable (LogName,
+      Id, Level, ProviderName, StartTime, EndTime) y -ComputerName.
+    · Respaldo (ad-ops.ts): wbadmin start backup (-include, -allCritical), enable backup
+      (programado), get versions, get items y start recovery (a su lugar o con
+      -recoveryTarget, -recursive y -overwrite).
+    · El estado de AD acepta ad.netbios, para dominios cuyo NetBIOS no es la primera
+      etiqueta (ad.estudiorios.example con NetBIOS ESTUDIO).
+    · Verificaciones nuevas: zona_dns, registro_dns, reenviador_dns, limpieza_dns,
+      resuelve, ambito_dhcp, reserva_dhcp, dhcp_autorizado, conmutacion_dhcp,
+      concesion_dhcp, permiso_ntfs, herencia_ntfs, recurso_compartido,
+      acceso_compartido, acceso_red, cuota, filtro_archivos, carpeta_dfs, unidad_red,
+      nla, grupo_local, respaldo_en, respaldo_programado, wsus_listo, wsus_grupo,
+      wsus_clasificacion, wsus_producto, wsus_aprobacion, wsus_rechazada, wsus_equipo y
+      actualizacion.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -785,6 +830,10 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     (núcleos, Standard contra Datacenter y punto de equilibrio en máquinas virtuales) y
     simulador de directivas de grupo (SimuladorGPO: vincular, bloquear, exigir y filtrar,
     con el resultado por persona), los dos sobre motores con pruebas.
+  - Hechos en la Etapa 6b (Nivel 3): simulador de permisos efectivos (SimuladorPermisos,
+    modo "ntfs" y modo "red"): grupos anidados, entradas explícitas y heredadas,
+    denegaciones, el resultado por derecho con la entrada que decide, y por la red el
+    más restrictivo entre el recurso y NTFS, con desafíos.
   - Pendientes, con el nivel que los usa: simuladores de RAID, quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; constructor de rack y calculadoras (UPS, disponibilidad, cron, costos).

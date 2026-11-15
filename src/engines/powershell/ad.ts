@@ -1080,7 +1080,7 @@ export function buildAdStore(s: PsSession): AdStore | undefined {
   if (!ad) return undefined
   const domain = s.state.dominio ?? 'empresa.local'
   const domainDn = domainToDn(domain)
-  const st: AdStore = { domain, domainDn, netbios: domain.split('.')[0].toUpperCase(), users: [], groups: [], ous: [], computers: [], nextRid: 1103 }
+  const st: AdStore = { domain, domainDn, netbios: (ad.netbios ?? domain.split('.')[0]).toUpperCase(), users: [], groups: [], ous: [], computers: [], nextRid: 1103 }
   const created = new Date(Date.now() - 180 * 86_400_000)
   const usersCn = `CN=Users,${domainDn}`
 

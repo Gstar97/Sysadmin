@@ -131,6 +131,8 @@ const stateShape = {
         .default([]),
       /** Nivel funcional del bosque y del dominio. */
       nivel_funcional: z.enum(['Windows2016', 'Windows2025']).default('Windows2025'),
+      /** Nombre NetBIOS del dominio (por defecto, la primera etiqueta del nombre DNS). */
+      netbios: z.string().optional(),
       /** Papelera de reciclaje de AD activada. */
       papelera: z.boolean().default(false),
       /** OUs con la herencia de directivas bloqueada. */
@@ -291,6 +293,8 @@ const stateShape = {
       dhcp: z.boolean().default(false),
       perfil: z.enum(['Public', 'Private', 'DomainAuthenticated']).optional(),
       conectada: z.boolean().default(true),
+      /** El router de la red del equipo reenvía los pedidos DHCP (ip helper-address) a estos servidores; "red" es la dirección de la red del equipo. */
+      reenvio_dhcp: z.strictObject({ red: z.string(), servidores: z.array(z.string()).min(1) }).optional(),
     })
     .default({ ip: '192.168.10.10', prefijo: 24, puerta_enlace: '192.168.10.1', dns: ['192.168.10.10'], alcanzables: [], adaptador: 'Ethernet', dhcp: false, conectada: true }),
 }

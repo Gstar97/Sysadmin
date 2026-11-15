@@ -97,7 +97,7 @@ export function VimSimulator({ exercise }: { exercise: VimExercise }) {
       <div className="rounded-xl border border-line bg-surface p-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Badge tone={done ? 'ok' : 'accent'}>{done ? 'Ejercicio completado' : `Paso ${step + 1} de ${pasos.length}`}</Badge>
-          <div className="flex gap-1" aria-hidden>
+          <div className="flex min-w-0 flex-wrap gap-1" aria-hidden>
             {pasos.map((_, i) => (
               <span key={i} className={cn('h-1.5 w-6 rounded-full', i < step || done ? 'bg-ok' : i === step ? 'bg-accent' : 'bg-surface-2')} />
             ))}
