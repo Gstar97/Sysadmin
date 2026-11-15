@@ -1,0 +1,97 @@
+---
+id: n4-m2-l5
+titulo: PKI interna
+minutos: 120
+objetivos:
+  - Crear una autoridad certificante interna con openssl y firmar certificados de servidores con su SAN.
+  - Distribuir la raíz en Linux, Windows, navegadores y aplicaciones, y saber cuál almacén usa cada uno.
+  - Conocer las alternativas para una PKI de empresa (step-ca, AD CS) y cómo se protege la raíz.
+glosario: [pki, ca-interna, almacen-confianza, step-ca]
+verificado: 2026-11
+---
+
+import pki from './pki.svg?raw'
+import ejPki from './ej-pki.yaml'
+import errores from './errores-cert.yaml'
+
+Let's Encrypt resuelve los sitios públicos. Pero la empresa tiene muchas cosas que **no se ven desde internet**: la intranet, el sistema de stock, la wiki, los paneles de las impresoras y del almacenamiento, los servicios que hablan entre sí. Para esos, la salida habitual es tener **una autoridad certificante propia**: una **PKI interna** (infraestructura de clave pública). Firmás vos, y todos los equipos de la empresa confían en tu firma porque les instalaste tu raíz.
+
+<AntesDeEmpezar>
+- Certificados X.509 y OpenSSL (lección 4.2.2).
+- Let's Encrypt y ACME (lección 4.2.3).
+- Active Directory y GPO (módulo 3.3).
+</AntesDeEmpezar>
+
+## Por qué no autofirmados
+
+Un certificado autofirmado por servidor "funciona", pero cada cliente tiene que aceptar cada uno por separado, y la gente se acostumbra a apretar "continuar de todos modos". Ese hábito es justo lo que aprovecha alguien para hacerse pasar por un servidor. Con una CA interna, se confía **una vez** en la raíz, y todos los certificados que firme valen solos, sin avisos. Y cuando un aviso aparece, significa algo.
+
+## Cómo se arma
+
+<Diagrama svg={pki} alt="A la izquierda, la jerarquía: la CA raíz Ejemplo Root CA, de 10 a 20 años, con CA:TRUE y la clave guardada fuera de línea; firma a la CA intermedia en ca01, que firma todos los días, dura de 3 a 5 años y puede ser openssl, step-ca con ACME o AD CS; y la intermedia firma los certificados de los servidores internos (intranet, wiki, impresoras, paneles), de un año o menos y con renovación automática. A la derecha, dónde tiene que estar la raíz para que confíen: en Rocky, en /etc/pki/ca-trust/source/anchors/ y update-ca-trust; en Ubuntu, en /usr/local/share/ca-certificates/ con extensión .crt y update-ca-certificates; en Windows, por GPO en Entidades de certificación raíz de confianza; Firefox tiene su propio almacén (política ImportEnterpriseRoots); Java el suyo (cacerts, keytool -importcert); Python requests usa certifi (REQUESTS_CA_BUNDLE o truststore); en los contenedores, cada imagen tiene su almacén; en los celulares, un perfil de MDM. La regla: cada programa confía en su propio almacén, y cada equipo nuevo necesita la raíz antes de usar un servicio interno." pie="Una raíz guardada, una intermedia que firma, y la raíz repartida en cada almacén de confianza." />
+
+- **La raíz** se crea una vez, dura mucho y su clave se guarda **fuera de línea**: en un USB cifrado en una caja fuerte, o en una máquina virtual apagada. Solo se usa para firmar intermedias, cada varios años.
+- **La intermedia** es la que firma en el día a día. Si se compromete, se revoca y se crea otra con la raíz, sin tener que reinstalar nada en los clientes.
+- **Los certificados de servidor**: un año o menos (los sistemas de Apple no aceptan más de 825 días ni siquiera de una CA interna) y, si se puede, con renovación automática.
+
+En el ejercicio vas a usar una raíz que firma directo, para que los pasos se vean; con una intermedia son los mismos comandos una vez más.
+
+<Terminal ejercicio={ejPki} />
+
+## Repartir la raíz
+
+Instalar la raíz en los equipos es la mitad del trabajo, y la que más se olvida. **Cada programa usa su almacén**:
+
+| Dónde | Cómo |
+|---|---|
+| Rocky | copiar a `/etc/pki/ca-trust/source/anchors/` y `update-ca-trust`; `trust list` la muestra |
+| Ubuntu | copiar a `/usr/local/share/ca-certificates/` **con extensión .crt** y `update-ca-certificates` |
+| Windows | GPO: Configuración del equipo → Directivas → Configuración de Windows → Configuración de seguridad → Directivas de clave pública → Entidades de certificación raíz de confianza |
+| Chrome y Edge | usan el del sistema operativo |
+| Firefox | su propio almacén; con la política `ImportEnterpriseRoots` toma el de Windows |
+| Java | su almacén `cacerts`, con `keytool -importcert` |
+| Python (requests) | usa certifi; `REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt` (Ubuntu) o el paquete truststore |
+| Node.js | `NODE_EXTRA_CA_CERTS=/ruta/ca.crt`, o `--use-system-ca` en las versiones nuevas |
+| Contenedores | la imagen tiene su propio sistema: se copia la raíz al construirla |
+
+Si un servicio interno anda en un lado y no en otro, casi siempre es esto.
+
+<Troubleshooting escenario={errores} />
+
+## Para una empresa: herramientas
+
+openssl a mano sirve para entender y para una oficina chica. Cuando hay decenas de certificados, conviene una CA de verdad:
+
+- **step-ca** (de Smallstep, libre): una CA interna con **ACME**. Los servidores Linux piden y renuevan sus certificados con el mismo certbot de la lección anterior, apuntándolo a tu CA (`certbot --server https://ca01.ejemplo.com/acme/acme/directory`). Es la forma más simple de tener certificados internos cortos y automáticos.
+- **AD CS** (Servicios de certificados de Active Directory): la CA de Windows Server. Con **autoinscripción** por GPO, las PC y servidores del dominio reciben y renuevan sus certificados solos. Es la opción natural si la empresa ya tiene Active Directory, y también se usa para Wi-Fi corporativo y VPN.
+- Para más adelante: **Vault** de HashiCorp como CA para aplicaciones, las **restricciones de nombre** (Name Constraints), que limitan una intermedia a firmar solo `*.ejemplo.com`, y la publicación de listas de revocados (CRL) de la CA interna.
+
+<EnSimple>
+Una CA propia firma los certificados de lo que no se ve desde internet. La raíz se guarda bien guardada, una intermedia firma, y la raíz se instala en el almacén de cada sistema y de cada programa que no usa el del sistema.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Dejar la clave de la CA en el servidor web">
+    Quien entre al servidor puede emitir certificados para cualquier nombre que tus equipos van a aceptar. La CA va aparte, y la raíz, fuera de línea.
+  </ErrorComun>
+  <ErrorComun titulo="Firmar sin copiar el SAN">
+    openssl x509 -req no copia las extensiones del pedido: -copy_extensions copy o -extfile. Comprobá con -ext subjectAltName antes de instalarlo.
+  </ErrorComun>
+  <ErrorComun titulo="La raíz en Ubuntu como .pem">
+    update-ca-certificates solo toma .crt en /usr/local/share/ca-certificates/. Dice "0 added" y no avisa nada más.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que con el sistema alcanza">
+    Firefox, Java, Python y los contenedores tienen su propio almacén. Lista de dónde va la raíz, antes de lanzar el servicio.
+  </ErrorComun>
+  <ErrorComun titulo="Una raíz de 20 años sin plan para cuando venza">
+    Dentro de veinte años vence en todos los equipos el mismo día. Anotalo, y planificá la raíz nueva con años de anticipación.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- PKI interna: tu propia CA para lo que no se ve desde internet. Mejor que los autofirmados: se confía una vez.
+- Raíz de larga duración y fuera de línea; intermedia que firma; certificados de servidor de un año o menos.
+- openssl req -x509 con CA:TRUE y keyCertSign para la CA; openssl x509 -req con -copy_extensions copy para firmar.
+- La raíz se instala en cada almacén: Rocky (anchors + update-ca-trust), Ubuntu (.crt + update-ca-certificates), Windows (GPO), Firefox, Java, Python, Node y contenedores.
+- step-ca (con ACME) o AD CS (con autoinscripción) para una empresa.
+</Resumen>

@@ -1,0 +1,128 @@
+tipo: troubleshooting
+titulo: Anda en unos lados y en otros no
+descripcion: >-
+  Incidente simulado. La empresa empezó a usar su CA interna (Ejemplo Root CA) para el nuevo
+  sistema de stock, stock.ejemplo.com. La raíz se distribuyó con una GPO a las PC con Windows y
+  con un script a los servidores Linux. El lunes llegan cuatro quejas distintas. Cada decisión suma
+  minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Primera queja: Ventas dice que en Chrome el sistema muestra "La conexión no es privada" con
+      NET::ERR_CERT_COMMON_NAME_INVALID. Todas las PC, todos los navegadores.
+    evidencia:
+      - titulo: openssl x509 -in stock.crt -noout -subject -issuer -ext subjectAltName
+        contenido: |
+          subject=CN = stock.ejemplo.com
+          issuer=O = Ejemplo S.A., CN = Ejemplo Root CA
+          No extensions in certificate
+    opciones:
+      - { texto: "El certificado no tiene SAN: firmarlo de nuevo copiando las extensiones del pedido", ir_a: n_ubuntu, minutos: 6 }
+      - texto: Volver a distribuir la raíz por GPO
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Las PC ya confían en la CA: el error no dice "emisor desconocido" sino "nombre
+          inválido". El navegador busca stock.ejemplo.com en el SAN y el certificado no tiene SAN.
+      - texto: Agregar stock.ejemplo.com al archivo hosts de las PC
+        ir_a: n1
+        minutos: 8
+        consecuencia: >-
+          El nombre resuelve bien: el problema es el certificado, no el DNS.
+  n_ubuntu:
+    situacion: >-
+      Chrome ya anda. Segunda queja: en srv-informes, un Ubuntu, el script que baja datos del
+      sistema falla con curl.
+    evidencia:
+      - titulo: En srv-informes
+        contenido: |
+          $ curl -sS https://stock.ejemplo.com/api/stock
+          curl: (60) SSL certificate problem: unable to get local issuer certificate
+
+          $ ls /usr/local/share/ca-certificates/
+          ejemplo-root-ca.pem
+
+          $ sudo update-ca-certificates
+          Updating certificates in /etc/ssl/certs...
+          0 added, 0 removed; done.
+    opciones:
+      - { texto: "update-ca-certificates solo toma archivos .crt: renombrarlo a ejemplo-root-ca.crt y volver a correrlo", ir_a: n_python, minutos: 3 }
+      - texto: Usar curl -k en el script
+        ir_a: n_ubuntu
+        minutos: 2
+        consecuencia: >-
+          -k desactiva toda la verificación: cualquiera en el medio podría hacerse pasar por el
+          sistema de stock. Y el problema seguiría para todo lo demás en ese servidor.
+      - texto: Copiar la raíz a /etc/pki/ca-trust/source/anchors/
+        ir_a: n_ubuntu
+        minutos: 3
+        consecuencia: >-
+          Esa es la carpeta de Rocky. En Ubuntu no existe ni se lee.
+  n_python:
+    situacion: >-
+      curl ya anda en srv-informes. Tercera queja: en el mismo servidor, el programa de informes en
+      Python sigue fallando, aunque curl funciona.
+    evidencia:
+      - titulo: El error del programa
+        contenido: |
+          requests.exceptions.SSLError: HTTPSConnectionPool(host='stock.ejemplo.com', port=443):
+          Max retries exceeded with url: /api/stock (Caused by SSLError(SSLCertVerificationError(1,
+          '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer
+          certificate (_ssl.c:1032)')))
+      - titulo: Lo que dicen los programadores
+        contenido: |
+          "Usamos requests, como siempre. En nuestras PC anda."
+    opciones:
+      - texto: requests usa su propio almacén (certifi). Indicarle el del sistema con REQUESTS_CA_BUNDLE en la unidad del servicio
+        ir_a: n_firefox
+        minutos: 5
+      - texto: Agregar verify=False en el código
+        ir_a: n_python
+        minutos: 3
+        consecuencia: >-
+          Es el -k de Python: apaga la verificación. Los programadores lo van a copiar a otros
+          lados y nadie se va a acordar de sacarlo.
+      - texto: Reinstalar Python
+        ir_a: n_python
+        minutos: 15
+        consecuencia: >-
+          certifi trae la lista de Mozilla, no la del sistema: reinstalar deja lo mismo. Hay que
+          decirle a requests qué archivo usar (REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt)
+          o usar el paquete truststore, que lee el almacén del sistema.
+  n_firefox:
+    situacion: >-
+      Cuarta queja: en Administración usan Firefox, y ahí el sistema dice "Advertencia: riesgo
+      potencial de seguridad" con SEC_ERROR_UNKNOWN_ISSUER. En la misma PC, Chrome y Edge andan.
+    evidencia:
+      - titulo: En una PC de Administración
+        contenido: |
+          Chrome:  candado normal, "La conexión es segura"
+          Firefox: SEC_ERROR_UNKNOWN_ISSUER
+          certlm.msc → Entidades de certificación raíz de confianza → Ejemplo Root CA (está)
+    opciones:
+      - texto: Firefox tiene su propio almacén. Activar por GPO la política de Firefox que importa las raíces de Windows (ImportEnterpriseRoots)
+        ir_a: n_ok
+        minutos: 6
+      - texto: Pedirle a cada usuario que acepte el riesgo y siga
+        ir_a: n_firefox
+        minutos: 4
+        consecuencia: >-
+          Les enseñás a ignorar justo el aviso que los protege de un ataque real. Y van a tener que
+          hacerlo de nuevo con cada certificado renovado.
+      - texto: Volver a distribuir la raíz en Windows
+        ir_a: n_firefox
+        minutos: 8
+        consecuencia: >-
+          Windows ya la tiene (certlm.msc la muestra, y Chrome y Edge andan). El que no la mira es
+          Firefox.
+  n_ok:
+    final: exito
+    resumen: >-
+      Cuatro quejas, cuatro causas, y una sola idea detrás: cada programa confía en su propio
+      almacén. Chrome y Edge usan el de Windows; Firefox, el suyo (salvo que una política le pida
+      importar el de Windows); curl, el del sistema Linux, que en Ubuntu solo toma archivos .crt;
+      y requests de Python, el de certifi. El primer problema era distinto: el certificado no tenía
+      SAN porque se firmó sin copiar las extensiones del pedido. Para la próxima: una lista de
+      "dónde va la raíz" (sistema, navegadores, Java, Python, contenedores) que se revise antes de
+      lanzar un servicio interno, y comprobar el SAN de cada certificado antes de instalarlo.

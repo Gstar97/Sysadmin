@@ -1,0 +1,113 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué sirve una CA interna?
+  opciones:
+    - { texto: "Para firmar certificados de servicios que no se ven desde internet, en los que confían todos los equipos de la empresa", correcta: true, explicacion: "Se confía una vez en la raíz." }
+    - { texto: "Para que los sitios públicos tengan certificado gratis", explicacion: "Eso es Let's Encrypt." }
+    - { texto: "Para cifrar los discos", explicacion: "No tiene relación." }
+    - { texto: "Para que los navegadores de internet confíen en tu sitio", explicacion: "Solo confían los equipos donde instalaste la raíz." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué la clave de la CA raíz se guarda fuera de línea?
+  opciones:
+    - { texto: "Porque quien la tenga puede emitir certificados que todos tus equipos aceptan, para cualquier nombre", correcta: true, explicacion: "Firma con una intermedia en el día a día." }
+    - { texto: "Porque ocupa mucho espacio", explicacion: "Es un archivo chico." }
+    - { texto: "Para que dure más", explicacion: "La duración está en el certificado." }
+    - { texto: "Porque la exige Let's Encrypt", explicacion: "Es tu CA, no la de ellos." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Firmaste el certificado de la wiki con tu CA. ¿Qué problema muestra esta salida?
+  salida: |
+    $ openssl x509 -in wiki.crt -noout -subject -ext subjectAltName
+    subject=CN = wiki.ejemplo.com
+    No extensions in certificate
+  opciones:
+    - { texto: "No tiene SAN: hay que firmarlo de nuevo con -copy_extensions copy (o -extfile)", correcta: true, explicacion: "Sin SAN, los navegadores lo rechazan por nombre." }
+    - { texto: "Está bien: el CN alcanza", explicacion: "Los navegadores miran el SAN." }
+    - { texto: "Falta la intermedia", explicacion: "La salida no dice nada de la cadena." }
+    - { texto: "El certificado venció", explicacion: "No se mostraron fechas." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Por qué no se agregó la raíz en este Ubuntu?
+  salida: |
+    $ ls /usr/local/share/ca-certificates/
+    ejemplo-root.pem
+    $ sudo update-ca-certificates
+    0 added, 0 removed; done.
+  opciones:
+    - { texto: "update-ca-certificates solo toma archivos con extensión .crt", correcta: true, explicacion: "Renombrarlo a ejemplo-root.crt." }
+    - { texto: "Hace falta reiniciar", explicacion: "No reconoció el archivo." }
+    - { texto: "La carpeta correcta es /etc/pki/ca-trust/source/anchors/", explicacion: "Esa es de Rocky." }
+    - { texto: "El archivo está en DER", explicacion: "Tiene extensión .pem, y el problema es la extensión." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En una PC, Chrome abre bien la intranet y Firefox muestra SEC_ERROR_UNKNOWN_ISSUER. ¿Qué pasa?
+  opciones:
+    - { texto: "Firefox tiene su propio almacén: falta la política que le hace importar las raíces de Windows", correcta: true, explicacion: "ImportEnterpriseRoots, por GPO." }
+    - { texto: "El certificado está vencido", explicacion: "Chrome también fallaría." }
+    - { texto: "Falta el SAN", explicacion: "Fallaría en todos los navegadores, con otro error." }
+    - { texto: "Firefox no soporta CA internas", explicacion: "Las soporta." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estos usan su propio almacén de confianza y no el del sistema? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Firefox", correcta: true, explicacion: "Salvo con ImportEnterpriseRoots." }
+    - { texto: "Java (cacerts)", correcta: true, explicacion: "keytool -importcert." }
+    - { texto: "requests de Python (certifi)", correcta: true, explicacion: "REQUESTS_CA_BUNDLE o truststore." }
+    - { texto: "curl en Rocky", explicacion: "Usa el del sistema." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La empresa tiene Active Directory y quiere que cada PC tenga su certificado y lo renueve sola. ¿Qué usás?
+  opciones:
+    - { texto: "AD CS con autoinscripción por GPO", correcta: true, explicacion: "Es la CA de Windows Server." }
+    - { texto: "Let's Encrypt", explicacion: "No emite para equipos internos ni para nombres que no se validan desde internet." }
+    - { texto: "Un certificado autofirmado por PC", explicacion: "Nadie confiaría en ellos." }
+    - { texto: "openssl a mano en cada PC", explicacion: "No escala." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Tenés servidores Linux internos y querés que renueven sus certificados internos con certbot. ¿Qué te permite eso?
+  opciones:
+    - { texto: "Una CA interna con ACME, como step-ca, apuntando certbot a ella con --server", correcta: true, explicacion: "El mismo flujo que Let's Encrypt, con tu CA." }
+    - { texto: "certbot --staging", explicacion: "Es el entorno de prueba de Let's Encrypt." }
+    - { texto: "Un deploy hook", explicacion: "Recarga servicios; no cambia la CA." }
+    - { texto: "No se puede: certbot solo funciona con Let's Encrypt", explicacion: "Funciona con cualquier CA ACME." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: En Rocky, copiaste la raíz a /etc/pki/ca-trust/source/anchors/. Escribí el comando que actualiza el almacén del sistema.
+  aceptadas:
+    - "update-ca-trust"
+    - "sudo update-ca-trust"
+    - "update-ca-trust extract"
+    - "sudo update-ca-trust extract"
+  patrones: ["^(sudo\\s+)?update-ca-trust(\\s+extract)?$"]
+  explicacion: "En Ubuntu es update-ca-certificates."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no conviene que los certificados de una CA interna duren cinco años?
+  opciones:
+    - { texto: "Los sistemas de Apple no aceptan más de 825 días, y cuanto más dura, más sirve una clave robada", correcta: true, explicacion: "Un año o menos, y renovación automática." }
+    - { texto: "openssl no permite más de un año", explicacion: "Permite cualquier valor." }
+    - { texto: "Porque la raíz dura menos", explicacion: "La raíz dura más." }
+    - { texto: "No hay problema", explicacion: "Hay dos." }
+- id: p11
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para publicar un servicio interno con la CA de la empresa.
+  pasos:
+    - Generar la clave y el CSR en el servidor del servicio, con el nombre en el SAN
+    - Firmar el pedido con la CA, copiando las extensiones
+    - Comprobar el SAN y el emisor del certificado
+    - Configurarlo en nginx y recargar
+    - Confirmar que la raíz está en todos los almacenes que usan los clientes
+  explicacion: "La clave no sale del servidor; lo que viaja a la CA es el CSR."

@@ -1,0 +1,107 @@
+tipo: terminal
+shell: bash
+titulo: Una CA propia para la intranet
+descripcion: >-
+  La intranet (intranet.ejemplo.com) solo se usa dentro de la oficina, así que Let's Encrypt no
+  puede validarla por HTTP. Vas a crear una autoridad certificante propia, firmar el certificado
+  de la intranet y hacer que este servidor confíe en ella. Para el ejercicio la CA queda en el
+  mismo web01 (Rocky Linux 10); en una empresa va en un equipo aparte y protegido.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nginx] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+  red:
+    registros_dns: { intranet.ejemplo.com: 127.0.0.1 }
+  archivos:
+    /var/www/intranet/index.html: "<h1>Intranet</h1>\n"
+pasos:
+  - consigna: >-
+      Creá la carpeta /root/ca solo para root (permisos 700) y adentro la clave de la CA: RSA de
+      4096 bits, en ca.key.
+    verificar:
+      - { archivo: /root/ca/ca.key, contenido_incluye: 'PRIVATE KEY' }
+    pistas:
+      - "`sudo mkdir -m 700 /root/ca` y `sudo openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out /root/ca/ca.key`"
+    solucion:
+      - sudo mkdir -m 700 /root/ca
+      - sudo openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out /root/ca/ca.key
+    explicacion: >-
+      Esta clave es lo más valioso de todo el módulo: quien la tenga puede emitir certificados que
+      todos tus equipos van a aceptar, para cualquier nombre. En una empresa, la de la raíz se
+      guarda fuera de línea y se firma con una intermedia.
+  - consigna: >-
+      Creá el certificado de la CA (autofirmado, 10 años) en /root/ca/ca.crt, con O=Ejemplo S.A. y
+      CN=Ejemplo Root CA, marcado como CA y con uso de clave keyCertSign y cRLSign. Mostrá esas dos
+      extensiones para comprobarlo.
+    verificar:
+      - { certificado: /root/ca/ca.crt, cn: Ejemplo Root CA, es_ca: true, autofirmado: true }
+      - { salida_contiene: 'Certificate Sign, CRL Sign' }
+    pistas:
+      - "`sudo openssl req -x509 -new -key /root/ca/ca.key -days 3650 -subj '/O=Ejemplo S.A./CN=Ejemplo Root CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -out /root/ca/ca.crt`"
+      - "`sudo openssl x509 -in /root/ca/ca.crt -noout -ext basicConstraints,keyUsage`"
+    solucion:
+      - "sudo openssl req -x509 -new -key /root/ca/ca.key -days 3650 -subj '/O=Ejemplo S.A./CN=Ejemplo Root CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -out /root/ca/ca.crt"
+      - sudo openssl x509 -in /root/ca/ca.crt -noout -ext basicConstraints,keyUsage
+    explicacion: >-
+      CA:TRUE es lo que le permite firmar otros certificados, y keyCertSign lo confirma. Este sí
+      se reparte: es lo que se instala en cada equipo para que confíe.
+  - consigna: >-
+      Generá la clave de la intranet en /etc/pki/tls/private/intranet.key y su pedido en
+      /tmp/intranet.csr, para CN=intranet.ejemplo.com y con ese nombre en el SAN. Después firmalo
+      con la CA, por un año, en /etc/pki/tls/certs/intranet.crt, y comprobá que el SAN llegó al
+      certificado.
+    verificar:
+      - { certificado: /etc/pki/tls/certs/intranet.crt, san_incluye: intranet.ejemplo.com, emisor_contiene: Ejemplo Root CA, vigente: true }
+      - { salida_contiene: 'DNS:intranet.ejemplo.com' }
+    pistas:
+      - "`sudo openssl req -new -newkey rsa:2048 -noenc -keyout /etc/pki/tls/private/intranet.key -out /tmp/intranet.csr -subj '/CN=intranet.ejemplo.com' -addext 'subjectAltName=DNS:intranet.ejemplo.com'`"
+      - "Para firmar: `sudo openssl x509 -req -in /tmp/intranet.csr -CA /root/ca/ca.crt -CAkey /root/ca/ca.key -CAcreateserial -days 365 -copy_extensions copy -out /etc/pki/tls/certs/intranet.crt`"
+      - "Para comprobar: `openssl x509 -in /etc/pki/tls/certs/intranet.crt -noout -issuer -ext subjectAltName`"
+    solucion:
+      - "sudo openssl req -new -newkey rsa:2048 -noenc -keyout /etc/pki/tls/private/intranet.key -out /tmp/intranet.csr -subj '/CN=intranet.ejemplo.com' -addext 'subjectAltName=DNS:intranet.ejemplo.com'"
+      - sudo openssl x509 -req -in /tmp/intranet.csr -CA /root/ca/ca.crt -CAkey /root/ca/ca.key -CAcreateserial -days 365 -copy_extensions copy -out /etc/pki/tls/certs/intranet.crt
+      - openssl x509 -in /etc/pki/tls/certs/intranet.crt -noout -issuer -ext subjectAltName
+    explicacion: >-
+      El detalle que más se olvida: openssl x509 -req no copia las extensiones del pedido si no
+      se lo pedís (-copy_extensions copy, o un archivo con -extfile). Sin eso, el certificado sale
+      sin SAN y los navegadores lo rechazan por nombre aunque el CN sea correcto.
+  - consigna: >-
+      Publicá la intranet por HTTPS: un server en /etc/nginx/conf.d/intranet.conf en el 443 con
+      ese certificado y su clave, y raíz /var/www/intranet. Recargá y pedí la página con curl.
+    verificar:
+      - { archivo: /etc/nginx/conf.d/intranet.conf, contenido_incluye: 'intranet.crt' }
+      - { salida_contiene: 'unable to get local issuer certificate' }
+    pistas:
+      - "`printf 'server {\\n    listen 443 ssl;\\n    server_name intranet.ejemplo.com;\\n    root /var/www/intranet;\\n    ssl_certificate /etc/pki/tls/certs/intranet.crt;\\n    ssl_certificate_key /etc/pki/tls/private/intranet.key;\\n}\\n' | sudo tee /etc/nginx/conf.d/intranet.conf`"
+    solucion:
+      - "printf 'server {\\n    listen 443 ssl;\\n    server_name intranet.ejemplo.com;\\n    root /var/www/intranet;\\n    ssl_certificate /etc/pki/tls/certs/intranet.crt;\\n    ssl_certificate_key /etc/pki/tls/private/intranet.key;\\n}\\n' | sudo tee /etc/nginx/conf.d/intranet.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -sS https://intranet.ejemplo.com
+    explicacion: >-
+      El certificado está bien, pero este equipo no conoce a "Ejemplo Root CA": no está en su
+      almacén de confianza. Es lo que le pasaría a cualquier PC de la oficina hasta que reciba la
+      raíz.
+  - consigna: >-
+      Hacé que el sistema confíe en tu CA: copiá ca.crt a la carpeta de anclas de Rocky,
+      actualizá el almacén, comprobá que aparece en la lista y volvé a pedir la página.
+    verificar:
+      - { confia_en: Ejemplo Root CA }
+      - { http: 'https://intranet.ejemplo.com/', tls_valido: true, contiene: 'Intranet' }
+    pistas:
+      - "`sudo cp /root/ca/ca.crt /etc/pki/ca-trust/source/anchors/ejemplo-root-ca.crt` y `sudo update-ca-trust`"
+      - "`trust list | grep -A2 'Ejemplo Root'` y `curl -s https://intranet.ejemplo.com`"
+    solucion:
+      - sudo cp /root/ca/ca.crt /etc/pki/ca-trust/source/anchors/ejemplo-root-ca.crt
+      - sudo update-ca-trust
+      - trust list | grep -A2 'Ejemplo Root'
+      - curl -s https://intranet.ejemplo.com
+    explicacion: >-
+      update-ca-trust arma de nuevo el almacén del sistema, que usan curl, dnf, wget y casi todo lo
+      demás. En Ubuntu es /usr/local/share/ca-certificates/ (con extensión .crt) y
+      update-ca-certificates. Cada equipo de la red necesita este paso: en Windows, con una GPO;
+      en Linux, con la automatización del Nivel 6.

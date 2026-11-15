@@ -325,7 +325,9 @@ function opensslX509(ctx: CommandContext, o: ReturnType<typeof opts>): number {
   if (o.flags.has('-modulus')) out += `Modulus=${modulus(c.keyId)}\n`
   for (const e of o.vals.get('-ext') ?? []) {
     if (e.includes('subjectAltName')) out += c.san.length ? `X509v3 Subject Alternative Name: \n    ${c.san.join(', ')}\n` : 'No extensions in certificate\n'
-    if (e.includes('basicConstraints')) out += `X509v3 Basic Constraints: critical\n    CA:${c.ca ? 'TRUE' : 'FALSE'}\n`
+    if (e.includes('basicConstraints')) out += `X509v3 Basic Constraints: critical\n    CA:${c.ca ? 'TRUE' : 'FALSE'}${c.ca && c.pathLen !== undefined ? `, pathlen:${c.pathLen}` : ''}\n`
+    if (/(^|,)keyUsage/.test(e)) out += c.ku.length ? `X509v3 Key Usage: critical\n    ${c.ku.join(', ')}\n` : ''
+    if (e.includes('extendedKeyUsage')) out += c.eku.length ? `X509v3 Extended Key Usage: \n    ${c.eku.join(', ')}\n` : ''
   }
   if (o.flags.has('-pubkey')) out += `-----BEGIN PUBLIC KEY-----\n${hashHex(`pub:${c.keyId}`, 64)}\n-----END PUBLIC KEY-----\n`
   let code = 0
@@ -646,6 +648,22 @@ async function enc(ctx: CommandContext, o: ReturnType<typeof opts>): Promise<num
   const out = b64 ? btoa(blob).replace(/.{64}/g, '$&\n') + '\n' : blob
   return writeOut(ctx, one(o, '-out'), out, 0o644) ? 0 : 1
 }
+
+register('trust', {
+  usage: 'trust list [--filter=ca-anchors]',
+  run(ctx) {
+    if (ctx.args[0] !== 'list') {
+      ctx.err('usage: trust command <args>...\n\nCommon trust commands are:\n  list             List trust or certificates\n  extract          Extract certificates and trust\n  anchor           Add, remove, change trust anchors\n')
+      return 2
+    }
+    let out = ''
+    for (const c of trustedRoots(ctx.sys)) {
+      out += `pkcs11:id=%${fingerprint(c, 'sha1').split(':').slice(0, 20).join('%')};type=cert\n    type: certificate\n    label: ${c.subject.CN ?? c.subject.O ?? ''}\n    trust: anchor\n    category: authority\n\n`
+    }
+    ctx.out(out)
+    return 0
+  },
+})
 
 register('openssl', {
   usage: 'openssl genpkey | req | x509 | verify | s_client | pkcs12 | rand | dgst | version',

@@ -1,0 +1,8 @@
+- { id: t1, frente: "PKI interna", dorso: "Tu propia CA para lo que no se ve desde internet. Se confía una vez en la raíz." }
+- { id: t2, frente: "Jerarquía", dorso: "Raíz (10-20 años, fuera de línea) → intermedia (firma a diario) → servidores (un año o menos)." }
+- { id: t3, frente: "Certificado de CA con openssl", dorso: "openssl req -x509 -new -key ca.key -days 3650 -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign'" }
+- { id: t4, frente: "Firmar un pedido", dorso: "openssl x509 -req -in p.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 365 -copy_extensions copy -out c.crt" }
+- { id: t5, frente: "Confiar en Rocky", dorso: "cp ca.crt /etc/pki/ca-trust/source/anchors/ && update-ca-trust; trust list para ver." }
+- { id: t6, frente: "Confiar en Ubuntu", dorso: "cp ca.crt /usr/local/share/ca-certificates/ejemplo.crt (.crt sí o sí) && update-ca-certificates" }
+- { id: t7, frente: "Almacenes propios", dorso: "Firefox (ImportEnterpriseRoots), Java (cacerts), Python requests (certifi), Node (NODE_EXTRA_CA_CERTS), contenedores." }
+- { id: t8, frente: "CA de empresa", dorso: "step-ca (ACME interno, certbot --server) o AD CS (autoinscripción por GPO)." }
