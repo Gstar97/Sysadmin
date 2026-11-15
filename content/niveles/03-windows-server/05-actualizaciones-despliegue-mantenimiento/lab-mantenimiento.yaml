@@ -1,0 +1,185 @@
+tipo: pasos
+titulo: WSUS, una imagen de Windows 11 y el respaldo del DC en tus máquinas virtuales
+descripcion: >-
+  Sobre el dominio de los módulos 3.3 y 3.4 (DC01, DC02, SRV-ADMIN, SRV-CORE01 y PC01). WSUS va
+  en SRV-ADMIN con un disco nuevo; la imagen se arma en una VM nueva de Windows 11. Calculá unas
+  tres horas y media, más la descarga de las actualizaciones (depende de tu conexión).
+pasos:
+  - titulo: Discos nuevos
+    detalle: >-
+      En tu hipervisor, agregá un disco virtual de 150 GB (dinámico) a SRV-ADMIN, para WSUS, y uno
+      de 60 GB a DC01, para los respaldos. Después inicializalos y formatealos.
+    comandos:
+      - Get-Disk | Where-Object PartitionStyle -eq RAW | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -UseMaximumSize -DriveLetter D | Format-Volume -FileSystem NTFS -NewFileSystemLabel WSUS
+      - Invoke-Command DC01 { Get-Disk | Where-Object PartitionStyle -eq RAW | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -UseMaximumSize -DriveLetter E | Format-Volume -FileSystem NTFS -NewFileSystemLabel Respaldos }
+    comprobar: Get-Volume en SRV-ADMIN muestra D (WSUS) y en DC01 muestra E (Respaldos).
+  - titulo: Instalar WSUS
+    detalle: En SRV-ADMIN. La configuración posterior tarda unos minutos.
+    comandos:
+      - Install-WindowsFeature UpdateServices -IncludeManagementTools
+      - "& 'C:\\Program Files\\Update Services\\Tools\\wsusutil.exe' postinstall CONTENT_DIR=D:\\WSUS"
+    comprobar: La consola Windows Server Update Services abre y muestra el servidor.
+  - titulo: Qué sincronizar
+    detalle: >-
+      Primero una sincronización solo del catálogo de productos (puede tardar), y después elegís.
+      Windows Server 2025 figura como Microsoft Server Operating System-24H2. Un solo idioma.
+    comandos:
+      - $w = Get-WsusServer; $s = $w.GetSubscription(); $s.StartSynchronizationForCategoryOnly()
+      - "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Microsoft Server Operating System-24H2', 'Windows 11', 'Microsoft Defender Antivirus' } | Set-WsusProduct"
+      - "Get-WsusClassification | Where-Object { $_.Classification.Title -in 'Critical Updates', 'Security Updates', 'Definition Updates', 'Update Rollups' } | Set-WsusClassification"
+      - $c = $w.GetConfiguration(); $c.AllUpdateLanguagesEnabled = $false; $c.SetEnabledUpdateLanguages('es'); $c.TargetingMode = 'Client'; $c.Save()
+      - $s.SynchronizeAutomatically = $true; $s.SynchronizeAutomaticallyTimeOfDay = '03:00:00'; $s.NumberOfSynchronizationsPerDay = 1; $s.Save(); $s.StartSynchronization()
+    comprobar: En la consola, Sincronizaciones muestra una sincronización correcta y Actualizaciones tiene contenido.
+    si_falla: Si el producto 24H2 no aparece, esperá a que termine la sincronización solo de categorías y volvé a mirar.
+  - titulo: Grupos y GPO
+    detalle: >-
+      Los grupos Piloto y Produccion en WSUS, las OU Piloto y Produccion dentro de Equipos, y las
+      GPO de la lección. PC01 va al piloto.
+    comandos:
+      - $w.CreateComputerTargetGroup('Piloto'); $w.CreateComputerTargetGroup('Produccion')
+      - "'Piloto', 'Produccion' | ForEach-Object { New-ADOrganizationalUnit $_ -Path 'OU=Equipos,OU=Empresa,DC=empresa,DC=local' }"
+      - Get-ADComputer PC01 | Move-ADObject -TargetPath 'OU=Piloto,OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+      - $k = 'HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate'; $g = 'Equipos - Windows Update'
+      - New-GPO $g | New-GPLink -Target 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'
+      - Set-GPRegistryValue $g -Key $k -ValueName WUServer, WUStatusServer -Type String -Value 'http://srv-admin.empresa.local:8530'
+      - Set-GPRegistryValue $g -Key $k -ValueName TargetGroupEnabled -Type DWord -Value 1
+      - Set-GPRegistryValue $g -Key "$k\AU" -ValueName UseWUServer -Type DWord -Value 1
+      - "'Piloto', 'Produccion' | ForEach-Object { New-GPO \"$_ - Grupo WSUS\" | New-GPLink -Target \"OU=$_,OU=Equipos,OU=Empresa,DC=empresa,DC=local\"; Set-GPRegistryValue \"$_ - Grupo WSUS\" -Key $k -ValueName TargetGroup -Type String -Value $_ }"
+    comprobar: En PC01, después de gpupdate /force, gpresult /r muestra las dos GPO aplicadas.
+  - titulo: La primera PC
+    detalle: En PC01, como administrador. Puede tardar unos minutos en aparecer en la consola.
+    comandos:
+      - gpupdate /force
+      - Get-ItemProperty HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate
+      - UsoClient StartScan
+    comprobar: En SRV-ADMIN, Get-WsusComputer muestra pc01.empresa.local en el grupo Piloto.
+    si_falla: Revisá la dirección (con :8530), Test-NetConnection srv-admin -Port 8530 desde PC01 y la lección de PC que no aparecen.
+  - titulo: Aprobar para el piloto
+    detalle: >-
+      Aprobá lo que PC01 necesita y que lo instale (desde Configuración, Windows Update, o con
+      UsoClient). Después, la regla de aprobación automática para las definiciones del antivirus,
+      desde la consola (Opciones, Aprobaciones automáticas).
+    comandos:
+      - Get-WsusUpdate -Approval Unapproved -Status FailedOrNeeded | Approve-WsusUpdate -Action Install -TargetGroupName Piloto
+    comprobar: El informe de PC01 en la consola muestra las actualizaciones como instaladas (o pendientes de reinicio).
+  - titulo: La cuenta de unión al dominio
+    detalle: >-
+      En Usuarios y equipos de Active Directory, sobre la OU Equipos: Delegar control, la cuenta
+      svc-unir, tarea personalizada, solo objetos Equipo, Crear objetos seleccionados en esta
+      carpeta; y en los permisos, Restablecer contraseña, Leer y escribir restricciones de cuenta,
+      Escritura validada en nombre de host DNS y Escritura validada en nombre principal de
+      servicio. Y que los equipos nuevos caigan en Equipos.
+    comandos:
+      - New-ADUser svc-unir -Path 'OU=Cuentas de servicio,OU=Empresa,DC=empresa,DC=local' -AccountPassword (Read-Host -AsSecureString 'Contraseña') -Enabled $true -CannotChangePassword $true -PasswordNeverExpires $true
+      - redircmp "OU=Equipos,OU=Empresa,DC=empresa,DC=local"
+    comprobar: dsacls "OU=Equipos,OU=Empresa,DC=empresa,DC=local" muestra a svc-unir con permisos sobre objetos equipo.
+  - titulo: La PC de referencia
+    detalle: >-
+      Una VM nueva, REF-W11, con Windows 11 Pro o Enterprise (versión de evaluación, desde el
+      Centro de evaluación de Microsoft), sin red a la que se pueda unir a nada. En la primera
+      pantalla de configuración, Ctrl+Shift+F3 para entrar en modo auditoría. Instalá las
+      actualizaciones y un par de programas de prueba. Si el disco aparece cifrado (manage-bde
+      -status C:), desactivá BitLocker y esperá que termine.
+    comandos:
+      - "manage-bde -status C:"
+      - "manage-bde -off C:"
+    comprobar: La sesión dice que estás en modo auditoría y manage-bde muestra el disco totalmente descifrado.
+  - titulo: El archivo de respuestas
+    detalle: >-
+      Guardalo en REF-W11 como C:\Windows\Panther\unattend.xml (cambiá las dos contraseñas). Si
+      instalás el Windows ADK en SRV-ADMIN, abrilo con el Administrador de imágenes de sistema
+      para validarlo.
+    archivo:
+      ruta: C:\Windows\Panther\unattend.xml
+      contenido: |
+        <?xml version="1.0" encoding="utf-8"?>
+        <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <settings pass="specialize">
+            <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <ComputerName>*</ComputerName>
+              <TimeZone>Argentina Standard Time</TimeZone>
+            </component>
+            <component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <Identification>
+                <Credentials>
+                  <Domain>empresa.local</Domain>
+                  <Username>svc-unir</Username>
+                  <Password>CAMBIAR-contraseña-de-svc-unir</Password>
+                </Credentials>
+                <JoinDomain>empresa.local</JoinDomain>
+                <MachineObjectOU>OU=Equipos,OU=Empresa,DC=empresa,DC=local</MachineObjectOU>
+              </Identification>
+            </component>
+          </settings>
+          <settings pass="oobeSystem">
+            <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <InputLocale>080a:0000080a</InputLocale>
+              <SystemLocale>es-AR</SystemLocale>
+              <UserLocale>es-AR</UserLocale>
+            </component>
+            <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <OOBE>
+                <HideEULAPage>true</HideEULAPage>
+                <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+                <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+                <ProtectYourPC>3</ProtectYourPC>
+              </OOBE>
+              <UserAccounts>
+                <LocalAccounts>
+                  <LocalAccount wcm:action="add">
+                    <Name>soporte</Name>
+                    <Group>Administrators</Group>
+                    <Password>
+                      <Value>CAMBIAR-contraseña-local</Value>
+                      <PlainText>true</PlainText>
+                    </Password>
+                  </LocalAccount>
+                </LocalAccounts>
+              </UserAccounts>
+            </component>
+          </settings>
+        </unattend>
+    comprobar: El archivo está en C:\Windows\Panther y, si lo validaste, el Administrador de imágenes de sistema no marca errores.
+  - titulo: Generalizar y capturar
+    detalle: >-
+      Sysprep apaga la VM. No la vuelvas a encender desde su disco: tomá una instantánea de la VM
+      (por si querés repetir) y copiá su disco virtual como plantilla, o capturala con DISM
+      arrancando desde una ISO de WinPE (Windows ADK y su complemento de WinPE en SRV-ADMIN) con
+      un segundo disco para guardar el .wim.
+    comandos:
+      - C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /shutdown /unattend:C:\Windows\Panther\unattend.xml
+    variantes:
+      - nombre: Con DISM desde WinPE
+        detalle: >-
+          En SRV-ADMIN se arma la ISO; en REF-W11 se arranca desde ella con un disco E: agregado.
+        comandos:
+          - copype amd64 C:\WinPE
+          - MakeWinPEMedia /ISO C:\WinPE C:\WinPE\winpe.iso
+          - DISM /Capture-Image /ImageFile:E:\empresa.wim /CaptureDir:C:\ /Name:"Empresa 2026-11"
+    comprobar: La VM quedó apagada sola y tenés la copia del disco o el archivo empresa.wim.
+    si_falla: Si Sysprep da error, abrí C:\Windows\System32\Sysprep\Panther\setupact.log y buscá "Error". Lo habitual es una app de la Store o BitLocker.
+  - titulo: Desplegar PC03
+    detalle: >-
+      Creá una VM nueva, PC03, con una copia del disco de la plantilla (o aplicando empresa.wim
+      desde WinPE, con el script de diskpart de la lección, DISM /Apply-Image y bcdboot), y
+      encendela.
+    comprobar: >-
+      PC03 arranca sin preguntar nombre ni dominio, aparece en la OU Equipos con un nombre
+      generado (Get-ADComputer -Filter * -SearchBase 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'),
+      la cuenta local soporte existe y un rato después aparece en WSUS.
+    si_falla: El registro de la etapa specialize está en C:\Windows\Panther\UnattendGC\setupact.log de PC03; la unión al dominio deja su detalle en C:\Windows\debug\NetSetup.log.
+  - titulo: Respaldo del estado del sistema de DC01
+    detalle: Uno ahora, y programado todas las noches con lo necesario para la recuperación completa.
+    comandos:
+      - Invoke-Command DC01 { Install-WindowsFeature Windows-Server-Backup -IncludeManagementTools }
+      - "Invoke-Command DC01 { wbadmin start systemstatebackup -backupTarget:E: -quiet }"
+      - "Invoke-Command DC01 { wbadmin enable backup -addtarget:E: -schedule:22:00 -allCritical -quiet }"
+      - Invoke-Command DC01 { wbadmin get versions }
+    comprobar: wbadmin get versions muestra una versión con "Can recover" que incluye System State.
+  - titulo: Borrar lo que quedó con contraseñas
+    detalle: >-
+      En PC03 (y en la plantilla, si la vas a seguir usando), el unattend.xml quedó con la
+      contraseña de svc-unir. Borralo después de comprobar que todo anduvo.
+    comandos:
+      - Remove-Item C:\Windows\Panther\unattend.xml, C:\Windows\Panther\unattend*.xml -ErrorAction SilentlyContinue
+    comprobar: Get-ChildItem C:\Windows\Panther -Filter unattend*.xml no devuelve nada.

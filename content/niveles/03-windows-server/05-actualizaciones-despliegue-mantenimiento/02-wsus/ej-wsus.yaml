@@ -36,21 +36,21 @@ pasos:
       - Install-WindowsFeature UpdateServices -IncludeManagementTools
       - "& 'C:\\Program Files\\Update Services\\Tools\\wsusutil.exe' postinstall CONTENT_DIR=D:\\WSUS"
   - consigna: >-
-      Elegí qué sincronizar: los productos Windows Server 2025, Windows 11 y Microsoft Defender
+      Elegí qué sincronizar: los productos de Windows Server 2025 (en WSUS se llama Microsoft Server Operating System-24H2), Windows 11 y Microsoft Defender
       Antivirus, y las clasificaciones de fábrica más Update Rollups (sin controladores).
       Después sincronizá.
     verificar:
       - { wsus_producto: Windows 11 }
-      - { wsus_producto: Windows Server 2025 }
+      - { wsus_producto: Microsoft Server Operating System-24H2 }
       - { wsus_clasificacion: Update Rollups }
       - { wsus_clasificacion: Drivers, habilitada: false }
       - { wsus_listo: true }
     pistas:
-      - "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Windows Server 2025','Windows 11','Microsoft Defender Antivirus' } | Set-WsusProduct"
+      - "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Microsoft Server Operating System-24H2','Windows 11','Microsoft Defender Antivirus' } | Set-WsusProduct"
       - "Get-WsusClassification | Where-Object { $_.Classification.Title -eq 'Update Rollups' } | Set-WsusClassification"
       - "(Get-WsusServer).GetSubscription().StartSynchronization()"
     solucion:
-      - "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Windows Server 2025','Windows 11','Microsoft Defender Antivirus' } | Set-WsusProduct"
+      - "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Microsoft Server Operating System-24H2','Windows 11','Microsoft Defender Antivirus' } | Set-WsusProduct"
       - "Get-WsusClassification | Where-Object { $_.Classification.Title -eq 'Update Rollups' } | Set-WsusClassification"
       - "(Get-WsusServer).GetSubscription().StartSynchronization()"
       - Get-WsusUpdate -Approval Unapproved

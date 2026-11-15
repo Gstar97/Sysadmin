@@ -1,0 +1,46 @@
+---
+titulo: Parches por anillos, una imagen de Windows 11 y el respaldo del dominio
+horas: 4
+verificacion:
+  - Resolví el laboratorio simulado completo, con la aprobación para producción después del piloto.
+  - WSUS sincroniza solo Windows 11, Microsoft Server Operating System-24H2 y Defender, en un idioma y sin controladores.
+  - PC01 aparece en el grupo Piloto de WSUS por la GPO de su OU, y tiene instalado lo aprobado.
+  - La cuenta svc-unir solo puede crear equipos en la OU Equipos, y redircmp apunta ahí.
+  - PC03 se desplegó desde la imagen sin preguntar nada, quedó en la OU Equipos y se reporta en WSUS.
+  - Ningún unattend.xml con contraseñas quedó en PC03.
+  - "DC01 tiene un respaldo del estado del sistema en E: y uno programado todas las noches."
+---
+
+import sim from './lab-mantenimiento-sim.yaml'
+import pasos from './lab-mantenimiento.yaml'
+
+## Objetivo
+
+Que el dominio deje de depender de la buena voluntad: las actualizaciones llegan por anillos y se pueden medir, una PC nueva queda lista en minutos y con la configuración de todas, y si DC01 se rompe hay de dónde volver. Es lo que piden los auditores, y lo que cualquier PyME necesita antes de crecer.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: el dominio de los módulos 3.3 y 3.4, espacio para dos discos virtuales nuevos (150 GB y 60 GB, dinámicos), una VM nueva de Windows 11 (versión de evaluación) y conexión a internet para la sincronización de WSUS.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+WSUS con un idioma y tres productos igual baja varios gigas el primer día. Si tu conexión es lenta, hacé la sincronización a la noche y seguí con la imagen y el respaldo mientras tanto.
+</Advertencia>
+
+<Consejo>
+Anotá cuánto tardó cada parte del despliegue de PC03, desde que la encendiste hasta que apareció en WSUS. Es el número que vas a usar para estimar cuánto lleva preparar diez PC nuevas.
+</Consejo>
+
+## Para pensar
+
+1. ¿Qué cambiarías en los anillos si la empresa tuviera un servidor de facturación que no puede parar en horario de trabajo?
+2. La imagen de PC03 tiene un mes. ¿Qué pasa si la usás dentro de un año tal como está? ¿Cada cuánto la actualizarías y cómo lo recordarías?
+3. El respaldo de DC01 está en un disco del propio DC01. Según la regla 3-2-1, ¿qué falta? ¿Y qué pasa si un ransomware cifra DC01?

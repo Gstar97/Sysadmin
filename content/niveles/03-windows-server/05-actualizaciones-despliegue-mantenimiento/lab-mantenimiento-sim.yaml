@@ -1,0 +1,108 @@
+tipo: terminal
+shell: powershell
+titulo: Parches por anillos y respaldo del dominio
+descripcion: >-
+  Distribuidora del Litoral ya tiene dominio, DHCP y servidor de archivos. Faltan dos cosas que
+  piden los auditores: que los parches se instalen de forma controlada y que exista un respaldo
+  del dominio. SRV-WSUS (con un disco D:) va a ser el servidor de actualizaciones; DC01 tiene un
+  disco E: nuevo para respaldos. PC01 es del piloto y PC02, de producción. Estás en SRV-WSUS.
+estado_inicial:
+  equipo: SRV-WSUS
+  dominio: empresa.local
+  red: { ip: 192.168.10.25, dns: [192.168.10.10, 192.168.10.11] }
+  discos:
+    - { numero: 1, tamano_gb: 200, estilo: GPT, particiones: [{ letra: D, tamano_gb: 199, sistema: NTFS, etiqueta: WSUS }] }
+  servidores:
+    - equipo: DC01
+      dominio: empresa.local
+      red: { ip: 192.168.10.10, dns: [127.0.0.1, 192.168.10.11] }
+      discos:
+        - { numero: 1, tamano_gb: 300, estilo: GPT, particiones: [{ letra: E, tamano_gb: 299, sistema: NTFS, etiqueta: Respaldos }] }
+      ad:
+        ous: [Empresa/Equipos/Piloto, Empresa/Equipos/Produccion]
+        equipos:
+          - { nombre: PC01, ou: Empresa/Equipos/Piloto, so: Windows 11 Pro }
+          - { nombre: PC02, ou: Empresa/Equipos/Produccion, so: Windows 11 Pro }
+    - { equipo: PC01, dominio: empresa.local, red: { ip: 192.168.10.51, dns: [192.168.10.10] } }
+    - { equipo: PC02, dominio: empresa.local, red: { ip: 192.168.10.52, dns: [192.168.10.10] } }
+pasos:
+  - consigna: >-
+      WSUS en SRV-WSUS, con el contenido en D:\WSUS. Sincronizá Windows 11, Windows Server 2025 (Microsoft Server Operating System-24H2) y
+      Microsoft Defender Antivirus, con las clasificaciones de fábrica más Update Rollups, sin
+      controladores.
+    verificar:
+      - { caracteristica: UpdateServices }
+      - { wsus_producto: Windows 11 }
+      - { wsus_producto: Microsoft Server Operating System-24H2 }
+      - { wsus_clasificacion: Update Rollups }
+      - { wsus_clasificacion: Drivers, habilitada: false }
+      - { wsus_listo: true }
+    pistas:
+      - "Es lo mismo que en la lección de WSUS: Install-WindowsFeature, wsusutil postinstall, Set-WsusProduct, Set-WsusClassification y StartSynchronization()."
+    solucion:
+      - Install-WindowsFeature UpdateServices -IncludeManagementTools
+      - "& 'C:\\Program Files\\Update Services\\Tools\\wsusutil.exe' postinstall CONTENT_DIR=D:\\WSUS"
+      - "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Microsoft Server Operating System-24H2','Windows 11','Microsoft Defender Antivirus' } | Set-WsusProduct"
+      - "Get-WsusClassification | Where-Object { $_.Classification.Title -eq 'Update Rollups' } | Set-WsusClassification"
+      - "(Get-WsusServer).GetSubscription().StartSynchronization()"
+  - consigna: Creá los grupos Piloto y Produccion, con segmentación del lado del cliente.
+    verificar:
+      - { wsus_grupo: Piloto }
+      - { wsus_grupo: Produccion }
+    solucion:
+      - $w = Get-WsusServer; $w.CreateComputerTargetGroup('Piloto'); $w.CreateComputerTargetGroup('Produccion')
+      - $c = $w.GetConfiguration(); $c.TargetingMode = 'Client'; $c.Save()
+  - consigna: >-
+      En DC01: la GPO "Equipos - Windows Update" en la OU Equipos (servidor
+      http://srv-wsus.empresa.local:8530, segmentación habilitada, UseWUServer = 1), y una GPO por
+      OU de anillo con su TargetGroup.
+    verificar:
+      - { en: DC01, verificar: { gpo: Equipos - Windows Update, vinculada_a: Empresa/Equipos } }
+      - { en: DC01, verificar: { gpo: Piloto - Grupo WSUS, vinculada_a: Empresa/Equipos/Piloto } }
+      - { en: DC01, verificar: { gpo: Produccion - Grupo WSUS, vinculada_a: Empresa/Equipos/Produccion } }
+    solucion:
+      - "Invoke-Command DC01 { $k = 'HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate'; $g = 'Equipos - Windows Update'; New-GPO $g | New-GPLink -Target 'OU=Equipos,OU=Empresa,DC=empresa,DC=local'; Set-GPRegistryValue $g -Key $k -ValueName WUServer -Type String -Value 'http://srv-wsus.empresa.local:8530'; Set-GPRegistryValue $g -Key $k -ValueName WUStatusServer -Type String -Value 'http://srv-wsus.empresa.local:8530'; Set-GPRegistryValue $g -Key $k -ValueName TargetGroupEnabled -Type DWord -Value 1; Set-GPRegistryValue $g -Key \"$k\\AU\" -ValueName UseWUServer -Type DWord -Value 1 }"
+      - "Invoke-Command DC01 { $k = 'HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate'; foreach ($a in 'Piloto', 'Produccion') { New-GPO \"$a - Grupo WSUS\" | New-GPLink -Target \"OU=$a,OU=Equipos,OU=Empresa,DC=empresa,DC=local\"; Set-GPRegistryValue \"$a - Grupo WSUS\" -Key $k -ValueName TargetGroup -Type String -Value $a } }"
+  - consigna: Que las PC tomen las directivas y se reporten, cada una en su grupo.
+    verificar:
+      - { wsus_equipo: PC01, grupo: Piloto }
+      - { wsus_equipo: PC02, grupo: Produccion }
+    solucion: ["Invoke-Command PC01, PC02 { gpupdate /force; UsoClient StartScan }"]
+  - consigna: >-
+      Anillo 1: aprobá para Piloto las actualizaciones de seguridad que hagan falta y que PC01
+      las instale.
+    verificar:
+      - { wsus_aprobacion: KB5072031, grupo: Piloto }
+      - { en: PC01, verificar: { actualizacion: KB5072031 } }
+      - { en: PC02, verificar: { actualizacion: KB5072031, instalada: false } }
+    solucion:
+      - Get-WsusUpdate -Classification Security -Approval Unapproved -Status FailedOrNeeded | Approve-WsusUpdate -Action Install -TargetGroupName Piloto
+      - Invoke-Command PC01 { UsoClient StartInstall }
+  - consigna: >-
+      Pasó una semana y el piloto no reportó problemas. Anillo 2: aprobá lo mismo para Produccion
+      y que PC02 lo instale.
+    verificar:
+      - { wsus_aprobacion: KB5072031, grupo: Produccion }
+      - { en: PC02, verificar: { actualizacion: KB5072031 } }
+    pistas:
+      - "Get-WsusUpdate -Classification Security -Approval Approved | Approve-WsusUpdate -Action Install -TargetGroupName Produccion"
+    solucion:
+      - Get-WsusUpdate -Classification Security -Approval Approved | Approve-WsusUpdate -Action Install -TargetGroupName Produccion
+      - Invoke-Command PC02 { UsoClient StartInstall }
+  - consigna: >-
+      Ahora el respaldo del dominio. En DC01: instalá Windows Server Backup y hacé un respaldo del
+      estado del sistema en E:.
+    verificar:
+      - { en: DC01, verificar: { caracteristica: Windows-Server-Backup } }
+      - { en: DC01, verificar: { respaldo_en: "E:", estado_sistema: true } }
+    solucion:
+      - Invoke-Command DC01 { Install-WindowsFeature Windows-Server-Backup -IncludeManagementTools }
+      - "Invoke-Command DC01 { wbadmin start systemstatebackup -backupTarget:E: -quiet }"
+  - consigna: Programalo en DC01 todos los días a las 22:00, con todo lo necesario para la recuperación completa.
+    verificar:
+      - { en: DC01, verificar: { respaldo_programado: true, hora: "22:00" } }
+    solucion: ["Invoke-Command DC01 { wbadmin enable backup -addtarget:E: -schedule:22:00 -allCritical -quiet }"]
+  - consigna: Comprobá en DC01 qué se puede recuperar del respaldo de hoy.
+    verificar:
+      - { salida_contiene: "System State" }
+    solucion: ["Invoke-Command DC01 { wbadmin get versions }"]

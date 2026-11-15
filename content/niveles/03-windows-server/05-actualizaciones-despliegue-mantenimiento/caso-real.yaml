@@ -1,0 +1,126 @@
+tipo: troubleshooting
+titulo: Una actualización rompió la aplicación de facturación
+descripcion: >-
+  Incidente simulado en una distribuidora de 60 personas. Los parches salen de WSUS por anillos:
+  Piloto, Produccion y Criticos (los DC y SRV-FACT01, el servidor de facturación). Los números de
+  KB son de ejemplo. Cada decisión suma minutos, y cada minuto sin facturar cuesta.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Miércoles, 8:40. Administración no puede emitir facturas: el programa abre, pero al confirmar
+      una factura da error. Ayer a la tarde andaba. Entrás a SRV-FACT01.
+    evidencia:
+      - titulo: El registro de la aplicación (C:\Facturacion\logs\hoy.log)
+        contenido: |
+          03:12:44 INFO  Servicio iniciado
+          08:31:02 ERROR No se pudo establecer el canal seguro con el servicio web de facturación electrónica
+          08:31:02 ERROR   (SEC_E_ALGORITHM_MISMATCH) El cliente y el servidor no tienen un algoritmo en común
+      - titulo: Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 2
+        contenido: |
+          Source      Description      HotFixID      InstalledBy          InstalledOn
+          ------      -----------      --------      -----------          -----------
+          SRV-FACT01  Security Update  KB5072033     NT AUTHORITY\SYSTEM  19/11/2026
+          SRV-FACT01  Update           KB5072052     NT AUTHORITY\SYSTEM  19/11/2026
+    opciones:
+      - { texto: "Se instaló el acumulativo esta madrugada y el error empezó después. Confirmar que es eso antes de tocar nada", ir_a: n_confirmar, minutos: 5 }
+      - texto: Reinstalar el programa de facturación
+        ir_a: n1
+        minutos: 40
+        consecuencia: >-
+          Cuarenta minutos después, el mismo error. El programa no cambió: cambió el Windows
+          sobre el que corre.
+      - texto: Reiniciar el servidor
+        ir_a: n1
+        minutos: 10
+        consecuencia: Vuelve igual. El servidor ya se había reiniciado a las 3:12 para terminar la actualización.
+  n_confirmar:
+    situacion: >-
+      Buscás si a alguien más le pasa. El proveedor del programa publicó un aviso a las 8:00, y en
+      la página de estado de Windows (release health) hay un problema conocido con ese acumulativo.
+    evidencia:
+      - titulo: Aviso del proveedor
+        contenido: |
+          Clientes con Windows Server 2025 y la actualización de noviembre (KB5072033): la versión 4.2
+          no puede conectarse al servicio web. Estamos preparando la 4.2.1. Mientras tanto, se
+          recomienda desinstalar la actualización solo en el servidor de facturación.
+      - titulo: Cómo está cada anillo
+        contenido: |
+          Piloto (6 PC):          KB5072033 instalada el jueves pasado, sin reportes
+          Produccion (50 PC):     KB5072033 instalada ayer, sin reportes
+          Criticos (DC01, DC02):  sin instalar
+          Criticos (SRV-FACT01):  instalada hoy 03:05  ← ¿por qué ya?
+    opciones:
+      - { texto: "Desinstalar la actualización solo en SRV-FACT01, con un respaldo antes", ir_a: n_desinstalar, minutos: 5 }
+      - texto: Rechazar KB5072033 en WSUS para todos y desinstalarla en toda la empresa
+        ir_a: n_confirmar
+        minutos: 60
+        consecuencia: >-
+          Cincuenta y seis equipos que andaban bien vuelven a quedar sin el parche de seguridad del
+          mes, por un problema que tiene uno solo. El problema es de SRV-FACT01 y su programa.
+  n_desinstalar:
+    situacion: >-
+      Ibas a usar wusa /uninstall, como en las versiones viejas de Windows, pero el artículo de
+      soporte de la actualización avisa otra cosa.
+    evidencia:
+      - titulo: Nota del artículo de soporte de KB5072033
+        contenido: |
+          This update contains a combined servicing stack update (SSU) and latest cumulative
+          update (LCU). If you want to remove the LCU, use DISM /Remove-Package with the LCU
+          package name. Running wusa.exe with the /uninstall switch on the combined package
+          won't work because the combined package contains the SSU.
+      - titulo: DISM /Online /Get-Packages /Format:Table | findstr RollupFix
+        contenido: |
+          Package_for_RollupFix~31bf3856ad364e35~amd64~~26100.7171.1.9 | Installed | Security Update | 19/11/2026
+    opciones:
+      - { texto: "Quitarla con DISM /Online /Remove-Package con ese nombre de paquete y reiniciar en una ventana acordada", ir_a: n_wsus, minutos: 25 }
+      - texto: Restaurar el servidor completo desde el respaldo de anoche
+        ir_a: n_desinstalar
+        minutos: 120
+        consecuencia: >-
+          Funcionaría, pero son dos horas y perdés lo que se facturó ayer a la tarde si el respaldo
+          es anterior. Para sacar un parche hay un camino más corto.
+  n_wsus:
+    situacion: >-
+      SRV-FACT01 vuelve a facturar. Pero esta noche WSUS se la va a volver a ofrecer: sigue
+      aprobada para su grupo.
+    evidencia:
+      - titulo: Get-WsusUpdate -UpdateId … (aprobaciones de KB5072033)
+        contenido: |
+          Piloto      Install
+          Produccion  Install
+          Criticos    Install   (aprobada el lunes por "Todos los equipos")
+    opciones:
+      - { texto: "Quitar la aprobación para el grupo de SRV-FACT01 (dejarla en Not Approved) hasta que salga la versión 4.2.1, y averiguar por qué Criticos la recibió el lunes", ir_a: n_causa, minutos: 8 }
+      - texto: Deshabilitar el servicio de Windows Update en SRV-FACT01
+        ir_a: n_wsus
+        minutos: 3
+        consecuencia: >-
+          Ese servidor deja de recibir todos los parches, este y los que vengan, y nadie se va a
+          acordar de volver a habilitarlo. Se controla desde WSUS, no apagando el servicio.
+  n_causa:
+    situacion: >-
+      El historial de WSUS muestra que el lunes un compañero aprobó el acumulativo para "Todos los
+      equipos" para ganar tiempo. Así llegó a los críticos el mismo día que a producción, sin
+      esperar y sin ventana de mantenimiento.
+    opciones:
+      - { texto: "Acordar que nadie aprueba para Todos los equipos, que Criticos se aprueba a mano en su ventana con respaldo previo, y anotar todo en el registro del incidente", ir_a: n_ok, minutos: 10 }
+      - texto: Quitarle los permisos de WSUS al compañero y no decir nada más
+        ir_a: n_causa
+        minutos: 5
+        consecuencia: >-
+          El problema no es la persona: es que el proceso permitía saltarse los anillos sin que
+          nadie lo notara. Se arregla con una regla clara y escrita.
+  n_ok:
+    final: exito
+    resumen: >-
+      Los anillos funcionaron donde se respetaron: piloto y producción llevaban días con el parche
+      sin problemas. Falló el atajo de aprobar para Todos los equipos, que llevó el acumulativo a
+      un servidor crítico sin pasar por su ventana. Se confirmó la causa (el error empezó después
+      de la instalación y el proveedor lo reconocía), se quitó el parche solo donde molestaba (con
+      DISM, porque los acumulativos actuales vienen combinados con la actualización de la pila de
+      servicio y wusa no los desinstala) y se quitó la aprobación solo para ese grupo, dejando al
+      resto protegido. Pendiente: instalar la versión 4.2.1 del programa y volver a aprobar el
+      parche para Criticos en la próxima ventana. Para la próxima, Microsoft a veces resuelve estos
+      problemas con una reversión de problema conocido (Known Issue Rollback) que se aplica por GPO
+      sin desinstalar nada: vale la pena revisar la página de estado de Windows antes de desinstalar.

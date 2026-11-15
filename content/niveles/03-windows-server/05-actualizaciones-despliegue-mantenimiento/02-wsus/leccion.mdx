@@ -56,12 +56,12 @@ El paso **postinstall** crea la base de datos y la carpeta del contenido. Por de
 
 Lo primero que se decide es **de qué productos** y **de qué clasificaciones** traer actualizaciones. La regla: **solo lo que tenés**. Cada producto o idioma de más son gigas de disco y miles de filas en la base.
 
-- **Productos**: las versiones de Windows y Windows Server que existen en tu red, Microsoft Defender Antivirus, .NET, Office si lo administrás así.
+- **Productos**: las versiones de Windows y Windows Server que existen en tu red, Microsoft Defender Antivirus, .NET, Office si lo administrás así. Ojo con los nombres: Windows Server 2025 no aparece como tal, sino como **Microsoft Server Operating System-24H2** (y 2022, como *-21H2*). Si no lo marcás, los servidores se reportan pero no les "corresponde" ninguna actualización.
 - **Clasificaciones**: de fábrica vienen las **críticas**, las **de seguridad** y las **definiciones**. Se suelen sumar los **acumulativos** (*Update Rollups*). Los **controladores** (*Drivers*) no: son muchísimos y se manejan mejor por otra vía.
 - **Idiomas**: solo los que usás.
 
 ```powershell
-Get-WsusProduct | Where-Object { $_.Product.Title -in 'Windows Server 2025', 'Windows 11' } | Set-WsusProduct
+Get-WsusProduct | Where-Object { $_.Product.Title -in 'Microsoft Server Operating System-24H2', 'Windows 11' } | Set-WsusProduct
 Get-WsusClassification | Where-Object { $_.Classification.Title -eq 'Update Rollups' } | Set-WsusClassification
 (Get-WsusServer).GetSubscription().StartSynchronization()
 ```

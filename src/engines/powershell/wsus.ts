@@ -16,7 +16,7 @@ const formatted = (text: string): PsObject => psObject('__formatted', { text })
 const MOD = 'UpdateServices'
 
 export const CLASSIFICATIONS = ['Critical Updates', 'Security Updates', 'Definition Updates', 'Update Rollups', 'Updates', 'Feature Packs', 'Service Packs', 'Tools', 'Drivers', 'Upgrades']
-export const PRODUCTS = ['Windows Server 2025', 'Windows Server 2022', 'Windows 11', 'Windows 10', 'Microsoft Defender Antivirus', 'Microsoft Edge', 'Microsoft 365 Apps/Office 2019/Office LTSC', 'Microsoft SQL Server 2022']
+export const PRODUCTS = ['Microsoft Server Operating System-24H2', 'Microsoft Server Operating System-21H2', 'Windows 11', 'Windows 10', 'Microsoft Defender Antivirus', 'Microsoft Edge', 'Microsoft 365 Apps/Office 2019/Office LTSC', 'Microsoft SQL Server 2022']
 
 export interface WsusUpdate {
   kb: string
@@ -61,11 +61,11 @@ function d(daysAgo: number) {
 export function defaultCatalog(): WsusUpdate[] {
   const u = (kb: string, title: string, classification: string, product: string, days: number, extra: Partial<WsusUpdate> = {}): WsusUpdate => ({ kb, title, classification, product, superseded: false, declined: false, approvals: {}, arrival: d(days), reboot: classification !== 'Definition Updates', ...extra })
   return [
-    u('KB5072033', '2026-11 Cumulative Update for Microsoft server operating system version 24H2 for x64-based Systems (KB5072033)', 'Security Updates', 'Windows Server 2025', 4),
+    u('KB5072033', '2026-11 Cumulative Update for Microsoft server operating system version 24H2 for x64-based Systems (KB5072033)', 'Security Updates', 'Microsoft Server Operating System-24H2', 4),
     u('KB5072031', '2026-11 Cumulative Update for Windows 11 Version 25H2 for x64-based Systems (KB5072031)', 'Security Updates', 'Windows 11', 4),
     u('KB5071950', '2026-10 Cumulative Update for Windows 11 Version 25H2 for x64-based Systems (KB5071950)', 'Security Updates', 'Windows 11', 32, { superseded: true }),
-    u('KB5071948', '2026-10 Cumulative Update for Microsoft server operating system version 24H2 for x64-based Systems (KB5071948)', 'Security Updates', 'Windows Server 2025', 32, { superseded: true }),
-    u('KB5072052', '2026-11 Cumulative Update for .NET Framework 3.5 and 4.8.1 for Microsoft server operating system version 24H2 for x64 (KB5072052)', 'Security Updates', 'Windows Server 2025', 4),
+    u('KB5071948', '2026-10 Cumulative Update for Microsoft server operating system version 24H2 for x64-based Systems (KB5071948)', 'Security Updates', 'Microsoft Server Operating System-24H2', 32, { superseded: true }),
+    u('KB5072052', '2026-11 Cumulative Update for .NET Framework 3.5 and 4.8.1 for Microsoft server operating system version 24H2 for x64 (KB5072052)', 'Security Updates', 'Microsoft Server Operating System-24H2', 4),
     u('KB2267602', 'Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.441.120.0)', 'Definition Updates', 'Microsoft Defender Antivirus', 0, { reboot: false }),
     u('KB890830', 'Windows Malicious Software Removal Tool x64 - v5.141 (KB890830)', 'Update Rollups', 'Windows 11', 4, { reboot: false }),
     u('KB5072210', '2026-11 Update for Windows 11 Version 25H2 for x64-based Systems (KB5072210)', 'Updates', 'Windows 11', 11),
@@ -91,7 +91,7 @@ function wsusTarget(ctx: CmdletContext, cmd: string): PsSession {
 }
 
 function osOf(s: PsSession): string {
-  return /^(PC|NB|WS)/i.test(s.state.equipo) ? 'Windows 11' : 'Windows Server 2025'
+  return /^(PC|NB|WS)/i.test(s.state.equipo) ? 'Windows 11' : 'Microsoft Server Operating System-24H2'
 }
 
 /** ¿La actualización se aplica a ese equipo? */
@@ -385,7 +385,7 @@ cmdlet('Deny-WsusUpdate', {
 // ---------------------------------------------------------------------------------------
 
 function computerObject(c: WsusComputer): PsObject {
-  return psObject('Microsoft.UpdateServices.Internal.BaseApi.ComputerTarget', { FullDomainName: c.name, IPAddress: c.ip, LastReportedStatusTime: formatDate(c.lastReport, false), RequestedTargetGroupName: c.requested, OSDescription: c.os, __group: c.group, __name: c.name })
+  return psObject('Microsoft.UpdateServices.Internal.BaseApi.ComputerTarget', { FullDomainName: c.name, IPAddress: c.ip, LastReportedStatusTime: formatDate(c.lastReport, false), RequestedTargetGroupName: c.requested, OSDescription: /^Microsoft Server/.test(c.os) ? 'Windows Server 2025 Standard' : c.os, __group: c.group, __name: c.name })
 }
 VIEWS['Microsoft.UpdateServices.Internal.BaseApi.ComputerTarget'] = {
   kind: 'table',
@@ -600,7 +600,7 @@ export function initialWsus(s: PsSession) {
     const u = w.catalog.find((x) => x.kb === kb)
     if (u) u.declined = true
   }
-  for (const c of cfg.equipos) w.computers.push({ name: c.nombre.toLowerCase(), ip: c.ip ?? '', group: c.grupo, requested: c.grupo, lastReport: new Date(Date.now() - (c.hace_dias ?? 0) * 86_400_000), os: /^(PC|NB|WS)/i.test(c.nombre) ? 'Windows 11' : 'Windows Server 2025' })
+  for (const c of cfg.equipos) w.computers.push({ name: c.nombre.toLowerCase(), ip: c.ip ?? '', group: c.grupo, requested: c.grupo, lastReport: new Date(Date.now() - (c.hace_dias ?? 0) * 86_400_000), os: /^(PC|NB|WS)/i.test(c.nombre) ? 'Windows 11' : 'Microsoft Server Operating System-24H2' })
 }
 
 export function verifyWsus(s: PsSession, check: Record<string, unknown>): { ok: boolean; label: string } | undefined {

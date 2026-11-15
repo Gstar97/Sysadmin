@@ -34,7 +34,7 @@ describe('WSUS y Windows Update', () => {
     await run(s, 'Install-WindowsFeature UpdateServices -IncludeManagementTools')
     expect((await run(s, 'Get-WsusServer')).err).toMatch(/postinstall/)
     expect((await run(s, "& 'C:\\Program Files\\Update Services\\Tools\\wsusutil.exe' postinstall CONTENT_DIR=D:\\WSUS")).out).toMatch(/successfully completed/)
-    await run(s, "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Windows Server 2025','Windows 11' } | Set-WsusProduct")
+    await run(s, "Get-WsusProduct | Where-Object { $_.Product.Title -in 'Microsoft Server Operating System-24H2','Windows 11' } | Set-WsusProduct")
     await run(s, '$w = Get-WsusServer; $w.GetSubscription().StartSynchronization()')
     await run(s, "$w.CreateComputerTargetGroup('Piloto'); $c = $w.GetConfiguration(); $c.TargetingMode = 'Client'; $c.Save()")
     expect(verifyPs(s, { wsus_listo: true }).ok).toBe(true)
