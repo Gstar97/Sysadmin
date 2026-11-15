@@ -1,0 +1,114 @@
+tipo: terminal
+shell: bash
+titulo: La pantalla de pedidos de un cliente tarda cuatro segundos
+descripcion: >-
+  Atención al cliente se queja: al abrir la ficha de un cliente, la lista de sus pedidos tarda
+  varios segundos. db01 (Rocky Linux 10, 8 GB de RAM, dedicado a la base) tiene MariaDB con el
+  registro de consultas lentas activado. La tabla pedidos tiene 50.000 filas.
+estado_inicial:
+  distro: rocky
+  hostname: db01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [mariadb-server] }
+  servicios:
+    mariadb: { activo: true, habilitado: true }
+  bases_datos:
+    mariadb:
+      bases:
+        tienda: >-
+          CREATE TABLE pedidos (id INT AUTO_INCREMENT PRIMARY KEY, cliente_id INT NOT NULL, fecha DATE NOT NULL, total DECIMAL(10,2) NOT NULL);
+          INSERT INTO pedidos (cliente_id, fecha, total) WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 50000)
+          SELECT (i * 37) % 2000 + 1, date('2025-01-01', '+' || (i % 680) || ' days'), (i * 13) % 900000 / 10.0 FROM n;
+  archivos:
+    /etc/my.cnf.d/rendimiento.cnf: |
+      [mysqld]
+      slow_query_log = 1
+      slow_query_log_file = /var/lib/mysql/db01-slow.log
+      long_query_time = 1
+    /var/lib/mysql/db01-slow.log:
+      dueno: mysql
+      modo: '0640'
+      contenido: |
+        /usr/libexec/mariadbd, Version: 10.11.11-MariaDB-log (MariaDB Server). started with:
+        Tcp port: 3306  Unix socket: /var/lib/mysql/mysql.sock
+        Time                Id Command  Argument
+        # Time: 261115 10:21:44
+        # User@Host: tienda_app[tienda_app] @  [192.168.10.11]
+        # Thread_id: 212  Schema: tienda  QC_hit: No
+        # Query_time: 4.183219  Lock_time: 0.000081  Rows_sent: 25  Rows_examined: 50000
+        # Rows_affected: 0  Bytes_sent: 1830
+        SET timestamp=1794738104;
+        SELECT * FROM pedidos WHERE cliente_id = 1234 ORDER BY fecha DESC;
+        # Time: 261115 10:24:02
+        # User@Host: tienda_app[tienda_app] @  [192.168.10.11]
+        # Thread_id: 215  Schema: tienda  QC_hit: No
+        # Query_time: 4.052744  Lock_time: 0.000077  Rows_sent: 31  Rows_examined: 50000
+        # Rows_affected: 0  Bytes_sent: 2214
+        SET timestamp=1794738242;
+        SELECT * FROM pedidos WHERE cliente_id = 87 ORDER BY fecha DESC;
+pasos:
+  - consigna: Mirá las últimas entradas del registro de consultas lentas.
+    verificar:
+      - { comando_usado: 'db01-slow\.log' }
+      - { salida_contiene: 'Rows_examined: 50000' }
+    pistas:
+      - "`sudo tail -n 15 /var/lib/mysql/db01-slow.log`"
+    solucion: ["sudo tail -n 15 /var/lib/mysql/db01-slow.log"]
+    explicacion: >-
+      La misma consulta, cada vez que alguien abre la ficha de un cliente: más de 4 segundos, y para
+      devolver 25 filas examina las 50.000. Esa diferencia (Rows_sent contra Rows_examined) es la
+      pista típica de un índice que falta.
+  - consigna: Pedile a MariaDB el plan de esa consulta.
+    verificar:
+      - { comando_usado: '(EXPLAIN|explain)' }
+      - { salida_contiene: 'ALL' }
+    pistas:
+      - "`sudo mysql tienda -e 'EXPLAIN SELECT * FROM pedidos WHERE cliente_id = 1234 ORDER BY fecha DESC'`"
+    solucion: ["sudo mysql tienda -e 'EXPLAIN SELECT * FROM pedidos WHERE cliente_id = 1234 ORDER BY fecha DESC'"]
+    explicacion: >-
+      type ALL y key NULL: recorre toda la tabla, fila por fila, porque no hay ningún índice sobre
+      cliente_id. Con 50.000 filas son 4 segundos; con un millón, la pantalla no abriría.
+  - consigna: Creá el índice idx_pedidos_cliente sobre cliente_id y volvé a pedir el plan.
+    verificar:
+      - { consulta_bd: "SELECT count(*) FROM pedidos", motor: mariadb, base: tienda, resultado: '50000' }
+      - { salida_contiene: 'idx_pedidos_cliente' }
+      - { salida_contiene: 'ref' }
+    pistas:
+      - "`sudo mysql tienda -e 'CREATE INDEX idx_pedidos_cliente ON pedidos (cliente_id)'` y el mismo EXPLAIN"
+    solucion:
+      - "sudo mysql tienda -e 'CREATE INDEX idx_pedidos_cliente ON pedidos (cliente_id)'"
+      - "sudo mysql tienda -e 'EXPLAIN SELECT * FROM pedidos WHERE cliente_id = 1234 ORDER BY fecha DESC'"
+    explicacion: >-
+      Ahora usa el índice (type ref) y estima unas 25 filas en lugar de 50.000. Un índice es como el
+      índice alfabético de un libro: no hace falta leer todas las páginas para encontrar algo. El
+      costo: ocupa espacio y cada INSERT o UPDATE tiene que actualizarlo, así que se crean para las
+      consultas que de verdad se usan, y se avisa a los programadores.
+  - consigna: >-
+      Revisá cuánta memoria le da MariaDB a InnoDB para guardar datos e índices
+      (innodb_buffer_pool_size).
+    verificar:
+      - { salida_contiene: '134217728' }
+    pistas:
+      - "`sudo mysql -e \"SHOW VARIABLES LIKE 'innodb_buffer_pool_size'\"`"
+    solucion: ["sudo mysql -e \"SHOW VARIABLES LIKE 'innodb_buffer_pool_size'\""]
+    explicacion: >-
+      134217728 bytes son 128 MB, el valor de fábrica, pensado para que MariaDB arranque en
+      cualquier equipo. En un servidor dedicado de 8 GB, la mayoría de los datos quedarían fuera de
+      la memoria y cada consulta iría al disco.
+  - consigna: >-
+      Subilo a 5G en /etc/my.cnf.d/rendimiento.cnf, reiniciá MariaDB y comprobá el valor nuevo.
+    verificar:
+      - { archivo: /etc/my.cnf.d/rendimiento.cnf, contenido_incluye: 'innodb_buffer_pool_size' }
+      - { salida_contiene: '5368709120' }
+    pistas:
+      - "`echo 'innodb_buffer_pool_size = 5G' | sudo tee -a /etc/my.cnf.d/rendimiento.cnf`, `sudo systemctl restart mariadb` y el mismo SHOW VARIABLES"
+    solucion:
+      - echo 'innodb_buffer_pool_size = 5G' | sudo tee -a /etc/my.cnf.d/rendimiento.cnf
+      - sudo systemctl restart mariadb
+      - "sudo mysql -e \"SHOW VARIABLES LIKE 'innodb_buffer_pool_size'\""
+    explicacion: >-
+      En un servidor dedicado a la base, entre el 50 y el 70 % de la RAM. Si en el mismo equipo
+      corren otras cosas (la aplicación, nginx), bastante menos: si la base hace que el sistema use
+      swap, todo se vuelve mucho más lento.

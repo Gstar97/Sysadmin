@@ -96,6 +96,7 @@ function myConfig(sys: System): DbConfig {
     longQueryTime: Number(c.get('long_query_time') ?? 10),
     listen: '',
     hba: [],
+    raw: c,
   }
 }
 

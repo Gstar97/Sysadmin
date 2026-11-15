@@ -83,6 +83,8 @@ export interface DbConfig {
   /** PostgreSQL */
   listen: string
   hba: HbaRule[]
+  /** Todas las opciones del archivo de configuración (para SHOW VARIABLES). */
+  raw?: Map<string, string>
 }
 
 export interface DbServer {
@@ -746,9 +748,22 @@ function mariadbSpecial(sess: Session, raw: string): Result | undefined {
     const inst = sess.db ? s.dbs.get(sess.db) : undefined
     if (!inst?.ddl.has(t)) return myErr(1146, '42S02', `Table '${sess.db}.${t}' doesn't exist`)
     const rows: unknown[][] = []
-    const pk = /PRIMARY\s+KEY/i.test(inst.ddl.get(t)!) ? (/(\w+)[`"]?\s+[^,]*PRIMARY\s+KEY/i.exec(inst.ddl.get(t)!)?.[1] ?? 'id') : undefined
+    const info = materialize(s, inst)?.exec(`PRAGMA table_info(${t})`)[0]?.values ?? []
+    const pk = info.find((r) => Number(r[5]) > 0)?.[1] as string | undefined
     if (pk) rows.push([t, 0, 'PRIMARY', 1, pk, 'A', count(s, inst, t), null, null, '', 'BTREE'])
-    for (const [k, v] of inst.indexes) if (v.table === t) v.columns.forEach((c, i) => rows.push([t, v.unique ? 0 : 1, k, i + 1, c, 'A', count(s, inst, t), null, null, 'YES', 'BTREE']))
+    for (const [k, v] of inst.indexes) {
+      if (v.table !== t) continue
+      v.columns.forEach((c, i) => {
+        let card = count(s, inst, t)
+        try {
+          card = Number(materialize(s, inst)?.exec(`SELECT count(DISTINCT ${c}) FROM ${t}`)[0]?.values[0]?.[0] ?? card)
+        } catch {
+          // columna con expresión
+        }
+        const nullable = info.find((r) => r[1] === c)?.[3] ? '' : 'YES'
+        rows.push([t, v.unique ? 0 : 1, k, i + 1, c, 'A', card, null, null, nullable, 'BTREE'])
+      })
+    }
     return { kind: 'rows', columns: ['Table', 'Non_unique', 'Key_name', 'Seq_in_index', 'Column_name', 'Collation', 'Cardinality', 'Sub_part', 'Packed', 'Null', 'Index_type'], rows }
   }
   if (/^EXPLAIN\b/.test(U) && !/^EXPLAIN (FORMAT|ANALYZE)/.test(U)) return explainMy(sess, stmt.replace(/^EXPLAIN\s+/i, ''))
@@ -932,8 +947,16 @@ export function grantsOf(s: DbServer, u: DbUser): string[] {
   return out
 }
 
+function bytes(v: string): string {
+  const m = /^(\d+)\s*([KMG])?$/i.exec(v.trim())
+  if (!m) return v
+  return String(Number(m[1]) * ({ K: 1024, M: 1024 ** 2, G: 1024 ** 3 }[(m[2] ?? '').toUpperCase() as 'K'] ?? 1))
+}
+
 function variables(s: DbServer): Record<string, string> {
   const c = s.loaded
+  const extra: Record<string, string> = {}
+  for (const [k, v] of c?.raw ?? []) if (/^(innodb_|max_|tmp_table|query_|table_|thread_|wait_timeout|key_buffer)/.test(k)) extra[k] = /size$|_buffer/.test(k) ? bytes(v) : v
   return {
     basedir: '/usr',
     bind_address: c?.bind ?? '',
@@ -949,9 +972,10 @@ function variables(s: DbServer): Record<string, string> {
     server_id: String(c?.serverId ?? 1),
     skip_networking: 'OFF',
     slow_query_log: c?.slowLog ? 'ON' : 'OFF',
-    slow_query_log_file: `${s.sys.hostname}-slow.log`,
+    slow_query_log_file: c?.raw?.get('slow_query_log_file') ?? `${s.sys.hostname}-slow.log`,
     socket: s.sys.distro === 'rocky' ? '/var/lib/mysql/mysql.sock' : '/run/mysqld/mysqld.sock',
     version: versionOf(s.sys, 'mariadb'),
+    ...extra,
   }
 }
 
@@ -1009,7 +1033,19 @@ function explainMy(sess: Session, query: string): Result {
     const total = count(s, inst, t)
     const possible = [...inst.indexes.entries()].filter(([, v]) => v.table === t).map(([k]) => k)
     if (pk) return [i + 1, 'SIMPLE', t, 'const', 'PRIMARY', 'PRIMARY', '4', 'const', 1, '']
-    if (idx) return [i + 1, 'SIMPLE', t, 'ref', possible.join(',') || idx, idx, '403', 'const', Math.max(1, Math.round(total / 50)), 'Using where']
+    if (idx) {
+      const col = inst.indexes.get(idx)?.columns[0] ?? ''
+      let distinct: number
+      try {
+        distinct = Number(db.exec(`SELECT count(DISTINCT ${col}) FROM ${t}`)[0]?.values[0]?.[0] ?? 1) || 1
+      } catch {
+        distinct = 50
+      }
+      const def = new RegExp('[`"]?' + col + '[`"]?\\s+(\\w+)\\s*(?:\\((\\d+)\\))?', 'i').exec(inst.ddl.get(t) ?? '')
+      const ty = (def?.[1] ?? 'int').toLowerCase()
+      const keyLen = /^big/.test(ty) ? 8 : /int/.test(ty) ? 4 : /^date$/.test(ty) ? 3 : /datetime|timestamp/.test(ty) ? 5 : /char/.test(ty) ? Number(def?.[2] ?? 50) * 4 + 2 : 8
+      return [i + 1, 'SIMPLE', t, 'ref', possible.join(',') || idx, idx, String(keyLen), 'const', Math.max(1, Math.round(total / distinct)), '']
+    }
     return [i + 1, 'SIMPLE', t, 'ALL', possible.length ? possible.join(',') : null, null, null, null, total, /WHERE/i.test(query) ? 'Using where' : '']
   })
   return { kind: 'rows', columns: ['id', 'select_type', 'table', 'type', 'possible_keys', 'key', 'key_len', 'ref', 'rows', 'Extra'], rows }

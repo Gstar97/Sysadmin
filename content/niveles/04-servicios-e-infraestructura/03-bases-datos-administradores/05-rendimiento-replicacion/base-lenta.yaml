@@ -1,0 +1,122 @@
+tipo: troubleshooting
+titulo: La tienda se cuelga y la base no responde
+descripcion: >-
+  Incidente simulado. La tienda online corre en web01 y su base, MariaDB 10.11, en db01 (Rocky
+  Linux 10, 8 GB de RAM, dedicado a la base). Es martes a media mañana, el horario de más ventas.
+  Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Martes, 10:31. Llaman de Ventas: la tienda tarda veinte segundos en cargar y a algunos
+      clientes les sale una página de error. Mirás el log de la aplicación en web01.
+    evidencia:
+      - titulo: tail -n 3 /var/log/tienda/app.log (en web01)
+        contenido: |
+          [2026-11-17 10:30:58] ERROR SQLSTATE[HY000] [1040] Too many connections
+          [2026-11-17 10:31:02] ERROR SQLSTATE[HY000] [1040] Too many connections
+          [2026-11-17 10:31:05] WARNING consulta lenta: SELECT * FROM productos WHERE ... (19.8 s)
+      - titulo: uptime (en db01)
+        contenido: |
+          10:31:22 up 41 days,  3:12,  1 user,  load average: 0.41, 0.38, 0.35
+    opciones:
+      - texto: Ver qué están haciendo las conexiones que ya tiene MariaDB (SHOW FULL PROCESSLIST)
+        ir_a: n_lista
+        minutos: 3
+      - texto: Subir max_connections a 2000 y reiniciar MariaDB
+        ir_a: n1
+        minutos: 6
+        consecuencia: >-
+          Después del reinicio la tienda anda diez minutos y vuelve a trabarse, ahora con 400
+          conexiones esperando en lugar de 151. "Too many connections" es el síntoma: las
+          conexiones se acumulan porque algo no las deja terminar. Y la carga del servidor es
+          bajísima (0.41): la base no está trabajando de más, está esperando algo.
+      - texto: Reiniciar MariaDB
+        ir_a: n1
+        minutos: 5
+        consecuencia: >-
+          Corta todas las compras en curso y a los quince minutos el problema vuelve, porque lo
+          que lo causa se vuelve a lanzar. Reiniciar borra la evidencia antes de leerla.
+  n_lista:
+    situacion: >-
+      Hay 151 conexiones (el máximo de fábrica). Casi todas dicen lo mismo, y las más viejas
+      cuentan otra historia.
+    evidencia:
+      - titulo: sudo mysql -e 'SHOW FULL PROCESSLIST' (resumido, ordenado por tiempo)
+        contenido: |
+          Id    User         Host                db      Command  Time  State                            Info
+          8812  informes     192.168.10.40:51122 tienda  Query    2381  Sending data                     SELECT p.categoria, sum(d.cantidad*d.precio) FROM detalle d JOIN productos p ...
+          8840  juan         192.168.10.77:40310 tienda  Query    1693  Waiting for table metadata lock  ALTER TABLE productos ADD COLUMN destacado TINYINT NOT NULL DEFAULT 0
+          8851  tienda_app   192.168.10.11:38820 tienda  Query    1688  Waiting for table metadata lock  SELECT * FROM productos WHERE id = 412
+          8853  tienda_app   192.168.10.11:38826 tienda  Query    1687  Waiting for table metadata lock  SELECT * FROM productos WHERE categoria = 'ofertas' ...
+          ...   (146 más, todas tienda_app, todas "Waiting for table metadata lock" sobre productos)
+    opciones:
+      - texto: Cancelar el ALTER (KILL 8840), que es el que hace esperar a todos, y hablar con quien lo lanzó
+        ir_a: n_swap
+        minutos: 4
+      - texto: Cancelar las 146 consultas de la tienda que están esperando
+        ir_a: n_lista
+        minutos: 5
+        consecuencia: >-
+          Se liberan conexiones por unos segundos, y las nuevas consultas de la tienda se vuelven a
+          formar en la misma fila. Ellas no causan nada: esperan detrás del ALTER.
+      - texto: Cancelar el informe (KILL 8812) y dejar que el ALTER termine
+        ir_a: n_lista
+        minutos: 6
+        consecuencia: >-
+          El ALTER arranca y la tienda sigue trabada otros diez minutos, porque cambiar la
+          estructura de una tabla grande lleva tiempo. Era mejor cancelar el ALTER y hacerlo fuera
+          de horario. El informe no molestaba a nadie hasta que llegó el ALTER.
+  n_swap:
+    situacion: >-
+      Juan, de desarrollo, lanzó el ALTER desde su computadora "porque era un cambio chico". Al
+      cancelarlo, las 146 consultas terminan en un segundo y la tienda vuelve. Quedan para la noche.
+      Pero en la tarde la tienda anda bastante más lenta que la semana pasada, aunque ya no hay
+      esperas en la lista de procesos.
+    evidencia:
+      - titulo: free -h (en db01)
+        contenido: |2
+                         total        used        free      shared  buff/cache   available
+          Mem:           7.5Gi        7.2Gi       112Mi        12Mi       310Mi       180Mi
+          Swap:          4.0Gi        2.9Gi       1.1Gi
+      - titulo: vmstat 5 3 (columnas si y so)
+        contenido: |
+          si   so
+          812  1430
+          790  1288
+          845  1502
+      - titulo: /etc/my.cnf.d/rendimiento.cnf (cambiado la semana pasada)
+        contenido: |
+          [mysqld]
+          innodb_buffer_pool_size = 7G
+          max_connections = 151
+    opciones:
+      - texto: Bajar innodb_buffer_pool_size a 5G y reiniciar MariaDB a la noche, fuera de horario
+        ir_a: n_ok
+        minutos: 4
+      - texto: Agregar 8 GB más de swap
+        ir_a: n_swap
+        minutos: 6
+        consecuencia: >-
+          La swap ya está en uso constante (si y so altos en vmstat): es el disco haciendo de
+          memoria, cientos de veces más lento. Más swap es más espacio para ser lento. El problema
+          es que a MariaDB se le dio más memoria de la que hay.
+      - texto: Vaciar la caché del sistema (echo 3 > /proc/sys/vm/drop_caches)
+        ir_a: n_swap
+        minutos: 3
+        consecuencia: >-
+          La caché ya era mínima (310 MB) y vaciarla no devuelve la memoria que usa MariaDB. Lo
+          que está de más es el buffer pool: 7 GB en una máquina de 7,5, sin lugar para el sistema
+          ni para las conexiones.
+  n_ok:
+    final: exito
+    resumen: >-
+      Eran dos problemas apilados. El primero, una espera en cadena: un informe largo usaba la
+      tabla productos, un ALTER TABLE lanzado en horario de ventas esperó a que terminara y, detrás
+      del ALTER, se formaron todas las consultas de la tienda hasta agotar max_connections. La
+      carga baja del servidor era la pista: la base no trabajaba, esperaba. Se canceló el ALTER y
+      queda como regla que los cambios de estructura se hacen fuera de horario, y los informes van
+      contra una réplica. El segundo, la semana anterior alguien subió el buffer pool a 7 GB en un
+      servidor de 8: el sistema terminó usando swap y todo se volvió lento. Con 5 GB (entre el 50 y
+      el 70 % de la RAM) vuelve a haber lugar para el sistema y las conexiones. Para la próxima: un
+      cambio de configuración se prueba y se anota, y el monitoreo avisa cuando la swap se usa.

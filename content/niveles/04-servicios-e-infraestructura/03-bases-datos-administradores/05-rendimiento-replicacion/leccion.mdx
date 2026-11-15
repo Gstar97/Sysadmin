@@ -1,0 +1,158 @@
+---
+id: n4-m3-l5
+titulo: Rendimiento y replicación
+minutos: 150
+objetivos:
+  - Encontrar las consultas lentas con el registro de consultas lentas, la lista de procesos y el plan de ejecución.
+  - "Resolver los casos típicos del administrador: un índice que falta, memoria mal repartida, conexiones agotadas."
+  - Entender qué es la replicación, para qué sirve, cómo se controla el atraso y por qué no reemplaza al respaldo.
+glosario: [indice-bd, slow-log, buffer-pool, replicacion-bd]
+verificado: 2026-11
+---
+
+import replicacion from './replicacion.svg?raw'
+import lenta from './ej-lenta.yaml'
+import baseLenta from './base-lenta.yaml'
+
+"La base está lenta" es de los reclamos más comunes que le llegan a un administrador, y casi nunca se arregla comprando un servidor más grande. Lo que suele pasar es más concreto: una consulta que recorre toda una tabla porque le falta un índice, una base que tiene poca memoria (o demasiada, y el sistema termina usando swap), o conexiones que esperan a otra que no termina. Esta lección es sobre cómo encontrar cuál de esas es, sin adivinar. Y al final, la replicación: copias de la base en otros servidores, que ayudan con la carga y con las roturas, pero no con los errores.
+
+<AntesDeEmpezar>
+- SQL básico y qué es una clave primaria (lección 4.3.1).
+- MariaDB y PostgreSQL desde la terminal (lecciones 4.3.2 y 4.3.3).
+- Memoria, swap y carga del sistema (módulo 1.5).
+- El binlog (lección 4.3.4).
+</AntesDeEmpezar>
+
+## Primero, encontrar la consulta
+
+Antes de tocar la configuración hay que saber **qué** está lento. Hay tres herramientas, de la más general a la más puntual.
+
+**El registro de consultas lentas.** Anota cada consulta que tarda más que un límite, con cuánto tardó y cuántas filas miró:
+
+```ini
+# /etc/my.cnf.d/rendimiento.cnf (en Ubuntu, /etc/mysql/mariadb.conf.d/)
+[mysqld]
+slow_query_log = 1
+slow_query_log_file = /var/lib/mysql/db01-slow.log
+long_query_time = 1
+```
+
+Lo que más dice cada entrada es la comparación entre `Rows_sent` (filas que devolvió) y `Rows_examined` (filas que miró). Devolver 25 filas mirando 50.000 es casi siempre un índice que falta. En PostgreSQL, lo mismo se activa con `log_min_duration_statement = 1000` (en milisegundos) en postgresql.conf, y las consultas aparecen en su log.
+
+**La lista de procesos.** Muestra qué está haciendo cada conexión **ahora mismo**:
+
+```sql
+-- MariaDB
+SHOW FULL PROCESSLIST;
+-- PostgreSQL
+SELECT pid, usename, state, now() - query_start AS hace, query FROM pg_stat_activity WHERE state <> 'idle';
+```
+
+Sirve para los incidentes en vivo: qué consulta lleva veinte minutos, quién está esperando a quién. Una consulta se cancela con `KILL id` en MariaDB o `SELECT pg_cancel_backend(pid)` en PostgreSQL.
+
+**El plan de ejecución.** `EXPLAIN` delante de una consulta muestra cómo piensa resolverla la base, sin ejecutarla:
+
+```sql
+EXPLAIN SELECT * FROM pedidos WHERE cliente_id = 1234;
+```
+
+En MariaDB, lo que hay que mirar es `type` y `key`: `ALL` con `key` en NULL es "recorro toda la tabla"; `ref` o `const` con un nombre de índice es "voy directo". En PostgreSQL, `Seq Scan` es recorrer todo e `Index Scan`, usar un índice; con `EXPLAIN ANALYZE` además la ejecuta y muestra los tiempos reales (cuidado: con un UPDATE o un DELETE, los ejecuta de verdad).
+
+## Índices
+
+Un **índice** es una lista ordenada de los valores de una columna, con dónde está cada fila. Funciona como el índice alfabético al final de un libro de cocina: para encontrar las recetas con berenjena no leés el libro entero, vas a la B. Sin índice, la base lee la tabla completa en cada consulta; con una tabla chica no se nota, con un millón de filas es la diferencia entre milisegundos y segundos.
+
+```sql
+CREATE INDEX idx_pedidos_cliente ON pedidos (cliente_id);
+SHOW INDEX FROM pedidos;        -- MariaDB
+\d pedidos                      -- psql
+```
+
+La clave primaria ya tiene su índice. Los que suelen faltar son los de las columnas por las que se busca o se une (`WHERE cliente_id = ...`, `JOIN ... ON d.pedido_id = p.id`). Los índices no son gratis: ocupan espacio y cada INSERT o UPDATE tiene que actualizarlos, así que no se crea uno por columna "por las dudas". Y crear un índice en una tabla grande lleva tiempo: se hace fuera de horario y se coordina con quienes programan la aplicación, que son los dueños de esas consultas.
+
+<Terminal ejercicio={lenta} />
+
+## La memoria de la base
+
+Las bases trabajan mucho más rápido cuando los datos que más se usan están en memoria. Cada una tiene un valor principal:
+
+| | MariaDB (InnoDB) | PostgreSQL |
+|---|---|---|
+| Memoria propia para datos e índices | `innodb_buffer_pool_size` | `shared_buffers` |
+| Valor de fábrica | 128 MB | 128 MB |
+| En un servidor dedicado | 50 a 70 % de la RAM | alrededor del 25 % de la RAM (el resto lo aprovecha la caché del sistema) |
+
+El valor de fábrica es chico a propósito, para que la base arranque en cualquier equipo. En un servidor dedicado de 8 GB, dejarlo en 128 MB es desperdiciar la memoria. Pero el error contrario es peor: si a la base se le da casi toda la RAM, no queda lugar para el sistema ni para cada conexión, el sistema empieza a usar **swap** (el disco haciendo de memoria) y todo se vuelve mucho más lento. La señal está en `free -h` (swap usada) y en `vmstat 5` (columnas `si` y `so` distintas de cero todo el tiempo).
+
+Si en el mismo servidor corren otras cosas (la aplicación, nginx), la base recibe bastante menos. El cambio se hace en el archivo de configuración y requiere reiniciar el servicio.
+
+## Too many connections
+
+Cada conexión a la base usa memoria. Por eso hay un máximo: `max_connections` (151 de fábrica en MariaDB, 100 en PostgreSQL). Cuando se llega, las nuevas conexiones reciben `ERROR 1040: Too many connections` en MariaDB o `FATAL: sorry, too many clients already` en PostgreSQL.
+
+La reacción automática es subir el número, y casi nunca es la solución. Las conexiones se acumulan porque algo no las deja terminar: una consulta lenta que se repite, o una espera en cadena. El caso clásico: un informe largo usa una tabla, alguien lanza un `ALTER TABLE` sobre esa tabla, el ALTER espera al informe, y todas las consultas que llegan después esperan al ALTER ("Waiting for table metadata lock"). La pista es que el servidor tiene poca carga: no trabaja de más, espera. La lista de procesos lo muestra, y se resuelve cancelando lo que traba a los demás.
+
+Cuando de verdad hacen falta muchas conexiones (muchos servidores de aplicación, cada uno con su grupo de conexiones), en PostgreSQL se pone adelante un **pooler** como PgBouncer, que reparte pocas conexiones reales entre muchos clientes. Queda para más adelante.
+
+<Troubleshooting escenario={baseLenta} />
+
+## Replicación
+
+<Diagrama svg={replicacion} alt="A la izquierda, la tienda, que escribe y lee, y los informes, que solo leen. En el centro, db01, el primario: recibe todas las escrituras y las anota en el binlog (MariaDB) o en el WAL (PostgreSQL). A la derecha, dos réplicas: db02, que copia con unos segundos de atraso (Seconds_Behind_Master: 0), y db03, que atiende las consultas pesadas sin cargar al primario y que puede promoverse si db01 se rompe. Los informes leen de una réplica. Abajo, la advertencia: no es un respaldo, un DELETE equivocado en el primario llega a las réplicas en segundos." pie="Un primario que escribe; las réplicas repiten lo mismo, unos segundos después." />
+
+La **replicación** mantiene copias de la base en otros servidores, casi al instante. Un servidor, el **primario**, recibe las escrituras y las anota en orden (el binlog de MariaDB, el WAL de PostgreSQL); las **réplicas** leen ese registro y repiten lo mismo. Sirve para dos cosas:
+
+- **Repartir la lectura.** Los informes y las consultas pesadas van contra una réplica, sin cargar al primario (y sin trabar a la tienda, como en el incidente de arriba).
+- **Sobrevivir a la rotura del primario.** Si db01 se rompe, una réplica se **promueve** a primario y la aplicación pasa a usarla. Hacerlo a mano está a tu alcance; hacerlo automático (con herramientas como Patroni o Galera) queda para más adelante.
+
+En MariaDB, la réplica se configura con un `server_id` distinto en cada servidor, el binlog activado en el primario, una cuenta con el permiso `REPLICATION SLAVE`, y en la réplica un `CHANGE MASTER TO` con la posición del binlog que anotó el respaldo inicial (el mismo `--source-data` de la lección anterior). Su estado se mira en la réplica:
+
+```sql
+SHOW REPLICA STATUS\G
+--   Slave_IO_Running: Yes
+--  Slave_SQL_Running: Yes
+-- Seconds_Behind_Master: 0
+```
+
+Los dos `Yes` dicen que la réplica recibe y aplica; `Seconds_Behind_Master` es el **atraso** (lag). Un atraso que crece sin parar avisa que la réplica no da abasto, o que una consulta muy larga la frenó. Si uno de los dos dice `No`, `Last_SQL_Error` dice por qué; lo típico es que alguien escribió directamente en la réplica y ahora un dato choca. Por eso las réplicas llevan `read_only = 1`.
+
+En PostgreSQL la idea es la misma con otro mecanismo (la réplica se crea con `pg_basebackup` y recibe el WAL en tiempo real); armarla queda para más adelante.
+
+<Advertencia>
+La réplica no es un respaldo. Un `DELETE` sin `WHERE` en el primario se repite en todas las réplicas en uno o dos segundos. Para volver atrás hacen falta los respaldos y el binlog de la lección anterior.
+</Advertencia>
+
+<EnSimple>
+Cuando la base está lenta: primero encontrar la consulta (registro de consultas lentas, lista de procesos), después ver cómo la resuelve (EXPLAIN). Lo más común es un índice que falta. La memoria de la base se ajusta según cuánto tiene el servidor, sin llegar a la swap. "Too many connections" casi siempre es un síntoma de que algo traba a las demás. Las réplicas reparten la carga y ayudan si se rompe el servidor, pero copian también los errores.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Subir max_connections cuando aparece “Too many connections”">
+    Las conexiones se acumulan por algo: una consulta que traba al resto o una que tarda demasiado. Mirar la lista de procesos antes de tocar el número.
+  </ErrorComun>
+  <ErrorComun titulo="Darle a la base toda la RAM">
+    Sin lugar para el sistema ni para las conexiones, el servidor usa swap y todo se vuelve más lento. 50 a 70 % en MariaDB dedicado, alrededor del 25 % en PostgreSQL.
+  </ErrorComun>
+  <ErrorComun titulo="Un índice en cada columna">
+    Ocupan espacio y hacen más lentas las escrituras. Se crean para las consultas que de verdad se usan, mirando el registro de consultas lentas.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar la estructura de una tabla en horario de trabajo">
+    Un ALTER TABLE puede trabar a todas las consultas que lleguen detrás. Fuera de horario, y avisado.
+  </ErrorComun>
+  <ErrorComun titulo="Usar EXPLAIN ANALYZE con un DELETE para “ver el plan”">
+    En PostgreSQL, ANALYZE ejecuta la consulta de verdad. Para un cambio, EXPLAIN solo, o dentro de una transacción que se deshace con ROLLBACK.
+  </ErrorComun>
+  <ErrorComun titulo="Escribir en una réplica">
+    Rompe la replicación cuando el dato choca con lo que viene del primario. Las réplicas, con read_only = 1.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Encontrar la consulta: registro de consultas lentas (Rows_sent contra Rows_examined), SHOW FULL PROCESSLIST o pg_stat_activity.
+- EXPLAIN: type ALL o Seq Scan es recorrer toda la tabla; ref o Index Scan, usar un índice.
+- Índices en las columnas por las que se busca o se une, no en todas; se crean fuera de horario.
+- Memoria: innodb_buffer_pool_size (50 a 70 % en un servidor dedicado), shared_buffers (alrededor del 25 %); nunca hasta usar swap.
+- Too many connections es un síntoma: buscar qué traba a las demás (KILL o pg_cancel_backend).
+- Replicación: el primario escribe, las réplicas repiten; SHOW REPLICA STATUS, dos Yes y el atraso en Seconds_Behind_Master; read_only en las réplicas.
+- La réplica no es un respaldo.
+</Resumen>

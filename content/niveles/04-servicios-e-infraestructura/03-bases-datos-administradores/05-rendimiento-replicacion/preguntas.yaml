@@ -1,0 +1,124 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Un usuario dice que "la base está lenta". ¿Qué hacés primero?
+  opciones:
+    - { texto: "Buscar qué consulta es la lenta (registro de consultas lentas, lista de procesos)", correcta: true, explicacion: "Sin saber qué está lento, cualquier cambio es adivinar." }
+    - { texto: "Duplicar la RAM del servidor", explicacion: "Casi nunca es la causa, y no sabés si ayuda." }
+    - { texto: "Reiniciar la base", explicacion: "Borra la evidencia y el problema vuelve." }
+    - { texto: "Subir max_connections", explicacion: "No tiene que ver con la velocidad de una consulta." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esta entrada del registro de consultas lentas?
+  salida: |
+    # Query_time: 3.912044  Lock_time: 0.000062  Rows_sent: 12  Rows_examined: 820000
+    SELECT * FROM facturas WHERE cuit = '30-71234567-9';
+  opciones:
+    - { texto: "Para devolver 12 filas miró 820.000: probablemente falta un índice en cuit", correcta: true, explicacion: "Es la comparación más útil del registro." }
+    - { texto: "La consulta esperó un bloqueo", explicacion: "Lock_time es casi cero." }
+    - { texto: "Devolvió demasiadas filas", explicacion: "Devolvió 12." }
+    - { texto: "El servidor tiene poca memoria", explicacion: "Puede ser, pero lo que se ve es que recorre toda la tabla." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Cómo resuelve MariaDB esta consulta?
+  salida: |
+    MariaDB [tienda]> EXPLAIN SELECT * FROM pedidos WHERE cliente_id = 87;
+    +------+-------------+---------+------+---------------+------+---------+------+-------+-------------+
+    | id   | select_type | table   | type | possible_keys | key  | key_len | ref  | rows  | Extra       |
+    +------+-------------+---------+------+---------------+------+---------+------+-------+-------------+
+    |    1 | SIMPLE      | pedidos | ALL  | NULL          | NULL | NULL    | NULL | 50000 | Using where |
+    +------+-------------+---------+------+---------------+------+---------+------+-------+-------------+
+  opciones:
+    - { texto: "Recorre toda la tabla (type ALL, sin índice)", correcta: true, explicacion: "Con un índice en cliente_id pasaría a type ref." }
+    - { texto: "Usa la clave primaria", explicacion: "key es NULL: no usa ninguno." }
+    - { texto: "Devuelve 50.000 filas", explicacion: "rows es cuántas estima que va a mirar, no las que devuelve." }
+    - { texto: "La consulta tiene un error", explicacion: "Es válida; solo es lenta." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí la sentencia que crea el índice idx_facturas_cuit sobre la columna cuit de la tabla facturas.
+  aceptadas:
+    - "CREATE INDEX idx_facturas_cuit ON facturas (cuit);"
+    - "CREATE INDEX idx_facturas_cuit ON facturas (cuit)"
+    - "create index idx_facturas_cuit on facturas (cuit);"
+  patrones: ["^(CREATE|create) (INDEX|index) idx_facturas_cuit (ON|on) facturas ?\\(cuit\\);?$"]
+  explicacion: "En una tabla grande, mejor fuera de horario."
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no se crea un índice en cada columna, por las dudas?
+  opciones:
+    - { texto: "Ocupan espacio y cada INSERT o UPDATE tiene que actualizarlos todos", correcta: true, explicacion: "Se crean para las consultas que se usan." }
+    - { texto: "MariaDB permite solo un índice por tabla", explicacion: "Permite muchos." }
+    - { texto: "Hacen más lentas las lecturas", explicacion: "Las hacen más rápidas; el costo está en las escrituras." }
+    - { texto: "Borran datos", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: db01 tiene 16 GB de RAM y solo corre MariaDB. ¿Qué valor de innodb_buffer_pool_size es razonable?
+  opciones:
+    - { texto: "Entre 8 y 11 GB", correcta: true, explicacion: "Del 50 al 70 % de la RAM, dejando lugar al sistema y a las conexiones." }
+    - { texto: "128 MB, el valor de fábrica", explicacion: "Desperdicia casi toda la memoria." }
+    - { texto: "16 GB", explicacion: "No queda nada para el sistema: termina en swap." }
+    - { texto: "32 GB, con swap", explicacion: "La swap es el disco: mucho más lenta." }
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: La tienda da "Too many connections". ¿Qué está pasando?
+  salida: |
+    Id    User        Time  State                            Info
+    5120  informes    1950  Sending data                     SELECT ... FROM detalle JOIN productos ...
+    5131  ana         1402  Waiting for table metadata lock  ALTER TABLE productos ADD COLUMN ...
+    5140  tienda_app  1399  Waiting for table metadata lock  SELECT * FROM productos WHERE id = 9
+    ...   (140 más iguales, de tienda_app)
+  opciones:
+    - { texto: "El ALTER espera al informe, y todas las consultas de la tienda esperan al ALTER", correcta: true, explicacion: "Cancelar el ALTER libera la fila; el cambio, fuera de horario." }
+    - { texto: "max_connections es muy bajo", explicacion: "Es el síntoma: con 2000, se llenarían igual." }
+    - { texto: "La tienda tiene un error de programación", explicacion: "Sus consultas son simples; esperan." }
+    - { texto: "Falta un índice en productos", explicacion: "Las consultas no están lentas: están esperando un bloqueo." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué señales te dicen que el servidor de la base está usando swap? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "free -h muestra varios GB de swap usada y poca memoria disponible", correcta: true, explicacion: "Es la primera mirada." }
+    - { texto: "vmstat muestra si y so distintos de cero todo el tiempo", correcta: true, explicacion: "Está moviendo datos entre memoria y disco." }
+    - { texto: "Todo anda más lento sin que haya consultas trabadas", correcta: true, explicacion: "Es el síntoma." }
+    - { texto: "SHOW REPLICA STATUS dice Yes", explicacion: "Eso es la replicación." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve una réplica de la base?
+  opciones:
+    - { texto: "Repartir las lecturas pesadas y tener a mano un servidor que pueda reemplazar al primario", correcta: true, explicacion: "Disponibilidad y carga." }
+    - { texto: "Recuperar una tabla borrada por error", explicacion: "El DELETE también se copia; para eso son los respaldos." }
+    - { texto: "Que la aplicación pueda escribir en dos lugares", explicacion: "Las escrituras van al primario; las réplicas, con read_only." }
+    - { texto: "Reemplazar los respaldos", explicacion: "No los reemplaza." }
+- id: p10
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: ¿Qué le pasa a esta réplica?
+  salida: |
+    MariaDB [(none)]> SHOW REPLICA STATUS\G
+                 Slave_IO_Running: Yes
+                Slave_SQL_Running: No
+                   Last_SQL_Errno: 1062
+                   Last_SQL_Error: Error 'Duplicate entry '5512' for key 'PRIMARY'' on query. Default database: 'tienda'. Query: 'INSERT INTO clientes ...'
+            Seconds_Behind_Master: NULL
+  opciones:
+    - { texto: "Recibe los cambios pero dejó de aplicarlos: alguien escribió directo en la réplica y ahora un dato choca", correcta: true, explicacion: "Por eso las réplicas llevan read_only = 1." }
+    - { texto: "No llega al primario por la red", explicacion: "Slave_IO_Running dice Yes: recibe." }
+    - { texto: "Está al día", explicacion: "Seconds_Behind_Master NULL: no está aplicando nada." }
+    - { texto: "Falta un índice", explicacion: "Es un dato duplicado." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En PostgreSQL querés ver el plan de un DELETE grande antes de ejecutarlo. ¿Qué usás?
+  opciones:
+    - { texto: "EXPLAIN, sin ANALYZE", correcta: true, explicacion: "EXPLAIN ANALYZE ejecuta la consulta de verdad." }
+    - { texto: "EXPLAIN ANALYZE", explicacion: "Borraría las filas." }
+    - { texto: "SHOW PROCESSLIST", explicacion: "Eso es de MariaDB, y muestra lo que corre ahora." }
+    - { texto: "pg_stat_activity", explicacion: "Muestra lo que corre ahora, no el plan." }
