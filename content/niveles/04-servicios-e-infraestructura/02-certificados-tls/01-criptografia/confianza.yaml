@@ -1,0 +1,41 @@
+tipo: diagrama
+titulo: La cadena de confianza
+puntos:
+  - id: raiz
+    titulo: La raíz
+    area: { x: 2.3, y: 12.1, ancho: 34.9, alto: 21.2 }
+    texto: >-
+      Un certificado que se firma a sí mismo. Vale porque viene guardado en el almacén de
+      confianza del sistema operativo y del navegador, que lo eligen con auditorías y reglas
+      públicas. Dura muchos años, y la autoridad lo guarda fuera de línea, en un equipo especial,
+      porque si su clave privada se filtrara, todo lo que firmó dejaría de ser confiable.
+  - id: intermedia
+    titulo: La intermedia
+    area: { x: 2.3, y: 42.4, ancho: 34.9, alto: 21.2 }
+    texto: >-
+      Firmada por la raíz. Es la que la autoridad usa en el día a día para firmar los certificados
+      de los sitios. Si se compromete, se revoca y se emite otra, sin tocar la raíz ni los
+      almacenes de confianza de millones de equipos.
+  - id: hoja
+    titulo: El certificado del servidor
+    area: { x: 2.3, y: 72.7, ancho: 34.9, alto: 21.2 }
+    texto: >-
+      Dice "esta clave pública es de www.ejemplo.com" y está firmado por la intermedia. Adentro:
+      los nombres (Subject Alternative Name), las fechas de validez, la clave pública y la firma.
+      La clave privada que le corresponde no viaja nunca: queda en el servidor, con permisos 600.
+  - id: envio
+    titulo: Lo que manda el servidor
+    area: { x: 44.2, y: 12.1, ancho: 53.5, alto: 33.3 }
+    texto: >-
+      Al conectarse, el servidor manda su certificado y la intermedia (en nginx, el archivo
+      fullchain.pem). La raíz no hace falta, porque el cliente ya la tiene. El error más común de
+      configuración es mandar solo el certificado: algunos navegadores lo arreglan solos buscando la
+      intermedia, pero curl, las aplicaciones y muchos celulares fallan.
+  - id: comprueba
+    titulo: Lo que comprueba el cliente
+    area: { x: 44.2, y: 51.5, ancho: 53.5, alto: 42.4 }
+    texto: >-
+      Nombre, fechas y firmas, una por una, hasta llegar a una raíz que tiene guardada. Y al final
+      del saludo TLS, el servidor demuestra que tiene la clave privada (firmando algo con ella).
+      Si cualquiera de estos pasos falla, el navegador muestra "la conexión no es privada" y curl
+      se niega a seguir.

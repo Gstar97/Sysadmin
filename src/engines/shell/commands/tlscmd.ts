@@ -5,6 +5,7 @@
 import { http01, lineages, LE_DIR, writeLineage, type Lineage } from '../acme'
 import { endpointAt, openSslVersion, reach, web } from '../http'
 import { register, type CommandContext } from '../shell'
+import { digest } from './files'
 import { nginxStartCheck } from '../web'
 import {
   anchorsDir,
@@ -17,6 +18,7 @@ import {
   hashHex,
   issue,
   keyIn,
+  pubIn,
   modulus,
   newKey,
   OPENSSL_ERR,
@@ -89,7 +91,7 @@ function fromDer(text: string): CertData | undefined {
 
 /** Opciones estilo openssl: -in archivo, -noout, -addext (repetible). */
 function opts(args: string[]): { flags: Set<string>; vals: Map<string, string[]>; rest: string[] } {
-  const withValue = new Set(['-in', '-out', '-key', '-keyout', '-subj', '-days', '-addext', '-newkey', '-CA', '-CAkey', '-CAfile', '-untrusted', '-connect', '-servername', '-algorithm', '-pkeyopt', '-inkey', '-certfile', '-passout', '-passin', '-password', '-name', '-extfile', '-extensions', '-copy_extensions', '-signkey', '-checkend', '-ext', '-inform', '-outform', '-config', '-reqexts', '-set_serial', '-CAserial', '-nameopt', '-verify_hostname', '-pass', '-sigopt'])
+  const withValue = new Set(['-in', '-out', '-key', '-keyout', '-subj', '-days', '-addext', '-newkey', '-CA', '-CAkey', '-CAfile', '-untrusted', '-connect', '-servername', '-algorithm', '-pkeyopt', '-inkey', '-certfile', '-passout', '-passin', '-password', '-name', '-extfile', '-extensions', '-copy_extensions', '-signkey', '-checkend', '-ext', '-inform', '-outform', '-config', '-reqexts', '-set_serial', '-CAserial', '-nameopt', '-verify_hostname', '-pass', '-sigopt', '-sign', '-verify', '-prverify', '-signature', '-k', '-iter'])
   const flags = new Set<string>()
   const vals = new Map<string, string[]>()
   const rest: string[] = []
@@ -508,6 +510,143 @@ function pkcs12(ctx: CommandContext, o: ReturnType<typeof opts>): number {
   return writeOut(ctx, one(o, '-out'), out, 0o600) ? 0 : 1
 }
 
+// ---------------------------------------------------------------------------------------
+// Hashes, firmas y cifrado simétrico
+// ---------------------------------------------------------------------------------------
+
+const DIGESTS: Record<string, { algo: string; name: string }> = {
+  md5: { algo: 'MD5', name: 'MD5' },
+  sha1: { algo: 'SHA-1', name: 'SHA1' },
+  sha256: { algo: 'SHA-256', name: 'SHA2-256' },
+  sha384: { algo: 'SHA-384', name: 'SHA2-384' },
+  sha512: { algo: 'SHA-512', name: 'SHA2-512' },
+}
+const SIG = 'SIMSIG1:'
+
+function readFileArg(ctx: CommandContext, f: string): string | undefined {
+  try {
+    return ctx.sys.vfs.readFile(ctx.sh.resolve(f), ctx.sh.cred)
+  } catch {
+    ctx.err(`Could not open file or uri for loading ${f}\n`)
+    return undefined
+  }
+}
+
+/** openssl dgst: el hash de un archivo, o firmarlo (-sign) y verificar la firma (-verify). */
+async function dgst(ctx: CommandContext, sub: string, o: ReturnType<typeof opts>): Promise<number> {
+  const key = sub === 'dgst' ? (Object.keys(DIGESTS).find((k) => o.flags.has(`-${k}`)) ?? 'sha256') : sub
+  const d = DIGESTS[key]
+  const files = o.rest.length ? o.rest : ['-']
+  const content = (f: string) => (f === '-' ? ctx.stdin.readAll() : readFileArg(ctx, f))
+  const signWith = one(o, '-sign')
+  const verifyWith = one(o, '-verify') ?? one(o, '-prverify')
+  if (signWith) {
+    const k = loadKey(ctx, signWith)
+    const text = content(files[0])
+    if (!k || text === undefined) return 1
+    const sig = SIG + JSON.stringify({ k: k.id, d: await digest(d.algo, text) })
+    const out = one(o, '-out')
+    if (!out) {
+      ctx.out(sig + '\n')
+      return 0
+    }
+    return writeOut(ctx, out, sig) ? 0 : 1
+  }
+  if (verifyWith) {
+    const keyText = readIn(ctx, verifyWith, 'pkey')
+    if (keyText === undefined) return 1
+    const pub = one(o, '-prverify') ? keyIn(keyText) : (pubIn(keyText) ?? keyIn(keyText))
+    if (!pub) {
+      ctx.err(`Could not find public key from ${verifyWith}\nUnable to load public key\n`)
+      return 1
+    }
+    const sigFile = one(o, '-signature')
+    if (!sigFile) {
+      ctx.err('No signature to verify: use the -signature option\n')
+      return 1
+    }
+    const sigText = readFileArg(ctx, sigFile)
+    const text = content(files[0])
+    if (sigText === undefined || text === undefined) return 1
+    let ok = false
+    if (sigText.startsWith(SIG)) {
+      try {
+        const s = JSON.parse(sigText.slice(SIG.length)) as { k: string; d: string }
+        ok = s.k === pub.id && s.d === (await digest(d.algo, text))
+      } catch {
+        ok = false
+      }
+    }
+    if (ok) {
+      ctx.out('Verified OK\n')
+      return 0
+    }
+    ctx.out('Verification failure\n')
+    if (pub.alg === 'RSA') ctx.err(`${hashHex('v', 12).toUpperCase()}:error:02000068:rsa routines:ossl_rsa_verify:bad signature:../crypto/rsa/rsa_sign.c:442:\n`)
+    return 1
+  }
+  for (const f of files) {
+    const text = content(f)
+    if (text === undefined) return 1
+    ctx.out(`${d.name}(${f === '-' ? 'stdin' : f})= ${await digest(d.algo, text)}\n`)
+  }
+  return 0
+}
+
+const ENC = 'Salted__SIMENC1:'
+
+/** openssl enc: cifrado simétrico con contraseña (-pass pass:...), y -d para descifrar. */
+async function enc(ctx: CommandContext, o: ReturnType<typeof opts>): Promise<number> {
+  const cipher = [...o.flags].find((f) => /^-(aes|chacha|camellia|des)/i.test(f))?.slice(1)
+  if (!cipher) {
+    ctx.err('[simulador] Elegí el algoritmo, por ejemplo: openssl enc -aes-256-cbc -pbkdf2 -in archivo -out archivo.enc\n')
+    return 1
+  }
+  if (/^des/i.test(cipher)) {
+    ctx.err(`enc: Unknown option or cipher: ${cipher}\n[simulador] DES ya no viene habilitado en OpenSSL 3: está roto hace décadas. Usá -aes-256-cbc.\n`)
+    return 1
+  }
+  const passArg = one(o, '-pass') ?? (one(o, '-k') !== undefined ? `pass:${one(o, '-k')}` : undefined)
+  let pass: string | undefined
+  if (passArg?.startsWith('pass:')) pass = passArg.slice(5)
+  else if (passArg?.startsWith('file:')) pass = readFileArg(ctx, passArg.slice(5))?.split('\n')[0]
+  else if (passArg?.startsWith('env:')) pass = ctx.sh.getVar(passArg.slice(4)) ?? ''
+  if (pass === undefined) {
+    ctx.err(`enter ${cipher.toUpperCase()} ${o.flags.has('-d') ? 'decryption' : 'encryption'} password:\n[simulador] En el simulador la contraseña va con -pass pass:LaContraseña (en un servidor real, mejor que la pida: así no queda en el historial).\n`)
+    return 1
+  }
+  const strong = o.flags.has('-pbkdf2') || o.vals.has('-iter')
+  const input = readIn(ctx, one(o, '-in'), 'enc')
+  if (input === undefined) return 1
+  const b64 = o.flags.has('-a') || o.flags.has('-base64')
+  if (o.flags.has('-d')) {
+    const raw = b64 ? (() => { try { return atob(input.replace(/\s+/g, '')) } catch { return '' } })() : input
+    let data: { p: string; c: string; k: boolean; x: string } | undefined
+    if (raw.startsWith(ENC)) {
+      try {
+        data = JSON.parse(raw.slice(ENC.length))
+      } catch {
+        data = undefined
+      }
+    }
+    if (!data) {
+      ctx.err('bad magic number\n')
+      return 1
+    }
+    if (!strong && data.k) ctx.err('*** WARNING : deprecated key derivation used.\nUsing -iter or -pbkdf2 would be better.\n')
+    if (data.p !== (await digest('SHA-256', `pass:${pass}`)) || data.c !== cipher.toLowerCase() || data.k !== strong) {
+      ctx.err(`bad decrypt\n${hashHex('d', 12).toUpperCase()}:error:1C800064:Provider routines:ossl_cipher_unpadblock:bad decrypt:../providers/implementations/ciphers/ciphercommon_block.c:107:\n`)
+      return 1
+    }
+    const plain = decodeURIComponent(escape(atob(data.x)))
+    return writeOut(ctx, one(o, '-out'), plain, 0o644) ? 0 : 1
+  }
+  if (!strong) ctx.err('*** WARNING : deprecated key derivation used.\nUsing -iter or -pbkdf2 would be better.\n')
+  const blob = ENC + JSON.stringify({ p: await digest('SHA-256', `pass:${pass}`), c: cipher.toLowerCase(), k: strong, x: btoa(unescape(encodeURIComponent(input))) })
+  const out = b64 ? btoa(blob).replace(/.{64}/g, '$&\n') + '\n' : blob
+  return writeOut(ctx, one(o, '-out'), out, 0o644) ? 0 : 1
+}
+
 register('openssl', {
   usage: 'openssl genpkey | req | x509 | verify | s_client | pkcs12 | rand | dgst | version',
   run(ctx) {
@@ -558,36 +697,25 @@ register('openssl', {
         if (o.flags.has('-check')) out += k.alg === 'RSA' ? 'RSA key ok\n' : 'Key is valid\n'
         if (o.flags.has('-modulus')) out += `Modulus=${modulus(k.id)}\n`
         if (o.flags.has('-text')) out += `Private-Key: (${k.bits} bit${k.alg === 'RSA' ? ', 2 primes' : ''})\n`
-        if (o.flags.has('-pubout')) out += `-----BEGIN PUBLIC KEY-----\n${hashHex(`pub:${k.id}`, 64)}\n-----END PUBLIC KEY-----\n`
+        if (o.flags.has('-pubout')) out += toPem({ t: 'pub', id: k.id, alg: k.alg, bits: k.bits })
         else if (!o.flags.has('-noout')) out += toPem(k)
         return writeOut(ctx, one(o, '-out'), out, 0o600) ? 0 : 1
       }
       case 'dgst':
       case 'sha256':
-      case 'md5': {
-        const alg = sub === 'md5' || o.flags.has('-md5') ? 'MD5' : 'SHA2-256'
-        const len = alg === 'MD5' ? 32 : 64
-        if (!o.rest.length) {
-          ctx.out(`${alg}(stdin)= ${hashHex(`dgst:${ctx.stdin.readAll()}`, len)}\n`)
-          return 0
-        }
-        for (const f of o.rest) {
-          try {
-            ctx.out(`${alg}(${f})= ${hashHex(`dgst:${ctx.sys.vfs.readFile(ctx.sh.resolve(f), ctx.sh.cred)}`, len)}\n`)
-          } catch {
-            ctx.err(`Could not open file or uri for loading ${f}\n`)
-            return 1
-          }
-        }
-        return 0
-      }
+      case 'sha1':
+      case 'sha512':
+      case 'md5':
+        return dgst(ctx, sub, o)
+      case 'enc':
+        return enc(ctx, o)
       case 'x509v3':
       case 'ca':
         ctx.err(`[simulador] openssl ${sub} no está simulado: para firmar con tu CA usá openssl x509 -req -in pedido.csr -CA ca.crt -CAkey ca.key.\n`)
         return 1
       case undefined:
       case 'help':
-        ctx.err('help:\n\nStandard commands\nca  crl  dgst  ec  genpkey  genrsa  pkcs12  pkey  rand  req  rsa  s_client  verify  version  x509\n')
+        ctx.err('help:\n\nStandard commands\nca  crl  dgst  ec  enc  genpkey  genrsa  pkcs12  pkey  rand  req  rsa  s_client  verify  version  x509\n')
         return sub ? 0 : 1
       default:
         ctx.err(`Invalid command '${sub}'; type "help" for a list.\n`)

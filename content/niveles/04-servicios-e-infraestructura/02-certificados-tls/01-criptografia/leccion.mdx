@@ -1,0 +1,117 @@
+---
+id: n4-m2-l1
+titulo: Criptografía para sysadmins
+minutos: 120
+objetivos:
+  - Distinguir hash, cifrado simétrico, cifrado asimétrico, firma digital e intercambio de claves, y saber para qué sirve cada uno.
+  - Explicar qué pasa en el saludo de TLS 1.3 y qué protege cada parte.
+  - Entender la cadena de confianza de un certificado y qué comprueba el cliente.
+glosario: [cifrado-simetrico, cifrado-asimetrico, firma-digital, intercambio-claves, secreto-hacia-adelante, cadena-confianza]
+verificado: 2026-11
+---
+
+import confianza from './confianza.svg?raw'
+import confianzaDatos from './confianza.yaml'
+import cripto from './ej-cripto.yaml'
+import paraQue from './para-que.yaml'
+
+No hace falta saber matemática para administrar HTTPS, VPN o SSH, pero sí saber qué piezas hay y qué hace cada una. Cuando un certificado falla, una VPN no conecta o un auditor pregunta "¿qué cifrado usan?", la respuesta sale de esta lección. Las piezas son cinco y siempre se combinan para resolver tres problemas: que nadie **lea** lo que mandás (confidencialidad), que nadie lo **cambie** sin que se note (integridad) y saber **quién** está del otro lado (autenticidad).
+
+<AntesDeEmpezar>
+- Qué es un hash (lección 0.3.5).
+- Claves SSH: la pública y la privada (lección 1.6.3).
+- HTTP por dentro (lección 4.1.1).
+</AntesDeEmpezar>
+
+## Hash: la huella
+
+Un **hash** convierte cualquier contenido en una huella de tamaño fijo. Si cambia una sola letra, la huella cambia por completo, y no hay forma de volver de la huella al contenido. Sirve para comprobar que un archivo no cambió (es lo que hacés con `sha256sum -c`).
+
+- **SHA-256** (y SHA-384, SHA-512) es el que se usa hoy.
+- **MD5 y SHA-1 están rotos** para seguridad: se pueden fabricar dos archivos distintos con la misma huella. Siguen apareciendo para detectar errores de copia, nada más.
+- Las **contraseñas** no se guardan con SHA-256, que es demasiado rápido (una placa de video prueba miles de millones por segundo), sino con hashes lentos y con "sal" (un valor al azar distinto para cada una): **yescrypt** (el de `/etc/shadow` en Ubuntu y Rocky, el que empieza con `$y$`), Argon2id o bcrypt.
+
+## Cifrado simétrico: una sola clave
+
+La misma clave cifra y descifra. Es muy rápido, y es el que protege los datos en todos lados: HTTPS, VPN, discos cifrados, respaldos. Los algoritmos de hoy son **AES** (en modo GCM, con 128 o 256 bits) y **ChaCha20-Poly1305** (más rápido en celulares sin aceleración para AES). Los dos, además de cifrar, detectan si alguien tocó los datos en el camino.
+
+El problema: las dos partes tienen que tener la misma clave. Con un respaldo, la sabés vos. Con un servidor de internet que nunca viste, ¿cómo la acuerdan si alguien escucha todo?
+
+## Cifrado asimétrico: un par de claves
+
+Cada uno tiene un **par**: una clave **pública**, que se reparte sin problema, y una **privada**, que no sale nunca de su lugar. Lo que una hace, solo la otra lo deshace. Es mucho más lento que el simétrico, así que se usa para poco: firmar y acordar claves.
+
+| Algoritmo | Tamaño hoy | Dónde lo vas a ver |
+|---|---|---|
+| RSA | 2048 bits como mínimo, 3072 recomendado | Certificados, claves SSH viejas |
+| ECDSA (curva P-256 o P-384) | 256 o 384 bits | Certificados (más cortos y rápidos que RSA) |
+| Ed25519 | 256 bits | Claves SSH, firmas de software |
+
+Se suele explicar con **un candado abierto**: repartís candados abiertos (la clave pública), cualquiera puede cerrar una caja con uno, y solo vos tenés la llave (la privada) para abrirla. La comparación sirve para cifrar, pero se queda corta para lo más usado, que es la firma: ahí el proceso va al revés y el candado no ayuda a entenderlo.
+
+## Firma digital
+
+Firmar es calcular el hash de un documento y "sellarlo" con la **clave privada**. Cualquiera con la **pública** comprueba dos cosas: que el documento no cambió y que lo firmó quien tiene la privada. Lo vas a ver en todos lados: los paquetes de `dnf` y `apt` vienen firmados (por eso el error de "GPG key" si falta la clave del repositorio), los certificados son firmas, y en SSH el servidor firma para demostrar quién es.
+
+## Intercambio de claves y secreto hacia adelante
+
+Con **ECDHE** (hoy, casi siempre con la curva **X25519**), cliente y servidor se mandan cada uno un valor público y, con su parte secreta, los dos calculan **el mismo número** sin haberlo mandado nunca. Quien escuchó todo no puede calcularlo. Ese número se convierte en la clave simétrica de la sesión.
+
+La "E" final (efímero) es importante: esas partes secretas se inventan para cada conexión y se tiran. Por eso, si mañana roban la clave privada del servidor, no pueden descifrar las conversaciones que grabaron antes. Se llama **secreto hacia adelante** (forward secrecy), y TLS 1.3 lo exige siempre.
+
+<Consejo>
+Para más adelante: una computadora cuántica grande podría romper RSA, ECDSA y ECDHE. Todavía no existe, pero alguien podría grabar tráfico hoy para descifrarlo cuando exista. Por eso los navegadores y OpenSSL 3.5 (el de Rocky 10 y Ubuntu 26.04) ya usan por defecto un intercambio híbrido, **X25519MLKEM768**, que combina X25519 con un algoritmo resistente a computadoras cuánticas (ML-KEM). En la mayoría de los servidores no hay que configurar nada: alcanza con tener el software al día.
+</Consejo>
+
+## Cómo se combinan en TLS 1.3
+
+Cuando abrís `https://www.ejemplo.com`, en una sola ida y vuelta:
+
+1. **El cliente saluda** con las versiones y cifrados que acepta, y su parte del intercambio de claves.
+2. **El servidor contesta** con lo que eligió y su parte del intercambio. Desde acá, todo va cifrado.
+3. **El servidor manda su certificado** (con la intermedia) y **una firma con su clave privada** de todo lo que se habló: eso prueba que el certificado es suyo.
+4. **El cliente verifica** el certificado y la firma, y empiezan a hablar HTTP, cifrado con AES-GCM o ChaCha20.
+
+TLS 1.2 todavía es aceptable bien configurado; TLS 1.0 y 1.1 están retirados (RFC 8996, de 2021) y no se habilitan. "SSL" es el nombre viejo: SSL 3.0 murió en 2015, aunque se siga diciendo "certificado SSL".
+
+<EnSimple>
+El hash detecta cambios. El cifrado simétrico protege los datos. Las claves pública y privada sirven para firmar y para acordar la clave simétrica sin mandarla. Un certificado es una firma que dice "esta clave pública es de este nombre".
+</EnSimple>
+
+## La cadena de confianza
+
+¿Cómo sabe el navegador que la clave pública que le manda el servidor es de verdad de www.ejemplo.com? Porque viene en un **certificado** firmado por una **autoridad certificante** (CA), cuya firma a su vez está firmada por una raíz que el navegador ya tiene guardada.
+
+<DiagramaInteractivo datos={confianzaDatos} svg={confianza} alt="Una cadena de tres certificados, de arriba hacia abajo: la raíz ISRG Root X1, que se firma a sí misma, vence en 2035 y viene guardada en el sistema y el navegador; firma a la intermedia R11, que la autoridad usa para firmar todos los días mientras la raíz queda fuera de línea; y la intermedia firma al certificado del servidor www.ejemplo.com, con sus nombres (SAN), clave pública y fechas, cuya clave privada queda solo en el servidor. A la derecha, lo que manda el servidor al conectarse: fullchain.pem, su certificado más la intermedia, sin la raíz; si falta la intermedia, muchos clientes fallan con unable to get local issuer certificate. Y lo que comprueba el cliente: que el nombre esté en el SAN, que hoy esté dentro de las fechas, cada firma con la clave pública del de arriba, que la cadena termine en una raíz de su almacén de confianza, y que el servidor pruebe que tiene la clave privada en el saludo TLS." />
+
+<Terminal ejercicio={cripto} />
+
+<Emparejar ejercicio={paraQue} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Mandar la clave privada">
+    "Pasame el certificado" nunca incluye la .key. Si una clave privada se mandó por correo o quedó en un repositorio, se considera comprometida: se genera otra y se revoca el certificado.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir cifrar con hacer un hash">
+    Un hash no se "descifra". Si un sistema puede devolverte tu contraseña por correo, la guarda cifrada (o en texto plano), no con un hash: mala señal.
+  </ErrorComun>
+  <ErrorComun titulo="Seguir usando MD5 o SHA-1 para verificar">
+    Detectan una descarga cortada, pero no a alguien que cambió el archivo a propósito. SHA-256, y si el proyecto firma su lista de huellas, verificar la firma.
+  </ErrorComun>
+  <ErrorComun titulo="Comprobar la huella contra la misma página de la descarga">
+    Si alguien cambió el archivo en ese servidor, también pudo cambiar la huella. Para eso están las firmas (con la clave pública que conseguiste por otro lado).
+  </ErrorComun>
+  <ErrorComun titulo="Claves RSA de 1024 bits">
+    Ya no se aceptan en certificados ni en SSH moderno. RSA 3072, ECDSA P-256 o Ed25519.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Tres problemas: confidencialidad, integridad y autenticidad.
+- Hash (SHA-256) para integridad; MD5 y SHA-1 rotos; contraseñas con hashes lentos y sal (yescrypt, Argon2id).
+- Simétrico (AES-GCM, ChaCha20): rápido, protege los datos, pero las dos partes necesitan la misma clave.
+- Asimétrico (RSA, ECDSA, Ed25519): par de claves; se usa para firmar y para acordar claves.
+- ECDHE (X25519) acuerda una clave sin mandarla, y con claves efímeras da secreto hacia adelante. El híbrido X25519MLKEM768 ya protege contra computadoras cuánticas futuras.
+- TLS 1.3: intercambio de claves, certificado, firma del servidor y después AES o ChaCha20. TLS 1.0 y 1.1, retirados.
+- La confianza es una cadena: hoja, intermedia y raíz guardada en el cliente. El servidor manda hoja e intermedia.
+</Resumen>

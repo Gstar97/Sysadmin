@@ -1,0 +1,114 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué clave usa un servidor para firmar en el saludo TLS?
+  opciones:
+    - { texto: "Su clave privada, que nunca sale del servidor", correcta: true, explicacion: "El cliente verifica la firma con la clave pública del certificado." }
+    - { texto: "Su clave pública", explicacion: "Con la pública se verifica, no se firma." }
+    - { texto: "La clave de la CA", explicacion: "La CA firmó el certificado una vez; en cada conexión firma el servidor." }
+    - { texto: "Una contraseña que configura el administrador", explicacion: "No hay contraseñas en el saludo." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Para qué sirve comparar el SHA-256 de un archivo con el que publica el proyecto?
+  opciones:
+    - { texto: "Para comprobar que el archivo es exactamente el publicado", correcta: true, explicacion: "Cualquier cambio altera la huella." }
+    - { texto: "Para descifrarlo", explicacion: "Un hash no cifra ni descifra." }
+    - { texto: "Para saber quién lo publicó", explicacion: "Eso lo da una firma, no un hash solo." }
+    - { texto: "Para comprimirlo", explicacion: "No tiene relación." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Si el cifrado simétrico es tan rápido, ¿por qué TLS usa también criptografía asimétrica?
+  opciones:
+    - { texto: "Para acordar la clave simétrica sin mandarla y para que el servidor demuestre quién es", correcta: true, explicacion: "Intercambio de claves (ECDHE) y firma." }
+    - { texto: "Porque AES no es seguro", explicacion: "AES es el que protege los datos." }
+    - { texto: "Para comprimir los datos", explicacion: "No comprime." }
+    - { texto: "Porque el asimétrico es más rápido", explicacion: "Es mucho más lento." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Roban la clave privada de un servidor que solo usa TLS 1.3. ¿Pueden descifrar las conversaciones que alguien grabó el mes pasado?
+  opciones:
+    - { texto: "No: las claves de cada sesión salieron de un intercambio efímero (ECDHE) que ya se descartó", correcta: true, explicacion: "Es el secreto hacia adelante. Igual hay que cambiar la clave y revocar el certificado: pueden hacerse pasar por el servidor." }
+    - { texto: "Sí, todas", explicacion: "Eso pasaba con el intercambio RSA de TLS 1.2 y anteriores." }
+    - { texto: "Solo las que usaron HTTP/2", explicacion: "No depende de la versión de HTTP." }
+    - { texto: "Sí, si tienen también el certificado", explicacion: "El certificado es público." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estos usos están bien hoy? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "SHA-256 para comprobar descargas", correcta: true, explicacion: "Es el estándar." }
+    - { texto: "AES-GCM o ChaCha20-Poly1305 para cifrar datos", correcta: true, explicacion: "Cifran y detectan cambios." }
+    - { texto: "MD5 para guardar contraseñas", explicacion: "Roto y demasiado rápido." }
+    - { texto: "RSA de 1024 bits en un certificado nuevo", explicacion: "Mínimo 2048, mejor 3072 o ECDSA." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Las contraseñas de /etc/shadow empiezan con $y$. ¿Qué significa y por qué se usa?
+  opciones:
+    - { texto: "Es yescrypt: un hash lento a propósito y con sal, para que probar contraseñas sea muy caro", correcta: true, explicacion: "SHA-256 solo sería demasiado rápido." }
+    - { texto: "Están cifradas con AES y se pueden recuperar", explicacion: "Un hash no se descifra." }
+    - { texto: "Es la marca de una cuenta bloqueada", explicacion: "Eso es un ! al principio." }
+    - { texto: "Indica que la contraseña vence pronto", explicacion: "Los vencimientos están en otras columnas." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un curl a tu sitio falla con "unable to get local issuer certificate", pero el navegador de tu PC lo abre bien. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "El servidor manda solo su certificado, sin la intermedia; el navegador la consiguió por su cuenta", correcta: true, explicacion: "Hay que configurar el fullchain (hoja + intermedia)." }
+    - { texto: "El certificado venció", explicacion: "Daría certificate has expired, también en el navegador." }
+    - { texto: "El nombre no coincide", explicacion: "Sería un error de nombre, también en el navegador." }
+    - { texto: "curl no soporta TLS 1.3", explicacion: "Lo soporta." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená lo que pasa en un saludo TLS 1.3.
+  pasos:
+    - El cliente manda versiones, cifrados y su parte del intercambio de claves
+    - El servidor elige y manda su parte del intercambio
+    - El servidor manda su certificado con la intermedia
+    - El servidor firma todo lo hablado con su clave privada
+    - El cliente verifica el certificado y la firma, y empieza HTTP cifrado
+  explicacion: "Todo en una sola ida y vuelta. Desde el segundo paso, lo demás ya viaja cifrado."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El proveedor te pasa el SHA-256 de un instalador en la misma página de la descarga, y te piden "verificarlo". ¿Qué protege eso y qué no?
+  opciones:
+    - { texto: "Detecta una descarga dañada, pero no a alguien que cambió el archivo y la huella en ese mismo servidor", correcta: true, explicacion: "Para eso hace falta una firma, verificada con una clave pública conseguida por otro lado." }
+    - { texto: "Protege de todo, porque SHA-256 no se puede romper", explicacion: "El algoritmo no se rompe, pero la huella puede cambiarse junto con el archivo." }
+    - { texto: "No protege de nada", explicacion: "Sí detecta archivos dañados." }
+    - { texto: "Solo sirve si el archivo está cifrado", explicacion: "No tiene relación." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué la raíz de una CA se guarda fuera de línea y se firma con una intermedia?
+  opciones:
+    - { texto: "Si se compromete la intermedia, se revoca y se emite otra; la raíz, guardada en millones de equipos, sigue a salvo", correcta: true, explicacion: "Cambiar una raíz lleva años." }
+    - { texto: "Porque la raíz no puede firmar", explicacion: "Puede; firmó a la intermedia." }
+    - { texto: "Para que los certificados duren más", explicacion: "No tiene relación." }
+    - { texto: "Porque la raíz es más lenta", explicacion: "No es un tema de velocidad." }
+- id: p11
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    $ openssl dgst -sha256 -verify proveedor.pub -signature lista.sig lista-precios.csv
+    Verification failure
+  opciones:
+    - { texto: "lista-precios.csv no es el que firmó el proveedor (cambió) o la firma no es de esa clave", correcta: true, explicacion: "No hay que usar ese archivo hasta aclararlo." }
+    - { texto: "La clave pública está vencida", explicacion: "Las claves solas no vencen; sería otro error." }
+    - { texto: "Falta instalar openssl", explicacion: "openssl corrió y contestó." }
+    - { texto: "El archivo está cifrado", explicacion: "Verificar no tiene que ver con cifrar." }
+- id: p12
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que calcula el SHA-256 de rocky.iso con openssl.
+  aceptadas:
+    - "openssl dgst -sha256 rocky.iso"
+    - "openssl sha256 rocky.iso"
+  patrones: ["^openssl\\s+(dgst\\s+-sha256|sha256)\\s+rocky\\.iso$"]
+  explicacion: "sha256sum rocky.iso da la misma huella."

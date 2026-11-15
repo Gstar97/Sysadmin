@@ -55,6 +55,14 @@ export interface KeyData {
   enc?: boolean
 }
 
+/** Clave pública (openssl pkey -pubout): sirve para verificar firmas, no para firmar. */
+export interface PubData {
+  t: 'pub'
+  id: string
+  alg: KeyAlg
+  bits: number
+}
+
 export interface CsrData {
   t: 'csr'
   subject: DistName
@@ -92,20 +100,20 @@ function wrap64(s: string): string {
   return s.match(/.{1,64}/g)?.join('\n') ?? ''
 }
 
-const LABEL: Record<string, string> = { cert: 'CERTIFICATE', key: 'PRIVATE KEY', csr: 'CERTIFICATE REQUEST' }
+const LABEL: Record<string, string> = { cert: 'CERTIFICATE', key: 'PRIVATE KEY', csr: 'CERTIFICATE REQUEST', pub: 'PUBLIC KEY' }
 
-export function toPem(obj: CertData | KeyData | CsrData): string {
+export function toPem(obj: CertData | KeyData | CsrData | PubData): string {
   const label = obj.t === 'key' && obj.enc ? 'ENCRYPTED PRIVATE KEY' : LABEL[obj.t]
   // Relleno para que el bloque tenga un tamaño parecido al de uno real.
   const json = JSON.stringify(obj)
-  const pad = obj.t === 'key' ? 1100 : obj.t === 'cert' ? 900 : 600
+  const pad = obj.t === 'key' ? 1100 : obj.t === 'cert' ? 900 : obj.t === 'pub' ? 300 : 600
   const body = b64encode(MARK + json + ' '.repeat(Math.max(0, pad - json.length)))
   return `-----BEGIN ${label}-----\n${wrap64(body)}\n-----END ${label}-----\n`
 }
 
 export interface PemBlock {
   label: string
-  data?: CertData | KeyData | CsrData
+  data?: CertData | KeyData | CsrData | PubData
 }
 
 /** Todos los bloques PEM de un texto (un fullchain tiene varios). */
@@ -138,6 +146,12 @@ export function keyIn(text: string): KeyData | undefined {
   return parsePem(text)
     .map((b) => b.data)
     .find((d): d is KeyData => d?.t === 'key')
+}
+
+export function pubIn(text: string): PubData | undefined {
+  return parsePem(text)
+    .map((b) => b.data)
+    .find((d): d is PubData => d?.t === 'pub')
 }
 
 export function csrIn(text: string): CsrData | undefined {

@@ -1,0 +1,120 @@
+tipo: terminal
+shell: bash
+titulo: Huellas, firmas y cifrado con openssl
+descripcion: >-
+  En tu servidor de administración (Ubuntu 26.04) tenés en ~/descargas dos archivos bajados de
+  internet y la lista de huellas que publica cada proyecto (SHA256SUMS). En ~/contratos, un
+  contrato que Compras tiene que mandar firmado al proveedor, y en ~/respaldos, un volcado de la
+  base que hay que guardar cifrado en un disco externo.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  archivos:
+    /home/ana/descargas/rocky-10.1.iso: "ISO de Rocky Linux 10.1 (simulada)\n"
+    /home/ana/descargas/herramienta-2.4.1.tar.gz: "herramienta 2.4.1 (modificada por alguien)\n"
+    /home/ana/descargas/SHA256SUMS: |
+      d5e5ea33a4bb793d663c340668d54c28b0a8b5235d4a218c99acc041d24717d4  rocky-10.1.iso
+      ffa5298d22d2d7113076ce1c3c350048bae8b2e81da23cb965d7342782b95f54  herramienta-2.4.1.tar.gz
+    /home/ana/contratos/contrato.txt: |
+      Contrato de provisión de sillas de oficina
+      Cantidad: 40 unidades
+      Precio total: 12.000.000 ARS
+    /home/ana/respaldos/clientes.sql: |
+      INSERT INTO clientes VALUES (1, 'Muebles del Sur', 'compras@mueblesdelsur.example');
+      INSERT INTO clientes VALUES (2, 'Oficinas Norte', 'pagos@oficinasnorte.example');
+pasos:
+  - consigna: >-
+      Entrá a ~/descargas y comprobá los dos archivos contra la lista de huellas. ¿Cuál no hay que
+      usar?
+    verificar:
+      - { comando_usado: 'sha256sum\s+(-c|--check)' }
+      - { salida_contiene: 'herramienta-2.4.1.tar.gz: FAILED' }
+    pistas:
+      - "`cd ~/descargas` y `sha256sum -c SHA256SUMS`"
+    solucion:
+      - cd ~/descargas
+      - sha256sum -c SHA256SUMS
+    explicacion: >-
+      La huella (hash) de herramienta-2.4.1.tar.gz no coincide con la publicada: el archivo no es
+      el que el proyecto subió. Puede ser una descarga cortada o algo peor, pero en los dos casos
+      no se usa. Ojo con el límite: si alguien cambió el archivo y también la lista de huellas
+      en el mismo sitio, esto no lo detecta. Para eso los proyectos firman SHA256SUMS.
+  - consigna: >-
+      Comprobá que openssl calcula la misma huella que sha256sum para la ISO.
+    verificar:
+      - { salida_contiene: 'SHA2-256(rocky-10.1.iso)= d5e5ea33a4bb793d663c340668d54c28b0a8b5235d4a218c99acc041d24717d4' }
+    pistas:
+      - "`openssl dgst -sha256 rocky-10.1.iso`"
+    solucion: ["openssl dgst -sha256 rocky-10.1.iso"]
+    explicacion: >-
+      Es el mismo cálculo (SHA-256) con otra herramienta. Cambiá una sola letra del archivo y la
+      huella cambia por completo, y no hay forma de volver de la huella al contenido.
+  - consigna: >-
+      Para firmar, necesitás un par de claves. En ~/contratos, generá una clave privada de curva
+      elíptica (P-256) en compras.key y sacá su clave pública a compras.pub.
+    verificar:
+      - { archivo: /home/ana/contratos/compras.key, contenido_incluye: 'BEGIN PRIVATE KEY' }
+      - { archivo: /home/ana/contratos/compras.pub, contenido_incluye: 'BEGIN PUBLIC KEY' }
+    pistas:
+      - "`cd ~/contratos`, `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out compras.key` y `openssl pkey -in compras.key -pubout -out compras.pub`"
+    solucion:
+      - cd ~/contratos
+      - openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out compras.key
+      - openssl pkey -in compras.key -pubout -out compras.pub
+    explicacion: >-
+      La privada se queda con vos (y nunca se manda por correo); la pública se le da a quien tenga
+      que verificar tus firmas. Una clave de curva elíptica de 256 bits es tan segura como una RSA
+      de 3072, y mucho más corta y rápida.
+  - consigna: >-
+      Firmá contrato.txt con la clave privada (la firma va a contrato.sig) y verificá la firma
+      con la clave pública, como lo haría el proveedor.
+    verificar:
+      - { archivo: /home/ana/contratos/contrato.sig, contenido_incluye: 'SIMSIG1' }
+      - { salida_contiene: 'Verified OK' }
+    pistas:
+      - "`openssl dgst -sha256 -sign compras.key -out contrato.sig contrato.txt`"
+      - "`openssl dgst -sha256 -verify compras.pub -signature contrato.sig contrato.txt`"
+    solucion:
+      - openssl dgst -sha256 -sign compras.key -out contrato.sig contrato.txt
+      - openssl dgst -sha256 -verify compras.pub -signature contrato.sig contrato.txt
+    explicacion: >-
+      Firmar es calcular la huella del contrato y "sellarla" con la clave privada. Quien tiene la
+      pública comprueba dos cosas a la vez: que el contrato no cambió (integridad) y que lo firmó
+      quien tiene la privada (autenticidad).
+  - consigna: >-
+      Alguien "corrige" el precio en el camino: cambiá 12.000.000 por 21.000.000 en el contrato y
+      volvé a verificar la firma.
+    verificar:
+      - { archivo: /home/ana/contratos/contrato.txt, contenido_incluye: '21.000.000' }
+      - { salida_contiene: 'Verification failure' }
+    pistas:
+      - "`sed -i 's/12.000.000/21.000.000/' contrato.txt` y el mismo comando de verificación."
+    solucion:
+      - sed -i 's/12.000.000/21.000.000/' contrato.txt
+      - openssl dgst -sha256 -verify compras.pub -signature contrato.sig contrato.txt
+    explicacion: >-
+      La huella del contrato cambiado ya no es la que se firmó, y quien lo modificó no puede
+      firmarlo de nuevo porque no tiene tu clave privada. Es lo mismo que hace un navegador con
+      cada certificado: comprobar una firma.
+  - consigna: >-
+      Ahora el respaldo: cifrá ~/respaldos/clientes.sql con AES-256 y una contraseña (usá
+      -pass pass:Resp4ldo-2026 y -pbkdf2), dejando el resultado en clientes.sql.enc. Después
+      descifralo en pantalla para comprobar que se puede recuperar.
+    verificar:
+      - { archivo: /home/ana/respaldos/clientes.sql.enc, contenido_incluye: 'Salted__' }
+      - { salida_contiene: 'Muebles del Sur' }
+    pistas:
+      - "`openssl enc -aes-256-cbc -pbkdf2 -in ~/respaldos/clientes.sql -out ~/respaldos/clientes.sql.enc -pass pass:Resp4ldo-2026`"
+      - "Para descifrar, lo mismo con `-d` y sin `-out`."
+    solucion:
+      - openssl enc -aes-256-cbc -pbkdf2 -in ~/respaldos/clientes.sql -out ~/respaldos/clientes.sql.enc -pass pass:Resp4ldo-2026
+      - openssl enc -d -aes-256-cbc -pbkdf2 -in ~/respaldos/clientes.sql.enc -pass pass:Resp4ldo-2026
+    explicacion: >-
+      Cifrado simétrico: la misma contraseña cifra y descifra. -pbkdf2 convierte la contraseña en
+      una clave con miles de vueltas, para que probar contraseñas al azar sea muy lento; sin esa
+      opción, openssl avisa que usa el método viejo. En un servidor real, no pongas la contraseña
+      en el comando (queda en el historial): dejá que la pida, o leela de un archivo protegido con
+      -pass file:.

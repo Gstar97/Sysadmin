@@ -123,6 +123,24 @@ describe('aplicaciones', () => {
   })
 })
 
+describe('openssl: hash, firma y cifrado', () => {
+  it('dgst coincide con sha256sum, la firma detecta cambios y enc pide la contraseña correcta', async () => {
+    const { run } = await session({ usuario: 'root', archivos: { '/root/c.txt': 'Precio: 1000\n' } })
+    const a = (await run('sha256sum c.txt')).out.split(' ')[0]
+    expect((await run('openssl dgst -sha256 c.txt')).out).toBe(`SHA2-256(c.txt)= ${a}\n`)
+    await run('openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out k.pem && openssl pkey -in k.pem -pubout -out p.pem')
+    await run('openssl dgst -sha256 -sign k.pem -out c.sig c.txt')
+    expect((await run('openssl dgst -sha256 -verify p.pem -signature c.sig c.txt')).out).toBe('Verified OK\n')
+    await run("sed -i 's/1000/9000/' c.txt")
+    const bad = await run('openssl dgst -sha256 -verify p.pem -signature c.sig c.txt')
+    expect(bad.out).toBe('Verification failure\n')
+    expect(bad.code).toBe(1)
+    await run('openssl enc -aes-256-cbc -pbkdf2 -in c.txt -out c.enc -pass pass:uno')
+    expect((await run('openssl enc -d -aes-256-cbc -pbkdf2 -in c.enc -pass pass:dos')).err).toContain('bad decrypt')
+    expect((await run('openssl enc -d -aes-256-cbc -pbkdf2 -in c.enc -pass pass:uno')).out).toBe('Precio: 9000\n')
+  })
+})
+
 describe('HTTPS y certificados', () => {
   const tlsLab: BashStateInput = {
     usuario: 'root',

@@ -1048,7 +1048,8 @@ function md5(bytes: Uint8Array): string {
 
 const HASHES = { md5sum: { algo: 'MD5', hex: 32 }, sha1sum: { algo: 'SHA-1', hex: 40 }, sha256sum: { algo: 'SHA-256', hex: 64 }, sha384sum: { algo: 'SHA-384', hex: 96 }, sha512sum: { algo: 'SHA-512', hex: 128 } } as const
 
-async function digest(algo: string, text: string): Promise<string> {
+/** Hash real (SHA con WebCrypto, MD5 propio): sha256sum y openssl dgst dan lo mismo. */
+export async function digest(algo: string, text: string): Promise<string> {
   const data = new TextEncoder().encode(text)
   if (algo === 'MD5') return md5(data)
   const hash = await crypto.subtle.digest(algo, data)
