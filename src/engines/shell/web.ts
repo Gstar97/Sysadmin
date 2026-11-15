@@ -1078,7 +1078,8 @@ function nginxTls(sys: System, port: number, localIp: string, sni: string): TlsH
   }
   const protos = first(srv.block, 'ssl_protocols')?.args ?? first(l.http, 'ssl_protocols')?.args ?? ['TLSv1.2', 'TLSv1.3']
   const h2 = first(srv.block, 'http2')?.args[0] === 'on' || first(l.http, 'http2')?.args[0] === 'on' || srv.listens.some((x) => x.http2)
-  return { chain: srv.cert.chain, protocols: protos, h2 }
+  const ciphers = first(srv.block, 'ssl_ciphers')?.args[0] ?? first(l.http, 'ssl_ciphers')?.args[0]
+  return { chain: srv.cert.chain, protocols: protos, h2, ciphers }
 }
 
 /** El motor de nginx se ofrece para atender un puerto. */

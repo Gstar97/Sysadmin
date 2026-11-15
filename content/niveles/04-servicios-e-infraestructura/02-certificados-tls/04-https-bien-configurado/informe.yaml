@@ -1,0 +1,41 @@
+tipo: diagrama
+titulo: Un informe de testssl
+puntos:
+  - id: protocolos
+    titulo: "Protocolos"
+    area: { x: 1.6, y: 8.7, ancho: 96.8, alto: 27.7 }
+    texto: >-
+      Qué versiones acepta el servidor. SSLv2 y SSLv3 no (bien). TLS 1.0 y 1.1 sí: están retirados
+      y bajan la nota a B. Y falta TLS 1.3, que es más rápido y más seguro: con ssl_protocols
+      TLSv1.2 TLSv1.3 se resuelven las dos cosas. ALPN dice si ofrece HTTP/2 (h2): acá no, falta
+      http2 on.
+  - id: cifrados
+    titulo: "Categorías de cifrados"
+    area: { x: 1.6, y: 36.0, ancho: 96.8, alto: 17.4 }
+    texto: >-
+      LOW y Triple DES ofrecidos: el ssl_ciphers incluye MEDIUM, que trae 3DES, y eso deja la nota
+      en C. Los CBC obsoletos no bajan la nota pero sobran. Con la lista intermedia de Mozilla
+      (solo ECDHE con AES-GCM y CHACHA20) quedan solo los de la última línea: cifrado fuerte con
+      secreto hacia adelante.
+  - id: certificado
+    titulo: "Certificado"
+    area: { x: 1.6, y: 53.0, ancho: 96.8, alto: 17.4 }
+    texto: >-
+      Los nombres del SAN, la cadena de confianza (Ok: el servidor manda la intermedia; con un
+      solo certificado diría chain incomplete y la nota sería T), los días que le quedan y cuántos
+      certificados manda. Si la validez baja de 30 días con renovación automática, algo de la
+      renovación se rompió.
+  - id: encabezados
+    titulo: "Encabezados HTTP"
+    area: { x: 1.6, y: 70.0, ancho: 96.8, alto: 10.6 }
+    texto: >-
+      Strict Transport Security not offered: falta HSTS, y sin eso el techo es A. Server banner
+      muestra la versión exacta de nginx: no baja la nota, pero le ahorra trabajo a quien busca
+      servidores con fallas conocidas (server_tokens off la oculta).
+  - id: nota
+    titulo: "La nota y sus motivos"
+    area: { x: 1.6, y: 80.2, ancho: 96.8, alto: 17.4 }
+    texto: >-
+      Cada problema pone un techo, y la nota final es el techo más bajo. Por eso, aunque
+      arreglaras el HSTS, seguiría en C mientras haya 3DES. Se corrigen de arriba hacia abajo, y
+      se vuelve a pasar testssl después de cada cambio.

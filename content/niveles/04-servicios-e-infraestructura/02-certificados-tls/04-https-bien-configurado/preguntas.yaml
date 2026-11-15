@@ -1,0 +1,111 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué versiones de TLS conviene aceptar hoy en un sitio público?
+  opciones:
+    - { texto: "TLS 1.2 y TLS 1.3", correcta: true, explicacion: "1.0 y 1.1 están retirados desde 2021." }
+    - { texto: "De TLS 1.0 a 1.3, para que entre todo el mundo", explicacion: "Los navegadores actuales ya no usan 1.0 ni 1.1, y bajan la nota a B." }
+    - { texto: "Solo SSLv3", explicacion: "Roto hace más de diez años." }
+    - { texto: "Solo TLS 1.3", explicacion: "Es la configuración moderna, pero deja afuera clientes que todavía usan 1.2." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué problema resuelve HSTS que no resuelve la redirección del 80 al 443?
+  opciones:
+    - { texto: "El primer pedido por HTTP, que alguien en el medio puede contestar sin mandarte nunca a HTTPS", correcta: true, explicacion: "Con HSTS, el navegador ni siquiera intenta HTTP." }
+    - { texto: "Que el certificado venza", explicacion: "HSTS no renueva nada." }
+    - { texto: "Que el sitio cargue lento", explicacion: "No tiene que ver con la velocidad." }
+    - { texto: "Que falte la intermedia", explicacion: "Es otro problema." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué hay que cambiar según este final de testssl?
+  salida: |
+    Grade cap reasons            Grade capped to B. TLS 1.0 offered
+                                 Grade capped to A. HSTS is not offered
+    Overall Grade                B
+  opciones:
+    - { texto: "Quitar TLS 1.0 (y 1.1) de ssl_protocols y agregar el encabezado HSTS", correcta: true, explicacion: "Con las dos cosas, A+." }
+    - { texto: "Renovar el certificado", explicacion: "El certificado no aparece entre los motivos." }
+    - { texto: "Activar HTTP/2", explicacion: "No afecta la nota." }
+    - { texto: "Cambiar a un certificado de pago", explicacion: "La nota no depende de quién lo firmó." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Agregaste add_header Strict-Transport-Security en el server, pero las páginas de error 404 no lo traen. ¿Por qué?
+  opciones:
+    - { texto: "Sin always, add_header solo se aplica a las respuestas exitosas y redirecciones", correcta: true, explicacion: "add_header ... always;" }
+    - { texto: "Los 404 no pueden llevar encabezados", explicacion: "Pueden." }
+    - { texto: "Hay que reiniciar el servidor", explicacion: "Es la configuración de add_header." }
+    - { texto: "HSTS solo se manda en la portada", explicacion: "Se manda en todas las respuestas." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una location /api/ tiene add_header Cache-Control no-store. Desde entonces, las respuestas de /api/ no traen HSTS ni nosniff, que están en el server. ¿Qué pasa?
+  opciones:
+    - { texto: "Si una location define algún add_header, deja de heredar todos los del server", correcta: true, explicacion: "Hay que repetirlos en la location (mejor con un include)." }
+    - { texto: "Cache-Control es incompatible con HSTS", explicacion: "Son independientes." }
+    - { texto: "Las API no pueden llevar HSTS", explicacion: "Sí pueden." }
+    - { texto: "Falta always en Cache-Control", explicacion: "always no cambia la herencia." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Ponés HSTS con includeSubDomains y max-age de dos años. Al otro día, nadie entra a viejo.ejemplo.com, que solo tiene HTTP. ¿Qué hacés?
+  opciones:
+    - { texto: "Darle HTTPS a viejo.ejemplo.com: los navegadores que ya vieron el encabezado no van a usar HTTP por dos años", correcta: true, explicacion: "Quitar el encabezado no borra lo que ya recordaron. Por eso se empieza con max-age corto." }
+    - { texto: "Quitar el encabezado y listo", explicacion: "Los navegadores que ya lo recibieron lo recuerdan hasta que vence." }
+    - { texto: "Pedirle a la gente que reinicie la PC", explicacion: "HSTS se guarda en el navegador." }
+    - { texto: "Cambiar el certificado", explicacion: "El problema es que no tiene HTTPS." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué bajan la nota de testssl? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Un certificado sin la intermedia", correcta: true, explicacion: "T: problemas con la cadena de confianza." }
+    - { texto: "Cifrados 3DES o RC4", correcta: true, explicacion: "C." }
+    - { texto: "TLS 1.1 habilitado", correcta: true, explicacion: "B." }
+    - { texto: "Usar HTTP/2", explicacion: "No baja nada; es recomendable." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un Rocky, alguien propone update-crypto-policies --set LEGACY para que se conecte una impresora vieja. ¿Qué le contestás?
+  opciones:
+    - { texto: "Que eso debilita OpenSSL, SSH y todo lo demás del servidor; mejor resolver la impresora aparte", correcta: true, explicacion: "La política es para todo el sistema." }
+    - { texto: "Que está bien, total es interna", explicacion: "Afecta todos los servicios del servidor." }
+    - { texto: "Que solo afecta a nginx", explicacion: "Afecta a todo el sistema." }
+    - { texto: "Que no existe ese comando", explicacion: "Existe en Rocky." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí la línea de nginx que manda HSTS por un año (31536000 segundos), también en los errores.
+  aceptadas:
+    - 'add_header Strict-Transport-Security "max-age=31536000" always;'
+  patrones: ["^add_header\\s+Strict-Transport-Security\\s+\"max-age=31536000\"\\s+always;$"]
+  explicacion: "Sin includeSubDomains hasta estar seguro de todos los subdominios."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿De dónde conviene sacar la lista de ssl_ciphers?
+  opciones:
+    - { texto: "Del generador de Mozilla (ssl-config.mozilla.org), con tu versión de nginx y de OpenSSL", correcta: true, explicacion: "Se actualiza cuando cambian las recomendaciones." }
+    - { texto: "De la primera respuesta de un foro", explicacion: "Muchas son viejas." }
+    - { texto: "ALL, para que no falle nadie", explicacion: "Incluiría cifrados rotos." }
+    - { texto: "No hace falta: TLS 1.2 elige solo los seguros", explicacion: "Elige entre los que ofrecés." }
+- id: p11
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este server tiene que dar A+ en testssl. Marcá las dos líneas que lo impiden.
+  lenguaje: nginx
+  archivo: |
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name pagos.ejemplo.com;
+        ssl_certificate /etc/letsencrypt/live/pagos.ejemplo.com/cert.pem;
+        ssl_certificate_key /etc/letsencrypt/live/pagos.ejemplo.com/privkey.pem;
+        ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
+        add_header Strict-Transport-Security "max-age=63072000" always;
+    }
+  lineas_con_error: [5, 7]
+  explicacion: "cert.pem no tiene la intermedia (va fullchain.pem), y TLS 1.1 limita la nota a B."

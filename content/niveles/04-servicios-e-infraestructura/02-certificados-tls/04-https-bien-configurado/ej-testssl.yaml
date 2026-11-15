@@ -1,0 +1,99 @@
+tipo: terminal
+shell: bash
+titulo: De C a A+ en la página de pagos
+descripcion: >-
+  web02 (Ubuntu 26.04) publica pagos.ejemplo.com con un certificado válido de Let's Encrypt. El
+  sitio se migró desde un servidor viejo copiando su configuración tal cual, y un cliente que
+  audita a sus proveedores pidió el informe de testssl. testssl ya está instalado.
+estado_inicial:
+  distro: ubuntu
+  hostname: web02
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nginx, testssl.sh] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+  red:
+    registros_dns: { pagos.ejemplo.com: 127.0.0.1 }
+  web:
+    certificados:
+      - { certificado: /etc/ssl/certs/pagos.crt, clave: /etc/ssl/private/pagos.key, cn: pagos.ejemplo.com }
+  archivos:
+    /var/www/pagos/index.html: "<h1>Pagos</h1>\n"
+    /etc/nginx/sites-enabled/pagos: |
+      server {
+          listen 80;
+          server_name pagos.ejemplo.com;
+          return 301 https://$host$request_uri;
+      }
+
+      server {
+          listen 443 ssl;
+          server_name pagos.ejemplo.com;
+          root /var/www/pagos;
+
+          ssl_certificate /etc/ssl/certs/pagos.crt;
+          ssl_certificate_key /etc/ssl/private/pagos.key;
+          ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+          ssl_ciphers HIGH:MEDIUM:!aNULL:!MD5;
+      }
+pasos:
+  - consigna: Corré testssl contra https://pagos.ejemplo.com y buscá la calificación y sus motivos al final.
+    verificar:
+      - { comando_usado: 'testssl' }
+      - { salida_contiene: 'Overall Grade                C' }
+    pistas:
+      - "`testssl https://pagos.ejemplo.com`"
+    solucion: ["testssl https://pagos.ejemplo.com"]
+    explicacion: >-
+      Tres problemas, cada uno con su tope: cifrados débiles (3DES, por el MEDIUM de ssl_ciphers)
+      lo dejan en C; TLS 1.0 y 1.1 lo limitan a B; y sin HSTS no puede pasar de A. La nota es la
+      del peor. Fijate también que no ofrece TLS 1.3 ni HTTP/2.
+  - consigna: >-
+      Arreglá los protocolos y los cifrados en /etc/nginx/sites-enabled/pagos: solo TLS 1.2 y 1.3,
+      y en ssl_ciphers la lista "intermedia" de Mozilla (ECDHE con AES-GCM y CHACHA20). Probá,
+      recargá y volvé a pasar testssl.
+    verificar:
+      - { archivo: /etc/nginx/sites-enabled/pagos, contenido_incluye: 'ssl_protocols TLSv1.2 TLSv1.3;' }
+      - { salida_contiene: 'Grade capped to A. HSTS is not offered' }
+    pistas:
+      - "`sudo sed -i 's/ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/sites-enabled/pagos`"
+      - "Los cifrados: `ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305`"
+    solucion:
+      - "sudo sed -i 's/ssl_protocols.*/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/sites-enabled/pagos"
+      - "sudo sed -i 's/ssl_ciphers.*/ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;/' /etc/nginx/sites-enabled/pagos"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - testssl https://pagos.ejemplo.com
+    explicacion: >-
+      Ya ofrece TLS 1.3, no quedan cifrados CBC ni 3DES, y la nota sube a A. Solo falta HSTS.
+      La lista de cifrados sale del generador de configuraciones de Mozilla
+      (ssl-config.mozilla.org): no hace falta armarla a mano.
+  - consigna: >-
+      Agregá HSTS por dos años (con always, para que vaya también en las respuestas de error) y
+      HTTP/2 en el server del 443. Recargá y comprobá con curl que el encabezado llega y que la
+      conexión es HTTP/2.
+    verificar:
+      - { http: 'https://pagos.ejemplo.com/', encabezado: { nombre: Strict-Transport-Security, contiene: 'max-age=63072000' }, contiene: 'Pagos' }
+      - { http: 'https://pagos.ejemplo.com/', http2: true }
+    pistas:
+      - "Dos líneas debajo de ssl_ciphers: `http2 on;` y `add_header Strict-Transport-Security \"max-age=63072000\" always;`. Con sed, agregándolas después de la línea de ssl_ciphers: `sudo sed -i 's/ssl_ciphers.*/&\\n    http2 on;\\n    add_header Strict-Transport-Security \"max-age=63072000\" always;/' /etc/nginx/sites-enabled/pagos`"
+      - "Para comprobar: `curl -sI https://pagos.ejemplo.com`"
+    solucion:
+      - "sudo sed -i 's/ssl_ciphers.*/&\\n    http2 on;\\n    add_header Strict-Transport-Security \"max-age=63072000\" always;/' /etc/nginx/sites-enabled/pagos"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -sI https://pagos.ejemplo.com
+    explicacion: >-
+      La primera línea dice HTTP/2 200 (los encabezados en HTTP/2 van en minúscula) y aparece
+      strict-transport-security. Desde ahora, un navegador que entró una vez va a usar HTTPS para
+      este nombre durante dos años, aunque alguien escriba http:// o intente desviarlo.
+  - consigna: Pasá testssl una última vez, solo para ver la nota final.
+    verificar:
+      - { salida_contiene: 'Overall Grade                A+' }
+    pistas:
+      - "`testssl https://pagos.ejemplo.com | tail -5`"
+    solucion: ["testssl https://pagos.ejemplo.com | tail -5"]
+    explicacion: >-
+      A+. El informe completo (testssl --htmlfile informe.html o --jsonfile) es lo que se le manda
+      al cliente que audita. Y conviene correrlo de nuevo después de cada cambio en nginx o en el
+      sistema.

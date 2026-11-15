@@ -1,0 +1,131 @@
+---
+id: n4-m2-l4
+titulo: HTTPS bien configurado
+minutos: 120
+objetivos:
+  - Configurar nginx con protocolos y cifrados actuales, HTTP/2, redirección a HTTPS y HSTS.
+  - Medir la configuración con testssl y saber qué baja la nota.
+  - Agregar los encabezados de seguridad básicos sin romper el sitio.
+glosario: [hsts, testssl, encabezados-seguridad, politica-cripto]
+verificado: 2026-11
+---
+
+import informe from './informe.svg?raw'
+import informeDatos from './informe.yaml'
+import editor from './editor-https.yaml'
+import testssl from './ej-testssl.yaml'
+
+Tener un certificado válido no alcanza. Un HTTPS puede tener el candado y aun así aceptar versiones de TLS de hace quince años, cifrados rotos, o dejar que alguien convierta la conexión en HTTP antes de que empiece. Lo bueno es que dejarlo bien son unas diez líneas que se copian de una fuente confiable, y que hay herramientas que lo miden en un minuto.
+
+<AntesDeEmpezar>
+- Criptografía para sysadmins: TLS 1.3 y los cifrados (lección 4.2.1).
+- Let's Encrypt y certbot (lección 4.2.3).
+- Encabezados HTTP (lección 4.1.1).
+</AntesDeEmpezar>
+
+## La configuración base
+
+Estas son las líneas que van en cada `server` con HTTPS (o una sola vez en el bloque `http`, para todos):
+
+```nginx
+server {
+    listen 80;
+    server_name pagos.ejemplo.com;
+    return 301 https://$host$request_uri;              # todo lo que llega por HTTP, a HTTPS
+}
+
+server {
+    listen 443 ssl;
+    http2 on;                                          # HTTP/2 (desde nginx 1.25.1 va así)
+    server_name pagos.ejemplo.com;
+
+    ssl_certificate     /etc/letsencrypt/live/pagos.ejemplo.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pagos.ejemplo.com/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;                     # con cifrados buenos, que elija el cliente
+    ssl_session_cache shared:SSL:10m;                  # reusar sesiones: menos saludos completos
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    add_header Strict-Transport-Security "max-age=63072000" always;
+    server_tokens off;
+}
+```
+
+- **Protocolos**: TLS 1.2 y 1.3. Nada de SSLv3, TLS 1.0 ni 1.1.
+- **Cifrados**: la lista anterior es la "intermedia" del generador de Mozilla (**ssl-config.mozilla.org**), que es la referencia que usa casi todo el mundo: elegís servidor y versión, y te da la configuración. La "moderna" deja solo TLS 1.3, y deja afuera a equipos y programas viejos. Solo afecta a TLS 1.2: los cifrados de TLS 1.3 son todos fuertes y no se tocan.
+- **HTTP/2**: varios pedidos a la vez por la misma conexión; la página carga más rápido. HTTP/3 (sobre QUIC, por UDP) queda para más adelante: nginx lo soporta con `listen 443 quic`, pero hay que abrir el 443 UDP y probar bien.
+
+<Consejo>
+En Rocky, además de nginx hay una **política criptográfica del sistema**: `update-crypto-policies --show` dice DEFAULT. Define qué protocolos y algoritmos permiten OpenSSL, SSH y los demás programas de todo el servidor. DEFAULT ya deja afuera TLS 1.0 y 1.1. No la cambies a LEGACY para que ande un equipo viejo: se debilita todo el servidor. Ubuntu no tiene este mecanismo, pero su OpenSSL viene con un nivel de seguridad que también los rechaza.
+</Consejo>
+
+## HSTS: que no vuelva a HTTP
+
+La redirección del 80 al 443 tiene un hueco: el primer pedido sale por HTTP, sin cifrar, y alguien en el medio (en un Wi-Fi público, por ejemplo) puede contestar él y nunca mandarte a HTTPS. **HSTS** (HTTP Strict Transport Security) lo cierra: con el encabezado `Strict-Transport-Security`, el navegador recuerda "a este nombre, solo por HTTPS" durante `max-age` segundos, y ni siquiera intenta HTTP.
+
+- **max-age=63072000** es dos años. Para empezar, conviene un valor chico (300, cinco minutos) y subirlo cuando estás seguro: mientras dure, si el HTTPS se rompe, los usuarios no pueden entrar de ninguna forma.
+- **includeSubDomains** lo extiende a todos los subdominios: solo si **todos** tienen HTTPS (incluida esa intranet vieja que nadie toca).
+- **preload** pide entrar en una lista que viene dentro de los navegadores. Salir de esa lista lleva meses: no lo pongas "por las dudas".
+- **always** hace que nginx lo mande también en las respuestas de error. Sin always, `add_header` solo se aplica a 200, 201, 204, 206, 301, 302, 303, 304, 307 y 308.
+
+## Encabezados de seguridad
+
+Otros encabezados que piden las auditorías. Son cosa del navegador, no del cifrado, y algunos pueden romper el sitio, así que se prueban con los programadores:
+
+| Encabezado | Para qué |
+|---|---|
+| `X-Content-Type-Options: nosniff` | Que el navegador no "adivine" el tipo de un archivo (y ejecute un script disfrazado de imagen) |
+| `Referrer-Policy: strict-origin-when-cross-origin` | Que no se filtren direcciones internas completas al seguir un enlace a otro sitio |
+| `Content-Security-Policy` | Qué scripts, estilos e imágenes puede cargar la página; frena muchos ataques, pero hay que armarla con los programadores |
+| `X-Frame-Options: DENY` (o `frame-ancestors` en la CSP) | Que otro sitio no pueda meter el tuyo dentro de un marco para engañar clics |
+
+Una trampa de nginx que ya viste con `proxy_set_header`: si una `location` tiene **algún** `add_header`, deja de heredar **todos** los del `server`. Los encabezados de seguridad del server desaparecen en esa location sin aviso. Desde nginx 1.29.3 existe `add_header_inherit merge;`, pero las versiones de Rocky y Ubuntu todavía no lo tienen: hay que repetirlos (con un `include`).
+
+<EditorConfig ejercicio={editor} />
+
+## Medir: testssl y SSL Labs
+
+- **testssl** (`dnf install testssl` desde EPEL, `apt install testssl.sh` en Ubuntu) revisa protocolos, cifrados, certificado, encabezados y vulnerabilidades conocidas, y da una nota de A+ a F (y T si el certificado no es confiable). Funciona contra cualquier servidor que alcances, incluidos los internos.
+- **SSL Labs** (ssllabs.com/ssltest) hace lo mismo desde internet, solo para sitios públicos.
+
+Así se lee un informe (el de la página de pagos antes de arreglarla). Tocá cada parte:
+
+<DiagramaInteractivo datos={informeDatos} svg={informe} alt="Un informe de testssl para https://pagos.ejemplo.com. Protocolos: SSLv2 y SSLv3 no ofrecidos, TLS 1 y TLS 1.1 ofrecidos (obsoletos), TLS 1.2 ofrecido, TLS 1.3 no ofrecido, y ALPN solo http/1.1. Categorías de cifrados: LOW y Triple DES ofrecidos (no está bien), CBC obsoletos ofrecidos, y cifrado fuerte con secreto hacia adelante ofrecido. Certificado: SAN pagos.ejemplo.com, cadena de confianza Ok, 59 días de validez y 2 certificados enviados. Encabezados: Strict Transport Security no ofrecido y el banner del servidor nginx/1.28.3. Calificación: tope C por cifrados débiles, tope B por TLS 1.0 y tope A por falta de HSTS; nota final C." />
+
+Qué baja la nota, de peor a mejor: un certificado no confiable, vencido o sin la intermedia (T); cifrados débiles como 3DES o RC4 (C); TLS 1.0 o 1.1 (B); y sin HSTS, el techo es A. Para A+, todo lo anterior bien y HSTS de al menos seis meses.
+
+<EnSimple>
+TLS 1.2 y 1.3 con los cifrados de Mozilla, HTTP/2, redirección a HTTPS y HSTS. Después, testssl para confirmar: lo que falta aparece en "Grade cap reasons".
+</EnSimple>
+
+<Terminal ejercicio={testssl} />
+
+<ErroresComunes>
+  <ErrorComun titulo="HSTS de dos años con includeSubDomains el primer día">
+    Si un subdominio no tiene HTTPS, queda inaccesible durante dos años para todos los que entraron. Empezá con max-age corto y sin includeSubDomains.
+  </ErrorComun>
+  <ErrorComun titulo="Habilitar TLS 1.0 para un equipo viejo">
+    Baja la seguridad de todos los que usan el sitio. Mejor un nombre aparte, solo para ese equipo, mientras se lo reemplaza.
+  </ErrorComun>
+  <ErrorComun titulo="add_header sin always">
+    El HSTS y los demás encabezados no van en los errores (404, 500). always.
+  </ErrorComun>
+  <ErrorComun titulo="Un add_header en una location">
+    Borra todos los del server para esa location. Repetilos o usá un include.
+  </ErrorComun>
+  <ErrorComun titulo="Copiar una configuración de un blog de 2016">
+    Trae SSLv3, cifrados rotos y opciones que ya no existen. ssl-config.mozilla.org, siempre con la versión real de nginx y de OpenSSL.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Puerto 80 con return 301 a HTTPS; en el 443, http2 on.
+- ssl_protocols TLSv1.2 TLSv1.3 y los cifrados "intermedios" de Mozilla (ssl-config.mozilla.org).
+- HSTS con always: empezar con max-age corto; includeSubDomains y preload solo con todo en HTTPS.
+- Encabezados de seguridad (nosniff, Referrer-Policy, CSP, frame-ancestors), probados con los programadores. Ojo con add_header en las location.
+- En Rocky, la política criptográfica del sistema (update-crypto-policies) en DEFAULT.
+- testssl o SSL Labs para medir: T por confianza, C por cifrados débiles, B por TLS viejo, A sin HSTS, A+ con todo.
+</Resumen>

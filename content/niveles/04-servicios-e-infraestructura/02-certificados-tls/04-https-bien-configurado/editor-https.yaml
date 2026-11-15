@@ -1,0 +1,53 @@
+tipo: configuracion
+titulo: El HTTPS de la intranet, como corresponde
+consigna: >-
+  Este sitio funciona, pero lo copiaron de un servidor de hace años. Dejalo bien: que solo acepte
+  TLS 1.2 y 1.3; que use HTTP/2; que mande HSTS por dos años (max-age=63072000, siempre, también
+  en los errores); que no diga la versión de nginx; y que el server del puerto 80 redirija todo a
+  HTTPS con un 301 en lugar de servir el sitio.
+lenguaje: nginx
+nombre_archivo: /etc/nginx/conf.d/intranet.conf
+archivo_inicial: |
+  server {
+      listen 80;
+      server_name intranet.ejemplo.com;
+      root /var/www/intranet;
+  }
+
+  server {
+      listen 443 ssl;
+      server_name intranet.ejemplo.com;
+      root /var/www/intranet;
+
+      ssl_certificate /etc/pki/tls/certs/intranet.crt;
+      ssl_certificate_key /etc/pki/tls/private/intranet.key;
+      ssl_protocols SSLv3 TLSv1 TLSv1.1 TLSv1.2;
+  }
+reglas:
+  - { tipo: sin_errores, mensaje: "nginx -t no encuentra errores" }
+  - { tipo: contiene, regex: "ssl_protocols\\s+TLSv1\\.2\\s+TLSv1\\.3\\s*;", mensaje: "Solo TLS 1.2 y 1.3" }
+  - { tipo: no_contiene, regex: "SSLv3|TLSv1\\s|TLSv1\\.1", mensaje: "No quedan SSLv3, TLS 1.0 ni TLS 1.1" }
+  - { tipo: contiene, regex: "http2\\s+on\\s*;", mensaje: "HTTP/2 activado (http2 on;)" }
+  - { tipo: contiene, regex: "add_header\\s+Strict-Transport-Security\\s+\"max-age=63072000[^\"]*\"\\s+always\\s*;", mensaje: "HSTS de dos años, con always" }
+  - { tipo: contiene, regex: "server_tokens\\s+off\\s*;", mensaje: "nginx no muestra su versión (server_tokens off)" }
+  - { tipo: contiene, regex: "listen\\s+80\\s*;[^}]*return\\s+301\\s+https://\\$host\\$request_uri\\s*;", mensaje: "El puerto 80 redirige a HTTPS con 301" }
+solucion: |
+  server {
+      listen 80;
+      server_name intranet.ejemplo.com;
+      return 301 https://$host$request_uri;
+  }
+
+  server {
+      listen 443 ssl;
+      http2 on;
+      server_name intranet.ejemplo.com;
+      root /var/www/intranet;
+      server_tokens off;
+
+      ssl_certificate /etc/pki/tls/certs/intranet.crt;
+      ssl_certificate_key /etc/pki/tls/private/intranet.key;
+      ssl_protocols TLSv1.2 TLSv1.3;
+
+      add_header Strict-Transport-Security "max-age=63072000" always;
+  }

@@ -547,6 +547,7 @@ export const ROCKY_WEB: Record<string, PackageInfo> = {
   certbot: { summary: 'A free, automated certificate authority client (EPEL)', version: '4.1.1', commands: ['certbot'], timers: [{ name: 'certbot-renew', description: 'This is the timer to set the schedule for automated renewals', calendar: '*-*-* 00/12:00:00', enabled: false }] },
   'python3-certbot-nginx': { summary: 'The nginx plugin for certbot (EPEL)', version: '4.1.1' },
   'python3-certbot-apache': { summary: 'The Apache plugin for certbot (EPEL)', version: '4.1.1' },
+  testssl: { summary: 'Testing TLS/SSL encryption anywhere on any port', version: '3.2.1', commands: ['testssl', 'testssl.sh'] },
   haproxy: { summary: 'HAProxy reverse proxy for high availability environments', version: '3.0.5', services: [{ name: 'haproxy', description: 'HAProxy Load Balancer', ports: [] }], files: { '/etc/haproxy/haproxy.cfg': '' }, commands: ['haproxy'] },
 }
 
@@ -594,5 +595,6 @@ export const UBUNTU_WEB: Record<string, PackageInfo> = {
   certbot: { summary: 'automatically configure HTTPS using Let\'s Encrypt', version: '4.0.0', commands: ['certbot'], timers: [{ name: 'certbot', description: 'Run certbot twice daily', calendar: '*-*-* 00,12:00:00', enabled: true }] },
   'python3-certbot-nginx': { summary: 'Nginx plugin for Certbot', version: '4.0.0' },
   'python3-certbot-apache': { summary: 'Apache plugin for Certbot', version: '4.0.0' },
+  'testssl.sh': { summary: 'Testing TLS/SSL encryption', version: '3.2.1', commands: ['testssl', 'testssl.sh'] },
   haproxy: { summary: 'fast and reliable load balancing reverse proxy', version: '3.0.5', services: [{ name: 'haproxy', description: 'HAProxy Load Balancer', ports: [], enabledByDefault: true, activeAfterInstall: true }], files: { '/etc/haproxy/haproxy.cfg': '' }, commands: ['haproxy'] },
 }

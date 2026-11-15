@@ -38,6 +38,8 @@ export interface TlsHello {
   chain: CertData[]
   protocols: string[]
   h2: boolean
+  /** ssl_ciphers del servidor (para testssl); sin valor, el de fábrica. */
+  ciphers?: string
 }
 
 /** Algo que atiende conexiones en un puerto: nginx, Apache o una aplicación. */
@@ -238,6 +240,8 @@ export interface TlsInfo {
   cipher: string
   verify: VerifyResult
   h2: boolean
+  /** ssl_ciphers del servidor, si lo configuró. */
+  cipherConf?: string
 }
 
 export type FetchResult =
@@ -361,6 +365,7 @@ export function fetchHttp(from: System, url: string, o: FetchOpts = {}): FetchRe
       cipher: agreed === 'TLSv1.3' ? 'TLS_AES_256_GCM_SHA384' : 'ECDHE-RSA-AES256-GCM-SHA384',
       verify: verifyChain(hello.chain, trustedRoots(from, o.caFile), u.host),
       h2: hello.h2 && !o.http1,
+      cipherConf: hello.ciphers,
     }
     if (!o.insecure && tls.verify.code !== 'ok') return verifyFail(u.host, tls, ip, u.port)
   }

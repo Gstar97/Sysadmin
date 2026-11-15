@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBashSession, stripAnsi, verifyBash } from '@/engines/shell'
 import type { BashStateInput } from '@/engines/shell/schema'
+import { ROOT_CRED } from '@/engines/shell/vfs'
 
 async function session(state: BashStateInput) {
   const sh = createBashSession(state)
@@ -138,6 +139,30 @@ describe('openssl: hash, firma y cifrado', () => {
     await run('openssl enc -aes-256-cbc -pbkdf2 -in c.txt -out c.enc -pass pass:uno')
     expect((await run('openssl enc -d -aes-256-cbc -pbkdf2 -in c.enc -pass pass:dos')).err).toContain('bad decrypt')
     expect((await run('openssl enc -d -aes-256-cbc -pbkdf2 -in c.enc -pass pass:uno')).out).toBe('Precio: 9000\n')
+  })
+})
+
+describe('testssl', () => {
+  it('protocolos viejos, cifrados débiles y sin HSTS dan C; bien configurado, A+', async () => {
+    const conf = (extra: string) =>
+      `server {\n    listen 443 ssl;\n    server_name pagos.ejemplo.com;\n    root /var/www/pagos;\n    ssl_certificate /etc/ssl/certs/pagos.crt;\n    ssl_certificate_key /etc/ssl/private/pagos.key;\n${extra}}\n`
+    const { sh, run } = await session({
+      distro: 'ubuntu',
+      usuario: 'root',
+      paquetes: { instalados: ['nginx', 'testssl.sh'] },
+      servicios: { nginx: { activo: true } },
+      red: { registros_dns: { 'pagos.ejemplo.com': '127.0.0.1' } },
+      web: { certificados: [{ certificado: '/etc/ssl/certs/pagos.crt', clave: '/etc/ssl/private/pagos.key', cn: 'pagos.ejemplo.com' }] },
+      archivos: { '/var/www/pagos/index.html': 'ok\n', '/etc/nginx/sites-enabled/pagos': conf('    ssl_protocols TLSv1 TLSv1.2;\n    ssl_ciphers HIGH:MEDIUM:!aNULL;\n') },
+    })
+    const before = (await run('testssl https://pagos.ejemplo.com')).out
+    expect(before).toContain('TLS 1      offered (deprecated)')
+    expect(before).toMatch(/Overall Grade\s+C/)
+    sh.sys.vfs.writeFile('/etc/nginx/sites-enabled/pagos', conf('    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-CHACHA20-POLY1305;\n    http2 on;\n    add_header Strict-Transport-Security "max-age=63072000" always;\n'), ROOT_CRED)
+    await run('systemctl reload nginx')
+    const after = (await run('testssl https://pagos.ejemplo.com')).out
+    expect(after).toContain('ALPN/HTTP2 h2, http/1.1 (offered)')
+    expect(after).toMatch(/Overall Grade\s+A\+/)
   })
 })
 
