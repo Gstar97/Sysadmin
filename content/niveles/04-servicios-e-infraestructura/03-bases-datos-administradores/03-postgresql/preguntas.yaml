@@ -1,0 +1,104 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cómo entrás a administrar un PostgreSQL recién instalado?
+  opciones:
+    - { texto: "sudo -u postgres psql", correcta: true, explicacion: "La regla peer acepta al usuario de Linux postgres como el rol postgres." }
+    - { texto: "psql -U postgres con la contraseña de root", explicacion: "Da Peer authentication failed." }
+    - { texto: "sudo psql", explicacion: "Entrarías como el rol root, que no existe." }
+    - { texto: "mysql -u postgres", explicacion: "Ese es el cliente de MariaDB." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En Rocky instalaste postgresql-server y systemctl start postgresql falla. ¿Qué falta?
+  opciones:
+    - { texto: "Crear el cluster con postgresql-setup --initdb", correcta: true, explicacion: "En Ubuntu lo hace el paquete; en Rocky, vos." }
+    - { texto: "Abrir el puerto 5432", explicacion: "El firewall no impide arrancar." }
+    - { texto: "Crear el usuario postgres", explicacion: "Lo crea el paquete." }
+    - { texto: "Reiniciar el servidor", explicacion: "No cambia nada." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: La aplicación, en el mismo servidor Rocky, no puede conectarse. ¿Qué cambiás?
+  salida: |
+    psql: error: connection to server at "127.0.0.1", port 5432 failed: FATAL:  Ident authentication failed for user "inventario_app"
+  opciones:
+    - { texto: "En pg_hba.conf, el método de la línea de 127.0.0.1/32 de ident a scram-sha-256, y reload", correcta: true, explicacion: "ident casi nunca funciona: necesita un servicio identd." }
+    - { texto: "La contraseña del rol", explicacion: "Ni siquiera se usó la contraseña." }
+    - { texto: "listen_addresses", explicacion: "Llegó: el error es de autenticación." }
+    - { texto: "Reinstalar PostgreSQL", explicacion: "Es configuración." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una aplicación nueva dice "permission denied for schema public" al crear sus tablas en PostgreSQL 18. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "La base es de otro rol (postgres): desde la versión 15, solo el dueño crea en public", correcta: true, explicacion: "CREATE DATABASE ... OWNER la_aplicacion, o ALTER DATABASE ... OWNER TO." }
+    - { texto: "Falta GRANT SELECT", explicacion: "Es para leer, no para crear." }
+    - { texto: "El disco está lleno", explicacion: "Sería otro error." }
+    - { texto: "pg_hba.conf no la deja entrar", explicacion: "Ya entró: falla al crear." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Diste GRANT SELECT ON ALL TABLES IN SCHEMA public TO informes. Al mes, informes no puede leer una tabla nueva. ¿Por qué?
+  opciones:
+    - { texto: "Ese GRANT vale para las tablas que existían en ese momento; para las futuras hace falta ALTER DEFAULT PRIVILEGES", correcta: true, explicacion: "Para las tablas de ese dueño, en ese esquema." }
+    - { texto: "Los GRANT vencen a los 30 días", explicacion: "No vencen." }
+    - { texto: "Hay que hacer reload", explicacion: "Los permisos se aplican al instante." }
+    - { texto: "informes perdió el LOGIN", explicacion: "Podría entrar igual; lo que falla es la tabla." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: Para que web01 se conecte al PostgreSQL de db01, ¿qué hace falta? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "listen_addresses con la IP de db01 (o '*') y restart", correcta: true, explicacion: "De fábrica escucha solo en localhost." }
+    - { texto: "Una línea host en pg_hba.conf para la red de web01, con scram-sha-256", correcta: true, explicacion: "Si no: no pg_hba.conf entry for host." }
+    - { texto: "El firewall de db01 abierto para 5432 desde web01", correcta: true, explicacion: "Servicio postgresql." }
+    - { texto: "Darle SUPERUSER al rol de la aplicación", explicacion: "Nunca hace falta." }
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué falta según este error?
+  salida: |
+    psql: error: connection to server at "db01" (192.168.10.20), port 5432 failed: FATAL:  no pg_hba.conf entry for host "192.168.10.11", user "inventario_app", database "inventario", no encryption
+  opciones:
+    - { texto: "Una línea en pg_hba.conf que permita esa base, ese rol y esa dirección", correcta: true, explicacion: "Llegó y PostgreSQL no encontró ninguna regla que coincida." }
+    - { texto: "Cambiar listen_addresses", explicacion: "Ya escucha: si no, sería Connection refused." }
+    - { texto: "Abrir el firewall", explicacion: "Si estuviera cerrado, no habría respuesta." }
+    - { texto: "La contraseña", explicacion: "No llegó a pedirla." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la diferencia entre aplicar un cambio de pg_hba.conf y uno de listen_addresses?
+  opciones:
+    - { texto: "pg_hba.conf se aplica con reload; listen_addresses necesita restart", correcta: true, explicacion: "reload no corta conexiones; restart, sí." }
+    - { texto: "Los dos se aplican solos al guardar", explicacion: "Hay que avisarle a PostgreSQL." }
+    - { texto: "Los dos necesitan reiniciar el servidor", explicacion: "Alcanza con el servicio." }
+    - { texto: "listen_addresses con reload, pg_hba.conf con restart", explicacion: "Es al revés." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando de psql que lista los roles.
+  aceptadas:
+    - "\\du"
+    - "\\dg"
+  patrones: ["^\\\\d[ug]\\+?$"]
+  explicacion: "\\l lista las bases y \\dt las tablas."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace la regla "host all all 0.0.0.0/0 reject" al final de pg_hba.conf?
+  opciones:
+    - { texto: "Rechaza cualquier conexión por red que no haya coincidido con una regla anterior", correcta: true, explicacion: "Gana la primera que coincide." }
+    - { texto: "Rechaza todo, incluso lo que permiten las líneas de arriba", explicacion: "Las de arriba ya decidieron." }
+    - { texto: "Abre PostgreSQL a internet", explicacion: "Es lo contrario." }
+    - { texto: "Bloquea las conexiones locales por socket", explicacion: "Son de tipo local, no host." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde está la configuración de PostgreSQL en Ubuntu 26.04?
+  opciones:
+    - { texto: "/etc/postgresql/18/main/", correcta: true, explicacion: "Los datos, en /var/lib/postgresql/18/main." }
+    - { texto: "/var/lib/pgsql/data/", explicacion: "Esa es la de Rocky." }
+    - { texto: "/etc/my.cnf.d/", explicacion: "Es de MariaDB en Rocky." }
+    - { texto: "/etc/psql.conf", explicacion: "No existe." }

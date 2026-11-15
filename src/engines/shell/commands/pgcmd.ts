@@ -706,13 +706,14 @@ register('createdb', {
   usage: 'createdb [-O dueño] nombre',
   async run(ctx) {
     await loadSql()
-    const o = parsePg(ctx.args)
+    const i = ctx.args.indexOf('-O')
+    const owner = ctx.args.find((a) => a.startsWith('--owner='))?.slice(8) ?? (i >= 0 ? ctx.args[i + 1] : undefined)
+    const o = parsePg(ctx.args.filter((a, j) => !(i >= 0 && (j === i || j === i + 1)) && !a.startsWith('--owner=')))
     const name = o.rest[0]
     if (!name) {
       ctx.err('createdb: error: missing required argument database name\n')
       return 1
     }
-    const owner = o.vals.get('--owner') ?? (ctx.args.includes('-O') ? ctx.args[ctx.args.indexOf('-O') + 1] : undefined)
     return runAsSql(ctx, `CREATE DATABASE ${name}${owner ? ` OWNER ${owner}` : ''}`, 'createdb')
   },
 })

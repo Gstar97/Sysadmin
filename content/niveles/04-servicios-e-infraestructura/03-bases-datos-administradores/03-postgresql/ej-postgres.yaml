@@ -1,0 +1,94 @@
+tipo: terminal
+shell: bash
+titulo: PostgreSQL para el sistema de inventario
+descripcion: >-
+  db01 (Rocky Linux 10) va a alojar la base del sistema de inventario. Todavía no tiene PostgreSQL.
+  La aplicación va a correr en el mismo servidor y se va a conectar por TCP a 127.0.0.1 con su
+  propio rol y contraseña.
+estado_inicial:
+  distro: rocky
+  hostname: db01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+pasos:
+  - consigna: Instalá el servidor PostgreSQL y tratá de arrancarlo. Mirá qué dice el journal.
+    verificar:
+      - { paquete: postgresql-server }
+      - { salida_contiene: 'postgresql-setup --initdb' }
+    pistas:
+      - "`sudo dnf install -y postgresql-server`, `sudo systemctl start postgresql` y `sudo journalctl -u postgresql -n 6`"
+    solucion:
+      - sudo dnf install -y postgresql-server
+      - sudo systemctl start postgresql
+      - sudo journalctl -u postgresql -n 6
+    explicacion: >-
+      En Rocky, el paquete no crea el "cluster" (la carpeta con los datos y la configuración): hay
+      que hacerlo una vez. En Ubuntu, el paquete lo crea y arranca solo.
+  - consigna: Creá el cluster, habilitá y arrancá el servicio.
+    verificar:
+      - { servicio: postgresql, activo: true, habilitado: true }
+    pistas:
+      - "`sudo postgresql-setup --initdb` y `sudo systemctl enable --now postgresql`"
+    solucion:
+      - sudo postgresql-setup --initdb
+      - sudo systemctl enable --now postgresql
+    explicacion: Los datos y la configuración quedan en /var/lib/pgsql/data, que es del usuario postgres.
+  - consigna: >-
+      Creá el rol inventario_app (que pueda iniciar sesión, con la contraseña Inv-2026-app) y la
+      base inventario con ese rol como dueño. Después listá las bases.
+    verificar:
+      - { usuario_bd: inventario_app, motor: postgresql, clave: Inv-2026-app }
+      - { base_datos: inventario, motor: postgresql }
+      - { salida_contiene: 'inventario_app' }
+    pistas:
+      - "Como el usuario de Linux postgres: `sudo -u postgres psql -c \"CREATE ROLE inventario_app WITH LOGIN PASSWORD 'Inv-2026-app'\"`"
+      - "`sudo -u postgres createdb -O inventario_app inventario` y `sudo -u postgres psql -l`"
+    solucion:
+      - "sudo -u postgres psql -c \"CREATE ROLE inventario_app WITH LOGIN PASSWORD 'Inv-2026-app'\""
+      - sudo -u postgres createdb -O inventario_app inventario
+      - sudo -u postgres psql -l
+    explicacion: >-
+      Siendo dueño de su base, inventario_app puede crear sus tablas (desde PostgreSQL 15, el
+      esquema public solo deja crear al dueño de la base), pero no puede tocar las demás bases ni
+      crear roles.
+  - consigna: Probá conectarte como la aplicación, por TCP, a 127.0.0.1.
+    verificar:
+      - { salida_contiene: 'Ident authentication failed for user "inventario_app"' }
+    pistas:
+      - "`psql -h 127.0.0.1 -U inventario_app -d inventario`"
+    solucion: ["psql -h 127.0.0.1 -U inventario_app -d inventario"]
+    explicacion: >-
+      La línea de pg_hba.conf que corresponde a 127.0.0.1 usa el método ident, que en Rocky viene
+      de fábrica y casi nunca funciona (necesita un servicio identd). Hay que cambiarlo por
+      scram-sha-256, que pide la contraseña del rol.
+  - consigna: >-
+      Cambiá el método de la línea de 127.0.0.1/32 en /var/lib/pgsql/data/pg_hba.conf a
+      scram-sha-256 y aplicá el cambio sin reiniciar.
+    verificar:
+      - { archivo: /var/lib/pgsql/data/pg_hba.conf, contenido_incluye: '127.0.0.1/32            scram-sha-256' }
+      - { comando_usado: 'systemctl\s+reload\s+postgresql' }
+    pistas:
+      - "`sudo sed -i 's|127.0.0.1/32            ident|127.0.0.1/32            scram-sha-256|' /var/lib/pgsql/data/pg_hba.conf` y `sudo systemctl reload postgresql`"
+    solucion:
+      - "sudo sed -i 's|127.0.0.1/32            ident|127.0.0.1/32            scram-sha-256|' /var/lib/pgsql/data/pg_hba.conf"
+      - sudo systemctl reload postgresql
+    explicacion: reload hace que PostgreSQL relea pg_hba.conf sin cortar a nadie.
+  - consigna: >-
+      Guardá la contraseña en ~/.pgpass (para 127.0.0.1, puerto 5432, base inventario, rol
+      inventario_app), con permisos 600, y creá desde ahí la tabla productos (id serial clave,
+      nombre texto obligatorio, stock entero).
+    verificar:
+      - { archivo: /home/ana/.pgpass, modo: '0600' }
+      - { consulta_bd: 'SELECT count(*) FROM productos', motor: postgresql, base: inventario, resultado: '0' }
+    pistas:
+      - "`echo '127.0.0.1:5432:inventario:inventario_app:Inv-2026-app' > ~/.pgpass` y `chmod 600 ~/.pgpass`"
+      - "`psql -h 127.0.0.1 -U inventario_app -d inventario -c 'CREATE TABLE productos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, stock INTEGER DEFAULT 0)'`"
+    solucion:
+      - "echo '127.0.0.1:5432:inventario:inventario_app:Inv-2026-app' > ~/.pgpass"
+      - chmod 600 ~/.pgpass
+      - "psql -h 127.0.0.1 -U inventario_app -d inventario -c 'CREATE TABLE productos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, stock INTEGER DEFAULT 0)'"
+    explicacion: >-
+      Cada línea de ~/.pgpass es servidor:puerto:base:rol:contraseña (con * vale para cualquiera).
+      Si el archivo no tiene permisos 600, psql lo ignora y avisa. La tabla quedó con
+      inventario_app como dueño.

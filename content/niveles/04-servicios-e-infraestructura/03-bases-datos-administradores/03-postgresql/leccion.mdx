@@ -1,0 +1,115 @@
+---
+id: n4-m3-l3
+titulo: PostgreSQL
+minutos: 180
+objetivos:
+  - Instalar PostgreSQL en Rocky (con initdb) y en Ubuntu, y administrarlo con psql.
+  - Crear roles y bases con el dueño correcto, y dar permisos de lectura que sirvan también para las tablas futuras.
+  - Configurar pg_hba.conf y listen_addresses para permitir solo las conexiones necesarias, y diagnosticar sus errores.
+glosario: [postgresql, rol-postgresql, pg-hba, peer-auth]
+verificado: 2026-11
+---
+
+import hba from './hba.svg?raw'
+import hbaDatos from './hba.yaml'
+import pg from './ej-postgres.yaml'
+import equivalencias from './equivalencias.yaml'
+
+**PostgreSQL** es la otra gran base de datos libre. Es más estricta que MariaDB con los tipos y las reglas, tiene más funciones avanzadas (tipos JSON, búsquedas de texto, extensiones como PostGIS para mapas) y es la preferida por muchos sistemas nuevos, por Django y por las plataformas de nube. Para el administrador, lo que más cambia es cómo se entra: en vez de cuentas usuario@host, hay **roles** y un archivo, **pg_hba.conf**, que decide quién puede conectarse, desde dónde y cómo.
+
+<AntesDeEmpezar>
+- MySQL y MariaDB (lección 4.3.2).
+- Usuarios y sudo en Linux (módulo 1.2).
+</AntesDeEmpezar>
+
+## Instalar
+
+| | Rocky Linux 10 | Ubuntu 26.04 |
+|---|---|---|
+| Instalar | `dnf install postgresql-server` | `apt install postgresql` |
+| Versión | PostgreSQL 16 | PostgreSQL 18 |
+| Antes de arrancar | `postgresql-setup --initdb` (crea el cluster) | nada: el paquete crea el cluster `18/main` y arranca |
+| Datos | `/var/lib/pgsql/data` | `/var/lib/postgresql/18/main` |
+| Configuración | en la misma carpeta de datos | `/etc/postgresql/18/main/` |
+| Ver los clusters | `systemctl status postgresql` | `pg_lsclusters` |
+
+Un **cluster** es una instalación con sus datos y su configuración; adentro tiene varias bases. Al crearlo, PostgreSQL arma el rol de administrador **postgres** y el usuario de Linux del mismo nombre. Para administrar se entra así:
+
+```bash
+sudo -u postgres psql
+```
+
+`sudo -u postgres` ejecuta psql como el usuario de Linux postgres, y la regla `peer` de pg_hba.conf lo deja entrar como el rol postgres porque los nombres coinciden. No hace falta (ni conviene) ponerle contraseña al rol postgres.
+
+<Emparejar ejercicio={equivalencias} />
+
+## Roles, bases y permisos
+
+En PostgreSQL usuarios y grupos son lo mismo: **roles**. Un rol con `LOGIN` puede conectarse; uno sin `LOGIN` sirve como grupo.
+
+```sql
+CREATE ROLE inventario_app WITH LOGIN PASSWORD 'una-clave-larga';
+CREATE DATABASE inventario OWNER inventario_app;
+```
+
+El **dueño** de una base y de cada tabla tiene todos los permisos sobre ellas. Desde **PostgreSQL 15**, en una base nueva solo su dueño puede crear tablas en el esquema `public` (antes podía cualquiera): si una aplicación dice "permission denied for schema public", casi siempre es porque la base es de postgres y no de la aplicación. La solución es crear la base con `OWNER`, o `ALTER DATABASE ... OWNER TO`.
+
+Para un rol de solo lectura (informes, una herramienta de análisis):
+
+```sql
+CREATE ROLE informes WITH LOGIN PASSWORD 'otra-clave';
+\c inventario
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO informes;
+ALTER DEFAULT PRIVILEGES FOR ROLE inventario_app IN SCHEMA public GRANT SELECT ON TABLES TO informes;
+```
+
+La trampa: `GRANT ... ON ALL TABLES` vale solo para las tablas que **existen hoy**. Las que la aplicación cree mañana no quedan incluidas, salvo que agregues `ALTER DEFAULT PRIVILEGES`, que define qué permisos reciben las tablas nuevas de ese dueño.
+
+## Quién entra, desde dónde y cómo: pg_hba.conf
+
+<DiagramaInteractivo datos={hbaDatos} svg={hba} alt="Un archivo pg_hba.conf, que está en /var/lib/pgsql/data en Rocky y en /etc/postgresql/18/main en Ubuntu. Columnas: TYPE, DATABASE, USER, ADDRESS y METHOD. Líneas: local all postgres peer; local all all peer; host all all 127.0.0.1/32 scram-sha-256; host inventario inventario_app 192.168.10.0/24 scram-sha-256; host all all 0.0.0.0/0 reject. Al final, un comentario: para que un cambio valga, sudo systemctl reload postgresql." />
+
+Dos cosas más para las conexiones desde otros servidores:
+
+- **listen_addresses** en postgresql.conf: de fábrica es `localhost`, así que nadie de afuera llega (el error es "Connection refused"). Se cambia a la IP del servidor o a `'*'`, y hace falta **restart** (no alcanza con reload).
+- El firewall: servicio `postgresql` (5432/tcp), solo desde los servidores de aplicación.
+
+En **Rocky**, las líneas de 127.0.0.1 vienen con el método `ident`, que casi siempre falla ("Ident authentication failed"). Lo primero que se hace al instalar es cambiarlas a `scram-sha-256`.
+
+Para que una aplicación o un script no tengan que escribir la contraseña, psql y pg_dump la leen de **~/.pgpass** (con permisos 600), con una línea `servidor:puerto:base:rol:contraseña`, o de la variable `PGPASSWORD` (menos segura: la ve quien pueda listar el entorno del proceso).
+
+<EnSimple>
+PostgreSQL: se administra con sudo -u postgres psql. Cada aplicación tiene un rol con LOGIN y es dueña de su base. pg_hba.conf dice quién entra, desde dónde y con qué método (se aplica con reload); listen_addresses dice dónde escucha (se aplica con restart).
+</EnSimple>
+
+<Terminal ejercicio={pg} />
+
+<ErroresComunes>
+  <ErrorComun titulo="psql -U postgres y “Peer authentication failed”">
+    Por el socket, peer exige que el usuario de Linux se llame como el rol. sudo -u postgres psql.
+  </ErrorComun>
+  <ErrorComun titulo="“Ident authentication failed” en Rocky">
+    Las líneas de 127.0.0.1 traen ident. Cambialas a scram-sha-256 y systemctl reload postgresql.
+  </ErrorComun>
+  <ErrorComun titulo="“permission denied for schema public”">
+    Desde PostgreSQL 15, solo el dueño de la base crea tablas en public. CREATE DATABASE ... OWNER la_aplicacion.
+  </ErrorComun>
+  <ErrorComun titulo="El rol de lectura no ve las tablas nuevas">
+    GRANT ON ALL TABLES no incluye las futuras. ALTER DEFAULT PRIVILEGES.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar listen_addresses y hacer reload">
+    Esa opción necesita restart. pg_hba.conf, en cambio, alcanza con reload.
+  </ErrorComun>
+  <ErrorComun titulo="Una regla trust “para probar”">
+    Cualquiera que llegue entra sin contraseña, como cualquier rol. Se olvida, y queda.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- PostgreSQL 16 en Rocky 10 (con postgresql-setup --initdb) y 18 en Ubuntu 26.04 (cluster 18/main, pg_lsclusters).
+- Administrar: sudo -u postgres psql; comandos \l, \c, \dt, \d, \du, \q.
+- Roles con LOGIN y CREATE DATABASE ... OWNER; desde la versión 15, solo el dueño crea en public.
+- Solo lectura: GRANT SELECT ON ALL TABLES más ALTER DEFAULT PRIVILEGES.
+- pg_hba.conf: tipo, base, rol, dirección y método; gana la primera línea que coincide; reload. listen_addresses: restart.
+- En Rocky, cambiar ident por scram-sha-256. Contraseñas en ~/.pgpass (600).
+</Resumen>

@@ -1,0 +1,49 @@
+tipo: diagrama
+titulo: pg_hba.conf, columna por columna
+puntos:
+  - id: tipo
+    titulo: "TYPE"
+    area: { x: 2.3, y: 24.5, ancho: 6.7, alto: 9.8 }
+    texto: >-
+      local es por el socket, en el mismo servidor (psql sin -h). host es por TCP, con la
+      dirección de origen (psql -h 127.0.0.1 o desde otro equipo). Hay también hostssl, para
+      exigir conexiones cifradas.
+  - id: base
+    titulo: "DATABASE"
+    area: { x: 9.0, y: 24.5, ancho: 13.4, alto: 9.8 }
+    texto: >-
+      A qué base se puede conectar con esta regla: all, un nombre o varios separados por comas.
+      Así una aplicación queda limitada a su base aunque su rol tuviera permisos en otra.
+  - id: usuario
+    titulo: "USER"
+    area: { x: 22.5, y: 24.5, ancho: 13.4, alto: 9.8 }
+    texto: >-
+      Qué rol: all o un nombre. En PostgreSQL los usuarios son roles con permiso para iniciar
+      sesión (LOGIN).
+  - id: direccion
+    titulo: "ADDRESS"
+    area: { x: 35.9, y: 24.5, ancho: 20.1, alto: 9.8 }
+    texto: >-
+      Solo en las líneas host: desde qué direcciones. 127.0.0.1/32 es el mismo servidor por TCP;
+      192.168.10.0/24, la red de las aplicaciones. Las líneas local no llevan dirección.
+  - id: metodo
+    titulo: "METHOD"
+    area: { x: 56.1, y: 24.5, ancho: 15.1, alto: 9.8 }
+    texto: >-
+      Cómo se comprueba la identidad. peer: el usuario de Linux tiene que llamarse igual que el
+      rol (por eso sudo -u postgres psql). scram-sha-256: con contraseña. ident: como peer pero
+      por la red, consultando un servicio que casi nunca está instalado (es lo que trae Rocky para
+      127.0.0.1, y falla). reject: rechazar. trust: sin nada (nunca en producción).
+  - id: orden
+    titulo: "El orden importa"
+    area: { x: 0.9, y: 34.3, ancho: 98.1, alto: 49.0 }
+    texto: >-
+      PostgreSQL lee las líneas de arriba hacia abajo y usa la primera que coincide con el tipo,
+      la base, el rol y la dirección; no sigue buscando. Si ninguna coincide: "no pg_hba.conf
+      entry for host". Por eso la línea que rechaza todo lo demás va al final.
+  - id: recarga
+    titulo: "Aplicar los cambios"
+    area: { x: 2.3, y: 83.3, ancho: 68.8, alto: 9.8 }
+    texto: >-
+      pg_hba.conf se relee con systemctl reload postgresql (no corta las conexiones abiertas).
+      listen_addresses y el puerto, en cambio, recién con un restart.
