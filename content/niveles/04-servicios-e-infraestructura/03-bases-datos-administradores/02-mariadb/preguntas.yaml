@@ -1,0 +1,102 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En un MariaDB recién instalado, ¿cómo entrás como administrador?
+  opciones:
+    - { texto: "Con sudo mysql: root entra por unix_socket, sin contraseña", correcta: true, explicacion: "MariaDB comprueba que el usuario de Linux sea root." }
+    - { texto: "mysql -u root -p con la contraseña de root de Linux", explicacion: "No usa la contraseña del sistema." }
+    - { texto: "mysql -u admin -padmin", explicacion: "No existe esa cuenta." }
+    - { texto: "Con la contraseña que se genera en /var/log", explicacion: "Eso hace MySQL de Oracle, no MariaDB." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Creaste 'app'@'localhost' y la aplicación, que corre en otro servidor, no puede entrar. ¿Por qué?
+  opciones:
+    - { texto: "Esa cuenta solo vale para conexiones desde el mismo servidor: hace falta 'app'@'IP-de-la-aplicación'", correcta: true, explicacion: "La cuenta es usuario más origen." }
+    - { texto: "Falta FLUSH PRIVILEGES", explicacion: "Con CREATE USER y GRANT no hace falta." }
+    - { texto: "MariaDB no acepta conexiones remotas", explicacion: "Las acepta, con la cuenta, el firewall y bind-address bien." }
+    - { texto: "La contraseña es muy corta", explicacion: "No es eso." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Desde web01 (Ubuntu) intentás conectarte al MariaDB de db01, también Ubuntu. ¿Qué revisás primero?
+  salida: |
+    $ mysql -h db01 -u app -p
+    ERROR 2002 (HY000): Can't connect to server on 'db01' (115)
+  opciones:
+    - { texto: "En db01, que bind-address no siga en 127.0.0.1 (y que el servicio esté activo)", correcta: true, explicacion: "115 es conexión rechazada: nada escucha en esa dirección." }
+    - { texto: "La contraseña de app", explicacion: "Ni siquiera llegó a pedirla." }
+    - { texto: "Los GRANT de app", explicacion: "Es antes: la conexión." }
+    - { texto: "El DNS", explicacion: "El nombre se resolvió: el error es de conexión." }
+- id: p04
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué permisos conviene darle a la cuenta de una tienda online, que solo lee y guarda datos? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "SELECT", correcta: true, explicacion: "Para leer." }
+    - { texto: "INSERT, UPDATE y DELETE", correcta: true, explicacion: "Para guardar y cambiar sus datos." }
+    - { texto: "DROP", explicacion: "Puede borrar tablas enteras." }
+    - { texto: "ALL PRIVILEGES ON *.*", explicacion: "Es acceso total al servidor." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene ~/.my.cnf con permisos 600 en vez de mysql -u app -pClave?
+  opciones:
+    - { texto: "La clave en la línea de comandos queda en el historial y se ve en la lista de procesos", correcta: true, explicacion: "En el archivo, solo la puede leer su dueño." }
+    - { texto: "Porque -p no funciona en scripts", explicacion: "Funciona, pero expone la clave." }
+    - { texto: "Porque es más rápido", explicacion: "No cambia la velocidad." }
+    - { texto: "Porque MariaDB lo exige", explicacion: "No lo exige." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esto?
+  salida: |
+    MariaDB [(none)]> SELECT user, host, plugin FROM mysql.user;
+    +------------+--------------+-----------------------+
+    | User       | Host         | plugin                |
+    +------------+--------------+-----------------------+
+    | root       | localhost    | unix_socket           |
+    | tienda_app | %            | mysql_native_password |
+    +------------+--------------+-----------------------+
+  opciones:
+    - { texto: "tienda_app puede conectarse desde cualquier origen: conviene limitarla a la red de las aplicaciones", correcta: true, explicacion: "El % solo es cualquier lugar." }
+    - { texto: "root está mal configurado", explicacion: "unix_socket es lo recomendado." }
+    - { texto: "tienda_app no tiene contraseña", explicacion: "El plugin dice que usa contraseña." }
+    - { texto: "Falta el usuario mysql", explicacion: "No es un problema." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí la sentencia que muestra los permisos de la cuenta 'tienda_app'@'192.168.10.%'.
+  aceptadas:
+    - "SHOW GRANTS FOR 'tienda_app'@'192.168.10.%';"
+    - "show grants for 'tienda_app'@'192.168.10.%';"
+  patrones: ["^(?:SHOW GRANTS FOR|show grants for)\\s+'tienda_app'@'192\\.168\\.10\\.%'\\s*;?$"]
+  explicacion: "Sin FOR, muestra los de la cuenta con la que estás conectado."
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En Rocky, ¿por qué conviene crear las bases con CHARACTER SET utf8mb4?
+  opciones:
+    - { texto: "MariaDB 10.11 usa latin1 de fábrica, que no guarda emojis ni muchos caracteres de otros idiomas", correcta: true, explicacion: "En Ubuntu ya viene utf8mb4." }
+    - { texto: "Porque es más rápido", explicacion: "No es por velocidad." }
+    - { texto: "Porque lo pide el firewall", explicacion: "No tiene relación." }
+    - { texto: "No hace falta, utf8 y utf8mb4 son iguales", explicacion: "utf8 en MySQL/MariaDB es una versión recortada." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un programador te pide que el puerto 3306 del servidor de base de datos quede abierto a internet "para conectarse desde su casa". ¿Qué le ofrecés?
+  opciones:
+    - { texto: "Entrar por la VPN de la empresa y conectarse como desde la red interna", correcta: true, explicacion: "La base no se publica." }
+    - { texto: "Abrir el 3306 a internet con una contraseña fuerte", explicacion: "Hay robots probando contraseñas en ese puerto todo el día." }
+    - { texto: "Darle la clave de root por correo", explicacion: "Nunca." }
+    - { texto: "Cambiar el puerto a 3307 y abrirlo", explicacion: "Lo encuentran igual." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Cambiaste bind-address en 50-server.cnf, pero ss sigue mostrando 127.0.0.1:3306. ¿Qué falta?
+  opciones:
+    - { texto: "Reiniciar MariaDB: systemctl restart mariadb", correcta: true, explicacion: "La configuración se lee al arrancar." }
+    - { texto: "FLUSH PRIVILEGES", explicacion: "Es para los permisos, y tampoco hace falta." }
+    - { texto: "Reiniciar el servidor", explicacion: "Alcanza con el servicio." }
+    - { texto: "Abrir el firewall", explicacion: "ss muestra dónde escucha, no el firewall." }

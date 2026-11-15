@@ -1,0 +1,114 @@
+tipo: terminal
+shell: bash
+titulo: MariaDB para la tienda, con un usuario de mínimo privilegio
+descripcion: >-
+  db01 (Rocky Linux 10, 192.168.10.20) va a ser el servidor de base de datos de la tienda, que
+  corre en web01 (192.168.10.11). En db01 todavía no hay nada instalado; en web01 ya está el
+  cliente de MariaDB. Los dos están en la red 192.168.10.0/24 y se conocen por nombre.
+estado_inicial:
+  distro: rocky
+  hostname: db01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [firewalld] }
+  servicios:
+    firewalld: { activo: true, habilitado: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.20/24, estado: UP }
+  servidores:
+    - hostname: web01
+      ip: 192.168.10.11
+      distro: rocky
+      en_dns: true
+      usuarios:
+        - { nombre: ana, sudo: true }
+      paquetes: { instalados: [mariadb] }
+pasos:
+  - consigna: Instalá el servidor MariaDB, habilitalo y arrancalo.
+    verificar:
+      - { paquete: mariadb-server }
+      - { servicio: mariadb, activo: true, habilitado: true }
+    pistas:
+      - "`sudo dnf install -y mariadb-server` y `sudo systemctl enable --now mariadb`"
+    solucion:
+      - sudo dnf install -y mariadb-server
+      - sudo systemctl enable --now mariadb
+    explicacion: >-
+      En Rocky 10 es MariaDB 10.11. En Ubuntu 26.04 sería apt install mariadb-server (11.8), que
+      además arranca solo. En los dos, root entra por el socket con sudo mysql, sin contraseña.
+  - consigna: >-
+      Creá la base tienda con el juego de caracteres utf8mb4, y la cuenta tienda_app que solo
+      puede conectarse desde la red 192.168.10.0/24, con la contraseña Tnd-2026-app y permiso
+      para leer, agregar, cambiar y borrar datos en tienda (nada más). Mostrá sus permisos.
+    verificar:
+      - { base_datos: tienda, motor: mariadb }
+      - { usuario_bd: tienda_app, host: '192.168.10.%', motor: mariadb, permiso: DELETE, base: tienda }
+      - { usuario_bd: tienda_app, host: '192.168.10.%', motor: mariadb, permiso: DROP, base: tienda, tiene: false }
+      - { comando_usado: 'SHOW GRANTS' }
+    pistas:
+      - "`sudo mysql` y adentro: `CREATE DATABASE tienda CHARACTER SET utf8mb4;`"
+      - "`CREATE USER 'tienda_app'@'192.168.10.%' IDENTIFIED BY 'Tnd-2026-app';` y `GRANT SELECT, INSERT, UPDATE, DELETE ON tienda.* TO 'tienda_app'@'192.168.10.%';`"
+      - "Para ver: `SHOW GRANTS FOR 'tienda_app'@'192.168.10.%';` (y `exit`)."
+    solucion:
+      - sudo mysql
+      - CREATE DATABASE tienda CHARACTER SET utf8mb4;
+      - CREATE USER 'tienda_app'@'192.168.10.%' IDENTIFIED BY 'Tnd-2026-app';
+      - GRANT SELECT, INSERT, UPDATE, DELETE ON tienda.* TO 'tienda_app'@'192.168.10.%';
+      - SHOW GRANTS FOR 'tienda_app'@'192.168.10.%';
+      - exit
+    explicacion: >-
+      La cuenta es usuario más origen: 'tienda_app'@'192.168.10.%' no puede entrar desde otra red,
+      ni siquiera con la contraseña correcta. Y no tiene CREATE, DROP ni ALTER: si alguien
+      encuentra una falla en la tienda, no puede borrar tablas. Las tablas las crean los scripts de
+      instalación con otra cuenta (o vos con sudo mysql).
+  - consigna: >-
+      Comprobá en qué dirección escucha MariaDB y abrí el servicio mysql en el firewall de forma
+      permanente.
+    verificar:
+      - { salida_contiene: '3306' }
+      - { comando_usado: 'firewall-cmd.*--permanent.*mysql' }
+    pistas:
+      - "`sudo firewall-cmd --permanent --add-service=mysql`, `sudo firewall-cmd --reload` y `sudo ss -tlnp | grep 3306`"
+    solucion:
+      - sudo firewall-cmd --permanent --add-service=mysql
+      - sudo firewall-cmd --reload
+      - sudo ss -tlnp | grep 3306
+    explicacion: >-
+      En Rocky, MariaDB escucha en todas las direcciones (0.0.0.0) de fábrica; en Ubuntu, solo en
+      127.0.0.1 (bind-address en 50-server.cnf). En una red real, además del servicio, conviene
+      dejar entrar solo a los servidores de aplicación (en firewalld, con una zona o una regla con
+      la dirección de origen).
+  - consigna: >-
+      Entrá a web01 por SSH, conectate desde ahí con la cuenta de la aplicación y probá que no
+      puede crear una tabla.
+    verificar:
+      - { comando_usado: 'ssh\s+web01' }
+      - { salida_contiene: "CREATE command denied to user 'tienda_app'@'192.168.10.11'" }
+    pistas:
+      - "`ssh web01` y `mysql -h db01 -u tienda_app -pTnd-2026-app tienda -e 'CREATE TABLE prueba (id INT)'`"
+    solucion:
+      - ssh web01
+      - mysql -h db01 -u tienda_app -pTnd-2026-app tienda -e 'CREATE TABLE prueba (id INT)'
+    explicacion: >-
+      La conexión llegó (pasó el firewall y el usuario y la contraseña son correctos) y MariaDB
+      la frenó en el último paso, los permisos: exactamente lo que queríamos. Fijate que el
+      mensaje muestra la IP real de web01.
+  - consigna: >-
+      Todavía en web01, guardá las credenciales de la aplicación en ~/.my.cnf (servidor, usuario, clave y
+      base), solo legible por vos, y comprobá que mysql se conecta sin escribir la contraseña.
+    verificar:
+      - { en: web01, verificar: { archivo: /home/ana/.my.cnf, modo: '0600' } }
+      - { salida_contiene: 'tienda_app@192.168.10.%' }
+    pistas:
+      - "`printf '[client]\\nhost=db01\\nuser=tienda_app\\npassword=Tnd-2026-app\\ndatabase=tienda\\n' > ~/.my.cnf` y `chmod 600 ~/.my.cnf`"
+      - "`mysql -e 'SELECT CURRENT_USER()'`"
+    solucion:
+      - "printf '[client]\\nhost=db01\\nuser=tienda_app\\npassword=Tnd-2026-app\\ndatabase=tienda\\n' > ~/.my.cnf"
+      - chmod 600 ~/.my.cnf
+      - mysql -e 'SELECT CURRENT_USER()'
+    explicacion: >-
+      CURRENT_USER() dice con qué cuenta te reconoció MariaDB: 'tienda_app'@'192.168.10.%'. La
+      contraseña ya no queda en el historial ni en la lista de procesos (con -pClave, cualquiera que
+      mire ps la ve mientras el comando corre). Con permisos 600, solo vos podés leer el archivo.

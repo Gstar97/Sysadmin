@@ -152,7 +152,7 @@ function serviceProcess(distro: 'rocky' | 'ubuntu', name: string): { cmd: string
     httpd: { cmd: '/usr/sbin/httpd -DFOREGROUND', comm: 'httpd' },
     apache2: { cmd: '/usr/sbin/apache2 -k start', comm: 'apache2' },
     mariadb: { cmd: rocky ? '/usr/libexec/mariadbd --basedir=/usr' : '/usr/sbin/mariadbd', user: 'mysql', comm: 'mariadbd' },
-    postgresql: { cmd: rocky ? '/usr/bin/postgres -D /var/lib/pgsql/data' : '/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main', user: 'postgres', comm: 'postgres' },
+    postgresql: { cmd: rocky ? '/usr/bin/postgres -D /var/lib/pgsql/data' : '/usr/lib/postgresql/18/bin/postgres -D /var/lib/postgresql/18/main -c config_file=/etc/postgresql/18/main/postgresql.conf', user: 'postgres', comm: 'postgres' },
     named: { cmd: rocky ? '/usr/sbin/named -u named -c /etc/named.conf' : '/usr/sbin/named -f -u bind', user: rocky ? 'named' : 'bind', comm: 'named' },
     smb: { cmd: '/usr/sbin/smbd --foreground --no-process-group', comm: 'smbd' },
     smbd: { cmd: '/usr/sbin/smbd --foreground --no-process-group', comm: 'smbd' },

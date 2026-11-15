@@ -1,0 +1,14 @@
+tipo: emparejar
+consigna: Uní cada error de MariaDB con lo primero que revisás.
+pares:
+  - { a: "ERROR 2002 (HY000): Can't connect to server on 'db01' (115)", b: "Que el servicio esté corriendo y escuche en esa dirección (bind-address)" }
+  - { a: "ERROR 2002 (HY000): Can't connect to server on 'db01' (110)", b: "El firewall: el paquete no llega y se agota el tiempo" }
+  - { a: "ERROR 1130 (HY000): Host '192.168.20.5' is not allowed to connect", b: "Que exista una cuenta para ese origen (usuario@host)" }
+  - { a: "ERROR 1045 (28000): Access denied for user 'app'@'192.168.10.11' (using password: YES)", b: "La contraseña, o que la cuenta sea para otro host" }
+  - { a: "ERROR 1698 (28000): Access denied for user 'root'@'localhost'", b: "root entra por unix_socket: usar sudo mysql" }
+  - { a: "ERROR 1142 (42000): DELETE command denied to user 'app'@...", b: "Los permisos de la cuenta: SHOW GRANTS" }
+explicacion: >-
+  Los errores siguen el orden en que MariaDB decide: primero si la conexión llega (2002), después
+  qué cuenta corresponde (1130), si es quien dice ser (1045 y 1698) y al final qué puede hacer
+  (1142). El 115 es "conexión rechazada" (nadie escucha) y el 110, "se agotó el tiempo" (algo en el
+  medio descarta el paquete).

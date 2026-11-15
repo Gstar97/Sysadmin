@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" font-family="system-ui, sans-serif" font-size="12">
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">Cómo decide MariaDB si te deja entrar (y qué error da cada paso)</text>
+  <g stroke="currentColor" stroke-width="1.2">
+    <rect x="10" y="40" width="200" height="160" rx="8" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="225" y="40" width="200" height="160" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="440" y="40" width="200" height="160" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="655" y="40" width="195" height="160" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="10" y="216" width="840" height="74" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.4" fill="currentColor">
+    <line x1="210" y1="120" x2="220" y2="120"/><path d="M225 120 l-6 -4 v8 z"/>
+    <line x1="425" y1="120" x2="435" y2="120"/><path d="M440 120 l-6 -4 v8 z"/>
+    <line x1="640" y1="120" x2="650" y2="120"/><path d="M655 120 l-6 -4 v8 z"/>
+  </g>
+  <g fill="currentColor">
+    <text x="110" y="62" text-anchor="middle" font-weight="700">1. ¿Llega?</text>
+    <text x="22" y="86">Servicio mariadb activo</text>
+    <text x="22" y="104">Puerto 3306 en la dirección de</text>
+    <text x="22" y="122">bind-address (Ubuntu: 127.0.0.1)</text>
+    <text x="22" y="140">Firewall: servicio mysql</text>
+    <text x="22" y="168" font-weight="700" font-size="11">ERROR 2002</text>
+    <text x="22" y="186" font-size="11">Can't connect to server</text>
+    <text x="325" y="62" text-anchor="middle" font-weight="700">2. ¿Qué cuenta?</text>
+    <text x="237" y="86">Una cuenta es usuario + host:</text>
+    <text x="237" y="104" font-family="ui-monospace, monospace" font-size="11">'app'@'192.168.10.%'</text>
+    <text x="237" y="122">Gana la más específica</text>
+    <text x="237" y="140">para la IP de origen</text>
+    <text x="237" y="168" font-weight="700" font-size="11">ERROR 1130</text>
+    <text x="237" y="186" font-size="11">Host '…' is not allowed</text>
+    <text x="540" y="62" text-anchor="middle" font-weight="700">3. ¿Es quien dice?</text>
+    <text x="452" y="86">Contraseña de la cuenta, o</text>
+    <text x="452" y="104">unix_socket: el usuario de</text>
+    <text x="452" y="122">Linux (root con sudo mysql)</text>
+    <text x="452" y="140">tiene que coincidir</text>
+    <text x="452" y="168" font-weight="700" font-size="11">ERROR 1045 / 1698</text>
+    <text x="452" y="186" font-size="11">Access denied for user</text>
+    <text x="752" y="62" text-anchor="middle" font-weight="700">4. ¿Qué puede hacer?</text>
+    <text x="667" y="86">Los GRANT de la cuenta,</text>
+    <text x="667" y="104">por base y por tabla:</text>
+    <text x="667" y="122" font-family="ui-monospace, monospace" font-size="11">SELECT, INSERT ON</text>
+    <text x="667" y="140" font-family="ui-monospace, monospace" font-size="11">tienda.*</text>
+    <text x="667" y="168" font-weight="700" font-size="11">ERROR 1142 / 1044</text>
+    <text x="667" y="186" font-size="11">command denied</text>
+    <text x="24" y="240" font-weight="700">Para diagnosticar, de izquierda a derecha:</text>
+    <text x="24" y="260">systemctl status mariadb y ss -tlnp | grep 3306 → SELECT user, host, plugin FROM mysql.user →</text>
+    <text x="24" y="280">probar la contraseña con mysql -u ... -p → SHOW GRANTS FOR 'usuario'@'host'</text>
+  </g>
+</svg>

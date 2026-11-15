@@ -423,7 +423,8 @@ function toSqlite(kind: DbKind, stmt: string, sess: Session): string {
   s = s.replace(/::\s*[a-z_]+(\s*\(\s*\d+(\s*,\s*\d+)?\s*\))?/gi, '')
   s = s.replace(/\bpublic\./gi, '')
   s = s.replace(/\bVERSION\s*\(\s*\)/gi, `'${kind === 'mariadb' ? versionOf(sess.server.sys, kind) : `PostgreSQL ${versionOf(sess.server.sys, kind)} on x86_64-pc-linux-gnu`}'`)
-  s = s.replace(/\b(?:USER|CURRENT_USER|SESSION_USER)\s*\(\s*\)/gi, `'${sess.user.name}@${sess.from === 'localhost' ? 'localhost' : sess.from}'`)
+  s = s.replace(/\bCURRENT_USER\s*\(\s*\)/gi, `'${sess.user.name}@${kind === 'mariadb' ? sess.user.host : ''}'`.replace(/@'$/, "'"))
+  s = s.replace(/\b(?:USER|SESSION_USER)\s*\(\s*\)/gi, `'${sess.user.name}@${sess.from === 'localhost' ? 'localhost' : sess.from}'`)
   s = s.replace(/\bcurrent_user\b(?!\s*\()/gi, `'${sess.user.name}'`)
   s = s.replace(/\bDATABASE\s*\(\s*\)|\bcurrent_database\s*\(\s*\)/gi, sess.db ? `'${sess.db}'` : 'NULL')
   s = s.replace(/\bCONCAT\s*\(([^()]*)\)/gi, (_, a: string) => `(${a.split(/,(?=(?:[^']*'[^']*')*[^']*$)/).join(' || ')})`)
@@ -542,14 +543,14 @@ export function execute(sess: Session, raw: string): Result {
     const tables = tablesIn(stmt).filter((t) => !/^(sqlite_|information_schema)/i.test(t))
     if (priv === 'CREATE' && !hasPriv(sess, 'CREATE', sess.db)) {
       const t = tablesIn(stmt)[0] ?? ''
-      return s.kind === 'mariadb' ? myErr(1142, '42000', `CREATE command denied to user '${sess.user.name}'@'${sess.user.host}' for table \`${sess.db}\`.\`${t}\``) : pgErr('permission denied for schema public', `LINE 1: ${stmt.slice(0, 60)}`)
+      return s.kind === 'mariadb' ? myErr(1142, '42000', `CREATE command denied to user '${sess.user.name}'@'${sess.from}' for table \`${sess.db}\`.\`${t}\``) : pgErr('permission denied for schema public', `LINE 1: ${stmt.slice(0, 60)}`)
     }
     for (const t of priv === 'CREATE' ? [] : tables) {
       const first = /^\s*(INSERT|REPLACE|UPDATE|DELETE)/i.test(stmt) ? tables[0] : undefined
       const need = t === first || priv !== 'SELECT' ? priv : 'SELECT'
       if (!hasPriv(sess, need, sess.db, t) && (s.kind === 'postgres' ? true : !hasPriv(sess, need, sess.db))) {
         return s.kind === 'mariadb'
-          ? myErr(1142, '42000', `${need} command denied to user '${sess.user.name}'@'${sess.user.host === '%' ? sess.from : sess.user.host}' for table \`${sess.db}\`.\`${t}\``)
+          ? myErr(1142, '42000', `${need} command denied to user '${sess.user.name}'@'${sess.from}' for table \`${sess.db}\`.\`${t}\``)
           : pgErr(`permission denied for table ${t}`)
       }
     }
