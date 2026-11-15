@@ -1,0 +1,134 @@
+tipo: terminal
+shell: bash
+titulo: HTTPS para el sitio público y la intranet
+descripcion: >-
+  web01 (Rocky Linux 10) tiene dos sitios por HTTP: www.ejemplo.com.ar, público (el router
+  reenvía el 80 y el 443 desde 203.0.113.10, y el DNS público ya apunta ahí), y
+  intranet.ejemplo.com, solo interno. La CA interna de la empresa ya existe en /root/ca (ca.crt y
+  ca.key). certbot, su complemento y testssl están instalados. Hay que dejar los dos con HTTPS,
+  renovación automática y nota A+.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nginx, firewalld, epel-release, certbot, python3-certbot-nginx, testssl] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+    firewalld: { activo: true, habilitado: true }
+  red:
+    registros_dns: { www.ejemplo.com.ar: 127.0.0.1, intranet.ejemplo.com: 127.0.0.1 }
+  web:
+    dominios_publicos: { www.ejemplo.com.ar: 203.0.113.10 }
+    ip_publica: 203.0.113.10
+    puertos_publicados: [80, 443]
+    ca_interna: { cn: Ejemplo Root CA, certificado: /root/ca/ca.crt, clave: /root/ca/ca.key }
+  archivos:
+    /var/www/publico/index.html: "<h1>Ejemplo S.A.</h1>\n"
+    /var/www/intranet/index.html: "<h1>Intranet</h1>\n"
+    /etc/nginx/conf.d/publico.conf: |
+      server {
+          listen 80;
+          server_name www.ejemplo.com.ar;
+          root /var/www/publico;
+      }
+    /etc/nginx/conf.d/intranet.conf: |
+      server {
+          listen 80;
+          server_name intranet.ejemplo.com;
+          root /var/www/intranet;
+      }
+pasos:
+  - consigna: >-
+      Empezá por la intranet. Generá su clave y su pedido (CN y SAN intranet.ejemplo.com), firmalo
+      con la CA interna por un año copiando las extensiones, y dejá el certificado en
+      /etc/pki/tls/certs/intranet.crt y la clave en /etc/pki/tls/private/intranet.key.
+    verificar:
+      - { certificado: /etc/pki/tls/certs/intranet.crt, san_incluye: intranet.ejemplo.com, emisor_contiene: Ejemplo Root CA, clave: /etc/pki/tls/private/intranet.key }
+    pistas:
+      - "`sudo openssl req -new -newkey rsa:2048 -noenc -keyout /etc/pki/tls/private/intranet.key -out /tmp/intranet.csr -subj '/CN=intranet.ejemplo.com' -addext 'subjectAltName=DNS:intranet.ejemplo.com'`"
+      - "`sudo openssl x509 -req -in /tmp/intranet.csr -CA /root/ca/ca.crt -CAkey /root/ca/ca.key -CAcreateserial -days 365 -copy_extensions copy -out /etc/pki/tls/certs/intranet.crt`"
+    solucion:
+      - "sudo openssl req -new -newkey rsa:2048 -noenc -keyout /etc/pki/tls/private/intranet.key -out /tmp/intranet.csr -subj '/CN=intranet.ejemplo.com' -addext 'subjectAltName=DNS:intranet.ejemplo.com'"
+      - sudo openssl x509 -req -in /tmp/intranet.csr -CA /root/ca/ca.crt -CAkey /root/ca/ca.key -CAcreateserial -days 365 -copy_extensions copy -out /etc/pki/tls/certs/intranet.crt
+    explicacion: El verificador comprobó también que la clave y el certificado son pareja.
+  - consigna: Hacé que web01 confíe en la CA interna.
+    verificar:
+      - { confia_en: Ejemplo Root CA }
+    pistas:
+      - "`sudo cp /root/ca/ca.crt /etc/pki/ca-trust/source/anchors/ejemplo-root-ca.crt && sudo update-ca-trust`"
+    solucion: ["sudo cp /root/ca/ca.crt /etc/pki/ca-trust/source/anchors/ejemplo-root-ca.crt && sudo update-ca-trust"]
+    explicacion: Sin esto, ni el propio servidor (sus scripts, su monitoreo) confiaría en la intranet.
+  - consigna: >-
+      Reescribí /etc/nginx/conf.d/intranet.conf: el 80 redirige a HTTPS con 301, y el 443 usa el
+      certificado nuevo, TLS 1.2 y 1.3, HTTP/2 y HSTS de dos años con always. Probá, recargá y
+      pedí la página por HTTPS.
+    verificar:
+      - { http: 'https://intranet.ejemplo.com/', tls_valido: true, http2: true, encabezado: { nombre: Strict-Transport-Security }, contiene: 'Intranet' }
+      - { http: 'http://intranet.ejemplo.com/', estado: 301 }
+    pistas:
+      - "Mirá la configuración base de la lección 4.2.4. En el 443: `listen 443 ssl;`, `http2 on;`, los dos ssl_certificate, `ssl_protocols TLSv1.2 TLSv1.3;` y `add_header Strict-Transport-Security \"max-age=63072000\" always;`."
+    solucion:
+      - "printf 'server {\\n    listen 80;\\n    server_name intranet.ejemplo.com;\\n    return 301 https://$host$request_uri;\\n}\\n\\nserver {\\n    listen 443 ssl;\\n    http2 on;\\n    server_name intranet.ejemplo.com;\\n    root /var/www/intranet;\\n    ssl_certificate /etc/pki/tls/certs/intranet.crt;\\n    ssl_certificate_key /etc/pki/tls/private/intranet.key;\\n    ssl_protocols TLSv1.2 TLSv1.3;\\n    add_header Strict-Transport-Security \"max-age=63072000\" always;\\n}\\n' | sudo tee /etc/nginx/conf.d/intranet.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -sI https://intranet.ejemplo.com
+    explicacion: La intranet ya tiene HTTPS con la CA interna, y web01 confía en ella.
+  - consigna: >-
+      Ahora el sitio público. Abrí http y https en firewalld (permanente) y pedí el certificado
+      con certbot certonly --webroot sobre /var/www/publico, con el correo sistemas@ejemplo.com.ar,
+      aceptando los términos y con un deploy hook que recargue nginx. (Para ahorrar tiempo, acá
+      vamos directo a producción; en tu laboratorio real, primero --staging.)
+    verificar:
+      - { certificado: /etc/letsencrypt/live/www.ejemplo.com.ar/fullchain.pem, emisor_contiene: "Let's Encrypt", con_cadena: true }
+      - { archivo: /etc/letsencrypt/renewal/www.ejemplo.com.ar.conf, contenido_incluye: 'reload nginx' }
+    pistas:
+      - "`sudo firewall-cmd --permanent --add-service=http --add-service=https && sudo firewall-cmd --reload`"
+      - "`sudo certbot certonly --webroot -w /var/www/publico -d www.ejemplo.com.ar -m sistemas@ejemplo.com.ar --agree-tos --deploy-hook \"systemctl reload nginx\"`"
+    solucion:
+      - sudo firewall-cmd --permanent --add-service=http --add-service=https && sudo firewall-cmd --reload
+      - sudo certbot certonly --webroot -w /var/www/publico -d www.ejemplo.com.ar -m sistemas@ejemplo.com.ar --agree-tos --deploy-hook "systemctl reload nginx"
+    explicacion: >-
+      Con --webroot, certbot no toca nginx: el deploy hook queda guardado en el archivo de
+      renovación y se ejecuta después de cada renovación exitosa.
+  - consigna: >-
+      Reescribí /etc/nginx/conf.d/publico.conf con la misma estructura que la intranet, pero con
+      los archivos de /etc/letsencrypt/live/www.ejemplo.com.ar/. Ojo: el 80 tiene que seguir
+      sirviendo /.well-known/acme-challenge/ desde /var/www/publico para las renovaciones.
+      Recargá y comprobá.
+    verificar:
+      - { http: 'https://www.ejemplo.com.ar/', tls_valido: true, http2: true, encabezado: { nombre: Strict-Transport-Security }, contiene: 'Ejemplo S.A.' }
+      - { http: 'http://www.ejemplo.com.ar/', estado: 301 }
+    pistas:
+      - "En el server del 80: `location /.well-known/acme-challenge/ { root /var/www/publico; }` y `location / { return 301 https://$host$request_uri; }`."
+    solucion:
+      - "printf 'server {\\n    listen 80;\\n    server_name www.ejemplo.com.ar;\\n    location /.well-known/acme-challenge/ {\\n        root /var/www/publico;\\n    }\\n    location / {\\n        return 301 https://$host$request_uri;\\n    }\\n}\\n\\nserver {\\n    listen 443 ssl;\\n    http2 on;\\n    server_name www.ejemplo.com.ar;\\n    root /var/www/publico;\\n    ssl_certificate /etc/letsencrypt/live/www.ejemplo.com.ar/fullchain.pem;\\n    ssl_certificate_key /etc/letsencrypt/live/www.ejemplo.com.ar/privkey.pem;\\n    ssl_protocols TLSv1.2 TLSv1.3;\\n    add_header Strict-Transport-Security \"max-age=63072000\" always;\\n}\\n' | sudo tee /etc/nginx/conf.d/publico.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -sI https://www.ejemplo.com.ar
+    explicacion: >-
+      Si el 80 redirigiera todo, la validación igual funcionaría (Let's Encrypt sigue las
+      redirecciones), pero dejar el desafío servido directo evita sorpresas el día que cambie la
+      configuración de HTTPS.
+  - consigna: Dejá activa la renovación automática y ensayala.
+    verificar:
+      - { servicio: certbot-renew.timer, activo: true, habilitado: true }
+      - { salida_contiene: 'all simulated renewals succeeded' }
+    pistas:
+      - "`sudo systemctl enable --now certbot-renew.timer` y `sudo certbot renew --dry-run`"
+    solucion:
+      - sudo systemctl enable --now certbot-renew.timer
+      - sudo certbot renew --dry-run
+    explicacion: El ensayo prueba todo el camino, incluido el acceso desde internet al puerto 80.
+  - consigna: Por último, pasá testssl a los dos sitios.
+    verificar:
+      - { comando_usado: 'testssl.*www\.ejemplo\.com\.ar' }
+      - { comando_usado: 'testssl.*intranet\.ejemplo\.com' }
+      - { salida_contiene: 'Overall Grade                A+' }
+    pistas:
+      - "`testssl https://www.ejemplo.com.ar | tail -4` y lo mismo con la intranet."
+    solucion:
+      - testssl https://www.ejemplo.com.ar | tail -4
+      - testssl https://intranet.ejemplo.com | tail -4
+    explicacion: >-
+      Los dos en A+. La intranet también, porque este servidor confía en la CA interna; desde un
+      equipo que no la tenga, testssl la marcaría con T.

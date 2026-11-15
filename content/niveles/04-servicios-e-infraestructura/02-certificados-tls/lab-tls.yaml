@@ -1,0 +1,103 @@
+tipo: pasos
+titulo: Una CA interna con ACME y HTTPS automático en tus máquinas virtuales
+descripcion: >-
+  ubuntu01 va a ser la CA interna (step-ca, que habla ACME) y rocky01 el servidor web, que pide y
+  renueva su certificado con certbot, igual que con Let's Encrypt. Usás los nombres rocky01.lab y
+  ubuntu01.lab (.lab no existe en internet). Hace falta salida a internet para instalar paquetes.
+  Calculá unas tres horas.
+pasos:
+  - titulo: Instantáneas y nombres
+    detalle: >-
+      Sacá una instantánea de las dos VM. Después agregá los dos nombres al archivo hosts de
+      rocky01, de ubuntu01 y de tu PC, con las IP de cada una.
+    comandos:
+      - "192.168.56.102  ubuntu01.lab"
+      - "192.168.56.103  rocky01.lab"
+    comprobar: Desde cada una, ping -c1 a los dos nombres responde.
+  - titulo: Instalar step-ca en ubuntu01
+    detalle: Los paquetes oficiales de Smallstep (step es la herramienta, step-ca el servidor).
+    comandos:
+      - wget https://dl.smallstep.com/cli/docs-ca-install/latest/step-cli_amd64.deb https://dl.smallstep.com/certificates/docs-ca-install/latest/step-ca_amd64.deb
+      - sudo dpkg -i step-cli_amd64.deb step-ca_amd64.deb
+      - step version && step-ca version
+    comprobar: Los dos comandos muestran su versión.
+  - titulo: Crear la CA
+    detalle: >-
+      step crea una raíz y una intermedia, y un "provisionador" ACME para que certbot pueda pedir
+      certificados. Te pide una contraseña para las claves: guardala en tu gestor de contraseñas y
+      en un archivo solo para tu usuario, para que el servicio arranque sin preguntar.
+    comandos:
+      - step ca init --name "Laboratorio CA" --dns ubuntu01.lab --address :9000 --provisioner admin@ubuntu01.lab --acme
+      - echo 'LaContraseñaQueElegiste' > ~/.step/password.txt && chmod 600 ~/.step/password.txt
+      - step-ca $(step path)/config/ca.json --password-file ~/.step/password.txt
+    comprobar: >-
+      La última línea dice "Serving HTTPS on :9000 ...". Dejala corriendo en esa terminal (después
+      podés convertirla en un servicio de systemd, como en la lección 4.1.5).
+    si_falla: Si el puerto está ocupado o bloqueado, sudo ufw allow 9000/tcp y probá de nuevo.
+  - titulo: Que rocky01 confíe en la CA
+    detalle: >-
+      La raíz está en ~/.step/certs/root_ca.crt en ubuntu01. Copiala a rocky01 (con scp) y a tu
+      PC (en Windows, doble clic e instalala en "Entidades de certificación raíz de confianza" del
+      equipo local).
+    comandos:
+      - scp ~/.step/certs/root_ca.crt tu_usuario@rocky01.lab:/tmp/
+      - "# en rocky01:"
+      - sudo cp /tmp/root_ca.crt /etc/pki/ca-trust/source/anchors/laboratorio-ca.crt && sudo update-ca-trust
+      - curl -s https://ubuntu01.lab:9000/health
+    comprobar: El curl de rocky01 devuelve {"status":"ok"} sin -k.
+  - titulo: Pedir el certificado con certbot
+    detalle: >-
+      En rocky01, con nginx sirviendo un sitio en rocky01.lab por el puerto 80 y el firewall
+      abierto para http y https. certbot usa tu CA en lugar de Let's Encrypt gracias a --server.
+    comandos:
+      - sudo dnf install -y epel-release && sudo dnf install -y certbot python3-certbot-nginx
+      - sudo firewall-cmd --permanent --add-service=http --add-service=https && sudo firewall-cmd --reload
+      - sudo certbot --nginx --server https://ubuntu01.lab:9000/acme/acme/directory -d rocky01.lab -m tu@correo.lab --agree-tos
+    comprobar: Desde tu PC, https://rocky01.lab abre con candado y sin avisos.
+    si_falla: >-
+      "Connection refused" o "Timeout" en la validación: step-ca (en ubuntu01) no llega a
+      rocky01.lab:80; revisá el hosts de ubuntu01 y el firewall de rocky01. Un error de
+      certificado al conectarse a ubuntu01:9000: rocky01 todavía no confía en la raíz.
+  - titulo: HTTPS bien configurado
+    detalle: >-
+      En el server del 443 que armó certbot: ssl_protocols TLSv1.2 TLSv1.3, http2 on, HSTS (para
+      el laboratorio, max-age=300) y server_tokens off. Probá y recargá.
+    comandos:
+      - sudo vi /etc/nginx/conf.d/rocky01.conf
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -sI https://rocky01.lab
+    comprobar: La respuesta es HTTP/2 y trae strict-transport-security.
+  - titulo: La renovación
+    detalle: >-
+      step-ca emite certificados de 24 horas por defecto: la renovación automática no es opcional.
+      Habilitá el temporizador y ensayá. Al día siguiente, mirá la fecha del certificado.
+    comandos:
+      - sudo systemctl enable --now certbot-renew.timer
+      - sudo certbot renew --dry-run
+      - sudo certbot certificates
+      - "# mañana:"
+      - echo | openssl s_client -connect rocky01.lab:443 -servername rocky01.lab 2>/dev/null | openssl x509 -noout -dates
+    comprobar: Al otro día, notBefore es de esa mañana, sin que hayas hecho nada.
+  - titulo: Medir con testssl
+    detalle: >-
+      En ubuntu01. testssl trae sus propias listas de raíces, así que hay que decirle que confíe
+      en la tuya con --add-ca.
+    comandos:
+      - sudo apt install -y testssl.sh
+      - testssl --add-ca ~/.step/certs/root_ca.crt https://rocky01.lab
+    comprobar: Overall Grade A (con HSTS de 300 segundos no llega a A+; con 63072000, sí).
+  - titulo: Documentar
+    detalle: >-
+      Dónde está la CA, dónde está la contraseña de sus claves, cómo se instala la raíz en un
+      equipo nuevo (Linux y Windows), cómo se pide un certificado, cuánto duran y cómo se renuevan.
+    comprobar: Otra persona podría sumar un servidor nuevo a la PKI siguiendo tu documento.
+  - titulo: "Variante: Let's Encrypt staging con DNS-01"
+    detalle: >-
+      Si tenés un dominio propio con DNS en un proveedor que certbot soporta (por ejemplo,
+      Cloudflare), probá el camino público sin abrir puertos: DNS-01 contra staging. La clave de la
+      API va en un archivo con permisos 600 y con el menor permiso posible (solo editar DNS de esa
+      zona).
+    comandos:
+      - sudo dnf install -y python3-certbot-dns-cloudflare
+      - sudo certbot certonly --staging --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare.ini -d lab.tu-dominio.com.ar
+    comprobar: certbot certificates muestra el certificado con TEST_CERT.

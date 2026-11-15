@@ -1,0 +1,148 @@
+tipo: troubleshooting
+titulo: El sitio amaneció con "la conexión no es privada"
+descripcion: >-
+  Incidente simulado en web01, un Ubuntu 26.04 que publica la tienda de una distribuidora
+  (tienda.ejemplo.com.ar) con nginx y un certificado de Let's Encrypt obtenido con certbot hace un
+  año. El jueves a las 8:00 los clientes empiezan a llamar: el navegador muestra un aviso de
+  seguridad y no deja comprar. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: Jueves, 8:10. Ventas reenvía capturas de pantalla de clientes. Lo primero es ver qué ve un cliente.
+    evidencia:
+      - titulo: La captura de un cliente
+        contenido: |
+          La conexión no es privada
+          NET::ERR_CERT_DATE_INVALID
+      - titulo: Desde tu PC
+        contenido: |
+          $ echo | openssl s_client -connect tienda.ejemplo.com.ar:443 -servername tienda.ejemplo.com.ar 2>/dev/null | openssl x509 -noout -enddate
+          notAfter=Nov 18 23:41:07 2026 GMT
+    opciones:
+      - { texto: "El certificado venció anoche. Ver en web01 por qué no se renovó", ir_a: n_timer, minutos: 2 }
+      - texto: Pedirles a los clientes que actualicen el navegador
+        ir_a: n1
+        minutos: 5
+        consecuencia: >-
+          ERR_CERT_DATE_INVALID quiere decir que el certificado está fuera de sus fechas. El
+          problema es del servidor, y todos los clientes lo ven igual.
+      - texto: Volver a la configuración de nginx de la semana pasada
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          El certificado es el mismo con cualquier configuración. Venció.
+  n_timer:
+    situacion: El temporizador corre todos los días, pero la renovación viene fallando hace semanas.
+    evidencia:
+      - titulo: systemctl list-timers certbot.timer y sudo certbot certificates
+        contenido: |
+          NEXT                        LEFT     LAST                        PASSED  UNIT          ACTIVATES
+          Thu 2026-11-19 14:12:00 UTC 6h left  Thu 2026-11-19 02:12:00 UTC 5h ago  certbot.timer certbot.service
+
+          Certificate Name: tienda.ejemplo.com.ar
+            Expiry Date: 2026-11-18 23:41:07+00:00 (INVALID: EXPIRED)
+      - titulo: sudo journalctl -u certbot --since "30 days ago" | tail -n 6
+        contenido: |
+          Nov 19 02:12:03 web01 certbot[51022]: Failed to renew certificate tienda.ejemplo.com.ar with error: Some challenges have failed.
+          Nov 19 02:12:03 web01 certbot[51022]: Domain: tienda.ejemplo.com.ar
+          Nov 19 02:12:03 web01 certbot[51022]: Type:   unauthorized
+          Nov 19 02:12:03 web01 certbot[51022]: Detail: 203.0.113.10: Invalid response from http://tienda.ejemplo.com.ar/.well-known/acme-challenge/kZ2v9...: 404
+          Nov 19 02:12:03 web01 certbot[51022]: All renewals failed.
+    opciones:
+      - { texto: "Let's Encrypt llega pero recibe 404 al buscar el archivo de prueba. Ver cómo está configurada la renovación y el sitio", ir_a: n_webroot, minutos: 4 }
+      - texto: Forzar la renovación con certbot renew --force-renewal
+        ir_a: n_timer
+        minutos: 3
+        consecuencia: >-
+          Falla igual, con el mismo 404: forzarla no cambia por qué falla la validación. Y cada
+          intento fallido cuenta para el límite de 5 por hora.
+      - texto: Abrir el puerto 80 en el firewall
+        ir_a: n_timer
+        minutos: 3
+        consecuencia: >-
+          Un 404 quiere decir que Let's Encrypt sí llegó al servidor y le contestó. El firewall está
+          bien.
+  n_webroot:
+    situacion: >-
+      La renovación usa webroot con una carpeta que ya no es la del sitio. Hace un mes, un
+      programador movió la tienda a otra carpeta.
+    evidencia:
+      - titulo: sudo grep -E 'authenticator|webroot' /etc/letsencrypt/renewal/tienda.ejemplo.com.ar.conf
+        contenido: |
+          authenticator = webroot
+          webroot_path = /var/www/tienda,
+      - titulo: grep root /etc/nginx/sites-enabled/tienda
+        contenido: |
+          root /srv/tienda/public;
+    opciones:
+      - texto: Renovar con el webroot nuevo (certbot certonly --webroot -w /srv/tienda/public -d tienda.ejemplo.com.ar), que también actualiza el archivo de renovación
+        ir_a: n_reload
+        minutos: 5
+      - texto: Crear un enlace de /var/www/tienda a /srv/tienda/public
+        ir_a: n_webroot
+        minutos: 3
+        consecuencia: >-
+          Funcionaría hoy, pero deja una trampa escondida para el próximo que mueva algo. Mejor
+          que la configuración diga la verdad: certbot actualiza el archivo de renovación cuando
+          renovás con la ruta nueva.
+  n_reload:
+    situacion: >-
+      certbot dice "Successfully received certificate" y la fecha nueva es de febrero. Pero los
+      clientes siguen viendo el aviso.
+    evidencia:
+      - titulo: Desde tu PC, otra vez
+        contenido: |
+          $ echo | openssl s_client -connect tienda.ejemplo.com.ar:443 -servername tienda.ejemplo.com.ar 2>/dev/null | openssl x509 -noout -enddate
+          notAfter=Nov 18 23:41:07 2026 GMT
+      - titulo: sudo openssl x509 -in /etc/letsencrypt/live/tienda.ejemplo.com.ar/fullchain.pem -noout -enddate
+        contenido: |
+          notAfter=Feb 17 07:20:44 2027 GMT
+    opciones:
+      - texto: nginx sigue con el certificado viejo en memoria. Recargarlo y agregar un deploy hook para las próximas renovaciones
+        ir_a: n_cadena
+        minutos: 3
+      - texto: Esperar a que se actualice solo
+        ir_a: n_reload
+        minutos: 15
+        consecuencia: >-
+          nginx lee los certificados al arrancar o recargar. Con webroot, certbot no lo recarga: no
+          se va a actualizar nunca.
+  n_cadena:
+    situacion: >-
+      Con systemctl reload nginx, los navegadores de las PC andan. Pero el sistema de pedidos de
+      un cliente mayorista, que se conecta por API, sigue fallando con otro error.
+    evidencia:
+      - titulo: El error que manda el mayorista
+        contenido: |
+          javax.net.ssl.SSLHandshakeException: PKIX path building failed: unable to find valid certification path to requested target
+      - titulo: Desde tu PC
+        contenido: |
+          $ echo | openssl s_client -connect tienda.ejemplo.com.ar:443 -servername tienda.ejemplo.com.ar 2>/dev/null | grep -E '^ [0-9] s:|Verify return'
+           0 s:CN=tienda.ejemplo.com.ar
+          Verify return code: 21 (unable to verify the first certificate)
+      - titulo: grep ssl_certificate /etc/nginx/sites-enabled/tienda
+        contenido: |
+          ssl_certificate /etc/letsencrypt/live/tienda.ejemplo.com.ar/cert.pem;
+          ssl_certificate_key /etc/letsencrypt/live/tienda.ejemplo.com.ar/privkey.pem;
+    opciones:
+      - texto: nginx manda cert.pem, sin la intermedia. Cambiar a fullchain.pem, probar y recargar
+        ir_a: n_ok
+        minutos: 4
+      - texto: Pedirle al mayorista que agregue el certificado a su almacén de Java
+        ir_a: n_cadena
+        minutos: 10
+        consecuencia: >-
+          Sería un parche en cada cliente, y con el próximo certificado (en 90 días o menos) otra
+          vez. El servidor tiene que mandar la cadena completa.
+  n_ok:
+    final: exito
+    resumen: >-
+      Fueron tres problemas encadenados. La renovación fallaba hacía semanas porque el sitio se
+      mudó de carpeta y el webroot de certbot quedó apuntando a la vieja (404 en el desafío); como
+      Let's Encrypt ya no manda correos de aviso, nadie se enteró hasta que venció. Después de
+      renovar, nginx seguía con el certificado viejo porque con webroot nadie lo recargaba: faltaba
+      el deploy hook. Y la configuración usaba cert.pem en lugar de fullchain.pem: los navegadores
+      completaban la cadena por su cuenta, pero Java no. Para que no se repita: monitoreo de la
+      fecha del certificado que se sirve (no del archivo), alerta a los 20 días; un certbot renew
+      --dry-run después de cualquier cambio en el sitio; deploy hook "systemctl reload nginx"; y
+      fullchain.pem siempre.

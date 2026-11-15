@@ -1,0 +1,42 @@
+---
+titulo: HTTPS con una CA interna y con Let's Encrypt, renovación automática y nota alta en testssl
+horas: 3
+verificacion:
+  - Resolví el laboratorio simulado completo, con los dos sitios en A+.
+  - step-ca corre en ubuntu01 y su raíz está instalada en rocky01 y en mi PC.
+  - https://rocky01.lab abre desde mi PC sin avisos, por HTTP/2 y con HSTS.
+  - El certificado de rocky01 se renovó solo de un día para el otro (certbot-renew.timer activo).
+  - testssl --add-ca con la raíz de mi CA da A o A+.
+  - Documenté dónde está la CA, su contraseña, cómo se instala la raíz y cómo se pide un certificado.
+---
+
+import sim from './lab-tls-sim.yaml'
+import pasos from './lab-tls.yaml'
+
+## Objetivo
+
+Que ningún servicio de la empresa quede sin HTTPS y que nadie tenga que acordarse de renovar un certificado: el sitio público con Let's Encrypt, lo interno con una CA propia, todo con renovación automática y una configuración que aguante una auditoría.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01 y ubuntu01 con salida a internet, y tu PC con permisos para editar su archivo hosts e instalar un certificado raíz.
+- Para la variante opcional: un dominio propio con DNS en un proveedor que certbot soporte.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+La contraseña de las claves de step-ca y la carpeta ~/.step son la CA entera. En el laboratorio quedan en ubuntu01; en una empresa, la raíz se guarda fuera de línea y la intermedia en un servidor dedicado, con respaldo cifrado.
+</Advertencia>
+
+## Para pensar
+
+1. Los certificados de step-ca duran 24 horas. ¿Qué ventaja tiene eso si alguien roba la clave de rocky01? ¿Y qué pasa si step-ca se cae un fin de semana?
+2. Instalaste la raíz en tu PC a mano. ¿Cómo lo harías para cien PC con Windows? ¿Y para los celulares de la empresa?
+3. testssl sin --add-ca le pone T a rocky01. ¿Por qué no es un problema para la empresa, y en qué caso sí lo sería?
