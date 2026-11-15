@@ -14,7 +14,7 @@ import { Network, normalizeIfName } from './network/model'
 import type { TopologyExercise } from './network/schema'
 import { createPsSession, verifyPs } from './powershell'
 import type { PsCheck } from './powershell/schema'
-import { createBashSession, verifyBash } from './shell'
+import { createBashSession, loadSql, verifyBash } from './shell'
 import type { BashCheck } from './shell/schema'
 import type { IosCheck } from './network/schema'
 import { createVim, verifyVim, vimKeys, type VimCheck } from './vim'
@@ -30,6 +30,7 @@ export async function checkTerminalExercise(ex: TerminalExercise): Promise<Exerc
   let run: (cmd: string) => Promise<void>
   let verify: (check: unknown) => { ok: boolean; label: string }
   if (ex.shell === 'bash') {
+    if ((ex.estado_inicial as { bases_datos?: unknown }).bases_datos) await loadSql()
     const sh = createBashSession(ex.estado_inicial)
     run = async (c) => void (await sh.run(c))
     verify = (c) => verifyBash(sh, c as BashCheck)

@@ -22,3 +22,8 @@ declare module '*.mdx' {
   export const frontmatter: Record<string, unknown>
   export default function MDXContent(props: MDXProps): import('react').JSX.Element
 }
+
+declare module 'sql.js/dist/sql-wasm-inline.js' {
+  const init: () => Promise<unknown>
+  export default init
+}

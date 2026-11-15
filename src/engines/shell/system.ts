@@ -564,6 +564,8 @@ export class System {
 
   /** Módulos que completan el servidor a partir del estado del ejercicio (web, TLS...). */
   static initHooks: ((sys: System, state: BashState) => void)[] = []
+  /** Lo que hace un paquete al instalarse además de copiar archivos (carpetas con dueño, un cluster...). */
+  static installHooks: Record<string, (sys: System) => void> = {}
 
   /** Regenera /proc y /sys con el estado actual (se llama antes de cada comando). */
   refreshVirtual() {
@@ -697,6 +699,7 @@ export class System {
     const info = this.catalog[name]
     if (!info) return false
     this.installed.add(name)
+    for (const r of info.requires ?? []) if (!this.installed.has(r)) this.installPackage(r, silent)
     if (info.user && !this.users.has(info.user.name)) this.addSystemUser(info.user.name, info.user.uid, info.user.home, info.user.gecos)
     for (const [path, content] of Object.entries(info.files ?? {})) {
       this.vfs.mkdirp(path.slice(0, path.lastIndexOf('/')) || '/', ROOT_CRED)
@@ -729,6 +732,7 @@ export class System {
       })
     }
     for (const t of info.timers ?? []) if (!this.timers.has(t.name)) this.timers.set(t.name, packageTimer(this, t.name, t.description, t.calendar, t.enabled))
+    System.installHooks[name]?.(this)
     return true
   }
 

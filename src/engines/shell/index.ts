@@ -35,6 +35,9 @@ import { System } from './system'
 import { modeString, ROOT_CRED, type Inode } from './vfs'
 import { GiB, parseSize } from './storage'
 import { verifyWeb } from './webverify'
+import { verifyDb } from './db/dbinit'
+import './commands/dbcmd'
+import './commands/pgcmd'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
@@ -173,6 +176,8 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
 function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string }>): CheckResult {
   const webResult = verifyWeb(sys, check)
   if (webResult) return webResult
+  const dbResult = verifyDb(sys, check)
+  if (dbResult) return dbResult
   if ('alcanza' in check) {
     const ok = reaches(sys, check.alcanza) === (check.resultado === 'ok')
     return { ok, label: check.resultado === 'ok' ? `${sys.hostname} llega a ${check.alcanza}` : `${sys.hostname} no llega a ${check.alcanza}` }
@@ -440,3 +445,4 @@ function safeRegex(pattern: string, flags?: string): RegExp | undefined {
     return undefined
   }
 }
+export { loadSql } from './db/sqlite'

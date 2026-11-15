@@ -69,12 +69,14 @@ function finish(before: string, word: string, candidates: string[], suffix: (c: 
 // ---------------------------------------------------------------------------------------
 
 export async function createBashTerm(state: BashStateInput): Promise<TermSession> {
-  const [{ createBashSession, verifyBash, COMMANDS }, { BUILTINS }, { saveEditor }, { ROOT_CRED }] = await Promise.all([
+  const [{ createBashSession, verifyBash, COMMANDS, loadSql }, { BUILTINS }, { saveEditor }, { ROOT_CRED }] = await Promise.all([
     import('@/engines/shell'),
     import('@/engines/shell/shell'),
     import('@/engines/shell/editor'),
     import('@/engines/shell/vfs'),
   ])
+  // Las bases de datos simuladas necesitan SQLite listo antes de armar el ejercicio (historia y respaldos).
+  if ((state as { bases_datos?: unknown }).bases_datos) await loadSql()
   const sh = createBashSession(state)
   return {
     kind: 'bash',
@@ -87,7 +89,7 @@ export async function createBashTerm(state: BashStateInput): Promise<TermSession
       sh.pendingClear = false
       return c
     },
-    secret: () => false,
+    secret: () => !!sh.fg?.secret,
     takeEditor() {
       const e = sh.pendingEditor
       sh.pendingEditor = undefined

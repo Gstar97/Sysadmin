@@ -1,4 +1,5 @@
 /** Catálogo de paquetes del sistema simulado, con sus servicios, archivos y comandos. */
+import { ROCKY_DB, UBUNTU_DB } from './dbpkgs'
 import { ROCKY_WEB, UBUNTU_WEB } from './webpkgs'
 
 export interface PackageService {
@@ -23,6 +24,8 @@ export interface PackageInfo {
   version: string
   /** Permisos y grupo de algunos archivos (por ejemplo /etc/named.conf es root:named 640). */
   perms?: Record<string, { mode: number; group?: string }>
+  /** Paquetes que se instalan junto con este (dependencias). */
+  requires?: string[]
 }
 
 const NAMED_CONF_ROCKY = `//
@@ -403,21 +406,6 @@ const common: Record<string, PackageInfo> = {
 
 export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   ...common,
-  'mariadb-server': {
-    summary: 'The MariaDB server and related files',
-    user: { name: 'mysql', uid: 27, home: '/var/lib/mysql', gecos: 'MySQL Server' },
-    version: '10.11.11',
-    services: [{ name: 'mariadb', description: 'MariaDB 10.11 database server', ports: [3306] }],
-    files: { '/etc/my.cnf.d/mariadb-server.cnf': '[mysqld]\ndatadir=/var/lib/mysql\nsocket=/var/lib/mysql/mysql.sock\nlog-error=/var/log/mariadb/mariadb.log\n' },
-    commands: ['mariadb', 'mysql'],
-  },
-  'postgresql-server': {
-    summary: 'The programs needed to create and run a PostgreSQL server',
-    user: { name: 'postgres', uid: 26, home: '/var/lib/pgsql', gecos: 'PostgreSQL Server' },
-    version: '16.8',
-    services: [{ name: 'postgresql', description: 'PostgreSQL database server', ports: [5432] }],
-    commands: ['postgresql-setup', 'psql'],
-  },
   'policycoreutils-python-utils': { summary: 'SELinux policy core python utilities', version: '3.8', commands: ['semanage', 'audit2allow', 'audit2why', 'sepolicy'] },
   'bind-utils': { summary: 'Utilities for querying DNS name servers', version: '9.18.33', commands: ['dig', 'nslookup', 'host'] },
   bind: {
@@ -514,26 +502,13 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
     files: { '/etc/exports': '' },
   },
   ...ROCKY_WEB,
+  ...ROCKY_DB,
 }
 
 export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   ...common,
   apparmor: { summary: 'user-space parser utility for AppArmor', version: '4.0.1', commands: ['aa-status', 'apparmor_parser', 'aa-enabled'] },
   'apparmor-utils': { summary: 'utilities for controlling AppArmor', version: '4.0.1', commands: ['aa-complain', 'aa-enforce', 'aa-disable', 'aa-logprof', 'aa-genprof'] },
-  'mariadb-server': {
-    user: { name: 'mysql', uid: 112, home: '/nonexistent', gecos: 'MySQL Server' },
-    summary: 'MariaDB database server',
-    version: '11.4.5',
-    services: [{ name: 'mariadb', description: 'MariaDB 11.4 database server', ports: [3306], enabledByDefault: true, activeAfterInstall: true }],
-    commands: ['mariadb', 'mysql'],
-  },
-  postgresql: {
-    user: { name: 'postgres', uid: 113, home: '/var/lib/postgresql', gecos: 'PostgreSQL administrator' },
-    summary: 'object-relational SQL database',
-    version: '16.8',
-    services: [{ name: 'postgresql', description: 'PostgreSQL RDBMS', ports: [5432], enabledByDefault: true, activeAfterInstall: true }],
-    commands: ['psql'],
-  },
   dnsutils: { summary: 'Clients provided with BIND 9', version: '9.18.30', commands: ['dig', 'nslookup', 'host'] },
   bind9: {
     user: { name: 'bind', uid: 114, home: '/var/cache/bind', gecos: '' },
@@ -625,6 +600,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     files: { '/etc/exports': '' },
   },
   ...UBUNTU_WEB,
+  ...UBUNTU_DB,
 }
 
 export const BASE_INSTALLED = {

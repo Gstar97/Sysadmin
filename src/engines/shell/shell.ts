@@ -177,6 +177,18 @@ export function matchPattern(text: string, pattern: string): boolean {
   return globToRegex(pattern).test(text)
 }
 
+/**
+ * Un programa interactivo en primer plano (mysql, psql, un pedido de contraseña): recibe las
+ * líneas que se escriben en lugar del shell y decide su propio prompt.
+ */
+export interface Foreground {
+  prompt(): string
+  /** La línea es una contraseña: no se muestra ni se guarda en el historial. */
+  secret?: boolean
+  /** Devuelve 'exit' cuando el programa termina y el shell vuelve a atender. */
+  line(text: string, io: IO): Promise<'exit' | void>
+}
+
 export class Shell {
   /** Servidor de cada nivel de la pila (cambia con ssh; con su y sudo se repite el mismo). */
   private sysStack: System[]
@@ -370,7 +382,11 @@ export class Shell {
     return abs
   }
 
+  /** Programa interactivo que está atendiendo la terminal (mysql, psql...). */
+  fg?: Foreground
+
   prompt(): string {
+    if (this.fg) return this.fg.prompt()
     const sym = this.user === 'root' ? '#' : '$'
     if (this.sys.distro === 'ubuntu') {
       return `\x1b[01;32m${this.user}@${this.sys.hostname}\x1b[00m:\x1b[01;34m${this.displayPath(this.cwd)}\x1b[00m${sym} `
@@ -387,6 +403,23 @@ export class Shell {
       const last = chunks[chunks.length - 1]
       if (last && last.stream === stream) last.text += text
       else chunks.push({ text, stream })
+    }
+    if (this.fg) {
+      const fg = this.fg
+      const line = source.replace(/\n$/, '')
+      if (!fg.secret && line.trim()) {
+        this.typed.push(line)
+        this.history.push(line)
+      }
+      try {
+        const done = await fg.line(line, { stdin: new Stdin(), out: push('out'), err: push('err'), isTTY: true })
+        if (done === 'exit' && this.fg === fg) this.fg = undefined
+      } catch (e) {
+        push('err')(`error interno del simulador: ${(e as Error).message}\n`)
+        if (this.fg === fg) this.fg = undefined
+      }
+      this.lastOutput = chunks.map((c) => c.text).join('')
+      return { chunks }
     }
     if (source.trim()) this.typed.push(source.replace(/\n$/, ''))
     this.sys.refreshVirtual()

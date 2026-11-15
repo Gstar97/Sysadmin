@@ -306,6 +306,44 @@ const stateShape = {
         .optional(),
     })
     .default({ aplicaciones: {}, dominios_publicos: {}, puertos_publicados: [], certificados: [], confia_en: [] }),
+  /** Bases de datos del servidor (MariaDB y PostgreSQL). */
+  bases_datos: z
+    .strictObject({
+      mariadb: z
+        .strictObject({
+          /** nombre de la base → SQL que crea sus tablas y datos. */
+          bases: z.record(z.string(), z.string()).default({}),
+          usuarios: z
+            .array(
+              z.strictObject({
+                usuario: z.string(),
+                host: z.string().default('localhost'),
+                clave: z.string().optional(),
+                /** Como en GRANT: "SELECT, INSERT ON tienda.*" */
+                permisos: z.array(z.string()).default([]),
+              }),
+            )
+            .default([]),
+          /** log_bin activado (con su configuración en el archivo del servidor). */
+          binlog: z.boolean().default(false),
+          /** Lo que pasó después del estado inicial, con la hora: queda en el binlog. */
+          historia: z.array(z.strictObject({ hora: z.string(), base: z.string(), sql: z.string() })).default([]),
+          /** Respaldos ya hechos con mysqldump en una hora de la historia. */
+          respaldos: z.array(z.strictObject({ archivo: z.string(), hora: z.string(), bases: z.array(z.string()), comprimido: z.boolean().default(false) })).default([]),
+        })
+        .optional(),
+      postgresql: z
+        .strictObject({
+          bases: z.record(z.string(), z.strictObject({ sql: z.string().default(''), dueno: z.string().default('postgres') })).default({}),
+          roles: z
+            .array(z.strictObject({ nombre: z.string(), clave: z.string().optional(), login: z.boolean().default(true), superusuario: z.boolean().default(false), crear_bases: z.boolean().default(false) }))
+            .default([]),
+          /** En Rocky: el cluster ya se creó con postgresql-setup --initdb. */
+          inicializado: z.boolean().default(true),
+        })
+        .optional(),
+    })
+    .optional(),
 }
 
 /** Otro servidor de la red del ejercicio (para ssh, scp y el bastión). */
@@ -445,6 +483,22 @@ const singleCheckSchema = z.union([
   z.strictObject({ modulo_apache: z.string(), cargado: z.boolean().default(true) }),
   /** Un booleano de SELinux encendido (o apagado), en la sesión y persistente. */
   z.strictObject({ booleano_selinux: z.string(), valor: z.boolean().default(true) }),
+  /** Una base de datos existe (o no). */
+  z.strictObject({ base_datos: z.string(), motor: z.enum(['mariadb', 'postgresql']), existe: z.boolean().default(true) }),
+  /** El resultado (primera celda) de una consulta hecha como administrador. */
+  z.strictObject({ consulta_bd: z.string(), motor: z.enum(['mariadb', 'postgresql']), base: z.string(), resultado: z.string() }),
+  /** Un usuario de la base: si existe y si tiene (o no) un permiso. */
+  z.strictObject({
+    usuario_bd: z.string(),
+    motor: z.enum(['mariadb', 'postgresql']),
+    host: z.string().optional(),
+    existe: z.boolean().default(true),
+    permiso: z.string().optional(),
+    base: z.string().optional(),
+    tabla: z.string().optional(),
+    tiene: z.boolean().default(true),
+    clave: z.string().optional(),
+  }),
 ])
 
 /** Una verificación, o la misma en otro servidor de la red: { en: web01, verificar: {...} }. */
