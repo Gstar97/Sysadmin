@@ -568,8 +568,9 @@ export function execute(sess: Session, raw: string): Result {
       const r = db.exec(sql)
       const first = r[0]
       let columns = first?.columns ?? columnsOf(sql)
+      const rows = decimalScale(inst, stmt, columns, first?.values ?? [])
       if (s.kind === 'postgres') columns = columns.map((c) => (/^(\w+)\s*\(.*\)$/.exec(c)?.[1]?.toLowerCase() ?? (/^[\w.]+$/.test(c) ? c.split('.').pop()! : '?column?')))
-      res = { kind: 'rows', columns, rows: first?.values ?? [] }
+      res = { kind: 'rows', columns, rows }
     } else {
       db.run(sql)
       const n = /^\s*(CREATE|DROP|ALTER)\b/i.test(sql) ? 0 : db.getRowsModified()
@@ -611,6 +612,29 @@ export function execute(sess: Session, raw: string): Result {
   if (at && !addIdx && inst.ddl.has(at[1])) inst.ddl.set(at[1], inst.ddl.get(at[1])!.replace(/\)\s*([^)]*)$/, `,\n  ${at[2]}\n)$1`))
   logEvent(sess, stmt)
   return res
+}
+
+/** Las columnas DECIMAL(p,s) se muestran con s decimales (185000.00), como en MariaDB y PostgreSQL. */
+function decimalScale(inst: DbInstance, stmt: string, columns: string[], rows: unknown[][]): unknown[][] {
+  const scales = new Map<string, number>()
+  for (const t of tablesIn(stmt)) {
+    const ddl = inst.ddl.get(t)
+    if (!ddl) continue
+    for (const m of ddl.matchAll(/[`"]?(\w+)[`"]?\s+(?:DECIMAL|NUMERIC)\s*\(\s*\d+\s*,\s*(\d+)\s*\)/gi)) scales.set(m[1].toLowerCase(), Number(m[2]))
+  }
+  if (!scales.size) return rows
+  const list = /^\s*SELECT\s+([\s\S]+?)\s+FROM\b/i.exec(stmt)?.[1]
+  const exprs = list && list.trim() !== '*' ? list.split(/,(?![^(]*\))/).map((x) => x.trim()) : []
+  const scaleOf = columns.map((c, i) => {
+    const direct = scales.get(c.toLowerCase())
+    if (direct !== undefined) return direct
+    const e = exprs[i]
+    if (!e || /^\s*count\s*\(/i.test(e)) return undefined
+    for (const [col, sc] of scales) if (new RegExp(`\\b${col}\\b`, 'i').test(e) && /^(sum|min|max|avg)?\s*\(?/i.test(e)) return /^\s*avg\s*\(/i.test(e) ? Math.max(sc, 4) + 2 : sc
+    return undefined
+  })
+  if (scaleOf.every((x) => x === undefined)) return rows
+  return rows.map((r) => r.map((v, i) => (typeof v === 'number' && scaleOf[i] !== undefined ? v.toFixed(scaleOf[i]) : v)))
 }
 
 function columnsOf(sql: string): string[] {

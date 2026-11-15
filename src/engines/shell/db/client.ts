@@ -17,7 +17,7 @@ export function cell(v: unknown, kind: 'mariadb' | 'postgres', nullText = 'NULL'
   return String(v)
 }
 
-const isNum = (v: unknown) => typeof v === 'number'
+const isNum = (v: unknown) => typeof v === 'number' || (typeof v === 'string' && /^-?\d+\.\d+$/.test(v))
 const wid = (s: string) => [...s].length
 
 function pad(s: string, n: number, right: boolean): string {

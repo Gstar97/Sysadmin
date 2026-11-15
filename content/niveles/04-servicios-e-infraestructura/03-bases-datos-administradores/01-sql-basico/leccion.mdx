@@ -1,0 +1,99 @@
+---
+id: n4-m3-l1
+titulo: Conceptos y SQL básico
+minutos: 150
+objetivos:
+  - Explicar qué es una base de datos relacional (tablas, filas, columnas, claves y relaciones) y qué parte de su cuidado es del administrador.
+  - Consultar datos con SELECT, WHERE, ORDER BY, JOIN y GROUP BY.
+  - Cambiar datos con INSERT, UPDATE y DELETE sin romper nada, usando transacciones.
+glosario: [sql, tabla-bd, clave-primaria, clave-foranea, transaccion, acid]
+verificado: 2026-11
+---
+
+import tablas from './tablas.svg?raw'
+import tablasDatos from './tablas.yaml'
+import sql from './ej-sql.yaml'
+import familias from './familias.yaml'
+
+Casi toda aplicación de una empresa guarda sus datos en una **base de datos**: el sistema de pedidos, la tienda, la intranet, el sistema de sueldos. Los programadores deciden qué se guarda y cómo se consulta; el administrador se ocupa de que el servidor de base de datos esté instalado y seguro, de que cada aplicación tenga su usuario con los permisos justos, de los **respaldos** (y de que se puedan restaurar), del rendimiento y de que siga funcionando si algo falla. Para eso no hace falta ser experto en SQL, pero sí saber leer una tabla y escribir las consultas básicas.
+
+<AntesDeEmpezar>
+- Qué es una base de datos, en general (lección 0.4.5).
+- Servicios y paquetes en Linux (módulo 1.3).
+</AntesDeEmpezar>
+
+## Tablas, filas y relaciones
+
+Una base de datos **relacional** guarda los datos en **tablas**. Se parece a una planilla de cálculo: una tabla por cada clase de cosa (clientes, pedidos), una fila por cada elemento y una columna por cada dato. La comparación sirve para empezar, pero se queda corta enseguida: la base controla el tipo de cada columna, no deja repetir una clave, mantiene las relaciones entre tablas y aguanta a cientos de usuarios cambiando datos al mismo tiempo sin que se pisen.
+
+<DiagramaInteractivo datos={tablasDatos} svg={tablas} alt="La base tienda con dos tablas. clientes tiene las columnas id (clave), nombre y email, con filas como 1 Muebles del Sur, 2 Oficinas Norte y 3 Estudio Ríos. pedidos tiene id (clave), cliente_id, fecha y total, con filas como 101 del cliente 2 por 185000.00, 102 del cliente 1 por 42500.00 y 103 del cliente 2 por 96000.00. Una flecha muestra que cliente_id de pedidos apunta al id de clientes. Abajo, una consulta: SELECT c.nombre, count(*) AS pedidos, sum(p.total) AS total FROM pedidos p JOIN clientes c ON c.id = p.cliente_id GROUP BY c.nombre ORDER BY total DESC, que da Oficinas Norte con 2 pedidos por 281000.00 y Muebles del Sur con 1 por 42500.00." />
+
+Los motores más usados en servidores Linux son **MariaDB** (el sucesor libre de MySQL, con el que es casi totalmente compatible) y **PostgreSQL**. En el mundo Windows está SQL Server, y en las grandes corporaciones, Oracle. Todos hablan **SQL**, el lenguaje para consultar y cambiar datos, con pequeñas diferencias entre sí. Hay también bases "NoSQL" (Redis, MongoDB) que guardan datos de otras formas: quedan para más adelante.
+
+## SQL en cinco familias
+
+<Emparejar ejercicio={familias} />
+
+## Consultar: SELECT
+
+```sql
+SELECT nombre, email FROM clientes;                       -- algunas columnas
+SELECT * FROM pedidos WHERE total > 50000;                -- filas que cumplen una condición
+SELECT * FROM pedidos ORDER BY fecha DESC LIMIT 10;       -- las 10 más nuevas
+SELECT count(*) FROM pedidos WHERE fecha >= '2026-11-01'; -- cuántas
+SELECT cliente_id, sum(total) FROM pedidos GROUP BY cliente_id;   -- un total por cliente
+SELECT c.nombre, p.total
+  FROM pedidos p JOIN clientes c ON c.id = p.cliente_id;  -- datos de dos tablas juntas
+```
+
+Los textos van entre comillas simples (`'Rosario'`); los números, sin comillas. Las mayúsculas en las palabras de SQL son una costumbre para leer mejor: `select` también funciona.
+
+## Cambiar datos sin miedo
+
+```sql
+INSERT INTO clientes (nombre, email) VALUES ('Papelera Central', 'ventas@papeleracentral.example');
+UPDATE clientes SET ciudad = 'Rosario' WHERE id = 3;
+DELETE FROM pedidos WHERE id = 104;
+```
+
+La regla de oro: **UPDATE y DELETE siempre con WHERE**. Sin WHERE, cambian o borran **todas** las filas de la tabla, y no hay papelera de reciclaje. La costumbre que evita el desastre:
+
+1. Escribir primero un `SELECT` con el mismo `WHERE` y mirar cuántas filas devuelve.
+2. Abrir una **transacción** (`START TRANSACTION;` en MariaDB, `BEGIN;` en PostgreSQL).
+3. Hacer el cambio y mirar cuántas filas tocó ("1 row affected").
+4. Si está bien, `COMMIT;`. Si no, `ROLLBACK;` y no pasó nada.
+
+Una transacción hace que varios cambios sean "todo o nada": si se corta la luz en el medio, la base vuelve al estado anterior. Esa garantía tiene nombre, **ACID**: las operaciones son atómicas (todo o nada), dejan la base consistente, aisladas de lo que hacen los demás al mismo tiempo, y duraderas (lo confirmado sobrevive a un reinicio).
+
+<EnSimple>
+Una base relacional son tablas con filas y columnas, relacionadas por sus claves. SELECT lee; INSERT, UPDATE y DELETE cambian, y los dos últimos siempre con WHERE y, si es a mano, dentro de una transacción.
+</EnSimple>
+
+<Terminal ejercicio={sql} />
+
+<ErroresComunes>
+  <ErrorComun titulo="UPDATE o DELETE sin WHERE">
+    Cambia o borra todas las filas. Primero el SELECT con el mismo WHERE, y el cambio dentro de una transacción.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar el punto y coma">
+    El cliente muestra -> (o =- en psql) y se queda esperando. Escribí ; y Enter. Si te equivocaste, \c (en mysql) descarta lo escrito.
+  </ErrorComun>
+  <ErrorComun titulo="Comillas dobles para los textos">
+    En SQL estándar (y en PostgreSQL) los textos van entre comillas simples; las dobles son para nombres de columnas.
+  </ErrorComun>
+  <ErrorComun titulo="Probar consultas pesadas en producción en horario de trabajo">
+    Un SELECT sin WHERE sobre una tabla de millones de filas puede frenar a todos. Probá sobre una copia, o fuera de hora, y con LIMIT.
+  </ErrorComun>
+  <ErrorComun titulo="Tocar datos a mano sin dejar registro">
+    Anotá qué cambiaste, cuándo y por qué (y si se puede, que lo pida alguien por escrito). Es lo primero que te van a preguntar si algo sale mal.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El administrador cuida el servidor de base de datos: instalación, usuarios y permisos, respaldos, rendimiento y disponibilidad.
+- Relacional: tablas, filas y columnas con tipo; clave primaria (no se repite) y clave foránea (apunta a otra tabla).
+- MariaDB (compatible con MySQL) y PostgreSQL son los más usados en Linux; todos hablan SQL.
+- SELECT con WHERE, ORDER BY, LIMIT, JOIN y GROUP BY (count, sum).
+- INSERT, UPDATE y DELETE; los dos últimos siempre con WHERE.
+- Transacciones (BEGIN o START TRANSACTION, COMMIT, ROLLBACK) y ACID.
+</Resumen>

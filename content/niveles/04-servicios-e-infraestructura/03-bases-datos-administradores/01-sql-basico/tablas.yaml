@@ -1,0 +1,33 @@
+tipo: diagrama
+titulo: Tablas, filas y relaciones
+puntos:
+  - id: clientes
+    titulo: Una tabla
+    area: { x: 2.3, y: 13.3, ancho: 38.4, alto: 51.5 }
+    texto: >-
+      Una tabla guarda una sola clase de cosas (clientes), con una fila por cada cliente y una
+      columna por cada dato. Cada columna tiene un tipo: id es un número entero, nombre un texto de
+      hasta 100 caracteres. La base rechaza lo que no encaja: un texto en una columna de números,
+      o un nombre vacío si la columna es NOT NULL.
+  - id: clave
+    titulo: La clave primaria
+    area: { x: 53.5, y: 13.3, ancho: 44.2, alto: 51.5 }
+    texto: >-
+      id identifica cada fila sin repetirse (la llave). La base lo numera sola (AUTO_INCREMENT en
+      MariaDB, SERIAL o IDENTITY en PostgreSQL) y no deja cargar dos filas con el mismo valor. Los
+      pedidos también tienen la suya, y además una columna cliente_id que dice de quién es cada uno.
+  - id: relacion
+    titulo: La relación (clave foránea)
+    area: { x: 41.9, y: 24.2, ancho: 11.6, alto: 12.1 }
+    texto: >-
+      cliente_id guarda el id de un cliente: así, el nombre y el correo se guardan una sola vez y
+      cada pedido los "apunta". Con una FOREIGN KEY, la base además impide cargar un pedido para un
+      cliente que no existe, o borrar un cliente que tiene pedidos.
+  - id: consulta
+    titulo: Una consulta que junta las dos
+    area: { x: 2.3, y: 71.5, ancho: 95.3, alto: 25.5 }
+    texto: >-
+      JOIN une las filas de las dos tablas donde c.id = p.cliente_id; GROUP BY junta los pedidos de
+      cada cliente y count(*) y sum() los resumen; ORDER BY ordena el resultado. Es el tipo de
+      consulta que te van a pedir para un informe, o que vas a ver en el registro de consultas
+      lentas cuando algo anda mal.

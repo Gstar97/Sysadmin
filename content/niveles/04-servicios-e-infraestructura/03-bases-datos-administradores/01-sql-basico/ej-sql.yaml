@@ -1,0 +1,103 @@
+tipo: terminal
+shell: bash
+titulo: Recorrer la base de la tienda con SQL
+descripcion: >-
+  db01 (Rocky Linux 10) tiene MariaDB con la base tienda: clientes y sus pedidos. Ventas te pide
+  algunos datos, y de paso vas a practicar lo que más se usa. Todo se hace dentro del cliente
+  mysql, que se abre con sudo mysql (root entra por el socket, sin contraseña).
+estado_inicial:
+  distro: rocky
+  hostname: db01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [mariadb-server] }
+  servicios:
+    mariadb: { activo: true, habilitado: true }
+  bases_datos:
+    mariadb:
+      bases:
+        tienda: |
+          CREATE TABLE clientes (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL, email VARCHAR(100), ciudad VARCHAR(50));
+          INSERT INTO clientes (nombre, email, ciudad) VALUES ('Muebles del Sur', 'compras@mueblesdelsur.example', 'Rosario'), ('Oficinas Norte', 'pagos@oficinasnorte.example', 'Córdoba'), ('Estudio Ríos', 'admin@estudiorios.example', 'Montevideo');
+          CREATE TABLE pedidos (id INT AUTO_INCREMENT PRIMARY KEY, cliente_id INT NOT NULL, fecha DATE NOT NULL, total DECIMAL(10,2) NOT NULL);
+          INSERT INTO pedidos (id, cliente_id, fecha, total) VALUES (101, 2, '2026-11-02', 185000.00), (102, 1, '2026-11-03', 42500.00), (103, 2, '2026-11-10', 96000.00), (104, 3, '2026-11-11', 31000.00), (105, 1, '2026-11-12', 78000.00);
+pasos:
+  - consigna: Entrá a MariaDB, elegí la base tienda y mirá qué tablas tiene.
+    verificar:
+      - { comando_usado: '^\s*(USE|use)\s+tienda' }
+      - { salida_contiene: 'pedidos' }
+    pistas:
+      - "`sudo mysql`, después `USE tienda;` y `SHOW TABLES;`"
+    solucion:
+      - sudo mysql
+      - USE tienda;
+      - SHOW TABLES;
+    explicacion: >-
+      El prompt cambia a MariaDB [tienda]>: esa es la base activa. Cada sentencia termina con ";";
+      si te olvidás, el cliente muestra -> y espera que la termines.
+  - consigna: Mirá cómo está armada la tabla pedidos.
+    verificar:
+      - { salida_contiene: 'cliente_id' }
+    pistas:
+      - "`DESCRIBE pedidos;`"
+    solucion: ["DESCRIBE pedidos;"]
+    explicacion: >-
+      Columna, tipo, si acepta valores vacíos (Null), si es clave (PRI) y si se numera sola
+      (auto_increment). Es lo primero que se mira antes de consultar una tabla que no conocés.
+  - consigna: Listá los pedidos de más de 50.000, del más grande al más chico.
+    verificar:
+      - { salida_contiene: '185000.00' }
+      - { salida_no_contiene: '42500' }
+    pistas:
+      - "`SELECT * FROM pedidos WHERE total > 50000 ORDER BY total DESC;`"
+    solucion: ["SELECT * FROM pedidos WHERE total > 50000 ORDER BY total DESC;"]
+    explicacion: WHERE filtra las filas y ORDER BY las ordena (DESC, de mayor a menor).
+  - consigna: >-
+      Ahora el informe que pidió Ventas: por cada cliente, cuántos pedidos hizo y cuánto suman,
+      ordenado por el total. Hace falta juntar las dos tablas.
+    verificar:
+      - { salida_contiene: 'Oficinas Norte' }
+      - { salida_contiene: '281000' }
+    pistas:
+      - "`SELECT c.nombre, count(*) AS pedidos, sum(p.total) AS total FROM pedidos p JOIN clientes c ON c.id = p.cliente_id GROUP BY c.nombre ORDER BY total DESC;`"
+    solucion: ["SELECT c.nombre, count(*) AS pedidos, sum(p.total) AS total FROM pedidos p JOIN clientes c ON c.id = p.cliente_id GROUP BY c.nombre ORDER BY total DESC;"]
+    explicacion: >-
+      p y c son apodos de las tablas para escribir menos. JOIN ... ON dice cómo se relacionan, y
+      GROUP BY junta las filas de cada cliente para que count y sum las resuman.
+  - consigna: >-
+      Cargá un cliente nuevo (Papelera Central, ventas@papeleracentral.example, Mendoza) y
+      corregí el correo de Estudio Ríos a administracion@estudiorios.example.
+    verificar:
+      - { consulta_bd: "SELECT count(*) FROM clientes", motor: mariadb, base: tienda, resultado: '4' }
+      - { consulta_bd: "SELECT email FROM clientes WHERE nombre = 'Estudio Ríos'", motor: mariadb, base: tienda, resultado: 'administracion@estudiorios.example' }
+    pistas:
+      - "`INSERT INTO clientes (nombre, email, ciudad) VALUES ('Papelera Central', 'ventas@papeleracentral.example', 'Mendoza');`"
+      - "`UPDATE clientes SET email = 'administracion@estudiorios.example' WHERE nombre = 'Estudio Ríos';`"
+    solucion:
+      - "INSERT INTO clientes (nombre, email, ciudad) VALUES ('Papelera Central', 'ventas@papeleracentral.example', 'Mendoza');"
+      - "UPDATE clientes SET email = 'administracion@estudiorios.example' WHERE nombre = 'Estudio Ríos';"
+    explicacion: >-
+      El id del cliente nuevo lo puso MariaDB solo. Y mirá el UPDATE: sin WHERE, habría cambiado
+      el correo de todos los clientes. "Query OK, 1 row affected" es la confirmación de que tocaste
+      una sola fila.
+  - consigna: >-
+      Practicá la red de seguridad: abrí una transacción, borrá el pedido 104, comprobá que no
+      está, y deshacé todo con ROLLBACK. Después salí.
+    verificar:
+      - { comando_usado: '^\s*(START TRANSACTION|start transaction|BEGIN|begin)' }
+      - { comando_usado: '^\s*(ROLLBACK|rollback)' }
+      - { consulta_bd: "SELECT count(*) FROM pedidos", motor: mariadb, base: tienda, resultado: '5' }
+    pistas:
+      - "`START TRANSACTION;`, `DELETE FROM pedidos WHERE id = 104;`, `SELECT count(*) FROM pedidos;`, `ROLLBACK;` y `exit`"
+    solucion:
+      - START TRANSACTION;
+      - DELETE FROM pedidos WHERE id = 104;
+      - SELECT count(*) FROM pedidos;
+      - ROLLBACK;
+      - exit
+    explicacion: >-
+      Dentro de una transacción, los cambios no son definitivos hasta COMMIT; ROLLBACK los
+      deshace. Es la costumbre que te salva cuando hay que tocar datos a mano en producción: primero
+      el SELECT con el mismo WHERE, después el cambio dentro de una transacción, mirar cuántas
+      filas tocó, y recién ahí COMMIT.

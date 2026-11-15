@@ -1,0 +1,110 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace "DELETE FROM pedidos;" sin WHERE?
+  opciones:
+    - { texto: "Borra todas las filas de la tabla pedidos", correcta: true, explicacion: "Por eso siempre va WHERE, salvo que de verdad quieras vaciarla." }
+    - { texto: "Da error porque falta el WHERE", explicacion: "Es válido, y por eso es peligroso." }
+    - { texto: "Borra la tabla pedidos", explicacion: "Eso es DROP TABLE; DELETE borra filas." }
+    - { texto: "Borra solo la última fila", explicacion: "Borra todas." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Para qué sirve la clave primaria de una tabla?
+  opciones:
+    - { texto: "Para identificar cada fila con un valor que no se repite", correcta: true, explicacion: "Suele ser un número que la base asigna sola." }
+    - { texto: "Para proteger la tabla con contraseña", explicacion: "Los permisos son otra cosa." }
+    - { texto: "Para ordenar las columnas", explicacion: "No tiene relación." }
+    - { texto: "Para cifrar los datos", explicacion: "No cifra nada." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En la tabla pedidos, la columna cliente_id guarda el id de un cliente. ¿Qué es?
+  opciones:
+    - { texto: "Una clave foránea: relaciona cada pedido con su cliente", correcta: true, explicacion: "Así el nombre y el correo del cliente se guardan una sola vez." }
+    - { texto: "Una segunda clave primaria", explicacion: "Puede repetirse: un cliente tiene muchos pedidos." }
+    - { texto: "Un índice", explicacion: "Puede tener uno, pero lo que la define es la relación." }
+    - { texto: "Un error de diseño", explicacion: "Es el diseño habitual." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Ejecutaste un UPDATE para corregir el correo de un cliente. ¿Qué te dice la respuesta?
+  salida: |
+    MariaDB [tienda]> UPDATE clientes SET email = 'nuevo@cliente.example';
+    Query OK, 3482 rows affected (0.041 sec)
+    Rows matched: 3482  Changed: 3482  Warnings: 0
+  opciones:
+    - { texto: "Faltó el WHERE: les cambiaste el correo a los 3482 clientes", correcta: true, explicacion: "Si estabas en una transacción, ROLLBACK; si no, hay que restaurar." }
+    - { texto: "Salió bien: se actualizó el cliente", explicacion: "Se actualizaron 3482." }
+    - { texto: "La tabla tiene 3482 errores", explicacion: "Warnings: 0." }
+    - { texto: "Se duplicó el cliente", explicacion: "UPDATE no duplica filas." }
+- id: p05
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená la forma segura de borrar a mano unos pedidos de prueba en producción.
+  pasos:
+    - Escribir un SELECT con el mismo WHERE y contar las filas
+    - START TRANSACTION
+    - DELETE con ese WHERE
+    - Comprobar que la cantidad de filas afectadas es la esperada
+    - COMMIT (o ROLLBACK si algo no cierra)
+  explicacion: "El SELECT previo y la transacción son la red de seguridad."
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace GROUP BY en "SELECT cliente_id, sum(total) FROM pedidos GROUP BY cliente_id"?
+  opciones:
+    - { texto: "Junta los pedidos de cada cliente para que sum() dé un total por cliente", correcta: true, explicacion: "Una fila del resultado por cada cliente_id." }
+    - { texto: "Ordena los pedidos por cliente", explicacion: "Eso es ORDER BY." }
+    - { texto: "Filtra los clientes", explicacion: "Eso es WHERE (o HAVING, después de agrupar)." }
+    - { texto: "Borra los pedidos repetidos", explicacion: "No borra nada." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué es responsabilidad habitual del administrador en una base de datos? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Respaldos y pruebas de restauración", correcta: true, explicacion: "Lo más importante." }
+    - { texto: "Usuarios de las aplicaciones con los permisos justos", correcta: true, explicacion: "Mínimo privilegio." }
+    - { texto: "Que el servidor esté disponible y rinda bien", correcta: true, explicacion: "Monitoreo, recursos, índices junto con los programadores." }
+    - { texto: "Decidir qué columnas tiene cada tabla de la aplicación", explicacion: "Eso es diseño de la aplicación: los programadores." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué significa la "A" de ACID?
+  opciones:
+    - { texto: "Atomicidad: los cambios de una transacción se hacen todos o ninguno", correcta: true, explicacion: "Si se corta en el medio, vuelve atrás." }
+    - { texto: "Acceso: solo entran usuarios con permiso", explicacion: "No es parte de ACID." }
+    - { texto: "Automatización de respaldos", explicacion: "No." }
+    - { texto: "Alta disponibilidad", explicacion: "Es otro tema." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí la sentencia que deshace los cambios de la transacción abierta.
+  aceptadas:
+    - "ROLLBACK;"
+    - "rollback;"
+    - "ROLLBACK"
+  patrones: ["^(?:ROLLBACK|rollback)\\s*;?$"]
+  explicacion: "COMMIT los confirma."
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este script tenía que cerrar la cuenta del cliente 57 y borrar sus pedidos pendientes. Marcá la línea peligrosa.
+  lenguaje: sql
+  archivo: |
+    START TRANSACTION;
+    UPDATE clientes SET activo = 0 WHERE id = 57;
+    DELETE FROM pedidos WHERE estado = 'pendiente';
+    COMMIT;
+  lineas_con_error: [3]
+  explicacion: "Borra los pedidos pendientes de todos los clientes: falta AND cliente_id = 57."
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cuál de estas es una base de datos relacional libre muy usada en servidores Linux?
+  opciones:
+    - { texto: "PostgreSQL", correcta: true, explicacion: "Junto con MariaDB." }
+    - { texto: "Redis", explicacion: "Es una base clave-valor, no relacional." }
+    - { texto: "Excel", explicacion: "Es una planilla." }
+    - { texto: "nginx", explicacion: "Es un servidor web." }
