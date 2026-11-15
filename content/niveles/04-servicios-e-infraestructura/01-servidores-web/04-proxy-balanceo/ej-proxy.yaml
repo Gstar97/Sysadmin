@@ -1,0 +1,101 @@
+tipo: terminal
+shell: bash
+titulo: La tienda detrás de nginx, con dos instancias
+descripcion: >-
+  En web01 (Rocky Linux) corren dos copias de la aplicación de la tienda como servicios de
+  systemd: tienda1 en 127.0.0.1:8001 y tienda2 en 127.0.0.1:8002. Cada página muestra qué le
+  llegó. nginx ya está instalado con su sitio por defecto. El DNS apunta tienda.ejemplo.com a
+  web01.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nginx] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+    tienda1: { activo: true, habilitado: true, descripcion: Tienda (instancia 1) }
+    tienda2: { activo: true, habilitado: true, descripcion: Tienda (instancia 2) }
+  red:
+    registros_dns: { tienda.ejemplo.com: 127.0.0.1 }
+  web:
+    aplicaciones:
+      tienda1: { escucha: 127.0.0.1:8001, cuerpo: Respondió tienda1, eco_encabezados: true }
+      tienda2: { escucha: 127.0.0.1:8002, cuerpo: Respondió tienda2, eco_encabezados: true }
+pasos:
+  - consigna: Comprobá que las dos instancias contestan directamente en sus puertos.
+    verificar:
+      - { comando_usado: '127\.0\.0\.1:8002|localhost:8002' }
+      - { salida_contiene: 'Respondió tienda2' }
+    pistas:
+      - "`curl -s 127.0.0.1:8001 | head -1; curl -s 127.0.0.1:8002 | head -1`"
+    solucion: ["curl -s 127.0.0.1:8001 | head -1; curl -s 127.0.0.1:8002 | head -1"]
+    explicacion: Antes de culpar al proxy, comprobá que lo de atrás anda.
+  - consigna: >-
+      Creá /etc/nginx/conf.d/tienda.conf con un upstream tienda con las dos instancias y un server
+      para tienda.ejemplo.com que le pase todo, con Host, X-Real-IP, X-Forwarded-For y
+      X-Forwarded-Proto. Probá y recargá. Después pedí la portada.
+    verificar:
+      - { archivo: /etc/nginx/conf.d/tienda.conf, contenido_incluye: 'upstream tienda' }
+      - { http: 'http://tienda.ejemplo.com/', estado: 502 }
+    pistas:
+      - "printf 'upstream tienda {\\n    server 127.0.0.1:8001;\\n    server 127.0.0.1:8002;\\n}\\n\\nserver {\\n    listen 80;\\n    server_name tienda.ejemplo.com;\\n    location / {\\n        proxy_pass http://tienda;\\n        proxy_set_header Host $host;\\n        proxy_set_header X-Real-IP $remote_addr;\\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\\n        proxy_set_header X-Forwarded-Proto $scheme;\\n    }\\n}\\n' | sudo tee /etc/nginx/conf.d/tienda.conf"
+    solucion:
+      - "printf 'upstream tienda {\\n    server 127.0.0.1:8001;\\n    server 127.0.0.1:8002;\\n}\\n\\nserver {\\n    listen 80;\\n    server_name tienda.ejemplo.com;\\n    location / {\\n        proxy_pass http://tienda;\\n        proxy_set_header Host $host;\\n        proxy_set_header X-Real-IP $remote_addr;\\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\\n        proxy_set_header X-Forwarded-Proto $scheme;\\n    }\\n}\\n' | sudo tee /etc/nginx/conf.d/tienda.conf"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -s http://tienda.ejemplo.com/
+    explicacion: >-
+      502 Bad Gateway: nginx no pudo hablar con ninguna de las dos. Las apps andan (lo
+      comprobaste), así que el problema está entre nginx y ellas.
+  - consigna: Buscá el motivo en el error.log de nginx y en el registro de auditoría de SELinux.
+    verificar:
+      - { comando_usado: 'ausearch' }
+      - { salida_contiene: 'name_connect' }
+    pistas:
+      - "`sudo tail -n 2 /var/log/nginx/error.log` y `sudo ausearch -m avc -ts recent`"
+    solucion:
+      - sudo tail -n 2 /var/log/nginx/error.log
+      - sudo ausearch -m avc -ts recent
+    explicacion: >-
+      "connect() to 127.0.0.1:8001 failed (13: Permission denied)" y el AVC "denied { name_connect
+      } ... dest=8001 ... httpd_t": SELinux no deja que el servidor web abra conexiones a puertos
+      que no son web. Es la protección que evita que un servidor web comprometido se use para
+      atacar otros servicios.
+  - consigna: Permitíselo de forma persistente con el booleano httpd_can_network_connect y probá de nuevo.
+    verificar:
+      - { booleano_selinux: httpd_can_network_connect }
+      - { http: 'http://tienda.ejemplo.com/', contiene: 'Respondió tienda' }
+    pistas:
+      - "`sudo setsebool -P httpd_can_network_connect 1`"
+    solucion:
+      - sudo setsebool -P httpd_can_network_connect 1
+      - curl -s http://tienda.ejemplo.com/
+    explicacion: >-
+      -P lo deja guardado para después de un reinicio. Fijate lo que recibió la aplicación: host
+      tienda.ejemplo.com (gracias a proxy_set_header Host), x-forwarded-for con la IP del cliente,
+      y la IP de la conexión, que es la de nginx (127.0.0.1).
+  - consigna: Pedí la portada cuatro veces seguidas, mostrando solo la primera línea, para ver el reparto.
+    verificar:
+      - { salida_contiene: 'Respondió tienda1' }
+      - { salida_contiene: 'Respondió tienda2' }
+    pistas:
+      - "`for i in 1 2 3 4; do curl -s http://tienda.ejemplo.com/ | head -1; done`"
+    solucion: ["for i in 1 2 3 4; do curl -s http://tienda.ejemplo.com/ | head -1; done"]
+    explicacion: Por turnos (round robin), una y una.
+  - consigna: >-
+      Simulá que se cae una instancia: detené tienda1 y volvé a pedir cuatro veces. Después mirá la
+      última línea del error.log.
+    verificar:
+      - { servicio: tienda1, activo: false }
+      - { salida_contiene: 'connect() failed (111: Connection refused) while connecting to upstream' }
+    pistas:
+      - "`sudo systemctl stop tienda1`, el mismo for, y `sudo tail -n 1 /var/log/nginx/error.log`"
+    solucion:
+      - sudo systemctl stop tienda1
+      - "for i in 1 2 3 4; do curl -s http://tienda.ejemplo.com/ | head -1; done"
+      - sudo tail -n 1 /var/log/nginx/error.log
+    explicacion: >-
+      Los cuatro pedidos los contestó tienda2: cuando nginx no pudo conectarse con tienda1, probó con
+      la siguiente sin que el cliente se enterara, y dejó el error anotado. Con el balanceo, una
+      instancia caída no es una caída del sitio, pero hay que mirar los logs para enterarse.

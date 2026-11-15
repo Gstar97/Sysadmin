@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 330" font-family="system-ui, sans-serif" font-size="12">
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">Un pedido a través de un proxy inverso con balanceo</text>
+  <g stroke="currentColor" stroke-width="1.2">
+    <rect x="10" y="110" width="120" height="90" rx="8" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="200" y="60" width="250" height="190" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="480" y="60" width="140" height="190" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+    <rect x="650" y="60" width="200" height="80" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="650" y="170" width="200" height="80" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="200" y="270" width="650" height="50" rx="8" fill="var(--surface-2, #eef1f5)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.4" fill="currentColor">
+    <line x1="130" y1="155" x2="195" y2="155"/><path d="M200 155 l-7 -4 v8 z"/>
+    <line x1="450" y1="155" x2="475" y2="155"/><path d="M480 155 l-7 -4 v8 z"/>
+    <line x1="620" y1="130" x2="645" y2="100"/><path d="M650 100 l-8 0 l4 -7 z"/>
+    <line x1="620" y1="180" x2="645" y2="210"/><path d="M650 210 l-8 0 l4 7 z"/>
+  </g>
+  <g fill="currentColor">
+    <text x="70" y="140" text-anchor="middle" font-weight="700">Cliente</text>
+    <text x="70" y="160" text-anchor="middle">navegador</text>
+    <text x="70" y="178" text-anchor="middle">203.0.113.50</text>
+    <text x="325" y="82" text-anchor="middle" font-weight="700">nginx (proxy inverso)</text>
+    <text x="214" y="106">recibe en :443 y :80</text>
+    <text x="214" y="124">termina HTTPS</text>
+    <text x="214" y="142">elige server y location</text>
+    <text x="214" y="160">location / { proxy_pass</text>
+    <text x="214" y="178">  http://tienda; }</text>
+    <text x="214" y="196">agrega X-Forwarded-For,</text>
+    <text x="214" y="214">X-Forwarded-Proto y Host</text>
+    <text x="214" y="236" font-size="11">el cliente nunca ve a las apps</text>
+    <text x="550" y="82" text-anchor="middle" font-weight="700">upstream tienda</text>
+    <text x="492" y="106">server :8001;</text>
+    <text x="492" y="124">server :8002;</text>
+    <text x="492" y="148">reparte por turnos</text>
+    <text x="492" y="166">(o least_conn,</text>
+    <text x="492" y="184">ip_hash, pesos)</text>
+    <text x="492" y="208">si una no contesta,</text>
+    <text x="492" y="226">prueba la otra</text>
+    <text x="750" y="82" text-anchor="middle" font-weight="700">app1 · 127.0.0.1:8001</text>
+    <text x="662" y="104">gunicorn, node, php-fpm...</text>
+    <text x="662" y="124">un servicio de systemd</text>
+    <text x="750" y="192" text-anchor="middle" font-weight="700">app2 · 127.0.0.1:8002</text>
+    <text x="662" y="214">otra copia de la misma app</text>
+    <text x="662" y="234">(o en otro servidor)</text>
+    <text x="214" y="292" font-weight="700">Logs:</text>
+    <text x="256" y="292">access.log dice qué pidió el cliente y qué código recibió; error.log dice por qué falló</text>
+    <text x="256" y="310">la conexión hacia atrás (connect() failed, upstream timed out); el journal de la app, por qué se cayó.</text>
+  </g>
+</svg>

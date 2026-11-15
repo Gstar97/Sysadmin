@@ -1,0 +1,46 @@
+tipo: diagrama
+titulo: Un pedido a través del proxy
+puntos:
+  - id: cliente
+    titulo: Cliente
+    area: { x: 1.2, y: 33.3, ancho: 14, alto: 27.3 }
+    texto: >-
+      El navegador habla solo con nginx: resuelve tienda.ejemplo.com a la IP del proxy y se conecta
+      ahí. No sabe cuántas copias de la aplicación hay atrás, ni en qué puertos o servidores están.
+  - id: nginx
+    titulo: nginx como proxy inverso
+    area: { x: 23.3, y: 18.2, ancho: 29.1, alto: 57.6 }
+    texto: >-
+      Recibe el pedido, termina el HTTPS (descifra acá, y hacia atrás puede ir por HTTP en la red
+      interna), elige server y location, y con proxy_pass lo reenvía. En el camino agrega lo que la
+      aplicación ya no puede ver por sí misma: el nombre original (Host), la IP del cliente
+      (X-Forwarded-For, X-Real-IP) y si vino por HTTPS (X-Forwarded-Proto).
+  - id: upstream
+    titulo: upstream
+    area: { x: 55.8, y: 18.2, ancho: 16.3, alto: 57.6 }
+    texto: >-
+      Un grupo de servidores con un nombre. Por defecto reparte por turnos (round robin); también
+      puede mandar al que tiene menos conexiones (least_conn), fijar cada cliente a una copia
+      (ip_hash) o dar más peso a una más potente (weight). Si una no contesta, prueba con la
+      siguiente y la deja de lado un rato (max_fails, fail_timeout).
+  - id: app1
+    titulo: Instancia 1
+    area: { x: 75.6, y: 18.2, ancho: 23.3, alto: 24.2 }
+    texto: >-
+      La aplicación (Python con gunicorn, Node, PHP-FPM...) corre como servicio de systemd y escucha
+      solo en 127.0.0.1: desde afuera no se llega, todo pasa por nginx. En Rocky, nginx necesita el
+      booleano httpd_can_network_connect para conectarse a un puerto que no es web.
+  - id: app2
+    titulo: Instancia 2
+    area: { x: 75.6, y: 51.5, ancho: 23.3, alto: 24.2 }
+    texto: >-
+      Otra copia de la misma aplicación. Con dos, se puede actualizar o reiniciar una mientras la
+      otra atiende. Tienen que compartir las sesiones (en una base o en Redis); si no, el balanceo
+      "desloguea" a la gente al cambiarla de copia.
+  - id: logs
+    titulo: Los logs de cada parte
+    area: { x: 23.3, y: 81.8, ancho: 75.6, alto: 15.2 }
+    texto: >-
+      Un 502 o un 504 se leen en tres lugares: el access.log de nginx (qué código recibió el
+      cliente), el error.log de nginx (por qué no pudo hablar con el upstream) y el journal de la
+      aplicación (por qué se cayó o tardó).

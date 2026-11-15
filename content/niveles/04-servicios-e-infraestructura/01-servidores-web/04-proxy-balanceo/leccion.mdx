@@ -1,0 +1,168 @@
+---
+id: n4-m1-l4
+titulo: Proxy inverso y balanceo de carga
+minutos: 180
+objetivos:
+  - Configurar nginx como proxy inverso con los encabezados correctos (Host, X-Forwarded-For, X-Forwarded-Proto).
+  - Balancear entre varios servidores de aplicación y soportar WebSockets.
+  - Conocer HAProxy para balanceo dedicado.
+glosario: [upstream, balanceo-carga, x-forwarded-for, websocket, haproxy]
+verificado: 2026-11
+---
+
+import flujo from './flujo.svg?raw'
+import flujoDatos from './flujo.yaml'
+import editor from './editor-proxy.yaml'
+import proxy from './ej-proxy.yaml'
+
+Las aplicaciones de la empresa (el sistema de pedidos en Python, la intranet en Node, la tienda en PHP) no se publican directamente en internet. Escuchan en un puerto interno, y adelante se pone un **proxy inverso**: un servidor web que recibe todos los pedidos y los reenvía a la aplicación que corresponde. Es el patrón más común de la web actual, y nginx es su herramienta más usada.
+
+<AntesDeEmpezar>
+- Nginx: server, location y logs (lección 4.1.2).
+- SELinux y sus booleanos (lección 1.6.6).
+- Encabezados HTTP (lección 4.1.1).
+</AntesDeEmpezar>
+
+## Para qué sirve un proxy inverso
+
+Un proxy "común" (de salida) está del lado de los clientes: las PC de la oficina salen a internet a través de él. Un proxy **inverso** está del lado de los servidores: los clientes de internet entran a través de él. Ganás:
+
+- **Un solo punto de entrada**: una IP y un certificado, aunque atrás haya diez aplicaciones en distintos puertos o servidores.
+- **HTTPS en un lugar**: nginx cifra y descifra; hacia atrás, por la red interna, puede ir HTTP.
+- **Balanceo**: repartir entre varias copias de la aplicación, y seguir atendiendo si una se cae.
+- **Protección**: las aplicaciones escuchan solo en 127.0.0.1 o en la red interna; desde internet solo se ve nginx, que además puede limitar tamaños, velocidad y rutas.
+- **Lo que nginx hace mejor** que la aplicación: servir archivos estáticos, comprimir, guardar en caché.
+
+<DiagramaInteractivo datos={flujoDatos} svg={flujo} alt="El cliente (un navegador) se conecta a nginx, que actúa de proxy inverso: recibe en los puertos 443 y 80, termina HTTPS, elige server y location, y con proxy_pass http://tienda reenvía el pedido agregando X-Forwarded-For, X-Forwarded-Proto y Host. El upstream tienda tiene dos servidores, en los puertos 8001 y 8002, reparte por turnos (o least_conn, ip_hash, pesos) y si uno no contesta prueba el otro. Las dos instancias de la aplicación escuchan en 127.0.0.1. Abajo, los logs: access.log dice qué pidió el cliente y qué código recibió; error.log, por qué falló la conexión hacia atrás; el journal de la aplicación, por qué se cayó." />
+
+## proxy_pass
+
+```nginx
+server {
+    listen 80;
+    server_name pedidos.ejemplo.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8001;
+    }
+}
+```
+
+Un detalle que confunde a todos alguna vez: **la barra al final de proxy_pass cambia la ruta que se manda**.
+
+| location | proxy_pass | El cliente pide | La aplicación recibe |
+|---|---|---|---|
+| `/api/` | `http://127.0.0.1:8001` | `/api/clientes` | `/api/clientes` (igual) |
+| `/api/` | `http://127.0.0.1:8001/` | `/api/clientes` | `/clientes` (se saca el prefijo) |
+| `/api/` | `http://127.0.0.1:8001/v2/` | `/api/clientes` | `/v2/clientes` |
+
+Sin nada después del puerto, la ruta pasa tal cual. Con una ruta (aunque sea solo `/`), nginx reemplaza la parte de la location por esa ruta.
+
+## Los encabezados que la aplicación ya no ve
+
+Detrás de un proxy, la aplicación recibe todas las conexiones **desde nginx**: la IP de origen es 127.0.0.1, el nombre pedido es el del upstream y todo llega por HTTP aunque el cliente usó HTTPS. Si no se le pasa la información, los registros de la aplicación tienen la IP de nginx para todos, los enlaces que arma salen con `http://` y nombres equivocados, y los límites por IP no sirven. Por eso, casi siempre:
+
+```nginx
+proxy_set_header Host $host;                                   # el nombre que pidió el cliente
+proxy_set_header X-Real-IP $remote_addr;                       # la IP del cliente
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;   # la cadena de IP (cliente, proxies)
+proxy_set_header X-Forwarded-Proto $scheme;                    # http o https
+```
+
+Ubuntu trae justamente esas líneas en `/etc/nginx/proxy_params`, y alcanza con `include proxy_params;`. Del lado de la aplicación, hay que decirle que **confíe** en esos encabezados solo si vienen del proxy (en Django, `SECURE_PROXY_SSL_HEADER`; en Express, `trust proxy`; en gunicorn, `--forwarded-allow-ips`): si los aceptara de cualquiera, un cliente podría mandar un X-Forwarded-For falso.
+
+Dos reglas de nginx que muerden: un `proxy_set_header` en una location **reemplaza todos** los del server (no se suman), y sin ninguno, nginx manda como Host el nombre del upstream.
+
+## Tiempos, tamaños y WebSockets
+
+- **proxy_connect_timeout** (60 s): cuánto esperar para conectar. **proxy_read_timeout** (60 s): cuánto esperar la respuesta. Si se pasa, el cliente recibe **504 Gateway Time-out**. Para un informe que tarda dos minutos, se sube solo en esa location.
+- **client_max_body_size** (1 MB por defecto): el tamaño máximo de lo que el cliente sube. Un archivo más grande recibe **413**.
+- **WebSockets** (chat, notificaciones en vivo): la conexión empieza como HTTP y se "convierte" con los encabezados `Upgrade` y `Connection`, que un proxy no reenvía solo:
+
+```nginx
+location /ws/ {
+    proxy_pass http://tienda;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+<EditorConfig ejercicio={editor} />
+
+## Balanceo de carga
+
+Un **upstream** es un grupo de servidores con nombre:
+
+```nginx
+upstream tienda {
+    least_conn;                                   # al que tenga menos conexiones
+    server 127.0.0.1:8001 weight=2;               # recibe el doble
+    server 127.0.0.1:8002;
+    server 10.0.0.31:8001 max_fails=3 fail_timeout=30s;
+    server 10.0.0.32:8001 backup;                 # solo si los demás no responden
+    keepalive 16;                                 # reusar conexiones hacia atrás
+}
+```
+
+- **Cómo reparte**: por turnos (de fábrica), `least_conn`, `ip_hash` (el mismo cliente siempre a la misma copia) o `hash` con una clave.
+- **Si uno no contesta**: nginx prueba el siguiente sin que el cliente se entere y, después de `max_fails` fallas, lo deja de lado durante `fail_timeout`. Es un control **pasivo**: se entera cuando falla un pedido real. Los controles **activos** (pedir /salud cada pocos segundos) son de HAProxy o de la versión paga de nginx.
+- **Sesiones**: si la aplicación guarda la sesión en la memoria de cada copia, al cambiar de copia la persona "pierde" la sesión. La solución de fondo es guardarlas en un lugar compartido (la base, Redis). Mientras tanto, `ip_hash`; y desde nginx 1.30 (abril de 2026) la versión libre también trae sesiones persistentes con `sticky`.
+- **keepalive**: reusar conexiones hacia la aplicación ahorra el saludo TCP en cada pedido; necesita `proxy_http_version 1.1` y `proxy_set_header Connection "";` en versiones anteriores a la 1.30, que lo trae así de fábrica. Las de las distribuciones (1.26 y 1.28) todavía no.
+
+En Rocky, recordá a SELinux: para que nginx se conecte a un puerto que no es web (8001, 3000, 5000), hace falta `setsebool -P httpd_can_network_connect 1`. Sin eso, todo da 502 con "(13: Permission denied)".
+
+<EnSimple>
+nginx recibe todo y reenvía con proxy_pass. Pasale a la aplicación Host, la IP del cliente y el esquema. Con un upstream, varias copias atienden y una caída no tira el sitio.
+</EnSimple>
+
+<Terminal ejercicio={proxy} />
+
+## HAProxy
+
+**HAProxy** es un balanceador dedicado: no sirve archivos, pero balancea HTTP y TCP (bases de datos, correo) con controles activos, estadísticas en vivo y una configuración pensada para eso. Se usa delante de varios servidores web, o delante de nginx. Sus versiones con soporte largo (LTS) son las 3.x.
+
+```
+frontend web
+    bind :80
+    default_backend tienda
+
+backend tienda
+    balance roundrobin
+    option httpchk GET /salud
+    server app1 10.0.0.31:8001 check
+    server app2 10.0.0.32:8001 check
+```
+
+`check` con `option httpchk` pide /salud cada pocos segundos a cada servidor y saca de la rueda al que no contesta 200, antes de que le llegue un pedido real.
+
+<ErroresComunes>
+  <ErrorComun titulo="La aplicación registra 127.0.0.1 para todos">
+    Faltan X-Real-IP y X-Forwarded-For, o la aplicación no confía en el proxy. Las dos partes.
+  </ErrorComun>
+  <ErrorComun titulo="Un proxy_set_header en la location y se pierden los demás">
+    No se suman: si una location define uno, tiene que repetir todos. include proxy_params en cada location ayuda.
+  </ErrorComun>
+  <ErrorComun titulo="502 en Rocky con todo bien configurado">
+    SELinux: httpd_can_network_connect. ausearch -m avc lo confirma en segundos.
+  </ErrorComun>
+  <ErrorComun titulo="La barra al final de proxy_pass">
+    Con ruta, nginx reemplaza el prefijo de la location; sin ruta, la pasa entera. Si la aplicación da 404 por todo, revisalo.
+  </ErrorComun>
+  <ErrorComun titulo="Balancear una aplicación con sesiones en memoria">
+    La gente pierde la sesión al cambiar de copia. Sesiones compartidas, o ip_hash/sticky mientras tanto.
+  </ErrorComun>
+  <ErrorComun titulo="Publicar la aplicación además del proxy">
+    Si escucha en 0.0.0.0 y el firewall deja pasar su puerto, se puede entrar salteando nginx. 127.0.0.1 o la red interna.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El proxy inverso es el punto de entrada: HTTPS, balanceo, protección y archivos estáticos; las aplicaciones escuchan en 127.0.0.1.
+- proxy_pass: sin ruta pasa la URI entera; con ruta, reemplaza el prefijo de la location.
+- Encabezados: Host $host, X-Real-IP, X-Forwarded-For y X-Forwarded-Proto (proxy_params en Ubuntu); la aplicación tiene que confiar solo en el proxy.
+- proxy_read_timeout (504), client_max_body_size (413) y WebSockets con HTTP/1.1, Upgrade y Connection.
+- upstream: round robin, least_conn, ip_hash, pesos, backup y max_fails; controles pasivos. Sesiones compartidas.
+- En Rocky, httpd_can_network_connect.
+- HAProxy: balanceador dedicado con controles activos y estadísticas.
+</Resumen>

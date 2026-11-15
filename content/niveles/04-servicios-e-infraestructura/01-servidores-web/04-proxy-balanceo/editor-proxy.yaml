@@ -1,0 +1,63 @@
+tipo: configuracion
+titulo: Completar el proxy de la tienda
+consigna: >-
+  Este archivo publica la tienda detrás de nginx, pero quedó a medias. Completalo: que el upstream
+  reparta entre las dos instancias (127.0.0.1:8001 y 127.0.0.1:8002); que la aplicación reciba el
+  nombre original, la IP del cliente y el esquema (Host $host, X-Forwarded-For
+  $proxy_add_x_forwarded_for y X-Forwarded-Proto $scheme); y que /ws/ funcione con WebSockets
+  (proxy_http_version 1.1 y los encabezados Upgrade y Connection).
+lenguaje: nginx
+nombre_archivo: /etc/nginx/conf.d/tienda.conf
+archivo_inicial: |
+  upstream tienda {
+      server 127.0.0.1:8001;
+  }
+
+  server {
+      listen 80;
+      server_name tienda.ejemplo.com;
+
+      location / {
+          proxy_pass http://tienda;
+      }
+
+      location /ws/ {
+          proxy_pass http://tienda;
+      }
+  }
+reglas:
+  - { tipo: sin_errores, mensaje: "nginx -t no encuentra errores" }
+  - { tipo: contiene, regex: "upstream\\s+tienda\\s*\\{[^}]*server\\s+127\\.0\\.0\\.1:8001;[^}]*server\\s+127\\.0\\.0\\.1:8002;", mensaje: "El upstream tiene las dos instancias" }
+  - { tipo: contiene, regex: "proxy_set_header\\s+Host\\s+\\$host\\s*;", mensaje: "La aplicación recibe el nombre original (Host $host)" }
+  - { tipo: contiene, regex: "proxy_set_header\\s+X-Forwarded-For\\s+\\$proxy_add_x_forwarded_for\\s*;", mensaje: "La aplicación recibe la IP del cliente (X-Forwarded-For)" }
+  - { tipo: contiene, regex: "proxy_set_header\\s+X-Forwarded-Proto\\s+\\$scheme\\s*;", mensaje: "La aplicación sabe si vino por HTTP o HTTPS (X-Forwarded-Proto)" }
+  - { tipo: contiene, regex: "location\\s+/ws/\\s*\\{[^}]*proxy_http_version\\s+1\\.1\\s*;", mensaje: "/ws/ usa HTTP/1.1 hacia la aplicación" }
+  - { tipo: contiene, regex: "location\\s+/ws/\\s*\\{[^}]*proxy_set_header\\s+Upgrade\\s+\\$http_upgrade\\s*;", mensaje: "/ws/ pasa el encabezado Upgrade" }
+  - { tipo: contiene, regex: "location\\s+/ws/\\s*\\{[^}]*proxy_set_header\\s+Connection\\s+\"?upgrade\"?\\s*;", mensaje: "/ws/ pasa Connection: upgrade" }
+solucion: |
+  upstream tienda {
+      server 127.0.0.1:8001;
+      server 127.0.0.1:8002;
+  }
+
+  server {
+      listen 80;
+      server_name tienda.ejemplo.com;
+
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+
+      location / {
+          proxy_pass http://tienda;
+      }
+
+      location /ws/ {
+          proxy_pass http://tienda;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          proxy_set_header Host $host;
+      }
+  }

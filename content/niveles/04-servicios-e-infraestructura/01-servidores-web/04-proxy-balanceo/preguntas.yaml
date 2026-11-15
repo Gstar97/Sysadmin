@@ -1,0 +1,115 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace un proxy inverso?
+  opciones:
+    - { texto: "Recibe los pedidos de los clientes y los reenvía a las aplicaciones que están atrás", correcta: true, explicacion: "Es el punto de entrada del lado de los servidores." }
+    - { texto: "Permite que las PC de la oficina salgan a internet", explicacion: "Ese es un proxy de salida." }
+    - { texto: "Traduce nombres a IP", explicacion: "Eso es DNS." }
+    - { texto: "Cifra el disco del servidor", explicacion: "No tiene relación." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "Con location /api/ y proxy_pass http://127.0.0.1:8001/; (con barra), un cliente pide /api/clientes. ¿Qué ruta recibe la aplicación?"
+  opciones:
+    - { texto: "/clientes", correcta: true, explicacion: "Con ruta en proxy_pass, nginx reemplaza el prefijo /api/ por /." }
+    - { texto: "/api/clientes", explicacion: "Eso pasaría sin la barra final." }
+    - { texto: "/api/", explicacion: "Se conserva el resto de la ruta." }
+    - { texto: "/", explicacion: "Se conserva lo que sigue al prefijo." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Los registros de la aplicación muestran 127.0.0.1 como IP de todos los clientes. ¿Qué falta?
+  opciones:
+    - { texto: "Que nginx mande X-Real-IP / X-Forwarded-For y que la aplicación confíe en ellos cuando vienen del proxy", correcta: true, explicacion: "La conexión siempre viene de nginx." }
+    - { texto: "Abrir el puerto de la aplicación en el firewall", explicacion: "Eso la expondría, y la IP seguiría siendo la de nginx para lo que pasa por él." }
+    - { texto: "Cambiar el DNS", explicacion: "No tiene relación." }
+    - { texto: "Usar HTTPS", explicacion: "La IP del proxy seguiría igual." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: En un Rocky, el sitio da 502 y el error.log dice esto. ¿Qué hacés?
+  salida: |
+    2026/11/15 11:02:14 [error] 1240#1240: *3 connect() to 127.0.0.1:3000 failed (13: Permission denied) while connecting to upstream, client: 192.168.1.10, server: intranet.ejemplo.com, request: "GET / HTTP/1.1", upstream: "http://127.0.0.1:3000/"
+  opciones:
+    - { texto: "Habilitar el booleano de SELinux: setsebool -P httpd_can_network_connect 1", correcta: true, explicacion: "Permission denied al conectar, en Rocky, es SELinux." }
+    - { texto: "Arrancar la aplicación", explicacion: "Si estuviera caída diría (111: Connection refused)." }
+    - { texto: "Darle chmod 777 a la carpeta del sitio", explicacion: "No es un archivo: es una conexión." }
+    - { texto: "Subir proxy_read_timeout", explicacion: "No es una demora." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice este error?
+  salida: |
+    connect() failed (111: Connection refused) while connecting to upstream, upstream: "http://127.0.0.1:8001/"
+  opciones:
+    - { texto: "En 127.0.0.1:8001 no escucha nada: la aplicación está caída o en otro puerto", correcta: true, explicacion: "systemctl status y ss -tlnp lo confirman." }
+    - { texto: "SELinux bloquea la conexión", explicacion: "Eso sería (13: Permission denied)." }
+    - { texto: "La aplicación tarda demasiado", explicacion: "Eso sería upstream timed out." }
+    - { texto: "El cliente cerró la conexión", explicacion: "El problema es hacia atrás." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué necesita una location que pasa WebSockets? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "proxy_http_version 1.1", correcta: true, explicacion: "El cambio de protocolo es de HTTP/1.1." }
+    - { texto: "proxy_set_header Upgrade $http_upgrade", correcta: true, explicacion: "nginx no lo reenvía solo." }
+    - { texto: "proxy_set_header Connection \"upgrade\"", correcta: true, explicacion: "Tampoco lo reenvía solo." }
+    - { texto: "client_max_body_size 0", explicacion: "No tiene relación." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un informe que tarda 90 segundos devuelve 504. ¿Qué ajustás?
+  opciones:
+    - { texto: "proxy_read_timeout, solo en la location de ese informe", correcta: true, explicacion: "El valor de fábrica es 60 segundos." }
+    - { texto: "client_max_body_size", explicacion: "Es el tamaño de lo que sube el cliente." }
+    - { texto: "worker_connections", explicacion: "No es un problema de cantidad de conexiones." }
+    - { texto: "El upstream con ip_hash", explicacion: "No cambia la demora." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Balanceás dos copias de una aplicación y la gente se "desloguea" al azar. ¿Por qué?
+  opciones:
+    - { texto: "Cada copia guarda las sesiones en su memoria y el balanceo manda a la persona a la otra", correcta: true, explicacion: "Sesiones compartidas (base o Redis); mientras tanto, ip_hash o sticky." }
+    - { texto: "El certificado vence", explicacion: "No tiene relación." }
+    - { texto: "Falta keepalive en el upstream", explicacion: "Eso afecta el rendimiento, no las sesiones." }
+    - { texto: "nginx borra las cookies", explicacion: "nginx no toca las cookies." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un upstream, ¿qué hace la opción backup en un server?
+  opciones:
+    - { texto: "Ese server recibe pedidos solo si los demás no responden", correcta: true, explicacion: "Sirve para una copia de reserva." }
+    - { texto: "Guarda una copia de seguridad de la aplicación", explicacion: "No hace respaldos." }
+    - { texto: "Recibe el doble de pedidos", explicacion: "Eso es weight=2." }
+    - { texto: "Lo saca del balanceo para siempre", explicacion: "Eso es down." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En el server tenés proxy_set_header Host $host. En una location agregás proxy_set_header X-Debug 1. ¿Qué Host recibe la aplicación en esa location?
+  opciones:
+    - { texto: "El nombre del upstream: la location define un proxy_set_header y deja de heredar los del server", correcta: true, explicacion: "No se suman; hay que repetirlos o usar include." }
+    - { texto: "El nombre original, porque se hereda", explicacion: "Los proxy_set_header se heredan solo si el nivel actual no define ninguno." }
+    - { texto: "Ninguno", explicacion: "nginx manda Host igual: el del upstream." }
+    - { texto: "localhost", explicacion: "Manda el nombre del upstream." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ofrece HAProxy que la versión libre de nginx no?
+  opciones:
+    - { texto: "Controles activos de salud (pedir /salud cada pocos segundos) y estadísticas en vivo", correcta: true, explicacion: "nginx libre controla de forma pasiva, con los pedidos reales." }
+    - { texto: "Servir archivos estáticos", explicacion: "HAProxy no sirve archivos." }
+    - { texto: "HTTPS", explicacion: "Los dos lo hacen." }
+    - { texto: "Balancear HTTP", explicacion: "Los dos lo hacen." }
+- id: p12
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que habilita, de forma persistente, que nginx (httpd_t) se conecte a cualquier puerto en Rocky.
+  aceptadas:
+    - "setsebool -P httpd_can_network_connect 1"
+    - "sudo setsebool -P httpd_can_network_connect 1"
+    - "setsebool -P httpd_can_network_connect on"
+    - "sudo setsebool -P httpd_can_network_connect on"
+  patrones: ["^(sudo\\s+)?setsebool\\s+-P\\s+httpd_can_network_connect\\s+(1|on|true)$"]
+  explicacion: "Sin -P, se pierde al reiniciar."
