@@ -491,6 +491,10 @@ register('file', {
         else if (node.data.startsWith('#!/usr/bin/python3') || node.data.startsWith('#!/usr/bin/env python3')) kind = 'Python script, ASCII text executable'
         else if (node.data.startsWith('#!/bin/sh')) kind = 'POSIX shell script, ASCII text executable'
         else if (/^\s*<(!DOCTYPE )?html/i.test(node.data)) kind = 'HTML document, ASCII text'
+        else if (node.data.startsWith('SIMDER1:')) kind = 'Certificate, Version=3'
+        else if (node.data.startsWith('SIMP12_1:') || node.data.startsWith('SIMSIG1:') || node.data.startsWith('Salted__')) kind = node.data.startsWith('Salted__') ? "openssl enc'd data with salted password" : 'data'
+        else if (/^-----BEGIN CERTIFICATE-----/.test(node.data)) kind = 'PEM certificate'
+        else if (/^-----BEGIN CERTIFICATE REQUEST-----/.test(node.data)) kind = 'PEM certificate request'
         // eslint-disable-next-line no-control-regex
         else if (/[^\x00-\x7f]/.test(node.data)) kind = `Unicode text, UTF-8 text${node.data.includes('\r\n') ? ', with CRLF line terminators' : ''}`
         else kind = `ASCII text${node.data.includes('\r\n') ? ', with CRLF line terminators' : ''}`

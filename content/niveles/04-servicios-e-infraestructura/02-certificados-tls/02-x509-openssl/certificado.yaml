@@ -1,0 +1,72 @@
+tipo: diagrama
+titulo: Un certificado por dentro
+puntos:
+  - id: serie
+    titulo: "Versión y número de serie"
+    area: { x: 1.6, y: 12.2, ancho: 96.8, alto: 8.4 }
+    texto: >-
+      Versión 3 (se cuenta desde 0, por eso dice 0x2): la única que se usa, porque es la que tiene
+      extensiones. El número de serie es único para cada certificado de esa CA: es lo que aparece
+      en las listas de revocados.
+  - id: emisor
+    titulo: "Emisor (Issuer)"
+    area: { x: 1.6, y: 22.9, ancho: 96.8, alto: 3.0 }
+    texto: >-
+      Quién firmó este certificado: la intermedia R11 de Let's Encrypt. Tiene que coincidir con el
+      Subject del certificado siguiente de la cadena. Si dice lo mismo que el Subject, es
+      autofirmado.
+  - id: fechas
+    titulo: "Validez"
+    area: { x: 1.6, y: 25.6, ancho: 96.8, alto: 8.4 }
+    texto: >-
+      Not Before y Not After, siempre en hora GMT. Fuera de ese rango, los clientes lo rechazan
+      ("certificate has expired" o "not yet valid"). Este dura 45 días, como los del perfil corto
+      de Let's Encrypt; desde marzo de 2026 ningún certificado público puede pasar de 200 días.
+  - id: sujeto
+    titulo: "Sujeto (Subject)"
+    area: { x: 1.6, y: 33.6, ancho: 96.8, alto: 3.0 }
+    texto: >-
+      A quién pertenece. El CN (Common Name) es histórico: los navegadores no lo miran desde hace
+      años, y algunos certificados ya ni lo traen. El nombre que vale es el del SAN.
+  - id: clave
+    titulo: "Clave pública"
+    area: { x: 1.6, y: 36.3, ancho: 96.8, alto: 13.7 }
+    texto: >-
+      La clave pública del servidor (RSA de 2048 bits) y el algoritmo. La privada que le
+      corresponde no está acá: queda en el servidor. Comparar el Modulus del certificado con el de
+      la clave (openssl rsa -modulus) dice si son pareja.
+  - id: usos
+    titulo: "Usos permitidos"
+    area: { x: 1.6, y: 52.3, ancho: 96.8, alto: 16.4 }
+    texto: >-
+      Key Usage y Extended Key Usage dicen para qué sirve la clave: TLS Web Server Authentication
+      es "servidor web". Basic Constraints CA:FALSE: no puede firmar otros certificados. En una
+      intermedia o una raíz diría CA:TRUE.
+  - id: ids
+    titulo: "Identificadores de clave"
+    area: { x: 1.6, y: 68.4, ancho: 96.8, alto: 11.0 }
+    texto: >-
+      Subject Key Identifier identifica la clave de este certificado; Authority Key Identifier, la
+      del emisor. Sirven para encontrar el certificado siguiente de la cadena aunque haya varios
+      con el mismo nombre.
+  - id: aia
+    titulo: "Dónde está el emisor"
+    area: { x: 1.6, y: 79.1, ancho: 96.8, alto: 5.7 }
+    texto: >-
+      Authority Information Access: la dirección desde donde bajar la intermedia. Algunos
+      navegadores la usan para completar una cadena incompleta; curl y la mayoría de las
+      aplicaciones no, y por eso fallan si el servidor no manda la intermedia.
+  - id: san
+    titulo: "Nombres (SAN)"
+    area: { x: 1.6, y: 84.4, ancho: 96.8, alto: 5.7 }
+    texto: >-
+      Subject Alternative Name: los nombres para los que vale el certificado. El cliente compara
+      el nombre que pidió con esta lista. Un comodín (*.ejemplo.com) cubre un solo nivel:
+      www.ejemplo.com sí, ejemplo.com y a.b.ejemplo.com no.
+  - id: firma
+    titulo: "Firma de la CA"
+    area: { x: 1.6, y: 89.8, ancho: 96.8, alto: 8.4 }
+    texto: >-
+      La firma del emisor sobre todo lo anterior, hecha con la clave privada de R11. El cliente la
+      verifica con la clave pública del certificado de R11. Si se cambiara un solo dato del
+      certificado, la firma dejaría de coincidir.

@@ -480,7 +480,7 @@ export function x509Text(c: CertData): string {
             Not After : ${gmt(c.notAfter)}
         Subject: ${dnString(c.subject)}
         Subject Public Key Info:
-${pub}
+${pub.replace(/^ {4}/gm, '')}
         X509v3 extensions:
 ${ext.join('\n')}
     Signature Algorithm: ${c.sigAlg}

@@ -1,0 +1,108 @@
+---
+id: n4-m2-l2
+titulo: Certificados X.509 y OpenSSL
+minutos: 150
+objetivos:
+  - Leer un certificado X.509 y saber qué significa cada campo.
+  - Generar claves y pedidos de certificado (CSR) con los nombres correctos en el SAN.
+  - Revisar fechas, cadenas y parejas de clave y certificado, y convertir entre PEM, DER y PKCS#12.
+glosario: [x509, san, csr, pem, pkcs12, revocacion]
+verificado: 2026-11
+---
+
+import cert from './certificado.svg?raw'
+import certDatos from './certificado.yaml'
+import x509 from './ej-x509.yaml'
+import formatos from './formatos.yaml'
+
+En la lección anterior viste que un certificado es una firma que dice "esta clave pública es de este nombre". Ahora toca abrirlo, porque casi todos los problemas de HTTPS se diagnostican leyendo uno: si venció, para qué nombres vale, quién lo firmó, si está la intermedia, si la clave es la suya. La herramienta es **openssl**, que viene en Rocky y en Ubuntu (las dos traen la versión 3.5).
+
+<AntesDeEmpezar>
+- Criptografía para sysadmins: firma, par de claves y cadena de confianza (lección 4.2.1).
+- Permisos de archivos (módulo 1.2).
+</AntesDeEmpezar>
+
+## Un certificado por dentro
+
+Los certificados siguen un formato estándar llamado **X.509** (versión 3). Tocá cada parte de esta salida real de openssl para ver qué es:
+
+<DiagramaInteractivo datos={certDatos} svg={cert} alt="La salida de openssl x509 -in tienda.crt -noout -text. Versión 3 y número de serie; algoritmo de firma sha256WithRSAEncryption; emisor C = US, O = Let's Encrypt, CN = R11; validez desde el 13 de octubre hasta el 27 de noviembre de 2026, en GMT; sujeto CN = tienda.ejemplo.com; clave pública RSA de 2048 bits con su módulo y exponente; extensiones: Key Usage crítico (Digital Signature, Key Encipherment), Extended Key Usage TLS Web Server Authentication, Basic Constraints crítico CA:FALSE, identificadores de clave del sujeto y de la autoridad, Authority Information Access con la URI http://r11.i.lencr.org/, y Subject Alternative Name con DNS:tienda.ejemplo.com y DNS:www.tienda.ejemplo.com; al final, el algoritmo y el valor de la firma." />
+
+Tres cosas que conviene grabarse:
+
+- **El nombre que vale es el del SAN** (Subject Alternative Name). El CN es un resto histórico que los navegadores ignoran desde hace años. Un certificado sin el nombre en el SAN falla aunque el CN sea correcto.
+- **Un comodín cubre un solo nivel**: `*.ejemplo.com` vale para `www.ejemplo.com` y `tienda.ejemplo.com`, pero no para `ejemplo.com` ni para `a.b.ejemplo.com`.
+- **Las fechas están en GMT** (hora de Greenwich). Un certificado "que vence hoy a las 9" en Argentina vence a las 6.
+
+## Cada vez duran menos
+
+Los navegadores y las autoridades certificantes acordaron (en el CA/Browser Forum) acortar la vida de los certificados públicos: cuanto menos dura uno, menos sirve si alguien roba la clave.
+
+| Desde | Duración máxima |
+|---|---|
+| 15 de marzo de 2026 | 200 días |
+| 15 de marzo de 2027 | 100 días |
+| 15 de marzo de 2029 | 47 días |
+
+Let's Encrypt va adelante: sus certificados de siempre duran 90 días, ya ofrece de 45 y planea bajar todos a 64 en 2027 y a 45 en 2028. La conclusión es una sola: **renovar a mano dejó de ser una opción**. La lección que sigue es cómo automatizarlo.
+
+<Consejo>
+Para más adelante: cuando una clave se compromete antes del vencimiento, el certificado se **revoca**. Los clientes se enteraban con listas de revocados (CRL) o preguntándole a la CA en cada conexión (OCSP). Let's Encrypt apagó su OCSP en 2025 y hoy los navegadores usan listas comprimidas que descargan solos. Los certificados cortos son parte de la misma idea: si dura poco, revocarlo importa menos.
+</Consejo>
+
+## Formatos de archivo
+
+<Emparejar ejercicio={formatos} />
+
+## Los comandos de todos los días
+
+| Para | Comando |
+|---|---|
+| Ver lo importante | `openssl x509 -in cert.pem -noout -subject -issuer -dates -ext subjectAltName` |
+| Ver todo | `openssl x509 -in cert.pem -noout -text` |
+| ¿Vence en 30 días? | `openssl x509 -in cert.pem -noout -checkend 2592000` (sale con 1 si vence) |
+| Lo que manda un servidor | `openssl s_client -connect sitio:443 -servername sitio < /dev/null` |
+| Solo sus fechas | `openssl s_client -connect sitio:443 -servername sitio < /dev/null 2>/dev/null \| openssl x509 -noout -dates` |
+| ¿Clave y certificado son pareja? | comparar `openssl x509 -noout -modulus` y `openssl rsa -noout -modulus` (con `\| openssl md5`) |
+| Clave y CSR | `openssl req -new -newkey rsa:3072 -noenc -keyout k.key -out p.csr -subj '/CN=...' -addext 'subjectAltName=DNS:...'` |
+| Revisar un CSR | `openssl req -in p.csr -noout -text` |
+| Autofirmado para pruebas | `openssl req -x509 -newkey rsa:3072 -noenc -days 365 -keyout k.key -out c.crt -subj '/CN=...' -addext 'subjectAltName=DNS:...'` |
+| PEM a DER | `openssl x509 -in c.pem -outform DER -out c.der` |
+| PEM a PFX (Windows) | `openssl pkcs12 -export -in c.pem -inkey k.key -out c.pfx` |
+| PFX a PEM | `openssl pkcs12 -in c.pfx -nodes -out todo.pem` |
+
+Del pedido (CSR): la clave privada se genera **en el servidor donde se va a usar** y no sale de ahí. Lo que viaja a la CA es el CSR, que solo tiene la clave pública y los datos. Si un proveedor ofrece "generarte la clave", desconfiá.
+
+Del certificado **autofirmado**: sirve para pruebas y para cosas internas que nadie más usa, pero cada cliente va a mostrar un aviso, y acostumbrar a la gente a "aceptar el aviso" es justo lo que aprovecha un atacante. Para lo interno de verdad, una CA interna (lección 4.2.5).
+
+<EnSimple>
+Un certificado X.509 dice para qué nombres vale (SAN), quién lo firmó (Issuer), desde y hasta cuándo, y qué clave pública tiene. openssl x509 lo lee, openssl req pide uno nuevo y openssl s_client muestra lo que manda un servidor de verdad.
+</EnSimple>
+
+<Terminal ejercicio={x509} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Poner el nombre solo en el CN">
+    Los navegadores miran el SAN. En el CSR, siempre -addext 'subjectAltName=DNS:...', con todos los nombres (con y sin www).
+  </ErrorComun>
+  <ErrorComun titulo="Revisar el archivo en vez del servidor">
+    El archivo nuevo puede estar bien y nginx seguir sirviendo el viejo porque no se recargó. openssl s_client muestra lo que ve el cliente.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar -servername">
+    Sin el nombre (SNI), un servidor con varios sitios te muestra el certificado del sitio por defecto, y parece que está mal configurado cuando no lo está.
+  </ErrorComun>
+  <ErrorComun titulo="Mandar el .pfx y su contraseña por el mismo correo">
+    El .pfx tiene la clave privada. El archivo por un lado y la contraseña por otro, y se borra cuando se importó.
+  </ErrorComun>
+  <ErrorComun titulo="Confiar en la extensión del archivo">
+    .crt y .cer pueden ser PEM o DER. file o head -1 te lo dicen.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- X.509 v3: serie, emisor, validez (en GMT), sujeto, clave pública, usos, SAN y la firma de la CA.
+- El SAN es el que vale; el comodín cubre un nivel.
+- Vida máxima de los certificados públicos: 200 días desde marzo de 2026, 100 desde 2027 y 47 desde 2029. Hay que automatizar.
+- Formatos: PEM (texto), DER (binario), PKCS#12/PFX (con la clave y contraseña), CSR (pedido), .key (clave privada, 600).
+- openssl x509 para leer, -checkend para vigilar, s_client para ver lo que manda el servidor, -modulus para comprobar la pareja, req para pedir y pkcs12 para Windows.
+</Resumen>

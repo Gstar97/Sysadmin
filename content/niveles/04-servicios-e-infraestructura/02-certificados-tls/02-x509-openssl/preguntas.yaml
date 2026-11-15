@@ -1,0 +1,122 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué campo del certificado mira el navegador para saber si vale para el nombre que pediste?
+  opciones:
+    - { texto: "Subject Alternative Name (SAN)", correcta: true, explicacion: "El CN ya no se usa para eso." }
+    - { texto: "El CN del Subject", explicacion: "Los navegadores lo ignoran desde hace años." }
+    - { texto: "El Issuer", explicacion: "Es quién lo firmó." }
+    - { texto: "El número de serie", explicacion: "Identifica el certificado, no el nombre." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un certificado para *.ejemplo.com, ¿para cuál de estos nombres vale?
+  opciones:
+    - { texto: "tienda.ejemplo.com", correcta: true, explicacion: "Un nivel debajo de ejemplo.com." }
+    - { texto: "ejemplo.com", explicacion: "El comodín no cubre el dominio solo; hay que agregarlo al SAN." }
+    - { texto: "a.tienda.ejemplo.com", explicacion: "El comodín cubre un solo nivel." }
+    - { texto: "ejemplo.com.ar", explicacion: "Es otro dominio." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice esta salida?
+  salida: |
+    $ openssl x509 -in web.crt -noout -subject -issuer -dates
+    subject=CN = web.ejemplo.com
+    issuer=CN = web.ejemplo.com
+    notBefore=Jan 10 12:00:00 2026 GMT
+    notAfter=Jan 10 12:00:00 2027 GMT
+  opciones:
+    - { texto: "Es un certificado autofirmado: emisor y sujeto son el mismo", correcta: true, explicacion: "Los clientes van a mostrar un aviso salvo que confíen en él explícitamente." }
+    - { texto: "Es de Let's Encrypt", explicacion: "Diría O = Let's Encrypt en el issuer." }
+    - { texto: "Está vencido", explicacion: "Vale hasta enero de 2027." }
+    - { texto: "Es una CA raíz pública", explicacion: "Una raíz pública viene en el almacén del sistema, no la hace uno." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un script ejecuta openssl x509 -in cert.pem -noout -checkend 1209600 y sale con código 1. ¿Qué significa?
+  opciones:
+    - { texto: "El certificado vence dentro de los próximos 14 días", correcta: true, explicacion: "1209600 segundos son 14 días." }
+    - { texto: "El archivo no existe", explicacion: "Daría un error de lectura." }
+    - { texto: "Ya venció hace 14 días", explicacion: "-checkend mira hacia adelante." }
+    - { texto: "La firma no es válida", explicacion: "-checkend solo mira la fecha." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Instalaste un certificado nuevo, el archivo dice que vence en 2027, pero el navegador sigue mostrando el que vence mañana. ¿Qué revisás primero?
+  opciones:
+    - { texto: "Si recargaste nginx, mirando con openssl s_client lo que manda de verdad", correcta: true, explicacion: "nginx lee los certificados al arrancar o recargar." }
+    - { texto: "El reloj del servidor", explicacion: "El navegador ve el certificado viejo, no una fecha mal calculada." }
+    - { texto: "El DNS", explicacion: "Llega al servidor correcto." }
+    - { texto: "La caché de la CA", explicacion: "La CA no interviene en cada conexión." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde se genera la clave privada de un certificado para un servidor?
+  opciones:
+    - { texto: "En el mismo servidor donde se va a usar; a la CA solo viaja el CSR", correcta: true, explicacion: "Así la clave nunca sale de su lugar." }
+    - { texto: "La genera la CA y te la manda por correo", explicacion: "Si otro tuvo la clave, no es solo tuya." }
+    - { texto: "En tu PC, y se copia al servidor por correo", explicacion: "Cada copia es un riesgo." }
+    - { texto: "No hace falta una clave privada", explicacion: "Sin ella, el servidor no puede probar que el certificado es suyo." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué tiene un archivo .pfx? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "El certificado", correcta: true, explicacion: "Sí." }
+    - { texto: "La clave privada", correcta: true, explicacion: "Por eso se trata como ella." }
+    - { texto: "Normalmente, la intermedia", correcta: true, explicacion: "Puede llevar la cadena." }
+    - { texto: "La clave privada de la CA", explicacion: "Nunca." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Desde el 15 de marzo de 2026, ¿cuánto puede durar como máximo un certificado público nuevo?
+  opciones:
+    - { texto: "200 días", correcta: true, explicacion: "Baja a 100 en 2027 y a 47 en 2029." }
+    - { texto: "398 días", explicacion: "Era el límite anterior." }
+    - { texto: "5 años", explicacion: "Hace mucho que no." }
+    - { texto: "47 días", explicacion: "Eso será desde 2029." }
+- id: p09
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Esto devuelve s_client para tu sitio. ¿Qué está mal?
+  salida: |
+    Certificate chain
+     0 s:CN=www.ejemplo.com
+       i:C=US, O=Let's Encrypt, CN=R11
+    ---
+    Verify return code: 21 (unable to verify the first certificate)
+  opciones:
+    - { texto: "El servidor manda solo su certificado: falta la intermedia R11 (usar fullchain.pem)", correcta: true, explicacion: "La cadena tiene un solo eslabón." }
+    - { texto: "El certificado está vencido", explicacion: "Sería el código 10." }
+    - { texto: "El nombre no coincide", explicacion: "s_client no compara el nombre si no se lo pedís." }
+    - { texto: "Falta la raíz en la cadena", explicacion: "La raíz no se manda; el cliente la tiene." }
+- id: p10
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que muestra las fechas de validez de cert.pem, sin repetir el certificado.
+  aceptadas:
+    - "openssl x509 -in cert.pem -noout -dates"
+    - "openssl x509 -noout -dates -in cert.pem"
+    - "openssl x509 -in cert.pem -dates -noout"
+  patrones: ["^openssl\\s+x509\\s+(?=.*-in\\s+cert\\.pem)(?=.*-noout)(?=.*-dates)(-in\\s+cert\\.pem\\s*|-noout\\s*|-dates\\s*){3}$"]
+  explicacion: "Con -enddate muestra solo la de vencimiento."
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: nginx no arranca y dice "SSL_CTX_use_PrivateKey ... key values mismatch". ¿Qué comprobás?
+  opciones:
+    - { texto: "Que la clave privada sea la pareja del certificado, comparando el módulo de los dos", correcta: true, explicacion: "Seguramente te pasaron el certificado nuevo con la clave vieja, o al revés." }
+    - { texto: "Los permisos del certificado", explicacion: "Sería Permission denied." }
+    - { texto: "Que el certificado no esté vencido", explicacion: "nginx arranca con certificados vencidos." }
+    - { texto: "El firewall", explicacion: "nginx ni arrancó." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué Basic Constraints dice CA:FALSE en el certificado de un sitio?
+  opciones:
+    - { texto: "Para que no se pueda usar para firmar otros certificados", correcta: true, explicacion: "Si pudiera, el dueño de un sitio podría emitir certificados para cualquier nombre." }
+    - { texto: "Porque no tiene clave privada", explicacion: "Sí tiene." }
+    - { texto: "Porque está vencido", explicacion: "No tiene relación." }
+    - { texto: "Porque es autofirmado", explicacion: "Un autofirmado de CA diría TRUE." }

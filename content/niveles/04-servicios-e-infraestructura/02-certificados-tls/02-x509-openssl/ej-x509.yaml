@@ -1,0 +1,130 @@
+tipo: terminal
+shell: bash
+titulo: Revisar un certificado, pedir otro y exportarlo
+descripcion: >-
+  web01 (Rocky Linux 10) publica la tienda por HTTPS con nginx. El certificado está en
+  /etc/pki/tls/certs/tienda.crt y su clave en /etc/pki/tls/private/tienda.key. Te piden tres
+  cosas: un informe del certificado actual, un pedido de certificado (CSR) para la intranet, y una
+  copia del certificado de la tienda para importar en un servidor Windows.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nginx] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+  red:
+    registros_dns: { tienda.ejemplo.com: 127.0.0.1, www.tienda.ejemplo.com: 127.0.0.1 }
+  web:
+    certificados:
+      - certificado: /etc/pki/tls/certs/tienda.crt
+        clave: /etc/pki/tls/private/tienda.key
+        cn: tienda.ejemplo.com
+        san: [tienda.ejemplo.com, www.tienda.ejemplo.com]
+        dias_emitido: 33
+        dias_restantes: 12
+  archivos:
+    /etc/nginx/conf.d/tienda.conf: |
+      server {
+          listen 443 ssl;
+          server_name tienda.ejemplo.com www.tienda.ejemplo.com;
+          ssl_certificate /etc/pki/tls/certs/tienda.crt;
+          ssl_certificate_key /etc/pki/tls/private/tienda.key;
+          root /usr/share/nginx/html;
+      }
+pasos:
+  - consigna: >-
+      Mostrá solo lo importante del certificado de la tienda: a quién pertenece, quién lo emitió,
+      sus fechas y los nombres para los que vale.
+    verificar:
+      - { comando_usado: 'x509' }
+      - { salida_contiene: "issuer=C = US, O = Let's Encrypt, CN = R11" }
+      - { salida_contiene: 'DNS:www.tienda.ejemplo.com' }
+    pistas:
+      - "`openssl x509 -in /etc/pki/tls/certs/tienda.crt -noout -subject -issuer -dates -ext subjectAltName`"
+    solucion: ["openssl x509 -in /etc/pki/tls/certs/tienda.crt -noout -subject -issuer -dates -ext subjectAltName"]
+    explicacion: >-
+      -noout evita que repita el certificado en base64, y cada opción muestra un campo. El
+      certificado es público: lo puede leer cualquiera (la clave privada no).
+  - consigna: ¿Vence en los próximos 30 días? Preguntáselo a openssl de forma que sirva para un script.
+    verificar:
+      - { comando_usado: '-checkend\s+2592000' }
+      - { salida_contiene: 'Certificate will expire' }
+    pistas:
+      - "-checkend recibe segundos: 30 días son 2592000. `openssl x509 -in /etc/pki/tls/certs/tienda.crt -noout -checkend 2592000; echo $?`"
+    solucion: ["openssl x509 -in /etc/pki/tls/certs/tienda.crt -noout -checkend 2592000; echo $?"]
+    explicacion: >-
+      "Certificate will expire" y código de salida 1: vence antes de 30 días. Un script de
+      monitoreo puede usar ese código (0 si no vence, 1 si vence) para mandar un aviso. Si la
+      renovación es automática, este aviso es la red de seguridad para cuando la automatización
+      falla.
+  - consigna: >-
+      Comprobá lo que manda de verdad el servidor a un cliente: conectate con openssl s_client a
+      tienda.ejemplo.com en el 443 y mirá la cadena y el resultado de la verificación.
+    verificar:
+      - { comando_usado: 's_client' }
+      - { salida_contiene: 'Verify return code: 0 (ok)' }
+    pistas:
+      - "`openssl s_client -connect tienda.ejemplo.com:443 -servername tienda.ejemplo.com < /dev/null`"
+    solucion: ["openssl s_client -connect tienda.ejemplo.com:443 -servername tienda.ejemplo.com < /dev/null"]
+    explicacion: >-
+      En "Certificate chain", el 0 es el certificado del servidor y el 1 la intermedia R11: la
+      cadena está completa. -servername manda el nombre en el saludo (SNI), que es como nginx
+      sabe qué certificado mostrar cuando tiene varios sitios en la misma IP. El < /dev/null
+      cierra la conexión al terminar, en lugar de quedarse esperando que escribas.
+  - consigna: >-
+      Antes de tocar nada, comprobá que la clave privada corresponde al certificado: compará la
+      huella del módulo de los dos.
+    verificar:
+      - { comando_usado: 'rsa.*-modulus|pkey.*-modulus' }
+      - { comando_usado: 'x509.*-modulus' }
+    pistas:
+      - "`sudo openssl x509 -noout -modulus -in /etc/pki/tls/certs/tienda.crt | openssl md5` y lo mismo con `sudo openssl rsa -noout -modulus -in /etc/pki/tls/private/tienda.key | openssl md5`"
+    solucion:
+      - sudo openssl x509 -noout -modulus -in /etc/pki/tls/certs/tienda.crt | openssl md5
+      - sudo openssl rsa -noout -modulus -in /etc/pki/tls/private/tienda.key | openssl md5
+    explicacion: >-
+      Las dos huellas son iguales: son pareja. Si no lo fueran, nginx no arrancaría ("key values
+      mismatch"). Es la comprobación que se hace siempre que alguien te manda "el certificado
+      nuevo" para instalar. Acá MD5 sirve, porque solo compara dos cosas tuyas: no protege de nadie.
+  - consigna: >-
+      Ahora el pedido para la intranet. En ~/csr, generá en un solo comando una clave RSA de 3072
+      bits sin contraseña (intranet.key) y su CSR (intranet.csr) para C=AR, O=Ejemplo S.A. y
+      CN=intranet.ejemplo.com, con los nombres intranet.ejemplo.com e intranet en el SAN. Después
+      mostrá el pedido para revisarlo.
+    verificar:
+      - { archivo: /home/ana/csr/intranet.csr, contenido_incluye: 'BEGIN CERTIFICATE REQUEST' }
+      - { archivo: /home/ana/csr/intranet.key, contenido_incluye: 'BEGIN PRIVATE KEY' }
+      - { salida_contiene: 'DNS:intranet.ejemplo.com, DNS:intranet' }
+    pistas:
+      - "`mkdir ~/csr && cd ~/csr` y `openssl req -new -newkey rsa:3072 -noenc -keyout intranet.key -out intranet.csr -subj '/C=AR/O=Ejemplo S.A./CN=intranet.ejemplo.com' -addext 'subjectAltName=DNS:intranet.ejemplo.com,DNS:intranet'`"
+      - "Para revisarlo: `openssl req -in intranet.csr -noout -text`"
+    solucion:
+      - mkdir -p ~/csr && cd ~/csr
+      - "openssl req -new -newkey rsa:3072 -noenc -keyout intranet.key -out intranet.csr -subj '/C=AR/O=Ejemplo S.A./CN=intranet.ejemplo.com' -addext 'subjectAltName=DNS:intranet.ejemplo.com,DNS:intranet'"
+      - openssl req -in intranet.csr -noout -text
+    explicacion: >-
+      El CSR lleva la clave pública y los datos pedidos, firmado con la privada: se le manda a la
+      CA (la interna, en la lección 4.2.5). La clave privada queda acá, con permisos 600 (fijate en
+      ls -l). -noenc la deja sin contraseña, que es lo habitual en un servidor: si tuviera, nginx
+      la pediría en cada arranque.
+  - consigna: >-
+      Por último, el servidor Windows necesita el certificado de la tienda con su clave, en un
+      solo archivo protegido. Exportalo a ~/tienda.pfx con la contraseña Exp0rt-2026 y comprobá
+      que se puede leer con esa contraseña.
+    verificar:
+      - { archivo: /home/ana/tienda.pfx, contenido_incluye: 'SIMP12' }
+      - { salida_contiene: 'subject=CN = tienda.ejemplo.com' }
+    pistas:
+      - "`sudo openssl pkcs12 -export -in /etc/pki/tls/certs/tienda.crt -inkey /etc/pki/tls/private/tienda.key -out ~/tienda.pfx -passout pass:Exp0rt-2026` y `sudo chown ana ~/tienda.pfx`"
+      - "Para leerlo: `openssl pkcs12 -in ~/tienda.pfx -nokeys -passin pass:Exp0rt-2026 | openssl x509 -noout -subject`"
+    solucion:
+      - sudo openssl pkcs12 -export -in /etc/pki/tls/certs/tienda.crt -inkey /etc/pki/tls/private/tienda.key -out ~/tienda.pfx -passout pass:Exp0rt-2026
+      - sudo chown ana ~/tienda.pfx
+      - openssl pkcs12 -in ~/tienda.pfx -nokeys -passin pass:Exp0rt-2026 | openssl x509 -noout -subject
+    explicacion: >-
+      Un .pfx (PKCS#12) junta certificado, intermedia y clave privada, cifrados con una
+      contraseña: es lo que importan Windows e IIS. Como lleva la clave, se trata igual que ella:
+      se pasa por un medio seguro, la contraseña por otro, y se borra cuando ya se importó.
