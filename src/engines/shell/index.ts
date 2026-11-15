@@ -17,6 +17,12 @@ import './commands/scriptutil'
 import './commands/dnsserver'
 import './commands/netdiag'
 import './commands/capture'
+import './commands/web'
+import './commands/apachecmd'
+import './commands/tlscmd'
+import './web'
+import './apache'
+import './webinit'
 import { dhcpConfigure } from './commands/dnsserver'
 import { reaches } from './commands/net'
 import { commandPackage, OTHER_FAMILY } from './packages'
@@ -27,6 +33,7 @@ import { COMMANDS, Shell } from './shell'
 import { System } from './system'
 import { modeString, ROOT_CRED, type Inode } from './vfs'
 import { GiB, parseSize } from './storage'
+import { verifyWeb } from './webverify'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
@@ -163,6 +170,8 @@ export function verifyBash(sh: Shell, check: BashCheck): CheckResult {
 }
 
 function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string }>): CheckResult {
+  const webResult = verifyWeb(sys, check)
+  if (webResult) return webResult
   if ('alcanza' in check) {
     const ok = reaches(sys, check.alcanza) === (check.resultado === 'ok')
     return { ok, label: check.resultado === 'ok' ? `${sys.hostname} llega a ${check.alcanza}` : `${sys.hostname} no llega a ${check.alcanza}` }
@@ -419,7 +428,8 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if ('directorio_actual' in check) {
     return { ok: sh.cwd === check.directorio_actual, label: `estar en ${check.directorio_actual}` }
   }
-  return { ok: sh.user === check.usuario_actual, label: `sesión como ${check.usuario_actual}` }
+  if ('usuario_actual' in check) return { ok: sh.user === check.usuario_actual, label: `sesión como ${check.usuario_actual}` }
+  return { ok: false, label: 'verificación desconocida' }
 }
 
 function safeRegex(pattern: string, flags?: string): RegExp | undefined {

@@ -3,7 +3,7 @@ import { FW_SERVICES, hostByIp, inbound, learnNeighbor, routeTo, sourceIp } from
 import type { NetIface, System } from '../system'
 import { namedListen, unboundListen } from '../dns'
 import { keaListen, dhcpConfigure } from './dnsserver'
-import { nginxServe } from '../web'
+import { appListen, web } from '../http'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
 import { ROOT_CRED } from '../vfs'
@@ -525,6 +525,12 @@ function listeningSockets(ctx: CommandContext) {
       if (p === 53) out.push({ proto: 'tcp', local: '0.0.0.0', port: p, proc: s.name, pid: s.pid ?? 1 })
     }
   }
+  // Aplicaciones del ejercicio (gunicorn, node...) que escuchan en un puerto TCP.
+  for (const name of Object.keys(web(ctx.sys).apps)) {
+    const s = ctx.sys.services.get(name)
+    const l = appListen(ctx.sys, name)
+    if (s?.active && l?.port) out.push({ proto: 'tcp', local: l.ip, port: l.port, proc: name.includes('node') ? 'node' : 'gunicorn', pid: s.pid ?? 1 })
+  }
   return out.sort((a, b) => a.port - b.port)
 }
 
@@ -567,119 +573,6 @@ register('ifconfig', {
     return 0
   },
 })
-
-function localWebContent(ctx: CommandContext, port: number, path = '/', sys = ctx.sys): { status: number; body: string; server: string } | undefined {
-  const svc = [...sys.services.values()].find((s) => s.active && s.ports.includes(port))
-  if (!svc) return undefined
-  if (svc.name === 'nginx') return nginxServe(sys, port, path)
-  const candidates = ['/var/www/html/index.html']
-  for (const c of candidates) {
-    if (sys.vfs.exists(c)) return { status: 200, body: sys.vfs.readFile(c, ROOT_CRED), server: 'Apache/2.4.63' }
-  }
-  return { status: 403, body: '<html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1></body></html>\n', server: 'Apache/2.4.63' }
-}
-
-register(['curl', 'wget'], {
-  usage: 'curl [options] <url>',
-  summary: '  -I  only headers  -s  silent  -o FILE  write output to FILE  -v  verbose  -L  follow redirects',
-  run(ctx) {
-    const a = parseArgs(ctx.args, { flags: { I: ['I', 'head'], s: ['s', 'silent'], v: ['v', 'verbose'], L: ['L', 'location'], k: ['k', 'insecure'], f: ['f', 'fail'], q: ['q'], O: ['O'] }, values: { o: ['o', 'output'], m: ['m', 'max-time'], w: ['w', 'write-out'] } })
-    const url = a.rest[0]
-    if (!url) {
-      ctx.err(ctx.name === 'wget' ? 'wget: missing URL\n' : "curl: try 'curl --help' for more information\n")
-      return ctx.name === 'wget' ? 1 : 2
-    }
-    const m = /^(?:(https?):\/\/)?([^/:]+)(?::(\d+))?(\/.*)?$/.exec(url)
-    if (!m) {
-      ctx.err(`curl: (3) URL rejected: Malformed input to a URL function\n`)
-      return 3
-    }
-    const scheme = m[1] ?? 'http'
-    const host = m[2]
-    const port = m[3] ? Number(m[3]) : scheme === 'https' ? 443 : 80
-    const ip = ctx.sys.resolveHost(host)
-    if (!ip) {
-      ctx.err(ctx.name === 'wget' ? `wget: unable to resolve host address '${host}'\n` : `curl: (6) Could not resolve host: ${host}\n`)
-      return ctx.name === 'wget' ? 4 : 6
-    }
-    let res: { status: number; body: string; server: string } | undefined
-    learnNeighbor(ctx.sys, ip)
-    const remote = hostByIp(ctx.sys, ip)
-    if (remote && remote !== ctx.sys) {
-      const failed = (why: string, code: number) => {
-        ctx.err(ctx.name === 'wget' ? `Connecting to ${host} (${host})|${ip}|:${port}... failed: ${why}.\n` : code === 28 ? `curl: (28) Failed to connect to ${host} port ${port} after 3002 ms: Timeout was reached\n` : `curl: (7) Failed to connect to ${host} port ${port} after 1 ms: ${why === 'Connection refused' ? "Couldn't connect to server" : why}\n`)
-        return ctx.name === 'wget' ? 4 : code
-      }
-      if (!routeTo(ctx.sys, ip)) return failed('Connection timed out', 28)
-      const fw = inbound(remote, port, 'tcp', sourceIp(ctx.sys, ip))
-      if (fw === 'reject') return failed('No route to host', 7)
-      if (fw === 'drop') return failed('Connection timed out', 28)
-      res = localWebContent(ctx, port, m[4] ?? '/', remote)
-      if (!res) return failed('Connection refused', 7)
-    } else if (ip.startsWith('127.') || ctx.sys.ownIps().includes(ip)) {
-      res = localWebContent(ctx, port, m[4] ?? '/')
-      if (!res) {
-        ctx.err(ctx.name === 'wget' ? `Connecting to ${host} (${host})|${ip}|:${port}... failed: Connection refused.\n` : `curl: (7) Failed to connect to ${host} port ${port} after 0 ms: Couldn't connect to server\n`)
-        return ctx.name === 'wget' ? 4 : 7
-      }
-    } else if (canReach(ctx, ip)) {
-      const body = ctx.sys.sites[host] ?? ctx.sys.sites[ip] ?? `<!doctype html>\n<html><head><title>${host}</title></head><body><h1>${host}</h1></body></html>\n`
-      res = { status: 200, body, server: 'nginx' }
-    } else {
-      ctx.err(ctx.name === 'wget' ? `Connecting to ${host}|${ip}|:${port}... failed: Connection timed out.\n` : `curl: (28) Failed to connect to ${host} port ${port} after 3002 ms: Timeout was reached\n`)
-      return ctx.name === 'wget' ? 4 : 28
-    }
-    // -w: los tiempos de cada etapa (resolver el nombre, conectar, TLS, primer byte, total), acumulados como en curl.
-    const rtt = ip.startsWith('127.') || ctx.sys.ownIps().includes(ip) ? 0.00005 : route(ctx, ip).via ? (ctx.sys.remoteNets.some((n) => inSubnet(ip, n.net)) ? 0.012 : 0.024) : 0.0006
-    const tn = /^\d+\.\d+\.\d+\.\d+$/.test(host) ? 0.00002 : 0.0021
-    const tc = tn + rtt
-    const ta = scheme === 'https' ? tc + 2 * rtt + 0.003 : 0
-    const ts = (ta || tc) + rtt + 0.0042 + (ctx.sys.serverDelay[host] ?? ctx.sys.serverDelay[ip] ?? 0)
-    const writeOut = (code: number) => {
-      const w = a.values.get('w')
-      if (w === undefined) return
-      const vars: Record<string, string> = { http_code: String(code).padStart(3, '0'), response_code: String(code).padStart(3, '0'), time_namelookup: tn.toFixed(6), time_connect: tc.toFixed(6), time_appconnect: ta.toFixed(6), time_pretransfer: (ta || tc).toFixed(6), time_starttransfer: ts.toFixed(6), time_total: (ts + 0.0004).toFixed(6), remote_ip: ip, remote_port: String(port), size_download: String(res?.body.length ?? 0), url_effective: url }
-      ctx.out(w.replace(/%\{(\w+)\}/g, (m0, k) => vars[k] ?? m0).replace(/\\n/g, '\n').replace(/\\t/g, '\t'))
-    }
-    const statusText = res.status === 200 ? 'OK' : res.status === 403 ? 'Forbidden' : 'Not Found'
-    const headers = `HTTP/1.1 ${res.status} ${statusText}\nServer: ${res.server}\nDate: ${new Date().toUTCString()}\nContent-Type: text/html\nContent-Length: ${res.body.length}\nConnection: keep-alive\n\n`
-    if (ctx.name === 'wget') {
-      const file = a.values.get('o') ?? (m[4] && m[4] !== '/' ? m[4].split('/').pop()! : 'index.html')
-      ctx.sys.vfs.writeFile(ctx.sh.resolve(file), res.body, ctx.sh.cred, { mode: 0o666, umask: ctx.sh.umask })
-      ctx.err(`--${new Date().toISOString().slice(0, 19).replace('T', ' ')}--  ${url}\nResolving ${host}... ${ip}\nConnecting to ${host}|${ip}|:${port}... connected.\nHTTP request sent, awaiting response... ${res.status} ${statusText}\nLength: ${res.body.length} [text/html]\nSaving to: '${file}'\n\n'${file}' saved [${res.body.length}/${res.body.length}]\n\n`)
-      return res.status >= 400 ? 8 : 0
-    }
-    if (a.flags.has('v')) {
-      // Formato de OpenSSL: "Oct  1 16:55:24 2026 GMT" (día rellenado con espacio)
-      const gmt = (d: Date) => `${d.toUTCString().slice(8, 11)} ${String(d.getUTCDate()).padStart(2, ' ')} ${d.toISOString().slice(11, 19)} ${d.getUTCFullYear()} GMT`
-      const now = Date.now()
-      const tls =
-        scheme === 'https'
-          ? `* ALPN: curl offers h2,http/1.1\n* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519 / RSASSA-PSS\n* ALPN: server accepted http/1.1\n* Server certificate:\n*  subject: CN=${host}\n*  start date: ${gmt(new Date(now - 26 * 86400000))}\n*  expire date: ${gmt(new Date(now + 64 * 86400000))}\n*  subjectAltName: host "${host}" matched cert's "${host}"\n*  SSL certificate verify ok.\n`
-          : ''
-      ctx.err(`* Host ${host}:${port} was resolved.\n* IPv6: (none)\n* IPv4: ${ip}\n*   Trying ${ip}:${port}...\n${tls}* Connected to ${host} (${ip}) port ${port}\n> GET ${m[4] ?? '/'} HTTP/1.1\n> Host: ${host}\n> User-Agent: curl/8.9.1\n> Accept: */*\n>\n< ${headers.trim().split('\n').join('\n< ')}\n<\n`)
-    }
-    if (a.flags.has('I')) {
-      ctx.out(headers.replace(/\n/g, '\r\n').replace(/\r\n\r\n$/, '\r\n\r\n'))
-      writeOut(res.status)
-      return 0
-    }
-    if (a.flags.has('f') && res.status >= 400) {
-      ctx.err(`curl: (22) The requested URL returned error: ${res.status}\n`)
-      return 22
-    }
-    if (a.values.has('o')) {
-      ctx.sys.vfs.writeFile(ctx.sh.resolve(a.values.get('o')!), res.body, ctx.sh.cred, { mode: 0o666, umask: ctx.sh.umask })
-      if (!a.flags.has('s')) ctx.err(`  % Total    % Received % Xferd  Average Speed   Time\n100  ${res.body.length}  100  ${res.body.length}    0     0   ${res.body.length * 10}      0 --:--:--\n`)
-      writeOut(res.status)
-      return 0
-    }
-    ctx.out(res.body)
-    writeOut(res.status)
-    return 0
-  },
-})
-
 
 register('firewall-cmd', {
   usage: 'firewall-cmd [OPTIONS...]',

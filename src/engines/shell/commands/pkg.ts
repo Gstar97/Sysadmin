@@ -79,7 +79,7 @@ function aptHistory(sys: System, cmd: string, action: string, items: string[]) {
 }
 
 /** Paquetes que en la familia Red Hat vienen del repositorio EPEL. */
-const EPEL_ONLY = new Set(['htop', 'ncdu', 'nethogs'])
+const EPEL_ONLY = new Set(['htop', 'ncdu', 'nethogs', 'certbot', 'python3-certbot-nginx', 'python3-certbot-apache'])
 
 function stamp(ms: number) {
   const d = new Date(ms)

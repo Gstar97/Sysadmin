@@ -6,7 +6,7 @@
 import { COMMANDS, register, type CommandContext } from '../shell'
 import { contextOf, policyType, portType, POLICY_PORTS, processDomain, restore, typeOf } from '../selinux'
 import { ROOT_CRED } from '../vfs'
-import { nginxStartCheck, nginxTest } from '../web'
+import { nginxDump, nginxStartCheck, nginxTest } from '../web'
 import { SERVICE_CHECKS, strftime } from './sysinfo'
 
 function rockyOnly(ctx: CommandContext, pkg = 'selinux-utils'): boolean {
@@ -552,7 +552,7 @@ register('nginx', {
   path: '/usr/sbin',
   run(ctx) {
     if (ctx.args.includes('-v') || ctx.args.includes('-V')) {
-      ctx.err('nginx version: nginx/1.26.3\n')
+      ctx.err(`nginx version: nginx/${ctx.sys.distro === 'rocky' ? '1.26.3' : '1.28.3'}\n`)
       return 0
     }
     if (ctx.args.includes('-t') || ctx.args.includes('-T')) {
@@ -565,13 +565,7 @@ register('nginx', {
         return 1
       }
       ctx.err('nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nnginx: configuration file /etc/nginx/nginx.conf test is successful\n')
-      if (ctx.args.includes('-T')) {
-        try {
-          ctx.out(`# configuration file /etc/nginx/nginx.conf:\n${ctx.sys.vfs.readFile('/etc/nginx/nginx.conf', ROOT_CRED)}\n`)
-        } catch {
-          // sin archivo
-        }
-      }
+      if (ctx.args.includes('-T')) ctx.out(nginxDump(ctx.sys))
       return 0
     }
     if (ctx.args[0] === '-s') {

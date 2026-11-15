@@ -247,6 +247,65 @@ const stateShape = {
       }),
     )
     .default([]),
+  /** Servicios web: aplicaciones detrás del proxy, DNS público, certificados y Let's Encrypt. */
+  web: z
+    .strictObject({
+      /** Aplicaciones que corren como servicio de systemd (el nombre es el del servicio). */
+      aplicaciones: z
+        .record(
+          z.string(),
+          z.strictObject({
+            /** "127.0.0.1:8001", "0.0.0.0:3000" o "unix:/run/app/app.sock" (si la unidad no dice otra cosa con --bind o PORT=). */
+            escucha: z.string().optional(),
+            cuerpo: z.string().optional(),
+            /** La página muestra los encabezados que le llegaron (Host, X-Forwarded-For...). */
+            eco_encabezados: z.boolean().default(false),
+            websocket: z.boolean().default(false),
+            demora_s: z.number().default(0),
+            codigo: z.number().int().default(200),
+            tipo_contenido: z.string().default('text/html; charset=utf-8'),
+          }),
+        )
+        .default({}),
+      /** Lo que responde el DNS público (lo que ve Let's Encrypt): nombre → IP pública. */
+      dominios_publicos: z.record(z.string(), z.string()).default({}),
+      /** IP pública con la que se ve este servidor desde internet (NAT del borde). */
+      ip_publica: z.string().optional(),
+      /** Puertos que el router de borde reenvía desde internet hasta este servidor. */
+      puertos_publicados: z.array(z.number().int()).default([]),
+      /** Certificados ya instalados. */
+      certificados: z
+        .array(
+          z.strictObject({
+            certificado: z.string(),
+            clave: z.string(),
+            cn: z.string(),
+            san: z.array(z.string()).default([]),
+            emisor: z.enum(['letsencrypt', 'staging', 'autofirmado', 'ca_interna']).default('letsencrypt'),
+            dias_restantes: z.number().default(60),
+            dias_emitido: z.number().default(30),
+            /** El archivo trae también el intermedio (fullchain). */
+            con_intermedio: z.boolean().default(true),
+          }),
+        )
+        .default([]),
+      /** Autoridad certificante interna: certificado y clave en estos archivos. */
+      ca_interna: z.strictObject({ cn: z.string(), certificado: z.string(), clave: z.string() }).optional(),
+      /** Autoridades internas en las que confía este equipo (por CN; ya en el almacén del sistema). */
+      confia_en: z.array(z.string()).default([]),
+      /** Un certificado de Let's Encrypt ya emitido con certbot. */
+      certbot: z
+        .strictObject({
+          dominios: z.array(z.string()).min(1),
+          metodo: z.enum(['nginx', 'webroot']).default('nginx'),
+          webroot: z.string().optional(),
+          dias_restantes: z.number().default(60),
+          /** Comando que se ejecuta después de renovar (deploy hook). */
+          hook: z.string().optional(),
+        })
+        .optional(),
+    })
+    .default({ aplicaciones: {}, dominios_publicos: {}, puertos_publicados: [], certificados: [], confia_en: [] }),
 }
 
 /** Otro servidor de la red del ejercicio (para ssh, scp y el bastión). */
@@ -344,6 +403,48 @@ const singleCheckSchema = z.union([
   z.strictObject({ ruta: z.string(), via: z.string().optional(), persistente: z.boolean().optional() }),
   /** La interfaz tiene una IPv4 dentro de esa red (por ejemplo, recibida por DHCP). */
   z.strictObject({ interfaz: z.string(), ip_en: z.string().optional(), ipv6: z.string().optional(), activa: z.boolean().optional() }),
+  /**
+   * Una solicitud HTTP desde este servidor (como curl): el código, un texto del cuerpo, un
+   * encabezado, si el certificado es válido. Con desde_internet, como la haría alguien de afuera.
+   */
+  z.strictObject({
+    http: z.string(),
+    metodo: z.string().optional(),
+    estado: z.number().int().optional(),
+    contiene: z.string().optional(),
+    no_contiene: z.string().optional(),
+    encabezado: z.strictObject({ nombre: z.string(), contiene: z.string().optional(), existe: z.boolean().default(true) }).optional(),
+    /** Certificado válido para el nombre (true), o que la conexión falle por el certificado (false). */
+    tls_valido: z.boolean().optional(),
+    http2: z.boolean().optional(),
+    /** Como curl -k: no verificar el certificado. */
+    inseguro: z.boolean().default(false),
+    encabezados: z.record(z.string(), z.string()).optional(),
+    desde_internet: z.boolean().default(false),
+    /** La conexión tiene que fallar (rechazada, tiempo agotado). */
+    falla: z.boolean().optional(),
+  }),
+  /** Un archivo de certificado: nombre, SAN, emisor, vigencia, si es de una CA, si coincide con una clave. */
+  z.strictObject({
+    certificado: z.string(),
+    cn: z.string().optional(),
+    san_incluye: z.string().optional(),
+    emisor_contiene: z.string().optional(),
+    autofirmado: z.boolean().optional(),
+    es_ca: z.boolean().optional(),
+    vigente: z.boolean().optional(),
+    dias_min: z.number().optional(),
+    /** Ruta de la clave privada que tiene que corresponder al certificado. */
+    clave: z.string().optional(),
+    /** El archivo trae también el intermedio. */
+    con_cadena: z.boolean().optional(),
+  }),
+  /** El almacén de confianza del sistema tiene una CA con ese nombre (CN). */
+  z.strictObject({ confia_en: z.string(), confia: z.boolean().default(true) }),
+  /** Un módulo de Apache cargado (o no), por ejemplo rewrite o proxy_http. */
+  z.strictObject({ modulo_apache: z.string(), cargado: z.boolean().default(true) }),
+  /** Un booleano de SELinux encendido (o apagado), en la sesión y persistente. */
+  z.strictObject({ booleano_selinux: z.string(), valor: z.boolean().default(true) }),
 ])
 
 /** Una verificación, o la misma en otro servidor de la red: { en: web01, verificar: {...} }. */

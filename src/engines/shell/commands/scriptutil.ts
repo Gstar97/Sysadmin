@@ -476,26 +476,6 @@ register('flock', {
 // openssl rand y chpasswd (contraseñas temporales en altas de usuarios)
 // ---------------------------------------------------------------------------------------
 
-register('openssl', {
-  usage: 'openssl rand -base64 N  |  openssl rand -hex N  |  openssl version',
-  run(ctx) {
-    const [sub, ...rest] = ctx.args
-    if (sub === 'version') {
-      ctx.out(ctx.sys.distro === 'rocky' ? 'OpenSSL 3.2.2 4 Jun 2024 (Library: OpenSSL 3.2.2 4 Jun 2024)\n' : 'OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)\n')
-      return 0
-    }
-    if (sub === 'rand') {
-      const n = Number(rest.find((a) => /^\d+$/.test(a)) ?? 0)
-      const bytes = Array.from({ length: n }, () => Math.floor(Math.random() * 256))
-      if (rest.includes('-hex')) ctx.out(bytes.map((b) => b.toString(16).padStart(2, '0')).join('') + '\n')
-      else ctx.out(btoa(String.fromCharCode(...bytes)) + '\n')
-      return 0
-    }
-    ctx.err(`[simulador] openssl ${sub ?? ''} no está simulado: solo rand y version. Los certificados se ven en el nivel 4.\n`)
-    return 1
-  },
-})
-
 register('chpasswd', {
   usage: 'echo "usuario:contraseña" | chpasswd',
   path: '/usr/sbin',

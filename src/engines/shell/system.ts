@@ -1,5 +1,5 @@
 import type { BashState } from './schema'
-import { builtinTimers, daemonReload, type Timer, type UnitDef } from './units'
+import { builtinTimers, daemonReload, packageTimer, type Timer, type UnitDef } from './units'
 import { applyStateStorage, installLayout, parseSize, Storage, GiB, MiB } from './storage'
 import type { PerfState } from './perf'
 import { initKernel, chronyStart, bootModules, staticKernelFs, refreshKernelFs } from './kernel'
@@ -558,8 +558,12 @@ export class System {
     this.sshd = sshdConf
     this.sshSocketPorts = sshdConf.ports
     this.syncAccountFiles()
+    for (const hook of System.initHooks) hook(this, state)
     this.refreshVirtual()
   }
+
+  /** Módulos que completan el servidor a partir del estado del ejercicio (web, TLS...). */
+  static initHooks: ((sys: System, state: BashState) => void)[] = []
 
   /** Regenera /proc y /sys con el estado actual (se llama antes de cada comando). */
   refreshVirtual() {
@@ -724,6 +728,7 @@ export class System {
         pid: active ? this.spawnService(s.name, silent ? this.bootTime + 30_000 : Date.now()).pid : undefined,
       })
     }
+    for (const t of info.timers ?? []) if (!this.timers.has(t.name)) this.timers.set(t.name, packageTimer(this, t.name, t.description, t.calendar, t.enabled))
     return true
   }
 

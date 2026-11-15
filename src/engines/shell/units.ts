@@ -286,6 +286,28 @@ export function buildTimer(sys: System, name: string, path: string): Timer {
 }
 
 /** Timers que traen las distribuciones: aparecen en "systemctl list-timers". */
+/** Timer que instala un paquete (por ejemplo, la renovación de certbot). */
+export function packageTimer(_sys: System, name: string, description: string, calendar: string, enabled: boolean): Timer {
+  return {
+    name,
+    description,
+    unit: name,
+    onCalendar: [parseCalendar(calendar)!],
+    persistent: true,
+    randomizedDelay: 12 * 3600,
+    enabled,
+    active: enabled,
+    since: Date.now(),
+    builtin: true,
+    path: `/usr/lib/systemd/system/${name}.timer`,
+    wantedBy: ['timers.target'],
+    hasInstall: true,
+    errors: [],
+    warnings: [],
+    loadedSig: '',
+  }
+}
+
 export function builtinTimers(sys: System): Timer[] {
   const mk = (name: string, description: string, calendar: string, unit = name, lastAgoMin?: number): Timer => ({
     name,

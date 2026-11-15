@@ -1,4 +1,5 @@
 /** Catálogo de paquetes del sistema simulado, con sus servicios, archivos y comandos. */
+import { ROCKY_WEB, UBUNTU_WEB } from './webpkgs'
 
 export interface PackageService {
   name: string
@@ -17,49 +18,12 @@ export interface PackageInfo {
   /** Enlaces simbólicos que deja el paquete (enlace → destino). */
   links?: Record<string, string>
   commands?: string[]
+  /** Timers de systemd que trae el paquete. */
+  timers?: { name: string; description: string; calendar: string; enabled: boolean }[]
   version: string
   /** Permisos y grupo de algunos archivos (por ejemplo /etc/named.conf es root:named 640). */
   perms?: Record<string, { mode: number; group?: string }>
 }
-
-const nginxIndex = `<!DOCTYPE html>
-<html>
-<head><title>Welcome to nginx!</title></head>
-<body>
-<h1>Welcome to nginx!</h1>
-<p>If you see this page, the nginx web server is successfully installed and working.</p>
-</body>
-</html>
-`
-
-const nginxConf = `user nginx;
-worker_processes auto;
-error_log /var/log/nginx/error.log notice;
-pid /run/nginx.pid;
-
-events {
-    worker_connections 1024;
-}
-
-http {
-    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for"';
-    access_log  /var/log/nginx/access.log  main;
-    sendfile            on;
-    keepalive_timeout   65;
-    include             /etc/nginx/mime.types;
-    default_type        application/octet-stream;
-    include /etc/nginx/conf.d/*.conf;
-
-    server {
-        listen       80;
-        listen       [::]:80;
-        server_name  _;
-        root         /usr/share/nginx/html;
-    }
-}
-`
 
 const NAMED_CONF_ROCKY = `//
 // named.conf
@@ -439,31 +403,6 @@ const common: Record<string, PackageInfo> = {
 
 export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   ...common,
-  nginx: {
-    summary: 'A high performance web server and reverse proxy server',
-    user: { name: 'nginx', uid: 990, home: '/var/lib/nginx', gecos: 'Nginx web server' },
-    version: '1.26.3',
-    services: [{ name: 'nginx', description: 'The nginx HTTP and reverse proxy server', ports: [80] }],
-    files: {
-      '/etc/nginx/nginx.conf': nginxConf,
-      '/etc/nginx/conf.d/.keep': '',
-      '/usr/share/nginx/html/index.html': nginxIndex,
-      '/var/log/nginx/access.log': '',
-      '/var/log/nginx/error.log': '',
-    },
-    commands: ['nginx'],
-  },
-  httpd: {
-    summary: 'Apache HTTP Server',
-    user: { name: 'apache', uid: 48, home: '/usr/share/httpd', gecos: 'Apache' },
-    version: '2.4.63',
-    services: [{ name: 'httpd', description: 'The Apache HTTP Server', ports: [80] }],
-    files: {
-      '/etc/httpd/conf/httpd.conf': 'ServerRoot "/etc/httpd"\nListen 80\nInclude conf.modules.d/*.conf\nUser apache\nGroup apache\nDocumentRoot "/var/www/html"\nIncludeOptional conf.d/*.conf\n',
-      '/var/www/html/.keep': '',
-    },
-    commands: ['httpd', 'apachectl'],
-  },
   'mariadb-server': {
     summary: 'The MariaDB server and related files',
     user: { name: 'mysql', uid: 27, home: '/var/lib/mysql', gecos: 'MySQL Server' },
@@ -574,37 +513,13 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
     services: [{ name: 'nfs-server', description: 'NFS server and services', ports: [2049] }],
     files: { '/etc/exports': '' },
   },
+  ...ROCKY_WEB,
 }
 
 export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   ...common,
   apparmor: { summary: 'user-space parser utility for AppArmor', version: '4.0.1', commands: ['aa-status', 'apparmor_parser', 'aa-enabled'] },
   'apparmor-utils': { summary: 'utilities for controlling AppArmor', version: '4.0.1', commands: ['aa-complain', 'aa-enforce', 'aa-disable', 'aa-logprof', 'aa-genprof'] },
-  nginx: {
-    summary: 'small, powerful, scalable web/proxy server',
-    version: '1.26.3',
-    services: [{ name: 'nginx', description: 'A high performance web server and a reverse proxy server', ports: [80], enabledByDefault: true, activeAfterInstall: true }],
-    files: {
-      '/etc/nginx/nginx.conf': nginxConf
-        .replace('user nginx;', 'user www-data;')
-        .replace('include /etc/nginx/conf.d/*.conf;', 'include /etc/nginx/conf.d/*.conf;\n    include /etc/nginx/sites-enabled/*;')
-        .replace(/\n {4}server \{[\s\S]*?\n {4}\}\n/, '\n'),
-      '/etc/nginx/sites-available/default': 'server {\n\tlisten 80 default_server;\n\troot /var/www/html;\n\tindex index.html index.nginx-debian.html;\n\tserver_name _;\n}\n',
-      '/var/www/html/index.nginx-debian.html': nginxIndex,
-      '/usr/share/nginx/html/index.html': nginxIndex,
-      '/var/log/nginx/access.log': '',
-      '/var/log/nginx/error.log': '',
-    },
-    links: { '/etc/nginx/sites-enabled/default': '/etc/nginx/sites-available/default' },
-    commands: ['nginx'],
-  },
-  apache2: {
-    summary: 'Apache HTTP Server',
-    version: '2.4.63',
-    services: [{ name: 'apache2', description: 'The Apache HTTP Server', ports: [80], enabledByDefault: true, activeAfterInstall: true }],
-    files: { '/etc/apache2/apache2.conf': 'IncludeOptional sites-enabled/*.conf\n', '/var/www/html/index.html': '<h1>Apache2 Default Page</h1>\n' },
-    commands: ['apache2ctl', 'a2ensite', 'a2dissite'],
-  },
   'mariadb-server': {
     user: { name: 'mysql', uid: 112, home: '/nonexistent', gecos: 'MySQL Server' },
     summary: 'MariaDB database server',
@@ -709,6 +624,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     services: [{ name: 'nfs-server', description: 'NFS server and services', ports: [2049], enabledByDefault: true, activeAfterInstall: true }],
     files: { '/etc/exports': '' },
   },
+  ...UBUNTU_WEB,
 }
 
 export const BASE_INSTALLED = {
