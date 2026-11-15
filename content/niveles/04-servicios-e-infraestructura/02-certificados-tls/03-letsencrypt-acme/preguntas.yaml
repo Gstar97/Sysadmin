@@ -1,0 +1,113 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué comprueba Let's Encrypt antes de emitir un certificado?
+  opciones:
+    - { texto: "Que controlás el dominio, con un desafío (HTTP-01 o DNS-01)", correcta: true, explicacion: "Son certificados de dominio validado (DV)." }
+    - { texto: "Los datos fiscales de la empresa", explicacion: "Eso lo hacen los certificados OV y EV, pagos." }
+    - { texto: "Que pagaste la suscripción", explicacion: "Es gratuito." }
+    - { texto: "Nada: emite para cualquier nombre", explicacion: "Sin la prueba, cualquiera pediría un certificado para tu dominio." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: certbot --nginx falla con esto. ¿Qué revisás?
+  salida: |
+    Domain: www.ejemplo.com.ar
+    Type:   connection
+    Detail: 203.0.113.10: Timeout during connect (likely firewall problem)
+  opciones:
+    - { texto: "Que el puerto 80 llegue desde internet: firewall del servidor y reenvío del router", correcta: true, explicacion: "Let's Encrypt no pudo ni conectarse." }
+    - { texto: "Que el certificado anterior no esté vencido", explicacion: "No hay certificado todavía." }
+    - { texto: "La carpeta del sitio", explicacion: "Si llegara y no encontrara el archivo, sería un 404." }
+    - { texto: "El correo de la cuenta", explicacion: "La cuenta ya se creó." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Necesitás un certificado para *.ejemplo.com.ar. ¿Qué desafío usás?
+  opciones:
+    - { texto: "DNS-01: es el único que permite comodines", correcta: true, explicacion: "Con la API del proveedor de DNS para crear el TXT." }
+    - { texto: "HTTP-01", explicacion: "No sirve para comodines." }
+    - { texto: "TLS-ALPN-01", explicacion: "Tampoco sirve para comodines." }
+    - { texto: "No se puede con Let's Encrypt", explicacion: "Se puede, con DNS-01." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Pediste un certificado con --staging y curl dice "unable to get local issuer certificate". ¿Qué pasa?
+  opciones:
+    - { texto: "Es lo esperado: staging firma con una raíz de prueba en la que nadie confía", correcta: true, explicacion: "Sirve para ensayar; después, el comando sin --staging." }
+    - { texto: "Falta la intermedia en nginx", explicacion: "certbot pone el fullchain." }
+    - { texto: "El certificado venció", explicacion: "Recién se emitió." }
+    - { texto: "curl está desactualizado", explicacion: "Hace bien en no confiar." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un Rocky instalaste certbot hace cuatro meses y la tienda amaneció con el certificado vencido. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "Nunca se habilitó certbot-renew.timer, que en Rocky viene apagado", correcta: true, explicacion: "systemctl enable --now certbot-renew.timer." }
+    - { texto: "Let's Encrypt no renueva certificados", explicacion: "Renueva sin problema; alguien tiene que pedirlo." }
+    - { texto: "Hay que pagar la renovación", explicacion: "Es gratis." }
+    - { texto: "El certificado duraba un año", explicacion: "Los de Let's Encrypt duran 90 días o menos." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Usás certonly --webroot. certbot renew dice que renovó, pero el navegador sigue viendo el certificado que vence mañana. ¿Qué falta?
+  opciones:
+    - { texto: "Un deploy hook que recargue nginx (--deploy-hook \"systemctl reload nginx\")", correcta: true, explicacion: "Con webroot, certbot no toca nginx." }
+    - { texto: "Borrar la caché del navegador", explicacion: "El servidor sigue mandando el viejo." }
+    - { texto: "Volver a pedir el certificado con --force-renewal", explicacion: "Renovaría otra vez, y seguiría sin recargar." }
+    - { texto: "Reiniciar el servidor una vez por mes", explicacion: "Funciona de casualidad, pero no es una solución." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué necesita el desafío HTTP-01? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Que el DNS público del nombre apunte al servidor", correcta: true, explicacion: "Let's Encrypt busca el nombre en el DNS público." }
+    - { texto: "Que el puerto 80 llegue desde internet", correcta: true, explicacion: "La validación empieza por HTTP." }
+    - { texto: "Que se pueda llegar desde varios países", correcta: true, explicacion: "Valida desde varios lugares a la vez." }
+    - { texto: "Acceso a la API del proveedor de DNS", explicacion: "Eso es DNS-01." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ruta va en ssl_certificate de nginx para un certificado de certbot?
+  opciones:
+    - { texto: "/etc/letsencrypt/live/NOMBRE/fullchain.pem", correcta: true, explicacion: "Certificado e intermedia, y el enlace se actualiza al renovar." }
+    - { texto: "/etc/letsencrypt/live/NOMBRE/cert.pem", explicacion: "No tiene la intermedia." }
+    - { texto: "/etc/letsencrypt/archive/NOMBRE/fullchain1.pem", explicacion: "Al renovar se crea fullchain2 y nginx seguiría con el 1." }
+    - { texto: "/etc/letsencrypt/live/NOMBRE/privkey.pem", explicacion: "Esa es la clave, para ssl_certificate_key." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no alcanza con esperar el aviso de Let's Encrypt antes de que venza un certificado?
+  opciones:
+    - { texto: "Porque dejó de mandar esos correos en 2025: hace falta un monitoreo propio", correcta: true, explicacion: "Mirando la fecha del certificado que se sirve." }
+    - { texto: "Porque los correos llegan después del vencimiento", explicacion: "Ya no llegan." }
+    - { texto: "Porque los avisos son pagos", explicacion: "No es eso." }
+    - { texto: "Sí alcanza", explicacion: "Ya no se mandan." }
+- id: p10
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que ensaya la renovación de todos los certificados sin cambiar nada.
+  aceptadas:
+    - "certbot renew --dry-run"
+    - "sudo certbot renew --dry-run"
+  patrones: ["^(sudo\\s+)?certbot\\s+renew\\s+--dry-run$"]
+  explicacion: "Prueba todo el camino contra staging."
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: Desde el 16 de febrero de 2028, ¿cuánto van a durar por defecto los certificados de Let's Encrypt?
+  opciones:
+    - { texto: "45 días", correcta: true, explicacion: "Pasando por 64 días desde febrero de 2027." }
+    - { texto: "90 días", explicacion: "Es lo de hoy." }
+    - { texto: "200 días", explicacion: "Es el máximo general desde marzo de 2026, no el de Let's Encrypt." }
+    - { texto: "1 año", explicacion: "Nunca duraron tanto." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Para validar con DNS-01 guardás en el servidor web la clave de la API de tu proveedor de DNS. ¿Qué riesgo agregás?
+  opciones:
+    - { texto: "Quien entre al servidor podría cambiar cualquier registro del dominio (correo incluido)", correcta: true, explicacion: "Clave con el menor permiso posible, o un subdominio delegado solo para _acme-challenge." }
+    - { texto: "Ninguno", explicacion: "Esa clave es muy poderosa." }
+    - { texto: "Que el certificado dure menos", explicacion: "No cambia la duración." }
+    - { texto: "Que Let's Encrypt cobre", explicacion: "No tiene relación." }

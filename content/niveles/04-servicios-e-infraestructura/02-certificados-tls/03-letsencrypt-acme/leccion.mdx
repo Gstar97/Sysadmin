@@ -1,0 +1,120 @@
+---
+id: n4-m2-l3
+titulo: Let's Encrypt y ACME
+minutos: 120
+objetivos:
+  - Explicar cómo ACME prueba que un dominio es tuyo (HTTP-01, DNS-01) y qué necesita cada desafío.
+  - Obtener e instalar un certificado de Let's Encrypt con certbot, ensayando antes en staging.
+  - Dejar la renovación automática funcionando y saber vigilarla.
+glosario: [lets-encrypt, acme, desafio-acme, staging-acme, certbot]
+verificado: 2026-11
+---
+
+import desafios from './desafios.svg?raw'
+import flujo from './flujo-acme.yaml'
+import certbot from './ej-certbot.yaml'
+
+Hasta 2015, un certificado costaba dinero, se pedía por correo, tardaba días y se instalaba a mano una vez por año (o cada dos). **Let's Encrypt** cambió eso: es una autoridad certificante gratuita, sin fines de lucro, que emite certificados en segundos a quien demuestre que controla un dominio, todo de forma automática. Hoy firma la mayoría de los sitios HTTPS del mundo. Y con certificados que pronto van a durar 45 días, la automatización ya no es una comodidad: es la única forma razonable de trabajar.
+
+<AntesDeEmpezar>
+- Certificados X.509 y OpenSSL (lección 4.2.2).
+- Nginx (lección 4.1.2) y firewalld (lección 1.6.5).
+- DNS: registros A y TXT (módulo 2.3).
+</AntesDeEmpezar>
+
+## ACME: el protocolo
+
+**ACME** es el protocolo (RFC 8555) con el que un programa, llamado **cliente ACME**, habla con la autoridad certificante: crea una cuenta, pide un certificado, demuestra que el dominio es suyo, manda el pedido (CSR) y recibe el certificado firmado. Let's Encrypt fue la primera en usarlo, pero hoy lo ofrecen otras (ZeroSSL, Google Trust Services) y también se puede tener una CA interna con ACME (lección 4.2.5).
+
+<Ordenar ejercicio={flujo} />
+
+## Cómo se prueba que el dominio es tuyo
+
+Let's Encrypt solo emite **certificados de dominio validado** (DV): comprueba que controlás el nombre, no quién sos. Lo comprueba con un **desafío**:
+
+<Diagrama svg={desafios} alt="Tres columnas. HTTP-01, el más común: Let's Encrypt pide desde internet http://dominio/.well-known/acme-challenge/TOKEN; necesita el DNS público apuntando al servidor y el puerto 80 abierto desde internet; se usa con certbot --nginx o --webroot; no sirve para comodines ni para servidores que no se ven desde internet. DNS-01: hay que publicar un registro TXT en _acme-challenge.dominio; necesita poder cambiar el DNS automáticamente con la API del proveedor y una clave; sirve para comodines y para servidores internos; cuidado, la clave del DNS puede cambiar todo el dominio. TLS-ALPN-01: la prueba va dentro de una conexión TLS al puerto 443; necesita un programa que lo soporte, como Caddy, Traefik o mod_md de Apache; certbot no lo usa. Abajo: en todos los casos, después de validar, certbot manda el pedido, recibe el certificado y lo renueva solo." pie="HTTP-01 para un servidor que se ve desde internet; DNS-01 para comodines y servidores internos." />
+
+Un detalle importante de HTTP-01: la validación siempre empieza por el **puerto 80**. Aunque tu sitio vaya a funcionar solo por HTTPS, el 80 tiene que estar abierto (y redirigir a HTTPS para todo lo demás). Y Let's Encrypt valida **desde varios lugares del mundo a la vez**: si tu firewall solo deja entrar desde tu país, la validación falla.
+
+## certbot
+
+**certbot** es el cliente ACME más usado en Linux. Se instala con `dnf install certbot python3-certbot-nginx` (en Rocky, desde EPEL) o `apt install certbot python3-certbot-nginx` (en Ubuntu). Tiene dos formas de trabajar con nginx:
+
+| | `certbot --nginx` | `certbot certonly --webroot -w /var/www/sitio` |
+|---|---|---|
+| Validación | certbot agrega temporalmente una location para el token | certbot deja el token en la carpeta del sitio |
+| Configuración de nginx | la modifica él (listen 443, certificados, redirección) | la hacés vos |
+| Recarga al renovar | sí, sola | no: hace falta un deploy hook |
+| Cuándo | sitios simples | configuraciones a mano, varios servidores, o cuando no querés que nada toque tu nginx |
+
+Los archivos quedan en `/etc/letsencrypt/live/NOMBRE/`: `fullchain.pem` (certificado e intermedia, lo que va en `ssl_certificate`), `privkey.pem` (la clave, en `ssl_certificate_key`), y `cert.pem` y `chain.pem` por separado. Son enlaces a `/etc/letsencrypt/archive/`, donde se guardan todas las versiones; al renovar, el enlace apunta a la nueva y nginx no necesita cambiar de ruta.
+
+## Ensayar en staging
+
+Let's Encrypt tiene **límites** para que nadie la sature: por ejemplo, 50 certificados por dominio por semana, 5 iguales por semana, y 5 validaciones fallidas por hora. Mientras estás probando, es fácil chocar con el de fallas y quedar bloqueado un rato. Por eso existe **staging**: un entorno de prueba con límites mucho más altos, que emite certificados firmados por una raíz falsa ("(STAGING) Pretend Pear X1"). Todo funciona igual, pero ningún navegador confía en ellos.
+
+La regla: **primero `--staging`** (o `--test-cert`), y cuando sale bien, el comando real.
+
+## La renovación
+
+certbot instala un **temporizador de systemd** que corre `certbot renew` dos veces por día. Ese comando revisa todos los certificados y renueva los que están cerca de vencer (cuando les queda un tercio de su vida, o cuando Let's Encrypt avisa que conviene hacerlo). Tres cosas a vigilar:
+
+- **En Rocky, el temporizador viene apagado**: `systemctl enable --now certbot-renew.timer`. En Ubuntu (`certbot.timer`) viene encendido.
+- **Si renovás con --webroot o para otros servicios** (Postfix, un panel, HAProxy), certbot no sabe que tiene que recargarlos. Para eso está el **deploy hook**: `--deploy-hook "systemctl reload nginx"`, o un script en `/etc/letsencrypt/renewal-hooks/deploy/`. Sin eso, el certificado se renueva en disco y el servicio sigue mostrando el viejo hasta que vence.
+- **Let's Encrypt ya no manda correos de aviso de vencimiento** (los dejó de mandar en 2025). Si la renovación se rompe (alguien cerró el 80, cambió el DNS, tocó nginx), nadie te avisa: hace falta un monitoreo propio que mire la fecha del certificado que se sirve de verdad (con `openssl s_client` y `-checkend`, o desde el sistema de monitoreo del Nivel 5).
+
+Después de cualquier cambio en el servidor, `certbot renew --dry-run` prueba todo el camino contra staging.
+
+## Cuánto duran
+
+| Desde | Certificados de Let's Encrypt |
+|---|---|
+| Hoy (noviembre de 2026) | 90 días; con el perfil `tlsserver`, 45 días |
+| 10 de febrero de 2027 | 64 días por defecto |
+| 16 de febrero de 2028 | 45 días por defecto |
+
+Con renovación automática, la duración da casi igual. Sin ella, 45 días es un vencimiento por mes y medio.
+
+<EnSimple>
+Let's Encrypt da certificados gratis a quien demuestre que controla el dominio (por el puerto 80 o por DNS). certbot hace todo: la validación, el certificado, la configuración de nginx y la renovación. Lo que hay que cuidar es que el temporizador esté activo y que alguien vigile que el certificado que se sirve no esté por vencer.
+</EnSimple>
+
+<Terminal ejercicio={certbot} />
+
+## Otros clientes y casos
+
+- **acme.sh** y **lego**: clientes de una sola pieza, muy usados para DNS-01 porque soportan las API de casi todos los proveedores de DNS.
+- **Caddy**: un servidor web que pide y renueva sus certificados solo, sin configurar nada.
+- **mod_md**: el módulo de Apache para ACME.
+- **win-acme**: el cliente más usado en Windows con IIS.
+- Para un **comodín** (`*.ejemplo.com.ar`) hace falta DNS-01. Para un servidor **interno**, DNS-01 o una CA interna.
+
+<ErroresComunes>
+  <ErrorComun titulo="Probar directo contra producción">
+    Cinco fallas en una hora y quedás bloqueado. --staging hasta que salga bien.
+  </ErrorComun>
+  <ErrorComun titulo="Cerrar el puerto 80 (“el sitio es solo HTTPS”)">
+    HTTP-01 entra por el 80. Se deja abierto y redirigiendo a HTTPS.
+  </ErrorComun>
+  <ErrorComun titulo="El temporizador apagado en Rocky">
+    systemctl list-timers no lo muestra activo y el certificado vence a los 90 días. enable --now certbot-renew.timer.
+  </ErrorComun>
+  <ErrorComun titulo="Renovar sin recargar">
+    Con --webroot o en otros servicios, el archivo nuevo está en disco pero el servicio sigue con el viejo. Deploy hook.
+  </ErrorComun>
+  <ErrorComun titulo="Copiar los archivos de archive/ en vez de usar live/">
+    Si configurás /etc/letsencrypt/archive/.../cert3.pem, la renovación crea cert4 y tu servicio sigue con el 3. Siempre las rutas de live/.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar el correo de aviso">
+    Let's Encrypt ya no los manda. Monitoreo propio.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Let's Encrypt: CA gratuita y automática; emite certificados DV con el protocolo ACME.
+- HTTP-01 necesita DNS público y el puerto 80 abierto desde internet; DNS-01, la API del DNS (y sirve para comodines y servidores internos).
+- certbot --nginx valida, instala y recarga; certonly --webroot solo obtiene el certificado. Archivos en /etc/letsencrypt/live/.
+- Primero --staging: límites altos y certificados de prueba no confiables.
+- Renovación: temporizador de systemd (apagado de fábrica en Rocky), deploy hooks para recargar, renew --dry-run para ensayar y monitoreo propio.
+- Duración: 90 días hoy, 64 desde febrero de 2027 y 45 desde febrero de 2028.
+</Resumen>

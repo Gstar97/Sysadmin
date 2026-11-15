@@ -1,0 +1,123 @@
+tipo: terminal
+shell: bash
+titulo: HTTPS gratis y automático para la tienda
+descripcion: >-
+  web01 es un Rocky Linux 10 en la oficina, con nginx sirviendo la tienda por HTTP. El router de
+  la oficina reenvía los puertos 80 y 443 desde la IP pública 203.0.113.10 hasta web01, y el DNS
+  público de tienda.ejemplo.com.ar ya apunta a esa IP. firewalld está activo con su
+  configuración de fábrica. Falta HTTPS.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nginx, firewalld] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+    firewalld: { activo: true, habilitado: true }
+  red:
+    registros_dns: { tienda.ejemplo.com.ar: 127.0.0.1 }
+  web:
+    dominios_publicos: { tienda.ejemplo.com.ar: 203.0.113.10 }
+    ip_publica: 203.0.113.10
+    puertos_publicados: [80, 443]
+  archivos:
+    /var/www/tienda/index.html: "<h1>Tienda</h1>\n"
+    /etc/nginx/conf.d/tienda.conf: |
+      server {
+          listen 80;
+          server_name tienda.ejemplo.com.ar;
+          root /var/www/tienda;
+      }
+pasos:
+  - consigna: >-
+      Instalá certbot y su complemento para nginx. En Rocky vienen del repositorio EPEL, que no
+      está habilitado.
+    verificar:
+      - { paquete: certbot }
+      - { paquete: python3-certbot-nginx }
+    pistas:
+      - "`sudo dnf install -y epel-release` y después `sudo dnf install -y certbot python3-certbot-nginx`"
+    solucion:
+      - sudo dnf install -y epel-release
+      - sudo dnf install -y certbot python3-certbot-nginx
+    explicacion: >-
+      EPEL (Extra Packages for Enterprise Linux) es el repositorio de la comunidad de Fedora con
+      paquetes que Rocky no trae. En Ubuntu, certbot y python3-certbot-nginx están en el
+      repositorio normal.
+  - consigna: >-
+      Primero, un ensayo contra el entorno de pruebas (staging) de Let's Encrypt, para no gastar
+      los límites del real si algo falla. Pedí el certificado con el complemento de nginx, con el
+      correo sistemas@ejemplo.com.ar y aceptando los términos. Leé con atención qué pasa.
+    verificar:
+      - { comando_usado: 'certbot.*(--staging|--test-cert)' }
+      - { salida_contiene: 'Timeout during connect (likely firewall problem)' }
+    pistas:
+      - "`sudo certbot --nginx --staging -d tienda.ejemplo.com.ar -m sistemas@ejemplo.com.ar --agree-tos`"
+    solucion: ["sudo certbot --nginx --staging -d tienda.ejemplo.com.ar -m sistemas@ejemplo.com.ar --agree-tos"]
+    explicacion: >-
+      Let's Encrypt intentó conectarse a 203.0.113.10 por el puerto 80 y no obtuvo respuesta. El
+      router reenvía el puerto, pero firewalld de fábrica solo deja pasar ssh y cockpit: el pedido
+      se descarta y del otro lado se ve como un tiempo de espera agotado.
+  - consigna: >-
+      Abrí http y https en firewalld de forma permanente, recargalo y repetí el ensayo. Después
+      pedí la página por HTTPS con curl.
+    verificar:
+      - { salida_contiene: 'unable to get local issuer certificate' }
+      - { comando_usado: 'firewall-cmd.*--permanent' }
+    pistas:
+      - "`sudo firewall-cmd --permanent --add-service=http --add-service=https` y `sudo firewall-cmd --reload`"
+      - "El mismo certbot del paso anterior, y `curl -s https://tienda.ejemplo.com.ar`"
+    solucion:
+      - sudo firewall-cmd --permanent --add-service=http --add-service=https
+      - sudo firewall-cmd --reload
+      - sudo certbot --nginx --staging -d tienda.ejemplo.com.ar -m sistemas@ejemplo.com.ar --agree-tos
+      - curl -sS https://tienda.ejemplo.com.ar
+    explicacion: >-
+      El ensayo salió bien: la validación funciona y certbot configuró nginx. Pero curl no confía
+      en el certificado, y está bien que no lo haga: los de staging los firma una raíz de prueba
+      ("(STAGING) Pretend Pear X1") que no está en ningún almacén de confianza. Sirve solo para
+      ensayar.
+  - consigna: >-
+      Ahora sí, el certificado real: el mismo comando sin --staging, con --force-renewal para que
+      reemplace al de prueba. Comprobá la página por HTTPS.
+    verificar:
+      - { http: 'https://tienda.ejemplo.com.ar/', tls_valido: true, contiene: 'Tienda' }
+    pistas:
+      - "`sudo certbot --nginx -d tienda.ejemplo.com.ar -m sistemas@ejemplo.com.ar --agree-tos --force-renewal` y `curl -s https://tienda.ejemplo.com.ar`"
+    solucion:
+      - sudo certbot --nginx -d tienda.ejemplo.com.ar -m sistemas@ejemplo.com.ar --agree-tos --force-renewal
+      - curl -s https://tienda.ejemplo.com.ar
+    explicacion: >-
+      La cuenta de producción es otra (por eso vuelve a pedir el correo), y el certificado ya lo
+      firma la intermedia real de Let's Encrypt. curl lo acepta sin -k.
+  - consigna: Mirá cómo quedó el sitio de nginx y qué pasa si alguien entra por HTTP.
+    verificar:
+      - { salida_contiene: 'Location: https://tienda.ejemplo.com.ar/' }
+    pistas:
+      - "`sudo cat /etc/nginx/conf.d/tienda.conf` y `curl -sI http://tienda.ejemplo.com.ar`"
+    solucion:
+      - sudo cat /etc/nginx/conf.d/tienda.conf
+      - curl -sI http://tienda.ejemplo.com.ar
+    explicacion: >-
+      certbot agregó listen 443 ssl con los dos archivos de /etc/letsencrypt/live/ y un server
+      nuevo para el 80 que redirige todo a HTTPS (301). Las líneas dicen "# managed by Certbot":
+      si las cambiás a mano, la próxima vez certbot puede no reconocerlas.
+  - consigna: >-
+      Lo más importante: la renovación automática. Revisá si el temporizador de certbot está
+      habilitado, habilitalo si hace falta, y hacé un ensayo de renovación.
+    verificar:
+      - { servicio: certbot-renew.timer, activo: true, habilitado: true }
+      - { salida_contiene: 'all simulated renewals succeeded' }
+    pistas:
+      - "`systemctl is-enabled certbot-renew.timer`, `sudo systemctl enable --now certbot-renew.timer` y `sudo certbot renew --dry-run`"
+    solucion:
+      - systemctl is-enabled certbot-renew.timer
+      - sudo systemctl enable --now certbot-renew.timer
+      - sudo certbot renew --dry-run
+    explicacion: >-
+      En Rocky, el paquete de EPEL trae el temporizador apagado: si no lo habilitás, dentro de unos
+      meses la tienda amanece con "certificado vencido". En Ubuntu viene habilitado
+      (certbot.timer). --dry-run prueba todo el camino contra staging sin cambiar nada: es lo que
+      conviene correr después de cualquier cambio en nginx o en el firewall.

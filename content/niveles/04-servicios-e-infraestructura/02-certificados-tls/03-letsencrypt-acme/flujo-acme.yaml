@@ -1,0 +1,16 @@
+tipo: ordenar
+consigna: Ordená lo que pasa cuando ejecutás certbot --nginx -d tienda.ejemplo.com.ar por primera vez.
+pasos:
+  - certbot crea una cuenta en Let's Encrypt (con tu correo) y acepta los términos
+  - Pide un certificado para tienda.ejemplo.com.ar y Let's Encrypt le devuelve un desafío HTTP-01 con un token
+  - certbot configura nginx para que conteste ese token en /.well-known/acme-challenge/
+  - Let's Encrypt busca el token desde internet, desde varios lugares del mundo a la vez
+  - certbot genera una clave privada nueva y manda el pedido (CSR)
+  - Let's Encrypt firma el certificado y certbot lo guarda en /etc/letsencrypt/live/
+  - certbot agrega listen 443 ssl y los certificados al server de nginx, y lo recarga
+  - El temporizador de systemd ejecuta certbot renew dos veces por día y renueva cuando falta poco
+explicacion: >-
+  Primero la cuenta y la prueba de que el dominio es tuyo; recién después el pedido y el
+  certificado. La validación se hace desde varios lugares de internet para que nadie pueda
+  engañarla desviando el tráfico de una sola red. El último paso es el que más se olvida: sin el
+  temporizador, el certificado vence solo y nadie se entera.
