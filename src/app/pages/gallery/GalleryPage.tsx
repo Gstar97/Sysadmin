@@ -9,6 +9,7 @@ import {
   CalculadoraLicencias,
   SimuladorGPO,
   SimuladorPermisos,
+  ConstructorHTTP,
   CalculadoraUnidades,
   ClasificadorIp,
   ComparadorDiscos,
@@ -147,6 +148,10 @@ export default function GalleryPage() {
         <SimuladorGPO />
         <SimuladorPermisos />
         <SimuladorPermisos modo="red" />
+      </Section>
+
+      <Section id="web" titulo="Servidores web: HTTP por dentro" descripcion="Constructor de solicitudes HTTP contra la API de una tienda de práctica: métodos, códigos de estado, encabezados, cookies, ETag, redirecciones, hosts virtuales y la diferencia entre HTTP/1.1, HTTP/2 y HTTP/3, con el curl equivalente y desafíos.">
+        <ConstructorHTTP />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">

@@ -55,6 +55,7 @@ const RouteDecisionView = lazy(() => import('@/interactive/redes/RouteDecision')
 const CaptureViewerView = lazy(() => import('@/interactive/redes/CaptureViewer').then((m) => ({ default: m.CaptureViewer })))
 const NatSimView = lazy(() => import('@/interactive/redes/NatSim').then((m) => ({ default: m.NatSim })))
 const LicenseCalculatorView = lazy(() => import('@/interactive/windows/LicenseCalculator').then((m) => ({ default: m.LicenseCalculator })))
+const HttpBuilderView = lazy(() => import('@/interactive/web/HttpBuilder').then((m) => ({ default: m.HttpBuilder })))
 const PermissionSimulatorView = lazy(() => import('@/interactive/windows/PermissionSimulator').then((m) => ({ default: m.PermissionSimulator })))
 const GpoSimulatorView = lazy(() => import('@/interactive/windows/GpoSimulator').then((m) => ({ default: m.GpoSimulator })))
 const GuidedSteps = lazy(() => import('@/interactive/fundamentos/GuidedSteps').then((m) => ({ default: m.GuidedSteps })))
@@ -353,6 +354,14 @@ export function CalculadoraLicencias(props: ComponentProps<typeof LicenseCalcula
   )
 }
 
+export function ConstructorHTTP() {
+  return (
+    <Island>
+      <HttpBuilderView />
+    </Island>
+  )
+}
+
 export function SimuladorPermisos({ modo }: { modo?: 'ntfs' | 'red' }) {
   return (
     <Island>
@@ -637,6 +646,7 @@ export const mdxComponents = {
   CalculadoraLicencias,
   SimuladorGPO,
   SimuladorPermisos,
+  ConstructorHTTP,
   SimuladorSwitch,
   ClasificadorIp,
   DisenadorVlsm,
