@@ -165,7 +165,9 @@ export function appRespond(sys: System, name: string, req: HttpRequest): HttpRes
   if (!body.endsWith('\n')) body += '\n'
   if (spec.eco_encabezados) {
     const keys = ['host', 'x-real-ip', 'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host', 'connection', 'upgrade']
-    body += `Ruta pedida: ${req.path}\nIP que ve la aplicación: ${req.clientIp}\n` + keys.map((k) => `${k}: ${req.headers[k] ?? '(sin enviar)'}`).join('\n') + '\n'
+    body += `Método: ${req.method}\nRuta pedida: ${req.path}\nIP que ve la aplicación: ${req.clientIp}\n` + keys.map((k) => `${k}: ${req.headers[k] ?? '(sin enviar)'}`).join('\n') + '\n'
+    if (req.body) body += `Cuerpo recibido: ${req.body}\n`
+    for (const [k, v] of Object.entries(req.headers)) if (k.startsWith('x-') && !keys.includes(k)) body += `${k}: ${v}\n`
   }
   const server = name.includes('node') ? 'Node.js' : 'gunicorn'
   return { status: spec.codigo, headers: [['Server', server], ['Content-Type', spec.tipo_contenido]], body }

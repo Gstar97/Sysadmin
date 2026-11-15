@@ -1,0 +1,112 @@
+tipo: terminal
+shell: bash
+titulo: Mirar HTTP por dentro con curl
+descripcion: >-
+  Estás en admin01, tu PC de trabajo. En la red está web01, el servidor web de la tienda
+  (tienda.ejemplo.com), con nginx adelante y la aplicación atrás. Vas a hablarle con curl y mirar
+  qué viaja en cada pedido.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  red:
+    interfaces: [{ nombre: enp0s3, ip: 192.168.1.10/24 }]
+    registros_dns: { tienda.ejemplo.com: 192.168.1.20 }
+  servidores:
+    - ip: 192.168.1.20
+      hostname: web01
+      distro: ubuntu
+      paquetes: { instalados: [nginx] }
+      servicios:
+        nginx: { activo: true, habilitado: true }
+        tienda: { activo: true, habilitado: true }
+      web:
+        aplicaciones:
+          tienda: { escucha: 127.0.0.1:8001, cuerpo: '<h1>Tienda de mates</h1>', eco_encabezados: true }
+      archivos:
+        /etc/nginx/sites-enabled/tienda: |
+          server {
+              listen 80;
+              server_name tienda.ejemplo.com;
+
+              location = /salud {
+                  return 200 "ok\n";
+              }
+
+              location /viejo/ {
+                  return 301 /productos/;
+              }
+
+              location / {
+                  proxy_pass http://127.0.0.1:8001;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              }
+          }
+pasos:
+  - consigna: >-
+      Pedí solo los encabezados de http://tienda.ejemplo.com/viejo/ y fijate qué código devuelve y
+      adónde manda.
+    verificar:
+      - { comando_usado: 'curl\s+.*-I|curl\s+.*--head' }
+      - { salida_contiene: '301 Moved Permanently' }
+    pistas:
+      - "`curl -I http://tienda.ejemplo.com/viejo/`"
+    solucion: [curl -I http://tienda.ejemplo.com/viejo/]
+    explicacion: >-
+      301: la página se mudó para siempre. El encabezado Location dice adónde: /productos/. curl
+      no lo sigue solo, a menos que se lo pidas.
+  - consigna: Ahora pedí la misma dirección siguiendo la redirección.
+    verificar:
+      - { comando_usado: 'curl\s+.*-L' }
+      - { salida_contiene: 'Ruta pedida: /productos/' }
+    pistas:
+      - "La opción -L (location) sigue los 3xx."
+    solucion: [curl -L http://tienda.ejemplo.com/viejo/]
+    explicacion: >-
+      Con -L, curl hizo un segundo pedido a la dirección del Location. La aplicación de esta tienda
+      muestra todo lo que le llegó: la ruta, la IP y algunos encabezados.
+  - consigna: >-
+      Pedí la portada con -v para ver la conversación completa: lo que manda curl (líneas con >) y
+      lo que contesta el servidor (líneas con <).
+    verificar:
+      - { comando_usado: 'curl\s+.*-v' }
+      - { salida_contiene: '> Host: tienda.ejemplo.com' }
+    pistas:
+      - "`curl -v http://tienda.ejemplo.com/`"
+    solucion: [curl -v http://tienda.ejemplo.com/]
+    explicacion: >-
+      Primero resuelve el nombre, se conecta al puerto 80 y manda "GET / HTTP/1.1" con sus
+      encabezados (Host, User-Agent, Accept). Después vienen el código, los encabezados de la
+      respuesta y el cuerpo. El Host es lo que le permite a un mismo servidor atender varios sitios.
+  - consigna: Mandá un encabezado propio, X-Prueba con el valor hola, y comprobá que la aplicación lo recibió.
+    verificar:
+      - { salida_contiene: 'x-prueba: hola' }
+    pistas:
+      - "`-H 'X-Prueba: hola'`"
+    solucion: ["curl -H 'X-Prueba: hola' http://tienda.ejemplo.com/"]
+  - consigna: >-
+      Hacé un POST a /pedidos con los datos producto=mate&cantidad=2 y mirá qué método y qué cuerpo
+      le llegaron a la aplicación.
+    verificar:
+      - { salida_contiene: 'Método: POST' }
+      - { salida_contiene: 'Cuerpo recibido: producto=mate&cantidad=2' }
+    pistas:
+      - "Con -d, curl manda los datos en el cuerpo y usa POST solo."
+    solucion: ["curl -d 'producto=mate&cantidad=2' http://tienda.ejemplo.com/pedidos"]
+    explicacion: >-
+      -d pone los datos en el cuerpo, con Content-Type application/x-www-form-urlencoded, que es lo
+      que manda un formulario web. Para JSON: -H 'Content-Type: application/json' -d '{...}'.
+  - consigna: >-
+      Por último, medí: mostrá solo el código y el tiempo total de /salud, sin el cuerpo (-o
+      /dev/null -s -w '%{http_code} %{time_total}\n').
+    verificar:
+      - { salida_regex: '^200 0\.\d+' }
+    pistas:
+      - "`curl -o /dev/null -s -w '%{http_code} %{time_total}\\n' http://tienda.ejemplo.com/salud`"
+    solucion: ["curl -o /dev/null -s -w '%{http_code} %{time_total}\\n' http://tienda.ejemplo.com/salud"]
+    explicacion: >-
+      Es la forma de medir desde un script: el código para saber si anda y el tiempo para saber si
+      anda lento. En la lección 2.7.2 lo usaste para separar la demora de la red de la del servidor.

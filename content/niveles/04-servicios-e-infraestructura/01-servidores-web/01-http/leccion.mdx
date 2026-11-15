@@ -1,0 +1,126 @@
+---
+id: n4-m1-l1
+titulo: HTTP por dentro
+minutos: 120
+objetivos:
+  - Explicar una solicitud y una respuesta HTTP (métodos, códigos de estado, encabezados y cookies).
+  - Diferenciar HTTP/1.1, HTTP/2 y HTTP/3 (sobre QUIC y UDP).
+  - Inspeccionar el tráfico con curl -v y las herramientas del navegador.
+glosario: [metodo-http, codigo-estado, encabezado-http, cookie, http2, quic]
+verificado: 2026-11
+---
+
+import anatomia from './anatomia.svg?raw'
+import curl from './ej-curl.yaml'
+
+Cada página que abrís, cada aplicación del celular que carga datos y cada sistema de la empresa que "habla con el servidor" usa HTTP. Este nivel arranca por acá porque casi todo lo que vas a publicar (sitios, aplicaciones, APIs) se sirve por HTTP, y porque cuando algo falla, lo primero que hay que saber leer es qué se pidió y qué se contestó.
+
+<AntesDeEmpezar>
+- TCP, puertos y el saludo de tres pasos (módulo 2.3).
+- DNS: cómo un nombre se convierte en una IP (módulo 2.3).
+- curl básico y medir tiempos con -w (lecciones 1.6.1 y 2.7.2).
+</AntesDeEmpezar>
+
+## Pedido y respuesta
+
+HTTP es un protocolo de **pedido y respuesta**: el cliente (el navegador, curl, una aplicación) abre una conexión al servidor, manda una **solicitud** y espera una **respuesta**. En HTTP/1.1 las dos son texto que se puede leer:
+
+<Diagrama svg={anatomia} alt="A la izquierda, una solicitud: la primera línea POST /productos HTTP/1.1 (método, ruta y versión); después los encabezados Host, User-Agent, Content-Type, Authorization y Content-Length; una línea vacía; y el cuerpo con un JSON. A la derecha, la respuesta: la primera línea HTTP/1.1 201 Created (versión, código y texto); los encabezados Server, Content-Type, Location, Set-Cookie y Content-Length; una línea vacía y el cuerpo. Abajo, las familias de códigos: 2xx salió bien (200, 201, 204); 3xx está en otro lado (301 y 308 se mudó, 302 y 307 por ahora, 304 no cambió); 4xx error del pedido (400, 401, 403, 404, 405); 5xx error del servidor (500, 502, 503, 504). Para recordar: con un 4xx se mira el pedido, con un 5xx los logs del servidor." pie="Primera línea, encabezados, una línea vacía y el cuerpo, en las dos direcciones." />
+
+**Los métodos** dicen qué se quiere hacer con el recurso de la ruta:
+
+- **GET**: traer algo. No debería cambiar nada en el servidor.
+- **HEAD**: lo mismo que GET pero sin el cuerpo; sirve para ver tamaño, tipo o fecha sin bajarlo.
+- **POST**: mandar datos para que el servidor haga algo (crear un pedido, iniciar sesión).
+- **PUT** y **PATCH**: reemplazar o modificar un recurso. **DELETE**: borrarlo.
+- **OPTIONS**: preguntar qué se permite (lo usa el navegador antes de algunos pedidos entre sitios).
+
+Dos ideas que vas a ver en la documentación: un método es **seguro** si no cambia nada (GET, HEAD) e **idempotente** si repetirlo deja todo igual que hacerlo una vez (GET, PUT, DELETE sí; POST no: dos POST pueden crear dos pedidos). Por eso un proxy puede reintentar un GET que falló, pero no un POST.
+
+**Los códigos de estado** son tres cifras; la primera dice la familia. Para el trabajo diario alcanza con esta regla: **con un 4xx, el problema está en el pedido; con un 5xx, en el servidor**, y la explicación está en sus logs, no en la respuesta.
+
+## Encabezados que importan
+
+Los encabezados son pares `Nombre: valor`. No distinguen mayúsculas en el nombre. Los que más vas a mirar:
+
+| Encabezado | Dónde | Para qué |
+|---|---|---|
+| **Host** | pedido | Qué sitio se pide. Obligatorio en HTTP/1.1: así un mismo servidor (una IP) atiende muchos sitios |
+| **User-Agent** | pedido | Qué programa pide (navegador, curl, un robot) |
+| **Content-Type** | los dos | Qué hay en el cuerpo: text/html, application/json... |
+| **Content-Length** | los dos | Cuántos bytes tiene el cuerpo |
+| **Location** | respuesta | Adónde ir, en una redirección (3xx) o un recurso creado (201) |
+| **Cache-Control**, **ETag** | respuesta | Cuánto tiempo se puede guardar una copia y con qué "versión" |
+| **Authorization** / **WWW-Authenticate** | pedido / respuesta | Credenciales, y cómo pedirlas cuando faltan (401) |
+| **Set-Cookie** / **Cookie** | respuesta / pedido | Recordar a quien vuelve |
+| **Server** | respuesta | Qué software contestó (se suele ocultar la versión) |
+
+HTTP **no tiene memoria**: cada pedido es independiente. Para que el servidor "recuerde" que iniciaste sesión, te manda una **cookie** con `Set-Cookie` y el navegador la devuelve sola en cada pedido siguiente con `Cookie`. Las cookies de sesión llevan atributos que importan: **HttpOnly** (el JavaScript de la página no la puede leer), **Secure** (solo viaja por HTTPS) y **SameSite** (no viaja en pedidos que vienen de otros sitios).
+
+<EnSimple>
+Pedido: método, ruta, encabezados y a veces un cuerpo. Respuesta: código, encabezados y cuerpo. 4xx, revisá el pedido; 5xx, revisá el servidor.
+</EnSimple>
+
+## Probalo
+
+Armá pedidos contra la API de una tienda de práctica, mirá qué viaja de ida y de vuelta, y cumplí los desafíos:
+
+<ConstructorHTTP />
+
+## HTTP/1.1, HTTP/2 y HTTP/3
+
+El significado (métodos, códigos, encabezados) es el mismo en las tres versiones. Lo que cambia es **cómo viaja**:
+
+- **HTTP/1.1** (1997, actualizado en 2022 como RFC 9112): texto sobre TCP. En cada conexión va un pedido por vez; para cargar 80 archivos, el navegador abre varias conexiones en paralelo.
+- **HTTP/2** (2015, RFC 9113): binario, sobre TCP. Muchos pedidos a la vez en **una sola conexión**, encabezados comprimidos y en minúsculas. Los navegadores solo lo usan con **TLS** (HTTPS). Se negocia en el saludo TLS con ALPN: cliente y servidor acuerdan "h2".
+- **HTTP/3** (2022, RFC 9114): lo mismo que HTTP/2 pero sobre **QUIC**, que va por **UDP en el puerto 443**. Conecta más rápido y una pérdida de paquetes no frena a los demás pedidos. El servidor lo anuncia con el encabezado `Alt-Svc`, y el navegador lo prueba en la visita siguiente.
+
+Para el que administra, la consecuencia práctica de HTTP/3 es el firewall: si querés ofrecerlo, además de TCP 443 tiene que pasar **UDP 443**. Si no pasa, no se rompe nada: el navegador sigue con HTTP/2.
+
+## Mirar el tráfico
+
+Dos herramientas, para dos situaciones:
+
+**curl**, desde un servidor o tu terminal:
+
+```bash
+curl -I https://tienda.ejemplo.com              # solo los encabezados (HEAD)
+curl -i https://tienda.ejemplo.com              # encabezados y cuerpo
+curl -v https://tienda.ejemplo.com              # la conversación completa: > lo que manda, < lo que recibe
+curl -L http://tienda.ejemplo.com/viejo         # seguir las redirecciones
+curl -H 'Accept: application/json' https://...  # agregar un encabezado
+curl -d 'usuario=ana&clave=x' https://.../login # POST con datos de formulario
+curl -o /dev/null -s -w '%{http_code} %{time_total}\n' https://tienda.ejemplo.com
+```
+
+**El navegador**: F12 (Herramientas para desarrolladores), pestaña **Red**. Recargá la página y vas a ver cada pedido con su método, código, tipo, tamaño, tiempo y **protocolo** (h2, h3), y al tocar uno, sus encabezados de pedido y respuesta. Es lo primero que se mira cuando "la página carga mal": un recurso en rojo con un 404, otro que tarda cuatro segundos, una redirección de más.
+
+<Terminal ejercicio={curl} />
+
+<ErroresComunes>
+  <ErrorComun titulo="Buscar un 5xx en el pedido">
+    Un 500 o un 502 son del servidor. La respuesta casi nunca explica nada: la causa está en los logs (error.log de nginx, el journal de la aplicación).
+  </ErrorComun>
+  <ErrorComun titulo="Confundir 401 con 403">
+    401: faltan las credenciales o no sirven. 403: el servidor sabe quién sos y aun así no te deja. Con un 403, mandar otra contraseña no arregla nada.
+  </ErrorComun>
+  <ErrorComun titulo="Probar contra la IP y olvidar el Host">
+    curl http://192.168.1.20 manda Host: 192.168.1.20 y el servidor contesta con el sitio por defecto. Para probar un sitio por IP: curl -H 'Host: tienda.ejemplo.com' http://192.168.1.20 (o --resolve).
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar que curl no sigue redirecciones">
+    Sin -L, un 301 se ve como una página vacía. Mirá el código con -I antes de suponer que "no anda".
+  </ErrorComun>
+  <ErrorComun titulo="Abrir solo TCP 443 y esperar HTTP/3">
+    HTTP/3 va por UDP 443. Sin esa regla, todo funciona, pero por HTTP/2.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- HTTP es pedido y respuesta: primera línea, encabezados, línea vacía y cuerpo.
+- Métodos: GET y HEAD traen, POST manda, PUT/PATCH modifican, DELETE borra. GET, PUT y DELETE son idempotentes; POST no.
+- Códigos: 2xx bien, 3xx en otro lado, 4xx error del pedido, 5xx error del servidor (mirá sus logs).
+- Encabezados clave: Host (varios sitios en una IP), Content-Type, Location, Cache-Control/ETag, Authorization, Set-Cookie/Cookie.
+- HTTP no recuerda: las cookies sí. Las de sesión, con HttpOnly, Secure y SameSite.
+- HTTP/1.1 texto sobre TCP; HTTP/2 binario y multiplexado sobre TCP con TLS; HTTP/3 sobre QUIC (UDP 443).
+- curl -I, -i, -v, -L, -H, -d y -w; en el navegador, F12 y la pestaña Red.
+</Resumen>

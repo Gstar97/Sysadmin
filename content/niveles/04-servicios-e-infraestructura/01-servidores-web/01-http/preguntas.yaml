@@ -1,0 +1,122 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una página devuelve 502 Bad Gateway. ¿Dónde buscás la causa primero?
+  opciones:
+    - { texto: "En los logs del servidor: un 5xx es un problema del lado del servidor", correcta: true, explicacion: "El 502 lo devuelve un proxy que no pudo hablar con lo que tiene atrás." }
+    - { texto: "En el pedido del navegador", explicacion: "Eso es para los 4xx." }
+    - { texto: "En la conexión a internet de quien reporta", explicacion: "Si llegó un 502, la conexión anduvo: contestó el servidor." }
+    - { texto: "En el DNS", explicacion: "Si hubo respuesta HTTP, el nombre se resolvió." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Para qué sirve el encabezado Host en un pedido?
+  opciones:
+    - { texto: "Para decir qué sitio se pide, así un mismo servidor con una IP atiende varios sitios", correcta: true, explicacion: "Es obligatorio en HTTP/1.1." }
+    - { texto: "Para indicar la IP del cliente", explicacion: "Esa la ve el servidor por la conexión." }
+    - { texto: "Para elegir el puerto", explicacion: "El puerto se elige al conectarse." }
+    - { texto: "Para autenticarse", explicacion: "Eso es Authorization." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál de estos métodos NO es idempotente?
+  opciones:
+    - { texto: "POST", correcta: true, explicacion: "Dos POST iguales pueden crear dos pedidos. Por eso un proxy no lo reintenta solo." }
+    - { texto: "GET", explicacion: "Repetirlo deja todo igual." }
+    - { texto: "PUT", explicacion: "Reemplazar dos veces con lo mismo deja lo mismo." }
+    - { texto: "DELETE", explicacion: "Borrar dos veces deja el recurso borrado." }
+- id: p04
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué códigos indican un problema del lado del servidor? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "500", correcta: true, explicacion: "Falló la aplicación." }
+    - { texto: "502", correcta: true, explicacion: "El proxy no pudo hablar con el backend." }
+    - { texto: "504", correcta: true, explicacion: "El backend tardó demasiado." }
+    - { texto: "404", explicacion: "Es del pedido: ese recurso no existe." }
+    - { texto: "403", explicacion: "Es del pedido: no tenés permiso." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una persona con usuario y contraseña correctos recibe 403 al entrar a /admin. ¿Qué significa?
+  opciones:
+    - { texto: "El servidor sabe quién es y aun así no la deja: falta permiso, no credenciales", correcta: true, explicacion: "Con un 401 faltarían o fallarían las credenciales." }
+    - { texto: "La contraseña está mal", explicacion: "Eso sería un 401." }
+    - { texto: "La página no existe", explicacion: "Eso sería un 404." }
+    - { texto: "El servidor está caído", explicacion: "Respondió con un 403: está andando." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esta salida de curl -I?
+  salida: |
+    HTTP/1.1 301 Moved Permanently
+    Server: nginx
+    Location: https://www.ejemplo.com/
+    Content-Length: 162
+  opciones:
+    - { texto: "El sitio redirige para siempre a la versión HTTPS; con -L curl la seguiría", correcta: true, explicacion: "Es la redirección típica de HTTP a HTTPS." }
+    - { texto: "La página no existe", explicacion: "Eso sería un 404." }
+    - { texto: "El servidor está en mantenimiento", explicacion: "Eso sería un 503." }
+    - { texto: "Falta autenticarse", explicacion: "Eso sería un 401." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cómo hace un sitio para "recordar" que iniciaste sesión, si HTTP no tiene memoria?
+  opciones:
+    - { texto: "Te manda una cookie con Set-Cookie y el navegador la devuelve con Cookie en cada pedido", correcta: true, explicacion: "Por eso las cookies de sesión van con HttpOnly, Secure y SameSite." }
+    - { texto: "Guarda tu IP", explicacion: "Muchas personas comparten IP y la IP cambia." }
+    - { texto: "Mantiene la conexión TCP abierta para siempre", explicacion: "Las conexiones se cierran y se reabren." }
+    - { texto: "Con el encabezado Host", explicacion: "Host dice qué sitio se pide." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué es cierto de HTTP/3? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Va sobre QUIC, que usa UDP en el puerto 443", correcta: true, explicacion: "Por eso el firewall tiene que dejar pasar UDP 443." }
+    - { texto: "Los métodos, códigos y encabezados son los mismos que en HTTP/1.1", correcta: true, explicacion: "Cambia cómo viaja, no qué significa." }
+    - { texto: "Si UDP 443 está bloqueado, el navegador sigue por HTTP/2", correcta: true, explicacion: "No se rompe nada; se pierde la mejora." }
+    - { texto: "Reemplaza a TLS", explicacion: "QUIC trae TLS 1.3 adentro: sigue cifrado." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí el comando curl que muestra solo los encabezados de la respuesta de https://www.ejemplo.com.
+  aceptadas:
+    - "curl -I https://www.ejemplo.com"
+    - "curl --head https://www.ejemplo.com"
+  patrones: ["^curl\\s+(-I|--head)\\s+https://www\\.ejemplo\\.com/?$", "^curl\\s+https://www\\.ejemplo\\.com/?\\s+(-I|--head)$"]
+  explicacion: "-I hace un pedido HEAD: el servidor contesta los encabezados sin el cuerpo."
+- id: p10
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando curl que pide http://192.168.1.20/ pero como si fuera el sitio tienda.ejemplo.com (sin tocar el DNS ni /etc/hosts).
+  aceptadas:
+    - "curl -H 'Host: tienda.ejemplo.com' http://192.168.1.20/"
+    - 'curl -H "Host: tienda.ejemplo.com" http://192.168.1.20/'
+    - "curl --resolve tienda.ejemplo.com:80:192.168.1.20 http://tienda.ejemplo.com/"
+  patrones: ["^curl\\s+-H\\s+['\"]host:\\s*tienda\\.ejemplo\\.com['\"]\\s+http://192\\.168\\.1\\.20/?$", "^curl\\s+--resolve\\s+tienda\\.ejemplo\\.com:80:192\\.168\\.1\\.20\\s+http://tienda\\.ejemplo\\.com/?$"]
+  explicacion: "Con -H se reemplaza el Host; con --resolve se fija la IP para ese nombre (mejor para HTTPS, porque el certificado se valida con el nombre)."
+- id: p11
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Un pedido devuelve esto. ¿Qué hay que cambiar en el pedido?
+  salida: |
+    HTTP/1.1 405 Method Not Allowed
+    Allow: GET, HEAD, POST
+    Content-Type: application/json
+
+    {"error":"PUT no se permite en /productos"}
+  opciones:
+    - { texto: "Usar uno de los métodos que lista Allow: para crear, POST", correcta: true, explicacion: "El recurso existe, pero no acepta PUT." }
+    - { texto: "Agregar Authorization", explicacion: "Eso sería un 401." }
+    - { texto: "Cambiar la ruta porque no existe", explicacion: "Sería un 404." }
+    - { texto: "Esperar, el servidor está caído", explicacion: "Es un 4xx: el problema está en el pedido." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve la pestaña Red de las herramientas del navegador (F12)?
+  opciones:
+    - { texto: "Para ver cada pedido de la página con su código, tiempo, tamaño, protocolo y encabezados", correcta: true, explicacion: "Es lo primero que se mira cuando una página carga mal." }
+    - { texto: "Para cambiar la configuración de red de la PC", explicacion: "No toca la red del sistema." }
+    - { texto: "Para medir la velocidad de internet", explicacion: "Muestra los pedidos de esa página." }
+    - { texto: "Para ver los logs del servidor", explicacion: "Muestra lo que ve el navegador; los logs están en el servidor." }
