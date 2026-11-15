@@ -719,6 +719,42 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       nla, grupo_local, respaldo_en, respaldo_programado, wsus_listo, wsus_grupo,
       wsus_clasificacion, wsus_producto, wsus_aprobacion, wsus_rechazada, wsus_equipo y
       actualizacion.
+  - Nivel 4, parte 1 (módulos 4.1 y 4.2, servicios web y TLS), en src/engines/shell:
+    · HTTP (http.ts): solicitudes y respuestas, "aplicaciones" que corren como servicio
+      de systemd (web.aplicaciones; escuchan donde dice su unidad: --bind, -b, --port o
+      Environment=PORT=, o un socket unix:), alcance entre equipos y desde internet
+      (web.dominios_publicos, ip_publica y puertos_publicados, que pasan por firewalld) y
+      fetchHttp, que usan curl, wget, certbot y testssl.
+    · nginx (web.ts): configuración con sus include (cada archivo se valida en el
+      contexto donde se incluye), carga solo al arrancar o recargar, elección de server
+      (puerto, nombre, default_server) y de location (=, ^~, regex, prefijo), return,
+      rewrite, if, try_files, alias, index, autoindex, allow/deny, auth_basic, límites,
+      páginas de error, add_header (con always), proxy_pass con la regla de la URI,
+      proxy_set_header sin herencia parcial, upstream (turnos, pesos, ip_hash, backup,
+      reintento al siguiente), WebSockets, PHP-FPM por FastCGI (un PHP mínimo: echo,
+      concatenación, PHP_VERSION), permisos y SELinux (lectura de archivos y
+      httpd_can_network_connect con su AVC), y access.log y error.log con los mensajes
+      reales (111, 2, 13, upstream timed out).
+    · Apache (apache.ts, commands/apachecmd.ts): httpd de Rocky y apache2 de Ubuntu con
+      su estructura (conf.modules.d, sites-available, a2ensite, a2enmod con
+      dependencias), VirtualHost, Directory y Require, .htaccess con AllowOverride,
+      Redirect y RewriteRule, ProxyPass (con su módulo), apachectl -S, -M y -t.
+    · TLS (tls.ts, commands/tlscmd.ts): certificados, pedidos y claves con la estructura
+      de X.509 guardados en PEM simulados; openssl genpkey, req, x509 (incluida la firma
+      con una CA y -copy_extensions), verify, s_client (con sus códigos), pkcs12, pkey
+      -pubout, dgst con hashes reales y firma y verificación, y enc con contraseña;
+      almacenes de confianza de Rocky (update-ca-trust, trust list) y de Ubuntu
+      (update-ca-certificates, solo .crt); CA interna y certificados de ejemplo
+      definidos en web.ca_interna y web.certificados.
+    · Let's Encrypt (acme.ts): certbot con cuentas, staging, --nginx (instala HTTPS y la
+      redirección) y --webroot, desafío HTTP-01 desde internet (timeout por firewall,
+      404 por webroot equivocado), estructura live/archive/renewal, renew con --dry-run
+      y deploy hooks, y el temporizador (apagado de fábrica en Rocky).
+    · testssl (commands/testssl.ts): protocolos, categorías de cifrados según
+      ssl_ciphers, certificado, HSTS y la nota con sus topes (T, C, B, A, A+).
+    · Verificaciones nuevas: http (estado, contenido, encabezados, HTTP/2, TLS válido,
+      desde internet), certificado (nombre, SAN, emisor, CA, vigencia, clave, cadena),
+      confia_en, modulo_apache y booleano_selinux.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -834,6 +870,9 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     modo "ntfs" y modo "red"): grupos anidados, entradas explícitas y heredadas,
     denegaciones, el resultado por derecho con la entrada que decide, y por la red el
     más restrictivo entre el recurso y NTFS, con desafíos.
+  - Hechos en la Etapa 7a (Nivel 4): constructor de solicitudes HTTP (ConstructorHTTP,
+    sobre src/engines/web/httpsim.ts): método, ruta, encabezados y cuerpo, la respuesta
+    del servidor de ejemplo, el comando curl equivalente y siete desafíos.
   - Pendientes, con el nivel que los usa: simuladores de RAID, quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; constructor de rack y calculadoras (UPS, disponibilidad, cron, costos).
@@ -1079,7 +1118,25 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     - Durante la 5b, todo el contenido pasó a español rioplatense con voseo (decisión 4
       de la sección 14), con dos pasadas de revisión sobre los imperativos ambiguos.
 
-  Etapa 6 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
+  Etapa 6 - Nivel 3, Windows Server (en dos partes)
+    - 6a (HECHA, en revisión): módulos 3.1 a 3.3 (instalación, PowerShell y Active
+      Directory con directivas de grupo). El simulador sumó lo descripto en 6.1 (Nivel
+      3, parte 1).
+    - 6b (HECHA, en revisión): módulos 3.4 y 3.5 y el proyecto "Dominio para una PyME".
+      El simulador sumó lo descripto en 6.1 (Nivel 3, parte 2).
+
+  Etapa 7 - Nivel 4, Servicios e infraestructura (en dos partes)
+    - 7a (HECHA, en revisión): módulos 4.1 Servidores web y 4.2 Certificados y TLS. 10
+      lecciones, cada módulo con laboratorio (en la plataforma y en máquinas virtuales:
+      nginx con balanceo y una aplicación Flask real; una CA interna con step-ca y ACME),
+      examen y caso real; 117 preguntas, 85 tarjetas, 50 términos de glosario nuevos,
+      12 ejercicios de terminal, 3 de editor de configuración, 4 diagramas clicables, 4
+      casos de diagnóstico, 3 de emparejar y 1 de ordenar. El simulador sumó lo
+      descripto en 6.1 (Nivel 4, parte 1) y hay un interactivo nuevo (6.9).
+    - 7b (pendiente): módulos 4.3 Bases de datos, 4.4 Correo y archivos y 4.5 Hardware,
+      y el proyecto "Plataforma web de producción".
+
+  Etapa 8 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
 
 
 ============================================================================================
