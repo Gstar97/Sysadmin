@@ -91,10 +91,35 @@ describe('nginx', () => {
     expect((await run('curl -s www.ejemplo.com')).out).toBe('File not found.\n')
     expect((await run('tail -1 /var/log/nginx/error.log')).out).toContain('Primary script unknown')
     await run(`sed -i 's/fastcgi_params/fastcgi.conf/' /etc/nginx/conf.d/php.conf && systemctl reload nginx`)
-    expect((await run('curl -s www.ejemplo.com')).out).toBe('Hola desde PHP\n')
+    expect((await run('curl -s www.ejemplo.com')).out).toBe('Hola desde PHP') // PHP se come el salto de línea que sigue a ?>
     await run('systemctl stop php-fpm')
     expect((await run('curl -s www.ejemplo.com')).out).toContain('502')
     expect((await run('tail -1 /var/log/nginx/error.log')).out).toContain('connect() to unix:/run/php-fpm/www.sock failed (2: No such file or directory)')
+  })
+})
+
+describe('aplicaciones', () => {
+  it('Ubuntu: unidad de gunicorn, snippet de PHP dentro de la location y echo con PHP_VERSION', async () => {
+    const { run } = await session({
+      distro: 'ubuntu',
+      usuario: 'root',
+      usuarios: [{ nombre: 'pedidos', uid: 998, shell: '/usr/sbin/nologin', home: '/opt/pedidos' }],
+      paquetes: { instalados: ['nginx', 'php-fpm'] },
+      servicios: { nginx: { activo: true } },
+      red: { registros_dns: { 'pagos.ejemplo.com': '127.0.0.1' } },
+      archivos: {
+        '/opt/pedidos/venv/bin/gunicorn': { contenido: '#!/opt/pedidos/venv/bin/python3\n', modo: '0755', dueno: 'pedidos' },
+        '/var/www/pagos/index.php': '<?php echo "Pagos ", "PHP " . PHP_VERSION; ?>\n',
+      },
+      web: { aplicaciones: { pedidos: { cuerpo: 'Sistema de pedidos' } } },
+    })
+    await run(`printf '[Service]\\nUser=pedidos\\nWorkingDirectory=/opt/pedidos\\nExecStart=/opt/pedidos/venv/bin/gunicorn --bind 127.0.0.1:8001 app:app\\n' > /etc/systemd/system/pedidos.service`)
+    await run('systemctl daemon-reload && systemctl start pedidos')
+    expect((await run('curl -s 127.0.0.1:8001')).out).toContain('Sistema de pedidos')
+    await run(`printf 'server {\\n listen 80;\\n server_name pagos.ejemplo.com;\\n root /var/www/pagos;\\n index index.php;\\n location ~ \\\\.php$ {\\n  include snippets/fastcgi-php.conf;\\n  fastcgi_pass unix:/run/php/php8.5-fpm.sock;\\n }\\n}\\n' > /etc/nginx/sites-enabled/pagos`)
+    expect((await run('nginx -t')).err).toContain('test is successful')
+    await run('systemctl reload nginx')
+    expect((await run('curl -s pagos.ejemplo.com')).out).toBe('Pagos PHP 8.5.4')
   })
 })
 

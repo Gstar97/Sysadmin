@@ -1,0 +1,129 @@
+tipo: terminal
+shell: bash
+titulo: El sistema de pedidos (Python) y la página de pagos (PHP)
+descripcion: >-
+  En web02 (Ubuntu 26.04) están nginx y PHP-FPM instalados. Los programadores dejaron el sistema
+  de pedidos en /opt/pedidos, con su entorno virtual de Python y gunicorn adentro, y crearon el
+  usuario pedidos para que corra con él. La página de pagos, en PHP, está en /var/www/pagos. El DNS
+  ya apunta pedidos.ejemplo.com y pagos.ejemplo.com a este servidor. Falta todo lo demás.
+estado_inicial:
+  distro: ubuntu
+  hostname: web02
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+    - { nombre: pedidos, uid: 998, shell: /usr/sbin/nologin, home: /opt/pedidos }
+  paquetes: { instalados: [nginx, php-fpm] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+  red:
+    registros_dns: { pedidos.ejemplo.com: 127.0.0.1, pagos.ejemplo.com: 127.0.0.1 }
+  archivos:
+    /opt/pedidos/app.py: { contenido: "from flask import Flask\napp = Flask(__name__)\n", dueno: pedidos }
+    /opt/pedidos/requirements.txt: { contenido: "flask==3.1.2\ngunicorn==23.0.0\n", dueno: pedidos }
+    /opt/pedidos/venv/bin/python3: { contenido: "#!/bin/sh\n", modo: "0755", dueno: pedidos }
+    /opt/pedidos/venv/bin/gunicorn: { contenido: "#!/opt/pedidos/venv/bin/python3\n# gunicorn 23.0.0\n", modo: "0755", dueno: pedidos }
+    /var/www/pagos/index.php: "<?php echo \"<h1>Pagos</h1>\\n\", \"PHP \" . PHP_VERSION, \"\\n\"; ?>\n"
+  web:
+    aplicaciones:
+      pedidos: { cuerpo: "<h1>Sistema de pedidos</h1>", eco_encabezados: true }
+pasos:
+  - consigna: >-
+      Antes de crear nada, mirá lo que hay: el usuario pedidos y el gunicorn del entorno virtual.
+    verificar:
+      - { comando_usado: 'id\s+pedidos' }
+      - { salida_contiene: 'uid=998(pedidos)' }
+    pistas:
+      - "`id pedidos` y `ls -l /opt/pedidos/venv/bin/`"
+    solucion: ["id pedidos; ls -l /opt/pedidos/venv/bin/"]
+    explicacion: >-
+      Un usuario propio, sin shell para entrar (/usr/sbin/nologin), y el gunicorn instalado dentro
+      del entorno virtual de la aplicación, no en el sistema. La unidad tiene que usar esa ruta
+      completa.
+  - consigna: >-
+      Creá /etc/systemd/system/pedidos.service para que corra como el usuario pedidos, en
+      /opt/pedidos, con gunicorn escuchando solo en 127.0.0.1:8001 (3 workers, aplicación app:app)
+      y que se reinicie si se cae. Cargalo, habilitalo y arrancalo, y probá que contesta en su puerto.
+    verificar:
+      - { archivo: /etc/systemd/system/pedidos.service, contenido_incluye: 'User=pedidos' }
+      - { servicio: pedidos, activo: true, habilitado: true }
+      - { http: 'http://127.0.0.1:8001/', contiene: 'Sistema de pedidos' }
+    pistas:
+      - "Las líneas clave: `User=pedidos`, `WorkingDirectory=/opt/pedidos`, `ExecStart=/opt/pedidos/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8001 app:app` y `Restart=on-failure`."
+      - "Después: `sudo systemctl daemon-reload`, `sudo systemctl enable --now pedidos` y `curl -s 127.0.0.1:8001 | head -3`."
+    solucion:
+      - "printf '[Unit]\\nDescription=Sistema de pedidos\\nAfter=network.target\\n\\n[Service]\\nUser=pedidos\\nWorkingDirectory=/opt/pedidos\\nExecStart=/opt/pedidos/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8001 app:app\\nRestart=on-failure\\n\\n[Install]\\nWantedBy=multi-user.target\\n' | sudo tee /etc/systemd/system/pedidos.service"
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now pedidos
+      - curl -s 127.0.0.1:8001 | head -3
+    explicacion: >-
+      systemd lo arranca con el usuario pedidos (si alguien rompe la aplicación, no es root), en
+      su carpeta, y lo vuelve a levantar si se cae. Escucha solo en 127.0.0.1: desde afuera no se
+      ve, y el único camino es nginx.
+  - consigna: >-
+      Publicalo: un sitio /etc/nginx/sites-available/pedidos para pedidos.ejemplo.com que le pase
+      todo a 127.0.0.1:8001 con los encabezados de proxy_params. Activalo, probá y recargá, y pedí
+      la portada por el nombre.
+    verificar:
+      - { http: 'http://pedidos.ejemplo.com/', contiene: 'x-forwarded-for: 127.0.0.1' }
+      - { http: 'http://pedidos.ejemplo.com/', contiene: 'host: pedidos.ejemplo.com' }
+    pistas:
+      - "Dentro de `location /`: `proxy_pass http://127.0.0.1:8001;` e `include proxy_params;`. Activar en Ubuntu es un enlace en sites-enabled."
+    solucion:
+      - "printf 'server {\\n    listen 80;\\n    server_name pedidos.ejemplo.com;\\n\\n    location / {\\n        proxy_pass http://127.0.0.1:8001;\\n        include proxy_params;\\n    }\\n}\\n' | sudo tee /etc/nginx/sites-available/pedidos"
+      - sudo ln -s /etc/nginx/sites-available/pedidos /etc/nginx/sites-enabled/
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -s http://pedidos.ejemplo.com/
+    explicacion: >-
+      La aplicación ve la conexión desde 127.0.0.1 (nginx), pero recibe el nombre que pidió el
+      cliente y su IP en x-forwarded-for.
+  - consigna: >-
+      Ahora la página de pagos. Buscá en qué socket escucha PHP-FPM (en la línea listen de su pool)
+      y creá el sitio pagos.ejemplo.com con raíz /var/www/pagos, index.php como índice y una location
+      para los .php que use snippets/fastcgi-php.conf y ese socket. Activalo y probalo.
+    verificar:
+      - { comando_usado: 'pool\.d/www\.conf' }
+      - { http: 'http://pagos.ejemplo.com/', contiene: 'PHP 8.5' }
+    pistas:
+      - "`grep ^listen /etc/php/8.5/fpm/pool.d/www.conf`"
+      - "La location: `location ~ \\.php$ { include snippets/fastcgi-php.conf; fastcgi_pass unix:/run/php/php8.5-fpm.sock; }`"
+    solucion:
+      - grep ^listen /etc/php/8.5/fpm/pool.d/www.conf
+      - "printf 'server {\\n    listen 80;\\n    server_name pagos.ejemplo.com;\\n    root /var/www/pagos;\\n    index index.php;\\n\\n    location ~ \\\\.php$ {\\n        include snippets/fastcgi-php.conf;\\n        fastcgi_pass unix:/run/php/php8.5-fpm.sock;\\n    }\\n}\\n' | sudo tee /etc/nginx/sites-available/pagos"
+      - sudo ln -s /etc/nginx/sites-available/pagos /etc/nginx/sites-enabled/
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -si http://pagos.ejemplo.com/
+    explicacion: >-
+      nginx no ejecuta PHP: le pasa el archivo a PHP-FPM por el socket, y el snippet le dice cuál
+      es (SCRIPT_FILENAME) y comprueba antes que exista. Fijate el encabezado X-Powered-By: lo
+      agrega PHP, y conviene apagarlo en producción (expose_php = Off en php.ini).
+  - consigna: >-
+      Simulá una falla: detené PHP-FPM, pedí la página de pagos y mirá la última línea del error.log
+      de nginx.
+    verificar:
+      - { servicio: php8.5-fpm, activo: false }
+      - { salida_contiene: 'php8.5-fpm.sock failed (2: No such file or directory)' }
+    pistas:
+      - "`sudo systemctl stop php8.5-fpm`, `curl -sI http://pagos.ejemplo.com/ | head -1` y `sudo tail -n 1 /var/log/nginx/error.log`."
+    solucion:
+      - sudo systemctl stop php8.5-fpm
+      - curl -sI http://pagos.ejemplo.com/ | head -1
+      - sudo tail -n 1 /var/log/nginx/error.log
+    explicacion: >-
+      502 y "connect() to unix:/run/php/php8.5-fpm.sock failed (2: No such file or directory)": el
+      socket es un archivo que PHP-FPM crea al arrancar y borra al parar. Si no existe, o PHP-FPM
+      está caído, o el sitio apunta a un socket viejo (por ejemplo, el de php8.4 después de una
+      actualización de Ubuntu).
+  - consigna: Volvé a arrancar PHP-FPM y comprobá que la página de pagos responde otra vez.
+    verificar:
+      - { servicio: php8.5-fpm, activo: true }
+      - { salida_contiene: '200 OK' }
+    pistas:
+      - "`sudo systemctl start php8.5-fpm` y `curl -sI http://pagos.ejemplo.com/ | head -1`"
+    solucion:
+      - sudo systemctl start php8.5-fpm
+      - curl -sI http://pagos.ejemplo.com/ | head -1
+    explicacion: >-
+      Tres servicios trabajan juntos (nginx, PHP-FPM y la aplicación de Python) y cada uno tiene
+      su log: ante un 502, el error.log de nginx dice a quién no pudo llegar, y el journal de ese
+      servicio, por qué.

@@ -1,0 +1,172 @@
+---
+id: n4-m1-l5
+titulo: Publicar aplicaciones
+minutos: 150
+objetivos:
+  - Publicar una aplicación PHP con PHP-FPM detrás de nginx.
+  - Correr una aplicación de Python (gunicorn) o de Node.js como servicio de systemd, con su usuario, su puerto y sus variables.
+  - Diagnosticar un 502 o un 504 leyendo el error.log de nginx y el journal de la aplicación.
+glosario: [php-fpm, fastcgi, socket-unix, wsgi, gunicorn, entorno-virtual]
+verificado: 2026-11
+---
+
+import capas from './capas.svg?raw'
+import publicar from './ej-publicar.yaml'
+import intranet from './intranet-502.yaml'
+
+Un sitio estático son archivos: nginx los lee del disco y los manda. Una aplicación es otra cosa: un **programa que tiene que estar corriendo** todo el tiempo, que arma cada página en el momento (consulta la base, revisa la sesión, calcula precios). Ese programa lo escriben los programadores; tu trabajo es que corra bien, con el usuario correcto, que vuelva solo si se cae, que deje registros, y que nginx le pase los pedidos.
+
+<AntesDeEmpezar>
+- Servicios de systemd (lección 1.3.3) y unidades propias con archivos extra (lección 1.3.4).
+- Proxy inverso con nginx (lección 4.1.4).
+- Permisos y usuarios (módulo 1.2).
+</AntesDeEmpezar>
+
+## El mismo esquema para todo
+
+Sea PHP, Python o Node, la forma de publicar es siempre la misma: la aplicación escucha **solo adentro** (127.0.0.1 o un socket), systemd la mantiene viva, y nginx queda adelante con HTTPS, los archivos estáticos y los límites.
+
+<Diagrama svg={capas} alt="Tres columnas con el mismo esquema. Arriba, nginx (o Apache) adelante, con HTTPS, archivos estáticos y límites: a PHP le pasa los pedidos con fastcgi_pass al socket de PHP-FPM, y a Python y Node con proxy_pass a 127.0.0.1 y un puerto, o a un socket. En el medio, tres cajas: PHP con PHP-FPM (un grupo de procesos que escucha en /run/php-fpm/www.sock en Rocky o /run/php/php8.5-fpm.sock en Ubuntu), Python con gunicorn (la aplicación en su entorno virtual, --bind 127.0.0.1:8001, workers 2 por núcleos más 1, servicio pedidos.service) y Node.js (node server.js, con el puerto en Environment=PORT=3000 y NODE_ENV=production, servicio intranet.service). Abajo, systemd: un usuario propio, reinicio si se cae y logs en el journal; nunca como root." pie="PHP, Python o Node: la aplicación escucha adentro, systemd la mantiene y nginx la publica." />
+
+## PHP con PHP-FPM
+
+nginx no sabe ejecutar PHP. Le pasa cada pedido de un `.php` a **PHP-FPM**, un servicio que mantiene un grupo (pool) de procesos de PHP listos, usando el protocolo **FastCGI**, casi siempre por un **socket Unix**: un "punto de conexión" que aparece como un archivo y no usa la red.
+
+| | Rocky Linux 10 | Ubuntu 26.04 |
+|---|---|---|
+| Paquete | `php-fpm` (PHP 8.3) | `php-fpm` (PHP 8.5) |
+| Servicio | `php-fpm` | `php8.5-fpm` |
+| Pool | `/etc/php-fpm.d/www.conf` | `/etc/php/8.5/fpm/pool.d/www.conf` |
+| Socket | `/run/php-fpm/www.sock` | `/run/php/php8.5-fpm.sock` |
+| Corre como | `apache` (y deja entrar a `nginx`) | `www-data` |
+| Lo que trae para nginx | `default.d/php.conf` (ya funciona en el sitio por defecto) | `snippets/fastcgi-php.conf` (hay que usarlo en cada sitio) |
+
+En Ubuntu, un sitio PHP queda así:
+
+```nginx
+server {
+    listen 80;
+    server_name pagos.ejemplo.com;
+    root /var/www/pagos;
+    index index.php;
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;              # SCRIPT_FILENAME, y comprueba que el archivo exista
+        fastcgi_pass unix:/run/php/php8.5-fpm.sock;     # el socket de la línea listen del pool
+    }
+}
+```
+
+Tres cosas para saber del pool:
+
+- **pm.max_children** es cuántas páginas PHP se pueden armar a la vez. Si se llena, los pedidos esperan, y en el log de PHP-FPM aparece *"server reached pm.max_children setting (5), consider raising it"*. Cada proceso usa memoria (de 30 a 100 MB es común), así que se calcula con la memoria libre, no a ojo.
+- **Los límites de subida** son dos, y los dos tienen que alcanzar: `client_max_body_size` en nginx y `upload_max_filesize` / `post_max_size` en php.ini.
+- **Al actualizar Ubuntu** cambia la versión de PHP y con ella el nombre del servicio y del socket (de php8.4-fpm a php8.5-fpm). Un sitio que apunta al socket viejo da 502.
+
+## Python: entorno virtual y gunicorn
+
+Una aplicación de Python (Django, Flask, FastAPI) se instala en su propio **entorno virtual** (venv): una carpeta con un Python y las bibliotecas de esa aplicación, separadas de las del sistema. Así, actualizar el sistema no le rompe nada y dos aplicaciones pueden usar versiones distintas de lo mismo.
+
+```bash
+sudo -u pedidos python3 -m venv /opt/pedidos/venv
+sudo -u pedidos /opt/pedidos/venv/bin/pip install -r /opt/pedidos/requirements.txt
+```
+
+El programa que la atiende es un **servidor de aplicaciones**: **gunicorn** para las aplicaciones WSGI (Django, Flask) y **uvicorn** para las ASGI (FastAPI y lo que use WebSockets). Lanza varios procesos con la aplicación (**workers**; un punto de partida es 2 × núcleos + 1) y escucha en un puerto interno:
+
+```
+/opt/pedidos/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8001 app:app
+```
+
+`app:app` quiere decir "el objeto `app` del archivo `app.py`". Ojo con un valor de fábrica: si un pedido tarda más de **30 segundos**, gunicorn mata al worker (*"[CRITICAL] WORKER TIMEOUT"*) y nginx registra *"upstream prematurely closed connection"*. Para algo lento, `--timeout`, pero solo después de preguntar por qué tarda tanto.
+
+## Node.js
+
+Una aplicación de Node se arranca con `node server.js` (o lo que diga su `package.json`) y, por costumbre, toma el puerto de la variable **PORT**. `NODE_ENV=production` le pide que funcione en modo producción (sin mensajes de depuración, con caché). Usá una versión con soporte largo (LTS), de las que publica NodeSource o del módulo de la distribución. Hay administradores de procesos propios de Node, como pm2, pero systemd ya hace lo mismo y lo conocés.
+
+## La unidad de systemd
+
+Las tres terminan igual: un servicio de systemd. Una unidad completa:
+
+```ini
+# /etc/systemd/system/pedidos.service
+[Unit]
+Description=Sistema de pedidos
+After=network.target
+
+[Service]
+User=pedidos
+Group=pedidos
+WorkingDirectory=/opt/pedidos
+EnvironmentFile=/etc/pedidos/pedidos.env
+ExecStart=/opt/pedidos/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8001 app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+- **User**: un usuario propio, sin shell (`useradd --system --shell /usr/sbin/nologin`). Nunca root: si alguien encuentra una falla en la aplicación, queda encerrado en lo que puede hacer ese usuario.
+- **Restart=on-failure**: si se cae, systemd la vuelve a levantar a los 3 segundos.
+- **ExecReload**: gunicorn, con la señal HUP, cambia los workers por unos nuevos sin cortar a nadie. `systemctl reload pedidos` después de subir una versión.
+- **EnvironmentFile**: las contraseñas y claves (la de la base, la de la API de pagos) van en un archivo aparte, de root y con permisos 600. Nunca en la unidad: cualquier usuario puede leer las líneas `Environment=` con `systemctl show`.
+
+Para cambiar algo de una unidad que viene de otro lado (por ejemplo, el puerto de la intranet), no se edita el original: `systemctl edit intranet` crea un archivo extra en `intranet.service.d/` con solo lo que cambia.
+
+<EnSimple>
+La aplicación escucha en 127.0.0.1 (o en un socket), corre como servicio de systemd con su propio usuario y se reinicia sola. nginx la publica: fastcgi_pass para PHP, proxy_pass para lo demás.
+</EnSimple>
+
+<Terminal ejercicio={publicar} />
+
+## Cuando algo falla: 502 y 504
+
+Desde afuera todo se ve igual ("502 Bad Gateway"), pero el error.log de nginx dice exactamente qué pasó:
+
+| Lo que dice el error.log | Qué quiere decir | Dónde mirar |
+|---|---|---|
+| `connect() failed (111: Connection refused)` | En ese puerto no escucha nada | `systemctl status`, `ss -tlnp`: ¿está caída? ¿cambió de puerto? |
+| `connect() to unix:... failed (2: No such file or directory)` | El socket no existe | ¿PHP-FPM está corriendo? ¿El sitio apunta al socket de la versión vieja? |
+| `connect() ... failed (13: Permission denied)` | Algo no deja conectar | En Rocky, SELinux (`httpd_can_network_connect`); con un socket, sus permisos |
+| `upstream prematurely closed connection` | La aplicación cortó en el medio | El journal de la aplicación: un error, o el WORKER TIMEOUT de gunicorn |
+| `upstream timed out (110: Connection timed out)` → **504** | Tardó más que proxy_read_timeout | Por qué tarda; si es normal, más tiempo solo en esa location |
+
+Y después, el journal de la aplicación: `journalctl -u pedidos -n 50` muestra sus errores (un *Traceback* de Python, un *Error: Cannot find module* de Node) y los reinicios de systemd.
+
+<Troubleshooting escenario={intranet} />
+
+## Desplegar una versión nueva
+
+Cuando los programadores entregan una versión, el orden habitual es: copiar el código nuevo, actualizar las bibliotecas del entorno virtual (`pip install -r requirements.txt`, o `npm ci` en Node), aplicar los cambios de la base si los hay, y **recargar o reiniciar** el servicio. Después, mirar el journal y pedir la página. Para más adelante (módulo de automatización): tener cada versión en su carpeta y un enlace `current` que apunta a la que corre, para volver atrás en segundos, y hacer todo esto con Ansible o desde el sistema de integración continua de los programadores.
+
+<ErroresComunes>
+  <ErrorComun titulo="Correr la aplicación como root">
+    Funciona igual, y por eso pasa. Pero cualquier falla de la aplicación se vuelve una falla de todo el servidor. Un usuario propio, sin shell.
+  </ErrorComun>
+  <ErrorComun titulo="Que la aplicación escuche en 0.0.0.0">
+    Queda accesible salteando nginx, sin HTTPS ni límites. 127.0.0.1 o un socket, y el firewall cerrado para su puerto.
+  </ErrorComun>
+  <ErrorComun titulo="Las contraseñas en la unidad o en el código">
+    Las líneas Environment= las ve cualquiera con systemctl show. EnvironmentFile de root con permisos 600.
+  </ErrorComun>
+  <ErrorComun titulo="Instalar las bibliotecas de Python con el pip del sistema">
+    Mezcla las versiones de la aplicación con las del sistema operativo (y en Ubuntu, pip ya se niega: "externally-managed-environment"). Siempre un entorno virtual.
+  </ErrorComun>
+  <ErrorComun titulo="El socket de PHP de la versión anterior">
+    Después de actualizar Ubuntu, php8.4-fpm ya no existe. Revisá fastcgi_pass contra la línea listen del pool nuevo.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar daemon-reload">
+    Después de crear o cambiar una unidad, systemd sigue usando la versión anterior hasta un systemctl daemon-reload.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Una aplicación es un programa que tiene que estar corriendo: systemd la mantiene viva y nginx la publica.
+- PHP: PHP-FPM con un pool, por socket; fastcgi_pass y el snippet (Ubuntu) o default.d/php.conf (Rocky). pm.max_children y los dos límites de subida.
+- Python: entorno virtual, gunicorn (WSGI) o uvicorn (ASGI), workers y el timeout de 30 segundos.
+- Node: node server.js, PORT y NODE_ENV=production.
+- La unidad: User propio, WorkingDirectory, EnvironmentFile con permisos 600, Restart=on-failure, ExecReload.
+- Ante un 502 o 504, el error.log de nginx dice qué falló (111, 2, 13, prematurely closed, timed out) y el journal de la aplicación, por qué.
+</Resumen>

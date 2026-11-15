@@ -281,11 +281,12 @@ function checkListen(d: NginxDirective, diags: Diagnostic[]) {
 }
 
 /** Valida la configuración y devuelve errores y advertencias con número de línea. */
-export function validateNginx(src: string): { tree: NginxDirective[]; diagnostics: Diagnostic[] } {
+export function validateNginx(src: string, includedIn?: Ctx): { tree: NginxDirective[]; diagnostics: Diagnostic[] } {
   const { tree, diagnostics } = parseNginx(src)
   const hasHttp = tree.some((d) => d.name === 'http')
   // Un archivo de conf.d/sites-available se incluye dentro de http: si no hay "http", se asume ese contexto.
-  const rootCtx: Ctx = hasHttp || tree.some((d) => d.name === 'events') ? 'main' : 'http'
+  // Si se sabe dónde lo incluyeron (un snippet dentro de una location), se valida en ese lugar.
+  const rootCtx: Ctx = includedIn ?? (hasHttp || tree.some((d) => d.name === 'events') ? 'main' : 'http')
   const walk = (list: NginxDirective[], ctx: Ctx) => {
     const names = new Map<string, number>()
     for (const d of list) {

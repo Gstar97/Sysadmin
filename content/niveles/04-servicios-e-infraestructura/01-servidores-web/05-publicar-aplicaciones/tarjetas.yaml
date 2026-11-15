@@ -1,0 +1,10 @@
+- { id: t1, frente: "PHP-FPM", dorso: "Grupo de procesos de PHP. nginx le pasa los .php con fastcgi_pass, casi siempre por un socket Unix." }
+- { id: t2, frente: "Sockets de PHP-FPM", dorso: "Rocky: /run/php-fpm/www.sock (servicio php-fpm). Ubuntu 26.04: /run/php/php8.5-fpm.sock (servicio php8.5-fpm)." }
+- { id: t3, frente: "pm.max_children", dorso: "Cuántas páginas PHP a la vez. Se calcula con la memoria libre: cada proceso usa de 30 a 100 MB." }
+- { id: t4, frente: "Entorno virtual", dorso: "python3 -m venv /opt/app/venv: un Python y sus bibliotecas solo para esa aplicación." }
+- { id: t5, frente: "gunicorn", dorso: "--workers (2 × núcleos + 1) --bind 127.0.0.1:8001 app:app. Timeout de fábrica: 30 s (WORKER TIMEOUT)." }
+- { id: t6, frente: "Node.js en producción", dorso: "Environment=PORT=3000 y NODE_ENV=production en la unidad; versión LTS." }
+- { id: t7, frente: "Unidad de una aplicación", dorso: "User propio, WorkingDirectory, EnvironmentFile (600), ExecStart, ExecReload y Restart=on-failure." }
+- { id: t8, frente: "Mensajes del 502", dorso: "111 refused: no escucha. 2 No such file: socket. 13 Permission denied: SELinux o permisos. prematurely closed: la app cortó." }
+- { id: t9, frente: "504", dorso: "upstream timed out: tardó más que proxy_read_timeout (60 s). Más tiempo solo en esa location." }
+- { id: t10, frente: "Cambiar una unidad ajena", dorso: "systemctl edit servicio: un archivo extra en servicio.service.d/ con solo lo que cambia." }

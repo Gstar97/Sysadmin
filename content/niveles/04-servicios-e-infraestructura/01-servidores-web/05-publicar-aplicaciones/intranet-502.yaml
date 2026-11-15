@@ -1,0 +1,148 @@
+tipo: troubleshooting
+titulo: La intranet da 502 después del despliegue
+descripcion: >-
+  Incidente simulado. La intranet de la empresa es una aplicación de Node.js que corre como
+  servicio de systemd (intranet.service) en web01, un Ubuntu 26.04, detrás de nginx. Anoche los
+  programadores subieron una versión nueva. Hoy a la mañana nadie puede entrar. Cada decisión suma
+  minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: Lunes, 8:40. intranet.ejemplo.com muestra "502 Bad Gateway". Entrás por SSH a web01.
+    evidencia:
+      - titulo: sudo tail -n 2 /var/log/nginx/error.log
+        contenido: |
+          2026/11/16 08:39:12 [error] 912#912: *48 connect() failed (111: Connection refused) while connecting to upstream, client: 192.168.10.23, server: intranet.ejemplo.com, request: "GET / HTTP/2.0", upstream: "http://127.0.0.1:3000/", host: "intranet.ejemplo.com"
+          2026/11/16 08:39:40 [error] 912#912: *51 connect() failed (111: Connection refused) while connecting to upstream, client: 192.168.10.41, server: intranet.ejemplo.com, request: "GET / HTTP/2.0", upstream: "http://127.0.0.1:3000/", host: "intranet.ejemplo.com"
+    opciones:
+      - { texto: "En 127.0.0.1:3000 no escucha nada: mirar el servicio de la intranet y qué puertos hay abiertos", ir_a: n_puerto, minutos: 3 }
+      - texto: Reiniciar nginx
+        ir_a: n1
+        minutos: 4
+        consecuencia: >-
+          nginx arranca bien y el 502 sigue igual. nginx está sano: lo que no contesta es lo que
+          está atrás.
+      - texto: Habilitar httpd_can_network_connect
+        ir_a: n1
+        minutos: 3
+        consecuencia: >-
+          Es un Ubuntu: no tiene SELinux (usa AppArmor, que de fábrica no limita a nginx). Y el
+          error de SELinux sería "(13: Permission denied)", no "(111: Connection refused)".
+  n_puerto:
+    situacion: >-
+      El servicio está corriendo desde anoche, sin errores. Pero no está donde nginx lo busca.
+    evidencia:
+      - titulo: systemctl status intranet
+        contenido: |
+          ● intranet.service - Intranet (Node.js)
+               Loaded: loaded (/etc/systemd/system/intranet.service; enabled; preset: enabled)
+               Active: active (running) since Sun 2026-11-15 23:05:41 UTC; 9h ago
+             Main PID: 2211 (node)
+          Nov 15 23:05:41 web01 node[2211]: Intranet v4.0.0 escuchando en http://0.0.0.0:8080
+      - titulo: sudo ss -tlnp | grep node
+        contenido: |
+          LISTEN 0  511  0.0.0.0:8080  0.0.0.0:*  users:(("node",pid=2211,fd=21))
+      - titulo: La unidad y el cambio de la versión nueva
+        contenido: |
+          [Service]
+          User=intranet
+          WorkingDirectory=/opt/intranet
+          ExecStart=/usr/bin/node server.js
+          Restart=on-failure
+
+          # Notas de la versión 4.0.0:
+          # "El puerto se toma de la variable PORT (antes era 3000 fijo). Si no está, 8080."
+    opciones:
+      - texto: Fijar el puerto en la unidad con un archivo extra (systemctl edit intranet) y reiniciar la aplicación
+        ir_a: n_ws
+        minutos: 5
+      - texto: Cambiar proxy_pass a 127.0.0.1:8080 y recargar nginx
+        ir_a: n_puerto
+        minutos: 4
+        consecuencia: >-
+          Anda, pero la aplicación quedó escuchando en todas las direcciones (0.0.0.0:8080), y el
+          firewall de web01 deja pasar el 8080 porque lo usa el monitoreo: cualquiera de la red
+          entra salteando nginx, sin HTTPS. Y la próxima versión puede volver a cambiar. El
+          puerto y la dirección se fijan en la unidad. Volvés nginx a como estaba.
+      - texto: Volver a la versión anterior
+        ir_a: n_puerto
+        minutos: 15
+        consecuencia: >-
+          Es una salida válida si no hay tiempo, pero la causa está a la vista y se arregla en un
+          minuto. Los programadores necesitan la versión nueva.
+  n_ws:
+    situacion: >-
+      Con Environment=PORT=3000 y HOST=127.0.0.1 en el archivo extra, la intranet carga. Pero a la
+      hora llama la gente de Ventas: el chat interno y las notificaciones en vivo no funcionan.
+    evidencia:
+      - titulo: /etc/systemd/system/intranet.service.d/override.conf
+        contenido: |
+          [Service]
+          Environment=PORT=3000
+          Environment=HOST=127.0.0.1
+      - titulo: La consola del navegador
+        contenido: |
+          WebSocket connection to 'wss://intranet.ejemplo.com/socket.io/?EIO=4&transport=websocket' failed
+      - titulo: sudo grep socket.io /var/log/nginx/access.log | tail -n 1
+        contenido: |
+          192.168.10.23 - - [16/Nov/2026:09:52:10 +0000] "GET /socket.io/?EIO=4&transport=websocket HTTP/1.1" 400 34 "-" "Mozilla/5.0"
+      - titulo: El sitio de nginx (la parte del proxy)
+        contenido: |
+          location / {
+              proxy_pass http://127.0.0.1:3000;
+              include proxy_params;
+          }
+    opciones:
+      - texto: Agregar una location /socket.io/ con proxy_http_version 1.1 y los encabezados Upgrade y Connection
+        ir_a: n_504
+        minutos: 6
+      - texto: Abrir el puerto 3000 en el firewall para que el navegador se conecte directo
+        ir_a: n_ws
+        minutos: 3
+        consecuencia: >-
+          Además de exponer la aplicación, no funcionaría: el navegador se conecta a
+          intranet.ejemplo.com por el 443, que es nginx. El problema es que nginx no pasa el cambio
+          de protocolo.
+      - texto: Reiniciar la aplicación
+        ir_a: n_ws
+        minutos: 3
+        consecuencia: >-
+          La aplicación contesta "400" porque le llega un pedido de WebSocket sin los encabezados
+          Upgrade y Connection: nginx no los reenvía si no se lo pedís. Reiniciarla no cambia eso.
+  n_504:
+    situacion: >-
+      El chat anda. Al final del día, Administración avisa que el informe mensual de ventas, que
+      tarda casi dos minutos en armarse, devuelve "504 Gateway Time-out" justo al minuto.
+    evidencia:
+      - titulo: sudo tail -n 1 /var/log/nginx/error.log
+        contenido: |
+          2026/11/16 17:31:05 [error] 1544#1544: *902 upstream timed out (110: Connection timed out) while reading response header from upstream, client: 192.168.10.12, server: intranet.ejemplo.com, request: "GET /informes/ventas?mes=10 HTTP/2.0", upstream: "http://127.0.0.1:3000/informes/ventas?mes=10", host: "intranet.ejemplo.com"
+    opciones:
+      - texto: Una location /informes/ con proxy_read_timeout 180s, y avisar a los programadores que ese informe es lento
+        ir_a: n_ok
+        minutos: 5
+      - texto: proxy_read_timeout 3600s en el bloque http, para todo el servidor
+        ir_a: n_504
+        minutos: 4
+        consecuencia: >-
+          Funciona, pero ahora cualquier pedido colgado de cualquier sitio de este nginx retiene
+          una conexión una hora antes de cortar, y vas a tardar mucho más en enterarte de que algo
+          se trabó. El tiempo extra va solo donde hace falta.
+      - texto: Reiniciar la aplicación
+        ir_a: n_504
+        minutos: 3
+        consecuencia: >-
+          El informe tarda lo mismo. "upstream timed out" quiere decir que la aplicación no
+          contestó antes de proxy_read_timeout (60 segundos de fábrica), no que esté caída.
+  n_ok:
+    final: exito
+    resumen: >-
+      Fueron tres problemas distintos, y los tres se leyeron en el error.log de nginx. Primero, un
+      502 con "Connection refused": la versión nueva tomaba el puerto de la variable PORT y, sin
+      ella, escuchaba en 0.0.0.0:8080. Se arregló en la unidad, con un archivo extra que fija el
+      puerto y la dirección (127.0.0.1, para que solo nginx llegue). Segundo, los WebSockets: nginx
+      no reenvía Upgrade y Connection si no se le pide, y necesita HTTP/1.1 hacia atrás. Tercero, un
+      504 con "upstream timed out": el informe tarda más que proxy_read_timeout, y el tiempo se
+      sube solo en esa location. Para la próxima: pedirles a los programadores que avisen los
+      cambios de configuración en las notas de cada versión, y probar el despliegue en un servidor
+      de pruebas antes que en producción.

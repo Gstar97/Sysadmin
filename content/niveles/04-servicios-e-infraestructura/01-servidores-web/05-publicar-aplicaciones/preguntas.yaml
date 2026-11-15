@@ -1,0 +1,132 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Por qué nginx necesita PHP-FPM para una página .php?
+  opciones:
+    - { texto: "nginx no ejecuta PHP: le pasa el pedido a PHP-FPM, que tiene procesos de PHP listos", correcta: true, explicacion: "Se lo pasa por FastCGI, casi siempre por un socket." }
+    - { texto: "Para comprimir las páginas", explicacion: "Eso lo hace nginx con gzip." }
+    - { texto: "Para manejar HTTPS", explicacion: "HTTPS lo maneja nginx." }
+    - { texto: "No lo necesita: nginx trae PHP incluido", explicacion: "nginx no trae intérprete de PHP." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    Después de actualizar un Ubuntu, los sitios PHP dan 502 y el error.log dice "connect() to unix:/run/php/php8.4-fpm.sock failed (2: No such file or directory)". ¿Qué pasó?
+  opciones:
+    - { texto: "La actualización trajo PHP 8.5: el servicio y el socket se llaman ahora php8.5-fpm, y el sitio apunta al viejo", correcta: true, explicacion: "Se corrige fastcgi_pass con la línea listen del pool nuevo." }
+    - { texto: "SELinux bloquea el socket", explicacion: "Ubuntu no usa SELinux, y sería (13: Permission denied)." }
+    - { texto: "Falta el archivo index.php", explicacion: "Eso daría 404 o File not found." }
+    - { texto: "nginx necesita reiniciarse", explicacion: "El socket al que apunta ya no existe." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué se instala una aplicación de Python en un entorno virtual?
+  opciones:
+    - { texto: "Para que tenga sus propias bibliotecas, separadas de las del sistema y de otras aplicaciones", correcta: true, explicacion: "Actualizar el sistema no le rompe nada." }
+    - { texto: "Para que corra más rápido", explicacion: "No cambia la velocidad." }
+    - { texto: "Para que corra en una máquina virtual", explicacion: "No tiene relación con las máquinas virtuales." }
+    - { texto: "Para no necesitar Python instalado", explicacion: "Usa el Python del sistema." }
+- id: p04
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene en la unidad de systemd de una aplicación? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "User= con un usuario propio, sin shell", correcta: true, explicacion: "Nunca root." }
+    - { texto: "Restart=on-failure", correcta: true, explicacion: "Si se cae, vuelve sola." }
+    - { texto: "EnvironmentFile= con las contraseñas, en un archivo de root con permisos 600", correcta: true, explicacion: "Las líneas Environment= las ve cualquiera." }
+    - { texto: "Que escuche en 0.0.0.0 para que nginx la encuentre", explicacion: "nginx la encuentra en 127.0.0.1; 0.0.0.0 la expone." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Algunos pedidos al sistema de pedidos dan 502. ¿Qué dicen estos registros?
+  salida: |
+    # /var/log/nginx/error.log
+    upstream prematurely closed connection while reading response header from upstream, upstream: "http://127.0.0.1:8001/exportar"
+    # journalctl -u pedidos
+    [CRITICAL] WORKER TIMEOUT (pid:2411)
+    [INFO] Booting worker with pid: 2490
+  opciones:
+    - { texto: "La exportación tardó más de 30 segundos y gunicorn mató al worker", correcta: true, explicacion: "El timeout de fábrica de gunicorn es 30 s; se ajusta con --timeout, después de ver por qué tarda." }
+    - { texto: "nginx no tiene permiso para conectarse", explicacion: "Sería (13: Permission denied)." }
+    - { texto: "La aplicación está caída", explicacion: "Arrancó otro worker enseguida; sería Connection refused." }
+    - { texto: "El cliente cerró el navegador", explicacion: "El que cortó fue el de atrás." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una aplicación de Node escucha en 8080, pero nginx la busca en 3000. Viene de un paquete de los programadores con su unidad. ¿Cómo lo corregís?
+  opciones:
+    - { texto: "systemctl edit intranet y agregar Environment=PORT=3000 en el archivo extra, y reiniciarla", correcta: true, explicacion: "El original queda intacto y el cambio sobrevive a la próxima versión." }
+    - { texto: "Editar /etc/systemd/system/intranet.service del paquete", explicacion: "Se pisa con la próxima entrega." }
+    - { texto: "Cambiar nginx a 8080", explicacion: "Si escucha en 0.0.0.0:8080 queda expuesta." }
+    - { texto: "Reiniciar el servidor", explicacion: "No cambia el puerto." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Creaste /etc/systemd/system/pedidos.service y systemctl start pedidos dice "Unit pedidos.service not found". ¿Qué faltó?
+  opciones:
+    - { texto: "systemctl daemon-reload", correcta: true, explicacion: "systemd no lee las unidades nuevas hasta que se lo pedís." }
+    - { texto: "Reiniciar nginx", explicacion: "No tiene relación." }
+    - { texto: "Darle permisos de ejecución a la unidad", explicacion: "Las unidades son archivos de texto 644." }
+    - { texto: "systemctl enable", explicacion: "Enable no carga unidades nuevas; daemon-reload sí." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Suben archivos de 10 MB a una página PHP. nginx tiene client_max_body_size 20m, pero la subida falla igual. ¿Qué más hay que revisar?
+  opciones:
+    - { texto: "upload_max_filesize y post_max_size en el php.ini de PHP-FPM", correcta: true, explicacion: "Los límites son dos: el de nginx y el de PHP." }
+    - { texto: "proxy_read_timeout", explicacion: "PHP va por fastcgi_pass, y no es un problema de tiempo." }
+    - { texto: "El firewall", explicacion: "El pedido llega." }
+    - { texto: "pm.max_children", explicacion: "Es cuántos pedidos a la vez, no su tamaño." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El log de PHP-FPM dice "server reached pm.max_children setting (5), consider raising it" y las páginas tardan en las horas pico. ¿Qué hacés?
+  opciones:
+    - { texto: "Calcular cuántos procesos entran en la memoria libre (cada uno usa de 30 a 100 MB) y subir pm.max_children a ese número", correcta: true, explicacion: "Subirlo sin mirar la memoria lleva el servidor a usar swap, y todo empeora." }
+    - { texto: "Ponerle pm.max_children = 1000", explicacion: "Se queda sin memoria." }
+    - { texto: "Reiniciar PHP-FPM cada hora", explicacion: "No cambia cuántos pedidos atiende a la vez." }
+    - { texto: "Subir worker_connections de nginx", explicacion: "nginx no es el que está lleno." }
+- id: p10
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que muestra las últimas 50 líneas del journal del servicio pedidos.
+  aceptadas:
+    - "journalctl -u pedidos -n 50"
+    - "sudo journalctl -u pedidos -n 50"
+    - "journalctl -n 50 -u pedidos"
+    - "sudo journalctl -n 50 -u pedidos"
+  patrones: ["^(sudo\\s+)?journalctl\\s+(-u\\s+pedidos(\\.service)?\\s+-n\\s*50|-n\\s*50\\s+-u\\s+pedidos(\\.service)?)(\\s+--no-pager)?$"]
+  explicacion: "Con -f lo seguís en vivo mientras reproducís el error."
+- id: p11
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Esta unidad arranca la aplicación, pero un análisis de seguridad la marcó. Marcá las dos líneas que hay que cambiar.
+  lenguaje: ini
+  archivo: |
+    [Unit]
+    Description=Sistema de pedidos
+    After=network.target
+
+    [Service]
+    User=root
+    WorkingDirectory=/opt/pedidos
+    Environment=DB_PASSWORD=Pedidos2026!
+    ExecStart=/opt/pedidos/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8001 app:app
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+  lineas_con_error: [6, 8]
+  explicacion: "Corre como root (tiene que ser un usuario propio) y la contraseña está en la unidad, donde systemctl show la muestra a cualquiera: va en un EnvironmentFile de root con permisos 600."
+- id: p12
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para desplegar una versión nueva de la aplicación de Python.
+  pasos:
+    - Copiar el código nuevo a /opt/pedidos
+    - Actualizar las bibliotecas con el pip del entorno virtual
+    - Aplicar los cambios de la base de datos, si los hay
+    - Recargar el servicio (systemctl reload pedidos)
+    - Mirar el journal y pedir la página
+  explicacion: "Primero lo que la aplicación necesita para arrancar, después el reinicio, y siempre comprobar."

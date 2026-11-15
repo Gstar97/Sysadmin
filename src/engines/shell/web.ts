@@ -19,7 +19,12 @@ import { ROOT_CRED } from './vfs'
 interface ConfFile {
   path: string
   tree: NginxDirective[]
+  /** Dónde lo incluyeron (http, server, location...): ahí se valida cada directiva del archivo. */
+  ctx?: NginxContext
 }
+
+type NginxContext = NonNullable<Parameters<typeof validateNginx>[1]>
+const BLOCK_CTX = new Set(['events', 'http', 'server', 'location', 'upstream', 'stream', 'if', 'map', 'types', 'limit_except'])
 
 function readFiles(sys: System, pattern: string): string[] {
   const abs = pattern.startsWith('/') ? pattern : `/etc/nginx/${pattern}`
@@ -39,7 +44,7 @@ function readFiles(sys: System, pattern: string): string[] {
 }
 
 /** nginx.conf con los include ya reemplazados por el contenido de cada archivo. */
-function expanded(sys: System, path = '/etc/nginx/nginx.conf', files: ConfFile[] = []): NginxDirective[] {
+function expanded(sys: System, path = '/etc/nginx/nginx.conf', files: ConfFile[] = [], ctx?: NginxContext): NginxDirective[] {
   let text: string
   try {
     text = sys.vfs.readFile(path, ROOT_CRED)
@@ -47,13 +52,14 @@ function expanded(sys: System, path = '/etc/nginx/nginx.conf', files: ConfFile[]
     return []
   }
   const tree = parseNginx(text).tree
-  files.push({ path, tree })
-  const walk = (list: NginxDirective[]): NginxDirective[] =>
+  files.push({ path, tree, ctx })
+  const walk = (list: NginxDirective[], here?: NginxContext): NginxDirective[] =>
     list.flatMap((d) => {
-      if (d.name === 'include' && d.args[0] && !d.args[0].endsWith('mime.types')) return readFiles(sys, d.args[0]).flatMap((f) => expanded(sys, f, files))
-      return d.block ? [{ ...d, block: walk(d.block) }] : [d]
+      if (d.name === 'include' && d.args[0] && !d.args[0].endsWith('mime.types')) return readFiles(sys, d.args[0]).flatMap((f) => expanded(sys, f, files, here ?? 'main'))
+      const inner = BLOCK_CTX.has(d.name) ? (d.name as NginxContext) : here
+      return d.block ? [{ ...d, block: walk(d.block, inner) }] : [d]
     })
-  return walk(tree)
+  return walk(tree, ctx)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -255,9 +261,12 @@ export function nginxTest(sys: System): string[] {
   const tree = expanded(sys, '/etc/nginx/nginx.conf', files)
   if (!files.length) return ['nginx: [emerg] open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)']
   const errs: string[] = []
+  const seen = new Set<string>()
   for (const f of files) {
+    if (seen.has(f.path)) continue
+    seen.add(f.path)
     const text = sys.vfs.readFile(f.path, ROOT_CRED)
-    for (const d of validateNginx(text).diagnostics) {
+    for (const d of validateNginx(text, f.ctx).diagnostics) {
       if (d.severity !== 'error') continue
       const eng = /\(nginx: ([^)]+)\)/.exec(d.message)?.[1]
       const name = /"([^"]+)"/.exec(d.message)?.[1]
@@ -600,7 +609,7 @@ function serveFile(c: Ctx, path: string): HttpResponse {
   }
 }
 
-/** Ejecuta una página PHP muy simple: echo, print y phpinfo(). */
+/** Ejecuta una página PHP muy simple: echo/print de textos unidos con ".", PHP_VERSION, date('Y') y phpinfo(). */
 function runPhp(sys: System, path: string): string {
   let src: string
   try {
@@ -609,11 +618,29 @@ function runPhp(sys: System, path: string): string {
     return ''
   }
   const version = sys.distro === 'rocky' ? '8.3.19' : '8.5.4'
-  return src.replace(/<\?php([\s\S]*?)(\?>|$)/g, (_, code: string) => {
+  const value = (expr: string): string => {
     let out = ''
-    if (/phpinfo\s*\(\s*\)/.test(code)) out += `<h1>PHP Version ${version}</h1>\n<table><tr><td>Server API</td><td>FPM/FastCGI</td></tr></table>\n`
-    for (const m of code.matchAll(/(?:echo|print)\s+(["'])((?:\\.|(?!\1).)*)\1/g)) out += m[2].replace(/\\n/g, '\n')
-    for (const m of code.matchAll(/(?:echo|print)\s+PHP_VERSION/g)) out += version + m[0].slice(0, 0)
+    const re = /\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|(PHP_VERSION)|(PHP_OS)|date\(\s*['"]Y['"]\s*\)|(\d+))\s*(?:[.,]|$)/y
+    let m: RegExpExecArray | null
+    while (re.lastIndex < expr.length && (m = re.exec(expr))) {
+      if (m[1] !== undefined) out += m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+      else if (m[2] !== undefined) out += m[2].replace(/\\'/g, "'")
+      else if (m[3]) out += version
+      else if (m[4]) out += 'Linux'
+      else if (m[5]) out += m[5]
+      else out += String(new Date(Date.now() + sys.clock.offset * 1000).getUTCFullYear())
+      if (!m[0]) break
+    }
+    return out
+  }
+  return src.replace(/<\?php([\s\S]*?)(\?>\n?|$)/g, (_, code: string) => {
+    let out = ''
+    for (const stmt of code.split(';')) {
+      const t = stmt.trim()
+      if (/^phpinfo\s*\(\s*\)$/.test(t)) out += `<h1>PHP Version ${version}</h1>\n<table><tr><td>Server API</td><td>FPM/FastCGI</td></tr></table>\n`
+      const m = /^(?:echo|print)\b\s*([\s\S]*)$/.exec(t)
+      if (m) out += value(/^\(([\s\S]*)\)$/.exec(m[1])?.[1] ?? m[1])
+    }
     return out
   })
 }
