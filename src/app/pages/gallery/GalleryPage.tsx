@@ -7,6 +7,9 @@ import {
   Advertencia,
   CalculadoraPoe,
   CalculadoraLicencias,
+  SimuladorRaid,
+  CalculadoraUps,
+  ConstructorRack,
   SimuladorGPO,
   SimuladorPermisos,
   ConstructorHTTP,
@@ -67,6 +70,7 @@ const SECTIONS = [
   { id: 'terminal-linux', titulo: 'Terminal Linux' },
   { id: 'powershell', titulo: 'PowerShell' },
   { id: 'cisco', titulo: 'Consola Cisco' },
+  { id: 'servidor-fisico', titulo: 'Servidor físico: RAID, UPS y rack' },
   { id: 'subnetting', titulo: 'Subnetting' },
   { id: 'redes', titulo: 'Redes: PoE, switch, VLSM, NAT' },
   { id: 'topologia', titulo: 'Topologías' },
@@ -152,6 +156,12 @@ export default function GalleryPage() {
 
       <Section id="web" titulo="Servidores web: HTTP por dentro" descripcion="Constructor de solicitudes HTTP contra la API de una tienda de práctica: métodos, códigos de estado, encabezados, cookies, ETag, redirecciones, hosts virtuales y la diferencia entre HTTP/1.1, HTTP/2 y HTTP/3, con el curl equivalente y desafíos.">
         <ConstructorHTTP />
+      </Section>
+
+      <Section id="servidor-fisico" titulo="Hardware de servidor" descripcion="Simulador de RAID (elegir nivel y discos, hacer fallar discos y reconstruir), calculadora de UPS (carga en W y VA, margen y autonomía) y constructor de rack con la revisión del armado.">
+        <SimuladorRaid />
+        <CalculadoraUps />
+        <ConstructorRack inventario={['ups', 'srv2u', 'srv2u', 'nas', 'srv1u', 'sw', 'patch', 'org', 'fw']} />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">
