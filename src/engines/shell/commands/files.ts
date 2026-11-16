@@ -17,7 +17,7 @@ register('ls', {
   summary: 'List information about the FILEs (the current directory by default).\n  -a, --all  -A  -l  -h  -d  -R  -r  -t  -S  -i  -1  -F',
   run(ctx) {
     const a = parseArgs(ctx.args, {
-      flags: { all: ['a', 'all'], almost: ['A', 'almost-all'], long: ['l'], human: ['h', 'human-readable'], dir: ['d', 'directory'], recursive: ['R', 'recursive'], reverse: ['r', 'reverse'], time: ['t'], size: ['S'], inode: ['i', 'inode'], one: ['1'], classify: ['F', 'classify'], color: ['color'], columns: ['C'] },
+      flags: { all: ['a', 'all'], almost: ['A', 'almost-all'], long: ['l'], human: ['h', 'human-readable'], dir: ['d', 'directory'], recursive: ['R', 'recursive'], reverse: ['r', 'reverse'], time: ['t'], size: ['S'], inode: ['i', 'inode'], numeric: ['n', 'numeric-uid-gid'], one: ['1'], classify: ['F', 'classify'], color: ['color'], columns: ['C'] },
     })
     if (a.unknown) {
       ctx.err(`ls: invalid option -- '${a.unknown.replace(/^-+/, '')}'\nTry 'ls --help' for more information.\n`)
@@ -26,6 +26,7 @@ register('ls', {
     const { vfs } = ctx.sys
     const cred = ctx.sh.cred
     const f = a.flags
+    if (f.has('numeric')) f.add('long')
     const targets = a.rest.length ? a.rest : ['.']
     let code = 0
     const files: { name: string; node: Inode; abs: string }[] = []
@@ -63,8 +64,8 @@ register('ls', {
             ino: String(e.node.ino),
             perm: modeString(e.node) + (e.node.acl || e.node.defaultAcl ? '+' : ctx.sys.distro === 'rocky' ? '.' : ''),
             links: String(e.node.nlink),
-            user: ctx.sys.userName(e.node.uid),
-            group: ctx.sys.groupName(e.node.gid),
+            user: f.has('numeric') ? String(e.node.uid) : ctx.sys.userName(e.node.uid),
+            group: f.has('numeric') ? String(e.node.gid) : ctx.sys.groupName(e.node.gid),
             size,
             date: lsDate(e.node.mtime),
             name: colorName(e.name, e.node, ctx.isTTY) + target + (f.has('classify') && e.node.type === 'dir' ? '/' : ''),

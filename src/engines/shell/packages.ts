@@ -28,6 +28,87 @@ export interface PackageInfo {
   requires?: string[]
 }
 
+const NFS_CONF = `#
+# This is a general configuration for the
+# NFS daemons and tools
+#
+[general]
+# pipefs-directory=/var/lib/nfs/rpc_pipefs
+#
+[nfsd]
+# debug=0
+# threads=16
+# host=
+# port=0
+# grace-time=90
+# lease-time=90
+# udp=n
+# tcp=y
+# vers3=y
+# vers4=y
+# vers4.0=y
+# vers4.1=y
+# vers4.2=y
+# rdma=n
+#
+[mountd]
+# debug=0
+# manage-gids=n
+# descriptors=0
+# port=0
+#
+[statd]
+# debug=0
+# port=0
+`
+
+const EXPORTS_UBUNTU = `# /etc/exports: the access control list for filesystems which may be exported
+#\t\tto NFS clients.  See exports(5).
+#
+# Example for NFSv2 and NFSv3:
+# /srv/homes       hostname1(rw,sync,no_subtree_check) hostname2(ro,sync,no_subtree_check)
+#
+# Example for NFSv4:
+# /srv/nfs4        gss/krb5i(rw,sync,fsid=0,crossmnt,no_subtree_check)
+# /srv/nfs4/homes  gss/krb5i(rw,sync,no_subtree_check)
+#
+`
+
+const AUTO_MASTER = `#
+# Sample auto.master file
+# This is a 'master' automounter map and it has the following format:
+# mount-point [map-type[,format]:]map [options]
+# For details of the format look at auto.master(5).
+#
+/misc\t/etc/auto.misc
+#
+# Include /etc/auto.master.d/*.autofs
+# To add an extra map using this mechanism you will need to add
+# two configuration items - one /etc/auto.master.d/extra.autofs file
+# (using the same line format as the auto.master file)
+# and a separate mount map (e.g. /etc/auto.extra or an auto.extra NIS map)
+# that is referred to by the extra.autofs file.
+#
++dir:/etc/auto.master.d
+`
+
+const AUTO_MISC = `#
+# This is an automounter map and it has the following format
+# key [ -mount-options-separated-by-comma ] location
+# Details may be found in the autofs(5) manpage
+
+cd\t\t-fstype=iso9660,ro,nosuid,nodev\t:/dev/cdrom
+
+# the following entries are samples to pique your imagination
+#linux\t\t-ro,soft\t\tftp.example.org:/pub/linux
+#boot\t\t-fstype=ext2\t\t:/dev/hda1
+#floppy\t\t-fstype=auto\t\t:/dev/fd0
+#floppy\t\t-fstype=ext2\t\t:/dev/fd0
+#e2floppy\t-fstype=ext2\t\t:/dev/fd0
+#jaz\t\t-fstype=ext2\t\t:/dev/sdc1
+#removable\t-fstype=ext2\t\t:/dev/hdd
+`
+
 const NAMED_CONF_ROCKY = `//
 // named.conf
 //
@@ -497,9 +578,25 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   },
   'nfs-utils': {
     summary: 'NFS utilities and supporting clients and daemons for the kernel NFS server',
-    version: '2.8.2',
-    services: [{ name: 'nfs-server', description: 'NFS server and services', ports: [2049] }],
-    files: { '/etc/exports': '' },
+    version: '2.8.3',
+    requires: ['rpcbind'],
+    services: [{ name: 'nfs-server', description: 'NFS server and services', ports: [2049, 20048] }],
+    files: { '/etc/exports': '', '/etc/exports.d/.keep': '', '/etc/nfs.conf': NFS_CONF },
+    commands: ['exportfs', 'showmount', 'mount.nfs', 'mount.nfs4', 'nfsstat'],
+  },
+  rpcbind: {
+    summary: 'Universal Addresses to RPC Program Number Mapper',
+    version: '1.2.7',
+    services: [{ name: 'rpcbind', description: 'RPC Bind', ports: [111], enabledByDefault: true, activeAfterInstall: true }],
+    commands: ['rpcinfo'],
+  },
+  autofs: {
+    summary: 'A tool for automatically mounting and unmounting filesystems',
+    version: '5.1.9',
+    requires: ['nfs-utils'],
+    services: [{ name: 'autofs', description: 'Automounts filesystems on demand', ports: [] }],
+    files: { '/etc/auto.master': AUTO_MASTER, '/etc/auto.master.d/.keep': '', '/etc/auto.misc': AUTO_MISC },
+    commands: ['automount'],
   },
   ...ROCKY_WEB,
   ...ROCKY_DB,
@@ -595,9 +692,32 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   },
   'nfs-kernel-server': {
     summary: 'support for NFS kernel server',
-    version: '2.8.2',
-    services: [{ name: 'nfs-server', description: 'NFS server and services', ports: [2049], enabledByDefault: true, activeAfterInstall: true }],
-    files: { '/etc/exports': '' },
+    version: '1:2.8.3-1ubuntu1',
+    requires: ['nfs-common'],
+    services: [{ name: 'nfs-server', description: 'NFS server and services', ports: [2049, 20048], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/exports': EXPORTS_UBUNTU, '/etc/exports.d/.keep': '' },
+    commands: ['exportfs'],
+  },
+  'nfs-common': {
+    summary: 'NFS support files common to client and server',
+    version: '1:2.8.3-1ubuntu1',
+    requires: ['rpcbind'],
+    files: { '/etc/nfs.conf': NFS_CONF },
+    commands: ['showmount', 'mount.nfs', 'mount.nfs4', 'nfsstat'],
+  },
+  rpcbind: {
+    summary: 'converts RPC program numbers into universal addresses',
+    version: '1.2.7-1',
+    services: [{ name: 'rpcbind', description: 'RPC bind portmap service', ports: [111], enabledByDefault: true, activeAfterInstall: true }],
+    commands: ['rpcinfo'],
+  },
+  autofs: {
+    summary: 'kernel-based automounter for Linux',
+    version: '5.1.9-1ubuntu4',
+    requires: ['nfs-common'],
+    services: [{ name: 'autofs', description: 'Automounts filesystems on demand', ports: [], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/auto.master': AUTO_MASTER, '/etc/auto.master.d/.keep': '', '/etc/auto.misc': AUTO_MISC },
+    commands: ['automount'],
   },
   ...UBUNTU_WEB,
   ...UBUNTU_DB,

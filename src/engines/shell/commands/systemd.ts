@@ -752,6 +752,12 @@ function noInstall(ctx: CommandContext) {
   )
 }
 
+/**
+ * Unidades que atiende otro módulo (remote-fs.target, *.automount, *.mount): devuelve el código
+ * de salida si la atendió, o undefined.
+ */
+export const UNIT_HOOKS: ((ctx: CommandContext, verb: string, unit: string) => number | undefined)[] = []
+
 register('systemctl', {
   usage: 'systemctl [OPTIONS...] COMMAND [UNIT...]',
   summary:
@@ -821,6 +827,11 @@ register('systemctl', {
         }
         let code = 0
         for (const u of units) {
+          const hooked = UNIT_HOOKS.map((h) => h(ctx, verb, u.full)).find((x) => x !== undefined)
+          if (hooked !== undefined) {
+            if (hooked) code = hooked
+            continue
+          }
           if (u.kind === 'timer') {
             const t = findTimer(sys, u.name)
             if (!t) {

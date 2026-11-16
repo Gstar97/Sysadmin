@@ -38,6 +38,7 @@ import { verifyWeb } from './webverify'
 import { verifyDb } from './db/dbinit'
 import './commands/dbcmd'
 import './commands/pgcmd'
+import { verifyNfs } from './nfs'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
@@ -178,6 +179,8 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if (webResult) return webResult
   const dbResult = verifyDb(sys, check)
   if (dbResult) return dbResult
+  const nfsResult = verifyNfs(sys, check)
+  if (nfsResult) return nfsResult
   if ('alcanza' in check) {
     const ok = reaches(sys, check.alcanza) === (check.resultado === 'ok')
     return { ok, label: check.resultado === 'ok' ? `${sys.hostname} llega a ${check.alcanza}` : `${sys.hostname} no llega a ${check.alcanza}` }
@@ -347,7 +350,7 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
     let ok = !!m
     const parts: string[] = []
     if (check.dispositivo) {
-      ok &&= !!m && m.dev === st.canonical(check.dispositivo)
+      ok &&= !!m && (m.dev === st.canonical(check.dispositivo) || m.source === check.dispositivo)
       parts.push(`con ${check.dispositivo}`)
     }
     if (check.tipo) {

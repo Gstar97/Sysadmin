@@ -360,6 +360,10 @@ export class System {
 
     // Kernel (sysctl y módulos) y hora.
     initKernel(this)
+    for (const svc of state.servicios_firewall) {
+      this.firewall.services.add(svc)
+      this.firewall.permServices.add(svc)
+    }
     this.selinux.mode = this.distro === 'rocky' ? state.selinux : 'disabled'
     if (this.distro === 'rocky') {
       installSelinuxHooks(this)

@@ -913,8 +913,23 @@ function fstabHint(ctx: CommandContext) {
   if (s.fstabText() !== s.fstabSeen) ctx.err("mount: (hint) your fstab has been modified, but systemd still uses\n       the old version; use 'systemctl daemon-reload' to reload.\n")
 }
 
+/**
+ * Montajes de red (NFS, CIFS): cada módulo registra el suyo. Devuelve null si el pedido no es de
+ * su tipo; si no, el error (con el formato de mount.nfs o mount.cifs) o undefined si montó.
+ */
+export const NETWORK_MOUNTS: ((ctx: CommandContext, spec: string, target: string, type: string | undefined, options: string, auto?: boolean) => string | undefined | null)[] = []
+
+/** El mensaje de error de mount: los ayudantes (mount.nfs, mount.cifs) escriben el suyo. */
+function mountErr(target: string, err: string): string {
+  return /^mount\.\w+/.test(err) || /^mount error/.test(err) ? `${err}\n` : `mount: ${target}: ${err}\n`
+}
+
 /** Intenta montar; devuelve el mensaje de error (sin el prefijo "mount: TARGET: ") o undefined. */
 function tryMount(ctx: CommandContext, spec: string, target: string, type: string | undefined, options: string): string | undefined {
+  for (const h of NETWORK_MOUNTS) {
+    const r = h(ctx, spec, target, type, options)
+    if (r !== null) return r
+  }
   const s = st(ctx)
   const vfs = ctx.sys.vfs
   const abs = normalizePath(target)
@@ -975,7 +990,7 @@ register('mount', {
         const err = tryMount(ctx, e.spec, e.target, e.type, e.options)
         if (err) {
           if (/\bnofail\b/.test(e.options) && /can't find|does not exist/.test(err)) continue
-          ctx.err(`mount: ${e.target}: ${err}\n`)
+          ctx.err(mountErr(e.target, err))
           code = 32
         } else if (a.flags.has('v')) ctx.out(`${e.target.padEnd(24)}: successfully mounted\n`)
       }
@@ -1005,7 +1020,7 @@ register('mount', {
       }
       const err = tryMount(ctx, e.spec, e.target, e.type, `${e.options}${opts !== 'defaults' ? ',' + opts : ''}`)
       if (err) {
-        ctx.err(`mount: ${e.target}: ${err}\n`)
+        ctx.err(mountErr(e.target, err))
         return 32
       }
       fstabHint(ctx)
@@ -1015,7 +1030,7 @@ register('mount', {
     const target = ctx.sh.resolve(a.rest[1])
     const err = tryMount(ctx, spec, target, a.values.get('t'), opts)
     if (err) {
-      ctx.err(`mount: ${target}: ${err}\n`)
+      ctx.err(mountErr(target, err))
       return 32
     }
     fstabHint(ctx)
@@ -1184,6 +1199,7 @@ register('df', {
     type DfRow = { dev: string; type: string; size: number; used: number; target: string }
     let rows: DfRow[] = [
       ...s.mounts.filter((m) => m.dev).map((m) => ({ dev: m.source, type: m.fstype, size: s.sigs.get(m.dev!)!.size, used: s.used(m.dev!), target: m.target })),
+      ...s.mounts.filter((m) => m.remote).map((m) => ({ dev: m.source, type: m.fstype, size: m.remote!.size(), used: m.remote!.used(), target: m.target })),
       { dev: 'tmpfs', type: 'tmpfs', size: 1_921_788 * 1024, used: 0, target: '/dev/shm' },
       { dev: 'tmpfs', type: 'tmpfs', size: 768_716 * 1024, used: 8_840 * 1024, target: '/run' },
     ]

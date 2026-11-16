@@ -60,7 +60,7 @@ export interface Cred {
   groups: number[]
 }
 
-export type FsErrorCode = 'ENOENT' | 'ENOTDIR' | 'EISDIR' | 'EACCES' | 'EEXIST' | 'ENOTEMPTY' | 'ELOOP' | 'EPERM' | 'EINVAL' | 'EXDEV'
+export type FsErrorCode = 'ENOENT' | 'ENOTDIR' | 'EISDIR' | 'EACCES' | 'EEXIST' | 'ENOTEMPTY' | 'ELOOP' | 'EPERM' | 'EINVAL' | 'EXDEV' | 'EROFS' | 'EBUSY'
 
 const MESSAGES: Record<FsErrorCode, string> = {
   ENOENT: 'No such file or directory',
@@ -73,6 +73,8 @@ const MESSAGES: Record<FsErrorCode, string> = {
   EPERM: 'Operation not permitted',
   EINVAL: 'Invalid argument',
   EXDEV: 'Invalid cross-device link',
+  EROFS: 'Read-only file system',
+  EBUSY: 'Device or resource busy',
 }
 
 export class FsError extends Error {
@@ -108,8 +110,28 @@ export function basename(path: string): string {
   return n === '/' ? '/' : n.slice(n.lastIndexOf('/') + 1)
 }
 
+/**
+ * Un montaje de red (NFS o CIFS): lo que está debajo de target vive en el VFS de otro servidor.
+ * Cada operación se hace allá, con las credenciales que el servidor le asigna al usuario del
+ * cliente (root_squash, all_squash o la cuenta de Samba).
+ */
+export interface RemoteBinding {
+  target: string
+  vfs: VFS
+  path: string
+  cred: (c: Cred) => Cred
+  readonly: boolean
+  /** Montaje bajo demanda (automount): se monta de verdad la primera vez que se entra. */
+  activate?: () => void
+}
+
+type Remote = { b: RemoteBinding; rpath: string }
+
 export class VFS {
   inodes = new Map<number, Inode>()
+  /** Montajes de red activos (los más largos primero). */
+  remotes: RemoteBinding[] = []
+  private activating = false
   private nextIno = 2
   readonly root = 1
   /** Hora de referencia para las fechas de modificación. */
@@ -127,6 +149,59 @@ export class VFS {
     const node = this.inodes.get(ino)
     if (!node) throw new FsError('ENOENT', String(ino))
     return node
+  }
+
+  // ---------------------------------------------------------------------------
+  // Montajes de red
+  // ---------------------------------------------------------------------------
+
+  addRemote(b: RemoteBinding) {
+    this.remotes = [...this.remotes.filter((x) => x.target !== b.target), { ...b, target: normalizePath(b.target), path: normalizePath(b.path) }].sort((x, y) => y.target.length - x.target.length)
+  }
+
+  removeRemote(target: string) {
+    this.remotes = this.remotes.filter((x) => x.target !== normalizePath(target))
+  }
+
+  /** El montaje de red que atiende esta ruta, si hay uno (el punto de montaje incluido). */
+  remoteOf(path: string): Remote | undefined {
+    if (!this.remotes.length) return undefined
+    const abs = normalizePath(path)
+    for (const b of this.remotes) {
+      if (!(abs === b.target || abs.startsWith(b.target + '/'))) continue
+      if (b.activate) {
+        if (this.activating) return undefined
+        this.activating = true
+        try {
+          b.activate()
+        } finally {
+          this.activating = false
+        }
+        const now = this.remotes.find((x) => x.target === b.target)
+        if (!now || now.activate) return undefined
+        return { b: now, rpath: normalizePath(`${now.path}/${abs.slice(now.target.length)}`) }
+      }
+      return { b, rpath: normalizePath(`${b.path}/${abs.slice(b.target.length)}`) }
+    }
+    return undefined
+  }
+
+  private toLocal(b: RemoteBinding, rabs: string): string {
+    const rel = b.path === '/' ? rabs : rabs.slice(b.path.length)
+    return normalizePath(`${b.target}/${rel}`)
+  }
+
+  /** Hace la operación en el servidor; los errores vuelven con la ruta local. */
+  private via<T>(path: string, cred: Cred, write: boolean, fn: (v: VFS, p: string, c: Cred) => T): { v: T } | undefined {
+    const r = this.remoteOf(path)
+    if (!r) return undefined
+    if (write && r.b.readonly) throw new FsError('EROFS', normalizePath(path))
+    try {
+      return { v: fn(r.b.vfs, r.rpath, r.b.cred(cred)) }
+    } catch (e) {
+      if (e instanceof FsError && e.path.startsWith('/')) throw new FsError(e.code, this.toLocal(r.b, normalizePath(e.path)))
+      throw e
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -197,6 +272,8 @@ export class VFS {
   }
 
   exists(path: string, cred: Cred = ROOT_CRED, follow = true): boolean {
+    const r = this.via(path, cred, false, (v, p, c) => v.exists(p, c, follow))
+    if (r) return r.v
     try {
       this.resolve(path, cred, follow)
       return true
@@ -206,6 +283,8 @@ export class VFS {
   }
 
   stat(path: string, cred: Cred, follow = true): Inode {
+    const r = this.via(path, cred, false, (v, p, c) => v.stat(p, c, follow))
+    if (r) return r.v
     return this.get(this.resolve(path, cred, follow))
   }
 
@@ -264,6 +343,8 @@ export class VFS {
   // ---------------------------------------------------------------------------
 
   readdir(path: string, cred: Cred): string[] {
+    const r = this.via(path, cred, false, (v, p, c) => v.readdir(p, c))
+    if (r) return r.v
     const node = this.stat(path, cred)
     if (node.type !== 'dir') throw new FsError('ENOTDIR', path)
     if (!this.can(node, cred, 4)) throw new FsError('EACCES', path)
@@ -271,6 +352,8 @@ export class VFS {
   }
 
   readFile(path: string, cred: Cred): string {
+    const r = this.via(path, cred, false, (v, p, c) => v.readFile(p, c))
+    if (r) return r.v
     const node = this.stat(path, cred)
     if (node.type === 'dir') throw new FsError('EISDIR', path)
     if (!this.can(node, cred, 4)) throw new FsError('EACCES', path)
@@ -278,6 +361,7 @@ export class VFS {
   }
 
   writeFile(path: string, data: string, cred: Cred, opts: { append?: boolean; mode?: number; umask?: number } = {}): void {
+    if (this.via(path, cred, true, (v, p, c) => v.writeFile(p, data, c, opts))) return
     const abs = normalizePath(path)
     let ino: number | undefined
     try {
@@ -302,6 +386,7 @@ export class VFS {
   }
 
   touch(path: string, cred: Cred, umask?: number): void {
+    if (this.via(path, cred, true, (v, p, c) => v.touch(p, c, umask))) return
     if (this.exists(path, cred)) {
       const node = this.stat(path, cred)
       if (cred.uid !== 0 && cred.uid !== node.uid && !this.can(node, cred, 2)) throw new FsError('EACCES', path)
@@ -312,6 +397,7 @@ export class VFS {
   }
 
   mkdir(path: string, cred: Cred, mode = 0o755, umask = 0): void {
+    if (this.via(path, cred, true, (v, p, c) => v.mkdir(p, c, mode, umask))) return
     const abs = normalizePath(path)
     if (this.exists(abs, cred, false)) throw new FsError('EEXIST', path)
     const { parent, name } = this.parentFor(abs, cred)
@@ -338,6 +424,7 @@ export class VFS {
   }
 
   unlink(path: string, cred: Cred): void {
+    if (this.via(path, cred, true, (v, p, c) => v.unlink(p, c))) return
     const { parent, name } = this.parentFor(path, cred)
     const ino = parent.entries!.get(name)
     if (ino === undefined) throw new FsError('ENOENT', path)
@@ -354,6 +441,7 @@ export class VFS {
   }
 
   rmdir(path: string, cred: Cred): void {
+    if (this.via(path, cred, true, (v, p, c) => v.rmdir(p, c))) return
     const { parent, name } = this.parentFor(path, cred)
     const ino = parent.entries!.get(name)
     if (ino === undefined) throw new FsError('ENOENT', path)
@@ -368,6 +456,7 @@ export class VFS {
 
   /** Borra recursivamente (rm -r). */
   removeTree(path: string, cred: Cred): void {
+    if (this.via(path, cred, true, (v, p, c) => v.removeTree(p, c))) return
     const node = this.stat(path, cred, false)
     if (node.type === 'dir') {
       if (!this.can(node, cred, 4) || !this.can(node, cred, 2) || !this.can(node, cred, 1)) throw new FsError('EACCES', path)
@@ -379,6 +468,7 @@ export class VFS {
   }
 
   symlink(target: string, path: string, cred: Cred): void {
+    if (this.via(path, cred, true, (v, p, c) => v.symlink(target, p, c))) return
     if (this.exists(path, cred, false)) throw new FsError('EEXIST', path)
     const { parent, name } = this.parentFor(path, cred)
     const node = this.newInode('symlink', 0o777, cred, parent)
@@ -387,6 +477,13 @@ export class VFS {
   }
 
   link(existing: string, path: string, cred: Cred): void {
+    const lf = this.remoteOf(existing)
+    const lt = this.remoteOf(path)
+    if (lf || lt) {
+      if (!lf || !lt || lf.b !== lt.b) throw new FsError('EXDEV', path)
+      this.via(path, cred, true, (v, p, c) => v.link(lf.rpath, p, c))
+      return
+    }
     const src = this.stat(existing, cred)
     if (src.type === 'dir') throw new FsError('EPERM', existing)
     if (this.exists(path, cred, false)) throw new FsError('EEXIST', path)
@@ -396,6 +493,18 @@ export class VFS {
   }
 
   rename(from: string, to: string, cred: Cred): void {
+    const rf = this.remoteOf(from)
+    const rt = this.remoteOf(to)
+    if (rf || rt) {
+      if (rf && rt && rf.b === rt.b) {
+        this.via(to, cred, true, (v, p, c) => v.rename(rf.rpath, p, c))
+        return
+      }
+      // Entre sistemas de archivos distintos, mv copia y después borra el original.
+      this.copy(from, to, cred, { recursive: true, preserve: true })
+      this.removeTree(from, cred)
+      return
+    }
     const src = this.parentFor(from, cred)
     const ino = src.parent.entries!.get(src.name)
     if (ino === undefined) throw new FsError('ENOENT', from)
@@ -429,6 +538,7 @@ export class VFS {
   }
 
   chmod(path: string, mode: number, cred: Cred): void {
+    if (this.via(path, cred, true, (v, p, c) => v.chmod(p, mode, c))) return
     const node = this.stat(path, cred)
     if (cred.uid !== 0 && cred.uid !== node.uid) throw new FsError('EPERM', path)
     node.mode = mode & 0o7777
@@ -437,6 +547,7 @@ export class VFS {
   }
 
   chown(path: string, uid: number | undefined, gid: number | undefined, cred: Cred, follow = true): void {
+    if (this.via(path, cred, true, (v, p, c) => v.chown(p, uid, gid, c, follow))) return
     const node = this.stat(path, cred, follow)
     if (cred.uid !== 0) {
       if (uid !== undefined && uid !== node.uid) throw new FsError('EPERM', path)
@@ -452,6 +563,12 @@ export class VFS {
 
   /** Copia un archivo o, con recursive, un directorio completo. */
   copy(from: string, to: string, cred: Cred, opts: { recursive?: boolean; preserve?: boolean } = {}): void {
+    const cf = this.remoteOf(from)
+    const ct = this.remoteOf(to)
+    if ((cf || ct) && cf?.b === ct?.b) {
+      this.via(to, cred, true, (v, p, c) => v.copy(cf!.rpath, p, c, opts))
+      return
+    }
     const src = this.stat(from, cred)
     let dest = normalizePath(to)
     if (this.exists(dest, cred) && this.stat(dest, cred).type === 'dir') dest = `${dest}/${basename(from)}`
@@ -510,6 +627,12 @@ export class VFS {
     onError?: (abs: string, error: FsError) => void,
     depth = 0,
   ): void {
+    const wr = this.remoteOf(path)
+    if (wr) {
+      const back = (p: string) => this.toLocal(wr.b, normalizePath(p))
+      wr.b.vfs.walk(wr.rpath, wr.b.cred(cred), (abs, node, d) => visit(back(abs), node, depth + d), onError && ((abs, err) => onError(back(abs), new FsError(err.code, back(err.path)))), 0)
+      return
+    }
     const abs = normalizePath(path)
     const node = this.stat(abs, cred, false)
     const descend = visit(abs, node, depth)

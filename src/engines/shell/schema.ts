@@ -30,6 +30,8 @@ const stateShape = {
   selinux: z.enum(['enforcing', 'permissive', 'disabled']).default('enforcing'),
   /** Booleanos de SELinux que el ejercicio deja activados. */
   booleanos_selinux: z.array(z.string()).default([]),
+  /** Servicios que firewalld ya deja pasar (en la configuración activa y en la permanente). */
+  servicios_firewall: z.array(z.string()).default([]),
   usuario: z.string().default('estudiante'),
   directorio: z.string().optional(),
   usuarios: z
@@ -487,6 +489,8 @@ const singleCheckSchema = z.union([
   z.strictObject({ base_datos: z.string(), motor: z.enum(['mariadb', 'postgresql']), existe: z.boolean().default(true) }),
   /** El resultado (primera celda) de una consulta hecha como administrador. */
   z.strictObject({ consulta_bd: z.string(), motor: z.enum(['mariadb', 'postgresql']), base: z.string(), resultado: z.string() }),
+  /** Una carpeta exportada por NFS (lo aplicado con exportfs, no solo el archivo). */
+  z.strictObject({ exportado: z.string(), cliente: z.string().optional(), opciones_incluye: z.string().optional(), existe: z.boolean().default(true) }),
   /** Un usuario de la base: si existe y si tiene (o no) un permiso. */
   z.strictObject({
     usuario_bd: z.string(),
