@@ -1,0 +1,115 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué responde un registro SPF?
+  opciones:
+    - { texto: "Qué servidores pueden mandar correo en nombre del dominio", correcta: true, explicacion: "Es una lista de autorizados, publicada como TXT." }
+    - { texto: "Qué servidores reciben el correo del dominio", explicacion: "Eso son los MX." }
+    - { texto: "Si el mensaje llegó sin cambios", explicacion: "Eso lo prueba la firma DKIM." }
+    - { texto: "Qué hacer con un correo que falla", explicacion: "Eso lo dice DMARC." }
+- id: p02
+  tipo: encontrar_error
+  dificultad: 2
+  enunciado: El correo de ejemplo.com.ar empezó a fallar SPF en todos lados después de que alguien agregó el servidor de facturación. Marcá las líneas del problema.
+  archivo: |
+    ejemplo.com.ar.          IN TXT "v=spf1 include:_spf.proveedor.com -all"
+    ejemplo.com.ar.          IN TXT "v=spf1 ip4:203.0.113.40 -all"
+    ejemplo.com.ar.          IN TXT "MS=ms48211937"
+    _dmarc.ejemplo.com.ar.   IN TXT "v=DMARC1; p=none; rua=mailto:dmarc@ejemplo.com.ar"
+  lineas_con_error: [1, 2]
+  explicacion: >-
+    Un dominio puede tener un solo registro SPF: con dos, el resultado es un error permanente
+    (permerror) y falla todo. Se unen en uno: "v=spf1 include:_spf.proveedor.com ip4:203.0.113.40 -all".
+- id: p03
+  tipo: encontrar_error
+  dificultad: 2
+  enunciado: Los informes de DMARC nunca llegan y Gmail dice "dmarc=none". Marcá la línea con el error.
+  archivo: |
+    ejemplo.com.ar.                 IN TXT "v=spf1 include:_spf.proveedor.com ip4:203.0.113.40 -all"
+    dmarc.ejemplo.com.ar.           IN TXT "v=DMARC1; p=quarantine; rua=mailto:dmarc@ejemplo.com.ar"
+    s1._domainkey.ejemplo.com.ar.   IN TXT "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOC..."
+  lineas_con_error: [2]
+  explicacion: El registro DMARC va en _dmarc (con guion bajo) delante del dominio. En otro nombre, nadie lo busca.
+- id: p04
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Revisando la zona de un cliente nuevo encontrás dos problemas graves. Marcalos.
+  archivo: |
+    cliente.com.ar.          IN MX  10 mx1.proveedor.com.
+    cliente.com.ar.          IN TXT "v=spf1 include:_spf.proveedor.com +all"
+    _dmarc.cliente.com.ar.   IN TXT "v=DMARC1; p=quarantine; rua=mailto:dmarc@cliente.com.ar"
+    _dmarc.cliente.com.ar.   IN TXT "v=DMARC1; p=rejct"
+  lineas_con_error: [2, 4]
+  explicacion: >-
+    +all autoriza a cualquier servidor del mundo a mandar por el dominio: el SPF no protege nada
+    (va -all o ~all). Y dos registros DMARC, uno con la política mal escrita, hacen que DMARC se
+    ignore por completo: queda uno solo.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre terminar el SPF con -all y con ~all?
+  opciones:
+    - { texto: "-all pide rechazar lo que no esté autorizado (fail); ~all, aceptarlo pero marcarlo como sospechoso (softfail)", correcta: true, explicacion: "Con DMARC en vigor, lo que manda en la práctica es la política DMARC." }
+    - { texto: "-all desactiva SPF", explicacion: "Es la versión estricta." }
+    - { texto: "~all autoriza a todos", explicacion: "Eso sería +all." }
+    - { texto: "No hay diferencia", explicacion: "La hay en el resultado." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Un cliente reenvía tus correos desde su casilla vieja a Gmail. ¿Por qué igual pasan DMARC?
+  salida: |
+    Authentication-Results: mx.google.com;
+           dkim=pass header.i=@ejemplo.com.ar header.s=s1;
+           spf=fail (google.com: domain of ventas@ejemplo.com.ar does not designate 190.12.44.8 as permitted sender) smtp.mailfrom=ventas@ejemplo.com.ar;
+           dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=ejemplo.com.ar
+  opciones:
+    - { texto: "SPF falla porque lo entrega el servidor que reenvía, pero la firma DKIM sigue válida y alcanza para DMARC", correcta: true, explicacion: "DMARC pide que pase uno de los dos, alineado con el From." }
+    - { texto: "Gmail ignora SPF", explicacion: "Lo revisa: dice fail." }
+    - { texto: "DMARC está en p=none", explicacion: "Dice p=QUARANTINE." }
+    - { texto: "El reenvío corrige el SPF", explicacion: "Al contrario: es lo que lo rompe." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde se publica la clave pública DKIM con el selector s1 para ejemplo.com.ar?
+  opciones:
+    - { texto: "En un TXT de s1._domainkey.ejemplo.com.ar", correcta: true, explicacion: "selector._domainkey.dominio." }
+    - { texto: "En el TXT de ejemplo.com.ar, junto al SPF", explicacion: "Va en su propio nombre." }
+    - { texto: "En _dmarc.ejemplo.com.ar", explicacion: "Ahí va DMARC." }
+    - { texto: "En el servidor de correo, no en el DNS", explicacion: "Ahí está la clave privada; la pública va al DNS." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 3
+  enunciado: Ordená cómo se pone en marcha DMARC en un dominio que nunca lo tuvo.
+  pasos:
+    - Publicar SPF y activar DKIM en cada servicio que manda correo por el dominio
+    - Publicar DMARC con p=none y una dirección para los informes (rua)
+    - Leer los informes unas semanas y corregir lo que falle (servicios olvidados)
+    - Pasar a p=quarantine
+    - Pasar a p=reject
+  explicacion: "Empezar por reject sin mirar los informes deja afuera al sistema de facturación que nadie recordaba."
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué les piden Gmail y Yahoo a quienes mandan más de 5000 correos por día? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "SPF y DKIM, y un registro DMARC (aunque sea p=none) alineado con el From", correcta: true, explicacion: "Desde 2024." }
+    - { texto: "Darse de baja con un clic (List-Unsubscribe) en los correos masivos", correcta: true, explicacion: "Y procesar la baja en dos días." }
+    - { texto: "Que menos del 0,3 % de los destinatarios lo marque como spam", correcta: true, explicacion: "Por encima, se entrega cada vez peor." }
+    - { texto: "Un certificado de una autoridad pagada en el servidor", explicacion: "Piden TLS, no un tipo de certificado." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El PTR de la IP de tu servidor de correo apunta a "203-0-113-40.static.isp.net". ¿Quién lo cambia?
+  opciones:
+    - { texto: "El dueño de la IP (el proveedor de internet o de la nube), a pedido", correcta: true, explicacion: "La zona inversa es suya; algunos proveedores lo dejan cambiar desde su panel." }
+    - { texto: "Vos, en la zona de tu dominio", explicacion: "Tu zona tiene los nombres, no las IP inversas." }
+    - { texto: "Postfix, con myhostname", explicacion: "myhostname es otra cosa (el nombre que anuncia)." }
+    - { texto: "Nadie: no importa", explicacion: "Sin PTR que coincida, muchos servidores rechazan o mandan a spam." }
+- id: p11
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí el comando que muestra solo la política DMARC de ejemplo.com.ar.
+  aceptadas: ["dig +short TXT _dmarc.ejemplo.com.ar", "dig +short _dmarc.ejemplo.com.ar TXT", "dig TXT _dmarc.ejemplo.com.ar +short"]
+  patrones: ["^dig\\s+(\\+short\\s+TXT\\s+_dmarc\\.ejemplo\\.com\\.ar|\\+short\\s+_dmarc\\.ejemplo\\.com\\.ar\\s+TXT|TXT\\s+_dmarc\\.ejemplo\\.com\\.ar\\s+\\+short)$"]
+  explicacion: "También: host -t TXT _dmarc.ejemplo.com.ar."

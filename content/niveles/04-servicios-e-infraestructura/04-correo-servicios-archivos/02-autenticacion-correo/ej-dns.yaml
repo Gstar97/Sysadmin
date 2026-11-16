@@ -1,0 +1,90 @@
+tipo: terminal
+shell: bash
+titulo: Revisar la autenticación del correo de un dominio
+descripcion: >-
+  Ejemplo S.A. tiene el correo de las personas en un proveedor (smtp.proveedor.com) y, además, su
+  sistema de facturación manda las facturas desde un servidor propio, mail.ejemplo.com.ar
+  (203.0.113.40). Antes de tocar nada, vas a mirar desde web01 qué tiene publicado hoy el
+  dominio en el DNS.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [bind-utils] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.11/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.1]
+    registros_dns:
+      TXT ejemplo.com.ar: |-
+        v=spf1 include:_spf.proveedor.com ip4:203.0.113.40 -all
+        MS=ms48211937
+      TXT _spf.proveedor.com: "v=spf1 ip4:203.0.113.0/26 ip4:198.51.100.0/26 -all"
+      TXT s1._domainkey.ejemplo.com.ar: "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u+qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyehkd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdx/ZZpUgCkDFhRJmBY39OxolbmZjMIrkzE1mU2vJRxyvRWnhlpzyIBcx3Uy4oyNNsmnRY3nrUKfyNSKdvUFrP8ruEBj7IDh9H1tRwhcYPFmGaAqB4yh9dEqjHNjiGEB0X3OjTmtJjIwIDAQAB"
+      TXT _dmarc.ejemplo.com.ar: "v=DMARC1; p=none; rua=mailto:dmarc@ejemplo.com.ar"
+      PTR 40.113.0.203.in-addr.arpa: mail.ejemplo.com.ar
+      mail.ejemplo.com.ar: 203.0.113.40
+pasos:
+  - consigna: Buscá el registro SPF del dominio ejemplo.com.ar.
+    verificar:
+      - { comando_usado: 'TXT|txt' }
+      - { salida_contiene: 'v=spf1' }
+    pistas:
+      - "El SPF es un registro TXT del propio dominio: `dig +short TXT ejemplo.com.ar`"
+    solucion: ["dig +short TXT ejemplo.com.ar"]
+    explicacion: >-
+      Hay dos TXT: el SPF (empieza con v=spf1) y otro que dejó Microsoft para verificar el dominio.
+      El SPF dice: pueden mandar los servidores que autorice el proveedor (include), el servidor
+      de facturación (ip4:203.0.113.40), y nadie más (-all).
+  - consigna: Seguí el include y fijate qué direcciones autoriza el proveedor.
+    verificar:
+      - { comando_usado: '_spf\.proveedor\.com' }
+      - { salida_contiene: '203.0.113.0/26' }
+    pistas:
+      - "`dig +short TXT _spf.proveedor.com`"
+    solucion: ["dig +short TXT _spf.proveedor.com"]
+    explicacion: >-
+      include no copia texto: le dice al que verifica "consultá también el SPF de este otro
+      nombre". Cada include, a, mx y redirect cuesta una consulta DNS, y SPF permite como máximo
+      diez: con demasiados proveedores incluidos, el registro deja de valer (permerror).
+  - consigna: El proveedor firma con DKIM usando el selector s1. Buscá la clave pública.
+    verificar:
+      - { comando_usado: 's1\._domainkey' }
+      - { salida_contiene: 'v=DKIM1' }
+    pistas:
+      - "La clave está en selector._domainkey.dominio: `dig +short TXT s1._domainkey.ejemplo.com.ar`"
+    solucion: ["dig +short TXT s1._domainkey.ejemplo.com.ar"]
+    explicacion: >-
+      Una clave RSA de 2048 bits no entra en una sola cadena de DNS (máximo 255 caracteres), por
+      eso dig la muestra partida en dos, cada parte entre comillas. El que verifica las une. El
+      selector permite tener varias claves a la vez: una por proveedor, o la vieja y la nueva
+      mientras se cambia.
+  - consigna: Mirá la política DMARC del dominio.
+    verificar:
+      - { comando_usado: '_dmarc' }
+      - { salida_contiene: 'p=none' }
+    pistas:
+      - "`dig +short TXT _dmarc.ejemplo.com.ar`"
+    solucion: ["dig +short TXT _dmarc.ejemplo.com.ar"]
+    explicacion: >-
+      p=none: el dominio pide que no se haga nada distinto con lo que falle, pero que le manden
+      informes a dmarc@ejemplo.com.ar. Es el punto de partida correcto: con los informes se
+      descubre qué servidores mandan en nombre del dominio antes de endurecer la política.
+  - consigna: >-
+      Comprobá el registro inverso (PTR) de 203.0.113.40 y que ese nombre, a su vez, apunte a la
+      misma IP.
+    verificar:
+      - { comando_usado: 'mail\.ejemplo\.com\.ar' }
+      - { salida_contiene: '203.0.113.40' }
+    pistas:
+      - "`dig +short -x 203.0.113.40` y después `dig +short mail.ejemplo.com.ar`"
+    solucion:
+      - dig +short -x 203.0.113.40
+      - dig +short mail.ejemplo.com.ar
+    explicacion: >-
+      La IP apunta al nombre y el nombre a la IP: la vuelta completa que piden Gmail, Yahoo y
+      Microsoft a todo servidor que les entrega correo. El PTR no se carga en la zona del dominio
+      sino en la de quien es dueño de la IP: el proveedor de internet o de la nube, por pedido.

@@ -1,0 +1,119 @@
+---
+id: n4-m4-l2
+titulo: Autenticación de correo
+minutos: 120
+objetivos:
+  - Configurar y verificar SPF, DKIM y DMARC de un dominio, y el registro inverso (PTR) del servidor que manda.
+  - Entender por qué un correo legítimo cae en spam y qué piden hoy Gmail, Yahoo y Microsoft a quien les manda correo.
+  - Leer el resultado de la autenticación en los encabezados de un mensaje recibido.
+glosario: [spf, dkim, dmarc, ptr-correo]
+verificado: 2026-11
+---
+
+import tres from './tres.svg?raw'
+import dns from './ej-dns.yaml'
+
+En la lección anterior viste que el remitente de un correo se puede poner a mano. Durante años eso fue un agujero enorme: cualquiera podía mandar un correo "del banco" o "del gerente" y no había forma de saber si era verdad. Hoy hay tres mecanismos, todos publicados en el DNS del dominio, que permiten comprobarlo: **SPF**, **DKIM** y **DMARC**. Y los grandes (Gmail, Yahoo, Outlook) ya no reciben bien el correo de un dominio que no los tiene. Cuando alguien de la empresa dice "nuestros correos llegan a spam", casi siempre la respuesta está acá.
+
+<AntesDeEmpezar>
+- DNS y sus registros, y dig (lección 2.3.3).
+- Firmas digitales y claves públicas y privadas (lección 4.2.1).
+- El recorrido de un correo, y el sobre y la carta (lección 4.4.1).
+</AntesDeEmpezar>
+
+## Las tres comprobaciones
+
+<Diagrama svg={tres} alt="Tres cajas. SPF: ¿este servidor puede mandar correo por el dominio del sobre? TXT de ejemplo.com.ar: v=spf1 include:_spf.proveedor.com ip4:203.0.113.40 -all; una lista de quién puede mandar, que se rompe con los reenvíos. DKIM: ¿la carta llegó sin cambios y la firmó el dominio que dice? TXT de s1._domainkey.ejemplo.com.ar: v=DKIM1; k=rsa; p=...; el que manda firma con su clave privada, el DNS publica la pública, y sobrevive a los reenvíos. DMARC: ¿el From que ve la persona coincide con un dominio que pasó SPF o DKIM? TXT de _dmarc.ejemplo.com.ar: v=DMARC1; p=quarantine; rua=mailto:dmarc@ejemplo.com.ar; y qué hacer si no: nada, a spam o rechazar. Las tres terminan en el encabezado Authentication-Results del mensaje recibido: dkim=pass, spf=pass, dmarc=pass." pie="SPF y DKIM prueban cosas distintas; DMARC une las dos con el From." />
+
+### SPF: quién puede mandar
+
+**SPF** es un registro TXT del dominio con la lista de servidores autorizados a mandar correo en su nombre:
+
+```text
+ejemplo.com.ar.  IN TXT  "v=spf1 include:_spf.proveedor.com ip4:203.0.113.40 -all"
+```
+
+- `include:` suma la lista de otro (el proveedor de correo, la plataforma de facturas, el sistema de encuestas).
+- `ip4:` e `ip6:` autorizan direcciones o redes; `a` y `mx`, las IP de esos registros del propio dominio.
+- Al final, qué hacer con el resto: `-all` (no autorizado: falla), `~all` (sospechoso: softfail). Nunca `+all`, que autoriza a todo el mundo.
+
+Dos reglas que rompen muchos SPF: **un solo registro** por dominio (con dos, falla todo) y **como máximo diez consultas** (cada include, a y mx cuenta). SPF revisa el dominio del **sobre** (MAIL FROM), no el From que ve la persona, y se rompe cuando un correo se reenvía, porque lo entrega otro servidor.
+
+### DKIM: la firma
+
+Con **DKIM**, el servidor que manda **firma** cada mensaje con una clave privada, y agrega la firma como un encabezado (`DKIM-Signature`, con el dominio en `d=` y el selector en `s=`). La clave pública se publica en el DNS, en un nombre fijo:
+
+```text
+s1._domainkey.ejemplo.com.ar.  IN TXT  "v=DKIM1; k=rsa; p=MIIBIjANBgkqh..."
+```
+
+El que recibe busca esa clave y comprueba la firma: si alguien cambió el mensaje en el camino, o lo inventó, no coincide. Es la misma idea de las firmas digitales de la lección 4.2.1. Como la firma viaja con la carta, DKIM sobrevive a los reenvíos. En la práctica, cada proveedor (Microsoft 365, Google Workspace, la plataforma de envíos masivos) te da su selector y su clave para publicar; firmar desde un Postfix propio se hace con programas como OpenDKIM o Rspamd y queda para más adelante.
+
+### DMARC: que el From sea de verdad y qué hacer si no
+
+SPF y DKIM pueden pasar con **otro** dominio: un estafador puede tener un SPF perfecto para su propio dominio y poner `From: gerencia@ejemplo.com.ar`. **DMARC** cierra ese hueco: exige que el dominio del From coincida (esté **alineado**) con el que pasó SPF o DKIM, y dice qué hacer si no:
+
+```text
+_dmarc.ejemplo.com.ar.  IN TXT  "v=DMARC1; p=none; rua=mailto:dmarc@ejemplo.com.ar"
+```
+
+- `p=none`: no hacer nada distinto, solo mandar informes. `p=quarantine`: a spam. `p=reject`: rechazar.
+- `rua=`: adónde mandar los informes diarios, con quién mandó correo usando el dominio y si pasó o no.
+
+Se arranca con `p=none` y los informes, porque siempre aparece algún servicio que manda por el dominio y nadie recordaba (la central telefónica que manda los mensajes de voz por correo, el sistema de encuestas). Corregido eso, se pasa a `quarantine` y después a `reject`.
+
+<Pregunta id="p02" />
+
+## El registro inverso (PTR)
+
+Además del dominio, se mira la **IP** que entrega el correo: tiene que tener un registro inverso (PTR) que apunte a un nombre, y ese nombre tiene que volver a la misma IP. Una IP sin PTR, o con uno genérico como `203-0-113-40.static.isp.net`, parece una conexión hogareña infectada. El PTR no se carga en la zona del dominio: lo pide el dueño de la IP a su proveedor de internet o de la nube. Si el correo sale por el relay de un proveedor, ese tema es del proveedor.
+
+<Pregunta id="p03" />
+
+## Por qué un correo legítimo cae en spam
+
+1. **Falta autenticación**: sin SPF, DKIM o DMARC, o con alguno roto. Desde 2024, Gmail y Yahoo piden a todo el que les manda correo SPF o DKIM, PTR válido y TLS; a los que mandan más de 5000 por día, además, SPF **y** DKIM, DMARC alineado (aunque sea `p=none`), baja con un clic en los correos masivos y menos de 0,3 % de quejas por spam. Microsoft aplica reglas parecidas a Outlook.com desde 2025. Y ya no solo mandan a spam: rechazan lo que no cumple.
+2. **Mala reputación** de la IP o del dominio: una IP compartida con alguien que manda spam, una IP en listas negras, un dominio recién creado que de golpe manda miles de correos.
+3. **El contenido y los destinatarios**: listas compradas, muchos rebotes, mensajes que la gente marca como spam.
+
+El diagnóstico empieza siempre igual: pedir un correo que haya caído en spam y mirar sus encabezados (en Gmail, "Mostrar original").
+
+```text
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@ejemplo.com.ar header.s=s1;
+       spf=pass (google.com: domain of ventas@ejemplo.com.ar designates 203.0.113.12 as permitted sender) smtp.mailfrom=ventas@ejemplo.com.ar;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=ejemplo.com.ar
+```
+
+<Terminal ejercicio={dns} />
+
+<EnSimple>
+SPF publica qué servidores pueden mandar por el dominio; DKIM firma cada mensaje y publica la clave para comprobarla; DMARC exige que el From que ve la persona coincida con lo que pasó, dice qué hacer si no y manda informes. Más un PTR que vaya y vuelva para la IP que manda. Todo se mira con dig y con el encabezado Authentication-Results.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Agregar un segundo registro SPF para un servicio nuevo">
+    Con dos SPF el resultado es error para todos. Se agrega el include al registro que ya existe.
+  </ErrorComun>
+  <ErrorComun titulo="Pasar a p=reject el primer día">
+    Sin mirar los informes, siempre queda afuera algún servicio legítimo. none, informes, quarantine, reject.
+  </ErrorComun>
+  <ErrorComun titulo="Terminar el SPF con +all">
+    Autoriza a cualquier servidor del mundo. -all o ~all.
+  </ErrorComun>
+  <ErrorComun titulo="Publicar DMARC en el nombre equivocado">
+    Va en _dmarc.dominio, y la clave DKIM en selector._domainkey.dominio. En otro nombre, nadie los busca.
+  </ErrorComun>
+  <ErrorComun titulo="Demasiados include en el SPF">
+    Más de diez consultas y SPF da error permanente. Se sacan los servicios que ya no se usan o se usa un subdominio para los envíos masivos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- SPF: TXT del dominio con quién puede mandar (v=spf1 ... -all); uno solo, máximo diez consultas; revisa el sobre.
+- DKIM: firma en cada mensaje y clave pública en selector._domainkey.dominio; sobrevive a los reenvíos.
+- DMARC: _dmarc.dominio con p=none|quarantine|reject y rua para informes; exige alineación con el From.
+- PTR: la IP que manda tiene que tener un nombre que vuelva a ella; lo carga el dueño de la IP.
+- Gmail, Yahoo y Microsoft exigen autenticación, PTR y TLS; a los envíos masivos, además, DMARC, baja con un clic y pocas quejas.
+- Diagnóstico: el encabezado Authentication-Results de un correo que cayó en spam, y dig para ver lo publicado.
+</Resumen>
