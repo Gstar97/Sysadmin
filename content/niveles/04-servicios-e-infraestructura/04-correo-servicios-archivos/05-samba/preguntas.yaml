@@ -1,0 +1,103 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué se usa Samba en un servidor Linux?
+  opciones:
+    - { texto: "Para compartir carpetas con las PC Windows usando el protocolo de Windows (SMB)", correcta: true, explicacion: "Para compartir entre servidores Linux, NFS." }
+    - { texto: "Para mandar correo", explicacion: "Eso es Postfix." }
+    - { texto: "Para hacer respaldos", explicacion: "No es su función." }
+    - { texto: "Para que Linux use Active Directory sin compartir nada", explicacion: "Puede unirse a AD, pero su función es compartir." }
+- id: p02
+  tipo: encontrar_error
+  dificultad: 2
+  enunciado: Nadie del área de Ventas puede entrar al recurso, aunque todos están en el grupo ventas. Marcá la línea culpable.
+  archivo: |
+    [ventas]
+    	comment = Ventas
+    	path = /srv/samba/ventas
+    	valid users = ventas
+    	writable = yes
+  lineas_con_error: [4]
+  explicacion: Sin @, "ventas" es un usuario. Para el grupo, valid users = @ventas.
+- id: p03
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Con este recurso, cualquiera puede escribir en /srv/samba/ventas aunque se pidió que solo el grupo ventas pudiera hacerlo. Marcá las dos líneas que lo causan.
+  archivo: |
+    [ventas]
+    	path = /srv/samba/ventas
+    	valid users = @ventas
+    	guest ok = yes
+    	writable = yes
+    	map to guest = bad user
+  lineas_con_error: [4, 6]
+  explicacion: >-
+    guest ok permite entrar sin usuario, y map to guest = bad user convierte a cualquier usuario
+    desconocido en invitado. Además, map to guest es de [global]: en un recurso no corresponde.
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: En Rocky, ana tiene cuenta de Samba, está en valid users y la carpeta tiene permisos para su grupo. ¿Qué falta?
+  salida: |
+    $ smbclient //localhost/contabilidad -U ana%Ana-2026 -c ls
+    NT_STATUS_ACCESS_DENIED listing \*
+  opciones:
+    - { texto: "La etiqueta de SELinux: samba_share_t en la carpeta", correcta: true, explicacion: "Entró al recurso (no dice tree connect failed) pero no puede leer la carpeta." }
+    - { texto: "La cuenta de Samba", explicacion: "Sin cuenta sería LOGON_FAILURE." }
+    - { texto: "valid users", explicacion: "Sería tree connect failed." }
+    - { texto: "Abrir el firewall", explicacion: "Está conectando a localhost, y llegó." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué testparm después de cada cambio en smb.conf?
+  opciones:
+    - { texto: "Porque Samba ignora en silencio los parámetros mal escritos, y testparm los muestra", correcta: true, explicacion: "Y también los valores inválidos que impiden arrancar." }
+    - { texto: "Porque testparm aplica los cambios", explicacion: "Solo revisa; aplicar es smbcontrol o reiniciar." }
+    - { texto: "Porque sin testparm Samba no arranca", explicacion: "Arranca igual." }
+    - { texto: "Para crear las cuentas", explicacion: "Eso es smbpasswd." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: sudo smbpasswd -a juan responde "Failed to add entry for user juan." ¿Por qué?
+  opciones:
+    - { texto: "No existe el usuario juan en Linux", correcta: true, explicacion: "Cada cuenta de Samba se ata a un usuario de Linux." }
+    - { texto: "La contraseña es débil", explicacion: "El error sería otro." }
+    - { texto: "Samba no está corriendo", explicacion: "smbpasswd -a funciona igual." }
+    - { texto: "Falta el firewall", explicacion: "No tiene relación." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Montás un recurso con mount -t cifs como root, sin uid= ni gid=, y ana no puede escribir. ¿Por qué?
+  opciones:
+    - { texto: "Todo se ve como de root con 0755; hay que montar con uid= y gid= (o file_mode y dir_mode)", correcta: true, explicacion: "El cliente revisa esos permisos antes de ir al servidor." }
+    - { texto: "Samba no permite escribir desde Linux", explicacion: "Permite." }
+    - { texto: "Falta el SGID en el servidor", explicacion: "El problema está en el cliente." }
+    - { texto: "Falta writable en smb.conf", explicacion: "Root tampoco podría escribir." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená cómo se arma un recurso nuevo de Samba en Rocky.
+  pasos:
+    - Crear la carpeta con su grupo y permisos (2770)
+    - Etiquetarla samba_share_t con semanage fcontext y restorecon
+    - Agregar la sección en smb.conf y revisarla con testparm
+    - Crear las cuentas de Samba que falten con smbpasswd -a
+    - Arrancar o recargar Samba, abrir el firewall y probar con smbclient
+  explicacion: "Probar al final con smbclient muestra el error exacto si algo falta."
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué cambia si el servidor de Samba se une al dominio de Active Directory? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Las personas entran con su usuario y contraseña de Windows", correcta: true, explicacion: "Sin cuentas aparte en Samba." }
+    - { texto: "Se pueden usar los grupos del dominio en valid users", correcta: true, explicacion: "Por ejemplo, @\"EMPRESA\\Contabilidad\"." }
+    - { texto: "Ya no hacen falta los permisos de Linux en la carpeta", explicacion: "Siguen haciendo falta." }
+    - { texto: "Ya no hace falta smb.conf", explicacion: "Los recursos se definen igual." }
+- id: p10
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí el comando que lista los recursos que ve ana en files01 (te va a pedir su contraseña).
+  aceptadas: ["smbclient -L //files01 -U ana", "smbclient -U ana -L //files01", "smbclient -L files01 -U ana"]
+  patrones: ["^smbclient\\s+(-L\\s+(//)?files01\\s+-U\\s+ana|-U\\s+ana\\s+-L\\s+(//)?files01)$"]
+  explicacion: "Para entrar a un recurso: smbclient //files01/recurso -U ana."

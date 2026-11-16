@@ -1,0 +1,51 @@
+tipo: configuracion
+titulo: Encontrá y corregí los errores de este smb.conf
+consigna: >-
+  Así quedó el smb.conf de files01 después de que lo tocaron tres personas, y Samba no arranca.
+  Corregilo para que [ventas] sea solo para el grupo ventas, con escritura y archivos 0660; y
+  [publico] (los instaladores) se pueda leer sin usuario pero nadie pueda escribir. El editor
+  marca los errores a medida que escribís.
+lenguaje: smbconf
+nombre_archivo: /etc/samba/smb.conf
+archivo_inicial: |
+  [global]
+  	workgroup = EMPRESA
+  	security = user
+  	map to guest = bad user
+
+  [ventas]
+  	comment = Ventas
+  	path = /srv/samba/ventas
+  	valid users = ventas
+  	writeable2 = yes
+  	create mask = 0660
+
+  [publico]
+  	comment = Instaladores
+  	path = /srv/samba/publico
+  	guest ok = si
+  	read only = no
+reglas:
+  - { tipo: sin_errores, mensaje: "testparm no encuentra errores" }
+  - { tipo: contiene, regex: "\\[ventas\\][^\\[]*valid users\\s*=\\s*@ventas\\s*$", mensaje: "[ventas]: valid users = @ventas (con @ es el grupo)" }
+  - { tipo: contiene, regex: "\\[ventas\\][^\\[]*(writ(e)?able\\s*=\\s*yes|read only\\s*=\\s*no)", mensaje: "[ventas]: con escritura" }
+  - { tipo: contiene, regex: "\\[publico\\][^\\[]*guest ok\\s*=\\s*yes", mensaje: "[publico]: guest ok = yes" }
+  - { tipo: contiene, regex: "\\[publico\\][^\\[]*read only\\s*=\\s*yes", mensaje: "[publico]: read only = yes" }
+solucion: |
+  [global]
+  	workgroup = EMPRESA
+  	security = user
+  	map to guest = bad user
+
+  [ventas]
+  	comment = Ventas
+  	path = /srv/samba/ventas
+  	valid users = @ventas
+  	writable = yes
+  	create mask = 0660
+
+  [publico]
+  	comment = Instaladores
+  	path = /srv/samba/publico
+  	guest ok = yes
+  	read only = yes

@@ -886,3 +886,26 @@ function cifsMount(ctx: CommandContext, spec: string, target: string, type: stri
 }
 
 NETWORK_MOUNTS.push(cifsMount)
+
+register('smbcontrol', {
+  usage: 'smbcontrol all reload-config',
+  path: '/usr/bin',
+  run(ctx) {
+    if (ctx.sh.user !== 'root') {
+      ctx.err('Can only send messages as root\n')
+      return 1
+    }
+    const [dest, msg] = ctx.args
+    if (!dest || msg !== 'reload-config') {
+      ctx.err('[simulador] Acá smbcontrol solo hace: smbcontrol all reload-config (o smbd reload-config).\n')
+      return 1
+    }
+    if (!running(ctx.sys)) {
+      ctx.err(`Can't find pid for destination '${dest}'\n`)
+      return 1
+    }
+    const c = readSmbConf(ctx.sys)
+    if (!c.fatal.length) smbState(ctx.sys).loaded = c
+    return 0
+  },
+})

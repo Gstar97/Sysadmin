@@ -1,0 +1,119 @@
+tipo: terminal
+shell: bash
+titulo: Una carpeta de Contabilidad para las PC Windows
+descripcion: >-
+  files01 (Rocky Linux 10, con SELinux en enforcing) va a compartir una carpeta para el área de
+  Contabilidad, que trabaja con PC Windows. Ana y Luis son del área (grupo contabilidad); Pedro es
+  de Ventas y no tiene que entrar. Las cuentas de Linux ya existen. Samba ya está instalado.
+estado_inicial:
+  distro: rocky
+  hostname: files01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true, uid: 1001, grupos: [contabilidad] }
+    - { nombre: luis, uid: 1002, grupos: [contabilidad] }
+    - { nombre: pedro, uid: 1003 }
+  grupos:
+    - { nombre: contabilidad, gid: 2001 }
+  paquetes: { instalados: [samba, samba-client, policycoreutils-python-utils] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.30/24, estado: UP }
+pasos:
+  - consigna: >-
+      Creá /srv/samba/contabilidad, del grupo contabilidad, con lectura y escritura para el grupo,
+      nada para el resto y el bit SGID (2770).
+    verificar:
+      - { archivo: /srv/samba/contabilidad, tipo: directorio, grupo: contabilidad, modo: '2770' }
+    pistas:
+      - "`sudo mkdir -p /srv/samba/contabilidad`, `sudo chgrp contabilidad /srv/samba/contabilidad` y `sudo chmod 2770 /srv/samba/contabilidad`"
+    solucion:
+      - sudo mkdir -p /srv/samba/contabilidad
+      - sudo chgrp contabilidad /srv/samba/contabilidad
+      - sudo chmod 2770 /srv/samba/contabilidad
+    explicacion: >-
+      Samba no reemplaza los permisos de Linux: los usa. Lo que no permita la carpeta, no lo va a
+      permitir el recurso compartido. El SGID hace que todo lo que se cree adentro sea del grupo.
+  - consigna: >-
+      Agregá al final de /etc/samba/smb.conf el recurso [contabilidad]: esa carpeta, con el
+      comentario "Contabilidad", solo para el grupo contabilidad (valid users = @contabilidad),
+      con escritura, create mask 0660 y directory mask 2770. Revisalo con testparm.
+    verificar:
+      - { archivo: /etc/samba/smb.conf, contenido_incluye: '[contabilidad]' }
+      - { archivo: /etc/samba/smb.conf, contenido_incluye: '@contabilidad' }
+      - { comando_usado: 'testparm' }
+      - { salida_contiene: 'valid users = @contabilidad' }
+    pistas:
+      - "Con un editor (`sudo nano /etc/samba/smb.conf`) o con `printf '...' | sudo tee -a /etc/samba/smb.conf`."
+      - "Las líneas: `[contabilidad]`, `comment = Contabilidad`, `path = /srv/samba/contabilidad`, `valid users = @contabilidad`, `writable = yes`, `create mask = 0660`, `directory mask = 2770`. Después `testparm -s`."
+    solucion:
+      - "printf '\\n[contabilidad]\\n\\tcomment = Contabilidad\\n\\tpath = /srv/samba/contabilidad\\n\\tvalid users = @contabilidad\\n\\twritable = yes\\n\\tcreate mask = 0660\\n\\tdirectory mask = 2770\\n' | sudo tee -a /etc/samba/smb.conf > /dev/null"
+      - testparm -s
+    explicacion: >-
+      testparm revisa la sintaxis y muestra la configuración como la entiende Samba: writable =
+      yes aparece como read only = No (son sinónimos). Un parámetro mal escrito, Samba lo ignora
+      sin avisar al arrancar; testparm sí lo muestra.
+  - consigna: >-
+      Creá las cuentas de Samba de ana (clave Ana-2026) y luis (clave Luis-2026), arrancá y
+      habilitá Samba, y abrí el servicio samba en el firewall (permanente).
+    verificar:
+      - { comando_usado: 'smbpasswd' }
+      - { servicio: smb, activo: true, habilitado: true }
+      - { firewall_permite: 445/tcp }
+    pistas:
+      - "`(echo Ana-2026; echo Ana-2026) | sudo smbpasswd -s -a ana` (lo mismo para luis)"
+      - "`sudo systemctl enable --now smb` y `sudo firewall-cmd --permanent --add-service=samba && sudo firewall-cmd --reload`"
+    solucion:
+      - "(echo Ana-2026; echo Ana-2026) | sudo smbpasswd -s -a ana"
+      - "(echo Luis-2026; echo Luis-2026) | sudo smbpasswd -s -a luis"
+      - sudo systemctl enable --now smb
+      - sudo firewall-cmd --permanent --add-service=samba
+      - sudo firewall-cmd --reload
+    explicacion: >-
+      Samba tiene sus propias contraseñas (las de Windows se guardan distinto que las de Linux),
+      pero cada cuenta de Samba tiene que corresponder a un usuario de Linux: con él se aplican los
+      permisos de los archivos. sudo pdbedit -L lista las cuentas.
+  - consigna: Entrá al recurso como ana con smbclient y listá su contenido. ¿Qué pasa?
+    verificar:
+      - { comando_usado: 'smbclient' }
+      - { salida_contiene: 'NT_STATUS_ACCESS_DENIED' }
+    pistas:
+      - "`smbclient //localhost/contabilidad -U ana%Ana-2026 -c ls`"
+    solucion: ["smbclient //localhost/contabilidad -U ana%Ana-2026 -c ls"]
+    explicacion: >-
+      La contraseña y el recurso están bien, y los permisos también. Es SELinux: en Rocky, smbd
+      solo puede tocar archivos con la etiqueta samba_share_t, y /srv/samba tiene la de fábrica
+      (var_t). En el registro de auditoría queda un "denied" de smbd.
+  - consigna: >-
+      Etiquetá /srv/samba y todo lo que tenga adentro como samba_share_t (de forma permanente) y
+      volvé a probar, esta vez subiendo un archivo.
+    verificar:
+      - { comando_usado: 'semanage fcontext' }
+      - { salida_contiene: 'putting file' }
+    pistas:
+      - "`sudo semanage fcontext -a -t samba_share_t '/srv/samba(/.*)?'` y `sudo restorecon -Rv /srv/samba`"
+      - "Después: `echo prueba > balance.txt` y `smbclient //localhost/contabilidad -U ana%Ana-2026 -c 'put balance.txt; ls'`"
+    solucion:
+      - "sudo semanage fcontext -a -t samba_share_t '/srv/samba(/.*)?'"
+      - sudo restorecon -Rv /srv/samba
+      - echo prueba > balance.txt
+      - "smbclient //localhost/contabilidad -U ana%Ana-2026 -c 'put balance.txt; ls'"
+    explicacion: >-
+      semanage fcontext guarda la regla en la política (sobrevive a un relabel completo) y
+      restorecon la aplica. chcon también cambia la etiqueta, pero se pierde con el próximo
+      restorecon. El archivo quedó con el modo 0660 (create mask) y del grupo contabilidad (SGID).
+  - consigna: >-
+      Comprobá que pedro no entra: creale una cuenta de Samba (clave Pedro-2026) y probá listar
+      el recurso con ella.
+    verificar:
+      - { comando_usado: 'pedro' }
+      - { salida_contiene: 'tree connect failed: NT_STATUS_ACCESS_DENIED' }
+    pistas:
+      - "`(echo Pedro-2026; echo Pedro-2026) | sudo smbpasswd -s -a pedro` y `smbclient //localhost/contabilidad -U pedro%Pedro-2026 -c ls`"
+    solucion:
+      - "(echo Pedro-2026; echo Pedro-2026) | sudo smbpasswd -s -a pedro"
+      - "smbclient //localhost/contabilidad -U pedro%Pedro-2026 -c ls"
+    explicacion: >-
+      La contraseña es correcta (si no, sería NT_STATUS_LOGON_FAILURE), pero valid users no lo
+      incluye y Samba corta en la conexión al recurso. Desde Windows, Pedro vería "No tiene
+      permiso de acceso". Dos filtros, en orden: el recurso (valid users, writable) y la carpeta.

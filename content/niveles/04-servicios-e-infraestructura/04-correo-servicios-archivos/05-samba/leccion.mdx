@@ -1,0 +1,137 @@
+---
+id: n4-m4-l5
+titulo: Samba
+minutos: 150
+objetivos:
+  - Compartir carpetas desde Linux con clientes Windows usando smb.conf, y revisarlo con testparm.
+  - Gestionar las cuentas de Samba y los permisos (del recurso, de la carpeta y de SELinux) para que cada área vea solo lo suyo.
+  - Probar y montar recursos desde Linux (smbclient, mount -t cifs) y conocer la integración con Active Directory.
+glosario: [samba, cifs]
+verificado: 2026-11
+---
+
+import filtros from './filtros.svg?raw'
+import editor from './editor-smb.yaml'
+import ej from './ej-samba.yaml'
+
+Las PC de las personas son, casi siempre, Windows, y Windows comparte archivos con su propio protocolo: **SMB**. **Samba** es la implementación de SMB para Linux: con ella, una carpeta de un servidor Linux aparece en el Explorador de Windows como `\\files01\contabilidad`, se puede asignar a una letra (`Z:`) y respeta usuarios y permisos. En el módulo 3.4 viste los recursos compartidos desde Windows Server; acá vas a hacer lo mismo desde Linux, que en muchas empresas medianas es el servidor de archivos.
+
+<AntesDeEmpezar>
+- Permisos, grupos y SGID (módulo 1.2).
+- SELinux: etiquetas, semanage y restorecon (lección 1.6.6).
+- Recursos compartidos de Windows (módulo 3.4).
+</AntesDeEmpezar>
+
+## Instalar y configurar
+
+```bash
+sudo dnf install samba                    # Rocky: el servicio es smb
+sudo apt install samba                    # Ubuntu: el servicio es smbd y arranca solo
+sudo systemctl enable --now smb           # (en Ubuntu, smbd)
+sudo firewall-cmd --permanent --add-service=samba && sudo firewall-cmd --reload
+```
+
+Todo se configura en `/etc/samba/smb.conf`: una sección `[global]` con lo general y una sección por cada recurso compartido.
+
+```ini
+[global]
+	workgroup = EMPRESA
+	security = user
+
+[contabilidad]
+	comment = Contabilidad
+	path = /srv/samba/contabilidad
+	valid users = @contabilidad
+	writable = yes
+	create mask = 0660
+	directory mask = 2770
+```
+
+- `path`: la carpeta que se comparte.
+- `valid users`: quién puede entrar. Con `@` es un grupo; sin `@`, un usuario.
+- `writable = yes` (o `read only = no`, que es lo mismo): de fábrica, los recursos son de solo lectura. `write list` da escritura a algunos en un recurso que es de lectura para el resto.
+- `create mask` y `directory mask`: los permisos máximos de lo que se crea (de fábrica, 0744 y 0755). `force group` hace que todo lo nuevo sea de un grupo (lo mismo que el SGID de la carpeta).
+- `guest ok = yes`: se puede entrar sin usuario. Solo para carpetas públicas de solo lectura.
+
+Cada vez que se toca el archivo, **testparm** revisa la sintaxis y muestra cómo lo entendió Samba. Es importante porque Samba **ignora en silencio** los parámetros mal escritos: un `writeable2 = yes` no da error al arrancar, simplemente no hace nada. Los cambios en los recursos los toma Samba solo, en unos minutos; para aplicarlos enseguida, `sudo smbcontrol all reload-config` (o reiniciar el servicio).
+
+<EditorConfig ejercicio={editor} />
+
+## Las cuentas de Samba
+
+Windows no manda la contraseña igual que Linux, así que Samba guarda sus propias contraseñas. Pero cada cuenta de Samba tiene que corresponder a un **usuario de Linux**, porque los permisos de los archivos se aplican con ese usuario.
+
+```bash
+sudo smbpasswd -a ana      # crea la cuenta (pide la contraseña dos veces)
+sudo smbpasswd -d ana      # la deshabilita (-e la vuelve a habilitar)
+sudo smbpasswd -x ana      # la borra
+sudo pdbedit -L            # lista las cuentas
+```
+
+Si en la empresa hay un dominio de Active Directory (el del módulo 3.3), lo habitual no es crear cuentas en Samba, sino **unir el servidor al dominio**: con `realm join` y `security = ads`, las personas entran con su usuario y contraseña de Windows, y los grupos del dominio sirven en `valid users`. Es un tema con varias piezas (Kerberos, SSSD o winbind, el mapeo de uid) y queda para más adelante; lo que cambia es de dónde salen las cuentas, no cómo se arma el recurso.
+
+## Los cinco controles
+
+<Diagrama svg={filtros} alt="Cinco cajas en fila. 1, la red: smb corriendo y el firewall con el servicio samba (445); si falla, smbclient muestra HOST_UNREACHABLE o IO_TIMEOUT. 2, la cuenta: usuario y contraseña de Samba (smbpasswd), atada a un usuario de Linux; si falla, LOGON_FAILURE. 3, el recurso: smb.conf con valid users, writable o read only, write list, hosts allow; si falla, tree connect failed: ACCESS_DENIED. 4, SELinux en Rocky: la carpeta etiquetada samba_share_t con semanage fcontext; si falla, ACCESS_DENIED listing. 5, la carpeta: permisos de Linux del usuario (o force user), grupo y SGID; si falla, ACCESS_DENIED opening remote file. Abajo: desde Windows todo se ve casi igual, por eso se prueba con smbclient en el servidor, de a un control por vez." pie="Cuando algo no anda, se revisa en este orden." />
+
+Desde Windows, casi cualquier problema se ve como "No tiene permiso" o "No se encuentra la ruta de acceso". Por eso conviene probar en el propio servidor con **smbclient**, que muestra el error exacto:
+
+```bash
+smbclient -L //localhost -U ana                   # qué recursos ve ana
+smbclient //localhost/contabilidad -U ana -c ls   # entrar y listar
+```
+
+El paso que más se olvida en Rocky es **SELinux**: smbd solo puede tocar archivos con la etiqueta `samba_share_t`. Una carpeta nueva en `/srv` tiene otra, y el resultado es un recurso que aparece pero no deja ver nada:
+
+```bash
+sudo semanage fcontext -a -t samba_share_t '/srv/samba(/.*)?'
+sudo restorecon -Rv /srv/samba
+```
+
+Para compartir las carpetas personales hay un booleano (`samba_enable_home_dirs`), y para casos especiales, `samba_export_all_ro` y `samba_export_all_rw`, que dejan a Samba leer (o escribir) cualquier archivo: mejor no usarlos.
+
+<Terminal ejercicio={ej} />
+
+## Desde los clientes
+
+- **Windows**: en el Explorador, `\\files01\contabilidad`; para una letra fija, `net use Z: \\files01\contabilidad /persistent:yes` o una GPO de unidades asignadas (módulo 3.3).
+- **Linux**: con el paquete `cifs-utils`, `mount -t cifs`. Todo el montaje usa una sola cuenta de Samba, y los archivos se ven con el dueño y los permisos que digan las opciones, no los del servidor:
+
+```bash
+sudo mount -t cifs //files01/contabilidad /mnt/conta -o credentials=/root/.smb-conta,uid=ana,gid=contabilidad
+```
+
+El archivo de credenciales (`username=` y `password=`, con permisos 600) evita dejar la contraseña en `/etc/fstab` o en el historial. Sin `uid=` y `gid=`, todo aparece como de root y los demás usuarios del equipo no pueden escribir.
+
+<EnSimple>
+Samba comparte carpetas de Linux con Windows. Cada recurso es una sección de smb.conf (path, valid users, writable, create mask), que se revisa con testparm. Cada persona necesita una cuenta de Samba atada a un usuario de Linux (smbpasswd -a), o el servidor se une al dominio. Para entrar hay que pasar la red, la cuenta, el recurso, SELinux (samba_share_t en Rocky) y los permisos de la carpeta; smbclient muestra en cuál falla.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="valid users = contabilidad (sin @)">
+    Sin @ es un usuario llamado contabilidad, no el grupo. Nadie del área puede entrar.
+  </ErrorComun>
+  <ErrorComun titulo="Un parámetro mal escrito">
+    Samba lo ignora sin avisar. testparm después de cada cambio.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de SELinux en Rocky">
+    El recurso aparece pero no deja listar nada. semanage fcontext -t samba_share_t y restorecon. Nunca setenforce 0.
+  </ErrorComun>
+  <ErrorComun titulo="Crear la cuenta de Samba de alguien que no existe en Linux">
+    smbpasswd -a falla con "Failed to add entry". Primero el usuario de Linux (puede ser sin shell ni contraseña de Linux).
+  </ErrorComun>
+  <ErrorComun titulo="Dar permisos 777 a la carpeta para que “ande”">
+    Cualquier usuario del servidor la modifica. Un grupo, permisos 2770 y valid users = @grupo.
+  </ErrorComun>
+  <ErrorComun titulo="guest ok y escritura juntos">
+    Cualquiera de la red puede borrar o llenar la carpeta. Los recursos sin usuario, solo de lectura.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Paquete samba; servicio smb (Rocky) o smbd (Ubuntu); firewall: servicio samba (445).
+- smb.conf: [global] y una sección por recurso con path, valid users (@grupo), writable, create mask, directory mask; testparm después de cada cambio.
+- Cuentas: smbpasswd -a (atada a un usuario de Linux), -d, -x; pdbedit -L. Con Active Directory, el servidor se une al dominio.
+- Cinco controles: red, cuenta, recurso, SELinux (samba_share_t) y la carpeta. smbclient muestra en cuál falla.
+- Clientes: \\servidor\recurso en Windows; mount -t cifs con credentials=, uid= y gid= en Linux.
+</Resumen>
