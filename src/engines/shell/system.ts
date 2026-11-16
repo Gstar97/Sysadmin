@@ -574,7 +574,11 @@ export class System {
   /** Regenera /proc y /sys con el estado actual (se llama antes de cada comando). */
   refreshVirtual() {
     refreshKernelFs(this, metrics(this), MEM_TOTAL_KB)
+    for (const h of System.refreshHooks) h(this)
   }
+
+  /** Lo que avanza con el tiempo entre comando y comando (una reconstrucción de RAID, la UPS). */
+  static refreshHooks: ((sys: System) => void)[] = []
 
   // ---------------------------------------------------------------------------
   // Cuentas

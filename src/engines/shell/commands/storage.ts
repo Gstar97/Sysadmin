@@ -81,7 +81,7 @@ interface Row {
   path: string
   majmin: string
   size: number
-  type: 'disk' | 'part' | 'lvm' | 'rom'
+  type: 'disk' | 'part' | 'lvm' | 'rom' | `raid${number}`
   depth: number
   last: boolean[]
 }
@@ -118,15 +118,23 @@ function blockRows(s: Storage, only?: string[]): Row[] {
     const lvs = lvsOnPv(s, pv)
     lvs.forEach((x, i) => rows.push({ name: dmName(x.vg.name, x.lv.name), path: s.lvPath(x.vg.name, x.lv.name), majmin: `253:${x.lv.minor}`, size: x.lv.size, type: 'lvm', depth, last: [...last, i === lvs.length - 1] }))
   }
+  // Un arreglo RAID aparece debajo de cada uno de sus integrantes, como en lsblk real.
+  const addMd = (dev: string, depth: number, last: boolean[]) => {
+    const a = s.mdOf(dev)
+    if (!a) return addLvs(dev, depth, last)
+    const path = `/dev/${a.name}`
+    rows.push({ name: a.name, path, majmin: `9:${a.minor}`, size: s.size(path) ?? 0, type: `raid${a.level}`, depth, last: [...last, true] })
+    addLvs(path, depth + 1, [...last, true])
+  }
   for (const d of disks) {
     if (only?.length && !only.includes(`/dev/${d.name}`)) continue
     rows.push({ name: d.name, path: `/dev/${d.name}`, majmin: `${d.major}:${d.minor}`, size: d.size, type: 'disk', depth: 0, last: [] })
-    if (!d.parts.length) addLvs(`/dev/${d.name}`, 1, [])
+    if (!d.parts.length) addMd(`/dev/${d.name}`, 1, [])
     d.parts.forEach((p, i) => {
       const path = s.partPath(d.name, p.num)
       const last = i === d.parts.length - 1
       rows.push({ name: devName(path), path, majmin: `${d.major}:${d.minor + p.num}`, size: (p.end - p.start + 1) * SECTOR, type: 'part', depth: 1, last: [last] })
-      addLvs(path, 2, [last])
+      addMd(path, 2, [last])
     })
   }
   if (!only?.length) rows.push({ name: 'sr0', path: '/dev/sr0', majmin: '11:0', size: 1073741312, type: 'rom', depth: 0, last: [] })

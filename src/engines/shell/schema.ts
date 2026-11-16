@@ -308,6 +308,72 @@ const stateShape = {
         .optional(),
     })
     .default({ aplicaciones: {}, dominios_publicos: {}, puertos_publicados: [], certificados: [], confia_en: [] }),
+  /** Datos SMART de discos físicos (por ruta, ej. /dev/sdb). Sin esto, el disco es virtual y no tiene SMART. */
+  smart: z
+    .record(
+      z.string(),
+      z.strictObject({
+        estado: z.enum(['ok', 'fallando']).default('ok'),
+        reasignados: z.number().int().default(0),
+        pendientes: z.number().int().default(0),
+        horas: z.number().int().default(25812),
+        temperatura: z.number().int().default(36),
+        familia: z.string().default('Seagate Exos 7E10'),
+        modelo: z.string().default('ST4000NM024B'),
+        serie: z.string().default('ZC1A2B3C'),
+      }),
+    )
+    .optional(),
+  /** La placa de gestión del servidor (iDRAC, iLO, IPMI). */
+  bmc: z
+    .strictObject({
+      ip: z.string(),
+      usuario: z.string().default('admin'),
+      clave: z.string(),
+      modelo: z.string().default('PowerEdge R760'),
+      fuente1: z.boolean().default(true),
+      fuente2: z.boolean().default(true),
+      sensores: z
+        .strictObject({
+          ventilador1: z.number().default(5880),
+          ventilador2: z.number().default(5760),
+          temp_entrada: z.number().default(23),
+          temp_salida: z.number().default(35),
+          temp_cpu: z.number().default(48),
+          consumo: z.number().default(212),
+        })
+        .default({ ventilador1: 5880, ventilador2: 5760, temp_entrada: 23, temp_salida: 35, temp_cpu: 48, consumo: 212 }),
+      eventos: z.array(z.strictObject({ fecha: z.string(), hora: z.string(), texto: z.string() })).default([]),
+    })
+    .optional(),
+  /** Una UPS conectada por USB (la lee el driver usbhid-ups de NUT). */
+  ups: z
+    .strictObject({
+      marca: z.string().default('APC'),
+      modelo: z.string().default('Smart-UPS 1500'),
+      potencia_w: z.number().default(1000),
+      carga: z.number().default(34),
+      bateria: z.number().default(100),
+      autonomia_min: z.number().default(25),
+      estado: z.string().default('OL'),
+    })
+    .optional(),
+  /** Arreglos RAID por software que ya existen (mdadm), con discos fallados o de repuesto. */
+  raid: z
+    .array(
+      z.strictObject({
+        nombre: z.string(),
+        nivel: z.union([z.literal(0), z.literal(1), z.literal(5), z.literal(6), z.literal(10)]),
+        discos: z.array(z.string()),
+        repuestos: z.array(z.string()).default([]),
+        fallados: z.array(z.string()).default([]),
+        fs: z.enum(['xfs', 'ext4']).optional(),
+        montaje: z.string().optional(),
+        /** Fracción ocupada (0 a 1). */
+        usado: z.number().optional(),
+      }),
+    )
+    .default([]),
   /** Correo: los servidores del proveedor que sirven de relay, la cola y los mapas ya compilados. */
   correo: z
     .strictObject({
@@ -517,6 +583,12 @@ const singleCheckSchema = z.union([
   z.strictObject({ base_datos: z.string(), motor: z.enum(['mariadb', 'postgresql']), existe: z.boolean().default(true) }),
   /** El resultado (primera celda) de una consulta hecha como administrador. */
   z.strictObject({ consulta_bd: z.string(), motor: z.enum(['mariadb', 'postgresql']), base: z.string(), resultado: z.string() }),
+  /** La UPS que publica upsd tiene ese estado (OL, OB, LB). */
+  z.strictObject({ ups_estado: z.string(), ups: z.string() }),
+  /** upsmon ordenó (o no) el apagado del servidor. */
+  z.strictObject({ apagado_ups: z.boolean() }),
+  /** Estado de un arreglo RAID: sano, degradado, reconstruyendo, sincronizando o fallado. */
+  z.strictObject({ raid: z.string(), nivel: z.number().int().optional(), estado: z.enum(['sano', 'degradado', 'reconstruyendo', 'sincronizando', 'fallado']).optional(), activos: z.number().int().optional(), repuestos: z.number().int().optional() }),
   /** Un correo que Postfix entregó (o dejó diferido, o rebotó) para ese destinatario. */
   z.strictObject({ correo_enviado: z.string(), estado: z.enum(['sent', 'deferred', 'bounced']).default('sent'), via: z.string().optional() }),
   z.strictObject({ cola_vacia: z.boolean() }),

@@ -450,6 +450,158 @@ scache    unix  -       -       n       -       1       scache
 postlog   unix-dgram n  -       n       -       1       postlogd
 `
 
+const MDADM_CONF_UBUNTU = `# mdadm.conf
+#
+# !NB! Run update-initramfs -u after updating this file.
+# !NB! This will ensure that initramfs has an uptodate copy.
+#
+# Please refer to mdadm.conf(5) for information about this file.
+#
+
+# by default (built-in), scan all partitions (/proc/partitions) and all
+# containers for MD superblocks. alternatively, specify devices to scan, using
+# wildcards if desired.
+#DEVICE partitions containers
+
+# automatically tag new arrays as belonging to the local system
+HOMEHOST <system>
+
+# instruct the monitoring daemon where to send mail alerts
+MAILADDR root
+
+# definitions of existing MD arrays
+
+# This configuration was auto-generated on Mon, 16 Nov 2026 00:00:00 +0000 by mkconf
+`
+
+const SMARTD_CONF = `# Sample configuration file for smartd.  See man smartd.conf.
+
+# The word DEVICESCAN will cause any remaining lines in this
+# configuration file to be ignored: it tells smartd to scan for all
+# ATA and SCSI devices.  DEVICESCAN may be followed by any of the
+# Directives listed below, which will be applied to all devices that
+# are found.  Most users should comment out DEVICESCAN and explicitly
+# list the devices that they wish to monitor.
+DEVICESCAN -H -m root -n standby,10,q
+`
+
+const NUT_CONF = `# Network UPS Tools: example nut.conf
+#
+##############################################################################
+# General section
+##############################################################################
+# The MODE determines which part of the NUT is to be started, and which
+# configuration files must be modified.
+#
+# This file try to standardize the various files being found in the field, like
+# /etc/default/nut on Debian based systems, /etc/sysconfig/ups on RedHat based
+# systems, ... Distribution's init script should source this file to see which
+# component(s) has to be started.
+#
+# The values of MODE can be:
+# - none: NUT is not configured, or use the Integrated Power Management, or use
+#   some external system to startup NUT components. So nothing is to be started.
+# - standalone: This mode address a local only configuration, with 1 UPS
+#   protecting the local system. This implies to start the 3 NUT layers (driver,
+#   upsd and upsmon) and the matching configuration files. This mode can also
+#   address UPS redundancy.
+# - netserver: same as for the standalone configuration, but also
+#   need some more network access controls (firewall, tcp-wrappers) and possibly
+#   a specific LISTEN directive in upsd.conf.
+#   Since this MODE is opened to the network, a special care should be applied
+#   to security concerns.
+# - netclient: this mode only requires upsmon.
+
+MODE=none
+`
+
+const UPS_CONF = `# Network UPS Tools: example ups.conf
+#
+# --- SECURITY NOTE ---
+#
+# If you use snmp-ups and set a community string in here, you
+# will have to secure this file to keep other users from obtaining
+# that string.  It needs to be readable by upsdrvctl and any drivers,
+# and by upsd.
+#
+# ---
+#
+# This is where you configure all the UPSes that this system will be
+# monitoring directly.  These are usually attached to serial ports, but
+# USB devices and SNMP devices are also supported.
+#
+# This file is used by upsdrvctl to start and stop your driver(s), and
+# is also used by upsd to determine which drivers to monitor.  The
+# drivers themselves also read this file for configuration directives.
+#
+# Example:
+#
+# [myups]
+#	driver = usbhid-ups
+#	port = auto
+#	desc = "Workstation"
+`
+
+const UPSD_CONF = `# Network UPS Tools: example upsd configuration file
+#
+# This file contains access control data, you should keep it secure.
+#
+# It should only be readable by the user that upsd becomes.  See the FAQ.
+#
+# =======================================================================
+# LISTEN <address> [<port>]
+# LISTEN 127.0.0.1 3493
+# LISTEN ::1 3493
+#
+# This defaults to the localhost listening addresses and port 3493.
+`
+
+const UPSD_USERS = `# Network UPS Tools: Example upsd.users
+#
+# This file sets the permissions for upsd - the UPS network daemon.
+# Users are defined here, are given passwords, and their privileges are
+# controlled here too.  Since this file will contain passwords, keep it
+# secure, with only enough permissions for upsd to read it.
+#
+# --------------------------------------------------------------------------
+#
+# To add a user for upsmon, use this example:
+#
+#	[monuser]
+#		password  = pass
+#		upsmon primary
+#	or
+#		upsmon secondary
+`
+
+const UPSMON_CONF = `# Network UPS Tools: example upsmon configuration
+#
+# This file contains passwords, so keep it secure.
+#
+# --------------------------------------------------------------------------
+# MONITOR <system> <powervalue> <username> <password> ("primary"|"secondary")
+#
+# List systems you want to monitor.  Not all of these may supply power
+# to the system running upsmon, but if you want to watch it, it has to
+# be in this section.
+#
+# Examples:
+#
+# MONITOR myups@bigserver 1 upswired blah primary
+# MONITOR su700@server.example.com 1 monuser secretpass secondary
+
+MINSUPPLIES 1
+
+SHUTDOWNCMD "/sbin/shutdown -h +0"
+
+POLLFREQ 5
+POLLFREQALERT 5
+HOSTSYNC 15
+DEADTIME 15
+POWERDOWNFLAG /etc/killpower
+FINALDELAY 5
+`
+
 const NFS_CONF = `#
 # This is a general configuration for the
 # NFS daemons and tools
@@ -1012,6 +1164,38 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
     perms: { '/var/log/maillog': { mode: 0o600 } },
     commands: ['postconf', 'postmap', 'postalias', 'newaliases', 'postqueue', 'postsuper', 'postfix', 'mailq', 'sendmail', 'sendmail.postfix', 'postcat', 'postlog'],
   },
+  mdadm: {
+    summary: 'The mdadm program controls Linux md devices (software RAID arrays)',
+    version: '4.3',
+    services: [{ name: 'mdmonitor', description: 'Software RAID monitoring and management', ports: [], enabledByDefault: true }],
+    commands: ['mdadm', 'mdmon'],
+  },
+  smartmontools: {
+    summary: 'Tools for monitoring SMART capable hard disks',
+    version: '7.4',
+    services: [{ name: 'smartd', description: 'Self Monitoring and Reporting Technology (SMART) Daemon', ports: [], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/smartmontools/smartd.conf': SMARTD_CONF },
+    commands: ['smartctl', 'smartd'],
+  },
+  ipmitool: { summary: 'Utility for IPMI control', version: '1.8.19', commands: ['ipmitool'] },
+  nut: {
+    summary: 'Network UPS Tools',
+    version: '2.8.1',
+    requires: ['nut-client'],
+    services: [{ name: 'nut-server', description: 'Network UPS Tools - power devices information server', ports: [3493] }],
+    files: { '/etc/ups/nut.conf': NUT_CONF, '/etc/ups/ups.conf': UPS_CONF, '/etc/ups/upsd.conf': UPSD_CONF, '/etc/ups/upsd.users': UPSD_USERS },
+    perms: { '/etc/ups/upsd.users': { mode: 0o640, group: 'nut' } },
+    user: { name: 'nut', uid: 57, home: '/var/lib/ups', gecos: 'Network UPS Tools' },
+    commands: ['upsdrvctl', 'upsd'],
+  },
+  'nut-client': {
+    summary: 'Network UPS Tools client monitoring utilities',
+    version: '2.8.1',
+    services: [{ name: 'nut-monitor', description: 'Network UPS Tools - power device monitor and shutdown controller', ports: [] }],
+    files: { '/etc/ups/upsmon.conf': UPSMON_CONF, '/etc/ups/nut.conf': NUT_CONF },
+    perms: { '/etc/ups/upsmon.conf': { mode: 0o640 } },
+    commands: ['upsc', 'upsmon', 'upscmd', 'upsrw'],
+  },
   's-nail': { summary: 'Environment for sending and receiving mail, providing functionality of POSIX mailx', version: '14.9.24', commands: ['mail', 'mailx', 's-nail'] },
   'cyrus-sasl-plain': { summary: 'PLAIN and LOGIN authentication support for Cyrus SASL', version: '2.1.28' },
   'cifs-utils': { summary: 'Utilities for mounting and managing CIFS mounts', version: '7.2', commands: ['mount.cifs', 'mount.smb3', 'cifscreds'] },
@@ -1143,6 +1327,40 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     files: { '/etc/postfix/main.cf': MAIN_CF_UBUNTU, '/etc/postfix/master.cf': MASTER_CF, '/var/log/mail.log': '' },
     perms: { '/var/log/mail.log': { mode: 0o640, group: 'adm' } },
     commands: ['postconf', 'postmap', 'postalias', 'newaliases', 'postqueue', 'postsuper', 'postfix', 'mailq', 'sendmail', 'postcat', 'postlog'],
+  },
+  mdadm: {
+    summary: 'Tool to administer Linux MD arrays (software RAID)',
+    version: '4.3-1ubuntu2',
+    services: [{ name: 'mdmonitor', description: 'MD array monitor', ports: [], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/mdadm/mdadm.conf': MDADM_CONF_UBUNTU },
+    commands: ['mdadm', 'mdmon'],
+  },
+  smartmontools: {
+    summary: 'control and monitor storage systems using S.M.A.R.T.',
+    version: '7.4-3',
+    services: [{ name: 'smartmontools', description: 'Self Monitoring and Reporting Technology (SMART) Daemon', ports: [], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/smartd.conf': SMARTD_CONF },
+    commands: ['smartctl', 'smartd'],
+  },
+  ipmitool: { summary: 'utility for IPMI control with kernel driver or LAN interface (daemon)', version: '1.8.19-7', commands: ['ipmitool'] },
+  nut: { summary: 'network UPS tools - metapackage', version: '2.8.1-3.1ubuntu1', requires: ['nut-server', 'nut-client'] },
+  'nut-server': {
+    summary: 'network UPS tools - core system',
+    version: '2.8.1-3.1ubuntu1',
+    requires: ['nut-client'],
+    services: [{ name: 'nut-server', description: 'Network UPS Tools - power devices information server', ports: [3493], enabledByDefault: true }],
+    files: { '/etc/nut/nut.conf': NUT_CONF, '/etc/nut/ups.conf': UPS_CONF, '/etc/nut/upsd.conf': UPSD_CONF, '/etc/nut/upsd.users': UPSD_USERS },
+    perms: { '/etc/nut/upsd.users': { mode: 0o640, group: 'nut' } },
+    user: { name: 'nut', uid: 120, home: '/var/lib/nut', gecos: '' },
+    commands: ['upsdrvctl', 'upsd'],
+  },
+  'nut-client': {
+    summary: 'network UPS tools - clients',
+    version: '2.8.1-3.1ubuntu1',
+    services: [{ name: 'nut-monitor', description: 'Network UPS Tools - power device monitor and shutdown controller', ports: [], enabledByDefault: true }],
+    files: { '/etc/nut/upsmon.conf': UPSMON_CONF, '/etc/nut/nut.conf': NUT_CONF },
+    perms: { '/etc/nut/upsmon.conf': { mode: 0o640 } },
+    commands: ['upsc', 'upsmon', 'upscmd', 'upsrw'],
   },
   'libsasl2-modules': { summary: 'Cyrus SASL - pluggable authentication modules', version: '2.1.28+dfsg1-9ubuntu1' },
   mailutils: { summary: 'GNU mailutils utilities for handling mail', version: '1:3.20-1', commands: ['mail', 'mailx'] },

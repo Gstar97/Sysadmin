@@ -76,6 +76,34 @@ export interface MountEntry {
   onUnmount?: () => void
 }
 
+/** Un integrante de un arreglo RAID por software (md). */
+export interface MdMember {
+  dev: string
+  /** Número fijo dentro del arreglo (no cambia aunque se saquen otros). */
+  num: number
+  /** Posición en el arreglo (0, 1, ...) o -1 si es un repuesto. */
+  role: number
+  faulty: boolean
+}
+
+export interface MdArray {
+  name: string
+  level: 0 | 1 | 5 | 6 | 10
+  raidDevices: number
+  members: MdMember[]
+  chunkKiB: number
+  uuid: string
+  hostName: string
+  created: number
+  updated: number
+  events: number
+  minor: number
+  /** Reconstrucción o sincronización inicial en curso. */
+  sync?: { kind: 'recovery' | 'resync'; dev?: string; start: number; duration: number }
+  /** Se perdieron más discos de los que soporta: los datos no están disponibles. */
+  failed: boolean
+}
+
 export interface SwapEntry {
   path: string
   type: 'partition' | 'file'
@@ -144,6 +172,8 @@ export class Storage {
   disks = new Map<string, Disk>()
   sigs = new Map<string, FsSig>()
   vgs = new Map<string, VG>()
+  /** Arreglos RAID por software (md0, md1...). */
+  arrays = new Map<string, MdArray>()
   mounts: MountEntry[] = []
   swaps: SwapEntry[] = []
   deletedOpen: DeletedOpen[] = []
@@ -238,6 +268,14 @@ export class Storage {
     }
     const lv = this.findLv(path)
     if (lv) return lv.lv.size
+    const md = /^\/dev\/(md\d+)$/.exec(path)
+    if (md && this.arrays.has(md[1])) return mdSize(this, this.arrays.get(md[1])!)
+    return undefined
+  }
+
+  /** El arreglo md del que es integrante un dispositivo (si es). */
+  mdOf(dev: string): MdArray | undefined {
+    for (const a of this.arrays.values()) if (a.members.some((m) => m.dev === dev)) return a
     return undefined
   }
 
@@ -291,6 +329,8 @@ export class Storage {
     if (this.swaps.some((s) => s.path === path)) return 'used as swap'
     const vg = this.vgOf(path)
     if (vg) return `in use by volume group ${vg.name}`
+    const md = this.mdOf(path)
+    if (md) return `in use by /dev/${md.name}`
     return undefined
   }
 
@@ -306,7 +346,7 @@ export class Storage {
     const minors = new Set([...this.vgs.values()].flatMap((v) => v.lvs.map((l) => l.minor)))
     for (const f of vfs.readdir('/dev', ROOT_CRED)) {
       const dm = /^dm-(\d+)$/.exec(f)
-      if ((/^(sd[a-z]\d*|vd[a-z]\d*)$/.test(f) && this.size(`/dev/${f}`) === undefined) || (dm && !minors.has(Number(dm[1])))) vfs.unlink(`/dev/${f}`, ROOT_CRED)
+      if ((/^(sd[a-z]\d*|vd[a-z]\d*|md\d+)$/.test(f) && this.size(`/dev/${f}`) === undefined) || (dm && !minors.has(Number(dm[1])))) vfs.unlink(`/dev/${f}`, ROOT_CRED)
     }
     for (const f of vfs.readdir('/dev/mapper', ROOT_CRED)) if (f !== 'control' && !this.findLv(`/dev/mapper/${f}`)) vfs.unlink(`/dev/mapper/${f}`, ROOT_CRED)
     for (const f of vfs.readdir('/dev/disk/by-uuid', ROOT_CRED)) vfs.unlink(`/dev/disk/by-uuid/${f}`, ROOT_CRED)
@@ -325,6 +365,7 @@ export class Storage {
       mk(`/dev/${d.name}`, d.major, d.minor)
       for (const p of d.parts) mk(this.partPath(d.name, p.num), d.major, d.minor + p.num)
     }
+    for (const a of this.arrays.values()) mk(`/dev/${a.name}`, 9, a.minor)
     for (const vg of this.vgs.values()) {
       for (const lv of vg.lvs) {
         mk(`/dev/dm-${lv.minor}`, 253, lv.minor)
@@ -682,3 +723,19 @@ export const VIRTUAL_MOUNTS: { source: string; target: string; fstype: string; o
 ]
 
 export { GPT_TYPES, EXTENT }
+
+/** Bytes que aporta cada integrante (lo que deja la cabecera de md, redondeado al chunk). */
+export function mdMemberSize(st: Storage, a: MdArray): number {
+  const sizes = a.members.map((m) => st.size(m.dev) ?? 0).filter((x) => x > 0)
+  const min = sizes.length ? Math.min(...sizes) : 0
+  const usable = Math.max(0, min - 11 * MiB)
+  const chunk = a.chunkKiB * 1024
+  return Math.floor(usable / chunk) * chunk
+}
+
+export function mdSize(st: Storage, a: MdArray): number {
+  const each = mdMemberSize(st, a)
+  const n = a.raidDevices
+  const data = a.level === 0 ? n : a.level === 1 ? 1 : a.level === 5 ? n - 1 : a.level === 6 ? n - 2 : Math.floor(n / 2)
+  return each * data
+}

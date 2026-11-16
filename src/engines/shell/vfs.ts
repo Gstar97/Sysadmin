@@ -139,6 +139,8 @@ export class VFS {
   /** Montajes de red activos (los más largos primero). */
   remotes: RemoteBinding[] = []
   private activating = false
+  /** Rutas que dan error de entrada y salida (un sistema de archivos sobre un disco o arreglo caído). */
+  ioGuard?: (abs: string) => boolean
   private nextIno = 2
   readonly root = 1
   /** Hora de referencia para las fechas de modificación. */
@@ -258,6 +260,7 @@ export class VFS {
   resolve(path: string, cred: Cred, follow = true, depth = 0): number {
     if (depth > 20) throw new FsError('ELOOP', path)
     const abs = normalizePath(path)
+    if (this.ioGuard?.(abs)) throw new FsError('EIO', path)
     let current = this.root
     const parts = abs.split('/').filter(Boolean)
     let walked = ''
