@@ -1,0 +1,134 @@
+tipo: terminal
+shell: bash
+titulo: Que los avisos del servidor lleguen a una casilla real
+descripcion: >-
+  web01 (Rocky Linux 10) tiene Postfix con la configuración de fábrica. Los scripts de respaldo y
+  el monitoreo mandan avisos a soporte@ejemplo.com.ar, pero no llegan. El proveedor de correo de
+  la empresa ofrece un relay: smtp.proveedor.com, puerto 587, con STARTTLS obligatorio y la
+  cuenta notificaciones@ejemplo.com.ar (clave Not-2026-relay). Solo acepta correo cuyo
+  remitente sea esa misma cuenta.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [postfix, s-nail, bind-utils] }
+  servicios:
+    postfix: { activo: true, habilitado: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.11/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.1]
+    registros_dns:
+      MX ejemplo.com.ar: "10 mx1.proveedor.com"
+      mx1.proveedor.com: 203.0.113.30
+      smtp.proveedor.com: 203.0.113.25
+  correo:
+    relays:
+      - { servidor: smtp.proveedor.com, ip: 203.0.113.25, puerto: 587, usuario: notificaciones@ejemplo.com.ar, clave: Not-2026-relay, remitentes: [notificaciones@ejemplo.com.ar] }
+pasos:
+  - consigna: Mandá un aviso de prueba a soporte@ejemplo.com.ar y mirá la cola.
+    verificar:
+      - { correo_enviado: soporte@ejemplo.com.ar, estado: deferred }
+      - { salida_contiene: 'Connection timed out' }
+    pistas:
+      - "`echo prueba | mail -s 'Prueba de avisos' soporte@ejemplo.com.ar` y después `mailq`"
+    solucion:
+      - "echo prueba | mail -s 'Prueba de avisos' soporte@ejemplo.com.ar"
+      - mailq
+    explicacion: >-
+      Sin relayhost, Postfix trata de entregar directo al MX de ejemplo.com.ar por el puerto 25, y
+      la red no deja salir por ese puerto. El mensaje queda diferido: Postfix lo va a reintentar
+      durante cinco días antes de darlo por perdido.
+  - consigna: >-
+      Configurá el relay en main.cf con postconf: relayhost [smtp.proveedor.com]:587, TLS
+      obligatorio (smtp_tls_security_level = encrypt), autenticación SASL activada, las
+      credenciales en lmdb:/etc/postfix/sasl_passwd y smtp_sasl_security_options = noanonymous.
+    verificar:
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'relayhost = [smtp.proveedor.com]:587' }
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'smtp_sasl_auth_enable = yes' }
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd' }
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'smtp_sasl_security_options = noanonymous' }
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'smtp_tls_security_level = encrypt' }
+    pistas:
+      - "`sudo postconf -e 'relayhost = [smtp.proveedor.com]:587' 'smtp_tls_security_level = encrypt'`"
+      - "`sudo postconf -e 'smtp_sasl_auth_enable = yes' 'smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd' 'smtp_sasl_security_options = noanonymous'`"
+    solucion:
+      - "sudo postconf -e 'relayhost = [smtp.proveedor.com]:587' 'smtp_tls_security_level = encrypt'"
+      - "sudo postconf -e 'smtp_sasl_auth_enable = yes' 'smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd' 'smtp_sasl_security_options = noanonymous'"
+    explicacion: >-
+      Los corchetes en relayhost evitan que Postfix busque un MX: va directo a ese nombre. encrypt
+      exige TLS (con may, si algo fallara, mandaría la contraseña sin cifrar). noanonymous hace
+      falta porque el valor de fábrica, noplaintext, prohíbe el método PLAIN, que es el que usan
+      los proveedores; sobre TLS es seguro. Y lmdb: en Rocky 10 ya no existe el formato hash.
+  - consigna: >-
+      Guardá las credenciales en /etc/postfix/sasl_passwd, que solo pueda leer root, y compilá el
+      mapa.
+    verificar:
+      - { archivo: /etc/postfix/sasl_passwd, contenido_incluye: '[smtp.proveedor.com]:587 notificaciones@ejemplo.com.ar:Not-2026-relay', modo: '0600', dueno: root }
+      - { archivo: /etc/postfix/sasl_passwd.lmdb }
+    pistas:
+      - "`echo '[smtp.proveedor.com]:587 notificaciones@ejemplo.com.ar:Not-2026-relay' | sudo tee /etc/postfix/sasl_passwd` y `sudo chmod 600 /etc/postfix/sasl_passwd`"
+      - "Después `sudo postmap lmdb:/etc/postfix/sasl_passwd`"
+    solucion:
+      - "echo '[smtp.proveedor.com]:587 notificaciones@ejemplo.com.ar:Not-2026-relay' | sudo tee /etc/postfix/sasl_passwd > /dev/null"
+      - sudo chmod 600 /etc/postfix/sasl_passwd
+      - sudo postmap lmdb:/etc/postfix/sasl_passwd
+    explicacion: >-
+      La clave del mapa tiene que ser exactamente igual al relayhost, corchetes y puerto
+      incluidos. Postfix no lee el archivo de texto sino el .lmdb que genera postmap: cada vez que
+      se cambia la contraseña, hay que volver a correr postmap. El .lmdb hereda los permisos 600.
+  - consigna: >-
+      Instalá el módulo que permite autenticar con usuario y contraseña (cyrus-sasl-plain),
+      reintentá la cola y mirá en el registro qué respondió el relay.
+    verificar:
+      - { paquete: cyrus-sasl-plain }
+      - { comando_usado: 'maillog|journalctl' }
+      - { salida_contiene: '553 5.7.1' }
+    pistas:
+      - "`sudo dnf install -y cyrus-sasl-plain`, `sudo postqueue -f` y `sudo grep status= /var/log/maillog | tail -n 2`"
+    solucion:
+      - sudo dnf install -y cyrus-sasl-plain
+      - sudo postqueue -f
+      - sudo grep status= /var/log/maillog | tail -n 2
+    explicacion: >-
+      Ahora se conecta, cifra y se autentica, pero el proveedor rechaza el remitente
+      ana@web01.localdomain: solo acepta notificaciones@ejemplo.com.ar. Como es un error
+      definitivo (5xx), el mensaje rebota y el aviso de rebote le llega a ana en su buzón local.
+  - consigna: >-
+      Hacé que todo lo que sale de web01 use como remitente notificaciones@ejemplo.com.ar
+      (smtp_generic_maps en /etc/postfix/generic) y mandá otro aviso a soporte.
+    verificar:
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'smtp_generic_maps = lmdb:/etc/postfix/generic' }
+      - { correo_enviado: soporte@ejemplo.com.ar, estado: sent, via: smtp.proveedor.com }
+    pistas:
+      - "`echo '@web01.localdomain notificaciones@ejemplo.com.ar' | sudo tee /etc/postfix/generic`, `sudo postmap lmdb:/etc/postfix/generic` y `sudo postconf -e 'smtp_generic_maps = lmdb:/etc/postfix/generic'`"
+      - "Después `echo prueba | mail -s 'Prueba de avisos' soporte@ejemplo.com.ar`"
+    solucion:
+      - "echo '@web01.localdomain notificaciones@ejemplo.com.ar' | sudo tee /etc/postfix/generic > /dev/null"
+      - sudo postmap lmdb:/etc/postfix/generic
+      - "sudo postconf -e 'smtp_generic_maps = lmdb:/etc/postfix/generic'"
+      - "echo prueba | mail -s 'Prueba de avisos' soporte@ejemplo.com.ar"
+    explicacion: >-
+      smtp_generic_maps cambia las direcciones solo para lo que sale a internet: adentro del
+      servidor, el correo sigue siendo de ana o de root. @web01.localdomain abarca a todos los
+      usuarios del equipo. status=sent quiere decir que el relay lo aceptó; de ahí en más, es
+      responsabilidad del proveedor.
+  - consigna: >-
+      Que el correo para root (el de cron y los avisos del sistema) llegue a
+      sistemas@ejemplo.com.ar. Probalo mandándole algo a root.
+    verificar:
+      - { archivo: /etc/aliases, contenido_incluye: 'sistemas@ejemplo.com.ar' }
+      - { correo_enviado: sistemas@ejemplo.com.ar, estado: sent }
+    pistas:
+      - "`echo 'root: sistemas@ejemplo.com.ar' | sudo tee -a /etc/aliases`, `sudo newaliases` y `echo prueba | mail -s 'Para root' root`"
+    solucion:
+      - "echo 'root: sistemas@ejemplo.com.ar' | sudo tee -a /etc/aliases > /dev/null"
+      - sudo newaliases
+      - "echo prueba | mail -s 'Para root' root"
+    explicacion: >-
+      Postfix tampoco lee /etc/aliases directo: newaliases lo compila. Desde ahora, cualquier
+      programa que le escriba a root (cron, un script, el monitoreo) termina en la casilla del
+      equipo de sistemas, que es donde alguien lo va a leer.

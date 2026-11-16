@@ -1,0 +1,131 @@
+---
+id: n4-m4-l3
+titulo: Postfix como relay
+minutos: 150
+objetivos:
+  - Configurar Postfix para que los avisos de un servidor salgan por el relay autenticado del proveedor, con TLS.
+  - Leer la cola y el registro de Postfix para saber qué pasó con cada mensaje y corregirlo.
+  - Entender por qué el correo de las personas suele tercerizarse y qué queda a cargo del administrador.
+glosario: [postfix, cola-correo, sasl]
+verificado: 2026-11
+---
+
+import relay from './relay.svg?raw'
+import logs from './logs.yaml'
+import ej from './ej-relay.yaml'
+
+Montar un servidor de correo completo para las personas de una empresa (recibir, filtrar spam y virus, guardar buzones, webmail, copias de seguridad) es un trabajo enorme y delicado, y hoy casi nadie lo hace: el correo de las personas se terceriza a Microsoft 365, Google Workspace o un proveedor local. Lo que sí vas a configurar seguido es lo otro: que **cada servidor pueda mandar sus avisos** y que lleguen. Para eso alcanza con un Postfix que no recibe nada de afuera y le pasa todo al **relay** del proveedor.
+
+<AntesDeEmpezar>
+- El recorrido de un correo y los puertos 25 y 587 (lección 4.4.1).
+- SPF, DKIM y DMARC (lección 4.4.2).
+- Instalar paquetes y manejar servicios (módulo 1.3).
+</AntesDeEmpezar>
+
+## Por qué tercerizar el correo de las personas
+
+Un servidor de correo propio para cien personas implica: recibir correo de internet (y defenderse de todo el spam y los ataques que llegan por ahí), filtros, antivirus, buzones con respaldo, webmail, acceso desde los celulares, alta disponibilidad, y cuidar día a día la reputación de la IP para que lo que se manda no caiga en spam. Un proveedor grande hace todo eso con equipos dedicados, por un costo por usuario que casi siempre es menor que el tiempo que le llevaría a un administrador. Lo que queda a tu cargo es el **dominio**: los MX, SPF, DKIM y DMARC, las cuentas y que los sistemas de la empresa manden bien.
+
+## El relay
+
+<Diagrama svg={relay} alt="A la izquierda, tres servidores con Postfix (web01, que solo escucha en 127.0.0.1; db01, con los avisos de los respaldos; y el de monitoreo, con las alertas). Los tres mandan por el puerto 587 a smtp.proveedor.com, que pide STARTTLS y usuario y contraseña, firma con DKIM, figura en el SPF, tiene PTR y buena reputación. Desde ahí, por el 25, a los MX del destino (Gmail, Microsoft 365, la casilla de sistemas). Abajo, las líneas de main.cf: relayhost = [smtp.proveedor.com]:587, smtp_tls_security_level = encrypt, smtp_sasl_auth_enable = yes, smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd, smtp_sasl_security_options = noanonymous, smtp_generic_maps = lmdb:/etc/postfix/generic e inet_interfaces = localhost; más los archivos sasl_passwd, generic y el alias de root." pie="Cada servidor entrega al relay; el relay es el que tiene la reputación y la autenticación del dominio." />
+
+Mandar directo a los MX desde cada servidor no funciona: casi todas las redes bloquean la salida por el 25, y aunque no la bloquearan, esa IP no figura en el SPF, no firma con DKIM, no tiene PTR ni reputación. El relay del proveedor ya tiene todo eso. Cada servidor se conecta por el **587**, cifra con **STARTTLS** y se **autentica** con una cuenta creada para eso (`notificaciones@ejemplo.com.ar`); el proveedor hace el resto.
+
+## La configuración, paso a paso
+
+Postfix se configura en `/etc/postfix/main.cf`, y lo más cómodo (y seguro) es cambiarlo con `postconf -e`, que reemplaza el parámetro si ya está o lo agrega al final:
+
+```bash
+sudo postconf -e 'relayhost = [smtp.proveedor.com]:587' \
+                 'smtp_tls_security_level = encrypt' \
+                 'smtp_sasl_auth_enable = yes' \
+                 'smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd' \
+                 'smtp_sasl_security_options = noanonymous'
+postconf -n          # muestra solo lo que difiere de los valores de fábrica
+```
+
+- Los **corchetes** en `relayhost` le dicen a Postfix que no busque un MX: va directo a ese nombre.
+- `encrypt` exige TLS. Con `may` (el valor que trae Rocky), si el cifrado fallara mandaría igual, contraseña incluida.
+- `noanonymous` hace falta porque el valor de fábrica, `noplaintext, noanonymous`, prohíbe el método PLAIN, que es el que usan los proveedores. Viajando dentro de TLS, PLAIN es seguro.
+
+Las credenciales van en un archivo aparte, que solo lee root:
+
+```text
+# /etc/postfix/sasl_passwd
+[smtp.proveedor.com]:587 notificaciones@ejemplo.com.ar:LaClave
+```
+
+```bash
+sudo chmod 600 /etc/postfix/sasl_passwd
+sudo postmap lmdb:/etc/postfix/sasl_passwd     # genera sasl_passwd.lmdb, que es lo que lee Postfix
+```
+
+La clave del mapa tiene que coincidir **exactamente** con el `relayhost`. Y un detalle de versiones: **Rocky 10** ya no trae el formato `hash` (la biblioteca Berkeley DB se quitó de la distribución), así que los mapas son `lmdb:`; **Ubuntu 26.04** sigue usando `hash:` por defecto. Copiar una guía vieja en Rocky 10 termina en "unsupported dictionary type: hash". En Rocky además hay que instalar `cyrus-sasl-plain`, el módulo que sabe autenticar con usuario y contraseña; en Ubuntu viene con Postfix (`libsasl2-modules`).
+
+Dos ajustes más que casi siempre hacen falta:
+
+- **El remitente.** Los avisos salen como `root@web01.localdomain`, una dirección que no existe y que muchos proveedores rechazan. `smtp_generic_maps` la cambia solo para lo que sale:
+
+  ```text
+  # /etc/postfix/generic   (y después: postmap lmdb:/etc/postfix/generic)
+  @web01.localdomain    notificaciones@ejemplo.com.ar
+  ```
+
+- **El correo de root.** Cron y el sistema le escriben a root. Con un alias en `/etc/aliases` (`root: sistemas@ejemplo.com.ar`) y `newaliases`, eso llega a una casilla que alguien lee.
+
+Postfix va tomando los cambios de `main.cf` a medida que renueva sus procesos; para que valgan enseguida, `sudo systemctl reload postfix`. Los mapas y los alias, en cambio, **siempre** necesitan `postmap` o `newaliases`: Postfix no lee los archivos de texto.
+
+## La cola y el registro
+
+Lo que no se pudo entregar queda en la **cola**, y Postfix lo reintenta solo durante cinco días:
+
+```bash
+mailq                       # qué hay en la cola y por qué (el texto entre paréntesis)
+sudo postqueue -f           # reintentar ya todo lo diferido
+sudo postsuper -d ALL       # borrar todo lo que está en la cola (con cuidado)
+sudo grep 4F2A1C0B9E /var/log/maillog    # la historia de un mensaje, por su ID
+```
+
+En el registro, lo que importa está en `status=` y en el paréntesis: `sent` (lo aceptó el siguiente servidor), `deferred` (falló algo temporal y se va a reintentar) o `bounced` (rechazo definitivo: el remitente recibe un aviso de rebote).
+
+<Emparejar ejercicio={logs} />
+
+<Terminal ejercicio={ej} />
+
+<Consejo>
+Para probar un relay sin depender de que el mensaje llegue: `echo prueba | mail -s prueba tu@casilla` y `sudo tail -f /var/log/maillog` (en Ubuntu, `/var/log/mail.log`; en los dos, `journalctl -u postfix -f`). Con `status=sent` y el "queued as" del relay, tu servidor ya cumplió.
+</Consejo>
+
+<EnSimple>
+Los servidores no mandan correo directo a internet: se lo pasan al relay del proveedor por el 587, con TLS y una cuenta propia. En main.cf: relayhost entre corchetes, TLS obligatorio, SASL activado con las credenciales en un mapa compilado con postmap, noanonymous, el remitente corregido con smtp_generic_maps y el correo de root redirigido con /etc/aliases. mailq y el registro dicen qué pasó con cada mensaje.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Editar sasl_passwd y no correr postmap">
+    Postfix sigue usando la versión compilada vieja (o ninguna). Lo mismo con /etc/aliases y newaliases.
+  </ErrorComun>
+  <ErrorComun titulo="La clave de sasl_passwd distinta del relayhost">
+    Si relayhost es [smtp.proveedor.com]:587, la línea tiene que empezar igual, con corchetes y puerto. Si no, Postfix no encuentra credenciales y el relay contesta "Authentication Required".
+  </ErrorComun>
+  <ErrorComun titulo="Usar hash: en Rocky 10">
+    Ya no existe: lmdb:. En Ubuntu, hash: sigue siendo el de fábrica.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar sasl_passwd legible por todos">
+    Es la contraseña de una cuenta de correo de la empresa: chmod 600, dueño root.
+  </ErrorComun>
+  <ErrorComun titulo="Abrir Postfix a la red (inet_interfaces = all) en un servidor que solo manda avisos">
+    No hace falta recibir nada de afuera, y un error en la configuración lo convierte en relay abierto. localhost.
+  </ErrorComun>
+  <ErrorComun titulo="Borrar la cola sin mirar por qué estaba llena">
+    postsuper -d ALL saca los síntomas, no la causa: primero mailq y el registro.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El correo de las personas se terceriza; los servidores mandan sus avisos por el relay del proveedor (587, STARTTLS, cuenta propia).
+- main.cf con postconf -e: relayhost = [host]:587, smtp_tls_security_level = encrypt, smtp_sasl_auth_enable = yes, smtp_sasl_password_maps, smtp_sasl_security_options = noanonymous.
+- sasl_passwd con chmod 600 y postmap (lmdb: en Rocky 10, hash: en Ubuntu); en Rocky, cyrus-sasl-plain.
+- smtp_generic_maps para el remitente y root: en /etc/aliases con newaliases.
+- mailq, postqueue -f y postsuper -d; en el registro, status= (sent, deferred, bounced) y el texto entre paréntesis.
+</Resumen>

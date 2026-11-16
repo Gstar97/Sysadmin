@@ -1,0 +1,7 @@
+- { id: t1, frente: "relayhost", dorso: "relayhost = [smtp.proveedor.com]:587. Los corchetes evitan buscar MX: va directo a ese servidor." }
+- { id: t2, frente: "Credenciales del relay", dorso: "/etc/postfix/sasl_passwd con '[host]:puerto usuario:clave', chmod 600 y postmap (lmdb: en Rocky 10, hash: en Ubuntu)." }
+- { id: t3, frente: "Autenticar con PLAIN", dorso: "smtp_sasl_auth_enable = yes, smtp_sasl_security_options = noanonymous, smtp_tls_security_level = encrypt; en Rocky, cyrus-sasl-plain." }
+- { id: t4, frente: "El remitente", dorso: "smtp_generic_maps (por ejemplo @web01.localdomain → notificaciones@dominio) solo cambia lo que sale." }
+- { id: t5, frente: "Correo de root", dorso: "root: sistemas@dominio en /etc/aliases y newaliases." }
+- { id: t6, frente: "La cola", dorso: "mailq (ver), postqueue -f (reintentar), postsuper -d ID o -d ALL (borrar). deferred se reintenta solo; bounced es definitivo." }
+- { id: t7, frente: "Postfix no lee los archivos de texto", dorso: "Lee lo compilado: postmap para los mapas y newaliases para los alias, cada vez que se cambian." }

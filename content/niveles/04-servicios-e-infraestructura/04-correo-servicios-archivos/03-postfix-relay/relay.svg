@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 350" font-family="system-ui, sans-serif" font-size="12">
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">Los servidores mandan sus avisos a través del relay del proveedor</text>
+  <g stroke="currentColor" stroke-width="1.2">
+    <rect x="20" y="44" width="230" height="44" rx="8" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="20" y="98" width="230" height="44" rx="8" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="20" y="152" width="230" height="44" rx="8" fill="var(--surface-2, #eef1f5)"/>
+    <rect x="330" y="76" width="220" height="100" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="630" y="76" width="210" height="100" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="20" y="214" width="820" height="124" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.4" fill="currentColor">
+    <line x1="250" y1="66" x2="324" y2="110"/><path d="M329 113 l-9 -2 l4 7 z"/>
+    <line x1="250" y1="120" x2="324" y2="126"/><path d="M329 126 l-8 -4 v8 z"/>
+    <line x1="250" y1="174" x2="324" y2="142"/><path d="M329 140 l-9 0 l3 7 z"/>
+    <line x1="550" y1="126" x2="624" y2="126"/><path d="M629 126 l-8 -4 v8 z"/>
+  </g>
+  <g fill="currentColor">
+    <text x="135" y="64" text-anchor="middle" font-weight="700">web01 · Postfix</text>
+    <text x="135" y="80" text-anchor="middle" font-size="11">solo escucha en 127.0.0.1</text>
+    <text x="135" y="118" text-anchor="middle" font-weight="700">db01 · Postfix</text>
+    <text x="135" y="134" text-anchor="middle" font-size="11">avisos de los respaldos</text>
+    <text x="135" y="172" text-anchor="middle" font-weight="700">monitoreo · Postfix</text>
+    <text x="135" y="188" text-anchor="middle" font-size="11">alertas</text>
+    <text x="290" y="106" text-anchor="middle" font-size="10.5">587</text>
+    <text x="440" y="100" text-anchor="middle" font-weight="700">smtp.proveedor.com</text>
+    <text x="440" y="120" text-anchor="middle" font-size="10.5">STARTTLS + usuario y contraseña</text>
+    <text x="440" y="138" text-anchor="middle" font-size="10.5">firma con DKIM, figura en el SPF,</text>
+    <text x="440" y="156" text-anchor="middle" font-size="10.5">tiene PTR y buena reputación</text>
+    <text x="590" y="118" text-anchor="middle" font-size="10.5">25</text>
+    <text x="735" y="100" text-anchor="middle" font-weight="700">Los MX del destino</text>
+    <text x="735" y="120" text-anchor="middle" font-size="11">Gmail, Microsoft 365,</text>
+    <text x="735" y="138" text-anchor="middle" font-size="11">la casilla de sistemas</text>
+    <text x="36" y="236" font-weight="700">En main.cf de cada servidor (Rocky 10; en Ubuntu, hash: en lugar de lmdb:)</text>
+    <g font-family="ui-monospace, monospace" font-size="11">
+      <text x="36" y="258">relayhost = [smtp.proveedor.com]:587</text>
+      <text x="36" y="276">smtp_tls_security_level = encrypt</text>
+      <text x="36" y="294">smtp_sasl_auth_enable = yes</text>
+      <text x="36" y="312">smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd</text>
+      <text x="36" y="330">smtp_sasl_security_options = noanonymous</text>
+      <text x="470" y="258">smtp_generic_maps = lmdb:/etc/postfix/generic</text>
+      <text x="470" y="276">inet_interfaces = localhost</text>
+    </g>
+    <text x="470" y="302" font-size="11">Más el archivo sasl_passwd (600, con postmap),</text>
+    <text x="470" y="320" font-size="11">generic (el remitente) y root en /etc/aliases.</text>
+  </g>
+</svg>

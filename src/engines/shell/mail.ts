@@ -455,8 +455,10 @@ function deliverLocal(sys: System, msg: Msg, rcpt: string, depth = 0): { status:
         for (const t of targets) {
           if (isLocal(sys, t)) last = deliverLocal(sys, msg, t, depth + 1)
           else {
-            queueRemote(sys, msg, t)
-            last = { status: 'sent', text: `forwarded as ${msg.id}` }
+            // El reenvío es un mensaje nuevo, con su propio identificador de cola.
+            const copy = { ...msg, id: newId(), to: [] as string[] }
+            queueRemote(sys, copy, t)
+            last = { status: 'sent', text: `forwarded as ${copy.id}` }
           }
         }
         return last

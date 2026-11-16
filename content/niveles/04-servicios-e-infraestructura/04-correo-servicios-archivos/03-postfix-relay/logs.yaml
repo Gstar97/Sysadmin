@@ -1,0 +1,14 @@
+tipo: emparejar
+consigna: Uní cada línea del registro de Postfix con lo que hay que revisar.
+pares:
+  - { a: "status=deferred (connect to mx1.proveedor.com[203.0.113.30]:25: Connection timed out)", b: "No hay relayhost y la red no deja salir por el 25: configurar el relay del proveedor" }
+  - { a: "status=bounced (host smtp.proveedor.com[...] said: 530 5.7.0 Authentication Required)", b: "Falta smtp_sasl_auth_enable o la clave del mapa no coincide con el relayhost" }
+  - { a: "SASL authentication failed; cannot authenticate to server ...: no mechanism available", b: "smtp_sasl_security_options (noanonymous) o, en Rocky, el paquete cyrus-sasl-plain" }
+  - { a: "warning: lmdb:/etc/postfix/sasl_passwd is unavailable. open database /etc/postfix/sasl_passwd.lmdb: No such file or directory", b: "Falta correr postmap sobre el archivo" }
+  - { a: "status=deferred (SASL authentication failed; server ... said: 535 5.7.8 Error: authentication failed)", b: "El usuario o la contraseña de sasl_passwd (y volver a correr postmap)" }
+  - { a: "status=bounced (host ... said: 553 5.7.1 <root@web01.localdomain>: Sender address rejected: not owned by user)", b: "El remitente: smtp_generic_maps para usar la cuenta autorizada" }
+explicacion: >-
+  Leer el registro de Postfix es casi siempre ir a status= y al texto entre paréntesis, que dice
+  qué pasó y, cuando es el otro servidor, qué respondió. deferred se reintenta solo; bounced es
+  definitivo y genera un aviso de rebote al remitente. Después de corregir, postqueue -f reintenta
+  lo diferido sin esperar.

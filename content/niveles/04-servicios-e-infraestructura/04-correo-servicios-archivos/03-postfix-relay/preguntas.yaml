@@ -1,0 +1,95 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Por qué un servidor de la empresa manda sus avisos a través del relay del proveedor y no directo a los MX?
+  opciones:
+    - { texto: "Porque la salida por el 25 suele estar bloqueada y el relay ya tiene SPF, DKIM, PTR y buena reputación", correcta: true, explicacion: "Lo que sale directo de una IP cualquiera termina en spam o rechazado." }
+    - { texto: "Porque Postfix no sabe buscar MX", explicacion: "Sabe; el problema es la red y la reputación." }
+    - { texto: "Porque es más rápido", explicacion: "No es por velocidad." }
+    - { texto: "Porque el 587 no necesita contraseña", explicacion: "Al contrario: la pide." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirven los corchetes en relayhost = [smtp.proveedor.com]:587?
+  opciones:
+    - { texto: "Para que Postfix vaya directo a ese nombre, sin buscar su MX", correcta: true, explicacion: "Sin corchetes, buscaría el MX de smtp.proveedor.com." }
+    - { texto: "Para usar TLS", explicacion: "Eso lo define smtp_tls_security_level." }
+    - { texto: "Son obligatorios con el puerto", explicacion: "No; cambian cómo se resuelve el nombre." }
+    - { texto: "Para que no haga falta postmap", explicacion: "No tienen relación." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Configuraste el relay en Rocky 10 y en el registro aparece esto. ¿Qué falta?
+  salida: |
+    postfix/smtp[2311]: warning: lmdb:/etc/postfix/sasl_passwd is unavailable. open database /etc/postfix/sasl_passwd.lmdb: No such file or directory
+  opciones:
+    - { texto: "Correr sudo postmap lmdb:/etc/postfix/sasl_passwd", correcta: true, explicacion: "Postfix lee el .lmdb que genera postmap, no el texto." }
+    - { texto: "Instalar cyrus-sasl-plain", explicacion: "Ese error sería no mechanism available." }
+    - { texto: "Cambiar lmdb por hash", explicacion: "En Rocky 10 hash ya no existe." }
+    - { texto: "Abrir el 587 en el firewall", explicacion: "No llegó a conectarse: no encuentra el mapa." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: ¿Qué tenés que corregir?
+  salida: |
+    postfix/smtp[2311]: warning: SASL authentication failure: No worthy mechs found
+    postfix/smtp[2311]: 4C1A20E9F1: to=<soporte@ejemplo.com.ar>, relay=smtp.proveedor.com[203.0.113.25]:587, dsn=4.4.1, status=deferred (SASL authentication failed; cannot authenticate to server smtp.proveedor.com[203.0.113.25]: no mechanism available)
+  opciones:
+    - { texto: "smtp_sasl_security_options = noanonymous y, en Rocky, instalar cyrus-sasl-plain", correcta: true, explicacion: "Con el valor de fábrica (noplaintext) o sin el módulo, Postfix no tiene con qué autenticar." }
+    - { texto: "La contraseña", explicacion: "Ni siquiera llegó a mandarla." }
+    - { texto: "El relayhost", explicacion: "Se conectó bien al relay." }
+    - { texto: "El registro SPF", explicacion: "Es un problema de este servidor, no del DNS." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    El relay rechaza los avisos con "553 5.7.1 <root@db01.localdomain>: Sender address rejected". ¿Qué hacés?
+  opciones:
+    - { texto: "Un smtp_generic_maps que cambie @db01.localdomain por la cuenta autorizada del relay", correcta: true, explicacion: "Solo cambia lo que sale a internet." }
+    - { texto: "Cambiar el hostname del servidor", explicacion: "Seguiría sin ser la cuenta autorizada." }
+    - { texto: "Desactivar SASL", explicacion: "El relay pediría autenticación." }
+    - { texto: "postsuper -d ALL", explicacion: "Borra los mensajes, no corrige nada." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hay que hacer después de cambiar la contraseña del relay en /etc/postfix/sasl_passwd? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Correr postmap sobre el archivo", correcta: true, explicacion: "Si no, Postfix sigue con la vieja." }
+    - { texto: "Reintentar la cola con postqueue -f, si había mensajes diferidos", correcta: true, explicacion: "Si no, esperan el próximo reintento." }
+    - { texto: "Dejar el archivo con permisos 600", correcta: true, explicacion: "Es una contraseña." }
+    - { texto: "Correr newaliases", explicacion: "Eso es para /etc/aliases." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre status=deferred y status=bounced?
+  opciones:
+    - { texto: "deferred es un problema temporal y se reintenta; bounced es un rechazo definitivo y el remitente recibe un aviso", correcta: true, explicacion: "Los códigos 4xx difieren; los 5xx rebotan." }
+    - { texto: "deferred quiere decir que se entregó tarde", explicacion: "Todavía no se entregó." }
+    - { texto: "bounced se reintenta en cinco días", explicacion: "Es definitivo." }
+    - { texto: "Son lo mismo", explicacion: "No." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí el comando que reintenta ya todo lo que está diferido en la cola de Postfix.
+  aceptadas: ["sudo postqueue -f", "postqueue -f", "sudo postfix flush"]
+  patrones: ["^(sudo\\s+)?(postqueue\\s+-f|postfix\\s+flush|sendmail\\s+-q)$"]
+  explicacion: "mailq muestra la cola; postqueue -f la vacía reintentando."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué smtp_tls_security_level = encrypt y no may en un servidor que se autentica en el relay?
+  opciones:
+    - { texto: "Con may, si el cifrado no se pudiera negociar, mandaría igual, contraseña incluida", correcta: true, explicacion: "encrypt corta la conexión si no hay TLS." }
+    - { texto: "may no existe", explicacion: "Es el valor de Rocky y Ubuntu." }
+    - { texto: "encrypt es más rápido", explicacion: "No cambia la velocidad." }
+    - { texto: "may no funciona con el 587", explicacion: "Funciona, pero sin garantías." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Por qué el correo de las personas de una empresa suele tercerizarse (Microsoft 365, Google Workspace)?
+  opciones:
+    - { texto: "Porque recibir, filtrar, guardar y proteger el correo de todos, y cuidar la reputación, cuesta más que pagar el servicio", correcta: true, explicacion: "Al administrador le queda el dominio y que los sistemas manden bien." }
+    - { texto: "Porque Linux no puede ser servidor de correo", explicacion: "Puede; es una cuestión de costo y riesgo." }
+    - { texto: "Porque es obligatorio por ley", explicacion: "No lo es." }
+    - { texto: "Porque así no hacen falta SPF ni DKIM", explicacion: "Hacen falta igual: los publicás vos." }
