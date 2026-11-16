@@ -1,0 +1,62 @@
+tipo: terminal
+shell: bash
+titulo: Encontrar el disco que está por fallar
+descripcion: >-
+  stor01 es un servidor físico (Rocky Linux 10) con cuatro discos de datos de 4 TB (/dev/sdb a
+  /dev/sde) en las bahías 2 a 5. Anoche el monitoreo avisó de errores de lectura. Tenés que
+  averiguar qué disco es, por qué, y darle al técnico del centro de datos lo que necesita para
+  cambiar el correcto.
+estado_inicial:
+  distro: rocky
+  hostname: stor01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [smartmontools] }
+  discos:
+    - { nombre: sdb, tamano: 4T }
+    - { nombre: sdc, tamano: 4T }
+    - { nombre: sdd, tamano: 4T }
+    - { nombre: sde, tamano: 4T }
+  smart:
+    /dev/sdb: { serie: ZC1A2B3C, horas: 25812 }
+    /dev/sdc: { serie: ZC1A4D5E, horas: 25810 }
+    /dev/sdd: { serie: ZC9X8Y7W, horas: 25809, reasignados: 1880, pendientes: 24 }
+    /dev/sde: { serie: ZC1A6F7G, horas: 25807, temperatura: 41 }
+pasos:
+  - consigna: Revisá la salud general (SMART) de los cuatro discos de datos.
+    verificar:
+      - { comando_usado: 'smartctl' }
+      - { salida_contiene: 'FAILED' }
+    pistas:
+      - '`for d in /dev/sdb /dev/sdc /dev/sdd /dev/sde; do echo -n "$d: "; sudo smartctl -H $d | grep result; done`'
+    solucion: ['for d in /dev/sdb /dev/sdc /dev/sdd /dev/sde; do echo -n "$d: "; sudo smartctl -H $d | grep result; done']
+    explicacion: >-
+      Tres dicen PASSED y /dev/sdd dice FAILED: el propio disco predice que va a fallar. Un
+      PASSED no garantiza nada (muchos discos fallan sin aviso), pero un FAILED casi siempre se
+      cumple.
+  - consigna: Mirá los atributos de /dev/sdd para ver por qué.
+    verificar:
+      - { comando_usado: '-A|-a|--attributes|--all' }
+      - { salida_contiene: 'Reallocated_Sector_Ct' }
+    pistas:
+      - "`sudo smartctl -A /dev/sdd`"
+    solucion: ["sudo smartctl -A /dev/sdd"]
+    explicacion: >-
+      1880 sectores reasignados (el disco ya reemplazó sectores dañados por los de reserva) y 24
+      pendientes (sectores que no pudo leer). El valor normalizado de Reallocated_Sector_Ct bajó
+      por debajo del umbral: FAILING_NOW. Un disco con sectores pendientes que crecen se cambia,
+      aunque todavía funcione.
+  - consigna: >-
+      Conseguí el número de serie de /dev/sdd: es lo que le vas a pasar al técnico, junto con el
+      número de bahía.
+    verificar:
+      - { comando_usado: '-i|--info|-a' }
+      - { salida_contiene: 'ZC9X8Y7W' }
+    pistas:
+      - "`sudo smartctl -i /dev/sdd`"
+    solucion: ["sudo smartctl -i /dev/sdd"]
+    explicacion: >-
+      El nombre /dev/sdd puede cambiar entre un arranque y otro; el número de serie, no, y está
+      impreso en la etiqueta del disco. Con el número de serie, la bahía y la luz de
+      identificación prendida, no hay forma de sacar el disco equivocado.

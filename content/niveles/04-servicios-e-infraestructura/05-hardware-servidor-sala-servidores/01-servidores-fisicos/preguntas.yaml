@@ -1,0 +1,94 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué quiere decir que un disco de servidor es "hot swap"?
+  opciones:
+    - { texto: "Que se puede sacar y poner con el servidor funcionando", correcta: true, explicacion: "Lo mismo vale para fuentes y ventiladores." }
+    - { texto: "Que soporta temperaturas altas", explicacion: "No tiene que ver con la temperatura." }
+    - { texto: "Que es más rápido", explicacion: "Es sobre cómo se cambia." }
+    - { texto: "Que se cambia solo cuando falla", explicacion: "Lo cambia una persona." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor tiene dos fuentes de alimentación, enchufadas en la misma zapatilla. ¿Qué te protege?
+  opciones:
+    - { texto: "Solo la falla de una de las fuentes; un corte en la zapatilla o en ese circuito lo apaga igual", correcta: true, explicacion: "Cada fuente va a un circuito o una UPS distinta." }
+    - { texto: "Todo: por eso hay dos", explicacion: "Comparten el mismo punto de falla." }
+    - { texto: "Nada", explicacion: "Protege si se rompe una fuente." }
+    - { texto: "Los picos de tensión", explicacion: "Eso lo hace la UPS." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve la memoria ECC?
+  opciones:
+    - { texto: "Corrige errores de un bit y avisa de los que no puede corregir", correcta: true, explicacion: "Evita datos corruptos silenciosos." }
+    - { texto: "Hace la memoria más rápida", explicacion: "Es un poco más lenta, incluso." }
+    - { texto: "Permite cambiar memoria en caliente", explicacion: "No en los servidores comunes." }
+    - { texto: "Duplica la capacidad", explicacion: "No." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Este disco dice PASSED. ¿Qué hacés?
+  salida: |
+    SMART overall-health self-assessment test result: PASSED
+      5 Reallocated_Sector_Ct   0x0033   098   098   010    Pre-fail  Always       -       312
+    197 Current_Pending_Sector  0x0012   100   100   000    Old_age   Always       -       16
+  opciones:
+    - { texto: "Planificar el cambio: tiene sectores reasignados y pendientes, y eso suele crecer", correcta: true, explicacion: "PASSED solo dice que todavía no cruzó el umbral." }
+    - { texto: "Nada: dice PASSED", explicacion: "Los atributos dicen otra cosa." }
+    - { texto: "Formatearlo", explicacion: "No arregla un disco gastado." }
+    - { texto: "Desactivar SMART", explicacion: "Sería no enterarse." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué se le pasa al técnico el número de serie del disco y no "/dev/sdd"?
+  opciones:
+    - { texto: "Porque /dev/sdd puede cambiar entre arranques y el técnico ve la etiqueta del disco, no Linux", correcta: true, explicacion: "Con la serie, la bahía y la luz de identificación no hay error." }
+    - { texto: "Porque /dev/sdd es secreto", explicacion: "No lo es." }
+    - { texto: "Porque Linux no sabe en qué bahía está", explicacion: "A veces sí sabe; igual la serie es lo seguro." }
+    - { texto: "No importa", explicacion: "Sacar el disco equivocado de un RAID degradado es perder datos." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cuánto mide de alto una unidad de rack (1U)?
+  opciones:
+    - { texto: "4,45 cm (1,75 pulgadas)", correcta: true, explicacion: "Un rack común tiene 42U, unos 2 metros." }
+    - { texto: "10 cm", explicacion: "No." }
+    - { texto: "1 pulgada", explicacion: "Es 1,75 pulgadas." }
+    - { texto: "Depende del fabricante", explicacion: "Es un estándar." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: >-
+    En una máquina virtual, smartctl dice "SMART support is: Unavailable". ¿Qué pasa?
+  opciones:
+    - { texto: "Los discos de una VM son del hipervisor: la salud se mira en el servidor físico", correcta: true, explicacion: "Es normal." }
+    - { texto: "El disco está roto", explicacion: "No es una falla." }
+    - { texto: "Falta instalar smartd", explicacion: "smartctl ya está; no hay SMART." }
+    - { texto: "Hay que activar SMART en el BIOS de la VM", explicacion: "No existe." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué se cambia en caliente en un servidor de rack típico? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Discos de datos", correcta: true, explicacion: "Desde las bahías del frente." }
+    - { texto: "Fuentes de alimentación", correcta: true, explicacion: "Si hay dos." }
+    - { texto: "Ventiladores", correcta: true, explicacion: "En la mayoría de los modelos." }
+    - { texto: "El procesador", explicacion: "Obliga a apagar." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí el comando que muestra la salud general SMART de /dev/sdb.
+  aceptadas: ["sudo smartctl -H /dev/sdb", "smartctl -H /dev/sdb"]
+  patrones: ["^(sudo\\s+)?smartctl\\s+(-H|--health)\\s+/dev/sdb$"]
+  explicacion: "-a muestra todo; -A, los atributos."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El servidor tiene una controladora RAID por hardware y smartctl -H /dev/sda no muestra datos útiles. ¿Cómo se ven los discos?
+  opciones:
+    - { texto: "Con la herramienta de la controladora, smartctl -d megaraid,N o la placa de gestión", correcta: true, explicacion: "Linux ve un solo disco lógico." }
+    - { texto: "No se puede", explicacion: "Se puede, por otro camino." }
+    - { texto: "Sacando los discos", explicacion: "No hace falta." }
+    - { texto: "Con mdadm", explicacion: "mdadm es para el RAID por software." }

@@ -1,0 +1,81 @@
+tipo: diagrama
+titulo: Un servidor de 2U por fuera y por dentro
+puntos:
+  - id: panel
+    titulo: El panel de control
+    area: { x: 3.5, y: 8.5, ancho: 11.2, alto: 16.2 }
+    texto: >-
+      El botón de encendido, el de identificación (prende una luz azul adelante y atrás, para
+      encontrar el servidor en un rack lleno: "es el que tiene la luz azul") y el indicador de
+      estado, que se pone ámbar si algo falla. Algunos tienen una pantalla con el error.
+  - id: bahias
+    titulo: Las bahías de discos
+    area: { x: 16.3, y: 8.5, ancho: 80.2, alto: 16.2 }
+    texto: >-
+      Cada disco va en una bandeja que se saca desde el frente con el servidor andando (hot swap).
+      La luz de cada bahía dice si está bien, si tiene actividad o si falló (ámbar). Antes de
+      sacar uno, se confirma cuál es: por la luz, por el número de bahía y por el número de serie
+      que muestra smartctl. Sacar el disco equivocado de un RAID degradado es perder los datos.
+  - id: fuentes
+    titulo: Dos fuentes de alimentación
+    area: { x: 3.5, y: 36.2, ancho: 17.4, alto: 40 }
+    texto: >-
+      Cualquiera de las dos puede alimentar el servidor sola. La redundancia sirve si cada una
+      está conectada a un circuito o a una UPS distinta: dos fuentes enchufadas a la misma
+      zapatilla no protegen de nada. Si una falla, se cambia en caliente.
+  - id: red
+    titulo: Las placas de red
+    area: { x: 23.3, y: 36.2, ancho: 22.1, alto: 12.8 }
+    texto: >-
+      Varias bocas, para separar tráficos (el de las aplicaciones, el de los respaldos, el del
+      almacenamiento) o unirlas de a dos para tener redundancia y más ancho de banda (bonding,
+      lección 2.4.5).
+  - id: gestion
+    titulo: La placa de gestión
+    area: { x: 23.3, y: 50.2, ancho: 22.1, alto: 12.8 }
+    texto: >-
+      iDRAC en Dell, iLO en HPE, XClarity en Lenovo, o IPMI genérico: una computadora chiquita
+      dentro del servidor, con su propio puerto de red, que funciona aunque el servidor esté
+      apagado o el sistema colgado. Es el tema de la lección 4.5.3.
+  - id: raid
+    titulo: La controladora RAID
+    area: { x: 23.3, y: 64.3, ancho: 22.1, alto: 11.9 }
+    texto: >-
+      Arma los RAID por hardware: el sistema operativo ve un solo disco. Su memoria caché acelera
+      las escrituras, y la batería (o el capacitor) la protege si se corta la luz. Con la batería
+      vencida, la controladora apaga la caché y todo se pone lento. La alternativa es RAID por
+      software con mdadm (lección 4.5.2).
+  - id: cpu
+    titulo: Dos procesadores
+    area: { x: 47.7, y: 42.6, ancho: 27.9, alto: 23.4 }
+    texto: >-
+      Procesadores de servidor (Intel Xeon, AMD EPYC): muchos núcleos, más canales de memoria y
+      soporte de ECC. Con dos procesadores, cada uno tiene "su" memoria: las aplicaciones grandes
+      rinden mejor si usan la del procesador donde corren (NUMA, para más adelante).
+  - id: memoria
+    titulo: La memoria ECC
+    area: { x: 47, y: 36.2, ancho: 29.3, alto: 5.1 }
+    texto: >-
+      La memoria ECC detecta y corrige los errores de un bit (que pasan, por radiación o por
+      desgaste) y avisa si encuentra uno que no puede corregir. Sin ECC, ese error es un dato
+      corrupto o un cuelgue sin explicación. Los errores corregidos quedan en el registro de la
+      placa de gestión: si un módulo empieza a sumar muchos, se cambia antes de que falle.
+  - id: pcie
+    titulo: Las ranuras PCIe
+    area: { x: 77.9, y: 36.2, ancho: 18.6, alto: 14.9 }
+    texto: >-
+      Para agregar placas: más red, discos NVMe, placas de video para cálculo o inteligencia
+      artificial. Cada ranura está conectada a uno de los procesadores.
+  - id: arranque
+    titulo: Los discos de arranque
+    area: { x: 77.9, y: 52.8, ancho: 18.6, alto: 11.9 }
+    texto: >-
+      Dos discos chicos (M.2) en espejo solo para el sistema operativo, separados de los discos
+      de datos. Si se rompe uno, el servidor sigue arrancando.
+  - id: ventiladores
+    titulo: Los ventiladores
+    area: { x: 3.5, y: 79.6, ancho: 93, alto: 7.7 }
+    texto: >-
+      Redundantes y cambiables en caliente. El aire entra por el frente y sale por atrás: por eso
+      en el rack todos los servidores miran para el mismo lado (pasillo frío y pasillo caliente,
+      lección 4.5.4). Si uno falla, los demás aceleran y la placa de gestión avisa.

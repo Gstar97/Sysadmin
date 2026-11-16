@@ -1,0 +1,84 @@
+---
+id: n4-m5-l1
+titulo: Servidores físicos
+minutos: 120
+objetivos:
+  - Diferenciar los formatos de servidor (torre, rack de 1U y 2U, blade) y saber cuándo conviene cada uno.
+  - Reconocer los componentes redundantes de un servidor y para qué sirve cada uno (fuentes, ventiladores, discos, memoria ECC).
+  - Revisar la salud de los discos con SMART y preparar un cambio de disco sin equivocarse.
+glosario: [unidad-rack, ecc, smart, hot-swap]
+verificado: 2026-11
+---
+
+import servidor from './servidor.svg?raw'
+import servidorDatos from './servidor.yaml'
+import formatos from './formatos.yaml'
+import discos from './ej-discos.yaml'
+
+Hasta acá trabajaste con máquinas virtuales, que es lo que vas a administrar la mayor parte del tiempo. Pero todas corren sobre servidores de verdad, y alguien tiene que elegirlos, instalarlos en el rack, cambiarles un disco o una fuente y saber qué hacer cuando se prende una luz ámbar. Un servidor por dentro tiene las mismas piezas que una PC (las del módulo 0.1), pensadas para otra cosa: funcionar años sin apagarse y que cualquier pieza que se rompa se pueda cambiar sin cortar el servicio.
+
+<AntesDeEmpezar>
+- Las piezas de una computadora, la memoria y el almacenamiento (módulo 0.1).
+- Discos y particiones en Linux (módulo 1.4).
+</AntesDeEmpezar>
+
+## Formatos
+
+<Emparejar ejercicio={formatos} />
+
+En una empresa mediana lo más común son servidores de **rack** de 1U o 2U, de Dell (PowerEdge), HPE (ProLiant) o Lenovo (ThinkSystem). Las torres quedan para oficinas sin sala de servidores, y los blade, para centros de datos grandes.
+
+## Por fuera y por dentro
+
+<DiagramaInteractivo datos={servidorDatos} svg={servidor} alt="Arriba, el frente de un servidor de 2U: el panel de control (encendido, identificación y estado, pantalla y USB) y doce bahías de discos, una con la luz ámbar de falla. Abajo, el interior visto desde arriba: dos fuentes de alimentación, las placas de red, la placa de gestión (iDRAC o iLO), la controladora RAID con caché y batería, dos procesadores rodeados de memoria ECC, ranuras PCIe, dos discos M.2 de arranque en espejo y una fila de seis ventiladores redundantes que mueven el aire del frente hacia atrás." />
+
+La idea que atraviesa todo el diseño es la **redundancia**: dos fuentes, varios ventiladores, discos en RAID, memoria que corrige errores. Y casi todo se cambia **en caliente** (hot swap), con el servidor funcionando: un disco, una fuente, un ventilador. Lo que no tiene repuesto en caliente (un procesador, la placa madre) es lo que obliga a apagar, y por eso los servicios importantes se reparten entre varios servidores.
+
+Dos detalles que hacen la diferencia:
+
+- **Memoria ECC.** Corrige sola los errores de un bit y avisa de los que no puede corregir. En un servidor que guarda datos de la empresa no es opcional.
+- **Las fuentes redundantes solo sirven bien conectadas**: cada una a un circuito o a una UPS distinta. Con las dos en la misma zapatilla, un corte de esa zapatilla apaga el servidor igual.
+
+## La salud de los discos: SMART
+
+Los discos (mecánicos y de estado sólido) llevan la cuenta de sus propios problemas: sectores dañados que tuvieron que reemplazar, sectores que no pudieron leer, horas de uso, temperatura. Eso es **SMART**, y se lee con `smartctl` (paquete `smartmontools`):
+
+```bash
+sudo smartctl -H /dev/sdb     # salud general: PASSED o FAILED
+sudo smartctl -A /dev/sdb     # atributos: reasignados (5), pendientes (197), horas (9), temperatura (194)
+sudo smartctl -i /dev/sdb     # modelo y número de serie
+sudo smartctl -t short /dev/sdb   # una prueba corta (dos minutos); el resultado, con -l selftest
+```
+
+Lo que más importa mirar: **Reallocated_Sector_Ct** (sectores ya reemplazados) y **Current_Pending_Sector** (sectores que no se pudieron leer). Si alguno crece, el disco se cambia aunque todavía diga PASSED. El servicio `smartd` revisa los discos solo y manda un correo si algo empeora (con `-m root` en su configuración y el correo de root redirigido, lección 4.4.3).
+
+Dos aclaraciones. En una **máquina virtual** no hay SMART: los discos son del hipervisor, y la salud se mira ahí. Y detrás de una **controladora RAID por hardware**, el sistema operativo ve un solo disco lógico: SMART se lee con la herramienta de la controladora (o con `smartctl -d megaraid,N`), o desde la placa de gestión.
+
+<Terminal ejercicio={discos} />
+
+<EnSimple>
+Un servidor es una computadora pensada para no apagarse: dos fuentes, varios ventiladores, discos que se cambian en caliente y memoria ECC. Los formatos más comunes son de rack (1U o 2U). La salud de los discos se mira con smartctl; antes de cambiar uno, se confirman la bahía y el número de serie.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Las dos fuentes en la misma zapatilla">
+    Si se corta esa zapatilla, se apaga el servidor. Cada fuente a un circuito o una UPS distinta.
+  </ErrorComun>
+  <ErrorComun titulo="Sacar un disco por el nombre /dev/sdX">
+    El nombre puede cambiar. Se confirma con el número de serie (smartctl -i), la bahía y la luz de identificación.
+  </ErrorComun>
+  <ErrorComun titulo="Confiar en que PASSED quiere decir sano">
+    Muchos discos fallan sin aviso. Lo que se mira son los sectores reasignados y pendientes, y su tendencia.
+  </ErrorComun>
+  <ErrorComun titulo="Servidores sin memoria ECC para datos importantes">
+    Un error de memoria sin corregir es un dato corrupto que nadie ve hasta que es tarde.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Formatos: torre (oficinas chicas), rack de 1U y 2U (lo más común), blade (centros de datos grandes). 1U = 4,45 cm.
+- Redundancia y cambio en caliente: fuentes, ventiladores, discos. Las fuentes, a circuitos o UPS distintas.
+- Memoria ECC: corrige errores de un bit y avisa de los demás.
+- SMART con smartctl: -H, -A (reasignados y pendientes), -i (número de serie), -t short; smartd avisa por correo.
+- En una VM no hay SMART; detrás de una controladora RAID, se lee con su herramienta o con la placa de gestión.
+</Resumen>
