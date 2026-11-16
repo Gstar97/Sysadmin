@@ -308,6 +308,8 @@ const stateShape = {
         .optional(),
     })
     .default({ aplicaciones: {}, dominios_publicos: {}, puertos_publicados: [], certificados: [], confia_en: [] }),
+  /** Cuentas de Samba ya creadas con smbpasswd (el usuario de Linux tiene que existir). */
+  samba: z.strictObject({ usuarios: z.array(z.strictObject({ nombre: z.string(), clave: z.string() })).default([]) }).optional(),
   /** Bases de datos del servidor (MariaDB y PostgreSQL). */
   bases_datos: z
     .strictObject({

@@ -28,6 +28,176 @@ export interface PackageInfo {
   requires?: string[]
 }
 
+const SMB_CONF_ROCKY = `# See smb.conf.example for a more detailed config file or
+# read the smb.conf manpage.
+# Run 'testparm' to verify the config is correct after
+# you modified it.
+#
+# Note:
+# SMB1 is disabled by default. This means clients without support for SMB2 or
+# SMB3 are no longer able to connect to smbd (by default).
+
+[global]
+	workgroup = SAMBA
+	security = user
+
+	passdb backend = tdbsam
+
+	printing = cups
+	printcap name = cups
+	load printers = yes
+	cups options = raw
+
+[homes]
+	comment = Home Directories
+	valid users = %S, %D%w%S
+	browseable = No
+	read only = No
+	inherit acls = Yes
+
+[printers]
+	comment = All Printers
+	path = /var/tmp
+	printable = Yes
+	create mask = 0600
+	browseable = No
+
+[print$]
+	comment = Printer Drivers
+	path = /var/lib/samba/drivers
+	write list = @printadmin root
+	force group = @printadmin
+	create mask = 0664
+	directory mask = 0775
+`
+
+const SMB_CONF_UBUNTU = `#
+# Sample configuration file for the Samba suite for Debian GNU/Linux.
+#
+#
+# This is the main Samba configuration file. You should read the
+# smb.conf(5) manual page in order to understand the options listed
+# here. Samba has a huge number of configurable options most of which
+# are not shown in this example
+#
+# Some options that are often worth tuning have been included as
+# commented-out examples in this file.
+#  - When such options are commented with ";", the proposed setting
+#    differs from the default Samba behaviour
+#  - When commented with "#", the proposed setting is the default
+#    behaviour of Samba but the option is considered important
+#    enough to be mentioned here
+#
+# NOTE: Whenever you modify this file you should run the command
+# "testparm" to check that you have not made any basic syntactic
+# errors.
+
+#======================= Global Settings =======================
+
+[global]
+
+## Browsing/Identification ###
+
+# Change this to the workgroup/NT-domain name your Samba server will part of
+   workgroup = WORKGROUP
+
+#### Networking ####
+
+# The specific set of interfaces / networks to bind to
+# This can be either the interface name or an IP address/netmask;
+# interface names are normally preferred
+;   interfaces = 127.0.0.0/8 eth0
+
+#### Debugging/Accounting ####
+
+# This tells Samba to use a separate log file for each machine
+# that connects
+   log file = /var/log/samba/log.%m
+
+# Cap the size of the individual log files (in KiB).
+   max log size = 1000
+
+# We want Samba to only log to /var/log/samba/log.{smbd,nmbd}.
+# Append syslog@1 if you want important messages to be sent to syslog too.
+   logging = file
+
+# Do something sensible when Samba crashes: mail the admin a backtrace
+   panic action = /usr/share/samba/panic-action %d
+
+
+####### Authentication #######
+
+# Server role. Defines in which mode Samba will operate. Possible
+# values are "standalone server", "member server", "classic primary
+# domain controller", "classic backup domain controller", "active
+# directory domain controller".
+#
+# Most people will want "standalone server" or "member server".
+# Running as "active directory domain controller" will require first
+# running "samba-tool domain provision" to wipe databases and create a
+# new domain.
+   server role = standalone server
+
+   obey pam restrictions = yes
+
+# This boolean parameter controls whether Samba attempts to sync the Unix
+# password with the SMB password when the encrypted SMB password in the
+# passdb is changed.
+   unix password sync = yes
+
+# For Unix password sync to work on a Debian GNU/Linux system, the following
+# parameters must be set (thanks to Ian Kahan <kahan@informatik.tu-muenchen.de> for
+# sending the correct chat script for the passwd program in Debian Sarge).
+   passwd program = /usr/bin/passwd %u
+   passwd chat = *Enter\\snew\\s*\\spassword:* %n\\n *Retype\\snew\\s*\\spassword:* %n\\n *password\\supdated\\ssuccessfully* .
+
+# This boolean controls whether PAM will be used for password changes
+# when requested by an SMB client instead of the program listed in
+# 'passwd program'. The default is 'no'.
+   pam password change = yes
+
+# This option controls how unsuccessful authentication attempts are mapped
+# to anonymous connections
+   map to guest = bad user
+
+############ Misc ############
+
+# Allow users who've been granted usershare privileges to create
+# public shares, not just authenticated ones
+   usershare allow guests = yes
+
+#======================= Share Definitions =======================
+
+# Un-comment the following (and tweak the other settings below to suit)
+# to enable the default home directory shares. This will share each
+# user's home directory as \\\\server\\username
+;[homes]
+;   comment = Home Directories
+;   browseable = no
+
+# By default, the home directories are exported read-only. Change the
+# next parameter to 'no' if you want to be able to write to them.
+;   read only = yes
+
+[printers]
+   comment = All Printers
+   browseable = no
+   path = /var/tmp
+   printable = yes
+   guest ok = no
+   read only = yes
+   create mask = 0700
+
+# Windows clients look for this share name as a source of downloadable
+# printer drivers
+[print$]
+   comment = Printer Drivers
+   path = /var/lib/samba/printers
+   browseable = yes
+   read only = yes
+   guest ok = no
+`
+
 const NFS_CONF = `#
 # This is a general configuration for the
 # NFS daemons and tools
@@ -572,10 +742,16 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   'epel-release': { summary: 'Extra Packages for Enterprise Linux repository configuration', version: '10' },
   samba: {
     summary: 'Server and Client software to interoperate with Windows machines',
-    version: '4.21.3',
-    services: [{ name: 'smb', description: 'Samba SMB Daemon', ports: [139, 445] }],
-    files: { '/etc/samba/smb.conf': '[global]\n\tworkgroup = SAMBA\n\tsecurity = user\n' },
+    version: '4.23.5',
+    services: [
+      { name: 'smb', description: 'Samba SMB Daemon', ports: [139, 445] },
+      { name: 'nmb', description: 'Samba NMB Daemon', ports: [] },
+    ],
+    files: { '/etc/samba/smb.conf': SMB_CONF_ROCKY, '/etc/samba/smb.conf.example': SMB_CONF_ROCKY, '/etc/samba/lmhosts': '127.0.0.1 localhost\n', '/var/lib/samba/private/.keep': '' },
+    commands: ['testparm', 'smbpasswd', 'pdbedit', 'smbstatus', 'smbcontrol'],
   },
+  'samba-client': { summary: 'Samba client programs', version: '4.23.5', commands: ['smbclient', 'nmblookup', 'smbget'] },
+  'cifs-utils': { summary: 'Utilities for mounting and managing CIFS mounts', version: '7.2', commands: ['mount.cifs', 'mount.smb3', 'cifscreds'] },
   'nfs-utils': {
     summary: 'NFS utilities and supporting clients and daemons for the kernel NFS server',
     version: '2.8.3',
@@ -686,10 +862,16 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   'net-tools': { summary: 'NET-3 networking toolkit (obsolete: use iproute2)', version: '2.10', commands: ['ifconfig', 'netstat', 'route'] },
   samba: {
     summary: 'SMB/CIFS file, print, and login server for Unix',
-    version: '4.21.4',
-    services: [{ name: 'smbd', description: 'Samba SMB Daemon', ports: [139, 445], enabledByDefault: true, activeAfterInstall: true }],
-    files: { '/etc/samba/smb.conf': '[global]\n   workgroup = WORKGROUP\n   server role = standalone server\n' },
+    version: '2:4.23.6+dfsg-0ubuntu1',
+    services: [
+      { name: 'smbd', description: 'Samba SMB Daemon', ports: [139, 445], enabledByDefault: true, activeAfterInstall: true },
+      { name: 'nmbd', description: 'Samba NMB Daemon', ports: [], enabledByDefault: true, activeAfterInstall: true },
+    ],
+    files: { '/etc/samba/smb.conf': SMB_CONF_UBUNTU, '/var/lib/samba/private/.keep': '' },
+    commands: ['testparm', 'smbpasswd', 'pdbedit', 'smbstatus', 'smbcontrol'],
   },
+  smbclient: { summary: 'command-line SMB/CIFS clients for Unix', version: '2:4.23.6+dfsg-0ubuntu1', commands: ['smbclient', 'nmblookup', 'smbget'] },
+  'cifs-utils': { summary: 'Common Internet File System utilities', version: '2:7.4-1', commands: ['mount.cifs', 'mount.smb3', 'cifscreds'] },
   'nfs-kernel-server': {
     summary: 'support for NFS kernel server',
     version: '1:2.8.3-1ubuntu1',

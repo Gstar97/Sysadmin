@@ -39,6 +39,7 @@ import { verifyDb } from './db/dbinit'
 import './commands/dbcmd'
 import './commands/pgcmd'
 import { verifyNfs } from './nfs'
+import './samba'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'

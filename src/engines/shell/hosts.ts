@@ -562,7 +562,7 @@ export function learnNeighbor(from: System, ip: string) {
 
 export const FW_SERVICES: Record<string, string> = { dhcp: '67/udp', ssh: '22/tcp', http: '80/tcp', https: '443/tcp', 'dhcpv6-client': '546/udp', cockpit: '9090/tcp', dns: '53/udp', mysql: '3306/tcp', postgresql: '5432/tcp', samba: '445/tcp', nfs: '2049/tcp', 'rpc-bind': '111/tcp', mountd: '20048/tcp', 'smtp-submission': '587/tcp', smtps: '465/tcp', imaps: '993/tcp', pop3s: '995/tcp', ntp: '123/udp', smtp: '25/tcp', ftp: '21/tcp' }
 
-const UFW_APPS: Record<string, string[]> = { openssh: ['22/tcp'], 'nginx full': ['80/tcp', '443/tcp'], 'nginx http': ['80/tcp'], 'nginx https': ['443/tcp'], 'apache full': ['80/tcp', '443/tcp'], apache: ['80/tcp'] }
+const UFW_APPS: Record<string, string[]> = { openssh: ['22/tcp'], samba: ['137/udp', '138/udp', '139/tcp', '445/tcp'], postfix: ['25/tcp'], 'postfix smtps': ['465/tcp'], 'postfix submission': ['587/tcp'], 'nginx full': ['80/tcp', '443/tcp'], 'nginx http': ['80/tcp'], 'nginx https': ['443/tcp'], 'apache full': ['80/tcp', '443/tcp'], apache: ['80/tcp'] }
 
 function ufwMatches(target: string, port: number, proto: string, src: string): boolean {
   const t = target.trim().toLowerCase()

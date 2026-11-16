@@ -60,7 +60,7 @@ export interface Cred {
   groups: number[]
 }
 
-export type FsErrorCode = 'ENOENT' | 'ENOTDIR' | 'EISDIR' | 'EACCES' | 'EEXIST' | 'ENOTEMPTY' | 'ELOOP' | 'EPERM' | 'EINVAL' | 'EXDEV' | 'EROFS' | 'EBUSY'
+export type FsErrorCode = 'ENOENT' | 'ENOTDIR' | 'EISDIR' | 'EACCES' | 'EEXIST' | 'ENOTEMPTY' | 'ELOOP' | 'EPERM' | 'EINVAL' | 'EXDEV' | 'EROFS' | 'EBUSY' | 'EIO'
 
 const MESSAGES: Record<FsErrorCode, string> = {
   ENOENT: 'No such file or directory',
@@ -75,6 +75,7 @@ const MESSAGES: Record<FsErrorCode, string> = {
   EXDEV: 'Invalid cross-device link',
   EROFS: 'Read-only file system',
   EBUSY: 'Device or resource busy',
+  EIO: 'Input/output error',
 }
 
 export class FsError extends Error {
@@ -123,6 +124,12 @@ export interface RemoteBinding {
   readonly: boolean
   /** Montaje bajo demanda (automount): se monta de verdad la primera vez que se entra. */
   activate?: () => void
+  /** Permisos que se revisan antes de ir al servidor (los del cliente y los del recurso). */
+  check?: (local: Cred, write: boolean, path: string) => FsErrorCode | undefined
+  /** Cómo ve el cliente cada archivo (CIFS: el dueño y los permisos salen de las opciones de mount). */
+  view?: (node: Inode) => Inode
+  /** Permisos de lo que se crea (CIFS: create mask y directory mask del recurso). */
+  createMode?: (mode: number, dir: boolean) => number
 }
 
 type Remote = { b: RemoteBinding; rpath: string }
@@ -196,6 +203,8 @@ export class VFS {
     const r = this.remoteOf(path)
     if (!r) return undefined
     if (write && r.b.readonly) throw new FsError('EROFS', normalizePath(path))
+    const denied = r.b.check?.(cred, write, r.rpath)
+    if (denied) throw new FsError(denied, normalizePath(path))
     try {
       return { v: fn(r.b.vfs, r.rpath, r.b.cred(cred)) }
     } catch (e) {
@@ -284,7 +293,10 @@ export class VFS {
 
   stat(path: string, cred: Cred, follow = true): Inode {
     const r = this.via(path, cred, false, (v, p, c) => v.stat(p, c, follow))
-    if (r) return r.v
+    if (r) {
+      const view = this.remoteOf(path)?.b.view
+      return view ? view(r.v) : r.v
+    }
     return this.get(this.resolve(path, cred, follow))
   }
 
@@ -361,7 +373,10 @@ export class VFS {
   }
 
   writeFile(path: string, data: string, cred: Cred, opts: { append?: boolean; mode?: number; umask?: number } = {}): void {
-    if (this.via(path, cred, true, (v, p, c) => v.writeFile(p, data, c, opts))) return
+    if (this.via(path, cred, true, (v, p, c) => {
+      const cm = this.remoteOf(path)?.b.createMode
+      v.writeFile(p, data, c, cm ? { ...opts, mode: cm(opts.mode ?? 0o666, false), umask: 0 } : opts)
+    })) return
     const abs = normalizePath(path)
     let ino: number | undefined
     try {
@@ -386,7 +401,11 @@ export class VFS {
   }
 
   touch(path: string, cred: Cred, umask?: number): void {
-    if (this.via(path, cred, true, (v, p, c) => v.touch(p, c, umask))) return
+    if (this.via(path, cred, true, (v, p, c) => {
+      const cm = this.remoteOf(path)?.b.createMode
+      if (cm && !v.exists(p, c)) v.writeFile(p, '', c, { mode: cm(0o666, false), umask: 0 })
+      else v.touch(p, c, umask)
+    })) return
     if (this.exists(path, cred)) {
       const node = this.stat(path, cred)
       if (cred.uid !== 0 && cred.uid !== node.uid && !this.can(node, cred, 2)) throw new FsError('EACCES', path)
@@ -397,7 +416,10 @@ export class VFS {
   }
 
   mkdir(path: string, cred: Cred, mode = 0o755, umask = 0): void {
-    if (this.via(path, cred, true, (v, p, c) => v.mkdir(p, c, mode, umask))) return
+    if (this.via(path, cred, true, (v, p, c) => {
+      const cm = this.remoteOf(path)?.b.createMode
+      v.mkdir(p, c, cm ? cm(mode, true) : mode, cm ? 0 : umask)
+    })) return
     const abs = normalizePath(path)
     if (this.exists(abs, cred, false)) throw new FsError('EEXIST', path)
     const { parent, name } = this.parentFor(abs, cred)
@@ -630,7 +652,14 @@ export class VFS {
     const wr = this.remoteOf(path)
     if (wr) {
       const back = (p: string) => this.toLocal(wr.b, normalizePath(p))
-      wr.b.vfs.walk(wr.rpath, wr.b.cred(cred), (abs, node, d) => visit(back(abs), node, depth + d), onError && ((abs, err) => onError(back(abs), new FsError(err.code, back(err.path)))), 0)
+      const denied = wr.b.check?.(cred, false, wr.rpath)
+      if (denied) {
+        const err = new FsError(denied, normalizePath(path))
+        if (onError) return onError(normalizePath(path), err)
+        throw err
+      }
+      const view = wr.b.view ?? ((n: Inode) => n)
+      wr.b.vfs.walk(wr.rpath, wr.b.cred(cred), (abs, node, d) => visit(back(abs), view(node), depth + d), onError && ((abs, err) => onError(back(abs), new FsError(err.code, back(err.path)))), 0)
       return
     }
     const abs = normalizePath(path)

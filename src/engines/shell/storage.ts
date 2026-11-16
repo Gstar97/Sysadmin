@@ -72,6 +72,8 @@ export interface MountEntry {
   coveredIno?: number
   /** Montaje de red (NFS, CIFS): tamaño y uso los da el servidor. */
   remote?: { size: () => number; used: () => number }
+  /** Al desmontar (por ejemplo, Samba cierra la sesión). */
+  onUnmount?: () => void
 }
 
 export interface SwapEntry {
@@ -433,6 +435,7 @@ export class Storage {
   unmount(m: MountEntry): void {
     if (m.coveredIno !== undefined) this.sys.vfs.mountAt(m.target, m.coveredIno)
     if (m.remote) this.sys.vfs.removeRemote(m.target)
+    m.onUnmount?.()
     this.mounts = this.mounts.filter((x) => x !== m)
   }
 
