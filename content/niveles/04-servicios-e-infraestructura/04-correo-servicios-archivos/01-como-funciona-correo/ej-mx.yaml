@@ -1,0 +1,79 @@
+tipo: terminal
+shell: bash
+titulo: Seguir un correo en el servidor
+descripcion: >-
+  web01 (Rocky Linux 10) tiene Postfix instalado y funcionando con su configuración de fábrica,
+  para que los programas del servidor (cron, los scripts de respaldo) puedan mandar avisos. El
+  correo de la empresa (ejemplo.com.ar) lo maneja un proveedor.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [postfix, s-nail, bind-utils] }
+  servicios:
+    postfix: { activo: true, habilitado: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.11/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.1]
+    registros_dns:
+      MX ejemplo.com.ar: "10 mx1.proveedor.com; 20 mx2.proveedor.com"
+      mx1.proveedor.com: 203.0.113.30
+      mx2.proveedor.com: 198.51.100.30
+pasos:
+  - consigna: Averiguá qué servidores reciben el correo de ejemplo.com.ar.
+    verificar:
+      - { comando_usado: '\bMX\b|-t mx|-t MX|type=mx|type=MX' }
+      - { salida_contiene: 'mx1.proveedor.com' }
+    pistas:
+      - "`dig MX ejemplo.com.ar` (o `dig +short MX ejemplo.com.ar`)"
+    solucion: ["dig +short MX ejemplo.com.ar"]
+    explicacion: >-
+      Dos MX: mx1 con prioridad 10 y mx2 con 20. Quien manda correo a la empresa prueba primero
+      el de número más bajo; si no contesta, el otro. El correo de la empresa no pasa por web01:
+      lo recibe el proveedor.
+  - consigna: Fijate en qué dirección y puerto escucha Postfix en web01.
+    verificar:
+      - { comando_usado: '\bss\b' }
+      - { salida_contiene: '127.0.0.1:25' }
+    pistas:
+      - "`sudo ss -tlnp | grep :25`"
+    solucion: ["sudo ss -tlnp | grep :25"]
+    explicacion: >-
+      Solo en 127.0.0.1: la configuración de fábrica de Rocky (inet_interfaces = localhost)
+      acepta correo de los programas de este mismo servidor y de nadie más. Para un servidor que
+      solo manda avisos, es exactamente lo que se quiere.
+  - consigna: Mandale a root un correo de prueba con el asunto "Prueba" y el texto "hola".
+    verificar:
+      - { correo_enviado: root }
+    pistas:
+      - "`echo hola | mail -s Prueba root`"
+    solucion: ["echo hola | mail -s Prueba root"]
+    explicacion: >-
+      mail no manda nada por sí mismo: le pasa el mensaje a Postfix (con el comando sendmail), y
+      Postfix decide. Como root es un usuario de este servidor, lo entrega en su buzón local.
+  - consigna: Buscá en el registro de correo los pasos que dio ese mensaje.
+    verificar:
+      - { comando_usado: 'maillog|journalctl' }
+      - { salida_contiene: 'status=sent' }
+    pistas:
+      - "`sudo tail -n 6 /var/log/maillog`"
+    solucion: ["sudo tail -n 6 /var/log/maillog"]
+    explicacion: >-
+      Cada mensaje tiene un identificador de cola (los diez caracteres antes de los dos puntos), y
+      cada proceso de Postfix deja su línea: pickup lo toma, cleanup lo arma, qmgr lo pone en
+      la cola, local lo entrega (relay=local, status=sent) y qmgr lo saca de la cola. Buscando
+      ese identificador con grep se ve la historia completa de un correo.
+  - consigna: Leé el mensaje en el buzón de root.
+    verificar:
+      - { salida_contiene: 'Subject: Prueba' }
+    pistas:
+      - "`sudo cat /var/spool/mail/root`"
+    solucion: ["sudo cat /var/spool/mail/root"]
+    explicacion: >-
+      El buzón es un archivo de texto con todos los mensajes uno detrás del otro. Arriba están los
+      encabezados que agregó Postfix (Return-Path, Received) y los del mensaje (From, To,
+      Subject). En la lección 4.4.3 vas a hacer que estos avisos lleguen a una casilla real.

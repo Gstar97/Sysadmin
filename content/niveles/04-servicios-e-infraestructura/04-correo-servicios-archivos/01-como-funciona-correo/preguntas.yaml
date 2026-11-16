@@ -1,0 +1,99 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Laura manda un correo a un cliente de Gmail. ¿A qué servidor le entrega el mensaje su programa de correo?
+  opciones:
+    - { texto: "Al servidor de envío de su propia organización, que después lo lleva a Gmail", correcta: true, explicacion: "El programa siempre entrega a su servidor; los servidores se pasan el correo entre ellos." }
+    - { texto: "Directamente al MX de Gmail", explicacion: "Eso lo hace el servidor de envío, no el programa." }
+    - { texto: "Al celular del cliente", explicacion: "El correo no viaja de equipo a equipo." }
+    - { texto: "Al servidor DNS", explicacion: "El DNS solo dice adónde entregar." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿A qué servidor intenta entregar primero un correo para ejemplo.com.ar quien lo manda?
+  salida: |
+    $ dig +short MX ejemplo.com.ar
+    20 mx2.proveedor.com.
+    10 mx1.proveedor.com.
+  opciones:
+    - { texto: "A mx1.proveedor.com, porque tiene la prioridad más baja", correcta: true, explicacion: "El número más bajo se prueba primero; el orden de la respuesta no importa." }
+    - { texto: "A mx2.proveedor.com, porque aparece primero", explicacion: "Manda el número, no el orden." }
+    - { texto: "A los dos a la vez", explicacion: "Se prueba uno; el otro es el de reserva." }
+    - { texto: "A ejemplo.com.ar directamente", explicacion: "Para eso están los MX." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué se usa el puerto 587?
+  opciones:
+    - { texto: "Para que un programa de correo (o un servidor) entregue mensajes a su servidor de envío, con STARTTLS y usuario y contraseña", correcta: true, explicacion: "Es el puerto de submission." }
+    - { texto: "Para que los servidores se pasen el correo entre ellos", explicacion: "Ese es el 25." }
+    - { texto: "Para leer el buzón", explicacion: "Para leer, IMAP (993) o POP3 (995)." }
+    - { texto: "Para consultar los registros MX", explicacion: "Eso es DNS, puerto 53." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor en la nube trata de mandar avisos directo al MX de Gmail y los mensajes quedan en la cola con "Connection timed out" hacia el puerto 25. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "El proveedor de la nube bloquea la salida por el 25: hay que mandar por un relay en el 587", correcta: true, explicacion: "Es lo habitual para frenar el spam." }
+    - { texto: "Gmail está caído", explicacion: "Muy improbable; y tiene varios MX." }
+    - { texto: "Falta abrir el 25 en el firewall de entrada del servidor", explicacion: "El problema es la salida, no la entrada." }
+    - { texto: "El registro MX de Gmail está mal", explicacion: "El error es de conexión, no de DNS." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué ves en el "sobre" de un correo (lo que se manda en la conversación SMTP)? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "MAIL FROM, la dirección a la que se avisa si rebota", correcta: true, explicacion: "Después aparece como Return-Path." }
+    - { texto: "RCPT TO, a quién entregarlo", correcta: true, explicacion: "Puede tener varios destinatarios." }
+    - { texto: "El asunto", explicacion: "Es un encabezado de la carta." }
+    - { texto: "El From que muestra el programa de correo", explicacion: "También es de la carta, y puede no coincidir con el sobre." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué diferencia hay entre IMAP y POP3?
+  opciones:
+    - { texto: "IMAP deja los mensajes en el servidor y sincroniza todos los equipos; POP3 los descarga a uno", correcta: true, explicacion: "Por eso hoy se usa IMAP." }
+    - { texto: "IMAP sirve para mandar y POP3 para recibir", explicacion: "Los dos son para leer; para mandar, SMTP." }
+    - { texto: "POP3 es más seguro", explicacion: "Los dos tienen versión cifrada." }
+    - { texto: "Son lo mismo", explicacion: "Funcionan distinto." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es un relay abierto y por qué es un problema?
+  opciones:
+    - { texto: "Un servidor que reenvía correo de cualquiera hacia cualquiera; lo usan para spam y termina en listas negras", correcta: true, explicacion: "Por eso se exige autenticación o se limita a la propia red." }
+    - { texto: "Un servidor sin cifrado", explicacion: "Es otro problema." }
+    - { texto: "Un servidor con el puerto 587 abierto", explicacion: "El 587 pide contraseña." }
+    - { texto: "Un MX de reserva", explicacion: "Eso es un MX con prioridad más alta." }
+- id: p08
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó con este mensaje?
+  salida: |
+    postfix/qmgr[1160]: 95053CBDF1B: from=<ana@web01.localdomain>, size=327, nrcpt=1 (queue active)
+    postfix/local[1163]: 95053CBDF1B: to=<root@web01.localdomain>, relay=local, dsn=2.0.0, status=sent (delivered to mailbox)
+    postfix/qmgr[1160]: 95053CBDF1B: removed
+  opciones:
+    - { texto: "Se entregó en el buzón local de root y salió de la cola", correcta: true, explicacion: "relay=local y status=sent." }
+    - { texto: "Quedó diferido", explicacion: "Diría status=deferred y seguiría en la cola." }
+    - { texto: "Se mandó a internet", explicacion: "relay=local: no salió del servidor." }
+    - { texto: "Rebotó", explicacion: "Diría status=bounced." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Escribí el comando que muestra solo los registros MX de ejemplo.com.ar, sin el resto de la salida de dig.
+  aceptadas: ["dig +short MX ejemplo.com.ar", "dig +short ejemplo.com.ar MX", "dig MX ejemplo.com.ar +short"]
+  patrones: ["^dig\\s+(\\+short\\s+MX\\s+ejemplo\\.com\\.ar|\\+short\\s+ejemplo\\.com\\.ar\\s+MX|MX\\s+ejemplo\\.com\\.ar\\s+\\+short|-t\\s+MX\\s+ejemplo\\.com\\.ar\\s+\\+short)$"]
+  explicacion: "También: host -t MX ejemplo.com.ar."
+- id: p10
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená el recorrido de un correo de Laura a un cliente de Gmail.
+  pasos:
+    - El programa de correo de Laura lo entrega a su servidor de envío por el 587
+    - El servidor de envío busca en el DNS los MX de gmail.com
+    - Lo entrega al MX de Gmail por el 25
+    - Gmail revisa SPF, DKIM y DMARC y lo guarda en el buzón
+    - El celular del cliente lo lee por IMAP
+  explicacion: "Cada tramo tiene su protocolo y su puerto."

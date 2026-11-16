@@ -1,0 +1,89 @@
+tipo: paquetes
+titulo: El recorrido de un correo, de punta a punta
+descripcion: >-
+  Laura, de Ventas de Ejemplo S.A., le manda un presupuesto a un cliente que usa Gmail
+  (cliente@gmail.com). La empresa tiene el correo en un proveedor (smtp.proveedor.com). Seguí el
+  mensaje salto por salto: qué protocolo usa cada tramo, por qué puerto y qué se revisa.
+nodos:
+  - { id: pc, etiqueta: "PC de Laura (Thunderbird)", tipo: pc, x: 0, y: 140 }
+  - { id: msa, etiqueta: "smtp.proveedor.com", tipo: servidor, x: 210, y: 140 }
+  - { id: dns, etiqueta: "DNS", tipo: dns, x: 210, y: 10 }
+  - { id: mx, etiqueta: "Gmail (MX e IMAP)", tipo: servidor, x: 430, y: 140 }
+  - { id: cel, etiqueta: "Celular del cliente", tipo: pc, x: 640, y: 140 }
+enlaces:
+  - { a: pc, b: msa }
+  - { a: msa, b: dns }
+  - { a: msa, b: mx }
+  - { a: mx, b: dns }
+  - { a: mx, b: cel }
+pasos:
+  - desde: pc
+    hacia: msa
+    titulo: "Envío: el programa de correo entrega el mensaje a su servidor"
+    explicacion: >-
+      Thunderbird no le manda el correo al cliente: se lo da al servidor de envío de la empresa,
+      por el puerto 587 (submission). Primero pide cifrar la conexión (STARTTLS) y después se
+      identifica con usuario y contraseña (AUTH). Sin eso, el servidor no acepta mandar nada
+      afuera: si aceptara, cualquiera de internet lo usaría para mandar spam.
+    capas:
+      aplicacion: { protocolo: "SMTP (submission)", datos: "EHLO · STARTTLS · AUTH PLAIN · MAIL FROM:<laura@ejemplo.com.ar> · RCPT TO:<cliente@gmail.com> · DATA" }
+      transporte: { protocolo: TCP, origen: 51822, destino: 587 }
+      red: { origen: 192.168.10.37, destino: 203.0.113.25 }
+  - desde: msa
+    hacia: dns
+    titulo: "¿Quién recibe el correo de gmail.com?"
+    explicacion: >-
+      El servidor no sabe a qué máquina entregarle el correo para gmail.com. Le pregunta al DNS por
+      el registro MX del dominio: la lista de servidores que reciben su correo, cada uno con una
+      prioridad (el número más bajo se prueba primero).
+    capas:
+      aplicacion: { protocolo: DNS, datos: "Consulta: gmail.com, tipo MX" }
+      transporte: { protocolo: UDP, origen: 40211, destino: 53 }
+      red: { origen: 203.0.113.25, destino: 203.0.113.53 }
+  - desde: dns
+    hacia: msa
+    titulo: "Respuesta: los MX de gmail.com"
+    explicacion: >-
+      El DNS contesta con cinco servidores; el de prioridad 5 es el primero que se intenta. Si no
+      responde, se prueba el siguiente. Por eso un dominio con un solo MX caído no recibe correo,
+      pero uno con dos MX en lugares distintos sí.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "gmail.com MX 5 gmail-smtp-in.l.google.com · 10 alt1… · 20 alt2… · 30 alt3… · 40 alt4…" }
+      transporte: { protocolo: UDP, origen: 53, destino: 40211 }
+      red: { origen: 203.0.113.53, destino: 203.0.113.25 }
+  - desde: msa
+    hacia: mx
+    titulo: "Entre servidores: SMTP por el puerto 25"
+    explicacion: >-
+      El servidor del proveedor se conecta al MX de Gmail por el puerto 25, el de servidor a
+      servidor. Acá no hay usuario ni contraseña: Gmail acepta correo para sus usuarios desde
+      cualquier lugar, y decide si confía mirando quién lo manda. Cifra la conexión con STARTTLS
+      si los dos lo soportan (hoy, casi siempre).
+    capas:
+      aplicacion: { protocolo: SMTP, datos: "EHLO smtp.proveedor.com · STARTTLS · MAIL FROM:<laura@ejemplo.com.ar> · RCPT TO:<cliente@gmail.com> · DATA · 250 OK" }
+      transporte: { protocolo: TCP, origen: 39114, destino: 25 }
+      red: { origen: 203.0.113.25, destino: 142.250.0.27 }
+  - desde: mx
+    hacia: dns
+    titulo: "Gmail revisa quién manda: SPF, DKIM y DMARC"
+    explicacion: >-
+      Antes de dejarlo en la bandeja, Gmail le pregunta al DNS de ejemplo.com.ar: ¿este servidor
+      puede mandar correo en nombre del dominio (SPF)? ¿La firma del mensaje es válida (DKIM)? ¿Qué
+      quiere el dominio que se haga si algo no coincide (DMARC)? Con las tres bien, va a la
+      bandeja de entrada; si fallan, a spam o rechazado. Es el tema de la próxima lección.
+    capas:
+      aplicacion: { protocolo: DNS, datos: "TXT ejemplo.com.ar (SPF) · TXT s1._domainkey.ejemplo.com.ar (DKIM) · TXT _dmarc.ejemplo.com.ar (DMARC)" }
+      transporte: { protocolo: UDP, origen: 52001, destino: 53 }
+      red: { origen: 142.250.0.27, destino: 203.0.113.53 }
+  - desde: cel
+    hacia: mx
+    titulo: "Lectura: el celular trae el correo por IMAP"
+    explicacion: >-
+      El mensaje quedó guardado en el buzón del cliente, en los servidores de Gmail. El celular no
+      lo recibe por SMTP: se conecta por IMAP (puerto 993, cifrado desde el primer byte) y lo
+      lee del servidor. IMAP deja los mensajes allá y sincroniza todos los equipos; POP3, el más
+      viejo, los descargaba y los borraba del servidor.
+    capas:
+      aplicacion: { protocolo: "IMAP sobre TLS", datos: "LOGIN · SELECT INBOX · FETCH 1 (cuerpo del presupuesto)" }
+      transporte: { protocolo: TCP, origen: 50331, destino: 993 }
+      red: { origen: 10.80.4.21, destino: 142.250.0.108 }

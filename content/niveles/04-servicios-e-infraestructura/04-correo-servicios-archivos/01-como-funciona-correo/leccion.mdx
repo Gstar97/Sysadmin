@@ -1,0 +1,105 @@
+---
+id: n4-m4-l1
+titulo: Cómo funciona el correo
+minutos: 120
+objetivos:
+  - Explicar el recorrido de un correo, del programa de quien lo escribe al buzón de quien lo lee, y qué hace cada servidor.
+  - Usar los registros MX para saber quién recibe el correo de un dominio.
+  - Reconocer los puertos y protocolos del correo (SMTP 25, 587 y 465, IMAP 993, POP3) y para qué es cada uno.
+glosario: [smtp, registro-mx, imap, relay-correo]
+verificado: 2026-11
+---
+
+import recorrido from './recorrido.yaml'
+import sobre from './sobre.svg?raw'
+import puertos from './puertos.yaml'
+import mx from './ej-mx.yaml'
+
+El correo es uno de los servicios más viejos de internet, y se nota: funciona con reglas de los años ochenta a las que se les fueron agregando parches de seguridad. Como administrador vas a tener que ocuparte de dos cosas: que los servidores de la empresa puedan **mandar** avisos (de los respaldos, del monitoreo, de las aplicaciones), y que el correo de la empresa **llegue** y no caiga en spam. Para las dos hace falta entender por dónde pasa un mensaje.
+
+<AntesDeEmpezar>
+- DNS y sus registros (lección 2.3.3).
+- Puertos, TCP y TLS (lecciones 2.3.1 y 4.2.1).
+- Servicios y logs con systemd (módulo 1.3).
+</AntesDeEmpezar>
+
+## Quién hace qué
+
+Un correo pasa por varios programas, cada uno con su papel:
+
+- El **programa de correo** de la persona (Outlook, Thunderbird, la aplicación del celular o la página de Gmail). Escribe, manda y lee.
+- El **servidor de envío** de su organización. Recibe el mensaje del programa, comprueba que quien lo manda tenga usuario y contraseña, y se encarga de llevarlo a destino.
+- El **servidor de recepción** del destinatario: el que figura en el registro **MX** de su dominio. Recibe el mensaje, decide si es confiable y lo guarda en el buzón.
+- El **buzón**, de donde el programa de correo del destinatario lo lee.
+
+En la jerga, a los servidores que se pasan el correo entre ellos se los llama **MTA** (agentes de transferencia); Postfix, que es lo que vas a usar en Linux, es uno. Lo importante es la idea: el correo no viaja directo de una persona a la otra, sino de servidor en servidor, como una carta que pasa por la oficina de correos de quien la manda y la de quien la recibe.
+
+<SimuladorPaquetes escenario={recorrido} />
+
+## Los registros MX
+
+Para saber a qué servidor entregarle un correo para `cliente@gmail.com`, el servidor que lo manda le pregunta al DNS por el registro **MX** de `gmail.com`:
+
+```bash
+$ dig +short MX ejemplo.com.ar
+10 mx1.proveedor.com.
+20 mx2.proveedor.com.
+```
+
+Cada MX tiene una **prioridad**: se prueba primero el número más bajo y, si no responde, el siguiente. Si un dominio no tiene MX, no puede recibir correo (o se intenta con su registro A, según el servidor). Un error frecuente al cambiar de proveedor de correo es olvidarse de actualizar los MX: el correo sigue llegando al proveedor viejo.
+
+## Puertos y protocolos
+
+<Emparejar ejercicio={puertos} />
+
+- **SMTP** (Simple Mail Transfer Protocol) es el protocolo para **mandar**. Se usa en dos tramos: del programa de correo a su servidor (puerto **587**, con usuario y contraseña) y de servidor a servidor (puerto **25**, sin contraseña).
+- **IMAP** y **POP3** son para **leer**. Hoy casi siempre IMAP, cifrado, por el **993**.
+- Los puertos sin cifrar (110 y 143 para leer) quedan para más adelante en tu carrera: ya no se usan en instalaciones nuevas.
+
+Un servidor que acepta mandar correo de cualquiera hacia cualquiera, sin pedir usuario y contraseña, es un **relay abierto**. En horas lo descubren los que mandan spam, el servidor termina en listas negras y nadie recibe el correo legítimo de la empresa. Por eso los servidores de envío solo aceptan a quien se autentica o a las IP de la propia red.
+
+## El sobre y la carta
+
+<Diagrama svg={sobre} alt="A la izquierda, el sobre: MAIL FROM rebotes@proveedor.com y RCPT TO cliente@gmail.com. Se manda en la conversación SMTP antes del mensaje, dice a quién entregar y adónde avisar si rebota, y la persona no lo ve (queda como Return-Path); SPF revisa el dominio del sobre. A la derecha, la carta: los encabezados From Ventas ventas@ejemplo.com.ar, To, Subject Presupuesto 1043 y la firma DKIM-Signature con d=ejemplo.com.ar, más el cuerpo; el From es lo que muestra el programa de correo y no tiene por qué coincidir con el sobre; DKIM firma la carta y DMARC mira el From. Abajo: un estafador puede poner cualquier From, por eso DMARC exige que el dominio del From coincida con el que validó SPF o DKIM." pie="Los servidores leen el sobre; las personas, la carta." />
+
+Como en el correo postal, el sobre y la carta son cosas distintas. El "sobre" (MAIL FROM y RCPT TO) es lo que los servidores usan para entregar y para devolver si algo sale mal; el "remitente" que ve la persona es el encabezado From, que va adentro. Nada obliga a que coincidan, y ahí la comparación con el correo postal se queda corta: en una carta de papel, falsificar el remitente da trabajo; en un correo, es cambiar una línea. Esa es la base de casi todas las estafas por correo, y lo que vienen a resolver SPF, DKIM y DMARC en la lección siguiente.
+
+## El correo en un servidor Linux
+
+Aunque la empresa tenga el correo en Microsoft 365 o Google Workspace, cada servidor Linux necesita poder **mandar** avisos: cron le manda a root la salida de las tareas, los scripts de respaldo avisan si fallaron, las aplicaciones mandan notificaciones. Para eso se instala un servidor de correo liviano (Postfix) que acepta mensajes solo del propio equipo y los entrega en el buzón local o los pasa a un relay. Los comandos de todos los días:
+
+```bash
+echo "texto" | mail -s "Asunto" root        # mandar (s-nail en Rocky, mailutils en Ubuntu)
+mailq                                       # qué quedó en la cola sin poder salir
+sudo tail -f /var/log/maillog               # Rocky; en Ubuntu, /var/log/mail.log
+journalctl -u postfix                       # en los dos
+```
+
+<Terminal ejercicio={mx} />
+
+<EnSimple>
+Un correo va del programa de quien lo escribe a su servidor de envío (587, con contraseña), de ahí al servidor de recepción del destino que dicen los registros MX (25) y de ahí al buzón, que se lee por IMAP (993). Los servidores usan el "sobre" (MAIL FROM, RCPT TO); la persona ve la "carta" (From, Subject). En Linux, Postfix manda los avisos del servidor y deja todo en su registro.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Cambiar de proveedor de correo y no tocar los MX">
+    El correo nuevo funciona para mandar, pero lo que llega sigue yendo al proveedor viejo. Los MX dicen quién recibe.
+  </ErrorComun>
+  <ErrorComun titulo="Abrir el puerto 25 del servidor a internet “para que funcione el correo”">
+    Para mandar avisos no hace falta recibir nada de afuera. Postfix escuchando solo en localhost es lo correcto.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar que el servidor mande directo a Gmail por el 25">
+    Desde casi todas las redes de usuarios y nubes ese puerto está bloqueado para salir. Se manda a través de un relay por el 587.
+  </ErrorComun>
+  <ErrorComun titulo="Confiar en el remitente que muestra el correo">
+    El From se puede poner a mano. Lo que da garantías es la autenticación del dominio (SPF, DKIM, DMARC).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Programa de correo → servidor de envío (587, STARTTLS y contraseña) → MX del destino (25) → buzón → lectura por IMAP (993).
+- Los registros MX dicen qué servidores reciben el correo de un dominio, con prioridad: el número más bajo primero.
+- El sobre (MAIL FROM, RCPT TO) lo usan los servidores; la carta (From, To, Subject) la ve la persona, y no tienen por qué coincidir.
+- Un relay abierto termina mandando spam: solo se acepta a quien se autentica o a la propia red.
+- En Linux, Postfix manda los avisos del servidor; mailq muestra la cola y maillog (o mail.log, o journalctl -u postfix) cada paso.
+</Resumen>
