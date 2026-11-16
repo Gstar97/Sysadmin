@@ -1,0 +1,125 @@
+tipo: terminal
+shell: bash
+titulo: Una carpeta compartida por NFS entre dos servidores
+descripcion: >-
+  files01 (Rocky Linux 10, 192.168.10.30) va a compartir /srv/compartido con los servidores de
+  la red 192.168.10.0/24. web01 (192.168.10.11), donde estás, la va a montar en /mnt/compartido.
+  Los dos tienen nfs-utils instalado, y tu usuario ana existe en los dos con el mismo uid (1001), en el grupo proyectos (gid 3001).
+  Entrás a files01 con ssh files01.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true, uid: 1001, clave_ssh: true, grupos: [proyectos] }
+  grupos:
+    - { nombre: proyectos, gid: 3001 }
+  paquetes: { instalados: [nfs-utils] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.11/24, estado: UP }
+  servidores:
+    - hostname: files01
+      ip: 192.168.10.30
+      distro: rocky
+      en_dns: true
+      clave_conocida: si
+      usuarios:
+        - { nombre: ana, sudo: true, uid: 1001, clave_ssh: true, grupos: [proyectos] }
+      grupos:
+        - { nombre: proyectos, gid: 3001 }
+      paquetes: { instalados: [nfs-utils] }
+      archivos:
+        /srv/compartido/LEEME.txt: "Carpeta compartida de proyectos.\n"
+pasos:
+  - consigna: >-
+      En files01, exportá /srv/compartido con lectura y escritura (y sync) para 192.168.10.0/24,
+      arrancá y habilitá nfs-server y mostrá cómo quedó exportado.
+    verificar:
+      - { en: files01, verificar: { exportado: /srv/compartido, cliente: 192.168.10.0/24, opciones_incluye: 'rw,sync' } }
+      - { en: files01, verificar: { servicio: nfs-server, activo: true, habilitado: true } }
+      - { salida_contiene: 'root_squash' }
+    pistas:
+      - "`ssh files01`, después `echo '/srv/compartido 192.168.10.0/24(rw,sync)' | sudo tee /etc/exports`"
+      - "`sudo systemctl enable --now nfs-server` y `sudo exportfs -v`"
+    solucion:
+      - ssh files01
+      - "echo '/srv/compartido 192.168.10.0/24(rw,sync)' | sudo tee /etc/exports"
+      - sudo systemctl enable --now nfs-server
+      - sudo exportfs -v
+    explicacion: >-
+      exportfs -v muestra lo que de verdad está exportado, con todas las opciones, incluidas las
+      de fábrica: root_squash, no_subtree_check, secure. Si cambiás /etc/exports con el servicio
+      andando, no pasa nada hasta que corras sudo exportfs -ra.
+  - consigna: Abrí NFS en el firewall de files01 (de forma permanente) y volvé a web01.
+    verificar:
+      - { en: files01, verificar: { firewall_permite: 2049/tcp } }
+    pistas:
+      - "`sudo firewall-cmd --permanent --add-service=nfs`, `sudo firewall-cmd --reload` y `exit`"
+    solucion:
+      - sudo firewall-cmd --permanent --add-service=nfs
+      - sudo firewall-cmd --reload
+      - exit
+    explicacion: >-
+      NFS versión 4 usa un solo puerto, el 2049. showmount, en cambio, habla con rpcbind (111) y
+      mountd (20048): si querés usarlo desde los clientes, también hacen falta los servicios
+      rpc-bind y mountd en el firewall. Para montar, alcanza con nfs.
+  - consigna: Montá el recurso en /mnt/compartido (creá la carpeta) y comprobá con df qué quedó montado.
+    verificar:
+      - { montaje: /mnt/compartido, dispositivo: 'files01:/srv/compartido', tipo: nfs4 }
+      - { salida_contiene: 'files01:/srv/compartido' }
+    pistas:
+      - "`sudo mkdir -p /mnt/compartido` y `sudo mount -t nfs files01:/srv/compartido /mnt/compartido`, después `df -h /mnt/compartido`"
+    solucion:
+      - sudo mkdir -p /mnt/compartido
+      - sudo mount -t nfs files01:/srv/compartido /mnt/compartido
+      - df -h /mnt/compartido
+    explicacion: >-
+      El tamaño que muestra df es el del disco de files01. Con -t nfs, el cliente negocia la
+      versión más nueva que soporten los dos (4.2), por eso mount la muestra como nfs4.
+  - consigna: Como root, tratá de crear el archivo /mnt/compartido/prueba-root. ¿Qué pasa?
+    verificar:
+      - { comando_usado: 'prueba-root' }
+      - { salida_contiene: 'Permission denied' }
+    pistas:
+      - "`sudo touch /mnt/compartido/prueba-root`"
+    solucion: ["sudo touch /mnt/compartido/prueba-root"]
+    explicacion: >-
+      Ser root en web01 no te hace root en files01: con root_squash, el servidor te trata como
+      nobody, y la carpeta es de root con permisos 755. Es una protección: si alguien toma el
+      control de un cliente, no se adueña también del servidor.
+  - consigna: >-
+      En files01, dejá /srv/compartido del grupo proyectos, con escritura para el grupo y el bit
+      SGID (2775), y probá crear /mnt/compartido/prueba-ana desde web01 como ana.
+    verificar:
+      - { en: files01, verificar: { archivo: /srv/compartido, grupo: proyectos, modo: '2775' } }
+      - { en: files01, verificar: { archivo: /srv/compartido/prueba-ana, dueno: ana } }
+    pistas:
+      - "`ssh files01 'sudo chgrp proyectos /srv/compartido && sudo chmod 2775 /srv/compartido'`"
+      - "Después `touch /mnt/compartido/prueba-ana`"
+    solucion:
+      - "ssh files01 'sudo chgrp proyectos /srv/compartido && sudo chmod 2775 /srv/compartido'"
+      - touch /mnt/compartido/prueba-ana
+    explicacion: >-
+      Ahora sí: el cliente manda el uid 1001 y los grupos de ana (entre ellos el 3001), y en
+      files01 esos números son ana y proyectos. Si en web01 ana no estuviera en un grupo con el
+      gid 3001, el servidor le negaría la escritura aunque en files01 sí lo esté. El SGID hace que todo lo nuevo sea del grupo proyectos, para que el resto del
+      equipo también pueda modificarlo. Los permisos los decide siempre el servidor.
+  - consigna: >-
+      Que se monte solo al arrancar: agregá la línea a /etc/fstab (con _netdev), desmontá y
+      comprobá que mount -a lo vuelve a montar.
+    verificar:
+      - { fstab: /mnt/compartido, tipo: nfs, opciones_incluye: _netdev }
+      - { montaje: /mnt/compartido, tipo: nfs4 }
+    pistas:
+      - "`echo 'files01:/srv/compartido /mnt/compartido nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab`"
+      - "`sudo systemctl daemon-reload`, `sudo umount /mnt/compartido` y `sudo mount -a`"
+    solucion:
+      - "echo 'files01:/srv/compartido /mnt/compartido nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab"
+      - sudo systemctl daemon-reload
+      - sudo umount /mnt/compartido
+      - sudo mount -a
+    explicacion: >-
+      _netdev le avisa a systemd que es un recurso de red: lo monta después de que la red esté
+      lista. Si además agregás x-systemd.automount, no se monta al arrancar sino la primera vez
+      que alguien entra en la carpeta, y el arranque no se traba si files01 está apagado.

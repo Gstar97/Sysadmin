@@ -101,3 +101,12 @@ describe('NFS', () => {
     expect((await run('cat /datos/comp/leeme.txt')).out).toBe('hola\n')
   })
 })
+
+describe('Editor de /etc/exports', () => {
+  it('marca el espacio antes de las opciones y las opciones mal escritas', async () => {
+    const { validateExports } = await import('@/engines/config/exports')
+    const d = validateExports('/srv/a 192.168.10.0/24 (rw)\n/srv/b 10.0.0.1(rw,no_root_sqush)\n/srv/c 10.0.0.2(rw,sync)\n').diagnostics
+    expect(d.filter((x) => x.severity === 'error').map((x) => x.line).sort()).toEqual([1, 2])
+    expect(d.find((x) => x.line === 1)?.message).toContain('son dos clientes distintos')
+  })
+})

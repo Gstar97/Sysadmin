@@ -1,0 +1,26 @@
+tipo: configuracion
+titulo: Las exportaciones de files01
+consigna: >-
+  Este /etc/exports lo armó alguien apurado y tiene tres problemas (el editor marca algunos).
+  Dejalo así: /srv/compartido con lectura y escritura para la red 192.168.10.0/24; /srv/instaladores
+  solo de lectura para toda la red 192.168.0.0/16; y /srv/respaldos con escritura solo para
+  backup01 (192.168.10.50), que necesita conservar los dueños de los archivos, así que ahí root no
+  se convierte en nobody. Todas con sync.
+lenguaje: exports
+nombre_archivo: /etc/exports
+archivo_inicial: |
+  # Exportaciones de files01
+  /srv/compartido    192.168.10.0/24 (rw,sync)
+  /srv/instaladores  192.168.0.0/16(ro,sync,no_root_squash)
+  /srv/respaldos     *(rw,sync,no_root_sqush)
+reglas:
+  - { tipo: sin_errores, mensaje: "Sin errores (ni espacios antes de las opciones ni opciones mal escritas)" }
+  - { tipo: contiene, regex: "^/srv/compartido\\s+192\\.168\\.10\\.0/24\\((?=[^)]*\\brw\\b)(?=[^)]*\\bsync\\b)[^)]*\\)\\s*$", mensaje: "/srv/compartido: rw y sync para 192.168.10.0/24, pegado a la red" }
+  - { tipo: contiene, regex: "^/srv/instaladores\\s+192\\.168\\.0\\.0/16\\((?=[^)]*\\bro\\b)(?=[^)]*\\bsync\\b)[^)]*\\)\\s*$", mensaje: "/srv/instaladores: solo lectura para 192.168.0.0/16" }
+  - { tipo: no_contiene, regex: "^/srv/instaladores.*no_root_squash", mensaje: "/srv/instaladores sin no_root_squash (no hace falta)" }
+  - { tipo: contiene, regex: "^/srv/respaldos\\s+192\\.168\\.10\\.50\\((?=[^)]*\\brw\\b)(?=[^)]*\\bsync\\b)(?=[^)]*\\bno_root_squash\\b)[^)]*\\)\\s*$", mensaje: "/srv/respaldos: rw, sync y no_root_squash solo para 192.168.10.50" }
+solucion: |
+  # Exportaciones de files01
+  /srv/compartido    192.168.10.0/24(rw,sync)
+  /srv/instaladores  192.168.0.0/16(ro,sync)
+  /srv/respaldos     192.168.10.50(rw,sync,no_root_squash)

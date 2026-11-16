@@ -11,121 +11,13 @@ import { reach } from './http'
 import { register, type CommandContext } from './shell'
 import { System } from './system'
 import { normalizePath, ROOT_CRED, type Cred } from './vfs'
+import { parseExports, type NfsExport, type NfsOpts, type ExportsParse } from '../config/exports'
+
+export { parseExports, type NfsExport, type NfsOpts, type ExportsParse }
 
 // ---------------------------------------------------------------------------------------
 // /etc/exports
 // ---------------------------------------------------------------------------------------
-
-export interface NfsExport {
-  path: string
-  client: string
-  opts: NfsOpts
-  line: number
-  file: string
-}
-
-export interface NfsOpts {
-  rw: boolean
-  sync: boolean
-  wdelay: boolean
-  hide: boolean
-  crossmnt: boolean
-  subtreeCheck: boolean
-  secure: boolean
-  rootSquash: boolean
-  allSquash: boolean
-  anonuid?: number
-  anongid?: number
-  fsid?: string
-  sec: string
-}
-
-export interface ExportsParse {
-  exports: NfsExport[]
-  errors: { line: number; message: string }[]
-  warnings: string[]
-}
-
-const DEFAULTS: NfsOpts = { rw: false, sync: true, wdelay: true, hide: true, crossmnt: false, subtreeCheck: false, secure: true, rootSquash: true, allSquash: false, sec: 'sys' }
-
-function applyOpt(o: NfsOpts, raw: string): boolean {
-  const [k, v] = raw.split('=')
-  switch (k) {
-    case 'rw': o.rw = true; return true
-    case 'ro': o.rw = false; return true
-    case 'sync': o.sync = true; return true
-    case 'async': o.sync = false; return true
-    case 'wdelay': o.wdelay = true; return true
-    case 'no_wdelay': o.wdelay = false; return true
-    case 'hide': o.hide = true; return true
-    case 'nohide': o.hide = false; return true
-    case 'crossmnt': o.crossmnt = true; return true
-    case 'subtree_check': o.subtreeCheck = true; return true
-    case 'no_subtree_check': o.subtreeCheck = false; return true
-    case 'secure': o.secure = true; return true
-    case 'insecure': o.secure = false; return true
-    case 'root_squash': o.rootSquash = true; return true
-    case 'no_root_squash': o.rootSquash = false; return true
-    case 'all_squash': o.allSquash = true; return true
-    case 'no_all_squash': o.allSquash = false; return true
-    case 'anonuid': if (!/^\d+$/.test(v ?? '')) return false; o.anonuid = Number(v); return true
-    case 'anongid': if (!/^\d+$/.test(v ?? '')) return false; o.anongid = Number(v); return true
-    case 'fsid': if (!v) return false; o.fsid = v; return true
-    case 'sec': if (!v) return false; o.sec = v; return true
-    case 'no_acl': case 'mp': case 'nordirplus': case 'insecure_locks': case 'secure_locks': case 'pnfs': case 'no_pnfs': return true
-    default: return false
-  }
-}
-
-/** Lee el texto de /etc/exports (o de un archivo de /etc/exports.d). */
-export function parseExports(text: string, file = '/etc/exports'): ExportsParse {
-  const out: ExportsParse = { exports: [], errors: [], warnings: [] }
-  // Las líneas que terminan en \ siguen en la siguiente.
-  const lines = text.split('\n')
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]
-    const start = i + 1
-    while (line.endsWith('\\') && i + 1 < lines.length) line = line.slice(0, -1) + ' ' + lines[++i]
-    line = line.replace(/#.*$/, '').trim()
-    if (!line) continue
-    const m = /^("[^"]+"|\S+)\s*(.*)$/.exec(line)!
-    const path = m[1].replace(/^"|"$/g, '')
-    if (!path.startsWith('/')) {
-      out.errors.push({ line: start, message: `exportfs: ${file}:${start}: bad path "${path}"` })
-      continue
-    }
-    const rest = m[2].trim()
-    // Cada cliente es "host(opciones)", sin espacio. "host (opciones)" son dos clientes distintos.
-    const tokens = rest ? rest.match(/[^\s(]*(\([^)]*\))?/g)!.filter(Boolean) : []
-    if (!tokens.length) {
-      out.warnings.push(`exportfs: No host name given with ${path} (ro), suggest *(ro) to avoid warning`)
-      out.exports.push({ path, client: '*', opts: { ...DEFAULTS }, line: start, file })
-      continue
-    }
-    for (const tok of tokens) {
-      const tm = /^([^(]*)(?:\(([^)]*)\))?$/.exec(tok)
-      if (!tm) {
-        out.errors.push({ line: start, message: `exportfs: ${file}:${start}: syntax error: bad option list` })
-        continue
-      }
-      const host = tm[1]
-      const optText = tm[2]
-      const opts = { ...DEFAULTS }
-      let bad = false
-      for (const o of (optText ?? '').split(',').map((x) => x.trim()).filter(Boolean)) {
-        if (!applyOpt(opts, o)) {
-          out.errors.push({ line: start, message: `exportfs: ${file}:${start}: unknown keyword "${o}"` })
-          bad = true
-        }
-      }
-      if (bad) continue
-      if (!host) out.warnings.push(`exportfs: No host name given with ${path} (${optText}), suggest *(${optText}) to avoid warning`)
-      else if (optText === undefined) out.warnings.push(`exportfs: No options for ${path} ${host}: suggest ${host}(sync) to avoid warning`)
-      out.exports.push({ path, client: host || '*', opts, line: start, file })
-    }
-  }
-  return out
-}
 
 /** Todas las exportaciones configuradas en el servidor (/etc/exports y /etc/exports.d/*.exports). */
 export function readExports(sys: System): ExportsParse {

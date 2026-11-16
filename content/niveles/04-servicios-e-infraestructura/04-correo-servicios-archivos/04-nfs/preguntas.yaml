@@ -1,0 +1,105 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué se usa NFS?
+  opciones:
+    - { texto: "Para que una carpeta de un servidor Linux aparezca en otros como si fuera un disco local", correcta: true, explicacion: "Para compartir con PC Windows se usa Samba." }
+    - { texto: "Para hacer respaldos incrementales", explicacion: "Se puede usar como destino, pero no es su función." }
+    - { texto: "Para sincronizar la hora", explicacion: "Eso es NTP." }
+    - { texto: "Para compartir carpetas con las PC Windows de las personas", explicacion: "Para eso, Samba." }
+- id: p02
+  tipo: encontrar_error
+  dificultad: 2
+  enunciado: Después de esta configuración, cualquier equipo de la red puede borrar archivos de /srv/proyectos. Marcá la línea culpable.
+  archivo: |
+    /srv/instaladores   192.168.0.0/16(ro,sync)
+    /srv/proyectos      192.168.10.0/24 (rw,sync)
+    /srv/respaldos      192.168.10.50(rw,sync,no_root_squash)
+  lineas_con_error: [2]
+  explicacion: El espacio separa dos clientes. 192.168.10.0/24 queda en solo lectura y (rw,sync) vale para todo el mundo.
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Agregaste un cliente en /etc/exports con nfs-server corriendo, y el cliente sigue recibiendo "access denied". ¿Qué faltó?
+  opciones:
+    - { texto: "sudo exportfs -ra, para aplicar el archivo", correcta: true, explicacion: "Lo exportado es lo que cargó exportfs, no el archivo." }
+    - { texto: "Reiniciar el cliente", explicacion: "El problema está en el servidor." }
+    - { texto: "Abrir el firewall", explicacion: "Con el firewall cerrado el error sería No route to host o un timeout." }
+    - { texto: "Agregar no_root_squash", explicacion: "No tiene relación con poder montar." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Como root en el cliente, "sudo touch /mnt/compartido/x" da "Permission denied", aunque la carpeta del servidor tiene permisos 755 y es de root. ¿Por qué?
+  opciones:
+    - { texto: "Por root_squash: en el servidor, el root del cliente es nobody", correcta: true, explicacion: "Es la opción de fábrica, y es lo correcto." }
+    - { texto: "Porque el montaje es de solo lectura", explicacion: "El error sería Read-only file system." }
+    - { texto: "Porque falta _netdev", explicacion: "Eso es para el arranque." }
+    - { texto: "Porque NFS no deja escribir a root nunca", explicacion: "Con no_root_squash podría." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: En el servidor de archivos, los archivos que crea juan desde web01 aparecen así. ¿Qué pasa?
+  salida: |
+    $ ls -l /srv/proyectos
+    -rw-r--r--. 1 pedro   proyectos  2.1K Nov 16 10:12 informe.ods
+    $ id juan       (en web01)
+    uid=1002(juan) gid=1002(juan) groups=1002(juan),3001(proyectos)
+    $ id pedro      (en el servidor)
+    uid=1002(pedro) gid=1002(pedro) groups=1002(pedro)
+  opciones:
+    - { texto: "juan y pedro tienen el mismo uid en distintos equipos; NFS solo ve el número", correcta: true, explicacion: "Los uid tienen que coincidir en todos los equipos." }
+    - { texto: "juan se hizo pasar por pedro a propósito", explicacion: "Es una desprolijidad de las cuentas, no un ataque." }
+    - { texto: "El servidor tiene all_squash", explicacion: "Con all_squash sería nobody." }
+    - { texto: "Falta el SGID en la carpeta", explicacion: "El SGID afecta al grupo, no al dueño." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué está pasando?
+  salida: |
+    $ sudo mount -t nfs files01:/srv/compartido /mnt/compartido
+    mount.nfs: No route to host
+    $ ping -c1 files01
+    1 packets transmitted, 1 received, 0% packet loss
+  opciones:
+    - { texto: "files01 responde, pero su firewall rechaza el 2049: falta el servicio nfs", correcta: true, explicacion: "firewalld rechaza con un mensaje que el cliente traduce como No route to host." }
+    - { texto: "No hay ruta a files01", explicacion: "El ping llega." }
+    - { texto: "nfs-server está apagado", explicacion: "Sería Connection refused." }
+    - { texto: "El cliente no está en /etc/exports", explicacion: "Sería access denied." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí la línea de /etc/fstab que monta files01:/srv/compartido en /mnt/compartido por NFS, esperando a la red.
+  aceptadas:
+    - "files01:/srv/compartido /mnt/compartido nfs defaults,_netdev 0 0"
+    - "files01:/srv/compartido /mnt/compartido nfs _netdev 0 0"
+    - "files01:/srv/compartido /mnt/compartido nfs4 defaults,_netdev 0 0"
+  patrones: ["^files01:/srv/compartido\\s+/mnt/compartido\\s+nfs4?\\s+(\\S*,)?_netdev(,\\S*)?\\s+0\\s+0$"]
+  explicacion: "Con x-systemd.automount, además, se monta recién al entrar."
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ventaja tiene montar con x-systemd.automount o con autofs?
+  opciones:
+    - { texto: "Se monta la primera vez que alguien entra, así el arranque no depende de que el servidor responda", correcta: true, explicacion: "Y con un tiempo de espera, se desmonta cuando no se usa." }
+    - { texto: "Es más rápido leer los archivos", explicacion: "La velocidad es la misma." }
+    - { texto: "No hace falta /etc/exports", explicacion: "El servidor exporta igual." }
+    - { texto: "Evita root_squash", explicacion: "No cambia los permisos." }
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 3
+  enunciado: ¿Cuándo tiene sentido no_root_squash? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Para un servidor de respaldos puntual que tiene que conservar los dueños de los archivos", correcta: true, explicacion: "Y solo para esa IP." }
+    - { texto: "Para un cliente que instala el sistema por red y necesita escribir como root", correcta: true, explicacion: "Otro caso puntual." }
+    - { texto: "Para toda la red, así no hay problemas de permisos", explicacion: "Le da a cualquier root el control del servidor." }
+    - { texto: "Para *", explicacion: "Nunca." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué paquete necesita un cliente Ubuntu para montar NFS?
+  opciones:
+    - { texto: "nfs-common", correcta: true, explicacion: "En Rocky, nfs-utils (el mismo para cliente y servidor)." }
+    - { texto: "nfs-kernel-server", explicacion: "Ese es el servidor." }
+    - { texto: "samba", explicacion: "Es otro protocolo." }
+    - { texto: "Ninguno", explicacion: "Sin él: bad option, need a mount.nfs helper." }

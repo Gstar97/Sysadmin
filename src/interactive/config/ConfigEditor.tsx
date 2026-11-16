@@ -38,6 +38,8 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   nftables: '/etc/nftables.conf',
   wireguard: '/etc/wireguard/wg0.conf',
   powershell: 'C:\\Scripts\\script.ps1',
+  exports: '/etc/exports',
+  smbconf: '/etc/samba/smb.conf',
   texto: 'archivo.txt',
 }
 
@@ -53,6 +55,7 @@ function languageFor(lang: ConfigLanguage): Extension {
     case 'systemd':
       return StreamLanguage.define(properties)
     case 'fstab':
+    case 'exports':
     case 'sudoers':
     case 'zona':
     case 'named':
@@ -60,6 +63,7 @@ function languageFor(lang: ConfigLanguage): Extension {
     case 'nftables':
       return StreamLanguage.define(shell)
     case 'wireguard':
+    case 'smbconf':
       return StreamLanguage.define(properties)
     case 'kea':
       return StreamLanguage.define(javascript)

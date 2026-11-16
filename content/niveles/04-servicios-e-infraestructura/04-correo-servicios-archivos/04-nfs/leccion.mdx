@@ -1,0 +1,124 @@
+---
+id: n4-m4-l4
+titulo: NFS
+minutos: 120
+objetivos:
+  - Exportar carpetas por NFS versión 4 en Rocky y Ubuntu, y montarlas en los clientes a mano y desde fstab.
+  - Entender cómo decide NFS los permisos (números de usuario, root_squash, all_squash) y sus consecuencias de seguridad.
+  - Montar bajo demanda con systemd (x-systemd.automount) o con autofs.
+glosario: [nfs, root-squash, autofs]
+verificado: 2026-11
+---
+
+import squash from './squash.svg?raw'
+import editor from './editor-exports.yaml'
+import ej from './ej-nfs.yaml'
+
+**NFS** es la forma de compartir carpetas entre servidores Linux: una carpeta de un servidor aparece en otros como si fuera un disco local, con `ls`, `cp` y los permisos de siempre. Se usa para los archivos que sube una aplicación web que corre en varios servidores, para que todos los servidores tengan los mismos instaladores o scripts, para dejar respaldos en un equipo central. Para compartir con las PC de las personas (Windows) se usa Samba, que es la lección siguiente.
+
+<AntesDeEmpezar>
+- Permisos, grupos y SGID (módulo 1.2).
+- Montajes y /etc/fstab (lección 1.4.4).
+- Firewall (lección 1.6.5).
+</AntesDeEmpezar>
+
+## El servidor: /etc/exports
+
+En el servidor se instala el paquete (`nfs-utils` en Rocky, `nfs-kernel-server` en Ubuntu) y se dice qué carpetas se comparten, con quién y cómo, en `/etc/exports`:
+
+```text
+# carpeta           cliente(opciones)
+/srv/compartido     192.168.10.0/24(rw,sync)
+/srv/instaladores   192.168.0.0/16(ro,sync)
+```
+
+- El cliente puede ser una IP, una red (`192.168.10.0/24`), un nombre o `*` (cualquiera).
+- `rw` o `ro` (lectura y escritura, o solo lectura; de fábrica, `ro`). `sync` confirma cada escritura recién cuando está en disco: más lento que `async`, pero no se pierde nada si el servidor se corta.
+- **Las opciones van pegadas al cliente**. `192.168.10.0/24 (rw)` con un espacio son dos reglas: la red con las opciones de fábrica y `(rw)` para todo el mundo. Es el error más peligroso de NFS, y exportfs solo avisa.
+
+```bash
+sudo systemctl enable --now nfs-server      # en Ubuntu arranca solo al instalarse
+sudo exportfs -ra                           # aplica los cambios de /etc/exports
+sudo exportfs -v                            # muestra lo exportado, con todas las opciones
+sudo firewall-cmd --permanent --add-service=nfs && sudo firewall-cmd --reload
+```
+
+<EditorConfig ejercicio={editor} />
+
+## Los permisos: números, no nombres
+
+<Diagrama svg={squash} alt="A la izquierda, web01, el cliente, con root (uid 0), ana (uid 1001) y juan (uid 1002). En el medio, lo que hace el servidor según /etc/exports: con root_squash, que es la opción de fábrica, root pasa a ser nobody (65534); los demás llegan con su número tal cual; juan llega como 1002, y con all_squash todos serían nobody. A la derecha, files01, el servidor: nobody no puede escribir en una carpeta de root; el uid 1001 también es ana, bien si las cuentas tienen el mismo uid; el uid 1002 en el servidor es pedro, así que juan escribe como si fuera pedro. Abajo: con sec=sys, el servidor cree el número que dice el cliente; por eso los uid tienen que coincidir en todos los equipos (FreeIPA o AD los centralizan) y solo se exporta a equipos de confianza." pie="El servidor decide con los números que manda el cliente." />
+
+NFS no manda el nombre de quien escribe, sino su número de usuario (uid) y los de sus grupos. El servidor busca esos números en sus propias cuentas y aplica los permisos de siempre. Dos consecuencias:
+
+- **Los uid y los gid tienen que coincidir** en todos los equipos. Si ana es 1001 en uno y 1004 en otro, sus archivos aparecen como de otra persona (o como un número sin nombre). En empresas medianas se resuelve con un directorio central (FreeIPA, o Active Directory con SSSD), que queda para más adelante.
+- **El servidor cree lo que dice el cliente.** Con la seguridad de fábrica (`sec=sys`), quien sea root en un cliente puede crear un usuario con cualquier uid y hacerse pasar por otro. Por eso NFS se exporta solo a equipos de confianza, nunca a `*` en una red con PC de usuarios. La versión con Kerberos (`sec=krb5`) evita esto y queda para más adelante.
+
+La excepción es root: con **root_squash** (de fábrica), el root de cada cliente pasa a ser `nobody` en el servidor. Así, tomar el control de un cliente no da el control de los archivos del servidor. `no_root_squash` desactiva esa protección y solo se usa cuando hace falta (un respaldo que tiene que conservar los dueños), para equipos puntuales. `all_squash` hace lo contrario: todos los usuarios pasan a ser uno solo (`anonuid=`), útil para una carpeta pública de instaladores.
+
+## El cliente: montar
+
+En el cliente hace falta el paquete con el programa de montaje (`nfs-utils` en Rocky, `nfs-common` en Ubuntu). Después, como cualquier disco:
+
+```bash
+sudo mount -t nfs files01:/srv/compartido /mnt/compartido
+df -h /mnt/compartido
+```
+
+Y para que se monte al arrancar, en `/etc/fstab`, con `_netdev` para que espere a la red:
+
+```text
+files01:/srv/compartido   /mnt/compartido   nfs   defaults,_netdev   0 0
+```
+
+Los errores más comunes al montar, y qué quieren decir:
+
+| Mensaje | Causa |
+|---|---|
+| `access denied by server while mounting` | La IP del cliente no está en /etc/exports, o se cambió el archivo y no se corrió `exportfs -ra` |
+| `No route to host` | El firewall del servidor rechaza el 2049 |
+| `Connection timed out` | Algo descarta los paquetes en el camino (otro firewall, ruta) |
+| `Connection refused` | nfs-server no está corriendo |
+| `bad option; ... might need a /sbin/mount.<type> helper` | Falta instalar nfs-utils o nfs-common en el cliente |
+
+## Montar solo cuando hace falta
+
+Un montaje NFS en fstab tiene un problema: si el servidor no está, el arranque del cliente se demora o se traba. Hay dos maneras de montar **bajo demanda**, la primera vez que alguien entra en la carpeta:
+
+- **systemd**: agregar `x-systemd.automount` a las opciones de fstab (y, si se quiere desmontar cuando no se usa, `x-systemd.idle-timeout=600`), después `systemctl daemon-reload` y `systemctl restart remote-fs.target`.
+- **autofs**, el método clásico, que sirve para muchas carpetas a la vez: en `/etc/auto.master.d/datos.autofs` se dice que `/datos` lo maneja un mapa (`/datos /etc/auto.datos`), y en el mapa, una línea por carpeta (`compartido -rw files01:/srv/compartido`). Con `systemctl enable --now autofs`, entrar en `/datos/compartido` la monta.
+
+<Terminal ejercicio={ej} />
+
+<EnSimple>
+En el servidor, /etc/exports dice qué carpeta se comparte con quién (opciones pegadas al cliente), exportfs -ra lo aplica y el firewall deja pasar el servicio nfs. En el cliente, mount -t nfs o una línea en fstab con _netdev. Los permisos los decide el servidor con los números de usuario del cliente; root pasa a ser nobody. Para no depender del servidor al arrancar, x-systemd.automount o autofs.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Un espacio entre el cliente y las opciones">
+    192.168.10.0/24 (rw) exporta con escritura a todo el mundo. Pegado: 192.168.10.0/24(rw).
+  </ErrorComun>
+  <ErrorComun titulo="Editar /etc/exports y no correr exportfs -ra">
+    Lo exportado sigue siendo lo anterior. exportfs -v muestra lo que realmente vale.
+  </ErrorComun>
+  <ErrorComun titulo="Poner no_root_squash para que “ande”">
+    Le da a root de cada cliente el control de la carpeta del servidor. Mejor un grupo con permisos y SGID.
+  </ErrorComun>
+  <ErrorComun titulo="Usuarios con distinto uid en cada servidor">
+    Los archivos aparecen como de otra persona o como un número. Mismo uid y gid en todos los equipos.
+  </ErrorComun>
+  <ErrorComun titulo="Montar desde fstab sin _netdev ni nofail">
+    Si el servidor no responde, el arranque se demora o queda en modo de emergencia. _netdev, y x-systemd.automount si el servidor puede faltar.
+  </ErrorComun>
+  <ErrorComun titulo="Exportar a * en una red con PC de usuarios">
+    Cualquiera con root en su equipo puede hacerse pasar por cualquier usuario. Solo a servidores de confianza.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Servidor: nfs-utils (Rocky) o nfs-kernel-server (Ubuntu); /etc/exports con carpeta cliente(opciones) sin espacio; exportfs -ra y exportfs -v; firewall: servicio nfs (2049).
+- Cliente: nfs-utils o nfs-common; mount -t nfs servidor:/carpeta /punto; en fstab con _netdev.
+- Los permisos van por números (uid y gid), que tienen que coincidir; root_squash convierte a root en nobody; no_root_squash solo cuando hace falta.
+- sec=sys confía en el cliente: solo se exporta a equipos de confianza.
+- Bajo demanda: x-systemd.automount en fstab, o autofs con auto.master y un mapa.
+</Resumen>

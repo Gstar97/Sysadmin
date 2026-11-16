@@ -14,6 +14,8 @@ import { validateFrr } from './frr'
 import { validateNftables } from './nftables'
 import { validateWireguard } from './wireguard'
 import { validatePowerShell } from './powershell'
+import { validateExports } from './exports'
+import { validateSmbConf } from './smbconf'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -66,6 +68,10 @@ export function validateConfig(lang: ConfigLanguage, text: string, fileName?: st
       return validateSystemd(text)
     case 'powershell':
       return validatePowerShell(text)
+    case 'exports':
+      return validateExports(text)
+    case 'smbconf':
+      return validateSmbConf(text)
     case 'texto':
       return { diagnostics: [] }
   }

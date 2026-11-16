@@ -89,3 +89,13 @@ describe('Samba', () => {
     expect((await run('testparm -s')).out).toContain('[conta]\n\tcomment = Contabilidad\n\tpath = /srv/samba/conta\n\tvalid users = @contabilidad\n\tread only = No')
   })
 })
+
+describe('Editor de smb.conf', () => {
+  it('marca parámetros desconocidos, booleanos inválidos y recursos sin path', async () => {
+    const { validateSmbConf } = await import('@/engines/config/smbconf')
+    const d = validateSmbConf('[global]\n\tworkgroup = EMPRESA\n[conta]\n\tpath = /srv/conta\n\twriteable2 = yes\n\tvalid users = @conta\n[otro]\n\tread only = tal vez\n').diagnostics
+    expect(d.find((x) => x.line === 5)?.message).toContain('Parámetro desconocido "writeable2"')
+    expect(d.find((x) => x.line === 8)?.message).toContain('no es un valor válido')
+    expect(d.find((x) => x.line === 7 && x.severity === 'error')?.message).toContain('no tiene path')
+  })
+})
