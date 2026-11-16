@@ -141,6 +141,7 @@ register('nslookup', {
       else if (a.type === 'MX') ctx.out(`${n}\tmail exchanger = ${a.data}\n`)
       else if (a.type === 'PTR') ctx.out(`${a.name.replace(/\.$/, '')}\tname = ${a.data}\n`)
       else if (a.type === 'NS') ctx.out(`${n}\tnameserver = ${a.data}\n`)
+      else if (a.type === 'TXT') ctx.out(`${n}\ttext = ${a.data}\n`)
       else ctx.out(`${n}\t${a.type.toLowerCase()} = ${a.data}\n`)
     }
     ctx.out('\n')
@@ -183,6 +184,7 @@ register('host', {
         else if (a.type === 'AAAA') ctx.out(`${n} has IPv6 address ${a.data}\n`)
         else if (a.type === 'MX') ctx.out(`${n} mail is handled by ${a.data}\n`)
         else if (a.type === 'PTR') ctx.out(`${n} domain name pointer ${a.data}\n`)
+        else if (a.type === 'TXT') ctx.out(`${n} descriptive text ${a.data}\n`)
         else ctx.out(`${n} has ${a.type} record ${a.data}\n`)
         any = true
       }

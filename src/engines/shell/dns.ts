@@ -322,9 +322,19 @@ function externalLookup(sys: System, name: string, type: string): RR[] {
   const pool = [sys, ...sys.lab]
   for (const s of pool) {
     const v = s.dnsRecords[key]
+    // Los TXT (SPF, DKIM, DMARC) llevan ";" adentro: varios registros van en líneas separadas.
+    if (v && type === 'TXT') return v.split('\n').map((d) => d.trim()).filter(Boolean).map((d) => ({ name: fqdn(n), ttl: 300, type, data: txtData(d) }))
     if (v) return v.split(/\s*;\s*/).map((d) => ({ name: fqdn(n), ttl: 300, type, data: type === 'MX' || type === 'CNAME' || type === 'NS' || type === 'PTR' ? fqdn(d) : d }))
   }
   return []
+}
+
+/** Un TXT como lo muestra dig: entre comillas, en partes de hasta 255 caracteres. */
+export function txtData(d: string): string {
+  if (d.startsWith('"')) return d
+  const parts: string[] = []
+  for (let i = 0; i < d.length; i += 255) parts.push(d.slice(i, i + 255))
+  return parts.map((p) => `"${p}"`).join(' ')
 }
 
 /** Respuesta de una zona autoritativa. */

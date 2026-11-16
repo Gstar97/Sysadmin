@@ -198,6 +198,258 @@ const SMB_CONF_UBUNTU = `#
    guest ok = no
 `
 
+const MAIN_CF_ROCKY = `# Global Postfix configuration file. This file lists only a subset
+# of all parameters. For the syntax, and for a complete parameter
+# list, see the postconf(5) manual page (command: "man 5 postconf").
+#
+# For common configuration examples, see BASIC_CONFIGURATION_README
+# and STANDARD_CONFIGURATION_README. To find these documents, use
+# the command "postconf html_directory readme_directory", or go to
+# http://www.postfix.org/BASIC_CONFIGURATION_README.html etc.
+#
+# For best results, change no more than 2-3 parameters at a time,
+# and test if Postfix still works after every change.
+
+# COMPATIBILITY
+#
+compatibility_level = 3.8
+
+# SOFT BOUNCE
+#
+#soft_bounce = no
+
+# LOCAL PATHNAME INFORMATION
+#
+queue_directory = /var/spool/postfix
+command_directory = /usr/sbin
+daemon_directory = /usr/libexec/postfix
+data_directory = /var/lib/postfix
+
+# QUEUE AND PROCESS OWNERSHIP
+#
+mail_owner = postfix
+
+# INTERNET HOST AND DOMAIN NAMES
+#
+#myhostname = host.domain.tld
+#myhostname = virtual.domain.tld
+
+#mydomain = domain.tld
+
+# SENDING MAIL
+#
+#myorigin = $myhostname
+#myorigin = $mydomain
+
+# RECEIVING MAIL
+
+#inet_interfaces = all
+#inet_interfaces = $myhostname
+#inet_interfaces = $myhostname, localhost
+inet_interfaces = localhost
+
+# Enable IPv4, and IPv6 if supported
+inet_protocols = all
+
+mydestination = $myhostname, localhost.$mydomain, localhost
+
+# REJECTING MAIL FOR UNKNOWN LOCAL USERS
+#
+unknown_local_recipient_reject_code = 550
+
+# TRUST AND RELAY CONTROL
+#
+#mynetworks_style = class
+#mynetworks_style = subnet
+#mynetworks_style = host
+
+#mynetworks = 168.100.3.0/28, 127.0.0.0/8
+#mynetworks = $config_directory/mynetworks
+#mynetworks = lmdb:/etc/postfix/network_table
+
+# INTERNET OR INTRANET
+
+# The relayhost parameter specifies the default host to send mail to
+# when no entry is matched in the optional transport(5) table. When
+# no relayhost is given, mail is routed directly to the destination.
+#
+# On an intranet, specify the organizational domain name. If your
+# internal DNS uses no MX records, specify the name of the intranet
+# gateway host instead.
+#
+# In the case of SMTP, specify a domain, host, host:port, [host]:port,
+# [address] or [address]:port; the form [host] turns off MX lookups.
+#
+#relayhost = $mydomain
+#relayhost = [gateway.my.domain]
+#relayhost = [mailserver.isp.tld]
+#relayhost = uucphost
+#relayhost = [an.ip.add.ress]
+
+# ALIAS DATABASE
+#
+#alias_maps = dbm:/etc/aliases
+alias_maps = lmdb:/etc/aliases
+#alias_maps = lmdb:/etc/aliases, nis:mail.aliases
+#alias_maps = netinfo:/aliases
+
+#alias_database = dbm:/etc/aliases
+#alias_database = dbm:/etc/mail/aliases
+alias_database = lmdb:/etc/aliases
+#alias_database = lmdb:/etc/aliases, lmdb:/opt/majordomo/aliases
+
+# DEBUGGING CONTROL
+#
+debug_peer_level = 2
+
+debugger_command =
+\t PATH=/bin:/usr/bin:/usr/local/bin:/usr/X11R6/bin
+\t ddd $daemon_directory/$process_name $process_id & sleep 5
+
+# INSTALL-TIME CONFIGURATION INFORMATION
+#
+sendmail_path = /usr/sbin/sendmail.postfix
+newaliases_path = /usr/bin/newaliases.postfix
+mailq_path = /usr/bin/mailq.postfix
+setgid_group = postdrop
+html_directory = no
+manpage_directory = /usr/share/man
+sample_directory = /usr/share/doc/postfix/samples
+readme_directory = /usr/share/doc/postfix/README_FILES
+
+# TLS CONFIGURATION
+#
+# Basic Postfix TLS configuration by default with self-signed certificate
+# for inbound SMTP and also opportunistic TLS for outbound SMTP.
+
+# The full pathname of a file with the Postfix SMTP server RSA certificate
+# in PEM format. Intermediate certificates should be included in general,
+# the server certificate first, then the issuing CA(s) (bottom-up order).
+#
+smtpd_tls_cert_file = /etc/pki/tls/certs/postfix.pem
+
+# The full pathname of a file with the Postfix SMTP server RSA private key
+# in PEM format. The private key must be accessible without a pass-phrase,
+# i.e. it must not be encrypted.
+#
+smtpd_tls_key_file = /etc/pki/tls/private/postfix.key
+
+# Announce STARTTLS support to remote SMTP clients, but do not require that
+# clients use TLS encryption (opportunistic TLS inbound).
+#
+smtpd_tls_security_level = may
+
+# Directory with PEM format Certification Authority certificates that the
+# Postfix SMTP client uses to verify a remote SMTP server certificate.
+#
+smtp_tls_CApath = /etc/pki/tls/certs
+
+# The full pathname of a file containing CA certificates of root CAs
+# trusted to sign either remote SMTP server certificates or intermediate CA
+# certificates.
+#
+smtp_tls_CAfile = /etc/pki/tls/certs/ca-bundle.crt
+
+# Use TLS if this is supported by the remote SMTP server, otherwise use
+# plaintext (opportunistic TLS outbound).
+#
+smtp_tls_security_level = may
+meta_directory = /etc/postfix
+shlib_directory = /usr/lib64/postfix
+`
+
+const MAIN_CF_UBUNTU = `# See /usr/share/postfix/main.cf.dist for a commented, more complete version
+
+
+# Debian specific:  Specifying a file name will cause the first
+# line of that file to be used as the name.  The Debian default
+# is /etc/mailname.
+#myorigin = /etc/mailname
+
+smtpd_banner = $myhostname ESMTP $mail_name (Ubuntu)
+biff = no
+
+# appending .domain is the MUA's job.
+append_dot_mydomain = no
+
+# Uncomment the next line to generate "delayed mail" warnings
+#delay_warning_time = 4h
+
+readme_directory = no
+
+# See http://www.postfix.org/COMPATIBILITY_README.html -- default to 3.6 on
+# fresh installs.
+compatibility_level = 3.6
+
+
+
+# TLS parameters
+smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+smtpd_tls_security_level=may
+
+smtp_tls_CApath=/etc/ssl/certs
+smtp_tls_security_level=may
+smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
+
+
+smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+myhostname = __HOST__
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+myorigin = /etc/mailname
+mydestination = $myhostname, __SHORT__, localhost.localdomain, , localhost
+relayhost = 
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+inet_protocols = all
+`
+
+const MASTER_CF = `#
+# Postfix master process configuration file.  For details on the format
+# of the file, see the master(5) manual page (command: "man 5 master" or
+# on-line: http://www.postfix.org/master.5.html).
+#
+# Do not forget to execute "postfix reload" after editing this file.
+#
+# ==========================================================================
+# service type  private unpriv  chroot  wakeup  maxproc command + args
+#               (yes)   (yes)   (no)    (never) (100)
+# ==========================================================================
+smtp      inet  n       -       n       -       -       smtpd
+#submission inet n       -       n       -       -       smtpd
+#  -o syslog_name=postfix/submission
+#  -o smtpd_tls_security_level=encrypt
+#  -o smtpd_sasl_auth_enable=yes
+pickup    unix  n       -       n       60      1       pickup
+cleanup   unix  n       -       n       -       0       cleanup
+qmgr      unix  n       -       n       300     1       qmgr
+tlsmgr    unix  -       -       n       1000?   1       tlsmgr
+rewrite   unix  -       -       n       -       -       trivial-rewrite
+bounce    unix  -       -       n       -       0       bounce
+defer     unix  -       -       n       -       0       bounce
+trace     unix  -       -       n       -       0       bounce
+verify    unix  -       -       n       -       1       verify
+flush     unix  n       -       n       1000?   0       flush
+proxymap  unix  -       -       n       -       -       proxymap
+proxywrite unix -       -       n       -       1       proxymap
+smtp      unix  -       -       n       -       -       smtp
+relay     unix  -       -       n       -       -       smtp
+        -o syslog_name=\${multiservice_name}/$service_name
+showq     unix  n       -       n       -       -       showq
+error     unix  -       -       n       -       -       error
+retry     unix  -       -       n       -       -       error
+discard   unix  -       -       n       -       -       discard
+local     unix  -       n       n       -       -       local
+virtual   unix  -       n       n       -       -       virtual
+lmtp      unix  -       -       n       -       -       lmtp
+anvil     unix  -       -       n       -       1       anvil
+scache    unix  -       -       n       -       1       scache
+postlog   unix-dgram n  -       n       -       1       postlogd
+`
+
 const NFS_CONF = `#
 # This is a general configuration for the
 # NFS daemons and tools
@@ -751,6 +1003,17 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
     commands: ['testparm', 'smbpasswd', 'pdbedit', 'smbstatus', 'smbcontrol'],
   },
   'samba-client': { summary: 'Samba client programs', version: '4.23.5', commands: ['smbclient', 'nmblookup', 'smbget'] },
+  postfix: {
+    summary: 'Postfix Mail Transport Agent',
+    version: '3.8.5',
+    user: { name: 'postfix', uid: 89, home: '/var/spool/postfix', gecos: '' },
+    services: [{ name: 'postfix', description: 'Postfix Mail Transport Agent', ports: [25] }],
+    files: { '/etc/postfix/main.cf': MAIN_CF_ROCKY, '/etc/postfix/master.cf': MASTER_CF, '/var/log/maillog': '' },
+    perms: { '/var/log/maillog': { mode: 0o600 } },
+    commands: ['postconf', 'postmap', 'postalias', 'newaliases', 'postqueue', 'postsuper', 'postfix', 'mailq', 'sendmail', 'sendmail.postfix', 'postcat', 'postlog'],
+  },
+  's-nail': { summary: 'Environment for sending and receiving mail, providing functionality of POSIX mailx', version: '14.9.24', commands: ['mail', 'mailx', 's-nail'] },
+  'cyrus-sasl-plain': { summary: 'PLAIN and LOGIN authentication support for Cyrus SASL', version: '2.1.28' },
   'cifs-utils': { summary: 'Utilities for mounting and managing CIFS mounts', version: '7.2', commands: ['mount.cifs', 'mount.smb3', 'cifscreds'] },
   'nfs-utils': {
     summary: 'NFS utilities and supporting clients and daemons for the kernel NFS server',
@@ -871,6 +1134,18 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     commands: ['testparm', 'smbpasswd', 'pdbedit', 'smbstatus', 'smbcontrol'],
   },
   smbclient: { summary: 'command-line SMB/CIFS clients for Unix', version: '2:4.23.6+dfsg-0ubuntu1', commands: ['smbclient', 'nmblookup', 'smbget'] },
+  postfix: {
+    summary: 'High-performance mail transport agent',
+    version: '3.10.6-4ubuntu2.1',
+    user: { name: 'postfix', uid: 112, home: '/var/spool/postfix', gecos: '' },
+    requires: ['libsasl2-modules'],
+    services: [{ name: 'postfix', description: 'Postfix Mail Transport Agent', ports: [25], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/postfix/main.cf': MAIN_CF_UBUNTU, '/etc/postfix/master.cf': MASTER_CF, '/var/log/mail.log': '' },
+    perms: { '/var/log/mail.log': { mode: 0o640, group: 'adm' } },
+    commands: ['postconf', 'postmap', 'postalias', 'newaliases', 'postqueue', 'postsuper', 'postfix', 'mailq', 'sendmail', 'postcat', 'postlog'],
+  },
+  'libsasl2-modules': { summary: 'Cyrus SASL - pluggable authentication modules', version: '2.1.28+dfsg1-9ubuntu1' },
+  mailutils: { summary: 'GNU mailutils utilities for handling mail', version: '1:3.20-1', commands: ['mail', 'mailx'] },
   'cifs-utils': { summary: 'Common Internet File System utilities', version: '2:7.4-1', commands: ['mount.cifs', 'mount.smb3', 'cifscreds'] },
   'nfs-kernel-server': {
     summary: 'support for NFS kernel server',

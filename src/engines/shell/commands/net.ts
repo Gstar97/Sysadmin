@@ -5,6 +5,7 @@ import { namedListen, unboundListen } from '../dns'
 import { keaListen, dhcpConfigure } from './dnsserver'
 import { appListen, web } from '../http'
 import { ensureLoaded } from '../db/config'
+import { postfixListen } from '../mail'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
 import { ROOT_CRED } from '../vfs'
@@ -518,6 +519,10 @@ function listeningSockets(ctx: CommandContext) {
         else for (const proto of ['udp', 'tcp']) out.push({ proto, local: ad, port: 53, proc: s.name, pid: s.pid ?? 1 })
       }
       if (s.name === 'named') out.push({ proto: 'tcp', local: '127.0.0.1', port: 953, proc: 'named', pid: s.pid ?? 1 })
+      continue
+    }
+    if (s.name === 'postfix') {
+      for (const local of postfixListen(ctx.sys)) out.push({ proto: 'tcp', local, port: 25, proc: 'master', pid: s.pid ?? 1 })
       continue
     }
     // Las bases escuchan donde dice su configuración (bind-address, listen_addresses, port).

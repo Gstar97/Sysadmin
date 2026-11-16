@@ -40,6 +40,7 @@ import './commands/dbcmd'
 import './commands/pgcmd'
 import { verifyNfs } from './nfs'
 import './samba'
+import { verifyMail } from './mail'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
@@ -182,6 +183,8 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if (dbResult) return dbResult
   const nfsResult = verifyNfs(sys, check)
   if (nfsResult) return nfsResult
+  const mailResult = verifyMail(sys, check)
+  if (mailResult) return mailResult
   if ('alcanza' in check) {
     const ok = reaches(sys, check.alcanza) === (check.resultado === 'ok')
     return { ok, label: check.resultado === 'ok' ? `${sys.hostname} llega a ${check.alcanza}` : `${sys.hostname} no llega a ${check.alcanza}` }

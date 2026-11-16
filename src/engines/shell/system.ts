@@ -1014,6 +1014,7 @@ export class System {
     for (const [name, id, home] of system) this.addSystemUser(name, id, home, name)
     this.addGroup(this.adminGroup, this.distro === 'rocky' ? 10 : 27)
     this.addGroup('disk', 6)
+    this.addGroup('mail', this.distro === 'rocky' ? 12 : 8)
     if (this.distro === 'rocky') {
       this.addGroup('nginx', 990)
       this.addGroup('apache', 48)

@@ -308,6 +308,32 @@ const stateShape = {
         .optional(),
     })
     .default({ aplicaciones: {}, dominios_publicos: {}, puertos_publicados: [], certificados: [], confia_en: [] }),
+  /** Correo: los servidores del proveedor que sirven de relay, la cola y los mapas ya compilados. */
+  correo: z
+    .strictObject({
+      relays: z
+        .array(
+          z.strictObject({
+            servidor: z.string(),
+            ip: z.string(),
+            puerto: z.number().int().default(587),
+            usuario: z.string().optional(),
+            clave: z.string().optional(),
+            /** Exige STARTTLS antes de autenticar. */
+            tls: z.boolean().default(true),
+            /** Remitentes que el proveedor acepta para esa cuenta (vacío: cualquiera). */
+            remitentes: z.array(z.string()).default([]),
+          }),
+        )
+        .default([]),
+      /** El proveedor de internet o de la nube bloquea la salida por el puerto 25. */
+      puerto25_bloqueado: z.boolean().default(true),
+      /** Mapas que ya se compilaron con postmap (ej.: lmdb:/etc/postfix/sasl_passwd). */
+      mapas_compilados: z.array(z.string()).default([]),
+      /** Mensajes que ya esperan en la cola. */
+      cola: z.array(z.strictObject({ de: z.string(), para: z.string(), asunto: z.string().default(''), motivo: z.string(), hace_minutos: z.number().default(60) })).default([]),
+    })
+    .optional(),
   /** Cuentas de Samba ya creadas con smbpasswd (el usuario de Linux tiene que existir). */
   samba: z.strictObject({ usuarios: z.array(z.strictObject({ nombre: z.string(), clave: z.string() })).default([]) }).optional(),
   /** Bases de datos del servidor (MariaDB y PostgreSQL). */
@@ -491,6 +517,9 @@ const singleCheckSchema = z.union([
   z.strictObject({ base_datos: z.string(), motor: z.enum(['mariadb', 'postgresql']), existe: z.boolean().default(true) }),
   /** El resultado (primera celda) de una consulta hecha como administrador. */
   z.strictObject({ consulta_bd: z.string(), motor: z.enum(['mariadb', 'postgresql']), base: z.string(), resultado: z.string() }),
+  /** Un correo que Postfix entregó (o dejó diferido, o rebotó) para ese destinatario. */
+  z.strictObject({ correo_enviado: z.string(), estado: z.enum(['sent', 'deferred', 'bounced']).default('sent'), via: z.string().optional() }),
+  z.strictObject({ cola_vacia: z.boolean() }),
   /** Una carpeta exportada por NFS (lo aplicado con exportfs, no solo el archivo). */
   z.strictObject({ exportado: z.string(), cliente: z.string().optional(), opciones_incluye: z.string().optional(), existe: z.boolean().default(true) }),
   /** Un usuario de la base: si existe y si tiene (o no) un permiso. */
