@@ -1,0 +1,216 @@
+tipo: terminal
+shell: bash
+titulo: Dos bases en producción, con cuentas justas, respaldos automáticos y una restauración probada
+descripcion: >-
+  db01 (Rocky Linux 10, 192.168.10.20) tiene MariaDB con la base tienda (la usa la tienda, en
+  web01, 192.168.10.11) y PostgreSQL con la base inventario (su dueño es inventario_app). El
+  servidor de informes (192.168.10.40) necesita leer el inventario. No hay ningún respaldo. db02
+  (192.168.10.21) es un servidor de pruebas con MariaDB y PostgreSQL vacíos, para probar las
+  restauraciones. Tu usuario ana entra a db02 por SSH con su clave.
+estado_inicial:
+  distro: rocky
+  hostname: db01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true, clave_ssh: true }
+  paquetes: { instalados: [mariadb-server, postgresql-server, gzip, firewalld] }
+  servicios:
+    mariadb: { activo: true, habilitado: true }
+    postgresql: { activo: true, habilitado: true }
+    firewalld: { activo: true, habilitado: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.20/24, estado: UP }
+  bases_datos:
+    mariadb:
+      binlog: true
+      bases:
+        tienda: |
+          CREATE TABLE clientes (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL);
+          INSERT INTO clientes (nombre) VALUES ('Muebles del Sur'), ('Oficinas Norte'), ('Estudio Ríos');
+          CREATE TABLE pedidos (id INT AUTO_INCREMENT PRIMARY KEY, cliente_id INT NOT NULL, total DECIMAL(10,2) NOT NULL);
+          INSERT INTO pedidos (cliente_id, total) VALUES (2, 185000.00), (1, 42500.00), (2, 96000.00), (3, 31000.00), (1, 64000.00);
+    postgresql:
+      roles:
+        - { nombre: inventario_app, clave: Inv-2026-app }
+      bases:
+        inventario:
+          dueno: inventario_app
+          sql: |
+            CREATE TABLE productos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, stock INTEGER NOT NULL);
+            INSERT INTO productos (nombre, stock) VALUES ('Silla de oficina', 40), ('Escritorio 120 cm', 12), ('Biblioteca', 7), ('Lámpara de pie', 25), ('Perchero', 18), ('Mesa de reunión', 3);
+  archivos:
+    /var/backups/db/.keep: ''
+  servidores:
+    - hostname: db02
+      ip: 192.168.10.21
+      distro: rocky
+      en_dns: true
+      clave_conocida: si
+      usuarios:
+        - { nombre: ana, sudo: true, clave_ssh: true }
+      paquetes: { instalados: [mariadb-server, postgresql-server, gzip] }
+      servicios:
+        mariadb: { activo: true, habilitado: true }
+        postgresql: { activo: true, habilitado: true }
+      bases_datos:
+        mariadb: {}
+        postgresql: {}
+    - hostname: web01
+      ip: 192.168.10.11
+      distro: rocky
+      en_dns: true
+pasos:
+  - consigna: >-
+      En MariaDB, creá la cuenta de la tienda: tienda_app, que solo puede entrar desde la red
+      192.168.10.0/24 con la clave Tnd-2026-app y solo puede leer, agregar, cambiar y borrar datos
+      de la base tienda.
+    verificar:
+      - { usuario_bd: tienda_app, host: '192.168.10.%', motor: mariadb, permiso: UPDATE, base: tienda }
+      - { usuario_bd: tienda_app, host: '192.168.10.%', motor: mariadb, permiso: DROP, base: tienda, tiene: false }
+    pistas:
+      - "CREATE USER con host '192.168.10.%' y GRANT SELECT, INSERT, UPDATE, DELETE ON tienda.*"
+    solucion:
+      - "sudo mysql -e \"CREATE USER 'tienda_app'@'192.168.10.%' IDENTIFIED BY 'Tnd-2026-app'; GRANT SELECT, INSERT, UPDATE, DELETE ON tienda.* TO 'tienda_app'@'192.168.10.%';\""
+    explicacion: >-
+      Sin DROP, ALTER ni GRANT: si alguien encuentra la clave en la configuración de la tienda,
+      puede hacer daño con los datos, pero no borrar tablas ni crear cuentas.
+  - consigna: >-
+      En PostgreSQL, creá el rol informes (con login y la clave Inf-2026-rd) que solo pueda leer
+      todas las tablas de la base inventario.
+    verificar:
+      - { usuario_bd: informes, motor: postgresql, permiso: SELECT, base: inventario, tabla: productos }
+      - { usuario_bd: informes, motor: postgresql, permiso: INSERT, base: inventario, tabla: productos, tiene: false }
+    pistas:
+      - "`sudo -u postgres psql -c \"CREATE ROLE informes LOGIN PASSWORD 'Inf-2026-rd'\"`"
+      - "Después, conectado a inventario: GRANT CONNECT ON DATABASE, GRANT USAGE ON SCHEMA public y GRANT SELECT ON ALL TABLES IN SCHEMA public."
+    solucion:
+      - "sudo -u postgres psql -c \"CREATE ROLE informes LOGIN PASSWORD 'Inf-2026-rd'\""
+      - "sudo -u postgres psql inventario -c 'GRANT CONNECT ON DATABASE inventario TO informes'"
+      - "sudo -u postgres psql inventario -c 'GRANT USAGE ON SCHEMA public TO informes'"
+      - "sudo -u postgres psql inventario -c 'GRANT SELECT ON ALL TABLES IN SCHEMA public TO informes'"
+    explicacion: >-
+      ALL TABLES alcanza a las tablas que existen hoy. Para que las que cree inventario_app el mes
+      que viene también sean legibles, el dueño agrega ALTER DEFAULT PRIVILEGES ... GRANT SELECT ON
+      TABLES TO informes.
+  - consigna: >-
+      Dejá entrar a informes desde 192.168.10.40, solo a la base inventario y con contraseña
+      (scram-sha-256). PostgreSQL tiene que escuchar en la red, y el firewall, dejar pasar el
+      servicio postgresql (permanente). Aplicá los cambios y mostrá en qué dirección escucha.
+    verificar:
+      - { archivo: /var/lib/pgsql/data/pg_hba.conf, contenido_incluye: '192.168.10.40/32' }
+      - { comando_usado: '\bss\b' }
+      - { salida_contiene: '0.0.0.0:5432' }
+    pistas:
+      - "Al final de /var/lib/pgsql/data/pg_hba.conf: `host  inventario  informes  192.168.10.40/32  scram-sha-256`"
+      - "En /var/lib/pgsql/data/postgresql.conf: `listen_addresses = '*'` (cambiarlo requiere restart, no alcanza con reload)."
+      - "`sudo firewall-cmd --permanent --add-service=postgresql && sudo firewall-cmd --reload`, `sudo systemctl restart postgresql` y `sudo ss -tlnp | grep 5432`"
+    solucion:
+      - "echo 'host    inventario      informes        192.168.10.40/32        scram-sha-256' | sudo tee -a /var/lib/pgsql/data/pg_hba.conf"
+      - "echo \"listen_addresses = '*'\" | sudo tee -a /var/lib/pgsql/data/postgresql.conf"
+      - sudo firewall-cmd --permanent --add-service=postgresql && sudo firewall-cmd --reload
+      - sudo systemctl restart postgresql
+      - sudo ss -tlnp | grep 5432
+    explicacion: >-
+      Tres capas, y hacen falta las tres: que PostgreSQL escuche en la red, que el firewall deje
+      pasar el 5432 y que pg_hba.conf acepte ese origen, esa base y ese rol. Una línea de pg_hba
+      bien específica es mejor que "all all 0.0.0.0/0".
+  - consigna: >-
+      Ahora los respaldos. Creá en MariaDB la cuenta respaldos@localhost (clave Rsp-2026-bk) con
+      SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER y RELOAD sobre todas las bases, y guardá sus
+      credenciales en /etc/respaldo-bd.cnf, solo legible por root.
+    verificar:
+      - { usuario_bd: respaldos, host: localhost, motor: mariadb, permiso: LOCK TABLES, base: tienda }
+      - { usuario_bd: respaldos, host: localhost, motor: mariadb, permiso: DELETE, base: tienda, tiene: false }
+      - { archivo: /etc/respaldo-bd.cnf, contenido_incluye: 'user=respaldos', modo: '0600', dueno: root }
+    pistas:
+      - "Como en la lección 4.3.4: CREATE USER, GRANT ... ON *.*, y un archivo con `[client]`, `user=` y `password=`, con chmod 600."
+    solucion:
+      - "sudo mysql -e \"CREATE USER 'respaldos'@'localhost' IDENTIFIED BY 'Rsp-2026-bk'; GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, RELOAD ON *.* TO 'respaldos'@'localhost';\""
+      - "printf '[client]\\nuser=respaldos\\npassword=Rsp-2026-bk\\n' | sudo tee /etc/respaldo-bd.cnf > /dev/null"
+      - sudo chmod 600 /etc/respaldo-bd.cnf
+    explicacion: >-
+      PostgreSQL no necesita una cuenta aparte: el script corre como root y usa el rol postgres
+      por peer, sin contraseña.
+  - consigna: >-
+      Escribí /usr/local/sbin/respaldo-bd.sh (ejecutable, con set -euo pipefail) que deje en
+      /var/backups/db, con la fecha y la hora en el nombre: tienda-....sql.gz (mysqldump
+      consistente con la posición del binlog), inventario-....dump (pg_dump en formato custom) y
+      roles-....sql (pg_dumpall --globals-only). Que borre los de más de 14 días. Ejecutalo y
+      listá la carpeta.
+    verificar:
+      - { archivo: /usr/local/sbin/respaldo-bd.sh, contenido_incluye: 'pipefail', modo: '0755' }
+      - { archivo: /usr/local/sbin/respaldo-bd.sh, contenido_incluye: 'globals-only' }
+      - { salida_regex: 'tienda-\d{4}-\d{2}-\d{2}-\d{4}\.sql\.gz' }
+      - { salida_regex: 'inventario-\d{4}-\d{2}-\d{2}-\d{4}\.dump' }
+      - { salida_regex: 'roles-\d{4}-\d{2}-\d{2}-\d{4}\.sql' }
+    pistas:
+      - "Una variable con la fecha para los tres: `F=$(date +%F-%H%M)`."
+      - "MariaDB: `mysqldump --defaults-extra-file=/etc/respaldo-bd.cnf --single-transaction --source-data=2 --routines --events tienda | gzip > \"$D/tienda-$F.sql.gz\"`"
+      - "PostgreSQL: `sudo -u postgres pg_dump -Fc inventario > \"$D/inventario-$F.dump\"` y `sudo -u postgres pg_dumpall --globals-only > \"$D/roles-$F.sql\"`"
+    solucion:
+      - "printf '#!/bin/bash\\nset -euo pipefail\\nD=/var/backups/db\\nF=$(date +%%F-%%H%%M)\\nmysqldump --defaults-extra-file=/etc/respaldo-bd.cnf --single-transaction --source-data=2 --routines --events tienda | gzip > \"$D/tienda-$F.sql.gz\"\\nsudo -u postgres pg_dump -Fc inventario > \"$D/inventario-$F.dump\"\\nsudo -u postgres pg_dumpall --globals-only > \"$D/roles-$F.sql\"\\nfind \"$D\" -type f -mtime +14 -delete\\n' | sudo tee /usr/local/sbin/respaldo-bd.sh > /dev/null"
+      - sudo chmod 755 /usr/local/sbin/respaldo-bd.sh
+      - sudo /usr/local/sbin/respaldo-bd.sh
+      - ls /var/backups/db
+    explicacion: >-
+      Los tres archivos tienen la misma fecha porque F se calcula una vez. Sin el de roles, el
+      respaldo de inventario no se podría restaurar en un servidor nuevo: pg_dump no guarda los
+      roles.
+  - consigna: >-
+      Programalo con systemd para todas las noches a las 02:30 (respaldo-bd.service y
+      respaldo-bd.timer, con Persistent=true) y dejá el timer activo.
+    verificar:
+      - { archivo: /etc/systemd/system/respaldo-bd.timer, contenido_incluye: 'Persistent=true' }
+      - { servicio: respaldo-bd.timer, activo: true, habilitado: true }
+    pistas:
+      - "Igual que en la lección 4.3.4: un service Type=oneshot con ExecStart al script, y un timer con OnCalendar=*-*-* 02:30:00 y WantedBy=timers.target."
+    solucion:
+      - "printf '[Unit]\\nDescription=Respaldo de las bases\\n\\n[Service]\\nType=oneshot\\nExecStart=/usr/local/sbin/respaldo-bd.sh\\n' | sudo tee /etc/systemd/system/respaldo-bd.service > /dev/null"
+      - "printf '[Unit]\\nDescription=Respaldo nocturno de las bases\\n\\n[Timer]\\nOnCalendar=*-*-* 02:30:00\\nPersistent=true\\n\\n[Install]\\nWantedBy=timers.target\\n' | sudo tee /etc/systemd/system/respaldo-bd.timer > /dev/null"
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now respaldo-bd.timer
+    explicacion: >-
+      En una empresa, el script además copia los archivos a otro lugar (otro servidor o un
+      almacenamiento fuera del edificio), y el monitoreo avisa si una noche falló.
+  - consigna: Copiá los tres respaldos a /tmp de db02.
+    verificar:
+      - { comando_usado: '\bscp\b' }
+      - { salida_contiene: '100%' }
+    pistas:
+      - "`scp /var/backups/db/*-*.* db02:/tmp/`"
+    solucion: ["scp /var/backups/db/*-*.* db02:/tmp/"]
+    explicacion: >-
+      La prueba de restauración se hace en otro servidor: así no se toca producción, y se
+      comprueba que el respaldo sirve aunque db01 no exista más.
+  - consigna: >-
+      Entrá a db02 y restaurá la base tienda desde su respaldo. Comprobá que tiene los 5 pedidos.
+    verificar:
+      - { en: db02, verificar: { consulta_bd: 'SELECT count(*) FROM pedidos', motor: mariadb, base: tienda, resultado: '5' } }
+    pistas:
+      - "`ssh db02`, `sudo mysql -e 'CREATE DATABASE tienda'` y `zcat /tmp/tienda-*.sql.gz | sudo mysql tienda`"
+    solucion:
+      - ssh db02
+      - sudo mysql -e 'CREATE DATABASE tienda'
+      - zcat /tmp/tienda-*.sql.gz | sudo mysql tienda
+      - sudo mysql tienda -e 'SELECT count(*) FROM pedidos'
+    explicacion: >-
+      Si lo cronometrás (con time delante), tenés tu tiempo real de recuperación para esta base.
+  - consigna: >-
+      Ahora inventario, en db02: primero los roles, después una base vacía con su dueño y al final
+      el respaldo. Comprobá que tiene los 6 productos.
+    verificar:
+      - { en: db02, verificar: { usuario_bd: inventario_app, motor: postgresql } }
+      - { en: db02, verificar: { consulta_bd: 'SELECT count(*) FROM productos', motor: postgresql, base: inventario, resultado: '6' } }
+    pistas:
+      - "`sudo -u postgres psql -f /tmp/roles-*.sql` (los errores de \"role postgres already exists\" son normales)."
+      - "`sudo -u postgres createdb -O inventario_app inventario` y `sudo -u postgres pg_restore -d inventario /tmp/inventario-*.dump`"
+    solucion:
+      - sudo -u postgres psql -f /tmp/roles-*.sql
+      - sudo -u postgres createdb -O inventario_app inventario
+      - sudo -u postgres pg_restore -d inventario /tmp/inventario-*.dump
+      - "sudo -u postgres psql inventario -c 'SELECT count(*) FROM productos'"
+    explicacion: >-
+      Sin los roles, pg_restore falla con "role inventario_app does not exist" y las tablas quedan
+      con otro dueño. Con este orden, db02 queda igual que db01: los mismos roles, la misma base, los
+      mismos permisos. Las dos bases se pueden recuperar.

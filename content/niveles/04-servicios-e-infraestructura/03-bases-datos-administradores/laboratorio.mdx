@@ -1,0 +1,41 @@
+---
+titulo: MariaDB y PostgreSQL con cuentas de mínimo privilegio, respaldos automáticos y restauración probada en otro servidor
+horas: 3
+verificacion:
+  - Resolví el laboratorio simulado completo, con las dos bases restauradas en db02.
+  - En rocky01 corren MariaDB y PostgreSQL, y cada aplicación tiene su cuenta con lo justo.
+  - El rol informes entra desde mi PC, ve los productos y no puede modificarlos.
+  - El timer respaldo-bd.timer está activo y el journal muestra un respaldo sin errores.
+  - Restauré las dos bases en ubuntu01, en otra versión de cada motor, y anoté cuánto tardó cada una.
+  - Documenté las bases, las cuentas, los respaldos y cómo restaurarlos, sin contraseñas.
+---
+
+import sim from './lab-bd-sim.yaml'
+import pasos from './lab-bd.yaml'
+
+## Objetivo
+
+Que las bases de la empresa tengan lo que les pide cualquier auditoría: cada aplicación entra con una cuenta que solo puede hacer lo suyo, hay un respaldo de todas las noches sin que nadie se acuerde, y está **probado** que ese respaldo se puede restaurar en otro servidor, con el tiempo medido.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01 y ubuntu01 con salida a internet, y en tu PC un cliente de bases de datos (DBeaver, pgAdmin o psql) para probar la cuenta de informes.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Las contraseñas de este laboratorio son de ejemplo. En una empresa, cada cuenta tiene una contraseña larga y distinta, guardada en el gestor de contraseñas del equipo, y los archivos que las contienen (/etc/respaldo-bd.cnf, la configuración de las aplicaciones) son solo legibles por quien los usa.
+</Advertencia>
+
+## Para pensar
+
+1. Los respaldos quedaron en el mismo disco que las bases. Si ese disco se rompe a las 15:00, ¿qué perdés? ¿Qué agregarías al script para que no pase?
+2. Restaurar la base tienda tardó segundos. ¿Cómo estimarías cuánto tardaría con 50 GB? ¿Qué harías si el negocio no puede esperar tanto?
+3. Mañana un programador crea una tabla nueva en inventario. ¿Informes la va a poder leer? ¿Qué cambiarías para que sí, sin tener que acordarte cada vez?

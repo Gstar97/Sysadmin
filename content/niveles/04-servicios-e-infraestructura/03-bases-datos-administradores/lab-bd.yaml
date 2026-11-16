@@ -1,0 +1,131 @@
+tipo: pasos
+titulo: MariaDB y PostgreSQL en rocky01, respaldos automáticos y restauración en ubuntu01
+descripcion: >-
+  rocky01 va a ser el servidor de bases (MariaDB 10.11 y PostgreSQL 16, los de Rocky 10) y
+  ubuntu01 el servidor de pruebas donde se restauran los respaldos (MariaDB 11.8 y PostgreSQL 18,
+  los de Ubuntu 26.04). Las versiones distintas son a propósito: un respaldo lógico se restaura en
+  una versión más nueva sin problemas, y eso es lo que pasa cuando se migra. Calculá unas tres
+  horas.
+pasos:
+  - titulo: Instantáneas
+    detalle: >-
+      Sacá una instantánea de las dos VM antes de empezar. Si algo se rompe, volvés a este punto
+      en un minuto.
+    comprobar: Las dos instantáneas aparecen en VirtualBox (o en tu hipervisor).
+  - titulo: Instalar los dos motores en rocky01
+    detalle: >-
+      En Rocky, PostgreSQL necesita crear su cluster antes del primer arranque.
+    comandos:
+      - sudo dnf install -y mariadb-server postgresql-server
+      - sudo systemctl enable --now mariadb
+      - sudo postgresql-setup --initdb
+      - sudo systemctl enable --now postgresql
+      - sudo ss -tlnp | grep -E '3306|5432'
+    comprobar: >-
+      mariadbd escucha en el 3306 (en todas las direcciones) y postgres en 127.0.0.1:5432 (solo
+      local, de fábrica).
+  - titulo: Datos de prueba
+    detalle: >-
+      Una base tienda en MariaDB y una base inventario en PostgreSQL, con algunas filas. La de
+      PostgreSQL la crea su propio rol, que va a ser su dueño.
+    comandos:
+      - "sudo mysql -e \"CREATE DATABASE tienda; CREATE TABLE tienda.pedidos (id INT AUTO_INCREMENT PRIMARY KEY, cliente VARCHAR(80), total DECIMAL(10,2)); INSERT INTO tienda.pedidos (cliente, total) VALUES ('Muebles del Sur', 185000), ('Oficinas Norte', 42500), ('Estudio Ríos', 31000);\""
+      - "sudo -u postgres psql -c \"CREATE ROLE inventario_app LOGIN PASSWORD 'una-clave-larga'\""
+      - sudo -u postgres createdb -O inventario_app inventario
+      - "sudo -u postgres psql inventario -c \"SET ROLE inventario_app; CREATE TABLE productos (id SERIAL PRIMARY KEY, nombre TEXT, stock INTEGER); INSERT INTO productos (nombre, stock) VALUES ('Silla', 40), ('Escritorio', 12), ('Biblioteca', 7);\""
+    comprobar: "`sudo mysql tienda -e 'SELECT count(*) FROM pedidos'` da 3 y `sudo -u postgres psql inventario -c '\\dt'` muestra productos con dueño inventario_app."
+  - titulo: Cuentas de mínimo privilegio
+    detalle: >-
+      En MariaDB, una cuenta para la aplicación que entre solo desde la red del laboratorio. En
+      PostgreSQL, un rol de solo lectura para informes, con permiso para entrar desde tu PC con
+      contraseña. Reemplazá 192.168.56.1 por la IP de tu PC en la red de las VM.
+    comandos:
+      - "sudo mysql -e \"CREATE USER 'tienda_app'@'192.168.56.%' IDENTIFIED BY 'otra-clave-larga'; GRANT SELECT, INSERT, UPDATE, DELETE ON tienda.* TO 'tienda_app'@'192.168.56.%';\""
+      - "sudo -u postgres psql -c \"CREATE ROLE informes LOGIN PASSWORD 'clave-de-informes'\""
+      - "sudo -u postgres psql inventario -c 'GRANT CONNECT ON DATABASE inventario TO informes; GRANT USAGE ON SCHEMA public TO informes; GRANT SELECT ON ALL TABLES IN SCHEMA public TO informes;'"
+      - "echo 'host  inventario  informes  192.168.56.1/32  scram-sha-256' | sudo tee -a /var/lib/pgsql/data/pg_hba.conf"
+      - "echo \"listen_addresses = '*'\" | sudo tee -a /var/lib/pgsql/data/postgresql.conf"
+      - sudo firewall-cmd --permanent --add-service=mysql --add-service=postgresql && sudo firewall-cmd --reload
+      - sudo systemctl restart postgresql
+    comprobar: >-
+      Desde tu PC (con DBeaver, pgAdmin o psql), informes entra a inventario y ve los productos,
+      pero un INSERT le da "permission denied for table productos". Desde ubuntu01 (con sudo apt
+      install -y mariadb-client), `mysql -h rocky01 -u tienda_app -p tienda` entra, y un DROP
+      TABLE le da el error 1142.
+    si_falla: >-
+      "no pg_hba.conf entry for host" es que la IP de origen no coincide con la línea (mirá la IP
+      que aparece en el error). "Connection refused" es que PostgreSQL no se reinició o sigue en
+      localhost. Si se agota el tiempo, es el firewall.
+  - titulo: La cuenta y el script de respaldo
+    detalle: >-
+      La cuenta respaldos con lo justo para mysqldump, sus credenciales en un archivo de root, y
+      el script de la lección 4.3.4 ampliado a las dos bases. Escribí el script con nano o vim.
+    comandos:
+      - "sudo mysql -e \"CREATE USER 'respaldos'@'localhost' IDENTIFIED BY 'clave-respaldos'; GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, RELOAD ON *.* TO 'respaldos'@'localhost';\""
+      - "printf '[client]\\nuser=respaldos\\npassword=clave-respaldos\\n' | sudo tee /etc/respaldo-bd.cnf > /dev/null && sudo chmod 600 /etc/respaldo-bd.cnf"
+      - sudo mkdir -p /var/backups/db && sudo chmod 750 /var/backups/db
+      - sudo nano /usr/local/sbin/respaldo-bd.sh
+      - "#!/bin/bash"
+      - set -euo pipefail
+      - D=/var/backups/db
+      - F=$(date +%F-%H%M)
+      - mysqldump --defaults-extra-file=/etc/respaldo-bd.cnf --single-transaction --routines --events tienda | gzip > "$D/tienda-$F.sql.gz"
+      - runuser -u postgres -- pg_dump -Fc inventario > "$D/inventario-$F.dump"
+      - runuser -u postgres -- pg_dumpall --globals-only > "$D/roles-$F.sql"
+      - find "$D" -type f -mtime +14 -delete
+      - sudo chmod 755 /usr/local/sbin/respaldo-bd.sh && sudo /usr/local/sbin/respaldo-bd.sh && sudo ls -l /var/backups/db
+    comprobar: Hay tres archivos con la misma fecha y ninguno pesa 0 bytes.
+    si_falla: >-
+      Si el script se corta sin mensaje, ejecutalo con `sudo bash -x` para ver en qué línea. En
+      Rocky el binlog no está activado de fábrica: por eso esta versión no lleva --source-data
+      (con el binlog apagado daría error). Activarlo es el último paso, opcional.
+  - titulo: Todas las noches
+    detalle: Un service y un timer, como en la lección 4.3.4.
+    comandos:
+      - "printf '[Unit]\\nDescription=Respaldo de las bases\\n\\n[Service]\\nType=oneshot\\nExecStart=/usr/local/sbin/respaldo-bd.sh\\n' | sudo tee /etc/systemd/system/respaldo-bd.service"
+      - "printf '[Unit]\\nDescription=Respaldo nocturno de las bases\\n\\n[Timer]\\nOnCalendar=*-*-* 02:30:00\\nPersistent=true\\n\\n[Install]\\nWantedBy=timers.target\\n' | sudo tee /etc/systemd/system/respaldo-bd.timer"
+      - sudo systemctl daemon-reload && sudo systemctl enable --now respaldo-bd.timer
+      - sudo systemctl start respaldo-bd.service && systemctl list-timers respaldo-bd.timer
+      - journalctl -u respaldo-bd.service -n 5
+    comprobar: El timer figura con su próxima ejecución a las 02:30 y el journal muestra "Finished respaldo-bd.service" sin errores.
+  - titulo: Llevar los respaldos a ubuntu01
+    detalle: >-
+      Copialos a tu usuario en ubuntu01 (el mismo que usaste en el módulo 1.6). La carpeta de
+      respaldos es solo de root, así que el comodín lo resuelve un bash de root. En una empresa,
+      esta copia la hace el propio script, a un servidor o almacenamiento fuera del edificio.
+    comandos:
+      - sudo bash -c "cp /var/backups/db/*-$(date +%F)-* /tmp/ && chown $USER /tmp/tienda-*.sql.gz /tmp/inventario-*.dump /tmp/roles-*.sql"
+      - scp /tmp/tienda-*.sql.gz /tmp/inventario-*.dump /tmp/roles-*.sql tu_usuario@ubuntu01:/tmp/
+    comprobar: En ubuntu01, `ls -l /tmp` muestra los tres archivos con el mismo tamaño que en rocky01.
+  - titulo: Restaurar y cronometrar en ubuntu01
+    detalle: >-
+      En Ubuntu, MariaDB y PostgreSQL arrancan solos al instalarse. Restaurá cada base con time
+      delante y anotá cuánto tardó.
+    comandos:
+      - sudo apt install -y mariadb-server postgresql
+      - sudo mysql -e 'CREATE DATABASE tienda'
+      - time (zcat /tmp/tienda-*.sql.gz | sudo mysql tienda)
+      - sudo -u postgres psql -f /tmp/roles-*.sql
+      - sudo -u postgres createdb -O inventario_app inventario
+      - time sudo -u postgres pg_restore -d inventario /tmp/inventario-*.dump
+      - "sudo mysql tienda -e 'SELECT count(*) FROM pedidos' && sudo -u postgres psql inventario -c 'SELECT count(*) FROM productos'"
+    comprobar: >-
+      3 pedidos y 3 productos. psql -f roles muestra un error por el rol postgres, que ya existía:
+      es normal. El dueño de productos es inventario_app (\dt) e informes tiene SELECT (\dp).
+    si_falla: >-
+      "role inventario_app does not exist" quiere decir que pg_restore corrió antes que los roles.
+      Borrá la base (dropdb inventario) y repetí en orden.
+  - titulo: Documentar
+    detalle: >-
+      En tu documentación del laboratorio: qué bases hay y en qué servidor, las cuentas y para qué
+      es cada una (sin las contraseñas: esas van al gestor de contraseñas), dónde quedan los
+      respaldos, a qué hora corren, cómo se restauran y cuánto tardó la prueba.
+    comprobar: Alguien que no sos vos podría restaurar las dos bases leyendo solo ese documento.
+  - titulo: "Opcional: el binlog para recuperar al minuto"
+    detalle: >-
+      Activá el binlog en rocky01, volvé a poner --source-data=2 en el script y repetí el rescate
+      de la lección 4.3.4 con un DELETE de prueba.
+    comandos:
+      - "printf '[mysqld]\\nlog-bin=mariadb-bin\\nserver-id=1\\nbinlog_expire_logs_seconds=1209600\\n' | sudo tee /etc/my.cnf.d/binlog.cnf"
+      - sudo systemctl restart mariadb && sudo mysql -e 'SHOW BINARY LOGS'
+    comprobar: SHOW BINARY LOGS muestra mariadb-bin.000001, y el respaldo nuevo trae la línea CHANGE MASTER con su posición.

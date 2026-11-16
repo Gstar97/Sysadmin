@@ -87,6 +87,8 @@ function parseHora(h: string, sys: System): number {
   if (!m) return now.getTime()
   const d = m[1] ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(now.getFullYear(), now.getMonth(), now.getDate())
   d.setHours(Number(m[4]), Number(m[5]), Number(m[6] ?? 0), 0)
+  // Sin fecha, es la última vez que fue esa hora: si hoy todavía no llegó, fue ayer.
+  if (!m[1] && d.getTime() > now.getTime()) d.setDate(d.getDate() - 1)
   return d.getTime()
 }
 

@@ -75,11 +75,12 @@ describe('MariaDB', () => {
     })
     const pos = /MASTER_LOG_POS=(\d+)/.exec((await run('sudo zcat /var/backups/db/tienda.sql.gz | grep "CHANGE MASTER"')).out)?.[1]
     expect(pos).toBeDefined()
-    expect((await run('sudo mysqlbinlog /var/lib/mysql/mariadb-bin.000001 | grep -B3 "DROP TABLE"')).out).toMatch(/11:42:07/)
+    const drop = (await run('sudo mysqlbinlog /var/lib/mysql/mariadb-bin.000001 | grep -B3 "DROP TABLE"')).out
+    expect(drop).toMatch(/11:42:07/)
+    const [, yy, mm, dd] = /#(\d\d)(\d\d)(\d\d) +11:42:07/.exec(drop) ?? []
     await run('sudo zcat /var/backups/db/tienda.sql.gz | sudo mysql')
     expect(verifyBash(sh, { consulta_bd: 'SELECT count(*) FROM pedidos', motor: 'mariadb', base: 'tienda', resultado: '2' }).ok).toBe(true)
-    const local = new Date()
-    const ymd = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`
+    const ymd = `20${yy}-${mm}-${dd}`
     await run(`sudo mysqlbinlog --start-position=${pos} --stop-datetime="${ymd} 11:42:00" /var/lib/mysql/mariadb-bin.000001 | sudo mysql`)
     expect(verifyBash(sh, { consulta_bd: 'SELECT count(*) FROM pedidos', motor: 'mariadb', base: 'tienda', resultado: '3' }).ok).toBe(true)
   })
@@ -119,6 +120,17 @@ describe('PostgreSQL', () => {
     expect((await run('PGPASSWORD=Inf2026 psql -h 127.0.0.1 -U informes -d inventario -c "CREATE TABLE x (a int)"')).err).toContain('permission denied for schema public')
     await run('sudo -u postgres psql -d inventario -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO informes"')
     expect(verifyBash(sh, { usuario_bd: 'informes', motor: 'postgresql', permiso: 'SELECT', base: 'inventario', tabla: 'productos', existe: true, tiene: true }).ok).toBe(true)
+  })
+
+  it('GRANT ON ALL TABLES como primera sentencia; ss muestra listen_addresses recién al reiniciar', async () => {
+    const { sh, run } = await session(pg)
+    await run('sudo -u postgres psql inventario -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO informes"')
+    expect(verifyBash(sh, { usuario_bd: 'informes', motor: 'postgresql', permiso: 'SELECT', base: 'inventario', tabla: 'productos', existe: true, tiene: true }).ok).toBe(true)
+    expect((await run('sudo ss -tlnp')).out).toMatch(/127\.0\.0\.1:5432 .*"postgres"/)
+    await run("echo \"listen_addresses = '*'\" | sudo tee -a /var/lib/pgsql/data/postgresql.conf && sudo systemctl reload postgresql")
+    expect((await run('sudo ss -tln')).out).toContain('127.0.0.1:5432')
+    await run('sudo systemctl restart postgresql')
+    expect((await run('sudo ss -tln')).out).toContain('0.0.0.0:5432')
   })
 
   it('pg_dump en formato custom y pg_restore en otra base', async () => {

@@ -528,6 +528,10 @@ export function execute(sess: Session, raw: string): Result {
   const stmt = raw.trim().replace(/;\s*$/, '')
   if (!stmt) return { kind: 'empty' }
   const s = sess.server
+  // Las sentencias especiales (GRANT ... ON ALL TABLES, SHOW TABLES, ALTER ... OWNER) necesitan
+  // las tablas de la base ya creadas.
+  const cur = sess.db ? s.dbs.get(sess.db) : undefined
+  if (cur) materialize(s, cur)
   const special = s.kind === 'mariadb' ? mariadbSpecial(sess, stmt) : pgSpecial(sess, stmt)
   if (special) {
     if (special.kind !== 'error' && special.kind !== 'rows') logEvent(sess, stmt)

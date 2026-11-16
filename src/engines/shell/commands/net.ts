@@ -4,6 +4,7 @@ import type { NetIface, System } from '../system'
 import { namedListen, unboundListen } from '../dns'
 import { keaListen, dhcpConfigure } from './dnsserver'
 import { appListen, web } from '../http'
+import { ensureLoaded } from '../db/config'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
 import { ROOT_CRED } from '../vfs'
@@ -517,6 +518,21 @@ function listeningSockets(ctx: CommandContext) {
         else for (const proto of ['udp', 'tcp']) out.push({ proto, local: ad, port: 53, proc: s.name, pid: s.pid ?? 1 })
       }
       if (s.name === 'named') out.push({ proto: 'tcp', local: '127.0.0.1', port: 953, proc: 'named', pid: s.pid ?? 1 })
+      continue
+    }
+    // Las bases escuchan donde dice su configuración (bind-address, listen_addresses, port).
+    if (s.name === 'mariadb' || s.name === 'postgresql') {
+      const db = ensureLoaded(ctx.sys, s.name === 'mariadb' ? 'mariadb' : 'postgres')
+      const cfg = db.loaded
+      const setting = s.name === 'mariadb' ? (cfg?.bind ?? '') : (cfg?.listen ?? 'localhost')
+      const port = cfg?.port ?? s.ports[0]
+      const vals = setting.split(',').map((x) => x.trim()).filter(Boolean)
+      const addrs = vals.includes('skip-networking')
+        ? []
+        : !vals.length || vals.some((v) => v === '*' || v === '0.0.0.0' || v === '::')
+          ? ['0.0.0.0']
+          : vals.map((v) => (v === 'localhost' ? '127.0.0.1' : v)).filter((v) => /^\d+\.\d+\.\d+\.\d+$/.test(v))
+      for (const local of addrs) out.push({ proto: 'tcp', local, port, proc: s.name === 'mariadb' ? 'mariadbd' : 'postgres', pid: s.pid ?? 1 })
       continue
     }
     for (const p of s.ports) {
