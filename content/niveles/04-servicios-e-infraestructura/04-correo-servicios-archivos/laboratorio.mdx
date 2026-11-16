@@ -1,0 +1,41 @@
+---
+titulo: Servidor de notificaciones con Postfix como relay, recurso NFS para servidores Linux y recurso Samba para usuarios Windows
+horas: 3
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - rocky01 manda sus avisos por el relay y aparecen en Mailpit, con el correo de root redirigido.
+  - La tarea de cron del espacio libre manda su aviso todos los días.
+  - ubuntu01 monta la carpeta NFS de rocky01 bajo demanda, y comprobé root_squash.
+  - Desde mi PC con Windows abro \\rocky01.lab\compras con mi usuario de Samba y puedo crear archivos.
+  - Documenté qué se comparte, con quién, cómo se da de alta a una persona y adónde van los avisos.
+---
+
+import sim from './lab-archivos-sim.yaml'
+import pasos from './lab-archivos.yaml'
+
+## Objetivo
+
+Armar el servidor de archivos de una empresa chica: que los servidores Linux compartan carpetas por NFS, que las personas tengan su carpeta de área en Windows con Samba, y que el servidor avise por correo, sin que nadie tenga que acordarse de revisarlo.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: rocky01 y ubuntu01 con los nombres .lab del módulo 4.2 y salida a internet para instalar paquetes, y una PC con Windows (puede ser la tuya) para probar Samba.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Mailpit acepta cualquier usuario y contraseña sin cifrar: es para un laboratorio cerrado. Y si probás con una cuenta real (el paso opcional), usá una contraseña de aplicación que puedas revocar, y borrala de sasl_passwd al terminar.
+</Advertencia>
+
+## Para pensar
+
+1. El relay de prueba no tiene TLS y por eso usaste may. ¿Qué podría pasar si dejaras may en producción y alguien interceptara la conexión al relay?
+2. ¿Qué pasa con la carpeta NFS de ubuntu01 si alguien crea en ubuntu01 un usuario con el mismo uid que otra persona de rocky01? ¿Cómo se evita en una empresa?
+3. Marta se va de la empresa. ¿Qué tenés que hacer en rocky01 para que no pueda entrar más a Compras, y qué pasa con los archivos que creó?

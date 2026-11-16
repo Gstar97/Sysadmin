@@ -349,7 +349,9 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if ('montaje' in check) {
     const st = sys.storage
     const target = check.montaje.replace(/\/$/, '') || '/'
-    const m = st.mounts.find((x) => x.target === target)
+    // Con automount hay dos entradas: la de espera (autofs) y, cuando se usó, la real.
+    const here = st.mounts.filter((x) => x.target === target)
+    const m = here.find((x) => x.fstype !== 'autofs') ?? here[0]
     if (check.montado === false) return { ok: !m, label: `${target} desmontado` }
     let ok = !!m
     const parts: string[] = []

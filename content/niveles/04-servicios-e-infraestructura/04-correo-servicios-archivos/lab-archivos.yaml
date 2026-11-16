@@ -1,0 +1,99 @@
+tipo: pasos
+titulo: Avisos por correo, NFS y Samba en tus máquinas virtuales
+descripcion: >-
+  rocky01 va a ser el servidor de archivos (NFS y Samba) y va a mandar sus avisos por un relay.
+  Como relay de prueba usás Mailpit en ubuntu01: recibe los correos, no los manda a ningún lado y
+  los muestra en una página web. ubuntu01 también es el cliente de NFS, y tu PC, el de Samba. Se
+  usan los nombres rocky01.lab y ubuntu01.lab del laboratorio del módulo 4.2. Calculá unas tres
+  horas.
+pasos:
+  - titulo: Instantáneas
+    detalle: Sacá una instantánea de las dos VM antes de empezar.
+    comprobar: Las dos instantáneas aparecen en tu hipervisor.
+  - titulo: Mailpit en ubuntu01
+    detalle: >-
+      Mailpit es un servidor de correo de prueba. Con las dos variables acepta cualquier usuario
+      y contraseña, incluso sin cifrar: está bien para un laboratorio, nunca en una red real.
+      Dejalo corriendo en una terminal.
+    comandos:
+      - sudo bash < <(curl -sL https://raw.githubusercontent.com/axllent/mailpit/develop/install.sh)
+      - sudo ufw allow 1025/tcp && sudo ufw allow 8025/tcp
+      - MP_SMTP_AUTH_ACCEPT_ANY=1 MP_SMTP_AUTH_ALLOW_INSECURE=1 mailpit
+    comprobar: Desde tu PC, http://ubuntu01.lab:8025 muestra la bandeja vacía de Mailpit.
+    si_falla: Si las variables no tienen efecto en tu versión, mirá las opciones equivalentes con mailpit --help.
+  - titulo: Postfix en rocky01, con el relay
+    detalle: >-
+      Igual que en la lección 4.4.3, con dos diferencias porque Mailpit no tiene TLS: el relay es
+      [ubuntu01.lab]:1025 y el nivel de TLS es may. Con un proveedor real, encrypt. La cuenta y la
+      clave pueden ser cualquiera.
+    comandos:
+      - sudo dnf install -y postfix s-nail cyrus-sasl-plain
+      - "sudo postconf -e 'relayhost = [ubuntu01.lab]:1025' 'smtp_tls_security_level = may' 'smtp_sasl_auth_enable = yes' 'smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd' 'smtp_sasl_security_options = noanonymous'"
+      - "echo '[ubuntu01.lab]:1025 avisos@laboratorio.lab:una-clave' | sudo tee /etc/postfix/sasl_passwd && sudo chmod 600 /etc/postfix/sasl_passwd && sudo postmap lmdb:/etc/postfix/sasl_passwd"
+      - "echo 'root: sistemas@laboratorio.lab' | sudo tee -a /etc/aliases && sudo newaliases"
+      - sudo systemctl enable --now postfix
+      - "df -h | mail -s 'Espacio en rocky01' root"
+    comprobar: >-
+      El mensaje aparece en Mailpit, para sistemas@laboratorio.lab. En rocky01, sudo grep status=
+      /var/log/maillog muestra relay=ubuntu01.lab[...]:1025 y status=sent.
+    si_falla: >-
+      Si queda en mailq con "Connection refused" o un timeout, Mailpit no está corriendo o falta
+      la regla de ufw. Si dice "no mechanism available", revisá noanonymous y cyrus-sasl-plain.
+  - titulo: Un aviso automático
+    detalle: Una tarea de cron que todas las mañanas manda el espacio libre de rocky01.
+    comandos:
+      - "echo '0 8 * * * root df -h | mail -s \"Espacio en rocky01\" root' | sudo tee /etc/cron.d/aviso-espacio"
+    comprobar: Mañana a las 8 vas a tener el aviso en Mailpit (o cambiá la hora para verlo en un par de minutos).
+  - titulo: NFS en rocky01
+    detalle: Una carpeta compartida para los servidores Linux de la red del laboratorio.
+    comandos:
+      - sudo dnf install -y nfs-utils
+      - sudo mkdir -p /srv/nfs/compartido && sudo chmod 1777 /srv/nfs/compartido
+      - "echo '/srv/nfs/compartido 192.168.56.0/24(rw,sync)' | sudo tee /etc/exports"
+      - sudo systemctl enable --now nfs-server && sudo exportfs -v
+      - sudo firewall-cmd --permanent --add-service=nfs && sudo firewall-cmd --reload
+    comprobar: exportfs -v muestra la carpeta con rw y root_squash.
+  - titulo: Montarla en ubuntu01, bajo demanda
+    detalle: Con x-systemd.automount, la carpeta se monta la primera vez que se entra.
+    comandos:
+      - sudo apt install -y nfs-common
+      - sudo mkdir /mnt/compartido
+      - "echo 'rocky01.lab:/srv/nfs/compartido /mnt/compartido nfs _netdev,x-systemd.automount,x-systemd.idle-timeout=600 0 0' | sudo tee -a /etc/fstab"
+      - sudo systemctl daemon-reload && sudo systemctl restart remote-fs.target
+      - ls /mnt/compartido && mount | grep compartido
+      - sudo touch /mnt/compartido/de-root && touch /mnt/compartido/de-mi-usuario && ls -ln /mnt/compartido
+    comprobar: >-
+      mount muestra la línea autofs y la nfs4. El archivo de root aparece con el uid 65534
+      (nobody): root_squash. El tuyo, con tu uid, que puede ser de otra persona en rocky01 si los
+      uid no coinciden.
+  - titulo: Samba en rocky01
+    detalle: El recurso de Compras, como en la lección 4.4.5, con tu usuario como integrante del área.
+    comandos:
+      - sudo dnf install -y samba samba-client policycoreutils-python-utils
+      - sudo groupadd compras && sudo usermod -aG compras $USER
+      - sudo mkdir -p /srv/samba/compras && sudo chgrp compras /srv/samba/compras && sudo chmod 2770 /srv/samba/compras
+      - "sudo semanage fcontext -a -t samba_share_t '/srv/samba(/.*)?' && sudo restorecon -Rv /srv/samba"
+      - "printf '\\n[compras]\\n\\tpath = /srv/samba/compras\\n\\tvalid users = @compras\\n\\twritable = yes\\n\\tcreate mask = 0660\\n\\tdirectory mask = 2770\\n' | sudo tee -a /etc/samba/smb.conf && testparm -s"
+      - sudo smbpasswd -a $USER
+      - sudo systemctl enable --now smb
+      - sudo firewall-cmd --permanent --add-service=samba && sudo firewall-cmd --reload
+      - smbclient -L //localhost -U $USER
+    comprobar: smbclient lista compras. Desde tu PC con Windows, \\rocky01.lab\compras (con tu usuario y la clave de Samba) abre la carpeta y deja crear un archivo.
+    si_falla: >-
+      Si el recurso aparece pero no deja ver nada, es SELinux (sudo ausearch -m avc -ts recent).
+      Si Windows no encuentra el servidor por nombre, usá la IP: \\192.168.56.103\compras.
+  - titulo: Documentar
+    detalle: >-
+      Qué comparte el servidor, con quién y con qué permisos; cómo se agrega una persona a
+      Compras (grupo de Linux y smbpasswd); adónde van los avisos y cómo se revisa la cola.
+    comprobar: Alguien que no sos vos podría dar de alta a una persona nueva en Compras leyendo solo eso.
+  - titulo: "Opcional: un relay real"
+    detalle: >-
+      Si tenés una cuenta de Gmail con verificación en dos pasos, podés crear una contraseña de
+      aplicación y usar smtp.gmail.com:587 como relay, con smtp_tls_security_level = encrypt.
+      Gmail cambia el remitente por el de la cuenta. Volvé a Mailpit al terminar: no conviene
+      dejar una contraseña real en un laboratorio.
+    comandos:
+      - "sudo postconf -e 'relayhost = [smtp.gmail.com]:587' 'smtp_tls_security_level = encrypt'"
+      - "echo '[smtp.gmail.com]:587 tu.cuenta@gmail.com:clave-de-aplicacion' | sudo tee /etc/postfix/sasl_passwd && sudo postmap lmdb:/etc/postfix/sasl_passwd"
+    comprobar: El aviso llega a tu casilla y, en "Mostrar original", ves spf=pass y dkim=pass de gmail.com.

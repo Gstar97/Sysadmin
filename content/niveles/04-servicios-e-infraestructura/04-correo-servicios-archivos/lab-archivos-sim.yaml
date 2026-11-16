@@ -1,0 +1,172 @@
+tipo: terminal
+shell: bash
+titulo: Un servidor de archivos completo, con avisos por correo
+descripcion: >-
+  files01 (Rocky Linux 10, 192.168.10.30) va a ser el servidor de archivos de la empresa: los
+  avisos del sistema por correo a través del relay del proveedor (smtp.proveedor.com:587, cuenta
+  notificaciones@ejemplo.com.ar, clave Not-2026-relay, solo acepta ese remitente); carpetas NFS
+  para los servidores web (web01, 192.168.10.11); y una carpeta Samba para el área de Compras
+  (grupo compras: ana y marta). La cuenta de servicio tienda (uid 1500) existe en los dos
+  servidores. Los paquetes ya están instalados.
+estado_inicial:
+  distro: rocky
+  hostname: files01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true, uid: 1001, clave_ssh: true, grupos: [compras] }
+    - { nombre: marta, uid: 1002, grupos: [compras] }
+    - { nombre: tienda, uid: 1500 }
+  grupos:
+    - { nombre: compras, gid: 2002 }
+  paquetes: { instalados: [postfix, s-nail, nfs-utils, samba, samba-client, policycoreutils-python-utils] }
+  servicios:
+    postfix: { activo: true, habilitado: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.30/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.1]
+    registros_dns:
+      smtp.proveedor.com: 203.0.113.25
+  correo:
+    relays:
+      - { servidor: smtp.proveedor.com, ip: 203.0.113.25, puerto: 587, usuario: notificaciones@ejemplo.com.ar, clave: Not-2026-relay, remitentes: [notificaciones@ejemplo.com.ar] }
+  archivos:
+    /srv/nfs/instaladores/agente-monitoreo.rpm: "(paquete)\n"
+  servidores:
+    - hostname: web01
+      ip: 192.168.10.11
+      distro: rocky
+      en_dns: true
+      clave_conocida: si
+      usuarios:
+        - { nombre: ana, sudo: true, uid: 1001, clave_ssh: true }
+        - { nombre: tienda, uid: 1500 }
+      paquetes: { instalados: [nfs-utils] }
+pasos:
+  - consigna: >-
+      Configurá Postfix para mandar por el relay: relayhost [smtp.proveedor.com]:587, TLS
+      obligatorio, SASL con lmdb:/etc/postfix/sasl_passwd (600, compilado) y noanonymous, el módulo
+      cyrus-sasl-plain, y todo lo que sale con remitente notificaciones@ejemplo.com.ar
+      (smtp_generic_maps con @files01.localdomain).
+    verificar:
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'relayhost = [smtp.proveedor.com]:587' }
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'smtp_sasl_security_options = noanonymous' }
+      - { archivo: /etc/postfix/main.cf, contenido_incluye: 'smtp_generic_maps = lmdb:/etc/postfix/generic' }
+      - { archivo: /etc/postfix/sasl_passwd, modo: '0600' }
+      - { archivo: /etc/postfix/sasl_passwd.lmdb }
+      - { archivo: /etc/postfix/generic.lmdb }
+      - { paquete: cyrus-sasl-plain }
+    pistas:
+      - "Lo mismo que en la lección 4.4.3: postconf -e con los cinco parámetros de relay y SASL, más smtp_generic_maps."
+      - "Los archivos: `/etc/postfix/sasl_passwd` con `[smtp.proveedor.com]:587 notificaciones@ejemplo.com.ar:Not-2026-relay` y `/etc/postfix/generic` con `@files01.localdomain notificaciones@ejemplo.com.ar`, los dos con postmap lmdb:."
+    solucion:
+      - "sudo postconf -e 'relayhost = [smtp.proveedor.com]:587' 'smtp_tls_security_level = encrypt' 'smtp_sasl_auth_enable = yes' 'smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd' 'smtp_sasl_security_options = noanonymous' 'smtp_generic_maps = lmdb:/etc/postfix/generic'"
+      - "echo '[smtp.proveedor.com]:587 notificaciones@ejemplo.com.ar:Not-2026-relay' | sudo tee /etc/postfix/sasl_passwd > /dev/null"
+      - sudo chmod 600 /etc/postfix/sasl_passwd
+      - sudo postmap lmdb:/etc/postfix/sasl_passwd
+      - "echo '@files01.localdomain notificaciones@ejemplo.com.ar' | sudo tee /etc/postfix/generic > /dev/null"
+      - sudo postmap lmdb:/etc/postfix/generic
+      - sudo dnf install -y cyrus-sasl-plain
+    explicacion: "Con esto, cualquier programa del servidor puede mandar avisos que salen bien autenticados."
+  - consigna: >-
+      Que el correo de root llegue a sistemas@ejemplo.com.ar, y probalo mandándole a root el
+      resultado de df -h con el asunto "Espacio en files01".
+    verificar:
+      - { correo_enviado: sistemas@ejemplo.com.ar, estado: sent, via: smtp.proveedor.com }
+    pistas:
+      - "`echo 'root: sistemas@ejemplo.com.ar' | sudo tee -a /etc/aliases`, `sudo newaliases` y `df -h | mail -s 'Espacio en files01' root`"
+    solucion:
+      - "echo 'root: sistemas@ejemplo.com.ar' | sudo tee -a /etc/aliases > /dev/null"
+      - sudo newaliases
+      - "df -h | mail -s 'Espacio en files01' root"
+    explicacion: >-
+      Una tarea de cron con esa misma línea manda el informe todas las mañanas. Si el relay falla,
+      el mensaje espera en la cola (mailq) y el registro dice por qué.
+  - consigna: >-
+      NFS: exportá /srv/nfs/instaladores en solo lectura para la red 192.168.10.0/24 y
+      /srv/nfs/subidas (creala, de tienda, 750) con escritura solo para web01. Las dos con sync.
+      Arrancá nfs-server y abrí el servicio nfs en el firewall (permanente).
+    verificar:
+      - { exportado: /srv/nfs/instaladores, cliente: 192.168.10.0/24, opciones_incluye: 'ro,sync,root_squash' }
+      - { exportado: /srv/nfs/subidas, cliente: 192.168.10.11, opciones_incluye: 'rw,sync' }
+      - { archivo: /srv/nfs/subidas, dueno: tienda, modo: '0750' }
+      - { firewall_permite: 2049/tcp }
+    pistas:
+      - "`sudo mkdir -p /srv/nfs/subidas && sudo chown tienda:tienda /srv/nfs/subidas && sudo chmod 750 /srv/nfs/subidas`"
+      - "En /etc/exports: `/srv/nfs/instaladores 192.168.10.0/24(ro,sync)` y `/srv/nfs/subidas 192.168.10.11(rw,sync)`; después `sudo systemctl enable --now nfs-server`."
+    solucion:
+      - sudo mkdir -p /srv/nfs/subidas
+      - sudo chown tienda:tienda /srv/nfs/subidas
+      - sudo chmod 750 /srv/nfs/subidas
+      - "printf '/srv/nfs/instaladores 192.168.10.0/24(ro,sync)\\n/srv/nfs/subidas 192.168.10.11(rw,sync)\\n' | sudo tee /etc/exports > /dev/null"
+      - sudo systemctl enable --now nfs-server
+      - sudo firewall-cmd --permanent --add-service=nfs
+      - sudo firewall-cmd --reload
+    explicacion: >-
+      La carpeta de subidas es de la cuenta de servicio tienda, con el mismo uid (1500) en los dos
+      servidores: la aplicación de web01, que corre como tienda, va a poder escribir; nadie más.
+  - consigna: >-
+      En web01, que /srv/nfs/subidas de files01 se monte bajo demanda en /mnt/subidas
+      (x-systemd.automount en fstab). Activalo y comprobá, como tienda, que se puede escribir.
+    verificar:
+      - { en: web01, verificar: { fstab: /mnt/subidas, opciones_incluye: x-systemd.automount } }
+      - { en: web01, verificar: { montaje: /mnt/subidas, tipo: nfs4 } }
+      - { archivo: /srv/nfs/subidas/prueba, dueno: tienda }
+    pistas:
+      - "`ssh web01`, `sudo mkdir /mnt/subidas` y `echo 'files01:/srv/nfs/subidas /mnt/subidas nfs _netdev,x-systemd.automount 0 0' | sudo tee -a /etc/fstab`"
+      - "`sudo systemctl daemon-reload && sudo systemctl restart remote-fs.target`, después `sudo -u tienda touch /mnt/subidas/prueba` y `exit`"
+    solucion:
+      - ssh web01
+      - sudo mkdir /mnt/subidas
+      - "echo 'files01:/srv/nfs/subidas /mnt/subidas nfs _netdev,x-systemd.automount 0 0' | sudo tee -a /etc/fstab"
+      - sudo systemctl daemon-reload
+      - sudo systemctl restart remote-fs.target
+      - sudo -u tienda touch /mnt/subidas/prueba
+      - exit
+    explicacion: >-
+      El primer acceso disparó el montaje. Si files01 está apagado cuando arranca web01, el
+      arranque no se demora: la carpeta se monta cuando alguien la usa.
+  - consigna: >-
+      Samba: /srv/samba/compras del grupo compras (2770), etiquetada samba_share_t de forma
+      permanente, y el recurso [compras] solo para @compras, con escritura, create mask 0660 y
+      directory mask 2770. Cuentas de Samba para ana (Ana-2026) y marta (Marta-2026), Samba
+      arrancado y el servicio samba en el firewall (permanente).
+    verificar:
+      - { archivo: /srv/samba/compras, grupo: compras, modo: '2770' }
+      - { archivo: /etc/samba/smb.conf, contenido_incluye: '@compras' }
+      - { servicio: smb, activo: true, habilitado: true }
+      - { firewall_permite: 445/tcp }
+      - { comando_usado: 'semanage fcontext' }
+    pistas:
+      - "Carpeta: mkdir, chgrp compras, chmod 2770. SELinux: `sudo semanage fcontext -a -t samba_share_t '/srv/samba(/.*)?'` y `sudo restorecon -Rv /srv/samba`."
+      - "El recurso al final de /etc/samba/smb.conf, testparm, las dos cuentas con smbpasswd -s -a, `sudo systemctl enable --now smb` y el firewall."
+    solucion:
+      - sudo mkdir -p /srv/samba/compras
+      - sudo chgrp compras /srv/samba/compras
+      - sudo chmod 2770 /srv/samba/compras
+      - "sudo semanage fcontext -a -t samba_share_t '/srv/samba(/.*)?'"
+      - sudo restorecon -Rv /srv/samba
+      - "printf '\\n[compras]\\n\\tcomment = Compras\\n\\tpath = /srv/samba/compras\\n\\tvalid users = @compras\\n\\twritable = yes\\n\\tcreate mask = 0660\\n\\tdirectory mask = 2770\\n' | sudo tee -a /etc/samba/smb.conf > /dev/null"
+      - testparm -s
+      - "(echo Ana-2026; echo Ana-2026) | sudo smbpasswd -s -a ana"
+      - "(echo Marta-2026; echo Marta-2026) | sudo smbpasswd -s -a marta"
+      - sudo systemctl enable --now smb
+      - sudo firewall-cmd --permanent --add-service=samba
+      - sudo firewall-cmd --reload
+    explicacion: "Los cinco controles listos: red, cuentas, recurso, SELinux y carpeta."
+  - consigna: >-
+      Probá como marta: subí al recurso un archivo pedido-1043.txt (con cualquier texto) y
+      comprobá en el servidor que quedó del grupo compras con permisos 660.
+    verificar:
+      - { archivo: /srv/samba/compras/pedido-1043.txt, grupo: compras, modo: '0660' }
+    pistas:
+      - "`echo 'pedido' > pedido-1043.txt`, `smbclient //localhost/compras -U marta%Marta-2026 -c 'put pedido-1043.txt'` y `ls -l /srv/samba/compras`"
+    solucion:
+      - "echo 'pedido' > pedido-1043.txt"
+      - "smbclient //localhost/compras -U marta%Marta-2026 -c 'put pedido-1043.txt'"
+      - ls -l /srv/samba/compras
+    explicacion: >-
+      Del grupo compras gracias al SGID y con 660 por el create mask: ana lo puede abrir y
+      modificar. Desde una PC Windows, \\files01\compras con la cuenta de marta da el mismo
+      resultado.

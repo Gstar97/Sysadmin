@@ -1,0 +1,143 @@
+tipo: troubleshooting
+titulo: Las facturas llegan a spam
+descripcion: >-
+  Incidente simulado. Ejemplo S.A. tiene el correo de las personas en un proveedor
+  (smtp.proveedor.com, que firma con DKIM usando el selector s1). Su sistema de facturación, en
+  mail.ejemplo.com.ar (203.0.113.40), manda las facturas directamente con un Postfix propio: unas
+  200 por día y casi 6000 el primer día hábil de cada mes. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes 2 de noviembre, 10:15. Cobranzas avisa que varios clientes con Gmail dicen que la
+      factura de octubre les llegó a spam, y dos clientes que usan Outlook no la recibieron.
+      Pedís a un cliente de Gmail que te reenvíe los encabezados ("Mostrar original").
+    evidencia:
+      - titulo: Encabezados de una factura, en Gmail
+        contenido: |
+          From: Facturación <facturas@ejemplo.com.ar>
+          Return-Path: <facturas@ejemplo.com.ar>
+          Received: from mail.ejemplo.com.ar (40.113.0.203.static.isp-ejemplo.net [203.0.113.40])
+          Authentication-Results: mx.google.com;
+                 spf=permerror (google.com: permanent error in processing during lookup of facturas@ejemplo.com.ar: domain has multiple SPF records) smtp.mailfrom=facturas@ejemplo.com.ar;
+                 dmarc=fail (p=NONE sp=NONE dis=NONE) header.from=ejemplo.com.ar
+      - titulo: Un mensaje de Laura (Ventas), mandado desde Outlook hoy a la mañana
+        contenido: |
+          Authentication-Results: mx.google.com;
+                 dkim=pass header.i=@ejemplo.com.ar header.s=s1;
+                 spf=permerror (google.com: ... domain has multiple SPF records) smtp.mailfrom=laura@ejemplo.com.ar;
+                 dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=ejemplo.com.ar
+    opciones:
+      - texto: Revisar qué registros SPF tiene publicados el dominio
+        ir_a: n_spf
+        minutos: 3
+      - texto: Pedirles a los clientes que marquen las facturas como "No es spam"
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Ayuda un poco con esos clientes, pero no arregla nada: el problema es que la factura no
+          pasa ninguna comprobación, y lo va a sufrir cada cliente nuevo. Y los de Outlook ni
+          siquiera la recibieron.
+      - texto: Cambiar el asunto y el texto de las facturas, por si el filtro detecta algo
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          Los encabezados dicen claramente qué falla: SPF da error y DMARC falla. El contenido
+          no tiene nada que ver.
+  n_spf:
+    situacion: >-
+      Hay dos registros SPF. El proveedor de facturación pidió "agregar el suyo" la semana pasada,
+      y alguien creó uno nuevo en lugar de sumarlo al existente. Con dos, SPF da error para todo
+      el dominio, también para el correo de las personas.
+    evidencia:
+      - titulo: dig +short TXT ejemplo.com.ar
+        contenido: |
+          "v=spf1 include:_spf.proveedor.com -all"
+          "v=spf1 ip4:203.0.113.40 ~all"
+          "MS=ms48211937"
+    opciones:
+      - texto: Dejar un solo registro, con los dos autorizados (include del proveedor e ip4 de facturación) y -all
+        ir_a: n_firma
+        minutos: 8
+      - texto: Borrar el registro nuevo, que es el que generó el problema
+        ir_a: n_spf
+        minutos: 6
+        consecuencia: >-
+          El correo de las personas vuelve a pasar SPF, pero las facturas ahora fallan: la IP
+          203.0.113.40 no figura en ningún lado. Hay que sumarla, no sacarla.
+      - texto: Agregar un tercer registro con todo junto
+        ir_a: n_spf
+        minutos: 6
+        consecuencia: >-
+          Tres registros SPF dan el mismo error que dos: debe haber exactamente uno. Hay que
+          reemplazar los dos por uno solo.
+  n_firma:
+    situacion: >-
+      Con el SPF unificado, las facturas pasan SPF y DMARC en Gmail. Pero Outlook sigue
+      rechazando algunas, y al revisar los requisitos para quien manda más de 5000 correos por
+      día, ves que faltan cosas.
+    evidencia:
+      - titulo: Un rebote de Outlook, en la cola de mail.ejemplo.com.ar
+        contenido: |
+          postfix/smtp[3120]: 9D4A1E0F2B: to=<compras@cliente.com.ar>, relay=cliente-com-ar.mail.protection.outlook.com[52.101.10.5]:25, dsn=5.7.1, status=bounced (host cliente-com-ar.mail.protection.outlook.com[52.101.10.5] said: 550 5.7.1 Service unavailable, Client host [203.0.113.40] blocked using Spamhaus. To request removal from this list see https://www.spamhaus.org/query/ip/203.0.113.40)
+      - titulo: Lo que tiene el servidor de facturación
+        contenido: |
+          DKIM: no firma (no hay DKIM-Signature en las facturas)
+          PTR de 203.0.113.40: 40.113.0.203.static.isp-ejemplo.net (genérico, no vuelve a la IP)
+          La IP se la dio el proveedor de internet hace dos meses; antes la usaba otro cliente.
+    opciones:
+      - texto: >-
+          Que el Postfix de facturación mande por el relay autenticado del proveedor de correo
+          (que firma con DKIM, tiene PTR y buena reputación) y sacar la ip4 del SPF
+        ir_a: n_dmarc
+        minutos: 20
+      - texto: Instalar OpenDKIM en mail.ejemplo.com.ar, pedir el PTR al proveedor de internet y pedir la baja de la lista negra
+        ir_a: n_dmarc
+        minutos: 120
+      - texto: Cambiar la IP del servidor de facturación por otra
+        ir_a: n_firma
+        minutos: 30
+        consecuencia: >-
+          Una IP nueva sin reputación, sin PTR y sin DKIM tiene los mismos problemas que esta
+          (menos la lista negra, por ahora). Y hay que actualizar el SPF otra vez.
+  n_dmarc:
+    situacion: >-
+      Las facturas ya salen firmadas, con PTR correcto y desde una IP con buena reputación.
+      Queda la última pieza: el registro DMARC está en p=none y sin dirección para informes, así
+      que nadie se enteró del problema en dos semanas.
+    evidencia:
+      - titulo: dig +short TXT _dmarc.ejemplo.com.ar
+        contenido: |
+          "v=DMARC1; p=none"
+    opciones:
+      - texto: >-
+          Agregar rua=mailto:dmarc@ejemplo.com.ar, revisar los informes unas semanas y después
+          pasar a p=quarantine
+        ir_a: n_ok
+        minutos: 10
+      - texto: Pasar directo a p=reject, para que nadie pueda falsificar el dominio
+        ir_a: n_dmarc
+        minutos: 5
+        consecuencia: >-
+          Sin haber mirado informes, es probable que algo legítimo quede afuera. De hecho, a la
+          semana se descubre que el sistema de encuestas de satisfacción manda en nombre del
+          dominio sin SPF ni DKIM. Primero informes, después endurecer.
+      - texto: Borrar el registro DMARC, que no sirve de nada en p=none
+        ir_a: n_dmarc
+        minutos: 4
+        consecuencia: >-
+          Gmail y Yahoo exigen un registro DMARC (aunque sea p=none) a quien manda más de 5000
+          correos por día. Sin él, las facturas del primer día del mes se rechazan.
+  n_ok:
+    final: exito
+    resumen: >-
+      Fueron tres problemas apilados. Primero, dos registros SPF: alguien agregó uno nuevo en lugar
+      de sumar el servidor de facturación al existente, y con dos SPF falla todo el dominio. Se
+      dejó uno solo. Segundo, el servidor de facturación mandaba directo, sin DKIM, con un PTR
+      genérico y una IP heredada que estaba en una lista negra; en lugar de arreglar cada cosa en
+      ese servidor, se lo hizo mandar por el relay autenticado del proveedor, que ya firma,
+      tiene PTR y reputación (y se sacó la ip4 del SPF). Tercero, DMARC en p=none sin informes:
+      nadie se enteró en dos semanas. Ahora los informes llegan a dmarc@ejemplo.com.ar, y en un
+      mes se pasa a quarantine. Para la próxima: cualquier servicio nuevo que mande correo por el
+      dominio se suma al SPF existente (o mejor, manda por el relay), y se prueba con un correo a
+      una casilla de Gmail mirando los encabezados antes de ponerlo en marcha.
