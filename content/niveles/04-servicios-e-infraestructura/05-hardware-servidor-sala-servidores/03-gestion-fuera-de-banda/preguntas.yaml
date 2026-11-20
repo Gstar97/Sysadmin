@@ -1,0 +1,93 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Un servidor está colgado y no responde ni al ping. ¿Cómo lo reiniciás sin ir al centro de datos?
+  opciones:
+    - { texto: "Desde su placa de gestión (iDRAC, iLO, IPMI), que funciona aunque el sistema esté colgado", correcta: true, explicacion: "Tiene su propia red y su propio procesador." }
+    - { texto: "Por SSH", explicacion: "No responde." }
+    - { texto: "Con Wake on LAN", explicacion: "Eso es para prender equipos apagados, y depende del sistema." }
+    - { texto: "No se puede", explicacion: "Para eso existe la gestión fuera de banda." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué quiere decir "fuera de banda"?
+  opciones:
+    - { texto: "Por un camino distinto del que usa el sistema operativo: su propia red y su propio procesador", correcta: true, explicacion: "Si el sistema cae, la gestión sigue." }
+    - { texto: "Sin cables", explicacion: "Usa su propio cable." }
+    - { texto: "Fuera del horario laboral", explicacion: "No." }
+    - { texto: "Con otra frecuencia de radio", explicacion: "No." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué está pasando con este servidor?
+  salida: |
+    $ ipmitool -I lanplus -H 10.0.99.13 -U admin -E sel elist
+       1 | 11/19/2026 | 22:41:07 | Power Supply PS2 Status | Power Supply AC lost | Asserted
+       2 | 11/19/2026 | 22:41:08 | Power Supply PS Redundancy | Redundancy Lost | Asserted
+  opciones:
+    - { texto: "La fuente 2 se quedó sin corriente: sigue funcionando con una sola, sin redundancia", correcta: true, explicacion: "Hay que revisar el cable o el circuito de esa fuente." }
+    - { texto: "El servidor está apagado", explicacion: "Funciona con la fuente 1." }
+    - { texto: "Falló un disco", explicacion: "Son eventos de alimentación." }
+    - { texto: "No pasa nada: es un aviso viejo", explicacion: "Si no se resolvió, sigue sin redundancia." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la diferencia entre "chassis power soft" y "chassis power cycle"?
+  opciones:
+    - { texto: "soft le pide al sistema que se apague ordenado; cycle corta la energía y la vuelve a dar", correcta: true, explicacion: "cycle solo con un equipo colgado." }
+    - { texto: "Ninguna", explicacion: "Uno es ordenado y el otro, de golpe." }
+    - { texto: "soft reinicia y cycle apaga", explicacion: "Al revés en lo importante: cycle apaga y prende." }
+    - { texto: "cycle es más seguro", explicacion: "Puede corromper datos." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cómo se protege la gestión fuera de banda? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Una red propia, separada de producción y nunca expuesta a internet", correcta: true, explicacion: "Es el control total del servidor." }
+    - { texto: "Entrada solo desde un equipo de salto o la VPN de administración", correcta: true, explicacion: "Con doble factor." }
+    - { texto: "Cambiar la clave de fábrica y un usuario por persona", correcta: true, explicacion: "Muchas claves de fábrica son públicas." }
+    - { texto: "Publicarla en internet con una clave larga", explicacion: "Las fallas de seguridad no se arreglan con una clave." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es Redfish?
+  opciones:
+    - { texto: "Una API web (HTTPS y JSON) para administrar servidores, que reemplaza a IPMI", correcta: true, explicacion: "Se usa con curl, scripts o Ansible." }
+    - { texto: "Un tipo de placa de gestión de Dell", explicacion: "Ese es iDRAC; Redfish es un estándar." }
+    - { texto: "Un protocolo para discos", explicacion: "No." }
+    - { texto: "Un antivirus para servidores", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tenés que reinstalar el sistema de un servidor en otra ciudad. ¿Qué función de la placa de gestión usás?
+  opciones:
+    - { texto: "La ISO virtual y la consola remota", correcta: true, explicacion: "Arranca con la ISO de tu PC como si fuera un pendrive." }
+    - { texto: "El registro de eventos", explicacion: "Eso es para diagnosticar." }
+    - { texto: "Los sensores", explicacion: "No instalan nada." }
+    - { texto: "No se puede sin viajar", explicacion: "Se puede." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que muestra si está prendido el servidor cuya placa de gestión es 10.0.99.13 (usuario admin, la clave en IPMI_PASSWORD).
+  aceptadas: ["ipmitool -I lanplus -H 10.0.99.13 -U admin -E chassis power status"]
+  patrones: ["^ipmitool\\s+(-I\\s+lanplus\\s+-H\\s+10\\.0\\.99\\.13\\s+-U\\s+admin\\s+-E|-H\\s+10\\.0\\.99\\.13\\s+-I\\s+lanplus\\s+-U\\s+admin\\s+-E|-I\\s+lanplus\\s+-U\\s+admin\\s+-E\\s+-H\\s+10\\.0\\.99\\.13)\\s+chassis\\s+power\\s+status$"]
+  explicacion: "-E toma la clave de la variable IPMI_PASSWORD, así no queda en el historial."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El registro de eventos muestra cada semana un error de memoria corregido en el mismo módulo. ¿Qué hacés?
+  opciones:
+    - { texto: "Planificar el cambio de ese módulo: los corregidos frecuentes suelen anticipar uno que no se puede corregir", correcta: true, explicacion: "Un error sin corregir detiene el sistema." }
+    - { texto: "Nada: la ECC los corrige", explicacion: "Por ahora." }
+    - { texto: "Desactivar la ECC", explicacion: "Sería ocultar el problema." }
+    - { texto: "Borrar el registro de eventos", explicacion: "No arregla nada." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cómo se llama la placa de gestión en los servidores Dell y en los HPE?
+  opciones:
+    - { texto: "iDRAC en Dell e iLO en HPE", correcta: true, explicacion: "En Lenovo, XClarity Controller." }
+    - { texto: "BIOS en los dos", explicacion: "El BIOS es otra cosa." }
+    - { texto: "iLO en Dell e iDRAC en HPE", explicacion: "Al revés." }
+    - { texto: "IPMI en los dos", explicacion: "IPMI es el estándar de fondo; cada uno tiene su nombre." }

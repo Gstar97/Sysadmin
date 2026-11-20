@@ -1,0 +1,101 @@
+---
+id: n4-m5-l3
+titulo: Gestión fuera de banda
+minutos: 120
+objetivos:
+  - Usar la placa de gestión (iDRAC, iLO, IPMI) para prender y apagar un servidor, leer sus sensores y su registro de eventos, y usar la consola y la ISO virtual.
+  - Conocer Redfish, la interfaz moderna para automatizar la gestión.
+  - Entender por qué la gestión va en una red aislada y cómo se protege.
+glosario: [bmc, fuera-de-banda, redfish]
+verificado: 2026-11
+---
+
+import red from './red-gestion.svg?raw'
+import redDatos from './red-gestion.yaml'
+import ej from './ej-ipmi.yaml'
+
+Un servidor colgado en un centro de datos a 600 km, uno que no arranca después de una actualización, uno que hay que reinstalar de cero: sin gestión fuera de banda, todo eso es un viaje o una llamada a alguien que esté ahí. Con ella, se resuelve desde tu escritorio. "Fuera de banda" quiere decir por un camino distinto del que usa el sistema operativo: si el sistema se cuelga o pierde la red, la gestión sigue funcionando.
+
+<AntesDeEmpezar>
+- Las partes de un servidor físico (lección 4.5.1).
+- VLAN y firewall (lecciones 2.4.3 y 2.6.1).
+- HTTPS y certificados (módulo 4.2).
+</AntesDeEmpezar>
+
+## La placa de gestión
+
+Cada fabricante la llama distinto (**iDRAC** en Dell, **iLO** en HPE, **XClarity Controller** en Lenovo) y el estándar de fondo es **IPMI**. Es una computadora chiquita dentro del servidor, con su propio puerto de red, su propia dirección y sus propios usuarios, que funciona con el servidor apagado mientras esté enchufado. Desde su página web (o por línea de comandos) se puede:
+
+- Prender, apagar (ordenado o de golpe) y reiniciar el servidor.
+- Ver la **consola** desde el encendido, BIOS incluido, con teclado y mouse.
+- Montar una **ISO virtual** desde tu PC para instalar o rescatar el sistema.
+- Leer los **sensores** (temperaturas, ventiladores, fuentes, consumo) y el **registro de eventos** de hardware (SEL): un disco que falló, una fuente sin corriente, un error de memoria.
+- Recibir alertas por correo o SNMP, y actualizar el firmware.
+
+Con `ipmitool`, lo mismo desde la terminal:
+
+```bash
+ipmitool -I lanplus -H 10.0.99.13 -U admin -P 'clave' chassis power status   # on / off
+ipmitool -I lanplus -H 10.0.99.13 -U admin -P 'clave' chassis power soft     # apagado ordenado
+ipmitool -I lanplus -H 10.0.99.13 -U admin -P 'clave' chassis power cycle    # cortar y prender (colgado)
+ipmitool -I lanplus -H 10.0.99.13 -U admin -P 'clave' sdr                    # sensores
+ipmitool -I lanplus -H 10.0.99.13 -U admin -P 'clave' sel elist              # eventos de hardware
+sudo ipmitool lan print 1          # desde el propio servidor: la configuración de red de su placa
+```
+
+Para no dejar la clave en el historial, se exporta en `IPMI_PASSWORD` y se usa `-E` en lugar de `-P`.
+
+<Terminal ejercicio={ej} />
+
+## Redfish: la gestión para automatizar
+
+IPMI es un protocolo viejo, con fallas de seguridad conocidas. Su reemplazo es **Redfish**: una API web (HTTPS y JSON) que hoy soportan todos los fabricantes. Se usa con `curl`, con scripts o con herramientas de automatización como Ansible (Nivel 5):
+
+```bash
+curl -s -k -u admin:clave https://10.0.99.13/redfish/v1/Systems/System.Embedded.1 | jq '.PowerState, .Status'
+"On"
+{ "Health": "Critical", "HealthRollup": "Critical", "State": "Enabled" }
+```
+
+Con Redfish se puede, por ejemplo, revisar todas las noches el estado de cien servidores y avisar si alguno tiene una fuente caída, o actualizar el firmware de todos con un mismo script. Las rutas varían un poco entre fabricantes (`System.Embedded.1` es de Dell; en HPE es `1`), pero la forma es la misma.
+
+## Una red aparte
+
+<DiagramaInteractivo datos={redDatos} svg={red} alt="La red de gestión. Arriba, internet y el firewall, que no deja pasar nada de internet a la gestión. A la izquierda, la red de producción (VLAN 10 y 20, las aplicaciones), conectada a las placas de red del servidor que usa el sistema operativo. Abajo, la red de gestión (VLAN 99, 10.0.99.0/24, con su propio switch o VLAN) y el equipo de salto adm01 (10.0.99.5, con VPN y doble factor), el único que entra a la VLAN 99, conectado a la placa de gestión del servidor (iDRAC, iLO o BMC, 10.0.99.11, con puerto propio), que da consola, ISO virtual y sensores." />
+
+Quien controla la placa de gestión controla el servidor entero: puede apagarlo, montar una ISO y arrancar con ella, leer los discos. Y las placas de gestión tienen fallas de seguridad cada tanto. Por eso:
+
+- Van en una **red propia** (switch dedicado o VLAN), separada de producción y **nunca** expuesta a internet.
+- Se entra solo desde un **equipo de salto** o la VPN de administración, con doble factor.
+- Se cambia la **clave de fábrica** el primer día (muchos modelos vienen con una conocida o impresa en una etiqueta) y cada persona tiene su usuario.
+- Se mantiene el **firmware** al día, como el del resto del servidor.
+
+<EnSimple>
+La placa de gestión (iDRAC, iLO, IPMI) es una computadora dentro del servidor, con su propia red, que funciona aunque el sistema esté colgado o apagado: prende y apaga, muestra la consola, monta ISO, lee sensores y eventos. Se usa con su página web, con ipmitool o con Redfish (API web). Va en una red aislada, con un solo camino de entrada, claves propias y firmware actualizado.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="La placa de gestión en la red de producción o en internet">
+    Es el control total del servidor. Red aparte, solo desde el equipo de salto.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar la clave de fábrica">
+    Muchas son conocidas. Se cambia al instalar el servidor, y cada persona con su usuario.
+  </ErrorComun>
+  <ErrorComun titulo="Usar power cycle con un servidor que responde">
+    Es cortar la luz: puede corromper datos. Para apagar, power soft; cycle, solo si está colgado.
+  </ErrorComun>
+  <ErrorComun titulo="No configurar la gestión hasta que hace falta">
+    El día que el servidor se cuelga, sin IP ni clave en la placa, hay que viajar. Se configura al instalarlo y se prueba.
+  </ErrorComun>
+  <ErrorComun titulo="Ignorar el registro de eventos">
+    Una fuente sin corriente o errores de memoria corregidos avisan antes de la falla grave. Las alertas por correo se activan desde el primer día.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Placa de gestión: iDRAC (Dell), iLO (HPE), XClarity (Lenovo), IPMI: funciona con el servidor colgado o apagado.
+- Consola remota, ISO virtual, prender y apagar, sensores (sdr) y eventos de hardware (sel elist).
+- ipmitool -I lanplus -H ip -U usuario -E; chassis power status | soft | cycle.
+- Redfish: API HTTPS y JSON para automatizar (curl, scripts, Ansible).
+- Red de gestión aislada, nunca en internet, entrada solo por el equipo de salto, claves propias y firmware al día.
+</Resumen>

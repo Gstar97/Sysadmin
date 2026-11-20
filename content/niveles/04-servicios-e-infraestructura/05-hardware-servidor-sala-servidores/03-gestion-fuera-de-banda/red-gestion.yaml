@@ -1,0 +1,62 @@
+tipo: diagrama
+titulo: La red de gestión
+puntos:
+  - id: bmc
+    titulo: La placa de gestión
+    area: { x: 74, y: 51, ancho: 21.9, alto: 10.5 }
+    texto: >-
+      iDRAC (Dell), iLO (HPE), XClarity (Lenovo) o un BMC con IPMI. Tiene su propio procesador,
+      su propia red y su propio usuario, y funciona con el servidor apagado (alcanza con que esté
+      enchufado). Desde ahí se prende y se apaga el servidor, se ven los sensores y el registro
+      de eventos de hardware, y se usa la consola como si estuvieras enfrente.
+  - id: funciones
+    titulo: Consola, ISO virtual y sensores
+    area: { x: 74, y: 63.8, ancho: 21.9, alto: 9.5 }
+    texto: >-
+      La consola remota muestra la pantalla del servidor desde el encendido (BIOS incluido) y
+      deja usar teclado y mouse: sirve para un servidor colgado o sin red. La ISO virtual monta
+      una imagen de instalación desde tu PC, como si fuera un pendrive enchufado: se reinstala un
+      servidor sin ir al centro de datos.
+  - id: nic
+    titulo: Las placas de red del servidor
+    area: { x: 74, y: 38.1, ancho: 21.9, alto: 10.5 }
+    texto: >-
+      Las que usa el sistema operativo para las aplicaciones, en la red de producción. La placa
+      de gestión NO va por acá: si se mezclan, cualquier equipo de producción comprometido puede
+      intentar entrar a la gestión de todos los servidores.
+  - id: gestion
+    titulo: Una red aparte
+    area: { x: 2.3, y: 71.4, ancho: 23.3, alto: 21.4 }
+    texto: >-
+      Los puertos de gestión de todos los servidores (y de los switches, las UPS y las PDU) van a
+      una red propia: un switch dedicado o una VLAN que no se enruta hacia el resto. Así, aunque
+      la red de producción tenga un problema, la gestión sigue accesible, y un atacante en
+      producción no la ve.
+  - id: salto
+    titulo: Un solo camino para entrar
+    area: { x: 34.9, y: 71.4, ancho: 29.1, alto: 21.4 }
+    texto: >-
+      A la red de gestión se entra solo desde un equipo de salto (o por la VPN de administración),
+      con doble factor y registro de quién entró. Las placas de gestión tienen fallas de
+      seguridad con frecuencia y controlan el servidor entero: son de lo más valioso para un
+      atacante.
+  - id: firewall
+    titulo: Nunca a internet
+    area: { x: 34.9, y: 4.8, ancho: 29.1, alto: 16.7 }
+    texto: >-
+      Una placa de gestión publicada en internet es encontrada en horas por los buscadores de
+      equipos expuestos. Ninguna regla del firewall debe dejar llegar a la red de gestión desde
+      afuera.
+  - id: produccion
+    titulo: La red de producción
+    area: { x: 2.3, y: 31, ancho: 23.3, alto: 21.4 }
+    texto: >-
+      Donde viven las aplicaciones y por donde llegan los usuarios. Si un servidor pierde esta
+      red (una mala configuración, un switch roto), la gestión sigue funcionando por su lado: es
+      lo que permite arreglarlo sin viajar.
+  - id: internet
+    titulo: Internet
+    area: { x: 2.3, y: 4.8, ancho: 23.3, alto: 16.7 }
+    texto: >-
+      Los clientes llegan a las aplicaciones por la red de producción, a través del firewall. A
+      la gestión, nunca.

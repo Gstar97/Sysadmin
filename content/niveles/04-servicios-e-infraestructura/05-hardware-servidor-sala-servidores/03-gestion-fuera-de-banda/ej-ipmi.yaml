@@ -1,0 +1,78 @@
+tipo: terminal
+shell: bash
+titulo: Un servidor colgado a 600 km
+descripcion: >-
+  srv03 está en el centro de datos de otra ciudad y dejó de responder: ni ping ni SSH. Desde
+  adm01, el equipo de salto de la red de gestión (10.0.99.5), vas a usar su placa de gestión
+  (10.0.99.13, usuario admin, clave Bmc-2026) para entender qué pasó y reiniciarlo. ipmitool ya
+  está instalado.
+estado_inicial:
+  distro: rocky
+  hostname: adm01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [ipmitool] }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 10.0.99.5/24, estado: UP }
+  servidores:
+    - hostname: srv03
+      ip: 10.0.20.13
+      distro: rocky
+      bmc:
+        ip: 10.0.99.13
+        clave: Bmc-2026
+        fuente2: false
+        eventos:
+          - { fecha: 11/19/2026, hora: "22:41:07", texto: "Power Supply PS2 Status | Power Supply AC lost" }
+          - { fecha: 11/19/2026, hora: "22:41:08", texto: "Power Supply PS Redundancy | Redundancy Lost" }
+          - { fecha: 11/20/2026, hora: "03:17:52", texto: "Memory ECC Uncorr Err | Uncorrectable ECC (DIMM B3)" }
+          - { fecha: 11/20/2026, hora: "03:17:52", texto: "OS Critical Stop | Run-time critical stop" }
+pasos:
+  - consigna: Confirmá que la placa de gestión responde y mirá si el servidor está prendido.
+    verificar:
+      - { comando_usado: '-H 10\.0\.99\.13' }
+      - { salida_contiene: 'Chassis Power is on' }
+    pistas:
+      - "`ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 chassis power status`"
+    solucion: ["ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 chassis power status"]
+    explicacion: >-
+      El servidor está prendido pero no responde: está colgado, no apagado. La placa de gestión
+      contesta igual porque es otra computadora, con su propia red.
+  - consigna: Leé el registro de eventos de hardware (SEL).
+    verificar:
+      - { comando_usado: 'sel' }
+      - { salida_contiene: 'Uncorrectable ECC' }
+    pistas:
+      - "`ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 sel elist`"
+    solucion: ["ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 sel elist"]
+    explicacion: >-
+      Dos historias. A las 22:41 se cortó la alimentación de la fuente 2 (un cable flojo o un
+      circuito caído): el servidor siguió con la fuente 1, sin redundancia. A las 3:17, un error
+      de memoria que la ECC no pudo corregir en el módulo B3, y el sistema se detuvo. Eso explica
+      el cuelgue.
+  - consigna: Mirá los sensores para confirmar el estado de las fuentes.
+    verificar:
+      - { comando_usado: 'sdr|sensor' }
+      - { salida_contiene: 'PS2 Status' }
+    pistas:
+      - "`ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 sdr`"
+    solucion: ["ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 sdr"]
+    explicacion: >-
+      PS2 Status en cr (crítico) y PS Redundancy perdida. Hay que pedirle al centro de datos que
+      revise el cable o el circuito de la fuente 2, aunque el servidor funcione: hoy está a una
+      falla de apagarse.
+  - consigna: Reiniciá el servidor desde la placa de gestión.
+    verificar:
+      - { comando_usado: 'chassis power (cycle|reset)' }
+      - { salida_contiene: 'Chassis Power Control' }
+    pistas:
+      - "`ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 chassis power cycle`"
+    solucion: ["ipmitool -I lanplus -H 10.0.99.13 -U admin -P Bmc-2026 chassis power cycle"]
+    explicacion: >-
+      cycle lo apaga y lo vuelve a prender: es como cortar la luz, así que solo se usa con un
+      equipo colgado (para uno que responde, power soft, que le pide al sistema que se apague
+      ordenado). Mientras arranca, la consola remota (en la página de la iDRAC) muestra si el
+      servidor desactiva el módulo de memoria dañado. El módulo se cambia igual, en una ventana
+      de mantenimiento.
