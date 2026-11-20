@@ -1,0 +1,51 @@
+tipo: diagrama
+titulo: VMware vSphere
+puntos:
+  - id: vcenter
+    titulo: vCenter Server
+    area: { x: 34.9, y: 9.5, ancho: 30.2, alto: 14.3 }
+    texto: >-
+      El cerebro de vSphere: una VM (el appliance VCSA, con Linux) que administra todos los hosts.
+      Sin vCenter, cada ESXi se maneja suelto desde su propia web y no hay clúster, ni vMotion, ni
+      alta disponibilidad, ni plantillas compartidas. Si vCenter se cae, las VM siguen andando,
+      pero no se puede administrar el conjunto: se respalda como cualquier servidor crítico.
+  - id: cluster
+    titulo: Datacenter y clúster
+    area: { x: 2.3, y: 31, ancho: 40, alto: 7 }
+    texto: >-
+      El inventario se organiza en datacenters, clústeres, hosts y carpetas. En un clúster, HA
+      vuelve a prender en otro host las VM de un host que se cayó, y DRS reparte las VM entre los
+      hosts según la carga (moviéndolas con vMotion). Lo vas a comparar con Proxmox y Hyper-V en
+      el módulo 5.4.
+  - id: esxi
+    titulo: Los hosts ESXi
+    area: { x: 4.7, y: 39.3, ancho: 20.9, alto: 28.6 }
+    texto: >-
+      ESXi es el hipervisor de tipo 1 de VMware, un sistema propio y mínimo que se instala en el
+      servidor (o en un pendrive o una tarjeta SD, cosa que ya no se recomienda). Tiene una web
+      propia (Host Client) y una consola de texto (la DCUI) para lo básico. Solo corre en hardware
+      certificado: la lista de compatibilidad (HCL) manda.
+  - id: datastores
+    titulo: Los datastores
+    area: { x: 74.4, y: 35.7, ancho: 21.5, alto: 33.3 }
+    texto: >-
+      Donde viven los discos de las VM. VMFS es el sistema de archivos de VMware, pensado para que
+      varios hosts usen el mismo disco de una SAN a la vez (iSCSI o Fibre Channel, módulo 5.5).
+      También se usa NFS, y vSAN junta los discos de los propios hosts en un almacenamiento
+      compartido (como Ceph en Proxmox).
+  - id: red
+    titulo: La red
+    area: { x: 2.3, y: 76.2, ancho: 46.5, alto: 19 }
+    texto: >-
+      Los switches virtuales cumplen el papel de los puentes de Proxmox. El Standard Switch se
+      configura en cada host; el Distributed Switch se define una vez en vCenter y se aplica a
+      todos. Las VM se conectan a un grupo de puertos (port group), que tiene su VLAN: es el
+      equivalente del tag en Proxmox.
+  - id: vm
+    titulo: Cada VM
+    area: { x: 51.2, y: 76.2, ancho: 46.5, alto: 19 }
+    texto: >-
+      Una carpeta en el datastore con el .vmx (configuración) y los .vmdk (discos). Adentro se
+      instalan las VMware Tools (en Linux, open-vm-tools): drivers (vmxnet3 para la red,
+      paravirtual para el disco), apagado ordenado e información para vCenter. Son el equivalente
+      de virtio más el agente de QEMU.

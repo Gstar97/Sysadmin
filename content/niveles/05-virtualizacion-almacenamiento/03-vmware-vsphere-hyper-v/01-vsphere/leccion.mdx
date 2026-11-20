@@ -1,0 +1,85 @@
+---
+id: n5-m3-l1
+titulo: VMware vSphere
+minutos: 180
+objetivos:
+  - Reconocer las piezas de vSphere (ESXi, vCenter, datastores, switches virtuales, VMware Tools) y sus equivalentes en Proxmox.
+  - Entender cómo se licencia vSphere desde la compra de VMware por Broadcom y qué cambió para las empresas.
+  - Saber qué revisar al heredar un entorno de vSphere.
+glosario: [esxi, vcenter, vmotion]
+verificado: 2026-11
+---
+
+import vsphere from './vsphere.svg?raw'
+import vsphereDatos from './vsphere.yaml'
+import eq from './equivalencias.yaml'
+
+Durante veinte años, VMware vSphere fue sinónimo de virtualización en las empresas: si hoy entrás a trabajar en una empresa mediana o grande, es muy probable que tenga vSphere, o que esté en plena migración para dejarlo. Por eso hay que conocerlo aunque lo que instales vos sea Proxmox: vas a heredar entornos de vSphere, vas a migrar VM desde ahí y vas a tener que explicar en una reunión por qué la renovación cuesta lo que cuesta.
+
+<AntesDeEmpezar>
+- Hipervisores y recursos virtuales (módulo 5.1).
+- Proxmox VE (módulo 5.2): vamos a comparar todo el tiempo.
+</AntesDeEmpezar>
+
+## Las piezas
+
+<DiagramaInteractivo datos={vsphereDatos} svg={vsphere} alt="Las piezas de VMware vSphere. Arriba, vCenter Server, una VM (appliance) que administra todo: clúster, vMotion, HA, DRS, plantillas y permisos. Abajo, un datacenter con un clúster (HA y DRS) de tres hosts ESXi, cada uno con sus VM, y los datastores compartidos por todos: VMFS sobre una SAN (iSCSI o Fibre Channel), NFS de un NAS o vSAN con los discos de los propios hosts. Abajo, la red con switches virtuales (Standard Switch por host o Distributed Switch desde vCenter, con grupos de puertos con VLAN) y, en cada VM, los archivos .vmx y .vmdk, las VMware Tools, las instantáneas y las plantillas." />
+
+La gran diferencia con Proxmox es **vCenter**: en Proxmox cada nodo trae la administración de todo el clúster; en vSphere, la administración conjunta es un producto aparte que corre como una VM. Lo demás tiene equivalente directo:
+
+<Emparejar ejercicio={eq} />
+
+Lo que se usa todos los días en vSphere: crear VM desde plantillas o la Content Library, vMotion para mover VM entre hosts sin cortarlas, Storage vMotion para cambiarlas de datastore, instantáneas antes de un cambio, HA y DRS en el clúster, y la consola de cada VM desde la web de vCenter. Para automatizar, **PowerCLI** (un módulo de PowerShell: `Get-VM`, `New-VM`, `Move-VM`), que se parece mucho a lo que vas a usar con Hyper-V.
+
+## El licenciamiento después de Broadcom
+
+A fines de 2023 Broadcom compró VMware y cambió todo el modelo comercial. A fines de 2026, el panorama es este (los detalles cambian seguido: siempre se confirma con el proveedor):
+
+- **Se terminaron las licencias perpetuas**: todo es **suscripción**, que se paga año a año y, si se deja de pagar, se pierde el derecho a actualizar (y a usar las versiones nuevas).
+- Se vende en **paquetes**: **VMware Cloud Foundation (VCF)**, el completo, y **vSphere Foundation (VVF)**, más acotado. Las ediciones sueltas que usaban las empresas chicas casi desaparecieron.
+- Se paga **por núcleo** de procesador, con un **mínimo de 16 núcleos por procesador** aunque tenga menos.
+- La versión 9 se consigue solo dentro de esos paquetes. Volvió una edición gratuita de ESXi 8 (sin vCenter, con un máximo de 8 vCPU por VM y sin soporte) para pruebas, no para producción.
+- **vSphere 8** tiene soporte general hasta octubre de 2027.
+
+Para muchas empresas chicas y medianas el costo se multiplicó varias veces en la renovación, y eso disparó las migraciones a Proxmox, Hyper-V, Nutanix y otras plataformas (en el caso real de este módulo vas a armar una). Para empresas grandes, con todo su ecosistema en VMware (vSAN, NSX, herramientas de respaldo y monitoreo), quedarse sigue siendo razonable: mover cientos de servidores también cuesta.
+
+## Si heredás un vSphere
+
+Lo primero que conviene revisar, antes de tocar nada:
+
+1. **Versiones y soporte**: de vCenter y de cada ESXi (la misma versión en todo el clúster) y hasta cuándo tienen soporte.
+2. **Licencias**: qué paquete, cuántos núcleos y cuándo vence la suscripción. Una suscripción vencida significa no poder actualizar.
+3. **Respaldos**: qué herramienta (Veeam es la más común), qué VM respalda y cuándo se probó una restauración por última vez.
+4. **Instantáneas viejas**: en vSphere son una causa clásica de datastores llenos y VM lentas.
+5. **Capacidad**: memoria y CPU de cada host, y si el clúster aguanta perder un host (lo ves en el módulo 5.4).
+6. **VMware Tools** al día en las VM, y que vCenter esté en el respaldo.
+
+<EnSimple>
+vSphere son hosts ESXi (el hipervisor) administrados por vCenter (una VM aparte), con datastores compartidos (VMFS, NFS, vSAN), switches virtuales con grupos de puertos por VLAN, y VMware Tools en cada VM. Todo tiene su equivalente en Proxmox. Desde que Broadcom compró VMware se vende solo por suscripción, en paquetes, por núcleo con un mínimo de 16 por procesador, y para muchas empresas se encareció mucho: por eso tantas migran.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="No respaldar vCenter">
+    Si se pierde, las VM siguen, pero se pierden la configuración del clúster, los permisos y las plantillas. Se respalda como un servidor crítico.
+  </ErrorComun>
+  <ErrorComun titulo="Instantáneas olvidadas en vSphere">
+    Crecen hasta llenar el datastore, y ahí se pausan todas las VM de ese datastore. Se revisan todas las semanas.
+  </ErrorComun>
+  <ErrorComun titulo="Hosts con versiones distintas">
+    Un clúster con ESXi de versiones diferentes complica vMotion y las actualizaciones. Todos iguales.
+  </ErrorComun>
+  <ErrorComun titulo="Enterarse del vencimiento de la suscripción tarde">
+    Una renovación de VMware puede necesitar meses de presupuesto o de migración. Se anota la fecha y se empieza a evaluar con un año de anticipación.
+  </ErrorComun>
+  <ErrorComun titulo="Usar el ESXi gratuito en producción">
+    Sin soporte, sin vCenter, sin respaldos con las herramientas habituales. Es para pruebas.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- ESXi (hipervisor tipo 1, hardware certificado) + vCenter (appliance que administra todo).
+- Datastores: VMFS sobre SAN, NFS, vSAN. Red: Standard o Distributed Switch con grupos de puertos por VLAN.
+- VMware Tools en cada VM; vMotion, Storage vMotion, HA y DRS; PowerCLI para automatizar.
+- Licencias (fines de 2026): solo suscripción, paquetes VCF o VVF, por núcleo con mínimo de 16 por procesador; vSphere 8 con soporte hasta octubre de 2027.
+- Al heredar: versiones, licencias, respaldos, instantáneas, capacidad y VMware Tools.
+</Resumen>
