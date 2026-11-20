@@ -1,0 +1,95 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Contra qué protege un RAID 1?
+  opciones:
+    - { texto: "Contra la rotura de un disco", correcta: true, explicacion: "No contra un borrado, un ransomware o un incendio." }
+    - { texto: "Contra un borrado equivocado", explicacion: "El borrado se copia a los dos discos." }
+    - { texto: "Contra todo: es un respaldo", explicacion: "RAID no es un respaldo." }
+    - { texto: "Contra los cortes de luz", explicacion: "Para eso, una UPS." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Seis discos de 8 TB en RAID 6. ¿Cuánto espacio útil queda?
+  opciones:
+    - { texto: "32 TB", correcta: true, explicacion: "Seis menos dos de paridad, por 8 TB." }
+    - { texto: "40 TB", explicacion: "Eso sería RAID 5." }
+    - { texto: "24 TB", explicacion: "Eso sería RAID 10." }
+    - { texto: "48 TB", explicacion: "Eso sería RAID 0." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Cómo está este arreglo?
+  salida: |
+    md0 : active raid5 sde[3] sdd[2] sdc[1](F) sdb[0]
+          20948992 blocks super 1.2 level 5, 512k chunk, algorithm 2 [3/2] [U_U]
+          [=====>...............]  recovery = 27.4% (2870272/10474496) finish=0.8min speed=153600K/sec
+  opciones:
+    - { texto: "Degradado: sdc falló y se está reconstruyendo sobre sde, que era el repuesto", correcta: true, explicacion: "Hasta que termine, otra falla pierde los datos." }
+    - { texto: "Sano", explicacion: "[U_U]: falta uno." }
+    - { texto: "Perdido", explicacion: "Sigue activo." }
+    - { texto: "sde falló", explicacion: "El (F) está en sdc." }
+- id: p04
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená el reemplazo de un disco fallado en un RAID con mdadm.
+  pasos:
+    - Confirmar cuál falló (mdadm --detail, /proc/mdstat) y su número de serie
+    - Marcarlo como fallado si mdadm todavía no lo hizo (--fail)
+    - Sacarlo del arreglo (--remove)
+    - Cambiar el disco en la bahía
+    - Agregar el nuevo (--add) y seguir la reconstrucción hasta que termine
+  explicacion: "Hasta que termine la reconstrucción, el arreglo sigue sin protección completa."
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Por qué se desaconseja RAID 5 con discos de 16 TB?
+  opciones:
+    - { texto: "Porque la reconstrucción tarda un día o más y una segunda falla o un sector ilegible en ese tiempo pierde todo", correcta: true, explicacion: "RAID 6 soporta esa segunda falla." }
+    - { texto: "Porque RAID 5 no soporta discos grandes", explicacion: "Los soporta." }
+    - { texto: "Porque es más lento para leer", explicacion: "Lee bien." }
+    - { texto: "Porque desperdicia mucho espacio", explicacion: "Es el que menos desperdicia de los que protegen." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un RAID 10 de cuatro discos (pares sdb-sdc y sdd-sde). ¿Qué combinación de fallas pierde los datos?
+  opciones:
+    - { texto: "sdb y sdc", correcta: true, explicacion: "Es un par completo: no queda ninguna copia de esa mitad." }
+    - { texto: "sdb y sdd", explicacion: "Cada par conserva una copia." }
+    - { texto: "sdc y sde", explicacion: "Cada par conserva una copia." }
+    - { texto: "Cualquier par de discos", explicacion: "Depende de cuáles." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace falta para que un RAID con mdadm avise cuando falla un disco? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "MAILADDR en mdadm.conf", correcta: true, explicacion: "A quién avisar." }
+    - { texto: "El servicio mdmonitor activo", correcta: true, explicacion: "Es el que vigila." }
+    - { texto: "Que el correo del servidor funcione (Postfix por un relay)", correcta: true, explicacion: "Lección 4.4.3." }
+    - { texto: "Una controladora RAID", explicacion: "mdadm es por software." }
+- id: p08
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que agrega /dev/sdd al arreglo /dev/md0.
+  aceptadas: ["sudo mdadm /dev/md0 --add /dev/sdd", "mdadm /dev/md0 --add /dev/sdd", "sudo mdadm --manage /dev/md0 --add /dev/sdd", "sudo mdadm /dev/md0 -a /dev/sdd"]
+  patrones: ["^(sudo\\s+)?mdadm\\s+(--manage\\s+)?/dev/md0\\s+(--add|-a)\\s+/dev/sdd$"]
+  explicacion: "Si el arreglo está degradado, empieza la reconstrucción; si no, queda como repuesto."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué ventaja tiene un disco de repuesto (spare) ya instalado en el arreglo?
+  opciones:
+    - { texto: "La reconstrucción empieza apenas falla un disco, sin esperar a que alguien lo cambie", correcta: true, explicacion: "Achica el tiempo sin protección." }
+    - { texto: "Suma capacidad", explicacion: "No se usa hasta que falla uno." }
+    - { texto: "Hace el arreglo más rápido", explicacion: "No participa." }
+    - { texto: "Reemplaza al respaldo", explicacion: "Nada lo reemplaza." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre RAID por hardware y por software?
+  opciones:
+    - { texto: "Por hardware lo arma una controladora y el sistema ve un disco; por software lo arma Linux con mdadm", correcta: true, explicacion: "La controladora suele tener caché con batería." }
+    - { texto: "Por software no protege", explicacion: "Protege igual." }
+    - { texto: "Por hardware no necesita discos iguales", explicacion: "Las dos prefieren discos iguales." }
+    - { texto: "No hay diferencia", explicacion: "La hay en cómo se administra." }

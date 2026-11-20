@@ -1,0 +1,98 @@
+---
+id: n4-m5-l2
+titulo: RAID
+minutos: 180
+objetivos:
+  - Explicar RAID 0, 1, 5, 6 y 10 por su capacidad, su rendimiento y cuántos discos pueden fallar.
+  - Diferenciar RAID por hardware y por software, y armar, controlar y reparar un RAID con mdadm.
+  - Entender la reconstrucción y sus riesgos, y por qué un RAID no reemplaza al respaldo.
+glosario: [raid, paridad-raid, mdadm]
+verificado: 2026-11
+---
+
+import riesgo from './riesgo.svg?raw'
+import niveles from './niveles.yaml'
+import ej from './ej-raid.yaml'
+
+Los discos se rompen: no es una posibilidad sino una certeza, y en un servidor con doce discos pasa todos los años. **RAID** es la forma de juntar varios discos para que la rotura de uno no detenga el servidor ni haga perder datos (y, de paso, para sumar capacidad y velocidad). En esta lección vas a ver los niveles, a hacer fallar discos en un simulador y a armar y reparar un RAID real con `mdadm`.
+
+<AntesDeEmpezar>
+- Discos, particiones, sistemas de archivos y fstab (módulo 1.4).
+- Respaldos y la regla 3-2-1 (lecciones 3.5.5 y 4.3.4).
+- Servidores físicos y SMART (lección 4.5.1).
+</AntesDeEmpezar>
+
+## Los niveles
+
+- **RAID 0** (reparto): los datos se dividen en bloques que van a todos los discos a la vez. Rápido y con toda la capacidad, pero si falla un disco se pierde todo. No es protección.
+- **RAID 1** (espejo): cada disco tiene una copia completa. Con dos discos se usa la mitad del espacio, y sigue funcionando con uno solo.
+- **RAID 5** (paridad): los datos se reparten y, en cada fila, uno de los discos guarda una **paridad**, un cálculo con el que se puede reconstruir cualquier bloque que falte. Se pierde la capacidad de un disco y soporta que falle uno.
+- **RAID 6**: igual, con dos paridades. Se pierden dos discos de capacidad y soporta que fallen dos cualesquiera.
+- **RAID 10**: espejos de a pares, y los datos repartidos entre los pares. La mitad del espacio, muy rápido para escribir, y soporta un disco por par.
+
+La paridad funciona como una suma de control: si tres números suman 10 y se pierde uno, con los otros dos y el 10 se recalcula. Donde la comparación se queda corta es en el costo: cada vez que se escribe un dato hay que recalcular y escribir la paridad, por eso RAID 5 y 6 son más lentos para escribir.
+
+<Emparejar ejercicio={niveles} />
+
+<SimuladorRaid nivel={5} discos={4} />
+
+## La reconstrucción, el momento delicado
+
+<Diagrama svg={riesgo} alt="Una línea de tiempo de un RAID 5. Sano, con los cuatro discos arriba. Falla un disco y queda degradado, sin protección, hasta que alguien se entera y cambia el disco. Al agregar el disco nuevo empieza la reconstrucción, que lee todos los discos durante horas o días. Al terminar, sano otra vez. Desde la falla hasta el final de la reconstrucción es la ventana de riesgo: otra falla o un sector ilegible ahí pierde todo. Abajo, cómo achicar la parte degradada (aviso inmediato con MAILADDR y mdmonitor, un disco de repuesto instalado, discos de repuesto comprados) y cómo sobrevivir a la reconstrucción (RAID 6 o 10 con discos grandes, discos de lotes distintos y siempre el respaldo)." pie="La ventana de riesgo empieza cuando falla el disco, no cuando alguien lo ve." />
+
+Cuando falla un disco, el arreglo queda **degradado**: sigue funcionando, pero sin protección (en RAID 5) o con menos (en RAID 6). Al poner el disco nuevo empieza la **reconstrucción**: se leen todos los demás discos de punta a punta para recalcular lo que faltaba. Con discos de 16 TB, son un día o más de trabajo intenso, y es justo cuando más probable es que falle otro disco (suelen ser del mismo lote y tener las mismas horas) o que aparezca un sector ilegible. En RAID 5, eso es perder todo. Por eso, con discos grandes, se usa **RAID 6 o RAID 10**, se tiene un **disco de repuesto** (spare) ya instalado, que empieza a reconstruir apenas falla uno, y se **vigila**: un RAID degradado durante semanas sin que nadie se entere es el error más común.
+
+## Por hardware o por software
+
+- **Por hardware**: una controladora RAID (con caché y batería) arma el arreglo y el sistema operativo ve un solo disco. Se administra con la herramienta del fabricante o desde la placa de gestión.
+- **Por software**: el propio Linux arma el RAID con **mdadm**. No necesita hardware especial, se ve todo con comandos estándar y el arreglo se puede mover a otro servidor. Es lo habitual en servidores sin controladora y en máquinas virtuales.
+
+Hay una tercera vía, el RAID del sistema de archivos (ZFS, Btrfs), que queda para más adelante.
+
+```bash
+sudo mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sdb /dev/sdc   # crear
+cat /proc/mdstat                         # estado de todos los arreglos: [UU], [U_], recovery = 35%
+sudo mdadm --detail /dev/md0             # el detalle: State, discos activos, fallados, de repuesto
+sudo mdadm /dev/md0 --fail /dev/sdc      # marcar un disco como fallado (para probar o para sacarlo)
+sudo mdadm /dev/md0 --remove /dev/sdc    # sacarlo del arreglo
+sudo mdadm /dev/md0 --add /dev/sdd       # agregar el nuevo: empieza la reconstrucción
+sudo mdadm --detail --scan | sudo tee -a /etc/mdadm.conf   # en Ubuntu, /etc/mdadm/mdadm.conf y update-initramfs -u
+```
+
+Y para que avise: `MAILADDR` en `mdadm.conf` y el servicio `mdmonitor` activo.
+
+<Terminal ejercicio={ej} />
+
+<Advertencia>
+RAID no es un respaldo. Protege contra la rotura de un disco, no contra un borrado equivocado, un ransomware, una controladora que escribe basura o un incendio: todo eso se copia a todos los discos del arreglo al mismo tiempo. Los respaldos (lección 4.3.4 y módulo 3.5) siguen siendo obligatorios.
+</Advertencia>
+
+<EnSimple>
+RAID junta discos para que la rotura de uno no detenga el servidor: 1 es un espejo, 5 y 6 usan paridad (soportan uno y dos discos), 10 combina espejos y reparto, 0 no protege. La reconstrucción es el momento de riesgo: con discos grandes, RAID 6 o 10, un disco de repuesto y aviso por correo. En Linux, mdadm y /proc/mdstat. Y RAID no es un respaldo.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Un RAID degradado que nadie vio">
+    Sin MAILADDR y mdmonitor (o el monitoreo de la controladora), el primer aviso es la segunda falla. Configurar el aviso el mismo día que se arma el RAID.
+  </ErrorComun>
+  <ErrorComun titulo="RAID 5 con discos grandes">
+    La reconstrucción dura un día o más y otra falla en ese tiempo pierde todo. RAID 6 o 10.
+  </ErrorComun>
+  <ErrorComun titulo="Sacar el disco equivocado">
+    Con un RAID degradado, sacar uno de los sanos es perder los datos. Número de serie, bahía y luz de identificación.
+  </ErrorComun>
+  <ErrorComun titulo="RAID 0 “porque es más rápido”">
+    Un disco que falla y se pierde todo. Solo para datos que se pueden regenerar.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que el RAID reemplaza al respaldo">
+    Un borrado o un ransomware llegan a todos los discos a la vez.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- RAID 0: reparto, sin protección. RAID 1: espejo. RAID 5: una paridad, soporta uno. RAID 6: dos paridades, soporta dos. RAID 10: espejos repartidos.
+- Degradado: funciona sin protección completa. Reconstrucción: lee todos los discos; es el momento de riesgo.
+- Con discos grandes: RAID 6 o 10, disco de repuesto y aviso.
+- mdadm: --create, --detail, --fail, --remove, --add; /proc/mdstat; mdadm.conf con ARRAY y MAILADDR; mdmonitor.
+- Por hardware (controladora) o por software (mdadm). Y RAID no es un respaldo.
+</Resumen>

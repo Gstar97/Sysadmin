@@ -1,0 +1,107 @@
+tipo: terminal
+shell: bash
+titulo: Un RAID 1 con mdadm, de la creación al reemplazo de un disco
+descripcion: >-
+  files01 (Rocky Linux 10) tiene tres discos nuevos de 10 GB: /dev/sdb, /dev/sdc y /dev/sdd.
+  Vas a armar un RAID 1 con los dos primeros para /datos, dejarlo listo para que avise si algo
+  falla, y después simular la falla de un disco y reemplazarlo por el tercero. mdadm y Postfix
+  (con el correo de root ya redirigido a sistemas) están instalados.
+estado_inicial:
+  distro: rocky
+  hostname: files01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [mdadm, postfix] }
+  servicios:
+    postfix: { activo: true, habilitado: true }
+  discos:
+    - { nombre: sdb, tamano: 10G }
+    - { nombre: sdc, tamano: 10G }
+    - { nombre: sdd, tamano: 10G }
+pasos:
+  - consigna: Creá /dev/md0 como RAID 1 con /dev/sdb y /dev/sdc (vas a tener que confirmar).
+    verificar:
+      - { raid: md0, nivel: 1 }
+    pistas:
+      - "`sudo mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sdb /dev/sdc` y contestá y. (Sin preguntas: con `echo y |` delante.)"
+    solucion: ["echo y | sudo mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sdb /dev/sdc"]
+    explicacion: >-
+      mdadm avisa que los metadatos van al principio del disco (importa solo si fuera el disco
+      de arranque). El arreglo ya existe y empieza a copiar un disco al otro en segundo plano.
+  - consigna: Mirá el estado en /proc/mdstat, esperá a que termine la sincronización y volvé a mirar.
+    verificar:
+      - { raid: md0, estado: sano }
+      - { salida_contiene: '[UU]' }
+    pistas:
+      - "`cat /proc/mdstat`, `sudo mdadm --wait /dev/md0` y otra vez `cat /proc/mdstat`"
+    solucion:
+      - cat /proc/mdstat
+      - sudo mdadm --wait /dev/md0
+      - cat /proc/mdstat
+    explicacion: >-
+      [2/2] [UU]: dos discos de dos, los dos arriba (U). Mientras sincroniza ya se puede usar;
+      --wait solo espera a que termine. Con discos de varios TB, esta primera copia tarda horas.
+  - consigna: >-
+      Formatealo con XFS, montalo en /datos de forma permanente (fstab, con el UUID) y guardá la
+      definición del arreglo en /etc/mdadm.conf.
+    verificar:
+      - { montaje: /datos, dispositivo: /dev/md0 }
+      - { fstab: /datos, tipo: xfs }
+      - { archivo: /etc/mdadm.conf, contenido_incluye: 'ARRAY /dev/md0' }
+    pistas:
+      - "`sudo mkfs.xfs /dev/md0`, `sudo mkdir /datos` y la línea de fstab con el UUID que da `sudo blkid /dev/md0`."
+      - "`echo \"UUID=$(sudo blkid -s UUID -o value /dev/md0) /datos xfs defaults 0 0\" | sudo tee -a /etc/fstab`, `sudo systemctl daemon-reload`, `sudo mount -a` y `sudo mdadm --detail --scan | sudo tee -a /etc/mdadm.conf`"
+    solucion:
+      - sudo mkfs.xfs /dev/md0
+      - sudo mkdir /datos
+      - echo "UUID=$(sudo blkid -s UUID -o value /dev/md0) /datos xfs defaults 0 0" | sudo tee -a /etc/fstab
+      - sudo systemctl daemon-reload
+      - sudo mount -a
+      - sudo mdadm --detail --scan | sudo tee -a /etc/mdadm.conf
+    explicacion: >-
+      mdadm.conf asegura que el arreglo se arme con el mismo nombre en cada arranque. En Ubuntu
+      el archivo es /etc/mdadm/mdadm.conf y, además, hay que correr sudo update-initramfs -u.
+  - consigna: >-
+      Que avise: agregá MAILADDR root a /etc/mdadm.conf y dejá mdmonitor activo y habilitado.
+    verificar:
+      - { archivo: /etc/mdadm.conf, contenido_incluye: 'MAILADDR root' }
+      - { servicio: mdmonitor, activo: true, habilitado: true }
+    pistas:
+      - "`echo 'MAILADDR root' | sudo tee -a /etc/mdadm.conf` y `sudo systemctl enable --now mdmonitor`"
+    solucion:
+      - "echo 'MAILADDR root' | sudo tee -a /etc/mdadm.conf"
+      - sudo systemctl enable --now mdmonitor
+    explicacion: >-
+      Un RAID sin aviso es peligroso: un disco falla, el arreglo sigue andando degradado y nadie
+      se entera hasta que falla el segundo. mdmonitor manda un correo con cada falla.
+  - consigna: Simulá que /dev/sdc falla y mirá cómo queda el arreglo.
+    verificar:
+      - { raid: md0, estado: degradado }
+      - { salida_contiene: '[U_]' }
+    pistas:
+      - "`sudo mdadm /dev/md0 --fail /dev/sdc` y `cat /proc/mdstat`"
+    solucion:
+      - sudo mdadm /dev/md0 --fail /dev/sdc
+      - cat /proc/mdstat
+    explicacion: >-
+      sdc[1](F): fallado. [2/1] [U_]: sigue funcionando con un solo disco, sin protección. Los
+      datos de /datos siguen ahí, y a sistemas le llegó un correo con el evento Fail.
+  - consigna: >-
+      Reemplazalo: sacá /dev/sdc del arreglo, agregá /dev/sdd y seguí la reconstrucción hasta que
+      termine.
+    verificar:
+      - { raid: md0, estado: sano, activos: 2 }
+      - { comando_usado: '--detail|-D' }
+    pistas:
+      - "`sudo mdadm /dev/md0 --remove /dev/sdc`, `sudo mdadm /dev/md0 --add /dev/sdd`, `cat /proc/mdstat`, `sudo mdadm --wait /dev/md0` y `sudo mdadm --detail /dev/md0`"
+    solucion:
+      - sudo mdadm /dev/md0 --remove /dev/sdc
+      - sudo mdadm /dev/md0 --add /dev/sdd
+      - cat /proc/mdstat
+      - sudo mdadm --wait /dev/md0
+      - sudo mdadm --detail /dev/md0
+    explicacion: >-
+      Al agregar el disco nuevo, mdadm empieza solo a copiarle los datos (recovery). En un
+      servidor real, entre el remove y el add, el técnico saca el disco roto de la bahía y pone
+      el nuevo. State: clean y dos discos activos: el arreglo vuelve a estar protegido.
