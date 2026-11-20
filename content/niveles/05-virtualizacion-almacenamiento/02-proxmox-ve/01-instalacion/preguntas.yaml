@@ -1,0 +1,92 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es Proxmox VE?
+  opciones:
+    - { texto: "Una plataforma de virtualización de código abierto sobre Debian, con KVM, contenedores LXC, almacenamiento y clústeres, administrada por web", correcta: true, explicacion: "Gratis; la suscripción da soporte y el repositorio enterprise." }
+    - { texto: "Un hipervisor de tipo 2 para Windows", explicacion: "Es de tipo 1, sobre el hardware." }
+    - { texto: "Un producto de VMware", explicacion: "Es de Proxmox Server Solutions." }
+    - { texto: "Un sistema solo para contenedores", explicacion: "Hace VM y contenedores." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Por qué falla?
+  salida: |
+    # apt update
+    Err:5 https://enterprise.proxmox.com/debian/pve trixie InRelease
+      401  Unauthorized [IP: 212.224.123.70 443]
+  opciones:
+    - { texto: "El repositorio enterprise pide una suscripción; sin ella hay que usar el no-subscription", correcta: true, explicacion: "Se desactiva con Enabled: no y se agrega pve-no-subscription." }
+    - { texto: "El nodo no tiene internet", explicacion: "Si no tuviera, no llegaría a responder 401." }
+    - { texto: "La contraseña de root está mal", explicacion: "No tiene que ver." }
+    - { texto: "Falta reiniciar", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Con qué comando se actualiza un nodo de Proxmox?
+  opciones:
+    - { texto: "apt update y apt full-upgrade (o dist-upgrade)", correcta: true, explicacion: "apt upgrade solo puede dejar paquetes a medias." }
+    - { texto: "apt upgrade", explicacion: "No instala los paquetes nuevos que hagan falta." }
+    - { texto: "dnf update", explicacion: "Es Debian." }
+    - { texto: "pveversion -u", explicacion: "pveversion solo muestra versiones." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la mejor opción para el disco del sistema de un nodo de producción con dos SSD?
+  opciones:
+    - { texto: "ZFS RAID1 (espejo) en el instalador", correcta: true, explicacion: "Si se rompe un SSD, el nodo sigue." }
+    - { texto: "ext4 en uno solo y el otro vacío", explicacion: "Desperdiciás la redundancia." }
+    - { texto: "ZFS sobre una controladora RAID por hardware", explicacion: "ZFS quiere ver los discos directos." }
+    - { texto: "Da igual", explicacion: "No da igual." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la diferencia entre ana@pam y ana@pve?
+  opciones:
+    - { texto: "@pam es un usuario de Linux del nodo; @pve es una cuenta solo de Proxmox", correcta: true, explicacion: "Las @pve no pueden entrar por SSH." }
+    - { texto: "@pve es para administradores", explicacion: "Los permisos dependen del rol, no del realm." }
+    - { texto: "Ninguna", explicacion: "Se autentican distinto." }
+    - { texto: "@pam no puede entrar a la web", explicacion: "Puede." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que le da a ana@pve el rol PVEVMUser sobre la VM 105.
+  aceptadas: ["pveum acl modify /vms/105 --users ana@pve --roles PVEVMUser", "pveum acl modify /vms/105 --roles PVEVMUser --users ana@pve"]
+  explicacion: "Los permisos son un rol sobre una ruta, y bajan a lo de adentro."
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿En qué puerto está la interfaz web de Proxmox VE?
+  opciones:
+    - { texto: "8006, por HTTPS", correcta: true, explicacion: "https://IP:8006" }
+    - { texto: "443", explicacion: "Es el 8006." }
+    - { texto: "8080", explicacion: "No." }
+    - { texto: "9090", explicacion: "Ese es Cockpit." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve el almacenamiento local que crea el instalador?
+  opciones:
+    - { texto: "Para archivos: ISO, plantillas de contenedores y respaldos", correcta: true, explicacion: "Los discos de las VM van en local-lvm (o local-zfs)." }
+    - { texto: "Para los discos de las VM", explicacion: "Eso es local-lvm." }
+    - { texto: "Para compartir entre nodos", explicacion: "Es local de ese nodo." }
+    - { texto: "Para la configuración de las VM", explicacion: "Eso está en /etc/pve." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Después de un apt full-upgrade que trajo un kernel nuevo, uname -r sigue mostrando el anterior. ¿Por qué?
+  opciones:
+    - { texto: "El kernel nuevo se usa recién al reiniciar; hay que planificar el reinicio (moviendo las VM antes, si hay clúster)", correcta: true, explicacion: "pveversion muestra los dos: el instalado y el que corre." }
+    - { texto: "La actualización falló", explicacion: "Es normal hasta reiniciar." }
+    - { texto: "Faltó apt upgrade", explicacion: "No." }
+    - { texto: "Proxmox no actualiza el kernel", explicacion: "Sí lo actualiza." }
+- id: p10
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué buenas prácticas corresponden a un nodo nuevo? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Una cuenta por persona con el rol justo y doble factor", correcta: true, explicacion: "root para emergencias." }
+    - { texto: "La web solo en la red de administración", correcta: true, explicacion: "Nunca expuesta a internet." }
+    - { texto: "Correo para las notificaciones", correcta: true, explicacion: "Respaldos fallados, discos, actualizaciones." }
+    - { texto: "Repositorios de Debian 12 y 13 juntos, por las dudas", explicacion: "Mezclar versiones rompe el nodo." }

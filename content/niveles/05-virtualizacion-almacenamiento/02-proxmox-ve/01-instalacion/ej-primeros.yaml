@@ -1,0 +1,89 @@
+tipo: terminal
+shell: bash
+titulo: Un Proxmox recién instalado
+descripcion: >-
+  pve01 se acaba de instalar desde el ISO de Proxmox VE 9 (ext4 con LVM-thin) y estás en su
+  terminal como root. La empresa no compró suscripción todavía. Vas a dejarlo listo para
+  actualizarse y con una cuenta para Ana, que va a manejar las VM.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox: {}
+pasos:
+  - consigna: Mirá qué versión de Proxmox y qué kernel quedaron instalados.
+    verificar:
+      - { comando_usado: 'pveversion' }
+      - { salida_contiene: 'pve-manager/9' }
+    pistas:
+      - "`pveversion` (con -v, la lista de todos los paquetes)."
+    solucion: [pveversion]
+    explicacion: Proxmox VE 9 con su kernel propio (el que termina en -pve). Con pveversion -v ves la versión de cada parte (QEMU, LXC, ZFS, Ceph).
+  - consigna: Actualizá la lista de paquetes. ¿Qué pasa?
+    verificar:
+      - { comando_usado: 'apt (-get )?update' }
+      - { salida_contiene: '401' }
+    pistas:
+      - "`apt update`"
+    solucion: [apt update]
+    explicacion: >-
+      El instalador deja activados los repositorios enterprise (el de Proxmox y el de Ceph), que
+      piden una clave de suscripción: sin ella, 401 Unauthorized. No es una falla del servidor.
+  - consigna: >-
+      Desactivá los dos repositorios enterprise (agregando "Enabled: no" en sus archivos .sources)
+      y agregá el no-subscription en /etc/apt/sources.list.d/proxmox.sources. Después, apt
+      update tiene que andar sin errores.
+    verificar:
+      - { archivo: /etc/apt/sources.list.d/pve-enterprise.sources, contenido_incluye: 'Enabled: no' }
+      - { archivo: /etc/apt/sources.list.d/ceph.sources, contenido_incluye: 'Enabled: no' }
+      - { archivo: /etc/apt/sources.list.d/proxmox.sources, contenido_incluye: 'pve-no-subscription' }
+      - { salida_contiene: 'download.proxmox.com' }
+    pistas:
+      - "`sed -i '1i Enabled: no' /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources`"
+      - "El nuevo archivo tiene Types: deb, URIs: http://download.proxmox.com/debian/pve, Suites: trixie, Components: pve-no-subscription y Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg."
+    solucion:
+      - "sed -i '1i Enabled: no' /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources"
+      - "printf 'Types: deb\\nURIs: http://download.proxmox.com/debian/pve\\nSuites: trixie\\nComponents: pve-no-subscription\\nSigned-By: /usr/share/keyrings/proxmox-archive-keyring.gpg\\n' > /etc/apt/sources.list.d/proxmox.sources"
+      - apt update
+    explicacion: >-
+      En Proxmox 9 los repositorios están en el formato deb822 (archivos .sources). Lo mismo se
+      hace desde la web, en el nodo, Actualizaciones, Repositorios. Después, siempre apt
+      full-upgrade (nunca solo apt upgrade, que puede dejar paquetes de Proxmox a medias) y
+      reiniciar si se actualizó el kernel.
+  - consigna: >-
+      Ana no va a usar root. Creale la cuenta ana@pve con el comentario "Ana Pérez" y dale el
+      rol PVEVMAdmin sobre /vms (todas las VM), y PVEAuditor sobre / para que pueda ver el resto
+      sin tocarlo.
+    verificar:
+      - { pve_usuario: ana@pve, rol: PVEVMAdmin, ruta_acl: /vms }
+      - { pve_usuario: ana@pve, rol: PVEAuditor, ruta_acl: / }
+    pistas:
+      - "`pveum user add ana@pve --comment 'Ana Pérez'`, `pveum passwd ana@pve` y `pveum acl modify /vms --users ana@pve --roles PVEVMAdmin`."
+    solucion:
+      - "pveum user add ana@pve --comment 'Ana Pérez'"
+      - pveum passwd ana@pve
+      - pveum acl modify /vms --users ana@pve --roles PVEVMAdmin
+      - pveum acl modify / --users ana@pve --roles PVEAuditor
+    explicacion: >-
+      @pve es una cuenta de Proxmox (no existe en Linux, no puede entrar por SSH); @pam sería un
+      usuario de Linux del nodo. Los permisos se dan en una ruta (/, /vms, /vms/100,
+      /storage/local) y bajan a lo de adentro. En la web conviene activarle el segundo factor
+      (TOTP) en Datacenter, Permisos, Doble factor.
+  - consigna: Mirá qué almacenamientos dejó el instalador y para qué sirve cada uno.
+    verificar:
+      - { comando_usado: 'pvesm status' }
+      - { salida_contiene: 'local-lvm' }
+    pistas:
+      - "`pvesm status` y `cat /etc/pve/storage.cfg`."
+    solucion:
+      - pvesm status
+      - cat /etc/pve/storage.cfg
+    explicacion: >-
+      local (dir) para ISO, plantillas y respaldos; local-lvm (lvmthin) para los discos de las VM
+      y contenedores. Guardar los respaldos en local es mejor que nada, pero están en el mismo
+      disco que las VM: en la lección 5.2.4 van a otro equipo.

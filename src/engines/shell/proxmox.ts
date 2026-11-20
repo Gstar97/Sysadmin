@@ -1657,6 +1657,54 @@ register('pvesm', {
         writeStorageCfg(sys, pve)
         return 0
       }
+      case 'prune-backups': {
+        const st = pve.storages.get(pos[0] ?? '')
+        if (!st) {
+          ctx.err(`storage '${pos[0] ?? ''}' does not exist\n`)
+          return 1
+        }
+        const keepLast = Number(opts.get('keep-last') ?? 0)
+        const keepDaily = Number(opts.get('keep-daily') ?? 0)
+        const keepWeekly = Number(opts.get('keep-weekly') ?? 0)
+        const keepMonthly = Number(opts.get('keep-monthly') ?? 0)
+        if (!keepLast && !keepDaily && !keepWeekly && !keepMonthly) {
+          ctx.err('no prune options specified - aborting (use --keep-all 1 to keep everything)\n')
+          return 1
+        }
+        const dry = opts.get('dry-run') === '1'
+        const byVm = new Map<number, PveVolume[]>()
+        for (const v of pve.volumes.values()) if (v.storage === st.id && v.content === 'backup' && (!opts.has('vmid') || v.vmid === Number(opts.get('vmid')))) byVm.set(v.vmid ?? 0, [...(byVm.get(v.vmid ?? 0) ?? []), v])
+        ctx.out('Backup                                                       Backup-ID  Time                 Keep\n')
+        for (const [vmid, list] of [...byVm].sort(([a], [b]) => a - b)) {
+          const sorted = list.sort((a, b) => b.ctime - a.ctime)
+          const keep = new Set<PveVolume>()
+          sorted.slice(0, keepLast).forEach((v) => keep.add(v))
+          const bucket = (n: number, key: (d: Date) => string) => {
+            const seen = new Set<string>()
+            for (const v of sorted) {
+              if (seen.size >= n) break
+              const k = key(new Date(v.ctime))
+              if (seen.has(k)) continue
+              seen.add(k)
+              keep.add(v)
+            }
+          }
+          if (keepDaily) bucket(keepDaily, (d) => d.toDateString())
+          if (keepWeekly) bucket(keepWeekly, (d) => `${d.getFullYear()}-${Math.floor((d.getTime() / 86_400_000 + 4) / 7)}`)
+          if (keepMonthly) bucket(keepMonthly, (d) => `${d.getFullYear()}-${d.getMonth()}`)
+          for (const v of sorted) {
+            const verdict = v.protected ? 'protected' : keep.has(v) ? 'keep' : 'remove'
+            ctx.out(`${v.volid.padEnd(60)} ${String(vmid).padEnd(10)} ${fmtTime(v.ctime).padEnd(20)} ${verdict}\n`)
+            if (verdict === 'remove' && !dry) {
+              pve.volumes.delete(v.volid)
+              const dir = dirOf(sys, st, 'backup')
+              const file = `${dir}/${v.volid.split('/').pop()}`
+              for (const f of [file, `${file}.notes`, file.replace(/\.(vma|tar)(\.zst)?$/, '.log')]) if (sys.vfs.exists(f)) sys.vfs.unlink(f, ROOT_CRED)
+            }
+          }
+        }
+        return 0
+      }
       case 'remove': {
         if (!pve.storages.delete(pos[0] ?? '')) {
           ctx.err(`storage '${pos[0] ?? ''}' does not exist\n`)

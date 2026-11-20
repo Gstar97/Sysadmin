@@ -1,0 +1,59 @@
+tipo: diagrama
+titulo: Un nodo de Proxmox VE
+puntos:
+  - id: vms
+    titulo: Máquinas virtuales
+    area: { x: 2.3, y: 12.5, ancho: 29.1, alto: 27.5 }
+    texto: >-
+      Cada VM es un proceso de QEMU con KVM, como las de libvirt del módulo anterior, pero
+      administradas por Proxmox (no usa libvirt). Tienen un número (ID) desde el 100, y su
+      configuración es un archivo de texto en /etc/pve/qemu-server/.
+  - id: lxc
+    titulo: Contenedores LXC
+    area: { x: 32.6, y: 12.5, ancho: 29.1, alto: 27.5 }
+    texto: >-
+      Comparten el kernel del nodo, así que solo pueden ser Linux, pero arrancan en un segundo y
+      ocupan poco. Sirven para servicios chicos (DNS, un proxy, un servidor de monitoreo).
+      Comparten la numeración con las VM: no puede haber una VM 101 y un contenedor 101.
+  - id: admin
+    titulo: Cómo se administra
+    area: { x: 62.8, y: 12.5, ancho: 34.9, alto: 27.5 }
+    texto: >-
+      Casi todo se hace desde la interfaz web, en https://IP-del-nodo:8006, que también tiene
+      una consola para cada VM y para el nodo. Todo lo que hace la web pasa por una API, que se
+      puede usar con pvesh, con scripts o con herramientas como Ansible y Terraform (Nivel 6). Los
+      usuarios pueden ser los de Linux (realm pam) o propios de Proxmox (realm pve).
+  - id: servicios
+    titulo: Los servicios de Proxmox
+    area: { x: 2.3, y: 42.5, ancho: 45.9, alto: 25 }
+    texto: >-
+      pveproxy sirve la web y la API; pve-cluster mantiene /etc/pve, una pequeña base de datos que
+      se ve como carpeta y que, en un clúster, se replica entre todos los nodos (módulo 5.4).
+      Por eso los archivos de /etc/pve no se editan con cualquier herramienta ni se copian a mano.
+  - id: local
+    titulo: El almacenamiento local
+    area: { x: 49.4, y: 42.5, ancho: 23.3, alto: 25 }
+    texto: >-
+      Una carpeta común (/var/lib/vz) para lo que son archivos: ISO de instalación, plantillas de
+      contenedores y respaldos. No sirve para discos de VM con instantáneas eficientes.
+  - id: locallvm
+    titulo: Los discos de las VM
+    area: { x: 73.8, y: 42.5, ancho: 23.8, alto: 25 }
+    texto: >-
+      Si instalaste con ext4, el resto del disco queda como LVM-thin (local-lvm): volúmenes
+      dinámicos con instantáneas. Si instalaste con ZFS, es un pool ZFS (local-zfs). Los
+      almacenamientos en red (NFS, iSCSI, Ceph) se suman después (módulo 5.5).
+  - id: debian
+    titulo: Debian por debajo
+    area: { x: 2.3, y: 70, ancho: 95.3, alto: 12.5 }
+    texto: >-
+      Proxmox VE 9 es un Debian 13 (trixie) con un kernel propio y sus paquetes. Se actualiza con
+      apt, desde sus repositorios: el enterprise (con suscripción) o el no-subscription (gratis,
+      con actualizaciones un poco menos probadas). Lo que sabés de Debian y Ubuntu sirve acá.
+  - id: hardware
+    titulo: El hardware
+    area: { x: 2.3, y: 85, ancho: 95.3, alto: 11 }
+    texto: >-
+      Para producción: CPU con virtualización, mucha memoria (ECC), el sistema en dos SSD en espejo
+      (ZFS RAID1 en el instalador) y, si se puede, dos placas de red o más. No hace falta una
+      controladora RAID: con ZFS se recomienda que el sistema vea los discos directos (HBA).

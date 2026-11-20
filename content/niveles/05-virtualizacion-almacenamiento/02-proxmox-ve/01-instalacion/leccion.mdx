@@ -1,0 +1,80 @@
+---
+id: n5-m2-l1
+titulo: Instalación y primeros pasos
+minutos: 150
+objetivos:
+  - Elegir el hardware y las opciones de disco para instalar Proxmox VE.
+  - Entender cómo está armado un nodo (Debian, KVM, LXC, /etc/pve, la web y la API).
+  - Configurar los repositorios sin suscripción y actualizar bien.
+  - Crear usuarios con permisos justos en lugar de usar root.
+glosario: [proxmox-ve, repositorio-enterprise]
+verificado: 2026-11
+---
+
+import nodo from './nodo.svg?raw'
+import nodoDatos from './nodo.yaml'
+import ej from './ej-primeros.yaml'
+
+**Proxmox VE** es una plataforma de virtualización de código abierto, de una empresa austríaca (Proxmox Server Solutions), que junta en un solo producto lo que viste en el módulo anterior (KVM y QEMU), contenedores LXC, almacenamiento (ZFS, Ceph), clústeres con alta disponibilidad y respaldos, todo con una interfaz web. Es gratis y sin límites; la suscripción paga da soporte y el repositorio de actualizaciones más probado. Desde que VMware cambió su forma de licenciar (lo ves en el módulo 5.3), muchísimas empresas se pasaron a Proxmox, y hoy es una de las plataformas que más se piden. La versión vigente es la 9, sobre Debian 13.
+
+<AntesDeEmpezar>
+- KVM, QEMU y virtio (lección 5.1.1).
+- Recursos virtuales (lección 5.1.2).
+- apt y repositorios en Debian y Ubuntu (lección 1.3.1).
+</AntesDeEmpezar>
+
+## Cómo está armado
+
+<DiagramaInteractivo datos={nodoDatos} svg={nodo} alt="Un nodo de Proxmox VE por capas. Abajo, el hardware (CPU con VT-x o AMD-V, memoria ECC, SSD para el sistema, placas de red). Arriba, Debian 13 con el kernel de Proxmox (KVM, LXC, ZFS, LVM, Ceph, actualizado con apt). Arriba, los servicios de Proxmox (pveproxy con la web y la API en el puerto 8006, pve-cluster con /etc/pve, pvestatd, pve-firewall, pve-ha, y los comandos qm, pct, pvesm, pveum y vzdump), y dos almacenamientos: local (/var/lib/vz, para ISO, plantillas y respaldos) y local-lvm (LVM-thin o ZFS, para los discos de las VM). Arriba de todo, las máquinas virtuales (QEMU con KVM, desde el ID 100, en /etc/pve/qemu-server), los contenedores LXC (solo Linux, en /etc/pve/lxc) y cómo se administra (la web en https://IP:8006, la terminal y la API)." />
+
+## Instalar
+
+Se descarga el ISO de proxmox.com y se instala como cualquier sistema, sobre el hardware (es un hipervisor de tipo 1). Las decisiones importantes son pocas:
+
+- **El disco del sistema**: lo mejor es **ZFS RAID1** sobre dos SSD (si uno se rompe, el nodo sigue). Con un solo disco, **ext4** (o xfs) con LVM-thin. ZFS quiere ver los discos directos: si el servidor tiene una controladora RAID, se pone en modo HBA o se usa ext4 sobre el RAID por hardware.
+- **La red de administración**: nombre completo (pve01.empresa.lan), IP fija, puerta de enlace y DNS. Es la IP de la web. Cambiarla después se puede, pero da trabajo, sobre todo en un clúster.
+- **La contraseña de root y un correo** para los avisos (respaldos fallados, discos con problemas).
+
+Al terminar, se entra desde el navegador a `https://IP:8006` con root y el realm Linux PAM. El certificado es autofirmado (el navegador avisa); se cambia por uno de verdad en el nodo, Sistema, Certificados, con ACME (lo viste en el módulo 4.2).
+
+## Los primeros pasos
+
+Lo primero que todo el mundo encuentra es un aviso de "No valid subscription" al entrar, y que las actualizaciones fallan con **401 Unauthorized**: el instalador deja activado el **repositorio enterprise**, que es el de los clientes con suscripción. Sin ella se usa el **no-subscription**, que es el mismo software con las actualizaciones un poco antes (y un poco menos probadas). Para producción importante, la suscripción vale la pena: es soporte y un repositorio más estable.
+
+Después:
+
+1. **Actualizar** con `apt update` y `apt full-upgrade` (o desde la web). Nunca `apt upgrade` solo: puede dejar sin instalar paquetes nuevos que Proxmox necesita. Si se actualizó el kernel, reiniciar en una ventana.
+2. **Usuarios**: cada persona con su cuenta y los permisos que necesita, y root guardado para emergencias. Las cuentas pueden ser de Linux (`@pam`) o de Proxmox (`@pve`). Los permisos son **roles** (PVEAdmin, PVEVMAdmin, PVEVMUser, PVEAuditor...) sobre una **ruta** (`/`, `/vms`, `/vms/100`, `/storage/local`). Y doble factor (TOTP) para todos.
+3. **La hora** (chrony ya viene) y **las notificaciones** por correo, en Datacenter, Notificaciones.
+
+<Terminal ejercicio={ej} />
+
+<EnSimple>
+Proxmox VE es un Debian con KVM, LXC, ZFS y Ceph, administrado por web en el puerto 8006. Se instala sobre el hardware, idealmente con el sistema en ZFS RAID1. Sin suscripción, se desactiva el repositorio enterprise (da 401) y se usa el no-subscription; se actualiza siempre con apt full-upgrade. Cada persona usa su cuenta (@pam o @pve) con un rol sobre una ruta, y doble factor.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="apt upgrade en lugar de full-upgrade">
+    Puede dejar paquetes de Proxmox sin actualizar o con dependencias rotas. Siempre apt full-upgrade (o dist-upgrade).
+  </ErrorComun>
+  <ErrorComun titulo="Mezclar repositorios de versiones distintas">
+    Un archivo con bookworm (Debian 12) y otro con trixie (Debian 13) es la receta para un nodo roto. Todos de la misma versión.
+  </ErrorComun>
+  <ErrorComun titulo="ZFS sobre una controladora RAID">
+    ZFS tiene que ver cada disco; con un RAID por hardware abajo, no detecta ni corrige errores. Modo HBA, o ext4.
+  </ErrorComun>
+  <ErrorComun titulo="Todos con root">
+    Sin trazabilidad y con todo el poder. Una cuenta por persona, con el rol justo, y doble factor.
+  </ErrorComun>
+  <ErrorComun titulo="La web de Proxmox expuesta a internet">
+    El puerto 8006 va solo en la red de administración, igual que la gestión fuera de banda (lección 4.5.3).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Proxmox VE 9: Debian 13 + KVM/QEMU + LXC + ZFS + Ceph, con web y API en el puerto 8006.
+- Instalar con el sistema en ZFS RAID1 (o ext4 con LVM-thin), IP fija y nombre completo.
+- Sin suscripción: desactivar los .sources enterprise y agregar pve-no-subscription; actualizar con apt full-upgrade.
+- Usuarios @pam o @pve, roles sobre rutas (pveum acl modify), doble factor; root para emergencias.
+- Almacenamientos de fábrica: local (ISO, plantillas, respaldos) y local-lvm (discos).
+</Resumen>
