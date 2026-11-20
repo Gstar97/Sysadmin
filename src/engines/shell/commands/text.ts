@@ -106,9 +106,13 @@ register(['grep', 'egrep'], {
       const ls = lines(f.data)
       let count = 0
       const printed = new Set<number>()
+      let last = -1
       const emit = (idx: number, sep: string) => {
         if (printed.has(idx)) return
+        // Con contexto, los grupos que no se tocan van separados por --.
+        if ((before || after) && last >= 0 && idx > last + 1) ctx.out('--\n')
         printed.add(idx)
+        last = idx
         const line = ls[idx]
         const prefix = (showName ? `${color ? '\x1b[35m' : ''}${f.name}${color ? COLOR.reset : ''}${sep}` : '') + (a.flags.has('n') ? `${idx + 1}${sep}` : '')
         const shown = color && !a.flags.has('v') ? line.replace(re, (m) => `${COLOR.match}${m}${COLOR.reset}`) : line
@@ -132,7 +136,9 @@ register(['grep', 'egrep'], {
         emit(i, ':')
         for (let n = i + 1; n <= Math.min(ls.length - 1, i + after); n++) {
           re.lastIndex = 0
-          if (re.test(ls[n]) === a.flags.has('v')) emit(n, '-')
+          // Otra coincidencia dentro del contexto: la imprime el ciclo principal, con su propio contexto.
+          if (re.test(ls[n]) !== a.flags.has('v')) break
+          emit(n, '-')
         }
       }
       if (a.flags.has('c')) ctx.out((showName ? `${f.name}:` : '') + count + '\n')

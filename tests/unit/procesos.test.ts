@@ -88,3 +88,12 @@ describe('hora y chrony', () => {
     expect((await run('timedatectl')).out).toContain('synchronized: yes')
   })
 })
+
+describe('grep con contexto', () => {
+  it('las coincidencias seguidas salen en orden y los grupos separados con --', async () => {
+    const { run } = await session({})
+    await run("printf 'a\\nx1\\nx2\\nb\\nc\\nd\\nx3\\ne\\n' > /tmp/t")
+    expect((await run('grep --color=never -n x -A2 /tmp/t')).out).toBe('2:x1\n3:x2\n4-b\n5-c\n--\n7:x3\n8-e\n')
+    expect((await run('grep --color=never x -B1 /tmp/t')).out).toBe('a\nx1\nx2\n--\nd\nx3\n')
+  })
+})

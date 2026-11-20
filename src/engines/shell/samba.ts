@@ -866,6 +866,7 @@ function cifsMount(ctx: CommandContext, spec: string, target: string, type: stri
     },
   })
   sys.vfs.addRemote({
+    selabel: 'system_u:object_r:cifs_t:s0',
     target: abs,
     vfs: sess.server.vfs,
     path: tree.path,

@@ -281,7 +281,7 @@ export function mountNfsOn(sys: System, spec: string, target: string, type: stri
     options: final,
     remote: { size: () => sig?.size ?? 0, used: () => (exportMount?.dev ? server.storage.used(exportMount.dev) : 0) },
   })
-  sys.vfs.addRemote({ target: abs, vfs: server.vfs, path: rpath, cred: squash(exp.opts), readonly: ro })
+  sys.vfs.addRemote({ target: abs, vfs: server.vfs, path: rpath, cred: squash(exp.opts), readonly: ro, selabel: 'system_u:object_r:nfs_t:s0' })
   return undefined
 }
 

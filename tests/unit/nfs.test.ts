@@ -102,6 +102,26 @@ describe('NFS', () => {
   })
 })
 
+describe('NFS y SELinux', () => {
+  it('lo montado por NFS se ve como nfs_t y nginx lo lee solo con httpd_use_nfs', async () => {
+    const st = structuredClone(state)
+    st.paquetes = { instalados: ['nfs-utils', 'nginx'] }
+    st.servicios = { nginx: { activo: true, habilitado: true } }
+    st.servidores![0].servicios = { 'nfs-server': { activo: true, habilitado: true } }
+    st.servidores![0].paquetes = { instalados: ['nfs-utils'] }
+    st.servidores![0].servicios_firewall = ['nfs']
+    st.servidores![0].archivos!['/etc/exports'] = '/srv/compartido 192.168.10.0/24(rw)\n'
+    const { run } = await session(st)
+    await run('sudo mkdir -p /srv/imagenes && sudo mount -t nfs files01:/srv/compartido /srv/imagenes')
+    expect((await run('ls -Z /srv/imagenes')).out).toContain('system_u:object_r:nfs_t:s0 leeme.txt')
+    await run("printf 'server {\\n    listen 8080;\\n    location /imagenes/ {\\n        alias /srv/imagenes/;\\n    }\\n}\\n' | sudo tee /etc/nginx/conf.d/img.conf")
+    await run('sudo systemctl reload nginx')
+    expect((await run('curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/imagenes/leeme.txt')).out).toBe('403')
+    await run('sudo setsebool -P httpd_use_nfs 1')
+    expect((await run('curl -s http://localhost:8080/imagenes/leeme.txt')).out).toBe('hola\n')
+  })
+})
+
 describe('Editor de /etc/exports', () => {
   it('marca el espacio antes de las opciones y las opciones mal escritas', async () => {
     const { validateExports } = await import('@/engines/config/exports')

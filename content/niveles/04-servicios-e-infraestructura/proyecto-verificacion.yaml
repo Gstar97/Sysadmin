@@ -1,0 +1,74 @@
+tipo: pasos
+titulo: Verificación final antes de entregar
+descripcion: >-
+  Recorré estos pasos con las dos máquinas encendidas y, si podés, después de reiniciarlas: una
+  plataforma que anda hasta el primer reinicio no está terminada. Cada paso comprueba un
+  entregable con comandos que viste en el nivel.
+pasos:
+  - titulo: Todo arranca solo
+    detalle: Reiniciá rocky01 y ubuntu01 y, sin tocar nada, revisá en rocky01.
+    comandos:
+      - systemctl --failed
+      - systemctl is-active nginx tienda@1 tienda@2 mariadb postfix
+      - getenforce
+    comprobar: Ninguna unidad fallada, todo active y SELinux en Enforcing.
+  - titulo: El proxy y las instancias
+    comandos:
+      - "for i in 1 2 3 4; do curl -s https://tienda.ejemplo.test/ | head -1; done"
+      - sudo systemctl stop tienda@1
+      - curl -s -o /dev/null -w '%{http_code}\n' https://tienda.ejemplo.test/
+      - sudo systemctl start tienda@1
+      - sudo ss -tlnp | grep -E ':80|:443|:800'
+    comprobar: >-
+      Las respuestas se reparten entre las dos instancias; con una detenida sigue dando 200; solo
+      nginx escucha en todas las direcciones y las instancias, en 127.0.0.1.
+  - titulo: HTTPS
+    comandos:
+      - curl -sI http://tienda.ejemplo.test/ | head -3
+      - curl -sI https://tienda.ejemplo.test/ | grep -i -E '^HTTP|strict-transport'
+      - echo | openssl s_client -connect tienda.ejemplo.test:443 -servername tienda.ejemplo.test 2>/dev/null | openssl x509 -noout -issuer -enddate
+      - sudo certbot renew --dry-run
+    comprobar: >-
+      301 hacia https, HTTP/2 y HSTS, el emisor es tu CA interna, y la renovación de prueba
+      termina con "Congratulations, all simulated renewals succeeded".
+  - titulo: La base y los respaldos
+    comandos:
+      - "sudo mysql -e \"SHOW GRANTS FOR 'tienda_app'@'localhost'\""
+      - systemctl list-timers 'respaldo*'
+      - ls -lh /var/backups/db | tail -3
+      - ssh ubuntu01.lab ls -lh /srv/respaldos/rocky01 | tail -3
+    comprobar: >-
+      La cuenta de la aplicación tiene solo SELECT, INSERT, UPDATE y DELETE sobre tienda; el
+      timer tiene próxima ejecución; hay respaldos de las últimas noches en rocky01 y en ubuntu01.
+    si_falla: Si en ubuntu01 no hay respaldos, revisá la copia (la clave SSH de la cuenta que copia y la ruta).
+  - titulo: La restauración, otra vez
+    detalle: En ubuntu01, con el respaldo más nuevo y el cronómetro en marcha.
+    comandos:
+      - "sudo mysql -e 'DROP DATABASE IF EXISTS tienda_prueba; CREATE DATABASE tienda_prueba'"
+      - time (zcat $(ls -t /srv/respaldos/rocky01/tienda-*.sql.gz | head -1) | sudo mysql tienda_prueba)
+      - sudo mysql tienda_prueba -e 'SELECT count(*) FROM pedidos'
+    comprobar: La cantidad de pedidos coincide con la de producción a la hora del respaldo, y el tiempo quedó anotado en el documento.
+  - titulo: Las imágenes
+    comandos:
+      - ls /srv/tienda/imagenes | head -3
+      - mount | grep imagenes
+      - getsebool httpd_use_nfs
+      - curl -s -o /dev/null -w '%{http_code}\n' https://tienda.ejemplo.test/imagenes/$(ls /srv/tienda/imagenes | head -1)
+    comprobar: El montaje es nfs4 desde ubuntu01, el booleano está en on y la imagen da 200.
+  - titulo: Las alertas
+    detalle: Provocá una de cada tipo de tu tabla (si ya lo hiciste, repetí al menos dos) y mirá Mailpit.
+    comandos:
+      - sudo chmod 000 /var/backups/db && sudo systemctl start respaldo-bd.service; sudo chmod 755 /var/backups/db
+      - "df -h | mail -s 'Prueba de alerta desde rocky01' root"
+      - postqueue -p
+    comprobar: En Mailpit aparecen el aviso del respaldo fallado y la prueba, y la cola de Postfix está vacía.
+  - titulo: El diseño físico
+    detalle: Revisá el plano del rack y el cálculo de la UPS del documento contra el constructor y la calculadora.
+    comprobar: >-
+      Sin problemas en el constructor, la UPS por debajo del 80 %, la autonomía alcanza para el
+      apagado ordenado completo y está escrito el orden en que se apagan los servidores.
+  - titulo: El documento
+    detalle: >-
+      Pedile a alguien (o hacelo vos al día siguiente, sin mirar tus notas) que siga el
+      procedimiento de restaurar la base solo con el documento.
+    comprobar: Lo pudo hacer sin preguntarte nada.

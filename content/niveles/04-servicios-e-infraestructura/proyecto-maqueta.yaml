@@ -1,0 +1,247 @@
+tipo: terminal
+shell: bash
+titulo: "Maqueta: la tienda en producción, de punta a punta"
+descripcion: >-
+  web01 (Rocky Linux 10, 192.168.10.11) va a ser el servidor de la tienda online de Ejemplo
+  S.A. Ya tiene instalado todo lo necesario: nginx, la aplicación en /opt/tienda con sus dos
+  unidades de systemd escritas (tienda1 en el 8001 y tienda2 en el 8002, sin arrancar), MariaDB
+  con la base tienda, Postfix y el cliente de NFS. La CA interna está en /root/ca. files01
+  (192.168.10.30) exporta /srv/nfs/imagenes para web01; la cuenta tienda (uid 1500) existe en
+  los dos. El relay de correo es smtp.proveedor.com:587 (cuenta notificaciones@ejemplo.com.ar,
+  clave Not-2026-relay). El DNS interno apunta tienda.ejemplo.com a web01.
+estado_inicial:
+  distro: rocky
+  hostname: web01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true, uid: 1001 }
+    - { nombre: tienda, uid: 1500, shell: /sbin/nologin, home: /opt/tienda }
+  paquetes: { instalados: [nginx, firewalld, mariadb-server, gzip, postfix, s-nail, cyrus-sasl-plain, nfs-utils] }
+  servicios:
+    nginx: { activo: true, habilitado: true }
+    firewalld: { activo: true, habilitado: true }
+    mariadb: { activo: true, habilitado: true }
+    postfix: { activo: true, habilitado: true }
+  red:
+    interfaces:
+      - { nombre: enp0s3, ip: 192.168.10.11/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+    dns: [192.168.10.1]
+    registros_dns:
+      tienda.ejemplo.com: 127.0.0.1
+      smtp.proveedor.com: 203.0.113.25
+  correo:
+    relays:
+      - { servidor: smtp.proveedor.com, ip: 203.0.113.25, puerto: 587, usuario: notificaciones@ejemplo.com.ar, clave: Not-2026-relay, remitentes: [notificaciones@ejemplo.com.ar] }
+  web:
+    ca_interna: { cn: Ejemplo Root CA, certificado: /root/ca/ca.crt, clave: /root/ca/ca.key }
+    aplicaciones:
+      tienda1: { cuerpo: "<h1>Tienda</h1> (instancia 1)", eco_encabezados: true }
+      tienda2: { cuerpo: "<h1>Tienda</h1> (instancia 2)", eco_encabezados: true }
+  bases_datos:
+    mariadb:
+      bases:
+        tienda: |
+          CREATE TABLE clientes (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL);
+          INSERT INTO clientes (nombre) VALUES ('Muebles del Sur'), ('Oficinas Norte'), ('Estudio Ríos');
+          CREATE TABLE pedidos (id INT AUTO_INCREMENT PRIMARY KEY, cliente_id INT NOT NULL, total DECIMAL(10,2) NOT NULL);
+          INSERT INTO pedidos (cliente_id, total) VALUES (2, 185000.00), (1, 42500.00), (2, 96000.00), (3, 31000.00), (1, 64000.00);
+  archivos:
+    /opt/tienda/tienda.py: { contenido: "from flask import Flask\napp = Flask(__name__)\n", dueno: tienda }
+    /opt/tienda/venv/bin/python3: { contenido: "#!/bin/sh\n", modo: "0755", dueno: tienda }
+    /opt/tienda/venv/bin/gunicorn: { contenido: "#!/opt/tienda/venv/bin/python3\n# gunicorn 23.0.0\n", modo: "0755", dueno: tienda }
+    /etc/systemd/system/tienda1.service: |
+      [Unit]
+      Description=Tienda (instancia 1)
+      After=network.target
+
+      [Service]
+      User=tienda
+      WorkingDirectory=/opt/tienda
+      ExecStart=/opt/tienda/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8001 tienda:app
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    /etc/systemd/system/tienda2.service: |
+      [Unit]
+      Description=Tienda (instancia 2)
+      After=network.target
+
+      [Service]
+      User=tienda
+      WorkingDirectory=/opt/tienda
+      ExecStart=/opt/tienda/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8002 tienda:app
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    /var/backups/db/.keep: ''
+  servidores:
+    - hostname: files01
+      ip: 192.168.10.30
+      distro: rocky
+      usuarios:
+        - { nombre: ana, sudo: true, uid: 1001 }
+        - { nombre: tienda, uid: 1500 }
+      paquetes: { instalados: [nfs-utils, firewalld] }
+      servicios:
+        nfs-server: { activo: true, habilitado: true }
+        firewalld: { activo: true, habilitado: true }
+      servicios_firewall: [nfs]
+      archivos:
+        /etc/exports: "/srv/nfs/imagenes 192.168.10.11(rw,sync)\n"
+        /srv/nfs/imagenes/silla.txt: { contenido: "(foto de la silla de oficina)\n", dueno: tienda }
+pasos:
+  - consigna: Arrancá y habilitá las dos instancias de la tienda y comprobá que cada una contesta en su puerto.
+    verificar:
+      - { servicio: tienda1, activo: true, habilitado: true }
+      - { servicio: tienda2, activo: true, habilitado: true }
+    pistas:
+      - "`sudo systemctl daemon-reload`, `sudo systemctl enable --now tienda1 tienda2` y `curl -s 127.0.0.1:8001; curl -s 127.0.0.1:8002`"
+    solucion:
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now tienda1 tienda2
+      - "curl -s 127.0.0.1:8001 | head -1; curl -s 127.0.0.1:8002 | head -1"
+    explicacion: Dos copias de la misma aplicación, que solo escuchan en 127.0.0.1. El único camino desde afuera va a ser nginx.
+  - consigna: >-
+      El certificado: clave y pedido para tienda.ejemplo.com (CN y SAN), firmado por la CA interna
+      por un año, en /etc/pki/tls/certs/tienda.crt y /etc/pki/tls/private/tienda.key. Y que web01
+      confíe en la CA.
+    verificar:
+      - { certificado: /etc/pki/tls/certs/tienda.crt, san_incluye: tienda.ejemplo.com, emisor_contiene: Ejemplo Root CA, clave: /etc/pki/tls/private/tienda.key }
+      - { confia_en: Ejemplo Root CA }
+    pistas:
+      - "Como en el laboratorio del módulo 4.2: `openssl req -new -newkey rsa:2048 -noenc ... -addext 'subjectAltName=DNS:tienda.ejemplo.com'` y `openssl x509 -req ... -CA /root/ca/ca.crt -CAkey /root/ca/ca.key -CAcreateserial -days 365 -copy_extensions copy`."
+      - "La confianza: copiar ca.crt a /etc/pki/ca-trust/source/anchors/ y `sudo update-ca-trust`."
+    solucion:
+      - "sudo openssl req -new -newkey rsa:2048 -noenc -keyout /etc/pki/tls/private/tienda.key -out /tmp/tienda.csr -subj '/CN=tienda.ejemplo.com' -addext 'subjectAltName=DNS:tienda.ejemplo.com'"
+      - sudo openssl x509 -req -in /tmp/tienda.csr -CA /root/ca/ca.crt -CAkey /root/ca/ca.key -CAcreateserial -days 365 -copy_extensions copy -out /etc/pki/tls/certs/tienda.crt
+      - sudo cp /root/ca/ca.crt /etc/pki/ca-trust/source/anchors/ejemplo-root-ca.crt && sudo update-ca-trust
+    explicacion: En una tienda pública el certificado sería de Let's Encrypt con certbot; el resto del proyecto es igual.
+  - consigna: >-
+      nginx: /etc/nginx/conf.d/tienda.conf con el upstream de las dos instancias (keepalive 16), el
+      80 que redirige a HTTPS y el 443 con el certificado, TLS 1.2 y 1.3, HTTP/2, HSTS de dos años
+      y los encabezados del proxy. Que SELinux deje a nginx conectarse a las instancias (de forma
+      permanente) y que el firewall deje pasar http y https.
+    verificar:
+      - { http: 'https://tienda.ejemplo.com/', tls_valido: true, http2: true, contiene: 'Tienda', encabezado: { nombre: Strict-Transport-Security } }
+      - { http: 'http://tienda.ejemplo.com/', estado: 301 }
+      - { booleano_selinux: httpd_can_network_connect }
+      - { firewall_permite: 443/tcp }
+    pistas:
+      - "Es la unión del laboratorio del módulo 4.1 (upstream y proxy) con el del 4.2 (HTTPS). En la location: `proxy_pass http://tienda;`, `proxy_http_version 1.1;`, `proxy_set_header Connection \"\";` y Host, X-Real-IP, X-Forwarded-For y X-Forwarded-Proto."
+      - "Después: `sudo nginx -t && sudo systemctl reload nginx`, `sudo setsebool -P httpd_can_network_connect 1` y `sudo firewall-cmd --permanent --add-service={http,https} && sudo firewall-cmd --reload`."
+    solucion:
+      - "printf 'upstream tienda {\\n    server 127.0.0.1:8001;\\n    server 127.0.0.1:8002;\\n    keepalive 16;\\n}\\n\\nserver {\\n    listen 80;\\n    server_name tienda.ejemplo.com;\\n    return 301 https://$host$request_uri;\\n}\\n\\nserver {\\n    listen 443 ssl;\\n    http2 on;\\n    server_name tienda.ejemplo.com;\\n    ssl_certificate /etc/pki/tls/certs/tienda.crt;\\n    ssl_certificate_key /etc/pki/tls/private/tienda.key;\\n    ssl_protocols TLSv1.2 TLSv1.3;\\n    add_header Strict-Transport-Security \"max-age=63072000\" always;\\n\\n    location / {\\n        proxy_pass http://tienda;\\n        proxy_http_version 1.1;\\n        proxy_set_header Connection \"\";\\n        proxy_set_header Host $host;\\n        proxy_set_header X-Real-IP $remote_addr;\\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\\n        proxy_set_header X-Forwarded-Proto $scheme;\\n    }\\n}\\n' | sudo tee /etc/nginx/conf.d/tienda.conf > /dev/null"
+      - sudo nginx -t && sudo systemctl reload nginx
+      - sudo setsebool -P httpd_can_network_connect 1
+      - sudo firewall-cmd --permanent --add-service=http --add-service=https
+      - sudo firewall-cmd --reload
+      - curl -s https://tienda.ejemplo.com/ | head -1
+    explicacion: >-
+      X-Forwarded-Proto https le dice a la aplicación que el cliente usó HTTPS, aunque a ella le
+      llegue por HTTP desde nginx: así arma bien los enlaces y las cookies seguras.
+  - consigna: >-
+      Las imágenes de los productos viven en files01. Montá files01:/srv/nfs/imagenes en
+      /srv/tienda/imagenes bajo demanda y de forma permanente (fstab con _netdev y
+      x-systemd.automount), servilas en https://tienda.ejemplo.com/imagenes/ con un alias en el
+      server del 443, y habilitá el booleano de SELinux que permite a nginx leer NFS.
+    verificar:
+      - { fstab: /srv/tienda/imagenes, tipo: nfs, opciones_incluye: x-systemd.automount }
+      - { booleano_selinux: httpd_use_nfs }
+      - { http: 'https://tienda.ejemplo.com/imagenes/silla.txt', contiene: 'silla de oficina' }
+    pistas:
+      - "`sudo mkdir -p /srv/tienda/imagenes`, la línea `files01:/srv/nfs/imagenes /srv/tienda/imagenes nfs _netdev,x-systemd.automount 0 0` en fstab, `sudo systemctl daemon-reload` y `sudo systemctl restart remote-fs.target`."
+      - "En tienda.conf, dentro del server del 443: `location /imagenes/ { alias /srv/tienda/imagenes/; }`. Con sed: `sudo sed -i 's|    location / {|    location /imagenes/ {\\n        alias /srv/tienda/imagenes/;\\n    }\\n\\n    location / {|' /etc/nginx/conf.d/tienda.conf`."
+      - "`sudo setsebool -P httpd_use_nfs 1` y recargá nginx."
+    solucion:
+      - sudo mkdir -p /srv/tienda/imagenes
+      - "echo 'files01:/srv/nfs/imagenes /srv/tienda/imagenes nfs _netdev,x-systemd.automount 0 0' | sudo tee -a /etc/fstab"
+      - sudo systemctl daemon-reload
+      - sudo systemctl restart remote-fs.target
+      - "sudo sed -i 's|    location / {|    location /imagenes/ {\\n        alias /srv/tienda/imagenes/;\\n    }\\n\\n    location / {|' /etc/nginx/conf.d/tienda.conf"
+      - sudo setsebool -P httpd_use_nfs 1
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -s https://tienda.ejemplo.com/imagenes/silla.txt
+    explicacion: >-
+      Los archivos montados por NFS tienen la etiqueta nfs_t, que nginx no puede leer salvo con
+      httpd_use_nfs. Con las imágenes en files01, mañana se puede sumar un segundo servidor web
+      que vea las mismas.
+  - consigna: >-
+      El correo de alertas: Postfix por el relay (TLS obligatorio, SASL con lmdb, noanonymous) y
+      con remitente notificaciones@ejemplo.com.ar (smtp_generic_maps para @web01.localdomain);
+      el correo de root a sistemas@ejemplo.com.ar. Probalo mandando a root el resultado de df -h.
+    verificar:
+      - { correo_enviado: sistemas@ejemplo.com.ar, estado: sent, via: smtp.proveedor.com }
+    pistas:
+      - "Igual que en el laboratorio del módulo 4.4, cambiando files01 por web01."
+    solucion:
+      - "sudo postconf -e 'relayhost = [smtp.proveedor.com]:587' 'smtp_tls_security_level = encrypt' 'smtp_sasl_auth_enable = yes' 'smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd' 'smtp_sasl_security_options = noanonymous' 'smtp_generic_maps = lmdb:/etc/postfix/generic'"
+      - "echo '[smtp.proveedor.com]:587 notificaciones@ejemplo.com.ar:Not-2026-relay' | sudo tee /etc/postfix/sasl_passwd > /dev/null"
+      - sudo chmod 600 /etc/postfix/sasl_passwd
+      - sudo postmap lmdb:/etc/postfix/sasl_passwd
+      - "echo '@web01.localdomain notificaciones@ejemplo.com.ar' | sudo tee /etc/postfix/generic > /dev/null"
+      - sudo postmap lmdb:/etc/postfix/generic
+      - sudo systemctl reload postfix
+      - "echo 'root: sistemas@ejemplo.com.ar' | sudo tee -a /etc/aliases > /dev/null"
+      - sudo newaliases
+      - "df -h | mail -s 'Espacio en web01' root"
+    explicacion: A partir de ahora, todo lo que el servidor le mande a root (cron, el respaldo, mdadm) llega a una casilla que alguien lee.
+  - consigna: >-
+      La base: creá en MariaDB la cuenta tienda_app@localhost (clave Tnd-2026-app) con SELECT,
+      INSERT, UPDATE y DELETE sobre la base tienda, y nada más.
+    verificar:
+      - { usuario_bd: tienda_app, host: localhost, motor: mariadb, permiso: INSERT, base: tienda }
+      - { usuario_bd: tienda_app, host: localhost, motor: mariadb, permiso: DROP, base: tienda, tiene: false }
+    pistas:
+      - "`sudo mysql -e \"CREATE USER 'tienda_app'@'localhost' IDENTIFIED BY 'Tnd-2026-app'; GRANT SELECT, INSERT, UPDATE, DELETE ON tienda.* TO 'tienda_app'@'localhost';\"`"
+    solucion:
+      - "sudo mysql -e \"CREATE USER 'tienda_app'@'localhost' IDENTIFIED BY 'Tnd-2026-app'; GRANT SELECT, INSERT, UPDATE, DELETE ON tienda.* TO 'tienda_app'@'localhost';\""
+    explicacion: Si alguien se aprovecha de una falla de la aplicación, con esta cuenta puede leer y cambiar datos, pero no borrar tablas ni tocar otras bases.
+  - consigna: >-
+      El respaldo: /usr/local/sbin/respaldo-bd.sh (ejecutable, con set -euo pipefail) que deje en
+      /var/backups/db un tienda-AAAA-MM-DD-HHMM.sql.gz con mysqldump consistente, borre los de más
+      de 14 días y le mande a root la lista de respaldos. Ejecutalo.
+    verificar:
+      - { archivo: /usr/local/sbin/respaldo-bd.sh, contenido_incluye: 'pipefail', modo: '0755' }
+      - { archivo: /usr/local/sbin/respaldo-bd.sh, contenido_incluye: 'single-transaction' }
+      - { comando_usado: 'respaldo-bd\.sh' }
+    pistas:
+      - "Las líneas clave: `mysqldump --single-transaction --routines --triggers tienda | gzip > \"$destino/tienda-$fecha.sql.gz\"`, `find \"$destino\" -name 'tienda-*.sql.gz' -mtime +14 -delete` y `ls -lh \"$destino\" | mail -s \"Respaldo de la base en web01\" root`."
+    solucion:
+      - "printf '#!/bin/bash\\nset -euo pipefail\\ndestino=/var/backups/db\\nfecha=$(date +%%F-%%H%%M)\\nmysqldump --single-transaction --routines --triggers tienda | gzip > \"$destino/tienda-$fecha.sql.gz\"\\nfind \"$destino\" -name \"tienda-*.sql.gz\" -mtime +14 -delete\\nls -lh \"$destino\" | mail -s \"Respaldo de la base en web01\" root\\n' | sudo tee /usr/local/sbin/respaldo-bd.sh > /dev/null"
+      - sudo chmod 755 /usr/local/sbin/respaldo-bd.sh
+      - sudo /usr/local/sbin/respaldo-bd.sh
+      - ls /var/backups/db
+    explicacion: >-
+      Como root, mysqldump entra sin clave (por el socket). --single-transaction toma una foto
+      consistente sin bloquear la tienda. En producción, además, el respaldo se copia a otro
+      servidor: si web01 se pierde, el respaldo no puede perderse con él.
+  - consigna: Programalo con systemd para todas las noches a las 02:30 (respaldo-bd.service y respaldo-bd.timer, con Persistent=true) y dejá el timer activo.
+    verificar:
+      - { archivo: /etc/systemd/system/respaldo-bd.timer, contenido_incluye: 'Persistent=true' }
+      - { servicio: respaldo-bd.timer, activo: true, habilitado: true }
+    pistas:
+      - "Un service Type=oneshot con ExecStart=/usr/local/sbin/respaldo-bd.sh, y un timer con OnCalendar=*-*-* 02:30:00, Persistent=true y WantedBy=timers.target."
+    solucion:
+      - "printf '[Unit]\\nDescription=Respaldo de la base de la tienda\\n\\n[Service]\\nType=oneshot\\nExecStart=/usr/local/sbin/respaldo-bd.sh\\n' | sudo tee /etc/systemd/system/respaldo-bd.service > /dev/null"
+      - "printf '[Unit]\\nDescription=Respaldo nocturno de la base\\n\\n[Timer]\\nOnCalendar=*-*-* 02:30:00\\nPersistent=true\\n\\n[Install]\\nWantedBy=timers.target\\n' | sudo tee /etc/systemd/system/respaldo-bd.timer > /dev/null"
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now respaldo-bd.timer
+      - systemctl list-timers respaldo-bd.timer
+    explicacion: Persistent=true hace que, si el servidor estaba apagado a las 02:30, el respaldo corra apenas arranque.
+  - consigna: >-
+      Un respaldo que nunca se restauró no es un respaldo. Restauralo en una base nueva,
+      tienda_prueba, y comprobá que tiene los 5 pedidos.
+    verificar:
+      - { consulta_bd: 'SELECT count(*) FROM pedidos', motor: mariadb, base: tienda_prueba, resultado: '5' }
+    pistas:
+      - "`sudo mysql -e 'CREATE DATABASE tienda_prueba'` y `zcat` del último respaldo a `sudo mysql tienda_prueba`."
+    solucion:
+      - sudo mysql -e 'CREATE DATABASE tienda_prueba'
+      - zcat $(ls -t /var/backups/db/tienda-*.sql.gz | head -1) | sudo mysql tienda_prueba
+      - sudo mysql tienda_prueba -e 'SELECT count(*) FROM pedidos'
+    explicacion: >-
+      En la parte con tus máquinas virtuales, la restauración se prueba en otro servidor y se
+      anota cuánto tardó: ese es tu tiempo real de recuperación.

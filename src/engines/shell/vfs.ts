@@ -130,6 +130,8 @@ export interface RemoteBinding {
   view?: (node: Inode) => Inode
   /** Permisos de lo que se crea (CIFS: create mask y directory mask del recurso). */
   createMode?: (mode: number, dir: boolean) => number
+  /** Etiqueta de SELinux con la que el cliente ve todo lo del montaje (nfs_t, cifs_t). */
+  selabel?: string
 }
 
 type Remote = { b: RemoteBinding; rpath: string }

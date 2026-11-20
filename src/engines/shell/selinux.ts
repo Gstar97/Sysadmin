@@ -89,6 +89,7 @@ const BOOLEANS: [string, boolean, string][] = [
   ['httpd_enable_homedirs', false, 'Allow httpd to read home directories'],
   ['httpd_read_user_content', false, 'Allow httpd to read user content'],
   ['httpd_use_nfs', false, 'Allow httpd to access nfs file systems'],
+  ['httpd_use_cifs', false, 'Allow httpd to access cifs file systems'],
   ['ssh_sysadm_login', false, 'Allow ssh logins as sysadm_r:sysadm_t'],
   ['samba_enable_home_dirs', false, 'Allow samba to share users home directories.'],
   ['samba_export_all_ro', false, 'Allow samba to share any file/directory read only.'],
@@ -132,6 +133,9 @@ function defaultContext(sys: System, path: string): string {
 /** Contexto completo de un archivo (el que muestra ls -Z). */
 export function contextOf(sys: System, path: string, node?: Inode): string {
   const n = node ?? (sys.vfs.exists(path, ROOT_CRED, false) ? sys.vfs.stat(path, ROOT_CRED, false) : undefined)
+  // Lo que está en un montaje de red se ve con la etiqueta del montaje (nfs_t, cifs_t).
+  const remote = sys.vfs.remotes.length ? sys.vfs.remoteOf(path) : undefined
+  if (remote?.b.selabel) return remote.b.selabel
   if (n?.selabel) return n.selabel
   return defaultContext(sys, path)
 }
@@ -211,7 +215,7 @@ export function httpdCanRead(sys: System, path: string, comm = 'nginx'): boolean
   if (sys.distro !== 'rocky' || sys.selinux.mode === 'disabled') return true
   const t = typeOf(contextOf(sys, path))
   const b = sys.selinux.booleans
-  const ok = HTTPD_READ.includes(t) || (t === 'user_home_t' && b.get('httpd_read_user_content')!.cur) || (['user_home_dir_t', 'home_root_t'].includes(t) && b.get('httpd_enable_homedirs')!.cur)
+  const ok = HTTPD_READ.includes(t) || (t === 'user_home_t' && b.get('httpd_read_user_content')!.cur) || (['user_home_dir_t', 'home_root_t'].includes(t) && b.get('httpd_enable_homedirs')!.cur) || (t === 'nfs_t' && b.get('httpd_use_nfs')!.cur) || (t === 'cifs_t' && b.get('httpd_use_cifs')!.cur)
   if (ok) return true
   const name = path.split('/').pop() ?? path
   const ino = sys.vfs.exists(path) ? sys.vfs.stat(path, ROOT_CRED).ino : 0

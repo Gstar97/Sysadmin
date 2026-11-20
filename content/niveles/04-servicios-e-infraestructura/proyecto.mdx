@@ -1,0 +1,172 @@
+---
+titulo: Plataforma web de producción
+horas: 20
+entregables:
+  - Nginx como proxy inverso con HTTPS bien configurado, balanceo y aplicación detrás.
+  - Base de datos con backup automático y restauración probada.
+  - Almacenamiento compartido con NFS y correo de alertas con Postfix.
+  - Diseño físico documentado (rack, energía y UPS calculados).
+---
+
+import maqueta from './proyecto-maqueta.yaml'
+import verificacion from './proyecto-verificacion.yaml'
+
+## El pedido
+
+Este proyecto cierra el Nivel 4. Ejemplo S.A., la empresa de muebles de oficina de los ejemplos del nivel, quiere vender por internet:
+
+```text
+De: Martín Sosa <martin.sosa@ejemplo.test>
+Asunto: La tienda online
+
+Hola. Ya tenemos la aplicación de la tienda (la hizo un proveedor; corre en Python) y
+necesitamos que la pongas en producción en nuestros servidores. Lo que nos importa:
+
+- Que ande siempre. El año pasado la página vieja estuvo caída un fin de semana entero
+  y nadie se enteró hasta el lunes.
+- Que sea segura: los clientes cargan sus datos y el candado tiene que estar.
+- Que no se pierdan pedidos. Si pasa algo, ¿cuánto perdemos y cuánto tardamos en volver?
+- Las fotos de los productos las sube el área de marketing a la carpeta compartida.
+- Si algo falla, que nos avise a nosotros antes que un cliente.
+- Vamos a comprar un rack y una UPS para la sala nueva: decinos qué y cómo armarlo.
+
+Gracias,
+Martín
+```
+
+Vas a trabajar en tres lugares: el **papel** (el diseño), la **plataforma** (la maqueta) y tus **máquinas virtuales**: rocky01 como servidor web y de base de datos, y ubuntu01 como servidor de archivos, CA interna y relay de correo de prueba, con los nombres .lab de los laboratorios del nivel.
+
+| Fase | Se apoya en | Tiempo estimado |
+| --- | --- | --- |
+| 1. Relevamiento y diseño | Todo el nivel | 2 h |
+| 2. Maqueta en la plataforma | Módulos 4.1 a 4.4 | 2 h |
+| 3. La aplicación detrás del proxy | Módulo 4.1 | 3 h |
+| 4. HTTPS | Módulo 4.2 | 2 h |
+| 5. Base de datos y respaldos | Módulo 4.3 | 3 h |
+| 6. Archivos compartidos y alertas | Módulo 4.4 | 3 h |
+| 7. Diseño físico | Módulo 4.5 | 2 h |
+| 8. Pruebas de falla y documentación | Todo el nivel | 3 h |
+
+## 1. Relevamiento y diseño
+
+En tu cuaderno, antes de instalar nada:
+
+- **El esquema**: un dibujo con cada servidor, qué corre en cada uno, por qué puertos se hablan y qué llega desde internet (solo el 80 y el 443 de nginx). Marcá qué pasa si se cae cada pieza.
+- **Nombres y certificados**: `tienda.ejemplo.test` para los clientes; qué CA lo firma y cómo se renueva. Anotá qué cambiaría con un dominio real (Let's Encrypt con HTTP-01 o DNS-01).
+- **Cuentas**: la cuenta de servicio de la aplicación (sin shell), la cuenta de la base de la aplicación y sus permisos, la de respaldos, la del relay. Ninguna aplicación usa root ni cuentas personales.
+- **RPO y RTO**: con Martín, cuántos pedidos se pueden perder como máximo (RPO) y cuánto puede estar caída la tienda (RTO). De ahí sale cada cuánto se respalda y qué se prueba.
+- **La tabla de alertas**: qué situación avisa, por qué medio y a quién. Como mínimo: una instancia caída, el certificado a menos de 20 días de vencer, un respaldo que falló, un disco con poco espacio, un RAID degradado y la UPS a batería.
+
+**Criterio de calidad:** otra persona puede entender el esquema completo y por qué está armado así, solo con tus notas.
+
+## 2. Maqueta en la plataforma
+
+La misma plataforma en un solo servidor simulado, de punta a punta: las dos instancias, el certificado de la CA interna, nginx con HTTPS y balanceo, las imágenes por NFS, el correo por el relay, la cuenta de la base, el respaldo programado y la restauración probada.
+
+<Terminal ejercicio={maqueta} />
+
+## 3. La aplicación detrás del proxy
+
+En rocky01, como en el laboratorio del módulo 4.1:
+
+- La aplicación con su usuario de servicio y su entorno virtual, en **dos instancias** con la plantilla `tienda@.service`, que se reinician solas si se caen.
+- **nginx** como proxy inverso con un `upstream` de las dos, keepalive y los encabezados `X-Forwarded-*`; las instancias escuchan solo en 127.0.0.1.
+- **SELinux** en modo enforcing, con los booleanos justos (`httpd_can_network_connect`, y `httpd_use_nfs` en la fase 6), sin desactivarlo nunca.
+- **Logs**: el formato de acceso con el tiempo de respuesta del upstream (`$upstream_response_time`) y logrotate revisado.
+
+**Criterio de calidad:** con una instancia detenida la tienda sigue respondiendo, y al matar el proceso de la otra (`kill -9`), systemd la levanta sola en segundos.
+
+## 4. HTTPS
+
+- El certificado de `tienda.ejemplo.test` emitido por la CA interna de ubuntu01 con ACME (step-ca y certbot, como en el laboratorio del módulo 4.2), y rocky01 y tu PC confiando en la CA.
+- El 80 redirige al 443 con 301; TLS 1.2 y 1.3, HTTP/2 y HSTS.
+- La **renovación automática** probada con `certbot renew --dry-run`.
+
+**Criterio de calidad:** testssl da A o mejor, el navegador de tu PC muestra el candado sin advertencias, y la renovación de prueba termina bien.
+
+## 5. Base de datos y respaldos
+
+- **MariaDB** en rocky01 con la base `tienda` y una tabla de pedidos con datos de prueba. La cuenta de la aplicación solo con `SELECT, INSERT, UPDATE, DELETE` sobre su base, y solo desde localhost.
+- **El respaldo**: un script con `mysqldump --single-transaction`, comprimido, con fecha en el nombre y retención, una cuenta propia con lo mínimo, un timer de systemd y la copia a ubuntu01 (otro equipo, otro disco). Que si falla, avise.
+- **La restauración probada** en ubuntu01, cronometrada: ese tiempo es tu RTO real para la base. Comparalo con lo que acordaste.
+- **Para investigar** (no lo vimos en el nivel): que la aplicación lea la base. Con `pymysql` y la cuenta de la aplicación, una página `/pedidos` que muestre cuántos pedidos hay. Las credenciales van en un archivo de entorno (`EnvironmentFile=` en la unidad), legible solo por la cuenta de servicio, nunca en el código.
+
+**Criterio de calidad:** la cuenta de la aplicación no puede borrar una tabla, el timer corrió al menos una noche, y la restauración en ubuntu01 tiene fecha, tamaño y duración anotados.
+
+## 6. Archivos compartidos y alertas
+
+- **Las imágenes**: ubuntu01 exporta por NFS `/srv/nfs/imagenes` solo para rocky01; rocky01 la monta bajo demanda (`x-systemd.automount`) y nginx la sirve en `/imagenes/` con `httpd_use_nfs`. Para que marketing suba las fotos desde Windows, la misma carpeta por **Samba** con un grupo propio. Cuidado con los dueños: el uid de la cuenta tienda tiene que coincidir en los dos servidores.
+- **El correo de alertas**: Postfix en rocky01 por el relay (Mailpit en ubuntu01 para el laboratorio), el correo de root redirigido a la casilla del equipo.
+- **Las alertas de tu tabla**: el respaldo avisa si falla; una tarea diaria avisa si un disco pasa el 80 % o si el certificado vence en menos de 20 días (`openssl x509 -checkend`); mdmonitor avisa del RAID; upsmon, de la UPS. No hace falta un sistema de monitoreo todavía (Nivel 6): alcanzan scripts chicos y bien probados.
+
+**Criterio de calidad:** provocaste cada alerta al menos una vez (un respaldo que falla a propósito, un disco lleno de prueba, un certificado de prueba por vencer) y todas llegaron a Mailpit.
+
+## 7. Diseño físico
+
+La empresa va a comprar un rack de 42U y una UPS para tres servidores 2U (web, base de datos y archivos), un switch, un firewall, la patchera y espacio para crecer. Armalo en el constructor y calculá la UPS:
+
+<ConstructorRack altura={42} />
+
+<CalculadoraUps />
+
+En el documento:
+
+- **El plano del rack** (qué va en cada unidad) y por qué, con las reglas de la lección 4.5.4.
+- **La energía**: el consumo estimado, la UPS elegida (tipo, W, autonomía) y la carga en porcentaje; las dos PDU, de circuitos distintos.
+- **Los discos**: qué RAID usa cada servidor y por qué (por ejemplo, RAID 1 para el sistema y RAID 10 o 6 para los datos), con repuesto o no.
+- **El apagado ordenado**: qué servidor es el primary de NUT, cuáles son secondary, en qué orden se apagan (primero la aplicación, después la base, por último los archivos) y cuántos minutos necesita cada uno.
+- **La gestión fuera de banda**: la red de gestión, sus direcciones y quién accede.
+
+**Criterio de calidad:** el constructor no marca ningún problema, la UPS queda por debajo del 80 % con margen para crecer, y la autonomía alcanza para el apagado ordenado completo.
+
+## 8. Pruebas de falla y documentación
+
+Antes de entregar, rompé cosas a propósito (con instantáneas) y anotá qué pasó, cuánto tardó en notarse y cómo se resolvió:
+
+1. Se cae una instancia. Se caen las dos.
+2. ubuntu01 se apaga: ¿qué pasa con las imágenes, con el correo de alertas y con los respaldos de esa noche?
+3. Se borra la tabla de pedidos "por error": restauración desde el último respaldo.
+4. El certificado vence (adelantá la fecha de una VM de prueba o emití uno de un día).
+
+Y la documentación, en texto plano:
+
+```text
+TIENDA ONLINE DE EJEMPLO S.A. — DOCUMENTO DE ENTREGA
+Fecha: ...   Preparado por: ...
+
+1. RESUMEN: qué se armó, qué no incluye, el esquema.
+2. SERVIDORES: nombre, IP, qué corre, puertos abiertos, discos.
+3. WEB: nginx, instancias, SELinux, logs.
+4. CERTIFICADOS: CA, emisión, renovación, a quién confiar.
+5. BASE DE DATOS: cuentas y permisos, respaldo (qué, cuándo, dónde, retención), RPO y RTO
+   medidos, registro de restauraciones.
+6. ARCHIVOS: NFS, Samba, dueños y permisos.
+7. ALERTAS: la tabla, cómo se probó cada una.
+8. DISEÑO FÍSICO: rack, energía, UPS y NUT, RAID, gestión fuera de banda.
+9. PROCEDIMIENTOS: publicar una versión nueva de la aplicación, restaurar la base, cambiar
+   un disco, renovar el certificado a mano, qué hacer si se corta la luz.
+10. PRUEBAS DE FALLA: qué se rompió, qué pasó, qué se cambió.
+11. PENDIENTES Y RECOMENDACIONES.
+```
+
+**Criterio de calidad:** otra persona puede restaurar la base y publicar una versión nueva siguiendo solo el documento.
+
+## Verificación final
+
+<PasosGuiados ejercicio={verificacion} />
+
+## Revisión antes de entregar
+
+| Criterio | Falta | Bien | Muy bien |
+| --- | --- | --- | --- |
+| Web | Una instancia, expuesta directo | Proxy inverso con dos instancias y reinicio automático | Logs con tiempos, SELinux con booleanos justos y prueba de caída documentada |
+| HTTPS | HTTP o certificado con advertencias | Certificado de la CA interna, redirección y HSTS | Renovación automática probada, testssl A o más y plan para un dominio real |
+| Base de datos | Respaldos a mano o en el mismo disco | Respaldo programado con retención y copia a otro equipo | Cuentas mínimas, restauración cronometrada y RPO y RTO comparados con lo acordado |
+| Archivos | Carpeta local | NFS bajo demanda servido por nginx | Samba para marketing con permisos por grupo y uid coherentes |
+| Alertas | Nada avisa | Correo de root y aviso del respaldo | Toda la tabla de alertas probada provocando cada falla |
+| Diseño físico | Sin plano | Rack armado y UPS calculada | RAID, NUT con orden de apagado, gestión fuera de banda y margen de crecimiento justificados |
+| Operación | Sin documentos | Documento completo | Pruebas de falla documentadas y procedimientos que otra persona siguió |
+
+<Consejo>
+Tomá una instantánea `entrega-nivel-4` de las dos máquinas y guardá juntos los scripts, las unidades de systemd, las configuraciones de nginx y el documento. En el Nivel 5 todo esto se escribe como código con Ansible, y en el Nivel 6 se suma un sistema de monitoreo de verdad que reemplaza a los scripts de alertas.
+</Consejo>
