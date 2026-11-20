@@ -1,0 +1,112 @@
+tipo: terminal
+shell: bash
+titulo: Un nodo de Proxmox de punta a punta
+descripcion: >-
+  pve01 está recién instalado (Proxmox VE 9, ext4 con LVM-thin), con eno1 en vmbr0
+  (192.168.10.21) conectado a un troncal con las VLAN 10 (servidores) y 20 (servicios internos).
+  En /root están la imagen de nube de Ubuntu y la clave de Ana. pbs01 (192.168.10.40) ya tiene el
+  datastore principal, la cuenta pve@pbs (clave Pbs-2026-bk) y la huella
+  aa:12:bb:34:cc:56:dd:78:ee:90:ff:12:aa:34:bb:56:cc:78:dd:90:ee:12:ff:34:aa:56:bb:78:cc:90:dd:12.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox: {}
+  imagenes_disco:
+    - { ruta: /root/noble-server-cloudimg-amd64.img, formato: qcow2, virtual_gb: 3.5, disco_gb: 0.58 }
+  archivos:
+    /root/ana.pub: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK8z ana@pc\n"
+pasos:
+  - consigna: Dejá los repositorios sin suscripción funcionando (sin el enterprise de Proxmox ni el de Ceph) y actualizá la lista de paquetes.
+    verificar:
+      - { archivo: /etc/apt/sources.list.d/pve-enterprise.sources, contenido_incluye: 'Enabled: no' }
+      - { archivo: /etc/apt/sources.list.d/ceph.sources, contenido_incluye: 'Enabled: no' }
+      - { archivo: /etc/apt/sources.list.d/proxmox.sources, contenido_incluye: 'pve-no-subscription' }
+      - { salida_no_contiene: '401' }
+    pistas:
+      - "Como en la lección 5.2.1: `Enabled: no` en los dos .sources enterprise y un proxmox.sources con pve-no-subscription para trixie."
+    solucion:
+      - "sed -i '1i Enabled: no' /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources"
+      - "printf 'Types: deb\\nURIs: http://download.proxmox.com/debian/pve\\nSuites: trixie\\nComponents: pve-no-subscription\\nSigned-By: /usr/share/keyrings/proxmox-archive-keyring.gpg\\n' > /etc/apt/sources.list.d/proxmox.sources"
+      - apt update
+    explicacion: Listo para apt full-upgrade.
+  - consigna: Hacé que vmbr0 lleve VLAN (vlan-aware, VLAN 2 a 4094) y aplicalo.
+    verificar:
+      - { pve_puente: vmbr0, vlan_aware: true }
+    pistas:
+      - "Agregá `bridge-vlan-aware yes` y `bridge-vids 2-4094` al bloque de vmbr0, por ejemplo con sed después de la línea `bridge-fd 0`, y `ifreload -a`."
+    solucion:
+      - "sed -i 's/\\tbridge-fd 0/\\tbridge-fd 0\\n\\tbridge-vlan-aware yes\\n\\tbridge-vids 2-4094/' /etc/network/interfaces"
+      - ifreload -a
+    explicacion: Con un solo puente, la administración sigue sin etiqueta y las VM pueden ir a cualquier VLAN del troncal.
+  - consigna: >-
+      Armá la plantilla 9000 (ubuntu-2404) desde la imagen de nube, con virtio-scsi-single, el
+      agente, la unidad de cloud-init, la usuaria ana con su clave e IP por DHCP, y convertila en
+      plantilla.
+    verificar:
+      - { pve_vm: 9000, plantilla: true, config: { ciuser: ana, ide2: cloudinit } }
+    pistas:
+      - "Como en la lección 5.2.2: qm create con import-from, qm set con ide2, ciuser, sshkeys e ipconfig0, y qm template."
+    solucion:
+      - "qm create 9000 --name ubuntu-2404 --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --scsi0 local-lvm:0,import-from=/root/noble-server-cloudimg-amd64.img,discard=on,iothread=1 --agent 1 --ostype l26"
+      - qm set 9000 --ide2 local-lvm:cloudinit --boot order=scsi0 --serial0 socket --vga serial0
+      - qm set 9000 --ciuser ana --sshkeys /root/ana.pub --ipconfig0 ip=dhcp
+      - qm template 9000
+    explicacion: Una vez armada, cada servidor nuevo es un clon.
+  - consigna: >-
+      Cloná web01 (VM 110, clon completo) en la VLAN 10, con 20 GB más de disco, que arranque
+      sola con el nodo, y prendela.
+    verificar:
+      - { pve_vm: 110, nombre: web01, estado: running, config: { net0: 'tag=10', onboot: '1' } }
+    pistas:
+      - "`qm clone 9000 110 --name web01 --full 1`, `qm set 110 --net0 virtio,bridge=vmbr0,tag=10 --onboot 1`, `qm disk resize 110 scsi0 +20G` y `qm start 110`."
+    solucion:
+      - qm clone 9000 110 --name web01 --full 1
+      - qm set 110 --net0 virtio,bridge=vmbr0,tag=10 --onboot 1
+      - qm disk resize 110 scsi0 +20G
+      - qm start 110
+    explicacion: Clon completo porque es un servidor que va a vivir años y no tiene que depender de la plantilla.
+  - consigna: >-
+      Bajá la plantilla de Debian 13 y creá el contenedor 120, dns01, sin privilegios, en la VLAN
+      20 con IP por DHCP, que arranque con el nodo, y prendelo.
+    verificar:
+      - { pve_ct: 120, nombre: dns01, estado: running, config: { unprivileged: '1', net0: 'tag=20', onboot: '1' } }
+    pistas:
+      - "`pveam update`, `pveam download local debian-13-standard_13.1-2_amd64.tar.zst` y `pct create 120 ... --net0 name=eth0,bridge=vmbr0,tag=20,ip=dhcp --onboot 1 --start 1`."
+    solucion:
+      - pveam update
+      - pveam download local debian-13-standard_13.1-2_amd64.tar.zst
+      - "pct create 120 local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst --hostname dns01 --unprivileged 1 --memory 512 --cores 1 --rootfs local-lvm:8 --net0 name=eth0,bridge=vmbr0,tag=20,ip=dhcp --ssh-public-keys /root/ana.pub --onboot 1 --start 1"
+    explicacion: >-
+      web01 y dns01 están en el mismo puente pero en VLAN distintas: no se ven sin pasar por un router.
+  - consigna: Agregá pbs01 como almacenamiento y respaldá web01 y dns01 ahí, en modo snapshot.
+    verificar:
+      - { pve_almacenamiento: pbs01, tipo: pbs }
+      - { pve_respaldo: 110, almacenamiento: pbs01 }
+      - { pve_respaldo: 120, almacenamiento: pbs01 }
+    pistas:
+      - "`pvesm add pbs pbs01 --server 192.168.10.40 --datastore principal --username pve@pbs --password Pbs-2026-bk --fingerprint aa:12:...` y `vzdump 110 120 --storage pbs01 --mode snapshot`."
+    solucion:
+      - "pvesm add pbs pbs01 --server 192.168.10.40 --datastore principal --username pve@pbs --password Pbs-2026-bk --fingerprint aa:12:bb:34:cc:56:dd:78:ee:90:ff:12:aa:34:bb:56:cc:78:dd:90:ee:12:ff:34:aa:56:bb:78:cc:90:dd:12 --content backup"
+      - vzdump 110 120 --storage pbs01 --mode snapshot
+    explicacion: En producción, esto queda como trabajo programado en Datacenter, Respaldo, con retención y aviso por correo.
+  - consigna: >-
+      Probá la restauración: restaurá el respaldo de web01 como VM 910 con MAC nuevas, prendela,
+      y cuando compruebes que arranca, apagala y borrala.
+    verificar:
+      - { pve_vm: 910, existe: false }
+      - { comando_usado: 'qmrestore' }
+      - { comando_usado: 'qm start 910' }
+    pistas:
+      - "`qmrestore $(pvesm list pbs01 --vmid 110 | tail -1 | cut -d' ' -f1) 910 --unique 1`, `qm start 910`, `qm stop 910` y `qm destroy 910`."
+    solucion:
+      - "qmrestore $(pvesm list pbs01 --vmid 110 | tail -1 | cut -d' ' -f1) 910 --unique 1"
+      - qm start 910
+      - qm stop 910
+      - qm destroy 910
+    explicacion: Prueba hecha y sin dejar basura. Anotá en la documentación la fecha y cuánto tardó.

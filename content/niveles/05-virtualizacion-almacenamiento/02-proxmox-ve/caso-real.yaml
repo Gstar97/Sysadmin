@@ -1,0 +1,117 @@
+tipo: troubleshooting
+titulo: La actualización del domingo
+descripcion: >-
+  Incidente simulado. pve02 es el único nodo de Proxmox de una sucursal, con siete VM, sin
+  suscripción. El domingo a la noche, un compañero lo pasó de Proxmox VE 8 a 9 siguiendo un
+  artículo de un blog. Hay respaldos nocturnos en un PBS. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 7:40. Ninguna VM de pve02 arrancó. La web abre, pero cada VM falla al prenderla. El
+      compañero te pasa lo que hizo: cambió "bookworm" por "trixie" en el archivo de Debian, corrió
+      apt update y apt upgrade -y, y reinició.
+    evidencia:
+      - titulo: Al prender la VM 101
+        contenido: |
+          # qm start 101
+          /usr/bin/kvm: error while loading shared libraries: libgnutls.so.30: cannot open shared object file: No such file or directory
+          start failed: QEMU exited with code 127
+      - titulo: pveversion
+        contenido: |
+          pve-manager/8.4.14/d9a1c2a7 (running kernel: 6.8.12-15-pve)
+    opciones:
+      - texto: Revisar los repositorios y qué versión quedó de cada paquete
+        ir_a: n_repos
+        minutos: 10
+      - texto: Reinstalar Proxmox VE 9 de cero y restaurar las siete VM desde el PBS
+        ir_a: fin_reinstalar
+        minutos: 240
+      - texto: Reiniciar otra vez, por si el arranque quedó a medias
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Arranca igual que antes: el kernel viejo y la misma falla. El problema no es el
+          arranque, son los paquetes.
+  n_repos:
+    situacion: >-
+      Encontrás la causa: el sistema base quedó a medias en Debian 13, pero los paquetes de
+      Proxmox siguen en la versión 8, porque su repositorio sigue apuntando a bookworm. QEMU de
+      Proxmox 8 busca bibliotecas de Debian 12 que la actualización ya cambió.
+    evidencia:
+      - titulo: Los repositorios
+        contenido: |
+          # grep -r "Suites\|deb " /etc/apt/sources.list.d/
+          /etc/apt/sources.list.d/debian.sources:Suites: trixie trixie-updates
+          /etc/apt/sources.list.d/pve-no-subscription.list:deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription
+          /etc/apt/sources.list.d/ceph.list:deb http://download.proxmox.com/debian/ceph-quincy bookworm no-subscription
+      - titulo: Lo que apt dejó sin actualizar
+        contenido: |
+          # apt list --upgradable 2>/dev/null | head -4
+          Listing...
+          # apt-get -s dist-upgrade | grep -c "^Inst"
+          612
+    opciones:
+      - texto: >-
+          Seguir la guía oficial de 8 a 9 desde donde quedó: todos los repositorios en trixie (también Proxmox y Ceph), apt update, el chequeo pve8to9 y apt dist-upgrade
+        ir_a: n_upgrade
+        minutos: 45
+      - texto: Volver el archivo de Debian a bookworm y bajar los paquetes que se actualizaron
+        ir_a: n_repos
+        minutos: 40
+        consecuencia: >-
+          apt no baja versiones de forma ordenada: hay cientos de paquetes de Debian 13 que
+          dependen unos de otros. Terminás peor, con paquetes rotos. Hacia adelante es el camino.
+      - texto: Instalar a mano la biblioteca que falta (libgnutls) desde Debian 12
+        ir_a: n_repos
+        minutos: 20
+        consecuencia: >-
+          La VM 101 arranca, pero falla la 103 con otra biblioteca, y una actualización de mañana
+          lo rompe otra vez. Es un parche sobre un sistema a medio actualizar.
+  n_upgrade:
+    situacion: >-
+      Con los tres repositorios en trixie (Proxmox 9 y Ceph Squid), pve8to9 --full avisa de dos
+      cosas: el paquete systemd-boot que hay que sacar y que falta reiniciar en el kernel nuevo.
+      Seguís sus indicaciones, corrés apt dist-upgrade (instala y cambia 612 paquetes) y reiniciás
+      en una ventana con la consola de la iDRAC abierta.
+    evidencia:
+      - titulo: Después del reinicio
+        contenido: |
+          # pveversion
+          pve-manager/9.2.1/7a3b9c4e1f2d5a68 (running kernel: 7.0.4-1-pve)
+          # pve8to9 --full | tail -3
+          = SUMMARY =
+          TOTAL:    41
+          PASSED:   38   SKIPPED: 3   WARNINGS: 0   FAILURES: 0
+    opciones:
+      - texto: Prender las VM de a una, empezando por las críticas, y revisar cada servicio
+        ir_a: n_ok
+        minutos: 30
+      - texto: Prender todas juntas para recuperar el tiempo perdido
+        ir_a: n_upgrade
+        minutos: 10
+        consecuencia: >-
+          Arrancan, pero si alguna falla no sabés si es por la actualización o por la carga de
+          siete arranques a la vez. De a una, empezando por lo crítico (el controlador de dominio,
+          después la base, después el resto), cada problema aparece solo.
+  n_ok:
+    final: exito
+    resumen: >-
+      A las 11 estaban todas las VM funcionando. La causa fue una actualización mayor hecha con un
+      atajo: se cambió solo el repositorio de Debian (no el de Proxmox ni el de Ceph) y se usó apt
+      upgrade en lugar de dist-upgrade, así que el sistema quedó mitad Debian 13 y mitad Proxmox
+      8, y QEMU no encontraba sus bibliotecas. Se arregló yendo hacia adelante, como dice la guía
+      oficial. Para la próxima actualización mayor: leer la guía oficial y las notas de la
+      versión (no un blog); correr el chequeo (pve8to9 --full) días antes y resolver lo que
+      marque; verificar que hay respaldos recientes y restaurables; cambiar todos los
+      repositorios juntos; usar apt dist-upgrade (o full-upgrade); hacerlo en una ventana
+      anunciada, con acceso a la consola fuera de banda; y, en un clúster, de a un nodo, moviendo
+      antes sus VM a los otros.
+  fin_reinstalar:
+    final: fracaso
+    resumen: >-
+      Funcionó, pero la sucursal estuvo sin servidores hasta la tarde, y se perdió lo que se había
+      trabajado desde el respaldo de la noche anterior en las dos VM que se usaron el domingo. El
+      nodo no estaba perdido: tenía todas sus VM intactas y solo le faltaba terminar la
+      actualización. Mirar los repositorios y pveversion llevaba diez minutos; terminar la
+      actualización como dice la guía, menos de una hora.

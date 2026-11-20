@@ -1,0 +1,41 @@
+---
+titulo: Proxmox VE con VM y contenedores en VLAN, respaldos en Proxmox Backup Server y restauración
+horas: 4
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - Instalé Proxmox VE 9 anidado, con repositorios sin suscripción, actualizado y con un usuario propio con doble factor.
+  - Tengo una plantilla con cloud-init, una VM y dos contenedores en VLAN distintas, y comprobé que las VLAN los separan.
+  - Instalé Proxmox Backup Server con un datastore y una cuenta con permisos justos para los nodos.
+  - Programé un trabajo de respaldo con retención y vi que el segundo respaldo fue incremental.
+  - Restauré una VM completa, un archivo suelto y un contenedor borrado, y anoté los tiempos.
+---
+
+import sim from './lab-proxmox-sim.yaml'
+import pasos from './lab-proxmox.yaml'
+
+## Objetivo
+
+Armar la base de todo el resto del nivel: un nodo de Proxmox VE con su red, sus plantillas y sus servidores, y un Proxmox Backup Server que los respalda todas las noches y del que ya sabés restaurar. En el módulo 5.4 vas a sumar dos nodos más para el clúster.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: unos 12 GB de memoria libres y 150 GB de disco en tu computadora, la virtualización anidada activada y salida a internet. Los ISO de Proxmox VE 9 y Proxmox Backup Server 4.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Proxmox anidado sirve para aprender, no para medir rendimiento: las VM de adentro van a andar más lentas que en un servidor de verdad. Si te falta memoria, bajá pve01 a 6 GB y usá contenedores en lugar de VM para las pruebas.
+</Advertencia>
+
+## Para pensar
+
+1. El PBS de este laboratorio está en la misma computadora que pve01. ¿Qué cambiarías en una empresa, y qué agregarías para tener una copia fuera del lugar?
+2. web01 es un clon completo y no un clon enlazado. ¿Qué pasaría con un clon enlazado si alguien borra la plantilla 9000, y por qué Proxmox no te deja hacerlo?
+3. El trabajo de respaldo usa modo snapshot. ¿Qué cambia si web01 no tiene el agente de QEMU instalado, y cómo te darías cuenta mirando el registro del respaldo?

@@ -1,0 +1,99 @@
+tipo: pasos
+titulo: Proxmox VE y Proxmox Backup Server en tu laboratorio
+descripcion: >-
+  Vas a instalar Proxmox VE 9 y Proxmox Backup Server 4 como máquinas virtuales de tu
+  hipervisor (virtualización anidada), crear una plantilla, una VM y un contenedor en VLAN
+  distintas, respaldarlos en el PBS y restaurar. Necesitás unos 12 GB de memoria libres en tu
+  computadora y 150 GB de disco. Calculá unas cuatro horas.
+pasos:
+  - titulo: Descargar los ISO
+    detalle: >-
+      De proxmox.com, sección Downloads: el ISO de Proxmox VE 9 y el de Proxmox Backup Server 4.
+      Verificá la suma SHA256 que publican al lado de cada uno.
+    comandos:
+      - sha256sum proxmox-ve_9.*.iso proxmox-backup-server_4.*.iso
+    comprobar: Las sumas coinciden con las de la página.
+  - titulo: La VM para Proxmox VE
+    detalle: >-
+      En tu hipervisor: 4 vCPU con virtualización anidada activada (como en el laboratorio del
+      módulo 5.1), 8 GB de memoria, un disco de 64 GB, y la placa de red en modo puente (o en la
+      red solo-anfitrión de tus otras VM). Para que las VM de adentro de Proxmox puedan salir por
+      esa placa, el hipervisor de afuera tiene que dejar pasar MAC ajenas. En VirtualBox:
+      Red, Avanzado, Modo promiscuo: Permitir todo. En Hyper-V, el comando de abajo. En VMware
+      Workstation sobre Windows no hace falta nada.
+    comandos:
+      - "Set-VMNetworkAdapter -VMName pve01 -MacAddressSpoofing On"
+    comprobar: La VM está creada, con la virtualización anidada y el ISO de Proxmox VE en la lectora.
+  - titulo: Instalar Proxmox VE
+    detalle: >-
+      Arrancá desde el ISO y elegí la instalación gráfica. Disco: ext4 (o ZFS RAID0 con un solo
+      disco virtual, para probar ZFS). Nombre pve01.lab, una IP fija de la red de tu laboratorio,
+      la puerta de enlace y el DNS de esa red. Al terminar, sacá el ISO y reiniciá.
+    comprobar: Desde tu PC, https://IP-de-pve01:8006 muestra la pantalla de inicio de sesión (root, realm Linux PAM).
+  - titulo: Repositorios, actualización y tu usuario
+    detalle: Desde la web (pve01, Actualizaciones, Repositorios) o desde la consola, como en la lección 5.2.1.
+    comandos:
+      - "sed -i '1i Enabled: no' /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources"
+      - "printf 'Types: deb\\nURIs: http://download.proxmox.com/debian/pve\\nSuites: trixie\\nComponents: pve-no-subscription\\nSigned-By: /usr/share/keyrings/proxmox-archive-keyring.gpg\\n' > /etc/apt/sources.list.d/proxmox.sources"
+      - apt update && apt full-upgrade -y
+      - pveum user add ana@pve --comment 'Ana' && pveum passwd ana@pve
+      - pveum acl modify / --users ana@pve --roles PVEAdmin
+    comprobar: apt update termina sin errores y podés entrar a la web como ana@pve (realm Proxmox VE). Activale el doble factor (TOTP) desde la web.
+  - titulo: El puente con VLAN
+    detalle: >-
+      En pve01, Sistema, Red, editá vmbr0 y marcá "Con VLAN" (VLAN aware). Aplicá la configuración.
+    comprobar: grep vlan-aware /etc/network/interfaces muestra bridge-vlan-aware yes.
+  - titulo: Plantilla, una VM y un contenedor
+    detalle: >-
+      La plantilla, como en el ejercicio de la lección 5.2.2 (descargá la imagen con wget en
+      /root). Después: web01, clon completo, en la VLAN 10 con IP fija 10.10.10.11/24 (en la
+      pestaña Cloud-Init); y el contenedor dns01, desde la plantilla de Debian 13, en la VLAN 10
+      con 10.10.10.53/24. Por último, un contenedor prueba01 en la VLAN 20 con 10.10.10.99/24.
+    comandos:
+      - wget -P /root https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+      - pveam update && pveam download local debian-13-standard_13.1-2_amd64.tar.zst
+    comprobar: >-
+      Desde la consola de dns01, ping 10.10.10.11 responde (misma VLAN); desde prueba01, ping
+      10.10.10.11 no responde, aunque está en la misma subred: está en otra VLAN. Eso es lo que
+      separan las VLAN.
+  - titulo: Instalar Proxmox Backup Server
+    detalle: >-
+      Otra VM: 2 vCPU, 4 GB, un disco de 32 GB para el sistema y otro de 64 GB para los respaldos,
+      en la misma red. Instalá desde el ISO (pbs01.lab, IP fija) y entrá a https://IP-de-pbs01:8007
+      con root. Después, desde la web del PBS: Administración, Almacenamiento/Discos, inicializá el
+      disco de 64 GB y creá en él un directorio (o un pool ZFS) como datastore "principal". Hacé
+      lo mismo con los repositorios (pbs-no-subscription) y actualizá.
+    comprobar: El datastore principal aparece en el panel del PBS, vacío.
+  - titulo: Una cuenta para los nodos y la conexión
+    detalle: >-
+      En el PBS: Configuración, Control de acceso, agregá el usuario pve@pbs y dale el rol
+      DatastoreBackup sobre /datastore/principal (puede respaldar y restaurar lo suyo, no borrar
+      lo de otros). Copiá la huella del panel (Mostrar huella).
+    comandos:
+      - pvesm add pbs pbs01 --server IP-de-pbs01 --datastore principal --username pve@pbs --password 'la-clave' --fingerprint LA:HUELLA:COMPLETA --content backup
+    comprobar: En la web de pve01 aparece pbs01 en el árbol, con su capacidad.
+  - titulo: Un trabajo de respaldo con retención
+    detalle: >-
+      En pve01, Datacenter, Respaldo, Agregar: almacenamiento pbs01, todos los invitados, todos
+      los días a las 21:00, modo snapshot, con tu correo para avisar fallas, y en la pestaña
+      Retención: keep-last 3, keep-daily 7, keep-weekly 4. Después, "Ejecutar ahora".
+    comprobar: >-
+      En el PBS aparecen los respaldos de web01, dns01 y prueba01. Corré el trabajo una segunda
+      vez y fijate en el registro de web01: "using fast incremental mode" y "reused".
+  - titulo: Verificación y recolección de basura
+    detalle: >-
+      En el PBS, en el datastore principal: un trabajo de verificación (todos los días) y la
+      programación de la recolección de basura. Ejecutá la verificación una vez a mano.
+    comprobar: El resultado de la verificación es OK para todos los respaldos.
+  - titulo: Restaurar, de tres formas
+    detalle: >-
+      1) web01 completa como VM 910, con "Único" marcado, y comprobá que arranca. 2) Desde el
+      respaldo de dns01, con el botón "Restaurar archivos", bajá /etc/hostname. 3) Borrá prueba01
+      y restaurala desde el respaldo con su mismo número.
+    comprobar: Las tres funcionaron. Anotá cuánto tardó la restauración completa de web01.
+  - titulo: Documentar y limpiar
+    detalle: >-
+      Borrá la VM 910. Anotá: qué respalda el trabajo, cuándo, la retención, dónde está el PBS, la
+      cuenta que usan los nodos y los tiempos de restauración que mediste. Sacá una instantánea
+      de pve01 y de pbs01 ("fin módulo 5.2"): las vas a usar en el resto del nivel.
+    comprobar: Alguien con tu documento podría restaurar web01 sin preguntarte nada.
