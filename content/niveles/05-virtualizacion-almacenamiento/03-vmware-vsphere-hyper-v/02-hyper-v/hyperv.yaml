@@ -1,0 +1,61 @@
+tipo: diagrama
+titulo: Hyper-V por dentro
+puntos:
+  - id: raiz
+    titulo: La partición raíz
+    area: { x: 2.3, y: 9.3, ancho: 20.3, alto: 51.6 }
+    texto: >-
+      El Windows Server donde instalaste el rol parece el "dueño" de la máquina, pero al reiniciar
+      queda corriendo arriba del hipervisor, como una VM con privilegios. Tiene los drivers reales
+      del disco y la red y atiende los pedidos de las VM. Por eso conviene que haga poco más que
+      ser host: cada programa extra instalado ahí afecta a todas las VM.
+  - id: hijas
+    titulo: Las particiones hijas (las VM)
+    area: { x: 24.4, y: 9.3, ancho: 32, alto: 51.6 }
+    texto: >-
+      Cada VM es una partición hija. Windows trae incluidos los servicios de integración (apagado
+      ordenado, hora, latido, copia de archivos, VSS para los puntos de control). Linux trae en el
+      kernel los drivers hv_netvsc y hv_storvsc; los demonios (KVP, VSS) están en el paquete
+      hyperv-daemons en Rocky, o linux-cloud-tools en Ubuntu.
+  - id: vmbus
+    titulo: VMBus
+    area: { x: 2.3, y: 63.3, ancho: 54.1, alto: 7 }
+    texto: >-
+      El canal de memoria compartida por el que los drivers de las VM (VSC) le pasan los pedidos de
+      disco y red a la partición raíz (VSP). Es el equivalente de virtio en KVM: con estos drivers
+      el disco y la red andan casi tan rápido como sin virtualizar.
+  - id: hipervisor
+    titulo: El hipervisor
+    area: { x: 2.3, y: 73.3, ancho: 54.1, alto: 10.2 }
+    texto: >-
+      Aunque se instala como un rol de Windows, Hyper-V es de tipo 1: el hipervisor arranca primero
+      y Windows queda arriba. Es el mismo que usa Azure y el que está debajo de WSL2 y de la
+      seguridad basada en virtualización de Windows 11.
+  - id: externo
+    titulo: Conmutador externo
+    area: { x: 59.3, y: 9.3, ancho: 38.4, alto: 23.3 }
+    texto: >-
+      Se apoya en una placa física y conecta las VM con la red real. Con -AllowManagementOS el
+      host sigue usando esa placa a través de una placa virtual nueva (y toma la configuración IP
+      que tenía la física). Lo ideal en producción es separar: una placa (o un equipo de placas)
+      para las VM y otra para administrar el host.
+  - id: interno
+    titulo: Conmutador interno
+    area: { x: 59.3, y: 35.3, ancho: 38.4, alto: 18.6 }
+    texto: >-
+      Las VM se ven entre sí y con el host, pero no salen a la red. Útil para laboratorios: el host
+      puede hacer de router con NAT (New-NetNat) para darles salida.
+  - id: privado
+    titulo: Conmutador privado
+    area: { x: 59.3, y: 56.7, ancho: 38.4, alto: 18.6 }
+    texto: >-
+      Solo las VM entre sí; ni el host las alcanza. Para redes aisladas de prueba, por ejemplo un
+      laboratorio con un controlador de dominio que no tiene que chocar con el de producción.
+  - id: cadavm
+    titulo: En cada VM
+    area: { x: 59.3, y: 78.1, ancho: 38.4, alto: 18.1 }
+    texto: >-
+      Los discos son .vhdx (hasta 64 TB): dinámico, fijo o diferencial (un hijo que guarda solo los
+      cambios sobre un padre, como un clon enlazado). La generación 2 usa UEFI y arranque seguro, y
+      se elige al crear la VM: no se cambia después. Los puntos de control de producción usan VSS
+      dentro de la VM; los estándar guardan también la memoria, como una instantánea con RAM.

@@ -547,6 +547,11 @@ for (const [verb, synopsis] of [
           }
           const e = startVm(h, vm)
           if (e) throw new PsError(e, 'ResourceUnavailable', 'OutOfMemory,Microsoft.HyperV.PowerShell.Commands.StartVM', vm.name)
+          if (!bootsOk(vm)) ctx.host(`[simulador] En la consola de la VM (vmconnect ${ctx.s.state.equipo} ${vm.name}) se ve: "The image's hash and certificate are not allowed (DB)". El arranque seguro rechaza el cargador de Linux.\n`)
+          else if (!vm.guestReady && vm.dvd && vm.disks.length) {
+            vm.guestReady = true
+            ctx.host(`[simulador] Arranca desde la ISO. La instalación se hace en la consola (vmconnect ${ctx.s.state.equipo} ${vm.name}); acá se da por terminada.\n`)
+          }
           continue
         }
         if (verb === 'Resume-VM') {

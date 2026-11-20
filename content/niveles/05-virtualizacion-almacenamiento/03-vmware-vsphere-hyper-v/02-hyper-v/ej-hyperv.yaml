@@ -1,0 +1,108 @@
+tipo: terminal
+shell: powershell
+titulo: Tu primer host Hyper-V
+descripcion: >-
+  HV01 es un Windows Server 2025 Datacenter recién instalado, con el rol Hyper-V ya agregado y
+  reiniciado. Tiene el disco D: para las VM y la imagen de Ubuntu Server en D:\ISO. Hay que
+  dejarlo listo para el primer servidor web, que va en la VLAN 20.
+estado_inicial:
+  equipo: HV01
+  edicion: Datacenter
+  red: { ip: 192.168.10.31, adaptador: Ethernet }
+  discos:
+    - { numero: 1, tamano_gb: 500, estilo: GPT, particiones: [{ letra: D, tamano_gb: 499, sistema: NTFS, etiqueta: VMs }] }
+  archivos:
+    'D:\ISO\ubuntu-26.04-live-server-amd64.iso': { tamano_mb: 3100 }
+    'D:\VMs': { tipo: directorio }
+  hyperv: { procesadores: 16, memoria_gb: 64 }
+pasos:
+  - consigna: Mirá qué ofrece el host (procesadores, memoria y dónde guarda las VM por defecto) y qué conmutadores virtuales tiene.
+    verificar:
+      - { comando_usado: "get-vmhost" }
+      - { comando_usado: "get-vmswitch" }
+    pistas:
+      - "Get-VMHost | Format-List muestra todo."
+    solucion:
+      - Get-VMHost | Format-List LogicalProcessorCount, MemoryCapacity, VirtualMachinePath, VirtualHardDiskPath
+      - Get-VMSwitch
+    explicacion: >-
+      Un Hyper-V recién instalado no tiene ningún conmutador: las VM que crees quedarían sin red.
+      Y guarda todo en C:, cosa que conviene cambiar para no llenar el disco del sistema.
+  - consigna: >-
+      Hacé que las VM y sus discos se guarden por defecto en D:\VMs, y creá dos conmutadores:
+      "Externo", sobre la placa Ethernet y compartido con el host, y "Lab", interno.
+    verificar:
+      - { conmutador_hyperv: Externo, tipo: External }
+      - { conmutador_hyperv: Lab, tipo: Internal }
+      - { comando_usado: "set-vmhost" }
+    pistas:
+      - "Set-VMHost -VirtualMachinePath D:\\VMs -VirtualHardDiskPath D:\\VMs"
+      - "New-VMSwitch -Name Externo -NetAdapterName Ethernet -AllowManagementOS $true"
+      - "New-VMSwitch -Name Lab -SwitchType Internal"
+    solucion:
+      - Set-VMHost -VirtualMachinePath D:\VMs -VirtualHardDiskPath D:\VMs
+      - New-VMSwitch -Name Externo -NetAdapterName Ethernet -AllowManagementOS $true
+      - New-VMSwitch -Name Lab -SwitchType Internal
+    explicacion: >-
+      El conmutador externo es el puente de Proxmox: une las VM con la red física. Con
+      -AllowManagementOS el host sigue teniendo red por esa misma placa (a través de una placa
+      virtual nueva), por eso al crearlo se corta la conexión un par de segundos. El interno
+      conecta las VM entre sí y con el host, sin salir a la red; el privado, solo las VM entre sí.
+  - consigna: >-
+      Creá la VM web01: generación 2, 2 GB de memoria al arrancar, un disco nuevo de 60 GB en
+      D:\VMs\web01.vhdx y conectada a Externo. Después dale 2 procesadores, memoria dinámica entre
+      1 y 4 GB y la ISO de Ubuntu en una lectora.
+    verificar:
+      - { vm_hyperv: web01, generacion: 2, procesadores: 2, memoria_dinamica: true, conmutador: Externo, con_disco: 'D:\VMs\web01.vhdx' }
+      - { vhd: 'D:\VMs\web01.vhdx', tipo: Dynamic, tamano_gb: 60 }
+      - { comando_usado: "add-vmdvddrive" }
+    pistas:
+      - "New-VM -Name web01 -Generation 2 -MemoryStartupBytes 2GB -NewVHDPath D:\\VMs\\web01.vhdx -NewVHDSizeBytes 60GB -SwitchName Externo"
+      - "Set-VM -Name web01 -ProcessorCount 2 -DynamicMemory -MemoryMinimumBytes 1GB -MemoryMaximumBytes 4GB"
+      - "Add-VMDvdDrive -VMName web01 -Path D:\\ISO\\ubuntu-26.04-live-server-amd64.iso"
+    solucion:
+      - New-VM -Name web01 -Generation 2 -MemoryStartupBytes 2GB -NewVHDPath D:\VMs\web01.vhdx -NewVHDSizeBytes 60GB -SwitchName Externo
+      - Set-VM -Name web01 -ProcessorCount 2 -DynamicMemory -MemoryMinimumBytes 1GB -MemoryMaximumBytes 4GB
+      - Add-VMDvdDrive -VMName web01 -Path D:\ISO\ubuntu-26.04-live-server-amd64.iso
+    explicacion: >-
+      New-VM crea por defecto un solo procesador: casi siempre hay que ajustarlo. El disco queda
+      dinámico (crece a medida que se usa), que es el aprovisionamiento fino del módulo 5.1. La
+      memoria dinámica es el globo de Hyper-V: el host le saca memoria a la VM cuando no la usa.
+  - consigna: >-
+      Es un Linux con arranque seguro: cambiá la plantilla de arranque seguro a la que acepta Linux
+      (MicrosoftUEFICertificateAuthority). Después ponela en la VLAN 20, hacé que arranque sola
+      cuando se prende el host y encendela.
+    verificar:
+      - { comando_usado: "set-vmfirmware" }
+      - { vm_hyperv: web01, estado: Running, vlan: 20, arranque_automatico: Start }
+    pistas:
+      - "Set-VMFirmware -VMName web01 -SecureBootTemplate MicrosoftUEFICertificateAuthority"
+      - "Set-VMNetworkAdapterVlan -VMName web01 -Access -VlanId 20"
+      - "Set-VM -Name web01 -AutomaticStartAction Start"
+    solucion:
+      - Set-VMFirmware -VMName web01 -SecureBootTemplate MicrosoftUEFICertificateAuthority
+      - Set-VMNetworkAdapterVlan -VMName web01 -Access -VlanId 20
+      - Set-VM -Name web01 -AutomaticStartAction Start
+      - Start-VM web01
+    explicacion: >-
+      Con la plantilla por defecto (MicrosoftWindows) un Linux de generación 2 no arranca: la VM
+      figura encendida, pero en la consola aparece un error de arranque seguro y nunca toma
+      dirección. Es el error más común con Linux en Hyper-V. La VLAN de acceso es el equivalente
+      del tag de Proxmox (y el puerto físico del switch tiene que ser troncal, como viste en 2.4.3).
+  - consigna: >-
+      Ya instalado Ubuntu, antes de la primera actualización hacé un punto de control llamado
+      antes-de-actualizar y comprobá que aparece.
+    verificar:
+      - { vm_hyperv: web01, punto_de_control: antes-de-actualizar }
+      - { salida_contiene: "antes-de-actualizar" }
+    pistas:
+      - "Checkpoint-VM -Name web01 -SnapshotName antes-de-actualizar"
+      - "Get-VMCheckpoint -VMName web01"
+    solucion:
+      - Checkpoint-VM -Name web01 -SnapshotName antes-de-actualizar
+      - Get-VMCheckpoint -VMName web01
+    explicacion: >-
+      Por defecto Hyper-V hace puntos de control de producción: usa el servicio de instantáneas del
+      sistema invitado (VSS en Windows, una congelación del sistema de archivos en Linux), así que
+      la VM queda consistente, como si se hubiera apagado bien. Igual que en Proxmox, no es un
+      respaldo: se borra cuando la actualización salió bien.

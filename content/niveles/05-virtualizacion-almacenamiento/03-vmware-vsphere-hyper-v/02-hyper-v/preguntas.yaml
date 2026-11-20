@@ -1,0 +1,111 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Hyper-V se instala como un rol de Windows Server. ¿De qué tipo es como hipervisor?
+  opciones:
+    - { texto: "Tipo 1: el hipervisor arranca primero y el Windows del host queda arriba, en la partición raíz", correcta: true, explicacion: "Por eso el rol pide reiniciar." }
+    - { texto: "Tipo 2, como VirtualBox", explicacion: "Parece, pero no: corre debajo de Windows." }
+    - { texto: "Es un contenedor", explicacion: "No." }
+    - { texto: "Depende de la edición", explicacion: "Es igual en todas." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Necesitás que tres VM de prueba se vean entre sí, que el host también las alcance, pero que no salgan a la red de la empresa. ¿Qué conmutador creás?
+  opciones:
+    - { texto: "Interno", correcta: true, explicacion: "VM entre sí y con el host." }
+    - { texto: "Externo", explicacion: "Ese las conecta con la red física." }
+    - { texto: "Privado", explicacion: "Con el privado el host no las ve." }
+    - { texto: "Ninguno: se ven solas", explicacion: "Sin conmutador no tienen red." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Creaste una VM de generación 2, le pusiste la ISO de Rocky Linux y la encendiste. Mirás esto. ¿Qué pasa?
+  salida: |
+    PS> Get-VM rocky01 | Select-Object Name, State, Heartbeat
+    Name    State   Heartbeat
+    ----    -----   ---------
+    rocky01 Running NoContact
+
+    PS> Get-VMFirmware rocky01 | Select-Object SecureBoot, SecureBootTemplate
+    SecureBoot SecureBootTemplate
+    ---------- ------------------
+    On         MicrosoftWindows
+  opciones:
+    - { texto: "El arranque seguro con la plantilla de Windows rechaza el cargador de Linux: hay que apagarla y cambiar la plantilla a MicrosoftUEFICertificateAuthority", correcta: true, explicacion: "El error más común con Linux en Hyper-V." }
+    - { texto: "Falta memoria", explicacion: "La VM figura Running." }
+    - { texto: "La ISO está dañada", explicacion: "Puede ser, pero la plantilla ya explica el problema." }
+    - { texto: "Hay que pasarla a generación 1", explicacion: "No se puede cambiar, y no hace falta." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando para poner la placa de red de la VM web01 en la VLAN 30 (modo acceso).
+  prompt: "PS> "
+  aceptadas: ["Set-VMNetworkAdapterVlan -VMName web01 -Access -VlanId 30", "Set-VMNetworkAdapterVlan -VMName web01 -VlanId 30 -Access", "Set-VMNetworkAdapterVlan web01 -Access -VlanId 30"]
+  explicacion: "-Access pone la placa en una VLAN; -Trunk deja pasar varias (para una VM que hace de router o firewall)."
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre un punto de control de producción y uno estándar?
+  opciones:
+    - { texto: "El de producción usa VSS (o congela el sistema de archivos en Linux) y no guarda la memoria; el estándar guarda también la memoria", correcta: true, explicacion: "Al volver a uno de producción la VM arranca como si se hubiera apagado bien." }
+    - { texto: "El de producción es un respaldo y el estándar no", explicacion: "Ninguno es un respaldo." }
+    - { texto: "El estándar solo funciona con Linux", explicacion: "No." }
+    - { texto: "Son iguales", explicacion: "No." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son buenas prácticas para un host Hyper-V? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Guardar las VM en un disco distinto de C:", correcta: true, explicacion: "Con Set-VMHost, antes de la primera." }
+    - { texto: "Que el host haga solo de host", correcta: true, explicacion: "Idealmente en Server Core." }
+    - { texto: "Crear el conmutador externo desde la consola física o la gestión fuera de banda", correcta: true, explicacion: "La red se corta unos segundos." }
+    - { texto: "Hacer que el host sea también el controlador de dominio", explicacion: "Comparte recursos con todas las VM y complica todo." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un host con dos procesadores de 8 núcleos va a correr 4 VM con Windows Server y 6 con Linux. Con licencias Standard, ¿cuántas veces hay que licenciar todos los núcleos?
+  opciones:
+    - { texto: "Dos veces: cada licencia completa cubre 2 VM con Windows, y las Linux no cuentan", correcta: true, explicacion: "4 VM Windows / 2 = 2." }
+    - { texto: "Cinco veces: 10 VM / 2", explicacion: "Las Linux no necesitan licencia de Windows." }
+    - { texto: "Una vez", explicacion: "Una licencia completa cubre solo 2 VM con Windows." }
+    - { texto: "Ninguna: Hyper-V es gratis", explicacion: "Hyper-V viene incluido, pero los Windows de las VM se licencian." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para dejar lista una VM Ubuntu nueva en Hyper-V.
+  pasos:
+    - "New-VM con generación 2, disco nuevo y conmutador"
+    - "Set-VM con procesadores y memoria dinámica"
+    - "Add-VMDvdDrive con la ISO"
+    - "Set-VMFirmware con la plantilla MicrosoftUEFICertificateAuthority"
+    - "Start-VM e instalar desde la consola"
+  explicacion: "Lo de firmware y procesadores se cambia con la VM apagada; por eso va antes de encenderla."
+- id: p09
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este script tiene que darle 4 procesadores a una VM que está encendida. Marcá la línea que falla.
+  archivo: |
+    Checkpoint-VM -Name app01 -SnapshotName antes-de-cpu
+    Set-VM -Name app01 -ProcessorCount 4
+    Get-VM app01 | Select-Object Name, ProcessorCount
+  lineas_con_error: [2]
+  explicacion: "La cantidad de procesadores se cambia con la VM apagada: antes hace falta Stop-VM app01 (y después Start-VM)."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué son los servicios de integración?
+  opciones:
+    - { texto: "Lo que en Proxmox es el agente de QEMU: apagado ordenado, hora, latido, intercambio de datos y VSS", correcta: true, explicacion: "En Windows vienen incluidos; en Linux, los drivers están en el kernel y los demonios se instalan aparte." }
+    - { texto: "Los conmutadores", explicacion: "No." }
+    - { texto: "Las licencias de las VM", explicacion: "No." }
+    - { texto: "El hipervisor", explicacion: "No." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es un disco diferencial?
+  opciones:
+    - { texto: "Un .vhdx hijo que guarda solo los cambios sobre un disco padre, como un clon enlazado", correcta: true, explicacion: "Si se borra o cambia el padre, el hijo deja de servir." }
+    - { texto: "Un disco que se reserva entero de entrada", explicacion: "Ese es el fijo." }
+    - { texto: "Un respaldo incremental", explicacion: "No." }
+    - { texto: "Un disco compartido entre hosts", explicacion: "No." }

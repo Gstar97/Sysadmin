@@ -1,0 +1,97 @@
+---
+id: n5-m3-l2
+titulo: Hyper-V
+minutos: 180
+objetivos:
+  - Entender cómo está armado Hyper-V (partición raíz, particiones hijas, VMBus) y por qué es un hipervisor de tipo 1.
+  - Crear conmutadores y VM con PowerShell, incluida una VM Linux de generación 2 con arranque seguro.
+  - Usar memoria dinámica, VLAN, puntos de control y arranque automático, y saber cómo se licencia.
+glosario: [hyper-v, servicios-integracion, vhdx]
+verificado: 2026-11
+---
+
+import hyperv from './hyperv.svg?raw'
+import hypervDatos from './hyperv.yaml'
+import ej from './ej-hyperv.yaml'
+
+Hyper-V es el hipervisor de Microsoft. Viene incluido en Windows Server (es un rol más, como DNS o DHCP) y es el mismo que corre debajo de Azure. En empresas que ya tienen todo en Windows, con Active Directory y licencias Datacenter, suele ser la opción natural: no se paga aparte y se administra con las herramientas que ya conocen. Y desde los cambios de VMware, es uno de los dos destinos más comunes de las migraciones, junto con Proxmox.
+
+<AntesDeEmpezar>
+- Windows Server, PowerShell y las ediciones y licencias (nivel 3, sobre todo la lección 3.1.1).
+- Hipervisores, recursos virtuales e instantáneas (módulo 5.1).
+</AntesDeEmpezar>
+
+## Cómo está armado
+
+<DiagramaInteractivo datos={hypervDatos} svg={hyperv} alt="A la izquierda, cómo está armado Hyper-V: abajo el hardware del servidor (CPU con virtualización y SLAT), encima el hipervisor Hyper-V de tipo 1, y arriba de él la partición raíz (el Windows Server que ves, con la administración y los drivers reales de disco y red, y el proveedor VSP) y las particiones hijas, que son las VM (una Windows Server con servicios de integración y una Ubuntu con los drivers hv incluidos en el kernel, cada una con su cliente VSC). Un canal, el VMBus, une los clientes de las VM con el proveedor de la raíz. A la derecha, los tres tipos de conmutador: externo (VM, host y placa física), interno (VM y host, sin salir a la red) y privado (solo VM). Abajo, lo que tiene cada VM: discos vhdx dinámicos, fijos o diferenciales, generación 1 o 2 y puntos de control de producción o estándar." />
+
+Lo que más confunde al principio: parece que Hyper-V es un programa que corre en Windows (como VirtualBox, tipo 2), pero no. Cuando instalás el rol y reiniciás, el que arranca primero es el hipervisor, y el Windows que ves queda arriba, en una partición con privilegios para administrar. Por eso el rol **siempre pide reiniciar**, y por eso conviene que ese Windows haga solo de host (idealmente en Server Core): todo lo que le instales comparte la máquina con las VM.
+
+Las herramientas para administrarlo:
+
+- **Administrador de Hyper-V** (Hyper-V Manager): la consola gráfica clásica, para uno o varios hosts.
+- **Windows Admin Center**: la web de administración que viste en el nivel 3; tiene secciones para VM y conmutadores.
+- **PowerShell** (módulo Hyper-V): todo lo que hace la consola y más. Es lo que vas a usar acá.
+- **Administrador de clúster de conmutación por error** (Failover Cluster Manager): para alta disponibilidad entre varios hosts, en el módulo 5.4.
+- *Para más adelante*: System Center Virtual Machine Manager (SCVMM), para administrar muchos hosts y clústeres desde un solo lugar, y Azure Local (antes Azure Stack HCI), que es Hyper-V con almacenamiento distribuido administrado desde Azure.
+
+## Las decisiones al crear una VM
+
+- **Generación**: la 2 (UEFI, arranque seguro, discos SCSI, arranque por red moderno) es la que se usa siempre, salvo un sistema muy viejo que solo arranque con BIOS. Se elige al crear la VM y **no se puede cambiar después**.
+- **Arranque seguro con Linux**: la plantilla por defecto (MicrosoftWindows) solo acepta cargadores de Windows. Para Ubuntu, Rocky o Debian hay que cambiarla a **MicrosoftUEFICertificateAuthority**. Es el tropiezo más común: la VM figura encendida y en la consola aparece un error de arranque seguro.
+- **Memoria**: fija o **dinámica** (con mínimo, de arranque y máximo). La dinámica es el globo de Hyper-V: aprovecha mejor la memoria del host, pero hay programas (bases de datos grandes, Exchange) que piden memoria fija.
+- **Discos**: **.vhdx** dinámico (crece con el uso), fijo (se reserva todo de entrada, un poco más rápido y sin sorpresas de espacio) o diferencial (guarda solo los cambios sobre un disco padre). El formato viejo .vhd queda para compatibilidad.
+- **Red**: a qué conmutador se conecta y en qué **VLAN** (Set-VMNetworkAdapterVlan). Igual que en Proxmox, el puerto del switch físico tiene que ser troncal.
+- **Arranque automático**: qué hace la VM cuando se prende el host (no arrancar, arrancar si estaba encendida, arrancar siempre) y qué hace cuando se apaga (guardar el estado, apagar ordenadamente o cortar).
+
+## Hacelo vos
+
+<Terminal ejercicio={ej} />
+
+## Puntos de control, servicios de integración y otras funciones
+
+Los **puntos de control** son las instantáneas de Hyper-V. Hay dos tipos: los **de producción** (el valor por defecto) le piden a la VM que deje sus datos consistentes con VSS en Windows o congelando el sistema de archivos en Linux, y no guardan la memoria: al volver, la VM arranca como si se hubiera apagado bien. Los **estándar** guardan también la memoria, y al volver la VM sigue justo donde estaba, cosa que puede confundir a programas que hablan con otros equipos (una base de datos replicada, un controlador de dominio). Lo mismo de siempre: se usan antes de un cambio y se borran después. No son respaldos.
+
+Los **servicios de integración** son lo que en Proxmox es el agente de QEMU: apagado ordenado, sincronización de hora, latido (para saber si el sistema invitado responde), intercambio de datos y VSS. En Windows vienen incluidos y se actualizan con Windows Update. En Linux los drivers ya están en el kernel; los demonios se instalan aparte (hyperv-daemons en Rocky, linux-cloud-tools-virtual en Ubuntu).
+
+Otras funciones que vas a ver nombradas:
+
+- **Migración en vivo**: mover una VM encendida entre hosts, con o sin clúster (módulo 5.4).
+- **Hyper-V Replica**: copia una VM a otro host cada pocos minutos, para recuperarse si se cae el sitio principal (módulo 5.6).
+- **Virtualización anidada** (Set-VMProcessor -ExposeVirtualizationExtensions $true): correr Hyper-V, o Proxmox, adentro de una VM. Muy útil para laboratorios.
+- **Sesión mejorada**: la consola de la VM con portapapeles, audio y unidades compartidas.
+
+## Licencias
+
+Hyper-V en sí no se paga aparte: viene con Windows Server. Lo que se licencia son los **sistemas Windows de las VM**, como viste en la lección 3.1.1: Standard da derecho a **2 VM con Windows Server** por cada vez que se licencian todos los núcleos del host, y Datacenter, a **VM ilimitadas**. Las VM con Linux no necesitan licencia de Windows. Ya no hay un "Hyper-V Server" gratuito: la última versión fue la 2019, con soporte extendido hasta enero de 2029, y no tiene reemplazo.
+
+<EnSimple>
+Hyper-V es el hipervisor de Microsoft que viene con Windows Server. Aunque se instala como un rol, es de tipo 1: el hipervisor arranca primero y el Windows que ves queda arriba, administrando. Las VM se conectan a conmutadores externos, internos o privados; conviene que sean de generación 2, y si son Linux hay que cambiar la plantilla de arranque seguro. Se administra muy cómodo con PowerShell, y lo que se licencia son los Windows que corren adentro.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Linux de generación 2 con la plantilla de Windows">
+    La VM figura encendida, pero en la consola sale un error de arranque seguro y nunca toma dirección. Set-VMFirmware -SecureBootTemplate MicrosoftUEFICertificateAuthority.
+  </ErrorComun>
+  <ErrorComun titulo="Crear el conmutador externo desde una conexión remota">
+    Al crearlo, la red del host se corta unos segundos, y si algo sale mal (por ejemplo, sin -AllowManagementOS) no vuelve. Se hace desde la consola física o la gestión fuera de banda (lección 4.5.3).
+  </ErrorComun>
+  <ErrorComun titulo="Dejar las VM en el disco C:">
+    Por defecto Hyper-V guarda todo en C:. Unas cuantas VM llenan el disco del sistema y el host deja de andar bien. Se cambia con Set-VMHost antes de crear la primera.
+  </ErrorComun>
+  <ErrorComun titulo="Puntos de control olvidados">
+    Cada uno es un archivo .avhdx que sigue creciendo. Con meses, ocupan mucho y la VM anda más lenta. Se revisan con Get-VMCheckpoint.
+  </ErrorComun>
+  <ErrorComun titulo="Usar el host para otras cosas">
+    Un host Hyper-V que además es controlador de dominio o servidor de archivos comparte recursos con todas las VM y complica las actualizaciones. Que haga solo de host.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Hyper-V es tipo 1: hipervisor, partición raíz (el Windows que ves) y particiones hijas (las VM), unidas por VMBus.
+- Conmutadores: externo (red física), interno (VM y host), privado (solo VM).
+- VM de generación 2; con Linux, plantilla MicrosoftUEFICertificateAuthority. Discos .vhdx dinámicos, fijos o diferenciales.
+- PowerShell: Set-VMHost, New-VMSwitch, New-VM, Set-VM, Add-VMDvdDrive, Set-VMFirmware, Set-VMNetworkAdapterVlan, Start-VM, Checkpoint-VM.
+- Puntos de control de producción (consistentes, sin memoria) y estándar (con memoria). No son respaldos.
+- Licencias: Standard, 2 VM Windows por licencia completa del host; Datacenter, ilimitadas; Linux no paga.
+</Resumen>
