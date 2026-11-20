@@ -43,6 +43,9 @@ import './samba'
 import { verifyMail } from './mail'
 import { verifyRaid } from './raid'
 import { verifyHardware } from './serverhw'
+import { verifyLibvirt } from './libvirt'
+import { verifyProxmox } from './proxmox'
+import './diskimage'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'
@@ -191,6 +194,10 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if (raidResult) return raidResult
   const hwResult = verifyHardware(sys, check)
   if (hwResult) return hwResult
+  const lvResult = verifyLibvirt(sys, check)
+  if (lvResult) return lvResult
+  const pveResult = verifyProxmox(sys, check)
+  if (pveResult) return pveResult
   if ('alcanza' in check) {
     const ok = reaches(sys, check.alcanza) === (check.resultado === 'ok')
     return { ok, label: check.resultado === 'ok' ? `${sys.hostname} llega a ${check.alcanza}` : `${sys.hostname} no llega a ${check.alcanza}` }

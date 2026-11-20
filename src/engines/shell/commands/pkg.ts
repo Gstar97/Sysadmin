@@ -1,5 +1,5 @@
 import { COMMANDS, register, type CommandContext } from '../shell'
-import { EPEL_REPO, type System } from '../system'
+import { EPEL_REPO, System } from '../system'
 import { ROOT_CRED } from '../vfs'
 
 /** Versión instalada (o la del catálogo si nunca se actualizó). */
@@ -297,6 +297,13 @@ register(['apt', 'apt-get'], {
           ctx.err('Reading package lists... Done\nE: Could not open lock file /var/lib/apt/lists/lock - open (13: Permission denied)\nE: Unable to lock directory /var/lib/apt/lists/\n')
           return 100
         }
+        for (const hook of System.aptUpdateHooks) {
+          const r = hook(sys)
+          if (!r) continue
+          ctx.out(r.out)
+          if (r.err) ctx.err(r.err)
+          return r.code
+        }
         ctx.out(`Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease\nGet:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]\nHit:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease\nFetched 126 kB in 1s (138 kB/s)\nReading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\n${sys.upgradable.size ? `${sys.upgradable.size} package${sys.upgradable.size > 1 ? 's' : ''} can be upgraded. Run 'apt list --upgradable' to see ${sys.upgradable.size > 1 ? 'them' : 'it'}.` : 'All packages are up to date.'}\n`)
         return 0
       case 'install': {
@@ -319,7 +326,7 @@ register(['apt', 'apt-get'], {
           ctx.err('[simulador] Se respondió "Y" automáticamente. En scripts se usa -y.\n')
         }
         for (const n of toInstall) {
-          ctx.out(`Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 ${n} amd64 ${ver(sys, n)} [312 kB]\n`)
+          ctx.out(`Get:1 ${sys.aptMirror} amd64 ${n} amd64 ${ver(sys, n)} [312 kB]\n`)
         }
         for (const n of toInstall) {
           sys.installPackage(n)

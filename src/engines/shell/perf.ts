@@ -50,10 +50,10 @@ export function metrics(sys: System, onlyBase = false): Metrics {
   const live = procs.filter(active)
   const cpuSum = live.reduce((s, p) => s + p.cpu, 0)
   const niced = live.filter((p) => (p.nice ?? 0) > 0).reduce((s, p) => s + p.cpu, 0)
-  const cap = NCPU * 100
+  const cap = sys.ncpu * 100
   const scale = cpuSum > cap ? cap / cpuSum : 1
-  const ni = Math.min(100, (niced * scale) / NCPU)
-  const us = Math.min(100 - ni, ((cpuSum - niced) * scale) / NCPU)
+  const ni = Math.min(100, (niced * scale) / sys.ncpu)
+  const us = Math.min(100 - ni, ((cpuSum - niced) * scale) / sys.ncpu)
   const readKbs = live.reduce((s, p) => s + (p.io?.r ?? 0), 0) + 12
   const writeKbs = live.reduce((s, p) => s + (p.io?.w ?? 0), 0) + 35
   const blocked = procs.filter((p) => p.stat.startsWith('D')).length
@@ -67,10 +67,11 @@ export function metrics(sys: System, onlyBase = false): Metrics {
   const base = 0.08 + cpuSum / 100 + blocked + wa / 25
   const load: [number, number, number] = !onlyBase && st.load ? st.load : [base, base * 0.85 + 0.03, base * 0.6 + 0.05]
   const memProcs = procs.reduce((s, p) => s + p.mem, 0)
-  const usedDefault = 720 * 1024 + (memProcs * MEM_TOTAL_KB) / 100
-  const memUsedKb = Math.min(MEM_TOTAL_KB - 120 * 1024, !onlyBase && st.memUsedKb !== undefined ? st.memUsedKb : usedDefault)
-  const cacheKb = Math.max(110 * 1024, Math.min(!onlyBase && st.cacheKb !== undefined ? st.cacheKb : 1300 * 1024, MEM_TOTAL_KB - memUsedKb - 90 * 1024))
-  const memFreeKb = Math.max(60 * 1024, MEM_TOTAL_KB - memUsedKb - cacheKb)
+  const total = sys.memTotalKb
+  const usedDefault = 720 * 1024 + (memProcs * total) / 100
+  const memUsedKb = Math.min(total - 120 * 1024, !onlyBase && st.memUsedKb !== undefined ? st.memUsedKb : usedDefault)
+  const cacheKb = Math.max(110 * 1024, Math.min(!onlyBase && st.cacheKb !== undefined ? st.cacheKb : 1300 * 1024, total - memUsedKb - 90 * 1024))
+  const memFreeKb = Math.max(60 * 1024, total - memUsedKb - cacheKb)
   const availKb = memFreeKb + cacheKb * 0.82
   const swapTotalKb = sys.storage.swaps.reduce((a, w) => a + w.size / 1024 - 4, 0)
   const swapUsedKb = Math.min(swapTotalKb, !onlyBase && st.swapUsedKb !== undefined ? st.swapUsedKb : 0)

@@ -1,6 +1,7 @@
 /** Catálogo de paquetes del sistema simulado, con sus servicios, archivos y comandos. */
 import { ROCKY_DB, UBUNTU_DB } from './dbpkgs'
 import { ROCKY_WEB, UBUNTU_WEB } from './webpkgs'
+import { ROCKY_VIRT, UBUNTU_VIRT } from './virtpkgs'
 
 export interface PackageService {
   name: string
@@ -1223,6 +1224,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   },
   ...ROCKY_WEB,
   ...ROCKY_DB,
+  ...ROCKY_VIRT,
 }
 
 export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
@@ -1396,6 +1398,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   },
   ...UBUNTU_WEB,
   ...UBUNTU_DB,
+  ...UBUNTU_VIRT,
 }
 
 export const BASE_INSTALLED = {

@@ -25,6 +25,18 @@ const stateShape = {
   hostname: z.string().default('servidor'),
   /** Cómo arranca la máquina: BIOS heredado (tabla MBR en Rocky) o UEFI (con partición EFI). */
   firmware: z.enum(['bios', 'uefi']).default('bios'),
+  /** El equipo: núcleos, memoria y si la CPU expone la virtualización (vmx) a lo que corre adentro. */
+  equipo: z
+    .strictObject({
+      cpus: z.number().int().min(1).default(2),
+      memoria_gb: z.number().default(4),
+      /** Un servidor físico (no muestra el hipervisor en lscpu). */
+      fisico: z.boolean().default(false),
+      /** La CPU tiene extensiones de virtualización (en una VM: virtualización anidada activada). */
+      vmx: z.boolean().default(false),
+      modelo: z.string().optional(),
+    })
+    .default({ cpus: 2, memoria_gb: 4, fisico: false, vmx: false }),
   secure_boot: z.boolean().default(true),
   /** Modo de SELinux en Rocky. */
   selinux: z.enum(['enforcing', 'permissive', 'disabled']).default('enforcing'),
@@ -346,6 +358,115 @@ const stateShape = {
       eventos: z.array(z.strictObject({ fecha: z.string(), hora: z.string(), texto: z.string() })).default([]),
     })
     .optional(),
+  /** Máquinas virtuales de KVM/libvirt que ya existen en este equipo. */
+  libvirt: z
+    .strictObject({
+      vms: z
+        .array(
+          z.strictObject({
+            nombre: z.string(),
+            vcpus: z.number().int().default(1),
+            vcpus_max: z.number().int().optional(),
+            memoria_mb: z.number().int().default(1024),
+            memoria_max_mb: z.number().int().optional(),
+            /** Memoria que le dejó el globo (ballooning) mientras corre. */
+            balloon_mb: z.number().int().optional(),
+            disco: z.string().optional(),
+            estado: z.enum(['running', 'shut off']).default('shut off'),
+            autostart: z.boolean().default(false),
+            os: z.string().default('ubuntu24.04'),
+            instantaneas: z.array(z.string()).default([]),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+  /** El equipo es un nodo de Proxmox VE 9 (Debian 13): conviene usuario root y equipo con varios núcleos. */
+  proxmox: z
+    .strictObject({
+      nodo: z.string().optional(),
+      suscripcion: z.boolean().default(false),
+      /** Repositorios de apt como quedan al instalar (enterprise) o ya cambiados (no-subscription). */
+      repos: z.enum(['enterprise', 'no-subscription']).default('enterprise'),
+      /** La placa física sobre la que va vmbr0. */
+      placa: z.string().optional(),
+      /** Contenido de /etc/network/interfaces (si no, vmbr0 sobre la placa con la IP del equipo). */
+      interfaces: z.string().optional(),
+      almacenamientos: z
+        .array(
+          z.strictObject({
+            id: z.string(),
+            tipo: z.enum(['dir', 'lvmthin', 'lvm', 'zfspool', 'nfs', 'cifs', 'pbs']),
+            contenido: z.array(z.string()),
+            ruta: z.string().optional(),
+            servidor: z.string().optional(),
+            export: z.string().optional(),
+            datastore: z.string().optional(),
+            usuario: z.string().optional(),
+            huella: z.string().optional(),
+            total_gb: z.number().default(100),
+            compartido: z.boolean().default(false),
+            activo: z.boolean().default(true),
+          }),
+        )
+        .default([]),
+      isos: z.array(z.string()).default([]),
+      plantillas_ct: z.array(z.string()).default([]),
+      vms: z
+        .array(
+          z.strictObject({
+            id: z.number().int(),
+            nombre: z.string(),
+            memoria: z.number().int().default(2048),
+            nucleos: z.number().int().default(2),
+            so: z.string().default('l26'),
+            discos: z.record(z.string(), z.string()).default({}),
+            red: z.record(z.string(), z.string()).default({}),
+            estado: z.enum(['running', 'stopped']).default('stopped'),
+            plantilla: z.boolean().default(false),
+            /** El agente de QEMU está instalado y corriendo dentro de la VM. */
+            agente: z.boolean().default(false),
+            onboot: z.boolean().default(false),
+            instantaneas: z.array(z.string()).default([]),
+            otros: z.record(z.string(), z.string()).default({}),
+          }),
+        )
+        .default([]),
+      cts: z
+        .array(
+          z.strictObject({
+            id: z.number().int(),
+            nombre: z.string(),
+            memoria: z.number().int().default(512),
+            nucleos: z.number().int().default(1),
+            so: z.string().default('debian'),
+            rootfs: z.string().optional(),
+            red: z.string().optional(),
+            estado: z.enum(['running', 'stopped']).default('stopped'),
+            sin_privilegios: z.boolean().default(true),
+            onboot: z.boolean().default(false),
+          }),
+        )
+        .default([]),
+      respaldos: z.array(z.strictObject({ vmid: z.number().int(), tipo: z.enum(['qemu', 'lxc']).default('qemu'), almacenamiento: z.string().default('local'), dias_atras: z.number().default(1), proteger: z.boolean().default(false) })).default([]),
+      usuarios: z.array(z.strictObject({ id: z.string(), comentario: z.string().optional() })).default([]),
+      permisos: z.array(z.strictObject({ ruta: z.string(), usuario: z.string(), rol: z.string() })).default([]),
+    })
+    .optional(),
+  /** Imágenes de disco de máquinas virtuales (qcow2, raw, vmdk, vhdx) que ya están en el equipo. */
+  imagenes_disco: z
+    .array(
+      z.strictObject({
+        ruta: z.string(),
+        formato: z.enum(['qcow2', 'raw', 'vmdk', 'vhdx', 'vdi']).default('qcow2'),
+        virtual_gb: z.number(),
+        /** Lo que ocupa en el disco (si no se dice: casi nada en las dinámicas, todo en raw). */
+        disco_gb: z.number().optional(),
+        respaldo: z.string().optional(),
+        dueno: z.string().optional(),
+      }),
+    )
+    .default([]),
   /** Una UPS conectada por USB (la lee el driver usbhid-ups de NUT). */
   ups: z
     .strictObject({
@@ -585,6 +706,18 @@ const singleCheckSchema = z.union([
   z.strictObject({ consulta_bd: z.string(), motor: z.enum(['mariadb', 'postgresql']), base: z.string(), resultado: z.string() }),
   /** La UPS que publica upsd tiene ese estado (OL, OB, LB). */
   z.strictObject({ ups_estado: z.string(), ups: z.string() }),
+  /** Una máquina virtual de libvirt: si existe, su estado, vCPU, memoria (MiB), arranque automático, una instantánea o su red. */
+  z.strictObject({ dominio: z.string(), existe: z.boolean().optional(), estado: z.enum(['running', 'shut off', 'paused']).optional(), vcpus: z.number().int().optional(), memoria_mb: z.number().int().optional(), autostart: z.boolean().optional(), instantanea: z.string().optional(), red: z.string().optional() }),
+  /** Una imagen de disco: formato, archivo base y tamaño virtual. */
+  z.strictObject({ imagen_disco: z.string(), formato: z.string().optional(), respaldo: z.string().optional(), tamano_virtual_gb: z.number().optional() }),
+  z.strictObject({ red_libvirt: z.string(), activa: z.boolean().optional(), autostart: z.boolean().optional() }),
+  /** Una VM (pve_vm) o un contenedor (pve_ct) de Proxmox: estado, nombre, plantilla, instantánea y valores de su configuración. */
+  z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
+  z.strictObject({ pve_ct: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
+  z.strictObject({ pve_respaldo: z.number().int(), almacenamiento: z.string().optional(), cantidad: z.number().int().optional() }),
+  z.strictObject({ pve_almacenamiento: z.string(), tipo: z.string().optional(), contenido_incluye: z.string().optional(), activo: z.boolean().optional(), existe: z.boolean().optional() }),
+  z.strictObject({ pve_puente: z.string(), vlan_aware: z.boolean().optional(), puerto: z.string().optional(), direccion: z.string().optional() }),
+  z.strictObject({ pve_usuario: z.string(), rol: z.string().optional(), ruta_acl: z.string().optional() }),
   /** upsmon ordenó (o no) el apagado del servidor. */
   z.strictObject({ apagado_ups: z.boolean() }),
   /** Estado de un arreglo RAID: sano, degradado, reconstruyendo, sincronizando o fallado. */

@@ -4,7 +4,7 @@ import { BUILTINS, COMMANDS, formatPrintf, jobFor, register, type CommandContext
 import { commOf, priorityName, priorityNumber, type JournalEntry } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
-import { CPU_FLAGS, dmiBiosText, efibootmgrText } from '../hardware'
+import { cpuFlags, dmiBiosText, efibootmgrText } from '../hardware'
 import { ZONE_OFFSET } from '../kernel'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -402,8 +402,8 @@ register('pgrep', {
 register('uname', {
   usage: 'uname [-a|-r|-n|-m|-s|-o]',
   run(ctx) {
-    const kernel = ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'
-    const version = ctx.sys.distro === 'rocky' ? '#1 SMP PREEMPT_DYNAMIC Fri Jun 20 12:00:00 UTC 2025' : '#60-Ubuntu SMP PREEMPT_DYNAMIC Fri Mar 14 18:29:48 UTC 2025'
+    const kernel = ctx.sys.kernelRelease ?? (ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic')
+    const version = ctx.sys.kernelBuild ?? (ctx.sys.distro === 'rocky' ? '#1 SMP PREEMPT_DYNAMIC Fri Jun 20 12:00:00 UTC 2025' : '#60-Ubuntu SMP PREEMPT_DYNAMIC Fri Mar 14 18:29:48 UTC 2025')
     const f = ctx.args.join('')
     if (!f || f === '-s') ctx.out('Linux\n')
     else if (f.includes('a')) ctx.out(`Linux ${ctx.sys.hostname} ${kernel} ${version} x86_64 x86_64 x86_64 GNU/Linux\n`)
@@ -843,13 +843,19 @@ register('sleep', {
   },
 })
 
-register('nproc', { usage: 'nproc', run: (ctx) => (ctx.out('2\n'), 0) })
+register('nproc', { usage: 'nproc', run: (ctx) => (ctx.out(`${ctx.sys.ncpu}\n`), 0) })
 
 register('lscpu', {
   usage: 'lscpu',
   run(ctx) {
+    const sys = ctx.sys
+    const n = sys.ncpu
+    const list = n === 1 ? '0' : `0-${n - 1}`
+    const hyp = sys.physical
+      ? `Virtualization features:  \n  Virtualization:         VT-x\n`
+      : `Virtualization features:  \n${sys.vmx ? '  Virtualization:         VT-x\n' : ''}  Hypervisor vendor:      KVM\n  Virtualization type:    full\n`
     ctx.out(
-      `Architecture:             x86_64\n  CPU op-mode(s):         32-bit, 64-bit\n  Address sizes:          46 bits physical, 48 bits virtual\n  Byte Order:             Little Endian\nCPU(s):                   2\n  On-line CPU(s) list:    0,1\nVendor ID:                GenuineIntel\n  BIOS Vendor ID:         QEMU\n  Model name:             Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\n    BIOS Model name:      pc-q35-9.0  CPU @ 2.0GHz\n    CPU family:           6\n    Model:                79\n    Thread(s) per core:   1\n    Core(s) per socket:   2\n    Socket(s):            1\n    Stepping:             1\n    BogoMIPS:             4799.99\n    Flags:                ${CPU_FLAGS}\nVirtualization features:  \n  Hypervisor vendor:      KVM\n  Virtualization type:    full\nCaches (sum of all):      \n  L1d:                    64 KiB (2 instances)\n  L1i:                    64 KiB (2 instances)\n  L2:                     512 KiB (2 instances)\n  L3:                     35 MiB (1 instance)\nNUMA:                     \n  NUMA node(s):           1\n  NUMA node0 CPU(s):      0,1\n`,
+      `Architecture:             x86_64\n  CPU op-mode(s):         32-bit, 64-bit\n  Address sizes:          46 bits physical, 48 bits virtual\n  Byte Order:             Little Endian\nCPU(s):                   ${n}\n  On-line CPU(s) list:    ${n === 2 ? '0,1' : list}\nVendor ID:                GenuineIntel\n${sys.physical ? '' : '  BIOS Vendor ID:         QEMU\n'}  Model name:             ${sys.cpuModel}\n${sys.physical ? '' : '    BIOS Model name:      pc-q35-9.0  CPU @ 2.0GHz\n'}    CPU family:           6\n    Model:                79\n    Thread(s) per core:   1\n    Core(s) per socket:   ${n}\n    Socket(s):            1\n    Stepping:             1\n    BogoMIPS:             4799.99\n    Flags:                ${cpuFlags(sys.vmx || sys.physical)}\n${hyp}Caches (sum of all):      \n  L1d:                    ${32 * n} KiB (${n} instances)\n  L1i:                    ${32 * n} KiB (${n} instances)\n  L2:                     ${256 * n} KiB (${n} instances)\n  L3:                     35 MiB (1 instance)\nNUMA:                     \n  NUMA node(s):           1\n  NUMA node0 CPU(s):      ${n === 2 ? '0,1' : list}\n`,
     )
     return 0
   },

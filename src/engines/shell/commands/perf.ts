@@ -3,7 +3,7 @@
  * nohup y pstree. Todos usan el mismo modelo (perf.ts).
  */
 import { parseArgs } from '../args'
-import { jitter, MEM_TOTAL_KB, metrics, NCPU } from '../perf'
+import { jitter, metrics } from '../perf'
 import { register, type CommandContext } from '../shell'
 import { commOf, type Proc } from '../system'
 
@@ -40,7 +40,7 @@ function procRows(ctx: CommandContext, list: Proc[], limit: number) {
     const ni = p.nice ?? 0
     const pr = 20 + ni
     const virt = Math.round(20000 + p.mem * 40000)
-    const res = Math.round(4000 + (p.mem * MEM_TOTAL_KB) / 100)
+    const res = Math.round(4000 + (p.mem * ctx.sys.memTotalKb) / 100)
     const mins = Math.floor(((Date.now() - p.start) / 1000) * (p.cpu / 100) / 60)
     const time = `${Math.min(999, mins)}:${pad(Math.floor(Math.random() * 0) + (mins % 60))}.${pad(Math.round(p.cpu) % 100)}`
     ctx.out(`${String(p.pid).padStart(7)} ${p.user.padEnd(9).slice(0, 9)} ${String(pr).padStart(2)} ${String(ni).padStart(3)} ${String(virt).padStart(7)} ${String(res).padStart(6)} ${String(Math.round(res / 3)).padStart(6)} ${p.stat[0]} ${f1(p.cpu).padStart(5)} ${f1(p.mem).padStart(5)} ${time.padStart(9)} ${commOf(p)}\n`)
@@ -68,7 +68,7 @@ register(['top', 'htop'], {
       `top - ${uptimeLine(ctx).trim().replace(/^\S+ /, `${new Date().toTimeString().slice(0, 8)} `)}\n` +
         `Tasks: ${String(all.length + 95).padStart(3)} total, ${String(running).padStart(3)} running, ${String(all.length + 95 - running - count('T') - count('Z')).padStart(3)} sleeping, ${String(count('T')).padStart(3)} stopped, ${String(count('Z')).padStart(3)} zombie\n` +
         `%Cpu(s): ${f1(m.us).padStart(4)} us, ${f1(m.sy).padStart(4)} sy, ${f1(m.ni).padStart(4)} ni, ${f1(m.id).padStart(4)} id, ${f1(m.wa).padStart(4)} wa,  0.0 hi,  0.1 si, ${f1(m.st).padStart(4)} st\n` +
-        `MiB Mem : ${mb(MEM_TOTAL_KB)} total, ${mb(m.memFreeKb)} free, ${mb(m.memUsedKb)} used, ${mb(m.cacheKb)} buff/cache\n` +
+        `MiB Mem : ${mb(ctx.sys.memTotalKb)} total, ${mb(m.memFreeKb)} free, ${mb(m.memUsedKb)} used, ${mb(m.cacheKb)} buff/cache\n` +
         `MiB Swap: ${mb(m.swapTotalKb)} total, ${mb(m.swapTotalKb - m.swapUsedKb)} free, ${mb(m.swapUsedKb)} used. ${mb(m.availKb)} avail Mem\n\n` +
         '    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\n',
     )
@@ -97,7 +97,7 @@ register('free', {
       return `${v < 10 ? v.toFixed(1) : Math.round(v)}${units[u]}`
     }
     const row = (kb: number) => (h ? human(Math.round(kb)) : mm ? String(Math.round(kb / 1024)) : g ? String(Math.round(kb / 1048576)) : String(Math.round(kb)))
-    const mem = [MEM_TOTAL_KB, m.memUsedKb, m.memFreeKb, 9620, m.cacheKb, m.availKb]
+    const mem = [ctx.sys.memTotalKb, m.memUsedKb, m.memFreeKb, 9620, m.cacheKb, m.availKb]
     ctx.out(`${''.padEnd(8)}${['total', 'used', 'free', 'shared', 'buff/cache', 'available'].map((c) => c.padStart(12)).join('')}\n`)
     ctx.out(`${'Mem:'.padEnd(8)}${mem.map((v) => row(v).padStart(12)).join('')}\n`)
     ctx.out(`${'Swap:'.padEnd(8)}${[m.swapTotalKb, m.swapUsedKb, m.swapTotalKb - m.swapUsedKb].map((v) => row(v).padStart(12)).join('')}\n`)
@@ -153,7 +153,7 @@ register('iostat', {
     const m = metrics(ctx.sys)
     const ext = ctx.args.some((x) => /^-\w*x/.test(x))
     const d = new Date()
-    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${NCPU} CPU)\n\n`)
+    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${ctx.sys.ncpu} CPU)\n\n`)
     ctx.out(`avg-cpu:  %user   %nice %system %iowait  %steal   %idle\n          ${[m.us, m.ni, m.sy, m.wa, m.st, m.id].map((v) => v.toFixed(2).padStart(6)).join('  ')}\n\n`)
     const devs = [{ name: 'sda', share: 1 }, { name: 'dm-0', share: 0.97 }]
     if (ext) {
@@ -198,15 +198,15 @@ register('mpstat', {
     row('all', [m.us, m.ni, m.sy, m.wa, m.st])
     if (all) {
       // Un proceso de un solo hilo al 100 % ocupa una CPU entera; el resto del trabajo va a las otras.
-      const hogs = Math.min(NCPU, ctx.sys.procs.filter((p) => p.cpu > 80 && !p.stat.startsWith('T') && !p.stat.startsWith('Z')).length)
-      const restUs = Math.max(0, (m.us + m.ni) * NCPU - hogs * 99.4)
-      const others = NCPU - hogs
-      for (let i = 0; i < NCPU; i++) {
+      const hogs = Math.min(ctx.sys.ncpu, ctx.sys.procs.filter((p) => p.cpu > 80 && !p.stat.startsWith('T') && !p.stat.startsWith('Z')).length)
+      const restUs = Math.max(0, (m.us + m.ni) * ctx.sys.ncpu - hogs * 99.4)
+      const others = ctx.sys.ncpu - hogs
+      for (let i = 0; i < ctx.sys.ncpu; i++) {
         if (i < hogs) row(String(i), m.ni > m.us ? [0, 99.4, 0.5, 0, 0] : [99.4, 0, 0.5, 0, 0])
         else {
           const us = others ? restUs / others : 0
-          const sy = Math.min(100 - us, (m.sy * NCPU - hogs * 0.5) / Math.max(1, others))
-          const wa = Math.min(100 - us - sy - m.st, (m.wa * NCPU) / Math.max(1, others))
+          const sy = Math.min(100 - us, (m.sy * ctx.sys.ncpu - hogs * 0.5) / Math.max(1, others))
+          const wa = Math.min(100 - us - sy - m.st, (m.wa * ctx.sys.ncpu) / Math.max(1, others))
           row(String(i), [us, 0, sy, Math.max(0, wa), m.st])
         }
       }
@@ -240,7 +240,7 @@ register('sar', {
       return `${pad(d.getHours())}:${pad(d.getMinutes())}:01`
     }
     const d = new Date()
-    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${NCPU} CPU)\n\n`)
+    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${ctx.sys.ncpu} CPU)\n\n`)
     const j = (v: number, i: number, amt: number) => Math.max(0, v + jitter(i, amt))
     const avg = (f: (m: typeof cur) => number) => samples.reduce((s, x) => s + f(x.m), 0) / Math.max(1, samples.length)
     if (kind === 'u') {
@@ -255,7 +255,7 @@ register('sar', {
       ctx.out('00:00:01    kbmemfree   kbavail kbmemused  %memused kbbuffers  kbcached  kbcommit   %commit\n')
       samples.forEach((s, i) => {
         const used = j(s.m.memUsedKb, i, 3000)
-        ctx.out(`${time(s.t)} ${[s.m.memFreeKb, s.m.availKb, used].map((v) => String(Math.round(v)).padStart(9)).join(' ')} ${((used / MEM_TOTAL_KB) * 100).toFixed(2).padStart(9)} ${'4268'.padStart(9)} ${String(Math.round(s.m.cacheKb)).padStart(9)} ${String(Math.round(used * 1.4)).padStart(9)} ${((used * 1.4 * 100) / (MEM_TOTAL_KB + s.m.swapTotalKb)).toFixed(2).padStart(9)}\n`)
+        ctx.out(`${time(s.t)} ${[s.m.memFreeKb, s.m.availKb, used].map((v) => String(Math.round(v)).padStart(9)).join(' ')} ${((used / ctx.sys.memTotalKb) * 100).toFixed(2).padStart(9)} ${'4268'.padStart(9)} ${String(Math.round(s.m.cacheKb)).padStart(9)} ${String(Math.round(used * 1.4)).padStart(9)} ${((used * 1.4 * 100) / (ctx.sys.memTotalKb + s.m.swapTotalKb)).toFixed(2).padStart(9)}\n`)
       })
     } else if (kind === 'q') {
       ctx.out('00:00:01      runq-sz  plist-sz   ldavg-1   ldavg-5  ldavg-15   blocked\n')

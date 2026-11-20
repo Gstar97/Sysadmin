@@ -230,6 +230,19 @@ export class System {
   distro: 'rocky' | 'ubuntu'
   hostname: string
   firmware: 'bios' | 'uefi'
+  /** Núcleos y memoria del equipo (los usan top, free, lscpu, nproc y /proc). */
+  ncpu = 2
+  memTotalKb = MEM_TOTAL_KB
+  cpuModel = 'Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz'
+  physical = false
+  vmx = false
+  /** Otra plataforma sobre la base de Ubuntu/Debian (por ejemplo un nodo de Proxmox VE): kernel y repositorios propios. */
+  kernelRelease?: string
+  kernelBuild?: string
+  /** Repositorio que muestra apt al instalar (por defecto, el de Ubuntu). */
+  aptMirror = 'http://archive.ubuntu.com/ubuntu noble/main'
+  /** apt update con repositorios propios (devuelve la salida o undefined para la de Ubuntu). */
+  static aptUpdateHooks: ((sys: System) => { out: string; err: string; code: number } | undefined)[] = []
   secureBoot: boolean
   users = new Map<string, User>()
   groups = new Map<string, Group>()
@@ -321,6 +334,12 @@ export class System {
     this.distro = state.distro
     this.hostname = state.hostname
     this.firmware = state.firmware
+    this.ncpu = state.equipo.cpus
+    // La memoria que ve el sistema es un poco menos que la instalada (lo que reserva el kernel).
+    this.memTotalKb = state.equipo.memoria_gb === 4 ? MEM_TOTAL_KB : Math.round(state.equipo.memoria_gb * 1024 * 1024 * 0.975)
+    this.physical = state.equipo.fisico
+    this.vmx = state.equipo.vmx
+    if (state.equipo.modelo) this.cpuModel = state.equipo.modelo
     this.secureBoot = state.firmware === 'uefi' && state.secure_boot
     this.catalog = state.distro === 'rocky' ? ROCKY_PACKAGES : UBUNTU_PACKAGES
     this.vfs.now = () => Date.now()
@@ -573,7 +592,7 @@ export class System {
 
   /** Regenera /proc y /sys con el estado actual (se llama antes de cada comando). */
   refreshVirtual() {
-    refreshKernelFs(this, metrics(this), MEM_TOTAL_KB)
+    refreshKernelFs(this, metrics(this), this.memTotalKb)
     for (const h of System.refreshHooks) h(this)
   }
 
@@ -917,7 +936,7 @@ export class System {
           ? 'Defaults   !visiblepw\nDefaults    secure_path = /sbin:/bin:/usr/sbin:/usr/bin\nroot    ALL=(ALL)       ALL\n%wheel  ALL=(ALL)       ALL\n#includedir /etc/sudoers.d\n'
           : 'Defaults\tenv_reset\nDefaults\tsecure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"\nroot\tALL=(ALL:ALL) ALL\n%sudo\tALL=(ALL:ALL) ALL\n@includedir /etc/sudoers.d\n',
       '/etc/motd': '',
-      '/proc/cpuinfo': cpuinfoText(),
+      '/proc/cpuinfo': cpuinfoText(this.ncpu, this.cpuModel, this.vmx),
       '/proc/meminfo': 'MemTotal:        3843580 kB\nMemFree:         1520332 kB\nMemAvailable:    2788416 kB\nBuffers:            4268 kB\nCached:          1381420 kB\nSwapTotal:       2097148 kB\nSwapFree:        2097148 kB\n',
       '/proc/loadavg': '0.08 0.12 0.09 1/187 1450\n',
       '/proc/version':
