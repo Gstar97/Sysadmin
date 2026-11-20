@@ -755,6 +755,40 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     · Verificaciones nuevas: http (estado, contenido, encabezados, HTTP/2, TLS válido,
       desde internet), certificado (nombre, SAN, emisor, CA, vigencia, clave, cadena),
       confia_en, modulo_apache y booleano_selinux.
+  - Nivel 4, parte 2 (módulos 4.3 a 4.5, bases de datos, correo, archivos y hardware), en
+    src/engines/shell:
+    · Bases de datos (db/, commands/dbcmd.ts, commands/pgcmd.ts): MariaDB y PostgreSQL
+      con los datos en SQLite (sql.js), una base por cada base del servidor, y encima la
+      personalidad de cada motor: su sintaxis (AUTO_INCREMENT, SERIAL, SHOW, \d), usuarios
+      con host, permisos con GRANT y REVOKE, autenticación (unix_socket para root de
+      MariaDB, pg_hba.conf con peer y scram-sha-256), listen y bind-address, el binlog con
+      mysqlbinlog para recuperar a un momento, mysqldump (--single-transaction,
+      --master-data), pg_dump en sus formatos, pg_dumpall --globals-only, pg_restore,
+      createdb, mysqladmin y mysql_secure_installation, con los mensajes de error y sus
+      códigos reales. Los servidores se definen en bases_datos (bases, roles, historia y
+      respaldos ya hechos).
+    · Correo (mail.ts, dns.ts): Postfix con main.cf y master.cf (lmdb en Rocky, hash en
+      Ubuntu), postconf, postmap, aliases y newaliases, la cola (mailq, postqueue,
+      postsuper) con diferidos y rebotes, relay autenticado con SASL y TLS (relays del
+      proveedor en correo.relays, con los remitentes que aceptan), smtp_generic_maps,
+      mail y sendmail, el registro en maillog o mail.log, y los registros MX, SPF, DKIM y
+      DMARC como TXT en el DNS simulado.
+    · NFS (nfs.ts): /etc/exports con su validación, exportfs, showmount, root_squash y
+      all_squash, la identidad por uid y los grupos del cliente, montajes nfs4 y nfs con
+      mount y fstab, bajo demanda con x-systemd.automount y autofs, y el firewall del
+      servidor. Lo montado se ve con la etiqueta nfs_t de SELinux (httpd_use_nfs).
+    · Samba (samba.ts): smb.conf con testparm, smbpasswd y pdbedit, recursos con valid
+      users, write list, create mask y force group, smbclient y smbstatus, montajes cifs
+      (cifs_t, httpd_use_cifs) y las etiquetas samba_share_t.
+    · Hardware (raid.ts, serverhw.ts): mdadm (create, detail, scan, fail, remove, add,
+      wait, stop, examine, zero-superblock) con /proc/mdstat, reconstrucción y repuestos,
+      avisos de mdmonitor por correo y arreglos definidos en raid; smartctl con atributos
+      y pruebas; ipmitool local y por la red (lanplus) con sensores, SEL y encendido,
+      contra el BMC de los servidores definidos en servidores; y NUT (upsc, upsdrvctl,
+      upsd, upsmon) con usbhid-ups para una UPS definida en ups y dummy-ups para probar
+      cortes, incluido el apagado ordenado con OB LB.
+    · Verificaciones nuevas: base_datos, consulta_bd, usuario_bd, correo_enviado,
+      cola_vacia, exportado, raid, ups_estado y apagado_ups.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -873,9 +907,14 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
   - Hechos en la Etapa 7a (Nivel 4): constructor de solicitudes HTTP (ConstructorHTTP,
     sobre src/engines/web/httpsim.ts): método, ruta, encabezados y cuerpo, la respuesta
     del servidor de ejemplo, el comando curl equivalente y siete desafíos.
-  - Pendientes, con el nivel que los usa: simuladores de RAID, quórum y migración; consolas de Python
+  - Hechos en la Etapa 7b (Nivel 4): simulador de RAID (SimuladorRaid: niveles 0, 1, 5,
+    6 y 10, fallas, reconstrucción y la ventana de riesgo), calculadora de UPS
+    (CalculadoraUps: W y VA, carga y autonomía) y constructor de rack (ConstructorRack:
+    ubicar equipos por unidades y revisar peso, aire, red, potencia y huecos, libre o con
+    un inventario dado), sobre motores con pruebas en src/engines/hardware.
+  - Pendientes, con el nivel que los usa: simuladores de quórum y migración; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
-    simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; constructor de rack y calculadoras (UPS, disponibilidad, cron, costos).
+    simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; calculadoras de disponibilidad, cron y costos.
   - Los componentes pesados se cargan solo cuando una lección los usa.
 
 
@@ -1133,8 +1172,15 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       12 ejercicios de terminal, 3 de editor de configuración, 4 diagramas clicables, 4
       casos de diagnóstico, 3 de emparejar y 1 de ordenar. El simulador sumó lo
       descripto en 6.1 (Nivel 4, parte 1) y hay un interactivo nuevo (6.9).
-    - 7b (pendiente): módulos 4.3 Bases de datos, 4.4 Correo y archivos y 4.5 Hardware,
-      y el proyecto "Plataforma web de producción".
+    - 7b (HECHA, en revisión): módulos 4.3 Bases de datos, 4.4 Correo y archivos y 4.5
+      Hardware, y el proyecto "Plataforma web de producción". 15 lecciones, cada módulo
+      con laboratorio (en la plataforma y en máquinas virtuales: respaldos de MariaDB y
+      PostgreSQL restaurados en otro equipo; Postfix con Mailpit como relay, NFS y Samba;
+      RAID 5 con repuesto y NUT con una UPS simulada), examen y caso real; 154 preguntas,
+      108 tarjetas, 48 términos de glosario nuevos, 17 ejercicios de terminal, 2 de
+      editor de configuración, 5 diagramas clicables, 4 casos de diagnóstico, 9 de
+      emparejar y 1 de ordenar. El simulador sumó lo descripto en 6.1 (Nivel 4, parte 2)
+      y hay tres interactivos nuevos (6.9).
 
   Etapa 8 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
 
