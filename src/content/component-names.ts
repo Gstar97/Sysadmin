@@ -38,6 +38,9 @@ export const INTERACTIVE_COMPONENTS = [
   'SimuladorFirewall',
   'PlanificadorWifi',
   'VisorCapturas',
+  'SimuladorRaid',
+  'CalculadoraUps',
+  'ConstructorRack',
 ] as const
 
 export const REQUIRED_BLOCKS = [

@@ -1,0 +1,101 @@
+---
+id: n4-m5-l4
+titulo: Rack y sala de servidores
+minutos: 120
+objetivos:
+  - Armar un rack respetando el peso, el aire, la energía y la red.
+  - Explicar el pasillo frío y el pasillo caliente y por qué van paneles ciegos.
+  - Cablear y rotular de forma que cualquiera pueda seguir una conexión.
+  - Conocer lo que protege a una sala de servidores (clima, energía, incendio, acceso).
+glosario: [unidad-rack, pdu-rack, panel-ciego, pasillo-frio-caliente]
+verificado: 2026-11
+---
+
+import pasillos from './pasillos.svg?raw'
+import pasillosDatos from './pasillos.yaml'
+import montaje from './montaje.yaml'
+
+Un servidor bien elegido, mal instalado, falla igual: se calienta porque toma el aire caliente de otro, se apaga entero porque sus dos fuentes van a la misma regleta, o nadie sabe qué cable desconectar en un corte. Esta lección es sobre el lugar donde viven los servidores: el rack y la sala.
+
+<AntesDeEmpezar>
+- Formatos de servidor y la unidad de rack (lección 4.5.1).
+- Cableado estructurado y patcheras (módulo 2.1).
+</AntesDeEmpezar>
+
+## El rack
+
+Un rack es un armario de **19 pulgadas** de ancho (el ancho de los equipos) y una altura medida en **unidades** (1U = 4,45 cm); el más común tiene **42U**. Al comprarlo importa también la profundidad (1000 a 1200 mm para servidores actuales) y que tenga puertas perforadas para que pase el aire. Adentro van:
+
+- Los **rieles** de cada servidor, que permiten sacarlo como un cajón para cambiar piezas sin desarmar nada.
+- Dos **PDU** (regletas de rack, verticales a los costados), A y B, cada una de un circuito eléctrico distinto, y cada servidor con una fuente en cada una. Así, si se corta un circuito o se rompe una PDU, nada se apaga. Las PDU "administradas" muestran el consumo por toma y permiten apagar una de forma remota.
+- **Patcheras** y **organizadores** de cables, para que los cables no cuelguen.
+- **Paneles ciegos** en cada unidad vacía.
+
+El armado sigue unas pocas reglas: lo pesado abajo (las UPS y los servidores grandes: el rack no se vuelca y es más fácil levantarlos), la red arriba con su patchera al lado (los cables llegan desde el techo o la bandeja), sin huecos y sin pasar la potencia que soporta la UPS y el circuito.
+
+<ConstructorRack altura={24} inventario={['ups', 'srv2u', 'srv2u', 'nas', 'srv1u', 'srv1u', 'sw', 'patch', 'fw', 'org', 'kvm']} />
+
+## El aire: pasillo frío y pasillo caliente
+
+Los servidores toman el aire por el frente y lo tiran caliente por atrás. Por eso, en una sala con varios racks, se ponen en filas que se miran de frente (el **pasillo frío**) y se dan la espalda (el **pasillo caliente**). Todo se arruina si el aire caliente vuelve al frente: por un hueco en el rack, por un equipo montado al revés o porque los dos pasillos se mezclan.
+
+<DiagramaInteractivo datos={pasillosDatos} svg={pasillos} alt="Una sala vista de costado. A la izquierda, el aire acondicionado de precisión (CRAC), que manda aire frío por debajo del piso técnico. El aire sube por las baldosas perforadas al pasillo frío (18 a 27 °C), entre dos filas de racks que se miran de frente, con una contención en el techo. Los racks toman el aire por el frente y lo tiran por atrás, a los pasillos calientes (35 a 45 °C), de donde sube y vuelve por arriba al equipo de aire. En el rack de la fila A hay una unidad vacía sin panel ciego por la que el aire caliente vuelve al pasillo frío." />
+
+Esto vale también para un solo rack en un cuarto: que el aire frío llegue al frente, que el caliente salga por atrás y tenga por dónde irse, y que no haya huecos.
+
+## Cables
+
+Un rack con cables desordenados no es solo feo: tapa la salida del aire, hace imposible sacar un servidor de sus rieles y convierte cada cambio en una adivinanza. Las costumbres que lo evitan:
+
+- **Largo justo**: un cable de 50 cm donde alcanza, no uno de 3 m enrollado.
+- **Colores por función**: por ejemplo, azul para datos, amarillo para gestión, rojo para el enlace entre firewalls. Lo que importa es que sea siempre igual y esté escrito.
+- **Rótulo en las dos puntas** con el otro extremo (`srv03 eth0 ↔ SW1 p12`). Una etiquetadora cuesta mucho menos que una hora buscando cuál es el cable.
+- **Energía y datos separados**, por lados distintos del rack.
+- **Documentación**: qué equipo hay en cada unidad, a qué PDU y a qué puerto va cada cable. Puede ser una planilla, pero herramientas como NetBox (libre) lo organizan y lo conectan con la automatización (Nivel 5).
+
+<Ordenar ejercicio={montaje} />
+
+## La sala
+
+Lo que protege a una sala de servidores, de una empresa mediana o de un centro de datos alquilado, se puede revisar como una lista:
+
+- **Clima**: dos equipos de aire, temperatura de entrada entre 18 y 27 °C, humedad controlada, sensores con alarma (la placa de gestión de cada servidor ya trae uno).
+- **Energía**: UPS y, si los cortes pueden ser largos, un generador (lo vemos en la próxima lección).
+- **Incendio**: detección temprana de humo y extinción con **gas** (agentes limpios o gas inerte), que apaga el fuego sin dañar los equipos. Nunca rociadores de agua sobre los racks si se puede evitar, ni caños de agua que pasen por arriba. Matafuegos de CO2 a mano.
+- **Acceso**: puerta con llave o tarjeta, registro de quién entra, cámaras y visitas acompañadas. Con acceso físico se puede sacar un disco, conectar algo o apagar un servidor: ninguna clave lo frena.
+- **Orden**: nada de cajas, cartones ni repuestos guardados en la sala; ni comida ni bebida.
+
+Muchas empresas ya no tienen sala propia: alquilan racks en un centro de datos (**colocation**) que pone el clima, la energía y la seguridad, o usan la nube (Nivel 7). Igual vas a tener que armar racks y revisar que el lugar cumpla esta lista.
+
+<EnSimple>
+El rack es un armario de 19 pulgadas medido en unidades (U). Lo pesado va abajo, la red arriba, cada servidor con una fuente en la PDU A y otra en la B, y paneles ciegos en los huecos. Los racks se ponen frente a frente en el pasillo frío y espalda con espalda en el caliente, sin que los aires se mezclen. Los cables, cortos, por colores y rotulados en las dos puntas, y todo anotado. La sala necesita clima doble con alarma, UPS, extinción con gas y acceso controlado.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Las dos fuentes en la misma PDU">
+    Si se corta ese circuito, se apaga igual. Una fuente en la PDU A y otra en la B, de circuitos distintos.
+  </ErrorComun>
+  <ErrorComun titulo="Huecos sin paneles ciegos">
+    El aire caliente vuelve al frente y los equipos de arriba se calientan. Un panel cuesta casi nada.
+  </ErrorComun>
+  <ErrorComun titulo="Un equipo montado al revés">
+    Un switch con la salida de aire hacia el pasillo frío calienta a los de al lado. Hay switches con el flujo de aire elegible (de frente a atrás o al revés): se pide el que corresponde.
+  </ErrorComun>
+  <ErrorComun titulo="Enfriar la sala de más">
+    Más frío no es más seguro: se gasta mucha energía. Lo que importa es que el aire que entra esté entre 18 y 27 °C y que haya alarma.
+  </ErrorComun>
+  <ErrorComun titulo="Cables sin rótulo ni documentación">
+    En un corte nadie sabe qué desconectar. Rótulo en las dos puntas y plano del rack actualizado.
+  </ErrorComun>
+  <ErrorComun titulo="Usar la sala de depósito">
+    Cartones y cajas son combustible y tapan el aire. En la sala, solo los equipos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Rack de 19 pulgadas, 42U; profundidad de 1000 a 1200 mm; rieles, PDU A y B, organizadores y paneles ciegos.
+- Armado: UPS y equipos pesados abajo, red arriba con su patchera, sin huecos, sin pasar el 80 % de la UPS.
+- Pasillo frío (frentes, 18 a 27 °C) y caliente (espaldas); contención para que no se mezclen.
+- Cables de largo justo, por colores, rotulados en las dos puntas, energía y datos separados, y todo documentado.
+- Sala: clima doble con alarma, UPS y generador, detección y extinción con gas, acceso controlado y registrado, nada guardado.
+</Resumen>
