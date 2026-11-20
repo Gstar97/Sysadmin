@@ -141,7 +141,7 @@ System.initHooks.push((sys, state) => {
     const virtual = img.virtual_gb * GiB
     const used = img.disco_gb !== undefined ? img.disco_gb * GiB : initialUsage(img.formato, virtual)
     sys.vfs.mkdirp(img.ruta.replace(/\/[^/]+$/, '') || '/', ROOT_CRED)
-    writeImage(sys, img.ruta, { format: img.formato, virtual, backing: img.respaldo, backingFmt: img.respaldo ? 'qcow2' : undefined }, used)
+    writeImage(sys, img.ruta, { format: img.formato, virtual, backing: img.respaldo, backingFmt: img.respaldo ? 'qcow2' : undefined, sistema: img.sistema ? { so: img.sistema.so, uefi: img.sistema.uefi, virtio: img.sistema.drivers_virtio ?? img.sistema.so === 'linux' } : undefined }, used)
     if (img.dueno) {
       const u = sys.users.get(img.dueno)
       if (u) sys.vfs.stat(img.ruta, ROOT_CRED).uid = u.uid

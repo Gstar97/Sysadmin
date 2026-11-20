@@ -8,7 +8,7 @@
  * como en el nodo real; los discos son volúmenes de un almacenamiento (local-lvm, un NFS, un
  * Proxmox Backup Server...), con su tamaño, aunque no tengan contenido.
  */
-import { GiB, readImage } from './diskimage'
+import { GiB, readImage, type GuestSystem } from './diskimage'
 import { register, type CommandContext } from './shell'
 import { System } from './system'
 import { ROOT_CRED } from './vfs'
@@ -37,6 +37,12 @@ export interface PveGuest {
   ip?: string
   /** El sistema invitado ya está instalado (en una VM nueva sin disco preparado, no). */
   osReady: boolean
+  /** Lo que se ve en la consola al arrancar, si el sistema no arranca bien (o un aviso). */
+  consola?: string
+  /** QEMU corre, pero el sistema invitado no arrancó (firmware o drivers equivocados). */
+  bootFail?: boolean
+  /** Arrancó, pero sin driver para la placa de red. */
+  sinRed?: boolean
 }
 
 export interface PveStorage {
@@ -63,6 +69,8 @@ export interface PveVolume {
   content: 'images' | 'rootdir' | 'iso' | 'vztmpl' | 'backup'
   ctime: number
   notes?: string
+  /** Para los discos importados de otro hipervisor: el sistema que tienen adentro. */
+  sistema?: GuestSystem
   /** Para los respaldos: qué tenía la configuración del invitado. */
   guest?: { type: 'qemu' | 'lxc'; conf: [string, string][]; vmid: number }
   /** Un respaldo que no se puede borrar (protegido). */
@@ -621,9 +629,70 @@ export function startGuest(sys: System, pve: Pve, g: PveGuest): string | undefin
   }
   g.status = 'running'
   g.pid = pve.nextPid++
-  g.ip = guestIp(sys, pve, g)
+  g.consola = undefined
+  g.bootFail = false
+  g.sinRed = false
+  if (g.type === 'qemu') bootCheck(pve, g)
+  g.ip = g.bootFail || g.sinRed ? undefined : guestIp(sys, pve, g)
   sys.log(g.type === 'qemu' ? 'qmeventd.service' : 'pve-container@.service', `Starting ${g.type === 'qemu' ? 'VM' : 'CT'} ${g.vmid}`)
   return undefined
+}
+
+/** El disco de arranque: el primero de boot order que sea un disco (o el primero que haya). */
+function bootDisk(g: PveGuest): { key: string; volid: string } | undefined {
+  const isDisk = (k: string) => {
+    const v = g.conf.get(k)
+    return !!v && /^(scsi|virtio|sata|ide)\d+$/.test(k) && !v.includes('media=cdrom') && !!parseDrive(v).volid
+  }
+  const order = /order=([^,]+)/.exec(g.conf.get('boot') ?? '')?.[1]?.split(';') ?? []
+  const key = order.find(isDisk) ?? (order.length ? undefined : [...g.conf.keys()].filter(isDisk).sort((a, b) => ['scsi', 'virtio', 'sata', 'ide'].indexOf(a.replace(/\d+$/, '')) - ['scsi', 'virtio', 'sata', 'ide'].indexOf(b.replace(/\d+$/, '')))[0])
+  return key ? { key, volid: parseDrive(g.conf.get(key)!).volid! } : undefined
+}
+
+/**
+ * Lo que pasa adentro de una VM con un disco que vino de otro hipervisor: el firmware tiene que
+ * coincidir con cómo se instaló el sistema, y Windows necesita los drivers VirtIO para arrancar
+ * de un disco SCSI o VirtIO.
+ */
+function bootCheck(pve: Pve, g: PveGuest) {
+  const b = bootDisk(g)
+  if (!b) {
+    // Hay un disco con sistema, pero no figura en el orden de arranque.
+    const conDisco = [...g.conf].some(([k, v]) => /^(scsi|virtio|sata|ide)\d+$/.test(k) && !v.includes('media=cdrom') && pve.volumes.get(parseDrive(v).volid ?? '')?.sistema)
+    const suelto = [...g.conf].find(([k, v]) => /^unused\d+$/.test(k) && pve.volumes.get(v)?.sistema)
+    if (conDisco || suelto) {
+      g.bootFail = true
+      g.consola = conDisco
+        ? `No bootable device.\n[simulador] El disco del sistema no está en el orden de arranque (boot: ${g.conf.get('boot') ?? ''}). Agregalo con qm set ${g.vmid} --boot order=<disco>.`
+        : `No bootable device.\n[simulador] El disco del sistema quedó desconectado (${suelto![0]}: ${suelto![1]}). Conectalo con qm set ${g.vmid} --scsi0 ${suelto![1]} (o --sata0) y ponelo en el orden de arranque.`
+    }
+    return
+  }
+  const vol = pve.volumes.get(b.volid)
+  const s = vol?.sistema
+  if (!s) return
+  const ovmf = g.conf.get('bios') === 'ovmf'
+  const bus = b.key.replace(/\d+$/, '')
+  const fail = (msg: string) => {
+    g.bootFail = true
+    g.consola = msg
+  }
+  if (s.uefi && !ovmf) return fail(`Booting from Hard Disk...\nBoot failed: not a bootable disk\nNo bootable device.\n[simulador] El sistema se instaló en modo UEFI y la VM arranca con BIOS (SeaBIOS). Hace falta --bios ovmf y un disco EFI (--efidisk0).`)
+  if (!s.uefi && ovmf) return fail(`BdsDxe: failed to load Boot0001 "UEFI QEMU HARDDISK" from PciRoot(0x0)/Pci(0x5,0x0): Not Found\n>>Start PXE over IPv4.\n[simulador] El sistema se instaló en modo BIOS y la VM arranca con UEFI (OVMF). Hace falta --bios seabios.`)
+  if (s.so === 'windows' && !s.virtio && (bus === 'scsi' || bus === 'virtio')) return fail(`Your device ran into a problem and needs to restart.\nStop code: INACCESSIBLE_BOOT_DEVICE\n[simulador] Windows no tiene los drivers VirtIO: no ve un disco ${bus === 'scsi' ? 'SCSI (VirtIO SCSI)' : 'VirtIO'}. Conectá el disco como sata0, arrancá e instalá los drivers de la ISO virtio-win.`)
+  if (s.so === 'windows' && !s.virtio) {
+    const cd = [...g.conf.values()].some((v) => v.includes('media=cdrom') && /virtio-win/i.test(v))
+    if (cd) {
+      s.virtio = true
+      g.agent = true
+      g.consola = `[simulador] Windows arrancó. En la consola corrés virtio-win-guest-tools.exe desde la ISO virtio-win (instala los drivers y el agente de QEMU); acá se dan por instalados.`
+      return
+    }
+    if (/^virtio/.test(g.conf.get('net0') ?? '')) {
+      g.sinRed = true
+      g.consola = `[simulador] Windows arrancó, pero no tiene driver para la placa de red VirtIO: queda sin red. Instalá los drivers de la ISO virtio-win (o usá una placa e1000 mientras tanto).`
+    }
+  }
 }
 
 function stopGuest(g: PveGuest) {
@@ -740,7 +809,25 @@ function applyQmOpts(sys: System, pve: Pve, g: PveGuest, opts: Map<string, strin
   for (const [k, raw] of opts) {
     if (k === 'start' || k === 'pool' || k === 'storage') continue
     if (k === 'delete') {
-      for (const d of raw.split(',')) g.conf.delete(d)
+      for (const d of raw.split(',')) {
+        const v = g.conf.get(d)
+        g.conf.delete(d)
+        if (!v) continue
+        // Proxmox también lo saca del orden de arranque.
+        const order = /order=([^,]+)/.exec(g.conf.get('boot') ?? '')?.[1]
+        if (order && order.split(';').includes(d)) {
+          const rest = order.split(';').filter((x) => x !== d)
+          if (rest.length) g.conf.set('boot', `order=${rest.join(';')}`)
+          else g.conf.delete('boot')
+        }
+        const volid = parseDrive(v).volid
+        if (isDriveKey(d) && volid && !v.includes('media=cdrom') && !/cloudinit$/.test(volid) && pve.volumes.has(volid)) {
+          // Como en Proxmox: el disco desconectado queda como "unused", no se borra.
+          let u = 0
+          while (g.conf.has(`unused${u}`)) u++
+          g.conf.set(`unused${u}`, volid)
+        } else if (/^unused\d+$/.test(d) && pve.volumes.has(v)) pve.volumes.delete(v)
+      }
       continue
     }
     if (!(QM_KEYS.has(k) || isDriveKey(k) || /^net\d+$/.test(k) || /^unused\d+$/.test(k))) return { error: `400 Parameter verification failed.\n${k}: property is not defined in schema and the schema does not allow additional properties` }
@@ -769,13 +856,15 @@ function applyQmOpts(sys: System, pve: Pve, g: PveGuest, opts: Map<string, strin
         const se = storageCheck(pve, d.storage, 'images')
         if (se) return { error: `400 Parameter verification failed.\n${k}: ${se}` }
         let size = d.newSize
+        let sistema: GuestSystem | undefined
         if (d.importFrom) {
           const img = readImage(sys, d.importFrom)
           if (!img) return { error: `400 Parameter verification failed.\n${k}: unable to parse volume ID '${d.importFrom}'` }
           size = img.virtual
+          sistema = img.sistema && { ...img.sistema }
         }
         const name = nextDiskName(pve, d.storage, g.vmid)
-        addVolume(pve, { volid: `${d.storage}:${name}`, storage: d.storage, vmid: g.vmid, size, format: 'raw', content: 'images' })
+        addVolume(pve, { volid: `${d.storage}:${name}`, storage: d.storage, vmid: g.vmid, size, format: 'raw', content: 'images', sistema })
         out += lvCreated(pve, d.storage, name)
         if (d.importFrom) out += `transferred 0.0 B of ${(size / GiB).toFixed(1)} GiB (0.00%)\ntransferred ${(size / GiB).toFixed(1)} GiB of ${(size / GiB).toFixed(1)} GiB (100.00%)\n`
         const rest = [...d.opts].filter(([o]) => o !== 'import-from').map(([o, x]) => `${o}=${x}`)
@@ -1065,6 +1154,7 @@ register('qm', {
           ctx.err(`${e}\n`)
           return 1
         }
+        if (g.consola) ctx.out(`${g.bootFail ? '[simulador] La VM queda en marcha, pero en su consola (noVNC) se ve:\n' : ''}${g.consola}\n`)
         return 0
       }
       case 'stop':
@@ -1077,7 +1167,7 @@ register('qm', {
           ctx.err(`VM ${g.vmid} not running\n`)
           return 1
         }
-        if (verb === 'shutdown' && !g.osReady) {
+        if (verb === 'shutdown' && (!g.osReady || g.bootFail)) {
           ctx.err(`VM quit/powerdown failed - got timeout\n`)
           return 1
         }
@@ -1153,7 +1243,7 @@ register('qm', {
           const st = target ?? d.storage
           if (/cloudinit/.test(v)) {
             const name = `vm-${newid}-cloudinit`
-            addVolume(pve, { volid: `${st}:${name}`, storage: st, vmid: newid, size: vol.size, format: 'raw', content: 'images' })
+            addVolume(pve, { volid: `${st}:${name}`, storage: st, vmid: newid, size: vol.size, format: 'raw', content: 'images', sistema: vol.sistema && { ...vol.sistema } })
             conf.set(k, `${st}:${name},media=cdrom`)
             out += lvCreated(pve, st, name)
             continue
@@ -1209,7 +1299,7 @@ register('qm', {
         }
         const size = img?.virtual ?? sys.vfs.stat(path, ROOT_CRED).size ?? 0
         const name = nextDiskName(pve, storage, g.vmid)
-        addVolume(pve, { volid: `${storage}:${name}`, storage, vmid: g.vmid, size, format: 'raw', content: 'images' })
+        addVolume(pve, { volid: `${storage}:${name}`, storage, vmid: g.vmid, size, format: 'raw', content: 'images', sistema: img?.sistema && { ...img.sistema } })
         let u = 0
         while (g.conf.has(`unused${u}`)) u++
         g.conf.set(`unused${u}`, `${storage}:${name}`)
@@ -1282,7 +1372,7 @@ register('qm', {
           ctx.err(`No QEMU guest agent configured\n`)
           return 1
         }
-        if (!g.agent) {
+        if (!g.agent || g.bootFail) {
           ctx.err(`QEMU guest agent is not running\n`)
           return 1
         }
@@ -2042,7 +2132,7 @@ register('pveum', {
 export function verifyProxmox(sys: System, check: object): { ok: boolean; label: string } | undefined {
   const pve = pveOf(sys)
   if ('pve_vm' in check || 'pve_ct' in check) {
-    const c = check as { pve_vm?: number; pve_ct?: number; existe?: boolean; estado?: string; nombre?: string; plantilla?: boolean; config?: Record<string, string>; instantanea?: string }
+    const c = check as { pve_vm?: number; pve_ct?: number; existe?: boolean; estado?: string; nombre?: string; plantilla?: boolean; config?: Record<string, string>; instantanea?: string; arranca?: boolean; con_red?: boolean }
     const id = (c.pve_vm ?? c.pve_ct)!
     const type = c.pve_vm !== undefined ? 'qemu' : 'lxc'
     const what = type === 'qemu' ? `la VM ${id}` : `el contenedor ${id}`
@@ -2061,6 +2151,14 @@ export function verifyProxmox(sys: System, check: object): { ok: boolean; label:
     if (ok && c.plantilla !== undefined) {
       ok = g!.template === c.plantilla
       parts.push(c.plantilla ? 'convertida en plantilla' : 'que no es plantilla')
+    }
+    if (ok && c.arranca !== undefined) {
+      ok = (g!.status === 'running' && !g!.bootFail) === c.arranca
+      parts.push(c.arranca ? 'con el sistema arrancado' : 'sin poder arrancar')
+    }
+    if (ok && c.con_red !== undefined) {
+      ok = (g!.status === 'running' && !!g!.ip) === c.con_red
+      parts.push(c.con_red ? 'con red' : 'sin red')
     }
     if (ok && c.instantanea) {
       ok = g!.snapshots.some((s) => s.name === c.instantanea)

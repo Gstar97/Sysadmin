@@ -569,7 +569,7 @@ register('which', {
     let code = 0
     for (const c of ctx.args) {
       const def = COMMANDS.get(c)
-      const available = def && ctx.sys.isCommandAvailable(c, (x) => commandPackage(ctx.sys.distro, x))
+      const available = def && ctx.sys.isCommandAvailable(c, (x) => commandPackage(ctx.sys.distro, x, ctx.sys.installed))
       const script = ctx.sh.findInPath(c)
       if (script && !script.binary) ctx.out(`${script.path}\n`)
       else if (available) ctx.out(`${def.path ?? '/usr/bin'}/${c}\n`)
@@ -587,7 +587,7 @@ register('whereis', {
   run(ctx) {
     for (const c of ctx.args.filter((x) => !x.startsWith('-'))) {
       const def = COMMANDS.get(c)
-      const available = def && ctx.sys.isCommandAvailable(c, (x) => commandPackage(ctx.sys.distro, x))
+      const available = def && ctx.sys.isCommandAvailable(c, (x) => commandPackage(ctx.sys.distro, x, ctx.sys.installed))
       if (!available) {
         ctx.out(`${c}:\n`)
         continue

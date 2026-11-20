@@ -66,7 +66,7 @@ function installBinaries(sys: System) {
   const otherFamily = OTHER_FAMILY[sys.distro]
   for (const [name, def] of COMMANDS) {
     if (otherFamily.includes(name)) continue
-    const pkg = commandPackage(sys.distro, name)
+    const pkg = commandPackage(sys.distro, name, sys.installed)
     if (pkg && !sys.installed.has(pkg)) continue
     add(`${def.path ?? '/usr/bin'}/${name}`, name)
   }

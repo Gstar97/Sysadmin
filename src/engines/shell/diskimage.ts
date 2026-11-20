@@ -12,6 +12,14 @@ import { normalizePath, ROOT_CRED, type Cred } from './vfs'
 
 export type ImageFormat = 'qcow2' | 'raw' | 'vmdk' | 'vhdx' | 'vdi'
 
+export interface GuestSystem {
+  so: 'windows' | 'linux'
+  /** Instalado en modo UEFI (generación 2 en Hyper-V, EFI en VMware) o BIOS. */
+  uefi: boolean
+  /** Tiene los drivers VirtIO (Linux siempre; Windows solo si se instalaron). */
+  virtio: boolean
+}
+
 export interface ImageMeta {
   format: ImageFormat
   /** Tamaño que ve la máquina virtual (bytes). */
@@ -21,6 +29,8 @@ export interface ImageMeta {
   backingFmt?: ImageFormat
   /** Lo realmente escrito en el disco, si es distinto del tamaño del archivo (raw disperso, qcow2 con preallocation=metadata). */
   allocated?: number
+  /** Qué sistema tiene instalado adentro (para las migraciones entre hipervisores). */
+  sistema?: GuestSystem
   /** Instantáneas internas (qcow2). */
   snapshots?: { id: number; name: string; size: number; date: number; vmClock: string }[]
 }
@@ -121,11 +131,11 @@ register('qemu-img', {
     const sys = ctx.sys
     const [sub, ...rest] = ctx.args
     if (!sub || sub === '--help' || sub === '-h') {
-      ctx.out('qemu-img version 8.2.2\nusage: qemu-img [standard options] command [command options]\n\nCommand syntax:\n  check, create, commit, compare, convert, info, map, measure, snapshot, rebase, resize, amend, bitmap, dd\n')
+      ctx.out(`qemu-img version ${sys.installed.has('pve-qemu-kvm') ? '11.0.0 (pve-qemu-kvm_11.0.0-2)' : '8.2.2'}\nusage: qemu-img [standard options] command [command options]\n\nCommand syntax:\n  check, create, commit, compare, convert, info, map, measure, snapshot, rebase, resize, amend, bitmap, dd\n`)
       return sub ? 0 : 1
     }
     if (sub === '--version' || sub === '-V') {
-      ctx.out(`qemu-img version ${sys.distro === 'rocky' ? '9.1.0 (qemu-kvm-9.1.0-15.el10)' : '8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.4)'}\nCopyright (c) 2003-2024 Fabrice Bellard and the QEMU Project developers\n`)
+      ctx.out(`qemu-img version ${sys.installed.has('pve-qemu-kvm') ? '11.0.0 (pve-qemu-kvm_11.0.0-2)' : sys.distro === 'rocky' ? '9.1.0 (qemu-kvm-9.1.0-15.el10)' : '8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.4)'}\nCopyright (c) 2003-2024 Fabrice Bellard and the QEMU Project developers\n`)
       return 0
     }
     const opts = new Map<string, string>()
@@ -235,7 +245,7 @@ register('qemu-img', {
             b = bm.backing
           }
           if (meta.format === 'raw') data = Math.min(data, meta.virtual * 0.35)
-          writeImage(sys, dst, { format: out, virtual: meta.virtual }, out === 'raw' ? meta.virtual : Math.min(meta.virtual, data), cred(ctx))
+          writeImage(sys, dst, { format: out, virtual: meta.virtual, sistema: meta.sistema }, out === 'raw' ? meta.virtual : Math.min(meta.virtual, data), cred(ctx))
           if (flags.has('-p')) ctx.out('    (100.00/100%)\n')
           return 0
         }

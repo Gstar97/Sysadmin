@@ -464,6 +464,8 @@ const stateShape = {
         disco_gb: z.number().optional(),
         respaldo: z.string().optional(),
         dueno: z.string().optional(),
+        /** El sistema instalado adentro (una VM exportada de otro hipervisor). */
+        sistema: z.strictObject({ so: z.enum(['windows', 'linux']), uefi: z.boolean().default(false), drivers_virtio: z.boolean().optional() }).optional(),
       }),
     )
     .default([]),
@@ -712,7 +714,7 @@ const singleCheckSchema = z.union([
   z.strictObject({ imagen_disco: z.string(), formato: z.string().optional(), respaldo: z.string().optional(), tamano_virtual_gb: z.number().optional() }),
   z.strictObject({ red_libvirt: z.string(), activa: z.boolean().optional(), autostart: z.boolean().optional() }),
   /** Una VM (pve_vm) o un contenedor (pve_ct) de Proxmox: estado, nombre, plantilla, instantánea y valores de su configuración. */
-  z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
+  z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional(), arranca: z.boolean().optional(), con_red: z.boolean().optional() }),
   z.strictObject({ pve_ct: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
   /** Respaldos de un invitado (en un almacenamiento): al menos uno, o exactamente cantidad. */
   z.strictObject({ pve_respaldo: z.number().int(), almacenamiento: z.string().optional(), cantidad: z.number().int().optional() }),

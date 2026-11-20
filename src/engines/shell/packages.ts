@@ -1413,11 +1413,18 @@ export const OTHER_FAMILY: Record<'rocky' | 'ubuntu', string[]> = {
   ubuntu: ['dnf', 'yum', 'rpm', 'firewall-cmd', 'nmcli', 'authselect', 'grub2-mkconfig', 'grubby', 'dracut', 'lsinitrd'],
 }
 
-export function commandPackage(distro: 'rocky' | 'ubuntu', command: string): string | undefined {
+/**
+ * El paquete que trae un comando. Si varios lo traen (qemu-img viene en qemu-utils y en el
+ * pve-qemu-kvm de Proxmox) y se pasa lo instalado, devuelve el que esté instalado.
+ */
+export function commandPackage(distro: 'rocky' | 'ubuntu', command: string, installed?: Set<string>): string | undefined {
   if (OTHER_FAMILY[distro].includes(command)) return '(otra familia)'
   const catalog = distro === 'rocky' ? ROCKY_PACKAGES : UBUNTU_PACKAGES
+  let first: string | undefined
   for (const [name, info] of Object.entries(catalog)) {
-    if (info.commands?.includes(command)) return name
+    if (!info.commands?.includes(command)) continue
+    if (!installed || installed.has(name)) return name
+    first ??= name
   }
-  return undefined
+  return first
 }

@@ -1139,7 +1139,7 @@ export class Shell {
 
     const def = COMMANDS.get(name)
     if (def) {
-      const pkg = commandPackage(this.sys.distro, name)
+      const pkg = commandPackage(this.sys.distro, name, this.sys.installed)
       if (pkg && !this.sys.installed.has(pkg)) {
         io.err(`bash: ${name}: command not found\n`)
         return 127
@@ -2471,7 +2471,7 @@ export const BUILTINS: Record<string, Builtin> = {
     let code = 0
     if (args[0] === '-t') {
       for (const a of args.slice(1)) {
-        const kind = sh.aliases.has(a) ? 'alias' : RESERVED_WORDS.has(a) ? 'keyword' : sh.functions.has(a) ? 'function' : BUILTINS[a] ? 'builtin' : COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c)) ? 'file' : ''
+        const kind = sh.aliases.has(a) ? 'alias' : RESERVED_WORDS.has(a) ? 'keyword' : sh.functions.has(a) ? 'function' : BUILTINS[a] ? 'builtin' : COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c, sh.sys.installed)) ? 'file' : ''
         if (kind) io.out(kind + '\n')
         else code = 1
       }
@@ -2482,7 +2482,7 @@ export const BUILTINS: Record<string, Builtin> = {
       else if (BUILTINS[a]) io.out(`${a} is a shell builtin\n`)
       else if (sh.functions.has(a)) io.out(`${a} is a function\n`)
       else if (sh.findInPath(a) && !sh.findInPath(a)!.binary) io.out(`${a} is ${sh.findInPath(a)!.path}\n`)
-      else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c))) {
+      else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c, sh.sys.installed))) {
         io.out(`${a} is ${COMMANDS.get(a)!.path ?? '/usr/bin'}/${a}\n`)
       } else {
         io.err(`bash: type: ${a}: not found\n`)
@@ -2558,7 +2558,7 @@ export const BUILTINS: Record<string, Builtin> = {
         else if (BUILTINS[a]) io.out(args[0] === '-v' ? `${a}\n` : `${a} is a shell builtin\n`)
         else if (sh.functions.has(a)) io.out(args[0] === '-v' ? `${a}\n` : `${a} is a function\n`)
         else if (sh.findInPath(a) && !sh.findInPath(a)!.binary) io.out(`${sh.findInPath(a)!.path}\n`)
-        else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c))) io.out(`${COMMANDS.get(a)!.path ?? '/usr/bin'}/${a}\n`)
+        else if (COMMANDS.has(a) && sh.sys.isCommandAvailable(a, (c) => commandPackage(sh.sys.distro, c, sh.sys.installed))) io.out(`${COMMANDS.get(a)!.path ?? '/usr/bin'}/${a}\n`)
         else code = 1
       }
       return code

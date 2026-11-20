@@ -171,3 +171,49 @@ describe('Proxmox VE', () => {
     expect(verifyBash(sh, { pve_respaldo: 100, almacenamiento: 'pbs01', cantidad: 2 }).ok).toBe(true)
   })
 })
+
+describe('Migrar a Proxmox desde otro hipervisor', () => {
+  const origen: BashStateInput = {
+    ...pve,
+    proxmox: { isos: ['virtio-win-0.1.285.iso'] },
+    imagenes_disco: [
+      { ruta: '/mnt/migracion/erp01.vhdx', formato: 'vhdx', virtual_gb: 80, disco_gb: 34, sistema: { so: 'windows', uefi: true } },
+      { ruta: '/mnt/migracion/web02.vmdk', formato: 'vmdk', virtual_gb: 40, disco_gb: 9, sistema: { so: 'linux', uefi: false } },
+    ],
+  }
+  it('Windows UEFI sin drivers VirtIO: firmware, SATA, drivers y después SCSI', async () => {
+    const { run, sh } = await session(origen)
+    await run('qm create 120 --name erp01 --memory 8192 --cores 4 --ostype win11 --scsihw virtio-scsi-single --net0 virtio,bridge=vmbr0 --agent 1')
+    await run('qm disk import 120 /mnt/migracion/erp01.vhdx local-lvm')
+    await run('qm set 120 --scsi0 local-lvm:vm-120-disk-0 --boot order=scsi0')
+    expect((await run('qm start 120')).out).toContain('not a bootable disk')
+    expect(verifyBash(sh, { pve_vm: 120, arranca: false }).ok).toBe(true)
+    await run('qm stop 120')
+    await run('qm set 120 --bios ovmf --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1')
+    expect((await run('qm start 120')).out).toContain('INACCESSIBLE_BOOT_DEVICE')
+    await run('qm stop 120')
+    await run('qm set 120 --delete scsi0')
+    expect((await run('qm config 120')).out).toMatch(/unused0: local-lvm:vm-120-disk-0/)
+    await run('qm set 120 --sata0 local-lvm:vm-120-disk-0 --boot order=sata0')
+    expect((await run('qm start 120')).out).toContain('sin red')
+    expect(verifyBash(sh, { pve_vm: 120, arranca: true, con_red: false }).ok).toBe(true)
+    await run('qm stop 120')
+    await run('qm set 120 --ide2 local:iso/virtio-win-0.1.285.iso,media=cdrom')
+    expect((await run('qm start 120')).out).toContain('se dan por instalados')
+    await run('qm shutdown 120')
+    await run('qm set 120 --delete sata0')
+    expect((await run('qm start 120')).out).toContain('No bootable device')
+    await run('qm stop 120')
+    await run('qm set 120 --scsi0 local-lvm:vm-120-disk-0 --boot order=scsi0 --delete ide2')
+    expect((await run('qm start 120')).out).not.toContain('[simulador]')
+    expect(verifyBash(sh, { pve_vm: 120, arranca: true, con_red: true }).ok).toBe(true)
+    expect((await run('qm agent 120 ping')).code).toBe(0)
+  })
+  it('un Linux de VMware convertido con qemu-img arranca con SeaBIOS', async () => {
+    const { run, sh } = await session(origen)
+    await run('qemu-img convert -p -f vmdk -O qcow2 /mnt/migracion/web02.vmdk /root/web02.qcow2')
+    await run('qm create 121 --name web02 --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --scsi0 local-lvm:0,import-from=/root/web02.qcow2 --boot order=scsi0')
+    expect((await run('qm start 121')).out).toBe('')
+    expect(verifyBash(sh, { pve_vm: 121, arranca: true, con_red: true }).ok).toBe(true)
+  })
+})

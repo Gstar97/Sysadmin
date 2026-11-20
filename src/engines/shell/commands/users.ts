@@ -617,7 +617,7 @@ register('sudo', {
     try {
       if (securePath) ctx.sh.vars.set('PATH', securePath)
       const name0 = command[0]
-      if (!name0.includes('/') && !ctx.sh.findInPath(name0) && !(COMMANDS.has(name0) && ctx.sys.isCommandAvailable(name0, (c) => commandPackage(ctx.sys.distro, c)))) {
+      if (!name0.includes('/') && !ctx.sh.findInPath(name0) && !(COMMANDS.has(name0) && ctx.sys.isCommandAvailable(name0, (c) => commandPackage(ctx.sys.distro, c, ctx.sys.installed)))) {
         ctx.err(`sudo: ${name0}: command not found\n`)
         return 1
       }
