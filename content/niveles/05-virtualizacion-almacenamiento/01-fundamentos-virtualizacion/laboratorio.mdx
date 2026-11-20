@@ -1,0 +1,41 @@
+---
+titulo: KVM y libvirt, con máquinas virtuales creadas desde una imagen de nube y cloud-init
+horas: 3
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - Activé la virtualización anidada y virt-host-validate da PASS en ubuntu01.
+  - Creé web01 desde la imagen de nube de Ubuntu con cloud-init y entré por SSH con mi clave.
+  - Bajé la memoria de una VM con el globo y volví atrás con una instantánea.
+  - Creé varias VM iguales con un bucle y las di de baja sin dejar discos huérfanos.
+  - Manejé VM desde Cockpit en rocky01.
+---
+
+import sim from './lab-kvm-sim.yaml'
+import pasos from './lab-kvm.yaml'
+
+## Objetivo
+
+Armar un hipervisor KVM y crear servidores sin instalarlos a mano: una imagen de nube, un archivo de cloud-init y un comando. Es la misma idea que vas a usar en Proxmox (módulo 5.2) y en la nube (Nivel 7).
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: ubuntu01 con al menos 2 vCPU y 4 GB de memoria, salida a internet y la virtualización anidada activada en tu hipervisor; rocky01 para Cockpit.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Una VM adentro de otra VM anda bastante más lenta que en un servidor físico, y cada una usa memoria de tu computadora: con 1 GB por VM de prueba alcanza. Si tu equipo tiene poca memoria, creá las VM de a una y borralas al terminar.
+</Advertencia>
+
+## Para pensar
+
+1. Las VM de este laboratorio usan la red NAT de libvirt. ¿Qué cambiarías para que web01 sea un servidor más de la red del laboratorio, con IP de esa red?
+2. Si actualizás la imagen base (la descargás de nuevo con los parches del mes), ¿qué pasa con web01, que la usa como base? ¿Cómo lo resolverías?
+3. ¿Qué diferencia hay entre sacarle una instantánea a web01 y copiar el archivo web01.qcow2 a otro disco?

@@ -1,0 +1,117 @@
+tipo: terminal
+shell: bash
+titulo: Un hipervisor KVM en Rocky Linux y dos servidores desde una plantilla
+descripcion: >-
+  hv01 es un Rocky Linux 10 (16 núcleos, 64 GB) que va a ser hipervisor de laboratorio. Ya está
+  descargada la imagen de nube de Rocky 10 en /var/lib/libvirt/images/Rocky-10-GenericCloud.qcow2
+  y tu clave pública está en ~/.ssh/id_ed25519.pub. Vas a dejar KVM funcionando y crear web01 y
+  web02 iguales con un solo bucle.
+estado_inicial:
+  distro: rocky
+  hostname: hv01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  imagenes_disco:
+    - { ruta: /var/lib/libvirt/images/Rocky-10-GenericCloud.qcow2, formato: qcow2, virtual_gb: 10, disco_gb: 0.55 }
+  archivos:
+    /home/ana/.ssh/id_ed25519.pub: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK8z ana@pc\n"
+pasos:
+  - consigna: Comprobá que la CPU tiene las extensiones de virtualización y que el kernel cargó KVM.
+    verificar:
+      - { comando_usado: 'vmx|svm' }
+      - { comando_usado: 'lsmod' }
+    pistas:
+      - "`grep -cE 'vmx|svm' /proc/cpuinfo` y `lsmod | grep kvm`."
+    solucion:
+      - "grep -cE 'vmx|svm' /proc/cpuinfo"
+      - lsmod | grep kvm
+    explicacion: >-
+      Es un servidor físico con VT-x activado en el BIOS: los 16 procesadores tienen vmx y kvm_intel está cargado.
+  - consigna: >-
+      Instalá qemu-kvm, libvirt y virt-install, arrancá y habilitá los servicios de libvirt
+      (virtqemud, virtnetworkd y virtstoraged) y dejá la red default activa y con arranque
+      automático.
+    verificar:
+      - { paquete: virt-install }
+      - { servicio: virtqemud, activo: true, habilitado: true }
+      - { servicio: virtnetworkd, activo: true }
+      - { red_libvirt: default, activa: true, autostart: true }
+    pistas:
+      - "`sudo dnf install -y qemu-kvm libvirt virt-install` y `sudo systemctl enable --now virtqemud virtnetworkd virtstoraged`."
+      - "La red: `sudo virsh net-start default` y `sudo virsh net-autostart default`."
+    solucion:
+      - sudo dnf install -y qemu-kvm libvirt virt-install
+      - sudo systemctl enable --now virtqemud virtnetworkd virtstoraged
+      - sudo virsh net-start default
+      - sudo virsh net-autostart default
+    explicacion: >-
+      En Rocky 10, libvirt usa un servicio por parte (QEMU, redes, almacenamiento) en lugar del
+      libvirtd de Ubuntu. virt-manager ya no está: se administra con virsh o con Cockpit
+      (cockpit-machines), que lo vas a usar en la parte 2.
+  - consigna: Pasale la revisión completa de libvirt al servidor.
+    verificar:
+      - { comando_usado: 'virt-host-validate' }
+    pistas:
+      - "`virt-host-validate qemu`"
+    solucion: [virt-host-validate qemu]
+    explicacion: Al ser físico, hasta el IOMMU da PASS.
+  - consigna: >-
+      Escribí ~/plantilla.yaml, un user-data que sirva para cualquier servidor: la usuaria ana
+      con sudo y tu clave, y el nombre como NOMBRE (lo vas a reemplazar en cada VM).
+    verificar:
+      - { archivo: /home/ana/plantilla.yaml, contenido_incluye: '#cloud-config' }
+      - { archivo: /home/ana/plantilla.yaml, contenido_incluye: 'hostname: NOMBRE' }
+      - { archivo: /home/ana/plantilla.yaml, contenido_incluye: 'ssh_authorized_keys' }
+    pistas:
+      - "`printf '#cloud-config\\nhostname: NOMBRE\\nusers:\\n  - name: ana\\n    sudo: ALL=(ALL) NOPASSWD:ALL\\n    ssh_authorized_keys:\\n      - %s\\n' \"$(cat ~/.ssh/id_ed25519.pub)\" > ~/plantilla.yaml`"
+    solucion:
+      - "printf '#cloud-config\\nhostname: NOMBRE\\nusers:\\n  - name: ana\\n    sudo: ALL=(ALL) NOPASSWD:ALL\\n    ssh_authorized_keys:\\n      - %s\\n' \"$(cat ~/.ssh/id_ed25519.pub)\" > ~/plantilla.yaml"
+    explicacion: Un mismo archivo para todos; lo único que cambia es el nombre.
+  - consigna: >-
+      Con un bucle for, creá web01 y web02: para cada una, su user-data (~/NOMBRE.yaml con sed),
+      su disco qcow2 de 20 GB con la imagen de Rocky como base, y la VM (2 vCPU, 2048 MiB, osinfo
+      rocky10, red default, cloud-init, sin consola).
+    verificar:
+      - { dominio: web01, estado: running }
+      - { dominio: web02, estado: running }
+      - { imagen_disco: /var/lib/libvirt/images/web02.qcow2, respaldo: Rocky-10-GenericCloud.qcow2 }
+    pistas:
+      - "Adentro del bucle: `sed \"s/NOMBRE/$vm/\" ~/plantilla.yaml > ~/$vm.yaml`, después `sudo qemu-img create -f qcow2 -b Rocky-10-GenericCloud.qcow2 -F qcow2 /var/lib/libvirt/images/$vm.qcow2 20G` y el virt-install."
+      - "`for vm in web01 web02; do sed \"s/NOMBRE/$vm/\" ~/plantilla.yaml > ~/$vm.yaml; sudo qemu-img create -f qcow2 -b Rocky-10-GenericCloud.qcow2 -F qcow2 /var/lib/libvirt/images/$vm.qcow2 20G; sudo virt-install --name $vm --memory 2048 --vcpus 2 --disk /var/lib/libvirt/images/$vm.qcow2 --import --osinfo rocky10 --network network=default --cloud-init user-data=/home/ana/$vm.yaml --noautoconsole; done`"
+    solucion:
+      - "for vm in web01 web02; do sed \"s/NOMBRE/$vm/\" ~/plantilla.yaml > ~/$vm.yaml; sudo qemu-img create -f qcow2 -b Rocky-10-GenericCloud.qcow2 -F qcow2 /var/lib/libvirt/images/$vm.qcow2 20G; sudo virt-install --name $vm --memory 2048 --vcpus 2 --disk /var/lib/libvirt/images/$vm.qcow2 --import --osinfo rocky10 --network network=default --cloud-init user-data=/home/ana/$vm.yaml --noautoconsole; done"
+    explicacion: >-
+      Dos servidores iguales, con nombre propio, en un minuto. Para diez, alcanza con agregar
+      nombres a la lista. Es el mismo principio que en la nube: una imagen, una configuración y
+      un script.
+  - consigna: Mirá qué IP recibió cada una y que las dos arranquen solas con el servidor.
+    verificar:
+      - { dominio: web01, autostart: true }
+      - { dominio: web02, autostart: true }
+      - { salida_contiene: '192.168.122.' }
+    pistas:
+      - "`sudo virsh autostart web01`, lo mismo con web02, y `sudo virsh net-dhcp-leases default`."
+    solucion:
+      - sudo virsh autostart web01
+      - sudo virsh autostart web02
+      - sudo virsh net-dhcp-leases default
+    explicacion: >-
+      net-dhcp-leases muestra cada VM con su nombre (el que puso cloud-init) y su IP. Desde hv01
+      ya se puede entrar por SSH con tu clave: ssh ana@IP.
+  - consigna: >-
+      web02 era una prueba: dala de baja con sus discos y su user-data, y dejá la imagen de Rocky.
+    verificar:
+      - { dominio: web02, existe: false }
+      - { archivo: /var/lib/libvirt/images/web02.qcow2, existe: false }
+      - { archivo: /home/ana/web02.yaml, existe: false }
+      - { imagen_disco: /var/lib/libvirt/images/Rocky-10-GenericCloud.qcow2 }
+    pistas:
+      - "`sudo virsh destroy web02`, `sudo virsh undefine web02 --remove-all-storage` y `rm ~/web02.yaml`."
+    solucion:
+      - sudo virsh destroy web02
+      - sudo virsh undefine web02 --remove-all-storage
+      - rm ~/web02.yaml
+    explicacion: >-
+      Sin basura: ni la VM, ni su disco, ni su configuración. La imagen base sigue para la próxima.

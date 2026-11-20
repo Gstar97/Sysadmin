@@ -1,0 +1,130 @@
+tipo: troubleshooting
+titulo: Memoria libre y todo lento
+descripcion: >-
+  Incidente simulado. kvm-prod01 es el único hipervisor de una empresa de 60 personas: 16 núcleos
+  (32 hilos), 128 GB de memoria y seis VM, entre ellas el ERP (erp01) y la base de datos del ERP
+  (db01). Nadie cambió nada en semanas, según dicen. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:20. Llegan quejas de todas las áreas: el ERP tarda diez segundos en abrir cada
+      pantalla. Mirás el hipervisor y no parece estar sufriendo.
+    evidencia:
+      - titulo: free -h en kvm-prod01
+        contenido: |2
+                         total        used        free      shared  buff/cache   available
+          Mem:           125Gi        79Gi        38Gi        41Mi       8.1Gi        45Gi
+          Swap:          8.0Gi        0.2Gi       7.8Gi
+      - titulo: virsh list en kvm-prod01
+        contenido: |2
+           Id   Name       State
+          --------------------------
+           1    dc01       running
+           2    archivos   running
+           3    db01       running
+           4    erp01      running
+           5    informes   running
+           6    backup01   running
+    opciones:
+      - texto: Mirar adentro de erp01 qué está pasando (top y free)
+        ir_a: n_erp
+        minutos: 5
+      - texto: Comprar más memoria para el hipervisor
+        ir_a: n1
+        minutos: 20
+        consecuencia: >-
+          El hipervisor tiene 38 GB libres: el problema no es que le falte memoria. Gastarías
+          dinero y una semana de espera en algo que no cambia nada.
+      - texto: Reiniciar el hipervisor para que se "limpie"
+        ir_a: n1
+        minutos: 25
+        consecuencia: >-
+          Quince minutos sin ERP para toda la empresa, y a las 10:30 está igual de lento. Reiniciar
+          sin saber qué pasa solo cambia el momento del problema.
+  n_erp:
+    situacion: >-
+      Adentro de erp01 (8 vCPU, 16 GB configurados). La CPU no parece estar al máximo, pero hay
+      dos números que llaman la atención.
+    evidencia:
+      - titulo: top en erp01
+        contenido: |
+          %Cpu(s): 21.4 us,  4.0 sy,  0.0 ni, 31.2 id, 12.8 wa,  0.0 hi,  0.4 si, 30.2 st
+          MiB Mem :   6144.0 total,    112.3 free,   5801.6 used,    230.1 buff/cache
+          MiB Swap:   4096.0 total,    612.4 free,   3483.6 used.     88.2 avail Mem
+      - titulo: virsh dommemstat erp01 (en el hipervisor)
+        contenido: |
+          actual 6291456
+          swap_in 1841220
+          swap_out 2205540
+          unused 115020
+          available 6291456
+          rss 6184112
+    opciones:
+      - texto: Devolverle la memoria a erp01 y averiguar por qué la tenía en 6 GB
+        ir_a: n_memoria
+        minutos: 10
+      - texto: Darle más vCPU a erp01, ya que la CPU no llega
+        ir_a: n_erp
+        minutos: 15
+        consecuencia: >-
+          Hay que apagarla para cambiar las vCPU, y con más vCPU espera todavía más su turno: el
+          30 % de steal es tiempo que quiso CPU y el hipervisor no se la dio. Volvés a mirar.
+      - texto: Agrandar la swap de erp01
+        ir_a: n_erp
+        minutos: 10
+        consecuencia: >-
+          La VM ya está usando 3,4 GB de swap porque tiene 6 GB de memoria cuando debería tener
+          16. Más swap es más lentitud, no menos.
+  n_memoria:
+    situacion: >-
+      En el historial del hipervisor aparece un "virsh setmem erp01 6G --live" de hace tres
+      semanas, del día que alguien instaló backup01 y faltaba memoria para arrancarla. Le devolvés
+      la memoria a erp01 con el globo y la swap de adentro empieza a vaciarse. Las pantallas
+      tardan cuatro segundos en lugar de diez: mejor, pero no bien. Queda el 30 % de steal.
+    evidencia:
+      - titulo: Las vCPU de cada VM
+        contenido: |
+          dc01       2 vCPU
+          archivos   4 vCPU
+          db01      16 vCPU
+          erp01      8 vCPU
+          informes  16 vCPU   (el proceso de informes corre de lunes a viernes, de 9 a 11)
+          backup01  16 vCPU   (el respaldo empezó el domingo a las 23 y todavía no terminó)
+          total     62 vCPU sobre 32 hilos
+      - titulo: Uso de CPU de cada VM, ahora
+        contenido: |
+          informes  ~100 % de sus 16 vCPU
+          backup01  ~90 % de sus 16 vCPU (comprimiendo)
+          db01      ~40 %
+          erp01     ~35 % (esperando turno)
+    opciones:
+      - texto: Bajar las vCPU de informes y backup01 a lo que necesitan, y mover los informes y el respaldo fuera del horario de trabajo
+        ir_a: n_ok
+        minutos: 30
+      - texto: Desactivar el globo en todas las VM
+        ir_a: n_memoria
+        minutos: 10
+        consecuencia: >-
+          El globo no tiene la culpa: hizo lo que alguien le pidió. Sin globo, la próxima vez que
+          falte memoria el hipervisor va a usar su swap, que es peor. El problema que queda es de CPU.
+      - texto: Pasar db01 a 32 vCPU para que la base responda más rápido
+        ir_a: n_memoria
+        minutos: 20
+        consecuencia: >-
+          Con 32 vCPU, db01 tendría que esperar a que estén libres todos los hilos del servidor a
+          la vez. El steal sube para todos.
+  n_ok:
+    final: exito
+    resumen: >-
+      Eran dos problemas apilados que se veían igual desde afuera. Primero, la memoria: hace tres
+      semanas, para hacer lugar a backup01, alguien le bajó la memoria a erp01 a 6 GB con el globo
+      y no lo anotó. La VM pasó a usar su propia swap, y el hipervisor mostraba memoria libre
+      porque esa memoria ya no la tenía la VM. Segundo, la CPU: 62 vCPU sobre 32 hilos no es un
+      problema por sí mismo, pero los lunes a la mañana coincidían el proceso de informes (16
+      vCPU al 100 %) y un respaldo que se había alargado (16 vCPU comprimiendo), y el ERP esperaba
+      turno: 30 % de steal. Se bajaron informes y backup01 a 6 vCPU, los informes pasaron a las 6
+      de la mañana y el respaldo, a empezar más temprano el sábado. Para la próxima: el steal y
+      el uso del globo están en el monitoreo, los cambios de recursos se anotan en la
+      documentación de cada VM, y antes de agregar una VM se revisa si el servidor la banca,
+      en lugar de sacarle memoria a otra.

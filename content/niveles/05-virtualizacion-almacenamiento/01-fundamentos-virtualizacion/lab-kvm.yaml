@@ -1,0 +1,95 @@
+tipo: pasos
+titulo: KVM en tus máquinas virtuales, con virtualización anidada
+descripcion: >-
+  Vas a convertir ubuntu01 en un hipervisor KVM (adentro de tu VirtualBox, VMware o Hyper-V) y
+  crear VM desde la imagen de nube de Ubuntu con cloud-init. Después, lo mismo con interfaz web
+  en rocky01, con Cockpit. Necesitás que ubuntu01 tenga al menos 2 vCPU y 4 GB de memoria, y
+  salida a internet. Calculá unas tres horas.
+pasos:
+  - titulo: Instantánea y virtualización anidada
+    detalle: >-
+      Con ubuntu01 apagada, sacale una instantánea y activá la virtualización anidada. En
+      VirtualBox: Configuración, Sistema, Procesador, "Habilitar VT-x/AMD-V anidado". En VMware
+      Workstation: Configuración de la VM, Procesadores, "Virtualizar Intel VT-x/EPT o
+      AMD-V/RVI". En Hyper-V, desde PowerShell como administrador en tu PC.
+    comandos:
+      - "Set-VMProcessor -VMName ubuntu01 -ExposeVirtualizationExtensions $true"
+    comprobar: Al prenderla, grep -cE 'vmx|svm' /proc/cpuinfo da un número mayor que 0.
+    si_falla: >-
+      En Windows, si está activo el aislamiento del núcleo (integridad de memoria) o la
+      plataforma de máquina virtual, VirtualBox puede no ofrecer la opción o andar muy lento.
+      La alternativa más simple en ese caso es usar Hyper-V como hipervisor de tu laboratorio.
+  - titulo: Instalar KVM y libvirt
+    comandos:
+      - sudo apt update && sudo apt install -y qemu-kvm libvirt-daemon-system virtinst cloud-image-utils
+      - sudo usermod -aG libvirt,kvm $USER
+      - virt-host-validate qemu
+    comprobar: >-
+      Después de cerrar y volver a abrir la sesión (para tomar los grupos), virsh -c
+      qemu:///system list --all funciona sin sudo y virt-host-validate muestra PASS en la
+      virtualización por hardware.
+  - titulo: La imagen de nube
+    detalle: La imagen de Ubuntu 24.04 para la nube, unos 600 MB. Se descarga una vez y sirve de base para todas.
+    comandos:
+      - cd /var/lib/libvirt/images
+      - sudo wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+      - qemu-img info noble-server-cloudimg-amd64.img
+    comprobar: qemu-img info dice file format qcow2 y virtual size de unos 3,5 GiB.
+  - titulo: El user-data y la primera VM
+    detalle: Si no tenés una clave SSH en ubuntu01, creala con ssh-keygen -t ed25519.
+    comandos:
+      - |
+        cat > ~/web01.yaml <<EOF
+        #cloud-config
+        hostname: web01
+        users:
+          - name: $USER
+            sudo: ALL=(ALL) NOPASSWD:ALL
+            shell: /bin/bash
+            ssh_authorized_keys:
+              - $(cat ~/.ssh/id_ed25519.pub)
+        packages: [qemu-guest-agent]
+        runcmd:
+          - systemctl enable --now qemu-guest-agent
+        EOF
+      - sudo qemu-img create -f qcow2 -b noble-server-cloudimg-amd64.img -F qcow2 /var/lib/libvirt/images/web01.qcow2 10G
+      - virt-install --connect qemu:///system --name web01 --memory 1024 --vcpus 1 --disk /var/lib/libvirt/images/web01.qcow2 --import --osinfo ubuntu24.04 --network network=default --cloud-init user-data=$HOME/web01.yaml --graphics none --noautoconsole
+    comprobar: Un minuto después, virsh -c qemu:///system domifaddr web01 muestra una IP 192.168.122.x y ssh a esa IP entra sin pedir contraseña.
+    si_falla: >-
+      Si no aparece la IP, mirá la consola con virsh -c qemu:///system console web01 (salís con
+      Ctrl+]): ahí se ve cloud-init trabajando o el error. Un error típico es la sangría del YAML.
+  - titulo: Recursos, instantánea y vuelta atrás
+    comandos:
+      - virsh -c qemu:///system dommemstat web01
+      - virsh -c qemu:///system setmem web01 768M --live
+      - virsh -c qemu:///system snapshot-create-as web01 limpio
+      - ssh LA-IP-DE-WEB01 'sudo apt purge -y openssh-server' || true
+      - virsh -c qemu:///system snapshot-revert web01 limpio
+      - virsh -c qemu:///system snapshot-delete web01 limpio
+    comprobar: >-
+      Después de desinstalar SSH ya no podés entrar; después de volver a la instantánea, ssh
+      entra de nuevo como si nada. Y anotá: ¿cuánto bajó el "actual" de dommemstat?
+  - titulo: Varias VM con un bucle
+    detalle: >-
+      Lo mismo para web02 y web03 con un for, como en la parte 1: sed para el nombre, qemu-img
+      para el disco y virt-install. Revisá con virsh net-dhcp-leases default que cada una tiene
+      su nombre y su IP, y entrá a una por SSH.
+    comprobar: Tres VM corriendo, con nombres e IP distintos, y la imagen base sin tocar.
+  - titulo: Cockpit en rocky01
+    detalle: >-
+      La alternativa con interfaz web. En rocky01 también tiene que estar la virtualización
+      anidada activada.
+    comandos:
+      - sudo dnf install -y qemu-kvm libvirt virt-install cockpit cockpit-machines
+      - sudo systemctl enable --now virtqemud.socket virtnetworkd.socket virtstoraged.socket cockpit.socket
+      - sudo firewall-cmd --permanent --add-service=cockpit && sudo firewall-cmd --reload
+    comprobar: >-
+      Desde tu PC, https://rocky01.lab:9090 (con tu usuario de rocky01) muestra "Máquinas
+      virtuales" y desde ahí podés crear una VM desde una imagen de nube, ver su consola y sus
+      instantáneas.
+  - titulo: Limpiar y documentar
+    detalle: >-
+      Borrá web02 y web03 con sus discos (virsh undefine --remove-all-storage). Anotá los pasos
+      para crear una VM nueva desde la imagen, cuánto tardó, y qué harías distinto en
+      producción (por ejemplo: red en puente en lugar de NAT).
+    comprobar: virsh list --all muestra solo web01, y en /var/lib/libvirt/images quedan la imagen base y web01.qcow2.
