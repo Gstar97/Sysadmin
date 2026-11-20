@@ -1,0 +1,89 @@
+---
+id: n5-m2-l4
+titulo: Proxmox Backup Server
+minutos: 150
+objetivos:
+  - Respaldar VM y contenedores con vzdump y entender sus modos.
+  - Explicar qué agrega Proxmox Backup Server (incrementales, deduplicación, verificación, cifrado, sincronización).
+  - Programar respaldos con una retención razonable.
+  - Restaurar una VM entera o un archivo, y probarlo.
+glosario: [proxmox-backup-server, deduplicacion, retencion-respaldos]
+verificado: 2026-11
+---
+
+import pbs from './pbs.svg?raw'
+import pbsDatos from './pbs.yaml'
+import ej from './ej-pbs.yaml'
+
+Una instantánea no es un respaldo (lo viste en la lección 5.1.3), y un respaldo en el mismo disco que las VM tampoco lo es del todo. En Proxmox, los respaldos los hace **vzdump**, y el lugar natural para guardarlos es **Proxmox Backup Server** (PBS): un producto aparte, también libre, de la misma empresa, pensado para guardar muchas copias ocupando poco y para restaurarlas rápido. La versión vigente es la 4, sobre Debian 13.
+
+<AntesDeEmpezar>
+- Instantáneas y ciclo de vida de una VM (lección 5.1.3).
+- Proxmox VE: VM, contenedores y el agente de QEMU (lección 5.2.2).
+- Respaldos de bases de datos (módulo 4.3): la misma idea de probar la restauración.
+</AntesDeEmpezar>
+
+## vzdump: los tres modos
+
+`vzdump` respalda una VM o un contenedor entero (configuración y discos). Tiene tres modos:
+
+- **snapshot**: la VM sigue funcionando. Si tiene el **agente de QEMU**, Proxmox le pide que congele los archivos un instante para que la copia sea coherente (como apretar pausa un segundo). Es el modo normal.
+- **suspend**: pausa la VM mientras arranca el respaldo. Casi no se usa.
+- **stop**: apaga la VM, respalda y la vuelve a prender. La copia más limpia posible, con el servicio cortado.
+
+Se guardan en un almacenamiento con contenido "backup": una carpeta (local, un NFS) o un PBS. En una carpeta, cada respaldo es un archivo completo (`vzdump-qemu-100-FECHA.vma.zst`); en un PBS, no.
+
+## Por qué Proxmox Backup Server
+
+<DiagramaInteractivo datos={pbsDatos} svg={pbs} alt="Respaldos con Proxmox Backup Server. Los nodos de Proxmox VE respaldan con vzdump o con un trabajo programado, mandando solo lo que cambió (dirty bitmap de QEMU), con el agente congelando los archivos. En el PBS, el datastore guarda los respaldos como trozos (chunks), cada trozo una sola vez; abajo, la retención (prune decide qué copias quedan, la recolección de basura libera los trozos) y la verificación (relee los trozos y avisa si alguno se dañó). Desde el PBS se restaura la VM entera, en vivo o un archivo suelto. Un trabajo de sincronización copia los respaldos a otro PBS fuera de la empresa, con cifrado del cliente, y otra copia puede ir a cinta o a objetos (S3)." pie="El PBS va en otro equipo (y otros discos) que los nodos." />
+
+Con un PBS, los respaldos de una noche suelen tardar minutos y ocupar poco, porque solo viaja lo que cambió y cada trozo se guarda una vez. Eso permite lo que con archivos completos sería imposible: respaldar todas las noches (o cada pocas horas) y conservar semanas de historia.
+
+### Retención
+
+La retención dice qué copias se guardan, por ejemplo: las 3 últimas, una por día de los últimos 7 días, una por semana de las últimas 4, una por mes de los últimos 6. Se configura en el trabajo de respaldo o en el datastore, y la aplica el **prune**; el espacio se libera cuando corre la **recolección de basura** (GC). Un respaldo se puede marcar como **protegido** para que ninguna retención lo borre (por ejemplo, el de antes de una migración).
+
+## Programar los respaldos
+
+En la web: **Datacenter, Respaldo, Agregar**. Se elige qué (todas las VM, algunas, o las de un pool), cuándo (por ejemplo, todos los días a las 21:00), a dónde (el PBS), el modo (snapshot), la retención y a quién avisar. Dos cosas que conviene configurar desde el principio:
+
+- **Notificaciones**: un correo si un respaldo falla. Un respaldo que falla en silencio es igual a no tener respaldo.
+- **Notas** con el nombre de la VM (`{{guestname}}`), para reconocer cada copia sin memorizar números.
+
+## Restaurar
+
+- **La VM entera**, con otro número (para probar sin tocar la original) o pisando la original.
+- **Restauración en vivo** (*live restore*): la VM arranca mientras se restaura y se puede usar en segundos; los datos que pide se traen primero.
+- **Un archivo**: desde la web se abre el respaldo como una carpeta y se baja lo que haga falta, sin restaurar la VM.
+
+<Terminal ejercicio={ej} />
+
+<EnSimple>
+vzdump respalda VM y contenedores enteros, en modo snapshot (con el agente congelando los archivos), suspend o stop. Proxmox Backup Server los guarda en trozos deduplicados, manda solo lo que cambió, verifica, cifra y sincroniza a otro PBS fuera del lugar. Se programa en Datacenter, Respaldo, con retención y aviso por correo. Y se prueba restaurando: una VM con otro número, en una red aislada, anotando cuánto tardó.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Respaldos en el mismo disco que las VM">
+    Si ese disco falla, se pierden las VM y los respaldos juntos. El PBS va en otro equipo, con otros discos.
+  </ErrorComun>
+  <ErrorComun titulo="Respaldos sin aviso de fallas">
+    Un trabajo que falla todas las noches sin que nadie se entere. Notificación por correo desde el primer día.
+  </ErrorComun>
+  <ErrorComun titulo="Nunca restaurar">
+    El día que hace falta aparece que el respaldo estaba incompleto, o que nadie sabe cómo restaurar. Una prueba por mes, anotada.
+  </ErrorComun>
+  <ErrorComun titulo="Retención sin recolección de basura">
+    Los respaldos se borran pero el espacio no vuelve. prune y GC programados.
+  </ErrorComun>
+  <ErrorComun titulo="Perder la clave de cifrado">
+    Si los respaldos están cifrados en el cliente y se pierde la clave, nadie, ni Proxmox, los puede leer. Se guarda (impresa, en un gestor de contraseñas) fuera del servidor.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- vzdump: snapshot (normal, con el agente), suspend o stop.
+- PBS: incrementales (dirty bitmap), deduplicación en trozos, compresión, cifrado en el cliente, verificación y sincronización a otro PBS.
+- Retención (keep-last, daily, weekly, monthly) con prune y GC; respaldos protegidos.
+- Programar en Datacenter, Respaldo, con notificaciones y notas.
+- Restaurar entera, en vivo o un archivo; probar todos los meses, con otro número y MAC nuevas.
+</Resumen>

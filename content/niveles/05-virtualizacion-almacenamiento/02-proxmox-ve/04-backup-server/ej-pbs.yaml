@@ -1,0 +1,90 @@
+tipo: terminal
+shell: bash
+titulo: Respaldos locales, un Proxmox Backup Server y una restauración de prueba
+descripcion: >-
+  pve01 tiene web01 (VM 100, con el agente instalado) y dns01 (contenedor 200). Hasta hoy se
+  respaldaba en local, el mismo disco de las VM, y nunca se probó restaurar. Ya está instalado
+  un Proxmox Backup Server en pbs01 (192.168.10.40) con el datastore principal; su huella
+  (fingerprint) es 3c:7b:1d:a8:52:e0:9f:44:6a:b1:cc:07:28:5d:93:f6:0e:71:b4:2a:d9:65:18:3f:aa:c2:90:5e:7d:13:46:b8
+  y la cuenta para los nodos es pve@pbs, clave Pbs-2026-bk.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox:
+    repos: no-subscription
+    vms:
+      - { id: 100, nombre: web01, estado: running, agente: true, otros: { agent: '1' } }
+    cts:
+      - { id: 200, nombre: dns01, estado: running }
+    respaldos:
+      - { vmid: 100, dias_atras: 1 }
+      - { vmid: 100, dias_atras: 2 }
+      - { vmid: 100, dias_atras: 3 }
+      - { vmid: 100, dias_atras: 4 }
+      - { vmid: 200, tipo: lxc, dias_atras: 1 }
+pasos:
+  - consigna: Mirá los respaldos que hay en local y cuánto ocupa ese almacenamiento.
+    verificar:
+      - { comando_usado: 'pvesm (list|status)' }
+    pistas:
+      - "`pvesm list local --content backup` y `pvesm status`."
+    solucion:
+      - pvesm list local --content backup
+      - pvesm status
+    explicacion: Cuatro copias completas de web01 en el mismo disco que la VM. Cada una ocupa como la anterior, y si ese disco falla, se pierde todo junto.
+  - consigna: Dejá en local solo los dos respaldos más nuevos de cada invitado (probalo antes sin borrar).
+    verificar:
+      - { pve_respaldo: 100, almacenamiento: local, cantidad: 2 }
+    pistas:
+      - "`pvesm prune-backups local --keep-last 2 --dry-run 1` y después sin --dry-run."
+    solucion:
+      - pvesm prune-backups local --keep-last 2 --dry-run 1
+      - pvesm prune-backups local --keep-last 2
+    explicacion: El --dry-run muestra qué haría (keep o remove) sin borrar nada. Siempre primero así.
+  - consigna: Agregá el PBS como almacenamiento pbs01 de pve01, solo para respaldos.
+    verificar:
+      - { pve_almacenamiento: pbs01, tipo: pbs, contenido_incluye: backup }
+    pistas:
+      - "`pvesm add pbs pbs01 --server 192.168.10.40 --datastore principal --username pve@pbs --password Pbs-2026-bk --fingerprint 3c:7b:...` (la huella completa de la descripción)."
+    solucion: ["pvesm add pbs pbs01 --server 192.168.10.40 --datastore principal --username pve@pbs --password Pbs-2026-bk --fingerprint 3c:7b:1d:a8:52:e0:9f:44:6a:b1:cc:07:28:5d:93:f6:0e:71:b4:2a:d9:65:18:3f:aa:c2:90:5e:7d:13:46:b8 --content backup"]
+    explicacion: >-
+      La huella (fingerprint) del certificado del PBS asegura que estás hablando con tu servidor y
+      no con otro: se copia del panel del PBS (Panel, Mostrar huella). Sin ella, el nodo no se
+      conecta. En la web es Datacenter, Almacenamiento, Agregar, Proxmox Backup Server.
+  - consigna: Respaldá web01 y dns01 en pbs01, en modo snapshot. Después hacé otro respaldo de web01 y compará.
+    verificar:
+      - { pve_respaldo: 100, almacenamiento: pbs01, cantidad: 2 }
+      - { pve_respaldo: 200, almacenamiento: pbs01 }
+      - { salida_contiene: 'incremental' }
+    pistas:
+      - "`vzdump 100 200 --storage pbs01 --mode snapshot` y después `vzdump 100 --storage pbs01 --mode snapshot`."
+    solucion:
+      - vzdump 100 200 --storage pbs01 --mode snapshot
+      - vzdump 100 --storage pbs01 --mode snapshot
+    explicacion: >-
+      El primero lee todo el disco (dirty-bitmap: created new); el segundo manda solo lo que
+      cambió. El agente congeló los archivos de web01 un instante (fs-freeze y fs-thaw): el
+      respaldo es coherente aunque la VM esté en uso. En producción esto es un trabajo
+      programado en Datacenter, Respaldo, todas las noches.
+  - consigna: >-
+      La prueba que nunca se hizo: restaurá el respaldo más nuevo de web01 desde pbs01 como VM 150,
+      en local-lvm, con MAC nuevas para que no choque con la original, y arrancala.
+    verificar:
+      - { pve_vm: 150, nombre: web01, estado: running }
+    pistas:
+      - "El volumen del respaldo sale de `pvesm list pbs01`. Después: `qmrestore pbs01:backup/vm/100/FECHA 150 --storage local-lvm --unique 1` y `qm start 150`."
+      - "Para no copiar la fecha a mano: `qmrestore $(pvesm list pbs01 --vmid 100 | tail -1 | cut -d' ' -f1) 150 --storage local-lvm --unique 1`."
+    solucion:
+      - "qmrestore $(pvesm list pbs01 --vmid 100 | tail -1 | cut -d' ' -f1) 150 --storage local-lvm --unique 1"
+      - qm start 150
+    explicacion: >-
+      --unique 1 genera MAC nuevas: la copia arranca sin pelearse por la red con web01. En una
+      prueba real se la pone en una VLAN aislada, se comprueba que el servicio anda, se anota
+      cuánto tardó (tu tiempo de recuperación real) y se borra. Eso, una vez por mes, es lo que
+      convierte un respaldo en un respaldo.

@@ -1,0 +1,56 @@
+tipo: diagrama
+titulo: Proxmox Backup Server
+puntos:
+  - id: nodos
+    titulo: El respaldo desde los nodos
+    area: { x: 2.3, y: 13.2, ancho: 22.1, alto: 34.2 }
+    texto: >-
+      Cada nodo respalda con vzdump, a mano o con un trabajo programado (Datacenter, Respaldo:
+      qué VM, a qué hora, a dónde y qué retención). Hacia un PBS, QEMU lleva la cuenta de qué
+      partes del disco cambiaron desde el último respaldo (dirty bitmap) y manda solo esas: un
+      respaldo nocturno de una VM de 100 GB puede ser de 2 GB y tardar un minuto. Si la VM se
+      apaga, el bitmap se pierde y el siguiente lee todo el disco (pero sigue mandando solo lo nuevo).
+  - id: restaurar
+    titulo: Restaurar
+    area: { x: 2.3, y: 52.6, ancho: 22.1, alto: 21.1 }
+    texto: >-
+      Una VM entera (con otro número, para probar sin pisar la original), en vivo (la VM arranca
+      mientras se restaura y se usa a los pocos segundos) o un archivo suelto: desde la web se
+      navega adentro del respaldo y se baja una carpeta, sin restaurar todo.
+  - id: datastore
+    titulo: El datastore y la deduplicación
+    area: { x: 36, y: 23.7, ancho: 30.2, alto: 21.1 }
+    texto: >-
+      PBS corta cada respaldo en trozos (de 4 MB en los discos de VM) y guarda cada trozo una
+      sola vez, aunque aparezca en cien respaldos. Por eso treinta copias diarias de veinte VM
+      parecidas ocupan una fracción de lo que ocuparían treinta archivos completos. Los trozos se
+      comprimen y, si se configura, se cifran en el nodo antes de salir: el PBS guarda datos que
+      no puede leer.
+  - id: retencion
+    titulo: Retención y limpieza
+    area: { x: 36, y: 48.7, ancho: 14.5, alto: 26.3 }
+    texto: >-
+      La retención (prune) decide qué respaldos se conservan: por ejemplo, los 3 últimos, uno por
+      día durante 7 días, uno por semana durante 4 y uno por mes durante 6. Borrar un respaldo no
+      libera espacio en el momento: lo hace la recolección de basura (GC), que borra los trozos
+      que ya no usa nadie. Se programan las dos.
+  - id: verificacion
+    titulo: Verificación
+    area: { x: 51.7, y: 48.7, ancho: 14.5, alto: 26.3 }
+    texto: >-
+      Un trabajo que relee los trozos y comprueba que no se dañaron (un disco del PBS puede
+      fallar en silencio). Un respaldo que nunca se verificó ni se restauró es una promesa, no un
+      respaldo.
+  - id: remoto
+    titulo: La copia fuera del lugar
+    area: { x: 76.7, y: 13.2, ancho: 20.9, alto: 28.9 }
+    texto: >-
+      Un segundo PBS en otro edificio, en otra ciudad o en un proveedor, que trae los respaldos del
+      primero con un trabajo de sincronización (solo los trozos nuevos). Si un incendio o un
+      ransomware se llevan la sala, quedan los de afuera. Lo profundizás en el módulo 5.6.
+  - id: otros
+    titulo: Otro medio
+    area: { x: 76.7, y: 50, ancho: 20.9, alto: 28.9 }
+    texto: >-
+      PBS también respalda a cinta (LTO), y las versiones nuevas pueden guardar en almacenamiento
+      de objetos compatible con S3. La regla 3-2-1 pide copias en medios distintos.

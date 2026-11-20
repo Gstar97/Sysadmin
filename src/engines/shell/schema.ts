@@ -714,6 +714,7 @@ const singleCheckSchema = z.union([
   /** Una VM (pve_vm) o un contenedor (pve_ct) de Proxmox: estado, nombre, plantilla, instantánea y valores de su configuración. */
   z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
   z.strictObject({ pve_ct: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
+  /** Respaldos de un invitado (en un almacenamiento): al menos uno, o exactamente cantidad. */
   z.strictObject({ pve_respaldo: z.number().int(), almacenamiento: z.string().optional(), cantidad: z.number().int().optional() }),
   z.strictObject({ pve_almacenamiento: z.string(), tipo: z.string().optional(), contenido_incluye: z.string().optional(), activo: z.boolean().optional(), existe: z.boolean().optional() }),
   z.strictObject({ pve_puente: z.string(), vlan_aware: z.boolean().optional(), puerto: z.string().optional(), direccion: z.string().optional() }),

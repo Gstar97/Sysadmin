@@ -1,0 +1,88 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuál es el modo normal de vzdump para una VM en uso?
+  opciones:
+    - { texto: "snapshot: la VM sigue funcionando y, con el agente, se congelan los archivos un instante", correcta: true, explicacion: "Copia coherente sin cortar el servicio." }
+    - { texto: "stop: apaga la VM", explicacion: "Es el más limpio, pero corta el servicio." }
+    - { texto: "suspend", explicacion: "Casi no se usa." }
+    - { texto: "No se puede respaldar una VM en uso", explicacion: "Sí se puede." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué treinta respaldos diarios de veinte VM ocupan poco en un PBS?
+  opciones:
+    - { texto: "Porque se guardan en trozos y cada trozo se guarda una sola vez (deduplicación), además de comprimidos", correcta: true, explicacion: "Lo que no cambió no se vuelve a guardar." }
+    - { texto: "Porque el PBS borra los viejos", explicacion: "Los conserva según la retención." }
+    - { texto: "Porque solo respalda la configuración", explicacion: "Respalda los discos." }
+    - { texto: "No ocupan poco", explicacion: "Sí, gracias a la deduplicación." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Borraste respaldos con prune y el datastore sigue igual de lleno. ¿Qué falta?
+  opciones:
+    - { texto: "Que corra la recolección de basura (GC), que libera los trozos que ya nadie usa", correcta: true, explicacion: "Se programan las dos." }
+    - { texto: "Reiniciar el PBS", explicacion: "No libera espacio." }
+    - { texto: "Nada: el espacio no vuelve nunca", explicacion: "Vuelve con el GC." }
+    - { texto: "Borrar los archivos a mano", explicacion: "Nunca: rompería el datastore." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué se configura la huella (fingerprint) al agregar un PBS?
+  opciones:
+    - { texto: "Para asegurar que el nodo habla con tu PBS y no con otro que se haga pasar por él", correcta: true, explicacion: "Es la huella de su certificado." }
+    - { texto: "Para cifrar los respaldos", explicacion: "Eso es la clave de cifrado." }
+    - { texto: "Para comprimir", explicacion: "No." }
+    - { texto: "Es la contraseña", explicacion: "La contraseña va aparte." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué permite la restauración en vivo (live restore)?
+  opciones:
+    - { texto: "Arrancar la VM mientras se restaura y usarla en segundos, trayendo primero lo que pide", correcta: true, explicacion: "Acorta mucho el tiempo sin servicio." }
+    - { texto: "Restaurar sin que nadie lo note", explicacion: "No es eso." }
+    - { texto: "Restaurar a una fecha futura", explicacion: "No." }
+    - { texto: "Restaurar solo la memoria", explicacion: "Restaura los discos." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que restaura el respaldo pbs01:backup/vm/100/2026-11-20T03:00:00Z como VM 900 con MAC nuevas.
+  aceptadas: ["qmrestore pbs01:backup/vm/100/2026-11-20T03:00:00Z 900 --unique 1", "qmrestore pbs01:backup/vm/100/2026-11-20T03:00:00Z 900 --unique true"]
+  explicacion: "--unique 1 evita que la copia choque en la red con la original."
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene configurar en un trabajo de respaldo? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Notificación por correo si falla", correcta: true, explicacion: "Si no, puede fallar meses sin que nadie lo sepa." }
+    - { texto: "Una retención (por ejemplo 7 diarias, 4 semanales, 6 mensuales)", correcta: true, explicacion: "Historia suficiente sin llenar el disco." }
+    - { texto: "Notas con el nombre del invitado", correcta: true, explicacion: "Para reconocer cada copia." }
+    - { texto: "Guardarlo en el mismo disco que las VM", explicacion: "Es justo lo que no hay que hacer." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El PBS tiene un año de respaldos y nunca se hizo una restauración de prueba. ¿Qué tan seguro estás de poder recuperar?
+  opciones:
+    - { texto: "No lo sabés: hasta probar, puede faltar algo, estar dañado o nadie saber cómo hacerlo", correcta: true, explicacion: "Prueba mensual anotada y trabajos de verificación." }
+    - { texto: "Totalmente: si el trabajo dice OK, alcanza", explicacion: "OK dice que se copió, no que sirve." }
+    - { texto: "Depende del tamaño", explicacion: "Depende de probarlo." }
+    - { texto: "Nada: los respaldos se vencen al año", explicacion: "No se vencen." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve un trabajo de sincronización a otro PBS?
+  opciones:
+    - { texto: "Para tener una copia fuera del lugar: si se pierde la sala (incendio, ransomware), quedan los respaldos de afuera", correcta: true, explicacion: "Y solo viajan los trozos nuevos." }
+    - { texto: "Para acelerar los respaldos", explicacion: "No es para eso." }
+    - { texto: "Para borrar los respaldos viejos", explicacion: "Eso es la retención." }
+    - { texto: "Para verificar", explicacion: "Eso es la verificación." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué pasa si se pierde la clave de cifrado de los respaldos?
+  opciones:
+    - { texto: "Nadie puede leerlos, ni siquiera Proxmox: hay que guardarla fuera del servidor", correcta: true, explicacion: "Impresa o en un gestor de contraseñas." }
+    - { texto: "Se puede pedir a Proxmox", explicacion: "No la tienen." }
+    - { texto: "El PBS la regenera", explicacion: "No se puede." }
+    - { texto: "No pasa nada", explicacion: "Se pierden los respaldos." }

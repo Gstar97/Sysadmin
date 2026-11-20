@@ -2076,7 +2076,7 @@ export function verifyProxmox(sys: System, check: object): { ok: boolean; label:
   if ('pve_respaldo' in check) {
     const c = check as { pve_respaldo: number; almacenamiento?: string; cantidad?: number }
     const n = [...(pve?.volumes.values() ?? [])].filter((v) => v.content === 'backup' && v.vmid === c.pve_respaldo && (!c.almacenamiento || v.storage === c.almacenamiento)).length
-    return { ok: n >= (c.cantidad ?? 1), label: `hay ${c.cantidad && c.cantidad > 1 ? `${c.cantidad} respaldos` : 'un respaldo'} de ${c.pve_respaldo}${c.almacenamiento ? ` en ${c.almacenamiento}` : ''}` }
+    return { ok: c.cantidad !== undefined ? n === c.cantidad : n >= 1, label: `hay ${c.cantidad && c.cantidad > 1 ? `${c.cantidad} respaldos` : 'un respaldo'} de ${c.pve_respaldo}${c.almacenamiento ? ` en ${c.almacenamiento}` : ''}` }
   }
   if ('pve_almacenamiento' in check) {
     const c = check as { pve_almacenamiento: string; tipo?: string; contenido_incluye?: string; activo?: boolean; existe?: boolean }
