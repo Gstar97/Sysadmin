@@ -10,6 +10,8 @@ import {
   SimuladorRaid,
   CalculadoraUps,
   ConstructorRack,
+  SimuladorRecursos,
+  ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
   ConstructorHTTP,
@@ -71,6 +73,7 @@ const SECTIONS = [
   { id: 'powershell', titulo: 'PowerShell' },
   { id: 'cisco', titulo: 'Consola Cisco' },
   { id: 'servidor-fisico', titulo: 'Servidor físico: RAID, UPS y rack' },
+  { id: 'virtualizacion', titulo: 'Virtualización' },
   { id: 'subnetting', titulo: 'Subnetting' },
   { id: 'redes', titulo: 'Redes: PoE, switch, VLSM, NAT' },
   { id: 'topologia', titulo: 'Topologías' },
@@ -162,6 +165,11 @@ export default function GalleryPage() {
         <SimuladorRaid />
         <CalculadoraUps />
         <ConstructorRack inventario={['ups', 'srv2u', 'srv2u', 'nas', 'srv1u', 'sw', 'patch', 'org', 'fw']} />
+      </Section>
+
+      <Section id="virtualizacion" titulo="Virtualización" descripcion="Simulador de recursos virtuales (vCPU y memoria prometidas contra lo que tiene el servidor, con globo y páginas compartidas) y comparador de plataformas (matriz de decisión con pesos y el costo de licencias con tus precios).">
+        <SimuladorRecursos />
+        <ComparadorPlataformas />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">

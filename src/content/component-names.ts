@@ -41,6 +41,8 @@ export const INTERACTIVE_COMPONENTS = [
   'SimuladorRaid',
   'CalculadoraUps',
   'ConstructorRack',
+  'SimuladorRecursos',
+  'ComparadorPlataformas',
 ] as const
 
 export const REQUIRED_BLOCKS = [

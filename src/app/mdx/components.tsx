@@ -58,6 +58,8 @@ const LicenseCalculatorView = lazy(() => import('@/interactive/windows/LicenseCa
 const RaidSimulatorView = lazy(() => import('@/interactive/hardware/RaidSimulator').then((m) => ({ default: m.RaidSimulator })))
 const UpsCalculatorView = lazy(() => import('@/interactive/hardware/UpsCalculator').then((m) => ({ default: m.UpsCalculator })))
 const RackBuilderView = lazy(() => import('@/interactive/hardware/RackBuilder').then((m) => ({ default: m.RackBuilder })))
+const ResourceSimulatorView = lazy(() => import('@/interactive/virtualizacion/ResourceSimulator').then((m) => ({ default: m.ResourceSimulator })))
+const PlatformComparatorView = lazy(() => import('@/interactive/virtualizacion/PlatformComparator').then((m) => ({ default: m.PlatformComparator })))
 const HttpBuilderView = lazy(() => import('@/interactive/web/HttpBuilder').then((m) => ({ default: m.HttpBuilder })))
 const PermissionSimulatorView = lazy(() => import('@/interactive/windows/PermissionSimulator').then((m) => ({ default: m.PermissionSimulator })))
 const GpoSimulatorView = lazy(() => import('@/interactive/windows/GpoSimulator').then((m) => ({ default: m.GpoSimulator })))
@@ -381,6 +383,22 @@ export function ConstructorRack(props: ComponentProps<typeof RackBuilderView>) {
   )
 }
 
+export function SimuladorRecursos() {
+  return (
+    <Island>
+      <ResourceSimulatorView />
+    </Island>
+  )
+}
+
+export function ComparadorPlataformas() {
+  return (
+    <Island>
+      <PlatformComparatorView />
+    </Island>
+  )
+}
+
 export function ConstructorHTTP() {
   return (
     <Island>
@@ -674,6 +692,8 @@ export const mdxComponents = {
   SimuladorRaid,
   CalculadoraUps,
   ConstructorRack,
+  SimuladorRecursos,
+  ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
   ConstructorHTTP,
