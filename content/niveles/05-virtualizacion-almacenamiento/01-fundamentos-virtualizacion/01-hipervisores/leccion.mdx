@@ -1,0 +1,88 @@
+---
+id: n5-m1-l1
+titulo: Hipervisores
+minutos: 120
+objetivos:
+  - Explicar cómo un hipervisor reparte un servidor entre varias máquinas virtuales y qué hace el hardware para que sea rápido.
+  - Diferenciar hipervisores de tipo 1 y tipo 2, y máquinas virtuales de contenedores.
+  - Entender qué son KVM, QEMU, libvirt y virtio, y cómo se combinan.
+  - Comprobar si un servidor puede ser un hipervisor.
+glosario: [hipervisor, kvm, virtio, contenedor, virtualizacion-anidada]
+verificado: 2026-11
+---
+
+import capas from './capas.svg?raw'
+import capasDatos from './capas.yaml'
+import tipos from './tipos.yaml'
+import ej from './ej-host.yaml'
+
+En el Nivel 0 instalaste tu primera máquina virtual en tu computadora. En una empresa la idea es la misma, pero en grande: en lugar de un servidor físico para cada cosa (uno para el correo, otro para la base de datos, otro para los archivos), cada uno usado al 10 %, se ponen pocos servidores potentes y adentro, decenas de máquinas virtuales. Se compra menos hardware, se gasta menos luz y espacio, y aparecen cosas que con hardware físico no existen: crear un servidor en dos minutos, sacarle una instantánea antes de actualizarlo o moverlo de un equipo a otro sin apagarlo (lo vas a hacer en el módulo 5.4).
+
+<AntesDeEmpezar>
+- Máquinas virtuales e hipervisores de escritorio (lección 0.2.6).
+- Procesos, memoria y kernel (módulos 0.1 y 0.2).
+- Módulos del kernel (lección 1.3.6).
+</AntesDeEmpezar>
+
+## Cómo funciona por dentro
+
+Un sistema operativo espera ser el dueño de la máquina: manejar la memoria, los dispositivos, las interrupciones. Con varias VM, ninguna puede serlo, así que el **hipervisor** se pone en el medio. Antes eso era lento: el hipervisor tenía que revisar y traducir cada instrucción delicada. Desde hace más de quince años, los procesadores traen ayuda:
+
+- **Intel VT-x y AMD-V**: el código de la VM corre directo en la CPU, y el procesador le pasa el control al hipervisor solo cuando la VM intenta algo que no le corresponde.
+- **EPT (Intel) y NPT (AMD)**: lo mismo con la memoria. La CPU traduce en un solo paso las direcciones de la VM a las de la memoria real.
+- **VT-d (Intel) y AMD-Vi**, el **IOMMU**: permiten darle a una VM un dispositivo físico entero (una placa de video o de red) de forma segura. Se llama *passthrough*, y es para casos puntuales.
+
+Gracias a eso, una VM rinde casi como un equipo físico en CPU y memoria. Donde sí se nota la diferencia es en los dispositivos (disco y red), y para eso está virtio, que ves más abajo.
+
+## Tipo 1, tipo 2 y contenedores
+
+<DiagramaInteractivo datos={capasDatos} svg={capas} alt="Tres columnas. Hipervisor de tipo 1: el hardware con VT-x o AMD-V, arriba el hipervisor y arriba tres VM, cada una con su sistema y su kernel (ejemplos: ESXi, Hyper-V, Proxmox con KVM, XCP-ng). Hipervisor de tipo 2: el hardware, arriba un sistema anfitrión (Windows, macOS o Linux), arriba el hipervisor como programa junto a otros programas, y arriba dos VM (VirtualBox, VMware Workstation, UTM). Contenedores: el hardware, un solo sistema y un solo kernel, el motor de contenedores y arriba tres aplicaciones con sus bibliotecas (LXC, Docker, Podman)." />
+
+En servidores se usan hipervisores de **tipo 1**, instalados directo sobre el hardware. Los de **tipo 2** (los de escritorio) son para laboratorios y pruebas. Los **contenedores** no son máquinas virtuales: son procesos aislados que comparten el kernel; arrancan al instante y ocupan poco, pero son todos Linux y aíslan menos. Una buena regla: un servicio de Linux sencillo puede ir en un contenedor; algo de Windows, un sistema que necesita su propio kernel o algo de otro cliente, en una VM.
+
+<Emparejar ejercicio={tipos} />
+
+## KVM, QEMU, libvirt y virtio
+
+En el mundo Linux, la virtualización se arma con piezas que vas a ver todo el nivel:
+
+- **KVM** es un módulo del kernel de Linux (`kvm_intel` o `kvm_amd`) que usa VT-x o AMD-V. Con KVM cargado, el propio Linux es el hipervisor, y cada VM es un proceso más del sistema.
+- **QEMU** pone el resto de la máquina: el disco, la placa de red, el teclado, la pantalla, el firmware. Cada VM es un proceso `qemu-system-x86_64` (en Proxmox se ve como `kvm`).
+- **libvirt** administra QEMU: guarda la configuración de cada VM, sus redes y sus discos, y da herramientas como `virsh`. Proxmox no usa libvirt: tiene su propia administración, pero abajo es el mismo KVM con QEMU.
+- **virtio** son dispositivos pensados para máquinas virtuales: en lugar de imitar una placa de red o un controlador de disco de verdad (lo que es lento), la VM sabe que está virtualizada y habla con el hipervisor de forma directa. Linux trae los drivers de fábrica; Windows los necesita aparte (el ISO *virtio-win*). Usar virtio para el disco y la red es lo primero que se hace para que una VM rinda.
+
+## Virtualización anidada
+
+Una VM que a su vez crea VMs: es lo que vas a hacer en tus laboratorios (un Proxmox o un Hyper-V adentro de tu VirtualBox, VMware o Hyper-V). Hay que activarla en el hipervisor de abajo para que le pase a la VM las extensiones de la CPU: en VirtualBox, *Habilitar VT-x/AMD-V anidado*; en VMware, *Virtualizar Intel VT-x/EPT o AMD-V/RVI*; en Hyper-V, `Set-VMProcessor -ExposeVirtualizationExtensions $true`. Anda bien para aprender, pero más lento: no se usa en producción.
+
+<Terminal ejercicio={ej} />
+
+<EnSimple>
+El hipervisor reparte un servidor entre varias máquinas virtuales, y las extensiones de la CPU (VT-x o AMD-V, más EPT o NPT para la memoria) hacen que eso sea casi tan rápido como el hardware real. Los servidores usan hipervisores de tipo 1 (ESXi, Hyper-V, Proxmox); los de tipo 2 son para tu computadora. Los contenedores comparten el kernel y aíslan menos. En Linux: KVM en el kernel, QEMU con los dispositivos, libvirt o Proxmox para administrar, y virtio para que el disco y la red rindan.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="La virtualización apagada en el BIOS">
+    Muchos servidores vienen con VT-x o AMD-V desactivado. Sin eso no hay KVM ni Hyper-V. Se activa en el BIOS o UEFI (Intel Virtualization Technology, SVM Mode).
+  </ErrorComun>
+  <ErrorComun titulo="Discos y red emulados en lugar de virtio">
+    Una VM con disco IDE o SATA y placa de red e1000 anda, pero bastante más lenta. Para Linux y para Windows con sus drivers, virtio.
+  </ErrorComun>
+  <ErrorComun titulo="Pensar que un contenedor es una VM liviana">
+    Comparte el kernel: si se compromete, el riesgo es para todo el equipo. Para aislar de verdad, VM.
+  </ErrorComun>
+  <ErrorComun titulo="Un hipervisor de escritorio para producción">
+    VirtualBox o VMware Workstation dependen del sistema de abajo y de que alguien esté logueado. Para servidores, tipo 1.
+  </ErrorComun>
+  <ErrorComun titulo="Virtualización anidada en producción">
+    Es para laboratorios: cada capa suma demoras, y los fabricantes no la soportan para cargas reales.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- El hipervisor reparte el hardware; VT-x o AMD-V y EPT o NPT lo hacen rápido; el IOMMU permite el passthrough de dispositivos.
+- Tipo 1 en servidores (ESXi, Hyper-V, Proxmox), tipo 2 en laboratorios; los contenedores comparten el kernel.
+- KVM (módulo del kernel) + QEMU (dispositivos) + libvirt o Proxmox (administración); virtio para disco y red.
+- Para ver si un servidor puede ser hipervisor: grep -cE 'vmx|svm' /proc/cpuinfo, lsmod | grep kvm, /dev/kvm y virt-host-validate.
+- Virtualización anidada: para laboratorios, se activa en el hipervisor de abajo.
+</Resumen>

@@ -1,0 +1,60 @@
+tipo: terminal
+shell: bash
+titulo: ¿Este servidor puede ser un hipervisor?
+descripcion: >-
+  Te dieron kvm01, un Ubuntu donde se quiere probar KVM. Es una máquina virtual dentro del
+  hipervisor del laboratorio, con la virtualización anidada activada. Vas a comprobar, paso a
+  paso, que tiene todo lo necesario antes de instalar nada.
+estado_inicial:
+  distro: ubuntu
+  hostname: kvm01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  equipo: { cpus: 4, memoria_gb: 16, vmx: true }
+  paquetes: { instalados: [libvirt-clients] }
+pasos:
+  - consigna: Averiguá si kvm01 es un equipo físico o una máquina virtual.
+    verificar:
+      - { comando_usado: 'systemd-detect-virt|lscpu' }
+      - { salida_contiene: 'kvm' }
+    pistas:
+      - "`systemd-detect-virt` lo dice en una palabra (o mirá Hypervisor vendor en `lscpu`)."
+    solucion: [systemd-detect-virt]
+    explicacion: >-
+      kvm: es una VM que corre sobre KVM. En un servidor físico diría none. Para que una VM pueda
+      a su vez crear VMs hace falta la virtualización anidada.
+  - consigna: Contá cuántos procesadores tienen la extensión de virtualización de Intel (vmx) o de AMD (svm).
+    verificar:
+      - { comando_usado: 'vmx' }
+      - { salida_contiene: '4' }
+    pistas:
+      - "`grep -cE 'vmx|svm' /proc/cpuinfo`"
+    solucion: ["grep -cE 'vmx|svm' /proc/cpuinfo"]
+    explicacion: >-
+      Cuatro: los cuatro procesadores la tienen. Si diera 0, o el BIOS tiene la virtualización
+      apagada (en un servidor físico), o el hipervisor de abajo no la pasa (en una VM): ahí se
+      activa la virtualización anidada.
+  - consigna: Comprobá que el kernel cargó los módulos de KVM y que existe el dispositivo /dev/kvm.
+    verificar:
+      - { comando_usado: 'lsmod' }
+      - { comando_usado: '/dev/kvm' }
+    pistas:
+      - "`lsmod | grep kvm` y `ls -l /dev/kvm`"
+    solucion:
+      - lsmod | grep kvm
+      - ls -l /dev/kvm
+    explicacion: >-
+      kvm_intel (o kvm_amd) y kvm cargados, y /dev/kvm como dispositivo de caracteres (la c al
+      principio), del grupo kvm: por ahí QEMU le pide al kernel que corra las VM.
+  - consigna: Pasale la revisión completa de libvirt.
+    verificar:
+      - { comando_usado: 'virt-host-validate' }
+      - { salida_contiene: 'hardware virtualization' }
+    pistas:
+      - "`virt-host-validate qemu`"
+    solucion: [virt-host-validate qemu]
+    explicacion: >-
+      Todo en PASS salvo los WARN de IOMMU y de "secure guest": el IOMMU (VT-d) solo hace falta para
+      pasarle a una VM un dispositivo físico entero, como una placa de video o de red; en una VM
+      de laboratorio no está, y está bien.

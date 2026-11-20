@@ -1,0 +1,55 @@
+tipo: diagrama
+titulo: Tipo 1, tipo 2 y contenedores
+puntos:
+  - id: hw
+    titulo: Las extensiones de virtualización
+    area: { x: 3.5, y: 82.5, ancho: 26.7, alto: 10 }
+    texto: >-
+      Intel VT-x y AMD-V dejan que el código de la VM corra directo en la CPU, y el procesador le
+      avisa al hipervisor cuando la VM intenta algo que no puede hacer sola. Las tablas de páginas
+      anidadas (EPT en Intel, NPT o RVI en AMD) hacen lo mismo con la memoria. Sin ellas, el
+      hipervisor tendría que emular la CPU: decenas de veces más lento.
+  - id: hipervisor1
+    titulo: El hipervisor de tipo 1
+    area: { x: 3.5, y: 70, ancho: 26.7, alto: 10 }
+    texto: >-
+      Se instala directo sobre el hardware y su único trabajo es repartirlo. ESXi es un sistema
+      propio; Proxmox es un Debian con KVM (el kernel de Linux se convierte en hipervisor); en
+      Hyper-V, el propio Windows pasa a correr como una partición más arriba del hipervisor. Por
+      eso los tres son de tipo 1 aunque se vean muy distintos.
+  - id: vm
+    titulo: Cada VM con su sistema
+    area: { x: 3.5, y: 17.5, ancho: 26.7, alto: 50 }
+    texto: >-
+      Cada máquina virtual tiene su propio sistema operativo y su propio kernel: puede ser Linux
+      al lado de Windows. El aislamiento es fuerte: lo que pasa adentro de una VM (un kernel que
+      se cuelga, un malware) no pasa a las otras.
+  - id: anfitrion
+    titulo: El sistema anfitrión
+    area: { x: 36.6, y: 70, ancho: 26.7, alto: 10 }
+    texto: >-
+      En el tipo 2, entre el hardware y el hipervisor hay un sistema común (tu Windows o tu
+      macOS), con sus actualizaciones, su antivirus y sus reinicios. Sirve para un laboratorio en
+      tu notebook; para servidores de producción, no.
+  - id: hipervisor2
+    titulo: El hipervisor como programa
+    area: { x: 36.6, y: 57.5, ancho: 16.3, alto: 10 }
+    texto: >-
+      VirtualBox, VMware Workstation o UTM son programas que se abren y se cierran como cualquier
+      otro. Usan las mismas extensiones de la CPU, así que el rendimiento es bueno; lo que cambia
+      es todo lo que hay alrededor.
+  - id: contenedores
+    titulo: Los contenedores
+    area: { x: 69.8, y: 32.5, ancho: 26.7, alto: 22.5 }
+    texto: >-
+      No virtualizan hardware: son procesos aislados del mismo sistema, cada uno con sus archivos y
+      sus bibliotecas. Arrancan en un segundo y ocupan mucho menos, pero todos tienen que ser
+      Linux y el aislamiento es más débil. Proxmox ofrece las dos cosas: VM y contenedores LXC.
+      Docker y Kubernetes se ven en el Nivel 7.
+  - id: kernel
+    titulo: Un solo kernel
+    area: { x: 69.8, y: 70, ancho: 26.7, alto: 10 }
+    texto: >-
+      Todos los contenedores comparten el kernel del equipo. Si un contenedor consigue una falla
+      del kernel, afecta a todos. Por eso, para cosas de clientes distintos o de mucho riesgo, se
+      prefiere una VM.

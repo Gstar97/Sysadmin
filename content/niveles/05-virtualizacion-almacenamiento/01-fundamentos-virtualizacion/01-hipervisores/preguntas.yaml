@@ -1,0 +1,96 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Por qué una VM rinde casi como un equipo físico en CPU?
+  opciones:
+    - { texto: "Porque las extensiones de la CPU (VT-x o AMD-V) dejan que su código corra directo en el procesador", correcta: true, explicacion: "El hipervisor solo interviene en lo que la VM no puede hacer sola." }
+    - { texto: "Porque el hipervisor traduce cada instrucción muy rápido", explicacion: "Eso era antes: era lento." }
+    - { texto: "Porque la VM tiene su propio procesador físico", explicacion: "Comparte los del servidor." }
+    - { texto: "No rinde: siempre es mucho más lenta", explicacion: "En CPU y memoria, casi igual." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué tipo de hipervisor se usa en servidores de producción?
+  opciones:
+    - { texto: "Tipo 1, instalado directo sobre el hardware", correcta: true, explicacion: "ESXi, Hyper-V, Proxmox." }
+    - { texto: "Tipo 2, como un programa sobre Windows", explicacion: "Es para laboratorios." }
+    - { texto: "Cualquiera", explicacion: "El tipo 2 depende del sistema de abajo." }
+    - { texto: "Ninguno: se usan contenedores", explicacion: "Se usan los dos, para cosas distintas." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace KVM?
+  opciones:
+    - { texto: "Es el módulo del kernel de Linux que usa las extensiones de la CPU y convierte a Linux en hipervisor", correcta: true, explicacion: "QEMU pone los dispositivos y libvirt o Proxmox administran." }
+    - { texto: "Emula la placa de red y el disco", explicacion: "Eso es QEMU." }
+    - { texto: "Es la herramienta virsh", explicacion: "virsh es de libvirt." }
+    - { texto: "Es un hipervisor de tipo 2", explicacion: "Con KVM, el propio kernel hace de hipervisor." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve virtio?
+  opciones:
+    - { texto: "Son dispositivos (disco, red) pensados para VM, mucho más rápidos que imitar hardware real", correcta: true, explicacion: "Linux los trae; Windows necesita los drivers virtio-win." }
+    - { texto: "Para virtualizar la CPU", explicacion: "Eso lo hacen VT-x y KVM." }
+    - { texto: "Para pasarle una placa física a una VM", explicacion: "Eso es passthrough con IOMMU." }
+    - { texto: "Para conectar VM a internet", explicacion: "Es el tipo de placa, no la conexión." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esto sobre el servidor?
+  salida: |
+    $ grep -cE 'vmx|svm' /proc/cpuinfo
+    0
+    $ systemd-detect-virt
+    none
+  opciones:
+    - { texto: "Es físico y la virtualización está apagada en el BIOS (o la CPU no la tiene)", correcta: true, explicacion: "Se activa en el BIOS o UEFI." }
+    - { texto: "Es una VM sin virtualización anidada", explicacion: "systemd-detect-virt diría kvm, vmware o microsoft." }
+    - { texto: "Está todo listo para KVM", explicacion: "Sin vmx ni svm, no." }
+    - { texto: "El módulo kvm está cargado", explicacion: "No hay de dónde." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la diferencia principal entre un contenedor y una VM?
+  opciones:
+    - { texto: "El contenedor comparte el kernel del equipo; la VM tiene su propio sistema y su propio kernel", correcta: true, explicacion: "Por eso el contenedor es más liviano pero aísla menos." }
+    - { texto: "El contenedor es una VM más chica", explicacion: "No virtualiza hardware." }
+    - { texto: "La VM no necesita sistema operativo", explicacion: "Al revés: la VM tiene el suyo." }
+    - { texto: "Ninguna", explicacion: "Son muy distintos." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son hipervisores de tipo 1? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "VMware ESXi", correcta: true, explicacion: "Con sistema propio." }
+    - { texto: "Proxmox VE (KVM)", correcta: true, explicacion: "Linux con KVM." }
+    - { texto: "Hyper-V", correcta: true, explicacion: "Windows corre arriba del hipervisor." }
+    - { texto: "VirtualBox", explicacion: "Es de tipo 2." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Querés armar un Proxmox de laboratorio adentro de una VM de VirtualBox, pero KVM no anda. ¿Qué falta?
+  opciones:
+    - { texto: "Activar la virtualización anidada en VirtualBox para esa VM", correcta: true, explicacion: "Para que le pase VT-x o AMD-V." }
+    - { texto: "Instalar virtio", explicacion: "No tiene que ver con la CPU." }
+    - { texto: "Más memoria", explicacion: "Sin las extensiones, no hay KVM." }
+    - { texto: "No se puede: hace falta hardware físico", explicacion: "Con anidada se puede, para aprender." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve el IOMMU (VT-d o AMD-Vi)?
+  opciones:
+    - { texto: "Para darle a una VM un dispositivo físico entero de forma segura (passthrough)", correcta: true, explicacion: "Una placa de video o de red, por ejemplo." }
+    - { texto: "Para que la CPU corra más rápido", explicacion: "Es para dispositivos." }
+    - { texto: "Para la memoria de las VM", explicacion: "Eso es EPT o NPT." }
+    - { texto: "Para los contenedores", explicacion: "No los necesitan." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cuál es una ventaja de virtualizar servidores?
+  opciones:
+    - { texto: "Usar pocos servidores potentes en lugar de muchos al 10 %, y crear, copiar o mover servidores en minutos", correcta: true, explicacion: "Menos hardware, menos energía y más flexibilidad." }
+    - { texto: "No hace falta respaldar", explicacion: "Hace falta igual." }
+    - { texto: "Las VM no pueden fallar", explicacion: "Pueden, y si falla el servidor, caen todas las que tiene." }
+    - { texto: "No se necesitan licencias", explicacion: "Depende de la plataforma y de los sistemas invitados." }

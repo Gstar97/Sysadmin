@@ -25,6 +25,8 @@ export interface Inode {
   defaultAcl?: DefaultAcl
   /** Dispositivo de bloques (/dev/sda): números mayor y menor. */
   blockDev?: [number, number]
+  /** Con blockDev: es un dispositivo de caracteres (/dev/kvm, /dev/null) y no de bloques. */
+  charDev?: boolean
   /** Contexto de SELinux puesto a mano o heredado (si no, el que dice la política para su ruta). */
   selabel?: string
 }
@@ -683,8 +685,8 @@ export class VFS {
 }
 
 /** Convierte permisos numéricos en el formato de ls -l (por ejemplo drwxr-sr-x). */
-export function modeString(node: Pick<Inode, 'type' | 'mode'> & { blockDev?: [number, number] }): string {
-  const t = node.blockDev ? 'b' : node.type === 'dir' ? 'd' : node.type === 'symlink' ? 'l' : '-'
+export function modeString(node: Pick<Inode, 'type' | 'mode'> & { blockDev?: [number, number]; charDev?: boolean }): string {
+  const t = node.blockDev ? (node.charDev ? 'c' : 'b') : node.type === 'dir' ? 'd' : node.type === 'symlink' ? 'l' : '-'
   const m = node.mode
   const tri = (shift: number, special: number, ch: string) => {
     const r = m & (4 << shift) ? 'r' : '-'

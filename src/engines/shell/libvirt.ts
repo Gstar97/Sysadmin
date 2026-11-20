@@ -115,7 +115,8 @@ function setupDefaults(sys: System) {
       sys.vfs.writeFile('/dev/kvm', '', ROOT_CRED, { mode: 0o660 })
       const n = sys.vfs.stat('/dev/kvm', ROOT_CRED)
       n.gid = sys.groups.get('kvm')!.gid
-      n.type = 'chr' as typeof n.type
+      n.blockDev = [10, 232]
+      n.charDev = true
     }
   }
 }
@@ -133,6 +134,8 @@ function syncBridge(sys: System) {
 for (const pkg of ['libvirt', 'libvirt-daemon-system']) System.installHooks[pkg] = (sys) => setupDefaults(sys)
 
 System.initHooks.push((sys, state) => {
+  // Con las extensiones de virtualización, el kernel carga kvm solo al arrancar.
+  if (sys.vmx || sys.physical) for (const m of ['kvm_intel', 'kvm']) sys.modules.add(m)
   if (hasLibvirt(sys)) setupDefaults(sys)
   for (const img of state.imagenes_disco ?? []) {
     const virtual = img.virtual_gb * GiB
@@ -861,6 +864,19 @@ register('virt-install', {
       if (!d.installing) ctx.out(`[  OK  ] Finished cloud-final.service - Cloud-init: Final Stage.\n\n${cloud.hostname} login: \n[simulador: la consola se cierra sola]\n\nDomain creation completed.\n`)
       else ctx.out('(instalador en la consola)\n')
     }
+    return 0
+  },
+})
+
+register('systemd-detect-virt', {
+  usage: 'systemd-detect-virt [--vm|--container]',
+  path: '/usr/bin',
+  run(ctx) {
+    if (ctx.sys.physical || ctx.args.includes('--container') || ctx.args.includes('-c')) {
+      ctx.out('none\n')
+      return 1
+    }
+    ctx.out('kvm\n')
     return 0
   },
 })
