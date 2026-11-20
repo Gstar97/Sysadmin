@@ -1,0 +1,114 @@
+tipo: terminal
+shell: bash
+titulo: Una plantilla, un clon y un contenedor
+descripcion: >-
+  En pve01 ya están la imagen de nube de Ubuntu 24.04 (/root/noble-server-cloudimg-amd64.img) y la
+  clave pública de Ana (/root/ana.pub). La red del nodo es 192.168.10.0/24 con puerta de enlace
+  en .1. Vas a armar una plantilla con cloud-init, sacar de ella web01, y crear un contenedor para
+  el DNS interno.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox: { repos: no-subscription }
+  imagenes_disco:
+    - { ruta: /root/noble-server-cloudimg-amd64.img, formato: qcow2, virtual_gb: 3.5, disco_gb: 0.58 }
+  archivos:
+    /root/ana.pub: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK8z ana@pc\n"
+pasos:
+  - consigna: >-
+      Creá la VM 9000, ubuntu-2404, con 2 vCPU, 2048 MB, la placa virtio en vmbr0, el
+      controlador virtio-scsi-single, el agente activado y, como disco scsi0, la imagen de nube
+      importada a local-lvm (con discard e iothread).
+    verificar:
+      - { pve_vm: 9000, nombre: ubuntu-2404, config: { scsi0: 'local-lvm:vm-9000-disk-0', agent: '1', scsihw: virtio-scsi-single } }
+    pistas:
+      - "El disco se importa al crear: `--scsi0 local-lvm:0,import-from=/root/noble-server-cloudimg-amd64.img,discard=on,iothread=1`."
+      - "`qm create 9000 --name ubuntu-2404 --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --scsi0 local-lvm:0,import-from=/root/noble-server-cloudimg-amd64.img,discard=on,iothread=1 --agent 1 --ostype l26`"
+    solucion: ["qm create 9000 --name ubuntu-2404 --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --scsi0 local-lvm:0,import-from=/root/noble-server-cloudimg-amd64.img,discard=on,iothread=1 --agent 1 --ostype l26"]
+    explicacion: >-
+      El 0 en local-lvm:0 quiere decir "creá un disco nuevo", y import-from le copia adentro la
+      imagen. Es lo mismo que qm disk import más qm set, en un solo paso.
+  - consigna: >-
+      Agregale la unidad de cloud-init (ide2 en local-lvm), arrancá desde scsi0, consola serie,
+      usuaria ana con la clave de /root/ana.pub e IP por DHCP. Después mirá el user-data que va a
+      generar Proxmox.
+    verificar:
+      - { pve_vm: 9000, config: { ide2: cloudinit, ciuser: ana, ipconfig0: dhcp, boot: scsi0 } }
+      - { salida_contiene: 'user: ana' }
+    pistas:
+      - "`qm set 9000 --ide2 local-lvm:cloudinit --boot order=scsi0 --serial0 socket --vga serial0` y `qm set 9000 --ciuser ana --sshkeys /root/ana.pub --ipconfig0 ip=dhcp`."
+      - "Para ver lo que genera: `qm cloudinit dump 9000 user`."
+    solucion:
+      - qm set 9000 --ide2 local-lvm:cloudinit --boot order=scsi0 --serial0 socket --vga serial0
+      - qm set 9000 --ciuser ana --sshkeys /root/ana.pub --ipconfig0 ip=dhcp
+      - qm cloudinit dump 9000 user
+    explicacion: >-
+      En Proxmox no escribís el user-data a mano: lo arma con estos valores (en la web, la
+      pestaña Cloud-Init). Las imágenes de nube usan la consola serie, por eso serial0.
+  - consigna: Convertí la VM 9000 en plantilla.
+    verificar:
+      - { pve_vm: 9000, plantilla: true }
+    pistas:
+      - "`qm template 9000`"
+    solucion: [qm template 9000]
+    explicacion: >-
+      El disco pasa a llamarse base-9000-disk-0 y queda de solo lectura. La plantilla no se
+      arranca más: se clona.
+  - consigna: >-
+      Cloná la plantilla en la VM 110, web01 (clon enlazado), con la IP fija
+      192.168.10.110/24 y puerta de enlace .1, agrandale el disco 17 GB y arrancala.
+    verificar:
+      - { pve_vm: 110, nombre: web01, estado: running, config: { ipconfig0: '192.168.10.110/24' } }
+    pistas:
+      - "`qm clone 9000 110 --name web01`, `qm set 110 --ipconfig0 ip=192.168.10.110/24,gw=192.168.10.1`, `qm disk resize 110 scsi0 +17G` y `qm start 110`."
+    solucion:
+      - qm clone 9000 110 --name web01
+      - qm set 110 --ipconfig0 ip=192.168.10.110/24,gw=192.168.10.1
+      - qm disk resize 110 scsi0 +17G
+      - qm start 110
+    explicacion: >-
+      Con un clon enlazado, web01 sale en un segundo. La imagen de nube tiene 3,5 GB: por eso se
+      agranda el disco (cloud-init agranda la partición solo al primer arranque). Para un
+      servidor de producción que vive años, se prefiere --full: no depende de la plantilla.
+  - consigna: >-
+      Ahora el DNS en un contenedor. Actualizá la lista de plantillas y bajá la de Debian 13
+      (debian-13-standard_13.1-2_amd64.tar.zst) a local.
+    verificar:
+      - { salida_contiene: 'checksum verified' }
+    pistas:
+      - "`pveam update`, `pveam available --section system` y `pveam download local debian-13-standard_13.1-2_amd64.tar.zst`."
+    solucion:
+      - pveam update
+      - pveam download local debian-13-standard_13.1-2_amd64.tar.zst
+    explicacion: Las plantillas de contenedores son un sistema ya instalado, comprimido. Se bajan una vez y sirven para todos.
+  - consigna: >-
+      Creá el contenedor 200, dns01, sin privilegios, con 512 MB, 1 núcleo, disco de 8 GB en
+      local-lvm, red en vmbr0 con IP fija 192.168.10.53/24 (puerta .1), la clave de Ana para
+      root y que arranque al crearlo.
+    verificar:
+      - { pve_ct: 200, nombre: dns01, estado: running, config: { unprivileged: '1', memory: '512', net0: '192.168.10.53/24' } }
+    pistas:
+      - "`pct create 200 local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst --hostname dns01 --unprivileged 1 --memory 512 --cores 1 --rootfs local-lvm:8 --net0 name=eth0,bridge=vmbr0,ip=192.168.10.53/24,gw=192.168.10.1 --ssh-public-keys /root/ana.pub --start 1`"
+    solucion: ["pct create 200 local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst --hostname dns01 --unprivileged 1 --memory 512 --cores 1 --rootfs local-lvm:8 --net0 name=eth0,bridge=vmbr0,ip=192.168.10.53/24,gw=192.168.10.1 --ssh-public-keys /root/ana.pub --start 1"]
+    explicacion: >-
+      Sin privilegios, el root del contenedor es un usuario común del nodo (uid 100000): si
+      alguien escapa del contenedor, no es root en Proxmox. Es lo que se usa siempre, salvo
+      casos puntuales.
+  - consigna: Comprobá desde el nodo qué sistema y qué IP tiene el contenedor.
+    verificar:
+      - { comando_usado: 'pct exec 200' }
+      - { salida_contiene: '192.168.10.53' }
+    pistas:
+      - "`pct exec 200 -- cat /etc/os-release` y `pct exec 200 -- ip -br a`."
+    solucion:
+      - pct exec 200 -- cat /etc/os-release
+      - pct exec 200 -- ip -br a
+    explicacion: >-
+      pct exec corre un comando adentro sin entrar por SSH; pct enter abre una consola. Fijate
+      que uname -r adentro da el kernel del nodo: el contenedor no tiene uno propio.

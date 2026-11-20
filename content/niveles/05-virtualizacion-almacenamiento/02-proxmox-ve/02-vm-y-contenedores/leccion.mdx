@@ -1,0 +1,87 @@
+---
+id: n5-m2-l2
+titulo: Máquinas virtuales y contenedores LXC
+minutos: 180
+objetivos:
+  - Crear VM en Proxmox con la configuración recomendada (virtio-scsi, iothread, discard, agente, UEFI cuando hace falta).
+  - Armar una plantilla con cloud-init y crear servidores desde ella.
+  - Crear contenedores LXC sin privilegios y saber cuándo conviene una VM y cuándo un contenedor.
+glosario: [agente-qemu, contenedor-sin-privilegios, plantilla-vm, cloud-init]
+verificado: 2026-11
+---
+
+import conf from './conf.svg?raw'
+import confDatos from './conf.yaml'
+import ej from './ej-vm-ct.yaml'
+import vmct from './vm-o-ct.yaml'
+
+En la web de Proxmox, el botón **Crear VM** abre un asistente con siete pestañas, y casi todas las opciones tienen un valor de fábrica razonable. Lo importante es saber qué cambiar, y que todo lo que elegís termina como una línea en un archivo de texto: entender ese archivo es entender la VM.
+
+<AntesDeEmpezar>
+- Proxmox VE: instalación y primeros pasos (lección 5.2.1).
+- Recursos virtuales (lección 5.1.2) y ciclo de vida, plantillas y cloud-init (lección 5.1.3).
+</AntesDeEmpezar>
+
+## Una VM, línea por línea
+
+<DiagramaInteractivo datos={confDatos} svg={conf} alt="El archivo /etc/pve/qemu-server/100.conf de una VM: agent 1; balloon 2048; bios ovmf; boot order=scsi0;ide2;net0; cores 4; cpu x86-64-v2-AES; efidisk0 en local-lvm; ide2 con el ISO de Debian 13 como cdrom; machine q35; memory 4096; name web01; net0 virtio con su MAC, en el puente vmbr0, con firewall y VLAN 10; onboot 1; ostype l26; scsi0 de 32 GB en local-lvm con discard, iothread y ssd; scsihw virtio-scsi-single." />
+
+Lo que conviene elegir en el asistente:
+
+- **Sistema**: q35, y **OVMF (UEFI)** con disco EFI si el sistema lo pide (Windows 11, Windows Server 2025, arranque seguro), más un **TPM** para Windows 11. Activar el **agente de QEMU**.
+- **Discos**: bus SCSI con **VirtIO SCSI single**, con **IO thread** y **Discard** (y **SSD emulation** si el almacenamiento es SSD). En el disco, caché "Default (No cache)" salvo que sepas por qué cambiarla.
+- **CPU**: el tipo de fábrica (x86-64-v2-AES) deja mover la VM entre nodos con procesadores distintos; **host** da todo el rendimiento del procesador, pero solo se puede mover a nodos iguales.
+- **Memoria**: con el globo activo, un mínimo razonable.
+- **Red**: **VirtIO**, en el puente que corresponda, con la VLAN (lección 5.2.3).
+
+Dos cosas para Windows: los drivers **virtio-win** (un ISO que se monta como segunda lectora durante la instalación, para que Windows vea el disco virtio-scsi) y, después, el agente desde ese mismo ISO.
+
+### El agente de QEMU
+
+Es un pequeño servicio adentro de la VM (`qemu-guest-agent` en Linux) que habla con Proxmox. Con él, el apagado es ordenado, se ve la IP de la VM en la web, y antes de un respaldo Proxmox le pide que congele los archivos un instante para que queden coherentes. Sin él, el respaldo es como sacar la foto de un disco en pleno uso. Hay que activarlo en las opciones **y** instalarlo adentro.
+
+## Plantillas con cloud-init
+
+Igual que con libvirt en el módulo 5.1, pero con las herramientas de Proxmox: se crea una VM, se le importa la imagen de nube, se le agrega una **unidad de cloud-init** y se la convierte en plantilla. Los datos de cloud-init (usuario, clave, IP, DNS) se cargan en la pestaña Cloud-Init de cada VM y Proxmox arma el user-data solo. Después, cada servidor nuevo es un **clon**: enlazado (en un segundo, dependiente de la plantilla) o completo (independiente, para lo que va a vivir años).
+
+<Terminal ejercicio={ej} />
+
+## Contenedores LXC
+
+Un **contenedor LXC** es un sistema Linux completo (con su systemd, sus usuarios y sus paquetes) que comparte el kernel del nodo. Se crea desde una **plantilla** que se baja con `pveam` (Debian, Ubuntu, Rocky, Alma, Alpine...) y arranca en un par de segundos usando muy poca memoria. Tres decisiones:
+
+- **Sin privilegios** (*unprivileged*), siempre que se pueda: el root del contenedor es en realidad un usuario común del nodo, así que si alguien escapa, no es root en Proxmox. Los privilegiados se dejan para casos puntuales (algunos montajes de NFS, por ejemplo).
+- **Features**: `nesting=1` deja correr systemd moderno y contenedores adentro; otros permiten montar NFS o CIFS.
+- **Los mismos números**: VM y contenedores comparten los ID (100, 101...), los respaldos, los permisos y la red.
+
+<Emparejar ejercicio={vmct} />
+
+<EnSimple>
+Cada VM es un archivo en /etc/pve/qemu-server: virtio-scsi single con iothread y discard, el agente de QEMU activado e instalado, UEFI y TPM cuando el sistema lo pide, y el tipo de CPU de fábrica salvo que la VM no se vaya a mover. Las plantillas se arman con la imagen de nube y una unidad de cloud-init, y los servidores salen de clones. Los contenedores LXC son Linux con el kernel del nodo: livianos, sin privilegios, para servicios simples; para Windows, Docker, firewalls o cosas que hay que aislar bien, VM.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Activar el agente y no instalarlo">
+    La opción solo avisa que existe. Sin qemu-guest-agent adentro, el apagado espera y termina forzado, y los respaldos no congelan los archivos.
+  </ErrorComun>
+  <ErrorComun titulo="CPU host en un clúster con procesadores distintos">
+    La VM no se puede mover en vivo a un nodo con otro procesador. En clústeres mezclados, el tipo de fábrica.
+  </ErrorComun>
+  <ErrorComun titulo="Windows sin los drivers virtio">
+    El instalador no ve el disco. Se monta el ISO virtio-win como segunda lectora y se carga el driver.
+  </ErrorComun>
+  <ErrorComun titulo="Contenedores privilegiados por costumbre">
+    Si alguien escapa del contenedor, es root en el nodo. Sin privilegios, salvo que haya una razón.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar el ISO de instalación montado">
+    La VM depende de ese archivo: si se borra, o si se quiere mover la VM, falla. Se saca al terminar.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Disco: SCSI con VirtIO SCSI single, IO thread, discard (y SSD emulation). Red: VirtIO.
+- UEFI (OVMF) con disco EFI, y TPM para Windows 11; drivers virtio-win para Windows.
+- Agente de QEMU: activado en la VM e instalado adentro (apagado ordenado, IP visible, respaldos coherentes).
+- Plantilla: qm create con import-from, ide2 cloudinit, qm set --ciuser --sshkeys --ipconfig0, qm template, qm clone.
+- LXC: pveam download, pct create --unprivileged 1; para servicios Linux simples. Lo demás, VM.
+</Resumen>

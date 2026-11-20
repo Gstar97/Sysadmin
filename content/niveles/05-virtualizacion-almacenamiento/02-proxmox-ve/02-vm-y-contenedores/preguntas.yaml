@@ -1,0 +1,95 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Dónde guarda Proxmox la configuración de la VM 100?
+  opciones:
+    - { texto: "En /etc/pve/qemu-server/100.conf, un archivo de texto", correcta: true, explicacion: "Los contenedores, en /etc/pve/lxc/." }
+    - { texto: "En una base de datos SQL", explicacion: "Es un archivo de texto (sobre la base de pve-cluster)." }
+    - { texto: "En el disco de la VM", explicacion: "No." }
+    - { texto: "En /var/lib/vz", explicacion: "Ahí están ISO, plantillas y respaldos." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué configuración de disco se recomienda para una VM en Proxmox?
+  opciones:
+    - { texto: "SCSI con VirtIO SCSI single, IO thread y discard", correcta: true, explicacion: "Rendimiento y devolución del espacio borrado." }
+    - { texto: "IDE, por compatibilidad", explicacion: "Muy lento." }
+    - { texto: "SATA con caché writeback", explicacion: "No es lo recomendado de fábrica." }
+    - { texto: "Da igual", explicacion: "No da igual." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve el agente de QEMU?
+  opciones:
+    - { texto: "Para apagar la VM ordenadamente, ver su IP y congelar los archivos antes de un respaldo", correcta: true, explicacion: "Hay que activarlo y también instalarlo adentro." }
+    - { texto: "Para que la VM tenga internet", explicacion: "No tiene que ver." }
+    - { texto: "Para acelerar la CPU", explicacion: "No." }
+    - { texto: "Para hacer instantáneas", explicacion: "Las instantáneas funcionan sin él." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un clúster con nodos de procesadores distintos, ¿qué tipo de CPU conviene en las VM?
+  opciones:
+    - { texto: "El de fábrica (x86-64-v2-AES), para poder moverlas entre nodos", correcta: true, explicacion: "host solo sirve entre nodos iguales." }
+    - { texto: "host, para más rendimiento", explicacion: "No se podrían mover en vivo a un nodo distinto." }
+    - { texto: "kvm64, siempre", explicacion: "Es demasiado viejo y le faltan instrucciones." }
+    - { texto: "Da igual", explicacion: "Importa para mover VM." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Instalás Windows Server 2025 en una VM con disco virtio-scsi y el instalador no ve ningún disco. ¿Qué falta?
+  opciones:
+    - { texto: "Los drivers virtio-win: se monta su ISO como segunda lectora y se carga el driver", correcta: true, explicacion: "Windows no trae los drivers virtio." }
+    - { texto: "Más espacio en el disco", explicacion: "El problema es el driver." }
+    - { texto: "Cambiar a contenedor LXC", explicacion: "Windows no puede ir en LXC." }
+    - { texto: "Activar el agente", explicacion: "El agente es después." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es un contenedor sin privilegios?
+  opciones:
+    - { texto: "Uno cuyo root es en realidad un usuario común del nodo, así que si alguien escapa no es root en Proxmox", correcta: true, explicacion: "Es lo recomendado." }
+    - { texto: "Uno sin red", explicacion: "No tiene que ver con la red." }
+    - { texto: "Uno sin usuario root", explicacion: "Tiene root, pero mapeado a un usuario común del nodo." }
+    - { texto: "Uno que no puede instalar paquetes", explicacion: "Puede." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene poner en una VM y no en un contenedor? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Un controlador de dominio con Windows", correcta: true, explicacion: "Los contenedores son solo Linux." }
+    - { texto: "Docker en producción", correcta: true, explicacion: "Proxmox lo recomienda en VM." }
+    - { texto: "Un firewall con su propio kernel", correcta: true, explicacion: "Necesita su sistema." }
+    - { texto: "Un DNS interno con Unbound", explicacion: "Va bien en un contenedor." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená cómo se arma una plantilla con cloud-init en Proxmox.
+  pasos:
+    - Crear la VM importando la imagen de nube como disco (import-from)
+    - Agregar la unidad de cloud-init (ide2) y la consola serie
+    - Cargar el usuario, la clave y la red de cloud-init
+    - Convertirla en plantilla con qm template
+    - Clonarla para cada servidor nuevo
+  explicacion: "La plantilla no se arranca más: se clona."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Clonaste web01 desde la plantilla de la imagen de nube y tiene un disco de 3,5 GB. ¿Qué hacés?
+  opciones:
+    - { texto: "Agrandar el disco con qm disk resize antes del primer arranque: cloud-init agranda la partición sola", correcta: true, explicacion: "La imagen de nube es chica a propósito." }
+    - { texto: "Instalar el sistema de nuevo", explicacion: "No hace falta." }
+    - { texto: "Agregar un segundo disco y moverlo todo", explicacion: "Alcanza con agrandar." }
+    - { texto: "Nada: 3,5 GB alcanzan", explicacion: "Se llena enseguida." }
+- id: p10
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué significa esta línea de la configuración?
+  salida: |
+    net0: virtio=BC:24:11:5A:1C:3E,bridge=vmbr0,firewall=1,tag=10
+  opciones:
+    - { texto: "Placa virtio con su MAC, en el puente vmbr0, con el firewall de Proxmox y en la VLAN 10", correcta: true, explicacion: "Lo ves en detalle en la lección 5.2.3." }
+    - { texto: "La VM tiene la IP .10", explicacion: "tag es la VLAN." }
+    - { texto: "La placa está desconectada", explicacion: "Estaría link_down=1." }
+    - { texto: "Es el décimo disco", explicacion: "Es la primera placa de red." }

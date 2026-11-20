@@ -1,0 +1,59 @@
+tipo: diagrama
+titulo: La configuración de una VM
+puntos:
+  - id: agent
+    titulo: "agent: 1"
+    area: { x: 2.3, y: 11.8, ancho: 95.3, alto: 5.0 }
+    texto: "El agente de QEMU: un programa adentro de la VM (qemu-guest-agent) que le permite a Proxmox apagarla bien, ver su IP y congelar los archivos antes de un respaldo. La opción solo avisa que está; hay que instalarlo adentro."
+  - id: memoria
+    titulo: "balloon"
+    area: { x: 2.3, y: 16.8, ancho: 95.3, alto: 5.8 }
+    texto: "balloon es el piso del globo: la VM tiene hasta 4096 MB (memory) y Proxmox puede bajarla hasta 2048 si el nodo necesita memoria. Con balloon: 0 el globo queda apagado y la memoria es fija."
+  - id: firmware
+    titulo: "bios"
+    area: { x: 2.3, y: 21.8, ancho: 95.3, alto: 5.0 }
+    texto: "OVMF es UEFI (lo que piden Windows 11, Windows Server 2025 y el arranque seguro); necesita un pequeño disco EFI para guardar sus variables. Sin bios, es SeaBIOS (BIOS clásico). machine: q35 es un chipset moderno, con PCIe."
+  - id: boot
+    titulo: "boot"
+    area: { x: 2.3, y: 26.8, ancho: 95.3, alto: 5.0 }
+    texto: "El orden de arranque: primero el disco, después el ISO, después la red. Al instalar desde el ISO, conviene que el ISO vaya primero, o elegirlo con Esc en la consola."
+  - id: cpu
+    titulo: "cores y cpu"
+    area: { x: 2.3, y: 31.8, ancho: 95.3, alto: 10.0 }
+    texto: "cores es la cantidad de vCPU. El tipo de CPU decide qué instrucciones ve la VM: host le pasa todas las de tu procesador (lo más rápido) pero complica mover la VM a un nodo con otro procesador; x86-64-v2-AES (el de fábrica) es compatible entre casi todos."
+  - id: iso
+    titulo: "ide2"
+    area: { x: 2.3, y: 46.8, ancho: 95.3, alto: 5.0 }
+    texto: "El ISO de instalación, en el almacenamiento local, como si fuera una lectora de DVD. Después de instalar, se saca (Do not use any media) para que la VM no dependa del archivo."
+  - id: red
+    titulo: "net0"
+    area: { x: 2.3, y: 66.8, ancho: 95.3, alto: 5.0 }
+    texto: "Placa virtio, con MAC propia (Proxmox usa el prefijo BC:24:11), en el puente vmbr0, en la VLAN 10 y con el firewall de Proxmox activado para esta placa. Lo ves en la lección 5.2.3."
+  - id: onboot
+    titulo: "onboot"
+    area: { x: 2.3, y: 71.8, ancho: 95.3, alto: 5.0 }
+    texto: "Arranca sola cuando arranca el nodo. Con startup se puede elegir el orden y la demora (por ejemplo, primero el controlador de dominio, después el resto)."
+  - id: ostype
+    titulo: "ostype"
+    area: { x: 2.3, y: 76.8, ancho: 95.3, alto: 5.0 }
+    texto: "El tipo de sistema (l26 es Linux moderno; win11 es Windows 11 o Server 2022 y 2025). Proxmox ajusta detalles según esto, como el reloj y algunas optimizaciones."
+  - id: disco
+    titulo: "scsi0 y scsihw"
+    area: { x: 2.3, y: 81.8, ancho: 95.3, alto: 10.0 }
+    texto: "El disco en local-lvm, en el controlador VirtIO SCSI single (uno por disco), con su propio hilo de entrada y salida (iothread), discard para devolver el espacio borrado y ssd para que el invitado sepa que puede hacer TRIM. Es la combinación recomendada."
+  - id: efidisk
+    titulo: "efidisk0"
+    area: { x: 2.3, y: 41.8, ancho: 95.3, alto: 5.8 }
+    texto: "El disco EFI: guarda las variables de UEFI (como el orden de arranque y las claves del arranque seguro). pre-enrolled-keys=1 trae cargadas las claves de Microsoft para que arranque Windows con arranque seguro."
+  - id: machine
+    titulo: "machine"
+    area: { x: 2.3, y: 51.8, ancho: 95.3, alto: 5.8 }
+    texto: "El chipset virtual: q35 es moderno (PCIe), i440fx es el viejo (el de fábrica en VM sin especificar). Windows y las placas pasadas por passthrough se llevan mejor con q35."
+  - id: memory
+    titulo: "memory"
+    area: { x: 2.3, y: 56.8, ancho: 95.3, alto: 5.8 }
+    texto: "Memoria máxima de la VM en MB. Con el globo activo (balloon), Proxmox puede bajarla hasta el valor de balloon cuando el nodo pasa el 80 % de uso."
+  - id: name
+    titulo: "name"
+    area: { x: 2.3, y: 61.8, ancho: 95.3, alto: 5.8 }
+    texto: "El nombre que se ve en la web. No tiene que ser igual al nombre del sistema de adentro, pero conviene que lo sea."
