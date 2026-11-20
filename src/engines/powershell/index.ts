@@ -10,6 +10,7 @@ import './monitor'
 import { dhcpAcquire, initialDhcp } from './dhcp'
 import './ad-ops'
 import { initialGroupPolicy } from './gpo'
+import { initialHyperV, verifyHyperV } from './hyperv'
 import { buildAdStore, computerObject, ouPathToDn, sameDn, store, type AdStore } from './ad'
 import { BASE_RULES, DC_RULES, Lab, ruleObject } from './machine'
 import { psCheckSchema, psStateSchema, type PsCheckInput, type PsServerState, type PsStateInput } from './schema'
@@ -303,6 +304,7 @@ function buildComputer(state: PsServerState, lab: Lab): PsSession {
   initialFiles(s)
   initialWsus(s)
   initialGroupPolicy(s)
+  initialHyperV(s)
   return s
 }
 
@@ -404,7 +406,7 @@ export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
     const re = safeRegex(check.comando_usado, 'i')
     return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
   }
-  return verifyAd(s, check) ?? verifyServices(s, check) ?? verifyWsus(s, check as Record<string, unknown>) ?? verifySystem(s, check)
+  return verifyHyperV(s, check as Record<string, unknown>) ?? verifyAd(s, check) ?? verifyServices(s, check) ?? verifyWsus(s, check as Record<string, unknown>) ?? verifySystem(s, check)
 }
 
 function safeRegex(pattern: string, flags: string): RegExp | undefined {

@@ -1,4 +1,4 @@
-import { asArray, ALIASES, CMDLETS, CONSTRUCTORS, cmdlet, formatDotnetDate, moduleAvailable, psEquals, PsError, PsSession, truthy, wildcardToRegex, type CmdletContext } from './session'
+import { asArray, ALIASES, BOOT_HOOKS, CMDLETS, CONSTRUCTORS, cmdlet, formatDotnetDate, moduleAvailable, psEquals, PsError, PsSession, truthy, wildcardToRegex, type CmdletContext } from './session'
 import { formatDefault, formatList, formatTable, getProp, isPsObject, isScriptBlock, propNames, psObject, setProp, toText, typeName, VIEWS, type PsObject } from './values'
 import { reach } from './machine'
 import { connect, setTrustedHosts, wsmanItem } from './remoting'
@@ -1366,6 +1366,7 @@ const FEATURE_MODULES: Record<string, string> = {
   'fs-dfs-namespace': 'DFSN',
   'fs-dfs-replication': 'DFSR',
   'fs-resource-manager': 'FileServerResourceManager',
+  'hyper-v': 'Hyper-V',
 }
 /** Servicio que crea cada rol al instalarse. */
 const FEATURE_SERVICES: Record<string, [string, string]> = {
@@ -1397,11 +1398,14 @@ function featureChange(ctx: CmdletContext, install: boolean) {
   for (const n of names) {
     const f = features.find((x) => toText(x.Name).toLowerCase() === n.toLowerCase())
     if (!f) throw new PsError(`ArgumentNotValid: The role, role service, or feature name is not valid: '${n}'. The name was not found.`, 'InvalidArgument', 'NameDoesNotExist,Microsoft.Windows.ServerManager.Commands.AddWindowsFeatureCommand', n)
+    if (install && n.toLowerCase() === 'hyper-v' && !f.Installed && (target.state.hyperv as { cpu_virtualizacion?: boolean } | undefined)?.cpu_virtualizacion === false)
+      throw new PsError(`The request to add or remove features on the specified server failed.\nInstallation of one or more roles, role services, or features failed.\nHyper-V cannot be installed: The processor does not have required virtualization capabilities.`, 'InvalidOperation', 'DISMAPI_Error__Failed_To_Enable_Updates,Microsoft.Windows.ServerManager.Commands.AddWindowsFeatureCommand', n)
     if (Boolean(f.Installed) !== install) {
       f.Installed = install
       f.InstallState = install ? 'Installed' : 'Available'
       changed.push(toText(f.DisplayName))
       if (NEEDS_RESTART.includes(n.toLowerCase())) restart = true
+      if (n.toLowerCase() === 'hyper-v') target.data.hvBooted = [!install]
       const mod = FEATURE_MODULES[n.toLowerCase()]
       const mods = (target.data.modules ??= []) as string[]
       if (mod && install && !mods.includes(mod)) mods.push(mod)
@@ -1417,7 +1421,10 @@ function featureChange(ctx: CmdletContext, install: boolean) {
       if (n.toLowerCase() === 'rsat-ad-powershell' && install && target.data.domainStore?.length) target.data.ad = target.data.domainStore
     }
   }
-  if (restart && has(ctx, 'Restart')) ctx.host('[simulador] El servidor se reinicia para terminar la instalación.\n')
+  if (restart && has(ctx, 'Restart')) {
+    ctx.host('[simulador] El servidor se reinicia para terminar la instalación.\n')
+    for (const hook of BOOT_HOOKS) hook(target)
+  }
   return [
     psObject('Microsoft.Windows.ServerManager.Commands.FeatureOperationResult', {
       Success: true,

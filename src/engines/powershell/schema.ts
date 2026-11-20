@@ -93,6 +93,40 @@ const stateShape = {
       }),
     )
     .optional(),
+  /** Hyper-V: si el rol ya está instalado, el tamaño del host y lo que ya está armado. */
+  hyperv: z
+    .strictObject({
+      instalado: z.boolean().default(true),
+      /** La CPU expone la virtualización (en una VM: virtualización anidada activada). */
+      cpu_virtualizacion: z.boolean().default(true),
+      procesadores: z.number().int().default(8),
+      memoria_gb: z.number().default(32),
+      conmutadores: z.array(z.strictObject({ nombre: z.string(), tipo: z.enum(['External', 'Internal', 'Private']) })).default([]),
+      discos: z
+        .array(z.strictObject({ ruta: z.string(), tamano_gb: z.number(), tipo: z.enum(['Dynamic', 'Fixed', 'Differencing']).default('Dynamic'), ocupado_gb: z.number().optional(), padre: z.string().optional() }))
+        .default([]),
+      vms: z
+        .array(
+          z.strictObject({
+            nombre: z.string(),
+            generacion: z.union([z.literal(1), z.literal(2)]).default(2),
+            procesadores: z.number().int().default(2),
+            memoria_mb: z.number().int().default(2048),
+            memoria_dinamica: z.boolean().default(false),
+            memoria_min_mb: z.number().int().optional(),
+            memoria_max_mb: z.number().int().optional(),
+            discos: z.array(z.string()).default([]),
+            conmutador: z.string().optional(),
+            vlan: z.number().int().optional(),
+            estado: z.enum(['Running', 'Off']).default('Off'),
+            linux: z.boolean().default(false),
+            plantilla_arranque: z.string().optional(),
+            puntos_de_control: z.array(z.string()).default([]),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
   caracteristicas: z
     .array(z.strictObject({ nombre: z.string(), nombre_visible: z.string(), instalada: z.boolean().default(false) }))
     .optional(),
@@ -329,6 +363,10 @@ const psSingleCheckSchema = z.union([
   z.strictObject({ salida_contiene: z.string() }),
   z.strictObject({ salida_regex: z.string() }),
   z.strictObject({ comando_usado: z.string() }),
+  /** Una máquina virtual de Hyper-V: estado, procesadores, memoria, conmutador, VLAN, generación, punto de control, disco. */
+  z.strictObject({ vm_hyperv: z.string(), existe: z.boolean().optional(), estado: z.enum(['Running', 'Off', 'Saved', 'Paused']).optional(), procesadores: z.number().int().optional(), memoria_mb: z.number().int().optional(), memoria_dinamica: z.boolean().optional(), conmutador: z.string().optional(), vlan: z.number().int().optional(), generacion: z.number().int().optional(), punto_de_control: z.string().optional(), arranque_automatico: z.string().optional(), con_disco: z.string().optional() }),
+  z.strictObject({ conmutador_hyperv: z.string(), tipo: z.enum(['External', 'Internal', 'Private']).optional() }),
+  z.strictObject({ vhd: z.string(), tipo: z.enum(['Dynamic', 'Fixed', 'Differencing']).optional(), tamano_gb: z.number().optional(), padre: z.string().optional() }),
   z.strictObject({ nombre_equipo: z.string(), pendiente: z.boolean().optional() }),
   z.strictObject({ ip: z.string(), prefijo: z.number().int().optional(), puerta_enlace: z.string().optional(), dns: z.array(z.string()).optional() }),
   z.strictObject({ perfil_red: z.enum(['Public', 'Private', 'DomainAuthenticated']) }),
