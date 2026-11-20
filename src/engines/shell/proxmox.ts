@@ -102,11 +102,11 @@ const TEMPLATES = [
   'alpine-3.22-default_20250617_amd64.tar.xz',
 ]
 
-const DEFAULT_INTERFACES = (ip: string, gw: string, nic: string) => `auto lo
+const DEFAULT_INTERFACES = (ip: string, gw: string, nic: string, others: string[] = []) => `auto lo
 iface lo inet loopback
 
 iface ${nic} inet manual
-
+${others.map((o) => `\niface ${o} inet manual\n`).join('')}
 auto vmbr0
 iface vmbr0 inet static
 	address ${ip}
@@ -284,7 +284,8 @@ function setupNode(sys: System, p: PveState, state: BashState) {
     first.ip = ip
   }
   sys.interfaces.push({ name: nic, mac: first?.mac ?? '00:1b:21:3a:4f:10', up: true, ipv6: [], dhcp: false, speed: 1000, duplex: 'full', autoneg: true, mtu: 1500 })
-  w('/etc/network/interfaces', p.interfaces ?? DEFAULT_INTERFACES(ip, gw, nic))
+  const others = sys.interfaces.filter((i) => i.name !== 'lo' && i.name !== 'vmbr0' && i.name !== nic).map((i) => i.name)
+  w('/etc/network/interfaces', p.interfaces ?? DEFAULT_INTERFACES(ip, gw, nic, others))
   w('/etc/hosts', `127.0.0.1 localhost.localdomain localhost\n${ip.split('/')[0]} ${sys.hostname}.lab.local ${sys.hostname}\n\n# The following lines are desirable for IPv6 capable hosts\n::1     ip6-localhost ip6-loopback\n`)
   applyInterfaces(sys, pve)
   // Almacenamientos
@@ -422,6 +423,30 @@ export function applyInterfaces(sys: System, pve: Pve): string | undefined {
     cur.attrs.set(words[0], words.slice(1).join(' '))
   }
   pve.bridges.clear()
+  // Bonds: dos o más placas juntas (active-backup, 802.3ad/LACP, balance-alb...).
+  for (const [name, b] of blocks) {
+    const slaves = b.attrs.get('bond-slaves')
+    if (!slaves) continue
+    const list = slaves.split(/\s+/).filter((x) => x !== 'none')
+    for (const sl of list) if (!sys.interfaces.some((i) => i.name === sl)) return `error: ${name}: bond slave ${sl} does not exist`
+    const mode = b.attrs.get('bond-mode') ?? 'balance-rr'
+    if (!['balance-rr', 'active-backup', 'balance-xor', 'broadcast', '802.3ad', 'balance-tlb', 'balance-alb'].includes(mode)) return `error: ${name}: invalid bond-mode ${mode}`
+    let iface = sys.interfaces.find((i) => i.name === name)
+    if (!iface) {
+      iface = { name, mac: sys.interfaces.find((i) => i.name === list[0])?.mac ?? `bc:24:11:${hex(2)}:${hex(2)}:${hex(2)}`, up: autos.has(name), ipv6: [], dhcp: false, speed: 1000 * (mode === 'active-backup' ? 1 : list.length), duplex: 'full', autoneg: false, mtu: 1500 }
+      sys.interfaces.push(iface)
+    }
+    iface.up = autos.has(name)
+    const names: Record<string, string> = { 'balance-rr': 'load balancing (round-robin)', 'active-backup': 'fault-tolerance (active-backup)', 'balance-xor': 'load balancing (xor)', broadcast: 'fault-tolerance (broadcast)', '802.3ad': 'IEEE 802.3ad Dynamic link aggregation', 'balance-tlb': 'transmit load balancing', 'balance-alb': 'adaptive load balancing' }
+    let proc = `Ethernet Channel Bonding Driver: v${PVE_KERNEL}\n\nBonding Mode: ${names[mode]}\n`
+    if (mode === 'active-backup') proc += `Primary Slave: None\nCurrently Active Slave: ${list[0]}\n`
+    if (mode === '802.3ad') proc += `Transmit Hash Policy: ${b.attrs.get('bond-xmit-hash-policy') ?? 'layer2'} (0)\n`
+    proc += `MII Status: up\nMII Polling Interval (ms): ${b.attrs.get('bond-miimon') ?? '0'}\nUp Delay (ms): 0\nDown Delay (ms): 0\n`
+    if (mode === '802.3ad') proc += `\n802.3ad info\nLACP active: on\nLACP rate: slow\nAggregator selection policy (ad_select): stable\n`
+    for (const sl of list) proc += `\nSlave Interface: ${sl}\nMII Status: up\nSpeed: 1000 Mbps\nDuplex: full\nLink Failure Count: 0\nPermanent HW addr: ${sys.interfaces.find((i) => i.name === sl)?.mac}\nSlave queue ID: 0\n`
+    sys.vfs.mkdirp('/proc/net/bonding', ROOT_CRED)
+    sys.vfs.writeFile(`/proc/net/bonding/${name}`, proc, ROOT_CRED)
+  }
   for (const [name, b] of blocks) {
     if (!b.attrs.has('bridge-ports')) continue
     const ports = (b.attrs.get('bridge-ports') ?? 'none').split(/\s+/).filter((x) => x !== 'none')

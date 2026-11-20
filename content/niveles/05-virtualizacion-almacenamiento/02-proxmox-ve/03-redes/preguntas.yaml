@@ -1,0 +1,96 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Dónde está la configuración de red de un nodo de Proxmox?
+  opciones:
+    - { texto: "En /etc/network/interfaces, y se aplica con ifreload -a", correcta: true, explicacion: "O con Aplicar configuración en la web." }
+    - { texto: "En Netplan", explicacion: "Proxmox usa ifupdown2." }
+    - { texto: "En /etc/pve/network.cfg", explicacion: "No existe." }
+    - { texto: "Solo en la web", explicacion: "La web escribe ese archivo." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es un puente vlan-aware?
+  opciones:
+    - { texto: "Un puente que lleva todas las VLAN, donde cada VM indica la suya con tag", correcta: true, explicacion: "Una sola configuración para todas las VLAN." }
+    - { texto: "Un puente solo para la VLAN 1", explicacion: "Lleva todas las de bridge-vids." }
+    - { texto: "Un bond de varias placas", explicacion: "Eso es un bond." }
+    - { texto: "Un puente con IP en cada VLAN", explicacion: "No necesita IP." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la diferencia entre un bond active-backup y uno 802.3ad (LACP)?
+  opciones:
+    - { texto: "active-backup usa una placa y pasa a la otra si se corta, sin configurar el switch; LACP usa todas y necesita el switch configurado", correcta: true, explicacion: "Si no podés tocar el switch, active-backup." }
+    - { texto: "Ninguna", explicacion: "Son muy distintos." }
+    - { texto: "LACP no tolera fallas", explicacion: "Sí las tolera." }
+    - { texto: "active-backup necesita un switch especial", explicacion: "Es al revés." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una VM con tag=30 no tiene red; las de tag=10 y tag=20 en el mismo puente sí. ¿Qué revisás primero?
+  opciones:
+    - { texto: "Que la VLAN 30 esté permitida en el troncal del switch", correcta: true, explicacion: "Es el error más común al estrenar una VLAN." }
+    - { texto: "Reinstalar Proxmox", explicacion: "No hace falta." }
+    - { texto: "Cambiar la placa de la VM a e1000", explicacion: "No es el problema." }
+    - { texto: "Sacar el bond", explicacion: "Las otras VLAN andan." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando que pone la placa de la VM 105 en el puente vmbr1, VLAN 20 (con una MAC nueva).
+  aceptadas: ["qm set 105 --net0 virtio,bridge=vmbr1,tag=20", "qm set 105 -net0 virtio,bridge=vmbr1,tag=20"]
+  explicacion: "Para conservar la MAC: virtio=XX:XX:XX:XX:XX:XX en lugar de virtio."
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene separar la red de administración del nodo de la de las VM?
+  opciones:
+    - { texto: "Para que la web y SSH del nodo no estén al alcance de las VM ni de los usuarios, y que un problema de tráfico no deje sin acceso al nodo", correcta: true, explicacion: "Igual que la gestión fuera de banda." }
+    - { texto: "Porque Proxmox no permite VM en vmbr0", explicacion: "Lo permite." }
+    - { texto: "Para usar menos placas", explicacion: "Usa más." }
+    - { texto: "No hace falta", explicacion: "Es una buena práctica." }
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice esta salida?
+  salida: |
+    $ cat /proc/net/bonding/bond0
+    Bonding Mode: fault-tolerance (active-backup)
+    Currently Active Slave: eno3
+    Slave Interface: eno2
+    MII Status: down
+    Slave Interface: eno3
+    MII Status: up
+  opciones:
+    - { texto: "eno2 perdió el enlace y el bond sigue funcionando por eno3", correcta: true, explicacion: "Hay que revisar el cable o el puerto de eno2: hoy no hay redundancia." }
+    - { texto: "El bond está caído", explicacion: "Sigue por eno3." }
+    - { texto: "Todo normal", explicacion: "Falta un enlace." }
+    - { texto: "Es un bond LACP", explicacion: "Es active-backup." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Vas a cambiar vmbr0, el puente con la IP del nodo, por SSH. ¿Qué hacés antes?
+  opciones:
+    - { texto: "Asegurar otra forma de entrar (consola fuera de banda o estar frente al servidor) y revisar el archivo antes de aplicar", correcta: true, explicacion: "Un error te deja afuera." }
+    - { texto: "Nada: ifreload deshace solo si falla", explicacion: "No deshace un error de configuración." }
+    - { texto: "Apagar todas las VM", explicacion: "No es lo crítico." }
+    - { texto: "Reiniciar el nodo", explicacion: "No ayuda." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Para que el firewall de Proxmox filtre el tráfico de una VM, ¿qué tiene que estar activado?
+  opciones:
+    - { texto: "El firewall del Datacenter, el de la VM y firewall=1 en su placa de red", correcta: true, explicacion: "Los tres." }
+    - { texto: "Solo el del nodo", explicacion: "El del nodo protege al propio Proxmox." }
+    - { texto: "Solo firewall=1", explicacion: "Faltan los otros dos." }
+    - { texto: "Nada: filtra siempre", explicacion: "Viene apagado." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué hace bridge-ports none en un puente?
+  opciones:
+    - { texto: "Lo deja sin placa física: las VM conectadas solo se ven entre sí", correcta: true, explicacion: "Una red aislada." }
+    - { texto: "Lo desactiva", explicacion: "Sigue funcionando, sin salida." }
+    - { texto: "Le da todas las placas", explicacion: "Es al revés." }
+    - { texto: "Lo pone en todas las VLAN", explicacion: "Eso es vlan-aware." }

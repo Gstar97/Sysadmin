@@ -1,0 +1,101 @@
+---
+id: n5-m2-l3
+titulo: Redes en Proxmox
+minutos: 150
+objetivos:
+  - Armar la red de un nodo con puentes, bonds y VLAN en /etc/network/interfaces.
+  - Poner cada VM o contenedor en su VLAN sin crear un puente por VLAN.
+  - Separar la administración, las VM y (más adelante) el clúster y el almacenamiento.
+  - Conocer el firewall de Proxmox y el SDN.
+glosario: [puente-red, bond, vlan]
+verificado: 2026-11
+---
+
+import red from './red-nodo.svg?raw'
+import redDatos from './red-nodo.yaml'
+import ej from './ej-redes.yaml'
+
+En el Nivel 2 armaste VLAN, troncales y EtherChannel en los switches. En un hipervisor pasa lo mismo, pero adentro del servidor: el nodo tiene un switch virtual (el puente) y cada VM es un equipo enchufado a él. Si la red del nodo está bien pensada, mover una VM de una red a otra es cambiar un número; si está mal, una VM puede terminar en la red equivocada, o el nodo quedar sin administración por un cable.
+
+<AntesDeEmpezar>
+- VLAN y enlaces troncales (lecciones 2.4.2 y 2.4.3), y EtherChannel (lección 2.4.6).
+- Puentes y modos de red de una VM (lección 5.1.2).
+- Proxmox VE: VM y contenedores (lección 5.2.2).
+</AntesDeEmpezar>
+
+## Las piezas
+
+Toda la red de un nodo está en un archivo, **/etc/network/interfaces**, y se aplica con **ifreload -a** (o con el botón Aplicar configuración de la web, que hace lo mismo). Hay cuatro piezas:
+
+- **Placas físicas** (eno1, enp1s0...): sin IP, como puertos de un puente o de un bond.
+- **Bonds**: dos o más placas que funcionan como una. **active-backup** usa una y pasa a la otra si se corta (no necesita nada en el switch); **802.3ad** (LACP) usa todas a la vez y necesita los puertos del switch configurados como grupo.
+- **Puentes** (vmbr0, vmbr1...): el switch virtual. Un puente **vlan-aware** lleva todas las VLAN, y cada VM dice la suya con **tag=**.
+- **Interfaces con IP**: el puente de administración (o una VLAN de él, como vmbr0.99) donde escucha la web.
+
+```text
+auto bond0
+iface bond0 inet manual
+	bond-slaves eno2 eno3
+	bond-miimon 100
+	bond-mode 802.3ad
+	bond-xmit-hash-policy layer3+4
+
+auto vmbr1
+iface vmbr1 inet manual
+	bridge-ports bond0
+	bridge-stp off
+	bridge-fd 0
+	bridge-vlan-aware yes
+	bridge-vids 2-4094
+```
+
+## Un buen diseño
+
+<DiagramaInteractivo datos={redDatos} svg={red} alt="La red de un nodo de Proxmox. eno1 va a un switch de administración por un puerto de acceso, y en el nodo forma vmbr0 con la IP 192.168.10.21, donde están la web (8006) y SSH. eno2 y eno3 forman bond0, conectado a dos troncales del switch con las VLAN 10, 20 y 30, y sobre bond0 está vmbr1, con VLAN (vlan-aware) y sin IP, solo para las VM: web01 con tag=10, proxy01 con tag=20 y el contenedor dns01 con tag=10. eno4 va a una red aparte para el clúster y el almacenamiento (módulos 5.4 y 5.5)." />
+
+La idea es separar por función: la **administración** (donde están la web y SSH del nodo), el **tráfico de las VM** (con todas sus VLAN, sobre un bond para que un cable no deje a todas sin red) y, cuando haya clúster y almacenamiento en red, **redes propias** para eso. En un servidor con solo dos placas, se puede juntar todo en un bond con VLAN y poner la administración en una de ellas (vmbr0.99, por ejemplo).
+
+Dos cuidados al cambiar la red de un nodo:
+
+- **Tené otra forma de entrar**: la consola de la placa de gestión (iDRAC, iLO) o estar frente al servidor. Un error en vmbr0 te deja afuera.
+- **Revisá el switch**: si la VLAN nueva no está permitida en el troncal, la VM queda aislada aunque Proxmox esté perfecto.
+
+<Terminal ejercicio={ej} />
+
+## El firewall de Proxmox
+
+Proxmox trae un firewall (nftables por debajo) que se configura en tres niveles: el **Datacenter** (reglas y grupos de seguridad para todo), el **nodo** (lo que entra al propio Proxmox) y cada **VM o contenedor** (lo que entra a esa VM). Para que filtre en una VM tienen que estar activados el firewall del Datacenter, el de la VM y la casilla `firewall=1` de su placa. Es útil para aislar VM dentro de la misma VLAN (microsegmentación) y como segunda barrera; no reemplaza al firewall de la red (lección 2.6.1). Ojo al activarlo en el Datacenter: la política de entrada es bloquear todo, y Proxmox deja abiertos el 8006 y SSH solo desde la red local del nodo.
+
+## Para más adelante: SDN
+
+Con varios nodos, Proxmox puede crear redes virtuales para todo el clúster desde un solo lugar (**SDN**: zonas, VNet y subredes, con VLAN, VXLAN o EVPN), en lugar de configurar cada nodo a mano. Se usa cuando el clúster crece o cuando hay que conectar VM de distintos nodos sin tocar los switches.
+
+<EnSimple>
+La red de un nodo está en /etc/network/interfaces y se aplica con ifreload -a. Las placas físicas no tienen IP: forman bonds (active-backup o LACP) y puentes. Un puente vlan-aware lleva todas las VLAN y cada VM dice la suya con tag. Conviene separar la administración del tráfico de las VM y, después, del clúster y el almacenamiento. Antes de tocar la red del nodo, otra forma de entrar; y la VLAN tiene que estar permitida en el troncal del switch.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Quedarse afuera por tocar vmbr0">
+    Un error en el puente de administración corta la web y SSH. Se cambia con la consola fuera de banda a mano o frente al servidor.
+  </ErrorComun>
+  <ErrorComun titulo="Un puente por cada VLAN">
+    Funciona, pero con diez VLAN son diez puentes en cada nodo. Un puente vlan-aware y el tag en cada VM.
+  </ErrorComun>
+  <ErrorComun titulo="LACP en el nodo y no en el switch">
+    Con 802.3ad en Proxmox y los puertos del switch sueltos, la red anda a medias o se corta. Los dos lados tienen que coincidir; si no se puede tocar el switch, active-backup.
+  </ErrorComun>
+  <ErrorComun titulo="La VLAN no está en el troncal">
+    La VM tiene tag=30 pero el switch solo deja pasar la 10 y la 20: queda aislada. Revisar los dos lados.
+  </ErrorComun>
+  <ErrorComun titulo="Cambiar la placa de una VM sin copiar la MAC">
+    Proxmox le da una MAC nueva: se pierden las reservas de DHCP y algunas licencias. Se copia la MAC de qm config.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- /etc/network/interfaces + ifreload -a (o Aplicar configuración en la web).
+- Placas sin IP; bond0 (active-backup o 802.3ad); puente vlan-aware con bridge-vids; tag=N en cada VM.
+- Separar administración, VM, clúster y almacenamiento; la web solo en la red de gestión.
+- Antes de cambiar la red del nodo: acceso fuera de banda. Y la VLAN, permitida en el troncal.
+- Firewall de Proxmox en Datacenter, nodo y VM (con firewall=1 en la placa); SDN para clústeres grandes.
+</Resumen>

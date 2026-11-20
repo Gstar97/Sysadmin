@@ -1,0 +1,53 @@
+tipo: diagrama
+titulo: La red de un nodo
+puntos:
+  - id: vmbr0
+    titulo: vmbr0, la administración
+    area: { x: 4.7, y: 14.6, ancho: 30.2, alto: 12.2 }
+    texto: >-
+      El puente que crea el instalador, con la IP del nodo: por ahí entran la web (8006) y SSH.
+      Conviene que esté en la red de gestión, separada de las VM, como la placa de gestión fuera
+      de banda (lección 4.5.3). Si se toca mal este puente, se pierde el acceso al nodo: se
+      cambia con cuidado y con la consola fuera de banda a mano.
+  - id: vmbr1
+    titulo: vmbr1 con VLAN
+    area: { x: 4.7, y: 43.9, ancho: 30.2, alto: 12.2 }
+    texto: >-
+      Un puente "vlan-aware": cada VM dice en qué VLAN está (tag=10, tag=20) y el puente manda su
+      tráfico etiquetado por el troncal. Una sola configuración sirve para todas las VLAN, sin
+      crear un puente por cada una. No tiene IP: el nodo no necesita estar en esas redes.
+  - id: vms
+    titulo: Las VM y los contenedores
+    area: { x: 4.7, y: 70.7, ancho: 30.2, alto: 12.2 }
+    texto: >-
+      Cada placa virtual dice su puente y su VLAN. Cambiar a una VM de VLAN es cambiar un número,
+      en caliente. Para el switch, cada VM es una MAC más en ese troncal.
+  - id: bond
+    titulo: bond0
+    area: { x: 38.4, y: 39, ancho: 12.8, alto: 22.2 }
+    texto: >-
+      Dos placas físicas que funcionan como una. En active-backup usa una y, si se corta, pasa a
+      la otra: no hace falta configurar nada en el switch. En 802.3ad (LACP) usa las dos a la vez,
+      pero los dos puertos del switch tienen que estar configurados como un grupo (EtherChannel,
+      lección 2.4.6). Para que el bond sirva de verdad, los dos cables van a switches distintos
+      (con LACP entre switches apilados o con MLAG).
+  - id: eno1
+    titulo: Las placas físicas
+    area: { x: 54.7, y: 15.9, ancho: 12.8, alto: 9.8 }
+    texto: >-
+      En /etc/network/interfaces aparecen como iface eno1 inet manual: no tienen IP propia, son
+      puertos de un puente o de un bond. Los nombres (eno1, enp1s0...) dependen del hardware.
+  - id: troncal
+    titulo: El troncal hacia el switch
+    area: { x: 74.4, y: 36.6, ancho: 23.3, alto: 26.8 }
+    texto: >-
+      Los puertos del switch van en modo troncal (trunk) con las VLAN que usan las VM. Si una VLAN
+      no está permitida en el troncal, la VM de esa VLAN queda aislada aunque Proxmox esté bien:
+      es el error más común al estrenar una VLAN.
+  - id: cluster
+    titulo: Una red para el clúster y el almacenamiento
+    area: { x: 74.4, y: 75.6, ancho: 23.3, alto: 14.6 }
+    texto: >-
+      En un clúster, los nodos se hablan todo el tiempo (corosync) y, con almacenamiento en red,
+      mueven muchos datos. Eso va por placas y redes propias, para que una copia grande no deje
+      sin comunicación al clúster. Lo armás en los módulos 5.4 y 5.5.

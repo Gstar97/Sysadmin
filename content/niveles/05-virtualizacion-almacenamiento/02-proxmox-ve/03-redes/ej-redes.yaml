@@ -1,0 +1,89 @@
+tipo: terminal
+shell: bash
+titulo: Un bond, un puente con VLAN y una red interna
+descripcion: >-
+  pve01 tiene tres placas: eno1, en vmbr0 con la IP de administración, y eno2 y eno3 sin usar,
+  conectadas a dos puertos troncales del switch (VLAN 10, 20 y 30). Corren la VM 100 (web01) y el
+  contenedor 200 (dns01), los dos en vmbr0. Vas a separar el tráfico de las VM de la
+  administración.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+      - { nombre: eno2, estado: UP }
+      - { nombre: eno3, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox:
+    repos: no-subscription
+    vms:
+      - { id: 100, nombre: web01, estado: running, agente: true, otros: { agent: '1' } }
+    cts:
+      - { id: 200, nombre: dns01, estado: running }
+pasos:
+  - consigna: Mirá las placas del nodo y cómo está armada la red hoy.
+    verificar:
+      - { comando_usado: '/etc/network/interfaces' }
+    pistas:
+      - "`ip -br a` y `cat /etc/network/interfaces`."
+    solucion:
+      - ip -br a
+      - cat /etc/network/interfaces
+    explicacion: >-
+      Solo vmbr0, sobre eno1, con la IP. eno2 y eno3 están declaradas pero sin uso. Las VM y la
+      administración comparten la misma red: es lo que deja el instalador.
+  - consigna: >-
+      Agregá a /etc/network/interfaces un bond0 con eno2 y eno3 en modo active-backup (miimon 100)
+      y un puente vmbr1 sobre bond0, vlan-aware, con las VLAN 2 a 4094 y sin IP. Aplicalo sin
+      reiniciar y mirá el estado del bond.
+    verificar:
+      - { pve_puente: vmbr1, vlan_aware: true, puerto: bond0 }
+      - { salida_contiene: 'active-backup' }
+    pistas:
+      - "Dos bloques: `auto bond0` / `iface bond0 inet manual` con `bond-slaves eno2 eno3`, `bond-miimon 100` y `bond-mode active-backup`; y `auto vmbr1` / `iface vmbr1 inet manual` con `bridge-ports bond0`, `bridge-stp off`, `bridge-fd 0`, `bridge-vlan-aware yes` y `bridge-vids 2-4094`."
+      - "Se aplica con `ifreload -a`; el estado, en `cat /proc/net/bonding/bond0`."
+    solucion:
+      - "printf '\\nauto bond0\\niface bond0 inet manual\\n\\tbond-slaves eno2 eno3\\n\\tbond-miimon 100\\n\\tbond-mode active-backup\\n\\nauto vmbr1\\niface vmbr1 inet manual\\n\\tbridge-ports bond0\\n\\tbridge-stp off\\n\\tbridge-fd 0\\n\\tbridge-vlan-aware yes\\n\\tbridge-vids 2-4094\\n' >> /etc/network/interfaces"
+      - ifreload -a
+      - cat /proc/net/bonding/bond0
+    explicacion: >-
+      ifreload aplica los cambios sin reiniciar la red entera (es ifupdown2, el de Proxmox). En la
+      web se hace en el nodo, Sistema, Red, y el botón Aplicar configuración. Si el switch
+      estuviera configurado con LACP, el modo sería 802.3ad.
+  - consigna: >-
+      Pasá a web01 a vmbr1, en la VLAN 10, y comprobá en el puente que su puerto lleva esa
+      etiqueta.
+    verificar:
+      - { pve_vm: 100, config: { net0: 'bridge=vmbr1' } }
+      - { pve_vm: 100, config: { net0: 'tag=10' } }
+      - { salida_contiene: 'tap100i0' }
+    pistas:
+      - "`qm set 100 --net0 virtio,bridge=vmbr1,tag=10` y `bridge vlan show`."
+    solucion:
+      - qm set 100 --net0 virtio,bridge=vmbr1,tag=10
+      - bridge vlan show
+    explicacion: >-
+      Ojo: al no poner la MAC (virtio=XX:XX:...), Proxmox le asignó una nueva. Si web01 tenía una
+      reserva de DHCP o una licencia atada a la MAC, se pierde: para conservarla, se copia la
+      MAC de qm config 100. bridge vlan show muestra tap100i0 (la placa de la VM 100) con la
+      VLAN 10.
+  - consigna: >-
+      Creá un puente vmbr9 sin placa física (bridge-ports none) para un laboratorio aislado, aplicalo
+      y pasá el contenedor 200 a ese puente con la IP 10.99.0.2/24.
+    verificar:
+      - { pve_puente: vmbr9 }
+      - { pve_ct: 200, config: { net0: 'bridge=vmbr9' } }
+    pistas:
+      - "Un bloque `auto vmbr9` / `iface vmbr9 inet manual` con `bridge-ports none`, `bridge-stp off` y `bridge-fd 0`, y `ifreload -a`."
+      - "`pct set 200 --net0 name=eth0,bridge=vmbr9,ip=10.99.0.2/24`"
+    solucion:
+      - "printf '\\nauto vmbr9\\niface vmbr9 inet manual\\n\\tbridge-ports none\\n\\tbridge-stp off\\n\\tbridge-fd 0\\n' >> /etc/network/interfaces"
+      - ifreload -a
+      - pct set 200 --net0 name=eth0,bridge=vmbr9,ip=10.99.0.2/24
+    explicacion: >-
+      Lo que conectes a vmbr9 solo se ve entre sí: sirve para probar algo sin tocar la red real.
+      Para que una VM de ahí salga a internet, haría falta otra VM que haga de router o firewall
+      entre vmbr9 y vmbr1.
