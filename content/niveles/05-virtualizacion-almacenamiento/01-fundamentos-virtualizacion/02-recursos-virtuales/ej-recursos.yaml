@@ -1,0 +1,79 @@
+tipo: terminal
+shell: bash
+titulo: Discos que crecen, memoria que se devuelve y vCPU que no alcanzan
+descripcion: >-
+  kvm01 (Ubuntu, 8 núcleos y 32 GB) tiene una VM en marcha, web01, con 2 vCPU y 4 GB. Vas a ver
+  la diferencia entre un disco dinámico y uno preasignado, devolverle memoria al host con el
+  globo y darle más vCPU a web01.
+estado_inicial:
+  distro: ubuntu
+  hostname: kvm01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  equipo: { cpus: 8, memoria_gb: 32, vmx: true }
+  paquetes: { instalados: [qemu-kvm, libvirt-daemon-system, virtinst] }
+  libvirt:
+    vms:
+      - { nombre: web01, vcpus: 2, memoria_mb: 4096, estado: running }
+pasos:
+  - consigna: >-
+      Creá un disco dinámico qcow2 de 100 GB en /var/lib/libvirt/images/datos.qcow2 y mirá
+      cuánto ocupa de verdad.
+    verificar:
+      - { imagen_disco: /var/lib/libvirt/images/datos.qcow2, formato: qcow2, tamano_virtual_gb: 100 }
+      - { salida_contiene: 'disk size: 196 KiB' }
+    pistas:
+      - "`sudo qemu-img create -f qcow2 /var/lib/libvirt/images/datos.qcow2 100G` y después `sudo qemu-img info` del mismo archivo."
+    solucion:
+      - sudo qemu-img create -f qcow2 /var/lib/libvirt/images/datos.qcow2 100G
+      - sudo qemu-img info /var/lib/libvirt/images/datos.qcow2
+    explicacion: >-
+      virtual size 100 GiB, disk size 196 KiB: la VM va a ver un disco de 100 GB, pero en el
+      almacenamiento ocupa casi nada hasta que se escriba. Es el aprovisionamiento fino (thin).
+  - consigna: >-
+      Ahora uno preasignado de 20 GB para una base de datos, /var/lib/libvirt/images/db.qcow2, y
+      mostrá solo la línea de lo que ocupa.
+    verificar:
+      - { imagen_disco: /var/lib/libvirt/images/db.qcow2, tamano_virtual_gb: 20 }
+      - { salida_contiene: '20 GiB' }
+    pistas:
+      - "Con `-o preallocation=full`; para ver solo una línea, `| grep 'disk size'`."
+    solucion:
+      - sudo qemu-img create -f qcow2 -o preallocation=full /var/lib/libvirt/images/db.qcow2 20G
+      - sudo qemu-img info /var/lib/libvirt/images/db.qcow2 | grep 'disk size'
+    explicacion: >-
+      Ocupa los 20 GB desde el primer momento (thick): nunca se queda sin lugar por culpa de
+      otras VM, y escribe un poco más rápido la primera vez. A cambio, se pierde la ventaja de
+      ocupar solo lo usado.
+  - consigna: >-
+      web01 tiene 4 GB pero usa poco. Bajale la memoria a 2 GB en caliente (sin apagarla) y
+      comprobá lo que tiene ahora.
+    verificar:
+      - { salida_contiene: 'actual 2097152' }
+    pistas:
+      - "`sudo virsh setmem web01 2G --live` y `sudo virsh dommemstat web01`."
+    solucion:
+      - sudo virsh setmem web01 2G --live
+      - sudo virsh dommemstat web01
+    explicacion: >-
+      Eso es el globo (ballooning): el driver virtio-balloon de adentro de la VM "infla" un globo
+      con la memoria que se le pide, y esa memoria vuelve al host. La VM sigue con un máximo de 4
+      GB y se le puede devolver. Si se le saca más de lo que necesita, la VM empieza a usar su
+      propia swap: se le baja con cuidado.
+  - consigna: >-
+      Para la próxima vez que arranque, web01 tiene que tener 4 vCPU. Probá directo y, si no te
+      deja, subí primero el máximo.
+    verificar:
+      - { dominio: web01, vcpus: 4 }
+    pistas:
+      - "`sudo virsh setvcpus web01 4 --config` va a fallar: el máximo es 2. Primero `sudo virsh setvcpus web01 4 --config --maximum`."
+    solucion:
+      - sudo virsh setvcpus web01 4 --config
+      - sudo virsh setvcpus web01 4 --config --maximum
+      - sudo virsh setvcpus web01 4 --config
+      - sudo virsh dominfo web01
+    explicacion: >-
+      dominfo sigue mostrando 2: --config cambia la configuración guardada, que se aplica en el
+      próximo arranque. Más vCPU no siempre es más rápido: una VM con muchas vCPU espera a que
+      haya muchos hilos libres a la vez. Se suben cuando la VM de verdad las usa.

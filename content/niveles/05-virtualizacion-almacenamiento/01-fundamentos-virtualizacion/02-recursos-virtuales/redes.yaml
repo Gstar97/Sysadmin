@@ -1,0 +1,46 @@
+tipo: diagrama
+titulo: Puente, NAT y red aislada
+puntos:
+  - id: puente
+    titulo: El puente
+    area: { x: 5.2, y: 55.6, ancho: 23.3, alto: 9.4 }
+    texto: >-
+      Un switch virtual adentro del hipervisor: la placa física del servidor es uno de sus puertos
+      y cada VM, otro. Las VM quedan en la misma red que el resto de la empresa, con su propia IP
+      (del DHCP de la red o fija), y se las puede alcanzar desde cualquier lado. Es lo normal en
+      servidores: en Proxmox se llama vmbr0; en Hyper-V, conmutador externo.
+  - id: vlan
+    titulo: Las VM en el puente
+    area: { x: 5.2, y: 38.3, ancho: 23.3, alto: 11.1 }
+    texto: >-
+      Para la red, cada VM es un equipo más, con su MAC propia. Con un puente que entiende VLAN,
+      cada VM puede ir a una VLAN distinta (la 10 de servidores, la 20 de la DMZ) con un solo cable
+      troncal hasta el switch: lo vas a armar en Proxmox en el módulo 5.2.
+  - id: nat
+    titulo: NAT
+    area: { x: 36.6, y: 69.4, ancho: 26.7, alto: 22.2 }
+    texto: >-
+      Las VM están en una red privada adentro del hipervisor (la 192.168.122.0/24 de libvirt) y
+      salen a internet con la IP del host, como tu casa detrás del router. Desde afuera no se
+      llega a ellas sin redirigir puertos. Es cómodo para un laboratorio en tu computadora; para
+      servidores, casi nunca.
+  - id: natvms
+    titulo: Las VM detrás del NAT
+    area: { x: 38.4, y: 38.3, ancho: 23.3, alto: 11.1 }
+    texto: >-
+      Reciben su IP del DHCP del propio hipervisor y se ven entre ellas. Para la red de la empresa
+      no existen: todo lo que sale parece venir del host.
+  - id: aislada
+    titulo: Sin salida
+    area: { x: 69.8, y: 19.4, ancho: 26.7, alto: 12.2 }
+    texto: >-
+      Una red solo para las VM (privada) o para las VM y el host (interna). Sirve para probar algo
+      peligroso, armar un laboratorio de un dominio sin pisar la red real, o una red de
+      almacenamiento o de clúster entre VM.
+  - id: puentesolo
+    titulo: Un puente sin placa
+    area: { x: 71.5, y: 55.6, ancho: 23.3, alto: 9.4 }
+    texto: >-
+      Es el mismo switch virtual, pero sin ningún puerto físico: el tráfico no sale del
+      hipervisor. En Proxmox es un vmbr con bridge-ports none; en Hyper-V, un conmutador privado o
+      interno.

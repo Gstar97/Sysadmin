@@ -1,0 +1,92 @@
+---
+id: n5-m1-l2
+titulo: Recursos virtuales
+minutos: 150
+objetivos:
+  - Entender qué es una vCPU y cuánto se puede prometer de más sin que las VM anden lentas.
+  - Explicar la sobreasignación de memoria, el globo, las páginas compartidas y por qué la swap del host es el peor caso.
+  - Elegir entre discos dinámicos y preasignados, y conocer los formatos (qcow2, raw, vmdk, vhdx).
+  - Conectar una VM con un puente, con NAT o a una red aislada.
+glosario: [sobreasignacion, globo-memoria, aprovisionamiento-fino, puente-red]
+verificado: 2026-11
+---
+
+import redes from './redes.svg?raw'
+import redesDatos from './redes.yaml'
+import ej from './ej-recursos.yaml'
+
+Una máquina virtual cree que tiene procesadores, memoria, disco y red propios. En realidad, el hipervisor se los presta del servidor, y casi siempre promete más de lo que tiene, igual que un banco no guarda en la bóveda todo el dinero que depositaron sus clientes: funciona porque no todos lo piden a la vez. Esta lección es sobre cuánto se puede prometer y qué pasa cuando todos lo piden.
+
+<AntesDeEmpezar>
+- Hipervisores, KVM y virtio (lección 5.1.1).
+- CPU, memoria, swap y carga del sistema (módulo 1.5).
+- Puentes, VLAN y NAT (módulos 2.4 y 2.6).
+</AntesDeEmpezar>
+
+## CPU: las vCPU
+
+Una **vCPU** no es un núcleo reservado: es un hilo que el hipervisor pone a correr en algún hilo real del servidor cuando le toca, igual que el sistema operativo reparte la CPU entre procesos. Por eso se pueden prometer más vCPU que hilos reales, y es lo normal: la mayoría de los servidores pasa el día casi sin usar la CPU.
+
+- Un servidor de 16 núcleos con hyper-threading tiene 32 hilos. Con servidores comunes (web, archivos, controladores de dominio) se suele llegar a 3 o 4 vCPU por hilo; con bases de datos o cosas sensibles a la demora, se queda cerca de 1 a 1.
+- Cuando todas las VM quieren CPU a la vez, esperan turno. Esa espera se llama **CPU ready** en VMware y **steal** en Linux (la columna `st` de `top` y `vmstat`, adentro de la VM). La VM anda lenta sin que su CPU marque el 100 %: es lo primero que hay que mirar cuando "la VM anda lenta y no tiene nada".
+- **Más vCPU no siempre es más rápido.** Una VM con 16 vCPU en un servidor de 32 hilos tiene que esperar a que se liberen muchos a la vez para correr. Se empieza con pocas y se suben cuando la VM las usa.
+- Para más adelante: en servidores con dos procesadores, la memoria está repartida entre ellos (NUMA). Una VM que no entra en un solo procesador anda más lenta; los hipervisores lo manejan solos casi siempre.
+
+## Memoria
+
+Con la memoria se puede prometer de más (**sobreasignación**), pero con mucho más cuidado que con la CPU, porque cuando falta, falta de verdad. Los hipervisores tienen trucos para recuperar memoria que las VM no usan:
+
+- **El globo** (ballooning): un driver adentro de la VM (virtio-balloon en Linux, el de Hyper-V o VMware Tools) le pide memoria al sistema invitado y se la devuelve al host. La VM decide qué soltar, así que suelta caché primero.
+- **Memoria dinámica** en Hyper-V: un mínimo, un valor de inicio y un máximo, y el hipervisor ajusta solo.
+- **Compartir páginas iguales** (KSM en Proxmox, TPS en VMware): veinte VM con el mismo sistema tienen muchas partes de memoria idénticas, y se guardan una sola vez. VMware lo desactivó entre VM distintas por seguridad; en Proxmox, KSM se activa solo cuando el host pasa el 80 % de memoria usada.
+- **La swap del host**: si nada de lo anterior alcanza, el host manda memoria de las VM a su disco. Es el peor caso: todo se vuelve lentísimo y es difícil de diagnosticar desde adentro de las VM.
+
+La regla práctica: la memoria se puede sobreasignar un poco, con margen y vigilando, y en un clúster se deja lugar libre para recibir las VM de un nodo que se caiga (módulo 5.4).
+
+<SimuladorRecursos />
+
+## Discos
+
+El disco de una VM es un archivo (o un volumen) en el almacenamiento del hipervisor. Dos decisiones:
+
+- **Dinámico o preasignado.** Un disco **dinámico** (thin) ocupa solo lo que la VM escribió; uno **preasignado** (thick) ocupa todo desde el principio. Con dinámicos se puede prometer más espacio del que hay, pero si el almacenamiento se llena, todas las VM que escriben ahí se pausan o fallan a la vez. Se vigila el espacio real, no el prometido.
+- **El formato.** **qcow2** es el de KVM: dinámico, con instantáneas y archivo base. **raw** es el disco tal cual, sin nada alrededor: el más simple y rápido (en Proxmox, los volúmenes de LVM o ZFS son raw). **vmdk** es el de VMware, **vhdx** el de Hyper-V y **vdi** el de VirtualBox. `qemu-img convert` pasa de uno a otro, y es la base de cualquier migración (módulo 5.3).
+
+Además: el controlador **virtio-scsi** (o virtio-blk) para el disco, y la opción **discard** para que, cuando la VM borra archivos, el espacio vuelva al almacenamiento.
+
+<Terminal ejercicio={ej} />
+
+## Red
+
+<DiagramaInteractivo datos={redesDatos} svg={redes} alt="Tres formas de conectar una VM. Puente: las VM 1 y 2 (192.168.10.51 y .52) están en un puente (vmbr0, br0) del que también es puerto la placa física del hipervisor, y así quedan en la red de la empresa 192.168.10.0/24. NAT: las VM (192.168.122.51 y .52) están en una red interna con DHCP (virbr0) y el hipervisor traduce las direcciones: la red de la empresa solo ve al hipervisor (192.168.10.21). Aislada: las VM (10.0.0.1 y .2) están en un puente sin placa física: se ven entre ellas, sin salida ni hacia la red ni desde ella." />
+
+La placa de red de la VM también es virtio (o vmxnet3 en VMware, o la sintética de Hyper-V), con una MAC propia que genera el hipervisor. En servidores casi siempre se usa un **puente**, y con VLAN cada VM va a la red que le corresponde.
+
+<EnSimple>
+Las vCPU son turnos en los hilos reales: se pueden prometer de más mientras no trabajen todas a la vez, y cuando sí, las VM esperan (CPU ready o steal). La memoria también se puede prometer de más, con el globo, la memoria dinámica y las páginas compartidas, pero si se acaba, el host usa su swap y todo anda lentísimo. Los discos pueden ser dinámicos (ocupan lo usado) o preasignados (todo desde el principio), en qcow2, raw, vmdk o vhdx. La red, casi siempre por un puente, con VLAN.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Darle muchas vCPU a una VM &quot;para que ande más rápido&quot;">
+    Con muchas vCPU espera más su turno. Empezá con pocas y subí cuando las use.
+  </ErrorComun>
+  <ErrorComun titulo="Mirar solo la CPU de adentro de la VM">
+    Si la VM anda lenta con la CPU al 30 %, mirá el steal (top, columna st) o el CPU ready en el hipervisor.
+  </ErrorComun>
+  <ErrorComun titulo="Sobreasignar memoria sin margen">
+    Cuando todas las VM la piden, el host usa su swap. Margen, alertas y lugar para un nodo caído.
+  </ErrorComun>
+  <ErrorComun titulo="Discos dinámicos sin vigilar el almacenamiento">
+    Se prometieron 10 TB sobre 4 TB reales: el día que se llena, se pausan todas las VM a la vez.
+  </ErrorComun>
+  <ErrorComun titulo="Placa de red o disco emulados">
+    e1000 o IDE andan, pero mucho peor que virtio. Para Windows, los drivers virtio-win.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- vCPU: turnos en hilos reales; 3 o 4 por hilo en servidores comunes, cerca de 1 a 1 en bases de datos. La espera se ve como CPU ready o steal.
+- Memoria: sobreasignar con margen; globo, memoria dinámica y KSM o TPS ayudan; la swap del host es el peor caso.
+- Discos: dinámicos o preasignados; qcow2, raw, vmdk, vhdx; qemu-img convert entre formatos; virtio-scsi y discard.
+- Red: puente (lo normal en servidores), NAT (laboratorio) o aislada; virtio para la placa.
+</Resumen>

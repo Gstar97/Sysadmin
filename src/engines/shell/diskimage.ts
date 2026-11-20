@@ -19,6 +19,8 @@ export interface ImageMeta {
   /** Archivo base (qcow2 con backing file). */
   backing?: string
   backingFmt?: ImageFormat
+  /** Lo realmente escrito en el disco, si es distinto del tamaño del archivo (raw disperso, qcow2 con preallocation=metadata). */
+  allocated?: number
   /** Instantáneas internas (qcow2). */
   snapshots?: { id: number; name: string; size: number; date: number; vmClock: string }[]
 }
@@ -94,7 +96,8 @@ function cred(ctx: CommandContext): Cred {
 }
 
 function infoText(sys: System, path: string, shown: string, meta: ImageMeta): string {
-  const used = diskUsage(sys, path)
+  const used = meta.allocated ?? diskUsage(sys, path)
+  const length = diskUsage(sys, path)
   let out = `image: ${shown}\nfile format: ${meta.format}\nvirtual size: ${qsize(meta.virtual)} (${meta.virtual} bytes)\ndisk size: ${qsize(used)}\n`
   if (meta.format === 'qcow2') out += 'cluster_size: 65536\n'
   if (meta.backing) out += `backing file: ${meta.backing}\nbacking file format: ${meta.backingFmt ?? 'qcow2'}\n`
@@ -103,7 +106,7 @@ function infoText(sys: System, path: string, shown: string, meta: ImageMeta): st
     for (const s of meta.snapshots) out += `${String(s.id).padEnd(10)}${s.name.padEnd(18)}${qsize(s.size).padStart(7)} ${new Date(s.date).toISOString().replace('T', ' ').slice(0, 19)} ${s.vmClock}           --\n`
   }
   if (meta.format === 'qcow2') out += 'Format specific information:\n    compat: 1.1\n    compression type: zlib\n    lazy refcounts: false\n    refcount bits: 16\n    corrupt: false\n    extended l2: false\n'
-  out += `Child node '/file':\n    filename: ${shown}\n    protocol type: file\n    file length: ${qsize(used)} (${used} bytes)\n    disk size: ${qsize(used)}\n`
+  out += `Child node '/file':\n    filename: ${shown}\n    protocol type: file\n    file length: ${qsize(length)} (${length} bytes)\n    disk size: ${qsize(used)}\n`
   return out
 }
 
@@ -201,8 +204,14 @@ register('qemu-img', {
             if (size < bm.virtual) return fail(`Backing file's size is larger than the image's size`)
           }
           if (size === undefined) return fail('Image creation needs a size parameter')
-          writeImage(sys, file, { format: fmt, virtual: size, backing, backingFmt }, initialUsage(fmt, size), cred(ctx))
-          const extra = fmt === 'qcow2' ? ` cluster_size=65536 extended_l2=off compression_type=zlib size=${size}${backing ? ` backing_file=${backing} backing_fmt=${backingFmt}` : ''} lazy_refcounts=off refcount_bits=16` : ` size=${size}`
+          let prealloc = 'off'
+          for (const kv of (o ?? '').split(',')) if (kv.startsWith('preallocation=')) prealloc = kv.split('=')[1]
+          if (!['off', 'metadata', 'falloc', 'full'].includes(prealloc) || (fmt === 'raw' && prealloc === 'metadata')) return fail(`Invalid parameter '${prealloc}'`)
+          // raw sin preasignar es un archivo disperso: mide todo, ocupa nada.
+          const fileLen = fmt === 'raw' || prealloc !== 'off' ? size : initialUsage(fmt, size)
+          const allocated = prealloc === 'full' || prealloc === 'falloc' ? size : fmt === 'raw' ? 0 : prealloc === 'metadata' ? 3.2 * MiB : undefined
+          writeImage(sys, file, { format: fmt, virtual: size, backing, backingFmt, allocated }, fileLen, cred(ctx))
+          const extra = fmt === 'qcow2' ? ` cluster_size=65536 extended_l2=off${prealloc !== 'off' ? ` preallocation=${prealloc}` : ''} compression_type=zlib size=${size}${backing ? ` backing_file=${backing} backing_fmt=${backingFmt}` : ''} lazy_refcounts=off refcount_bits=16` : `${prealloc !== 'off' ? ` preallocation=${prealloc}` : ''} size=${size}`
           ctx.out(`Formatting '${pos[0]}', fmt=${fmt}${extra}\n`)
           return 0
         }

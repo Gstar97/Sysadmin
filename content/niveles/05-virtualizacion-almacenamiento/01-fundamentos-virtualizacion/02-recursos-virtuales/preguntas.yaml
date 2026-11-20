@@ -1,0 +1,93 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Un servidor tiene 16 hilos. ¿Se le pueden dar 40 vCPU en total a sus VM?
+  opciones:
+    - { texto: "Sí, mientras no trabajen todas a la vez: una vCPU es un turno en un hilo real, no un núcleo reservado", correcta: true, explicacion: "Si todas trabajan a la vez, esperan turno." }
+    - { texto: "No: nunca más vCPU que hilos", explicacion: "Prometer de más es lo normal." }
+    - { texto: "Sí, y van a andar igual de rápido siempre", explicacion: "En los picos van a esperar." }
+    - { texto: "Solo con hyper-threading desactivado", explicacion: "No tiene que ver." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Una VM anda lenta. Adentro, top muestra esto. ¿Qué pasa?
+  salida: |
+    %Cpu(s): 18.2 us,  3.1 sy,  0.0 ni, 41.5 id,  0.4 wa,  0.0 hi,  0.3 si, 36.5 st
+  opciones:
+    - { texto: "La VM espera turno en el hipervisor (steal): el servidor está sobrecargado, no la VM", correcta: true, explicacion: "36,5 % del tiempo la VM quería CPU y el hipervisor no se la dio." }
+    - { texto: "La VM espera al disco", explicacion: "Eso sería wa, que está en 0,4." }
+    - { texto: "La CPU de la VM está al 100 %", explicacion: "Está al 21 %." }
+    - { texto: "Todo normal", explicacion: "Un steal de 36 % es muy alto." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace el globo (ballooning)?
+  opciones:
+    - { texto: "Un driver dentro de la VM le pide memoria al sistema invitado y se la devuelve al host", correcta: true, explicacion: "La VM elige qué soltar: primero la caché." }
+    - { texto: "Agranda el disco de la VM", explicacion: "Es memoria." }
+    - { texto: "Suma memoria física al host", explicacion: "Recupera la que las VM no usan." }
+    - { texto: "Manda memoria a la swap del host", explicacion: "Eso es lo que se quiere evitar." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué la swap del host es el peor caso para un hipervisor?
+  opciones:
+    - { texto: "Porque manda memoria de las VM al disco sin que ellas lo sepan: todo se vuelve lentísimo y es difícil de diagnosticar desde adentro", correcta: true, explicacion: "Adentro de la VM, la memoria parece normal." }
+    - { texto: "Porque borra las VM", explicacion: "No borra nada." }
+    - { texto: "Porque no existe en Linux", explicacion: "Existe." }
+    - { texto: "No es un problema", explicacion: "Es el peor caso." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Se crearon VM con discos dinámicos por 10 TB sobre un almacenamiento de 4 TB. ¿Cuál es el riesgo?
+  opciones:
+    - { texto: "Si las VM escriben de más y el almacenamiento se llena, se pausan o fallan todas a la vez", correcta: true, explicacion: "Se vigila el espacio real, con alertas." }
+    - { texto: "Ninguno: los discos dinámicos no ocupan espacio", explicacion: "Ocupan lo que escriben." }
+    - { texto: "Que las VM vean solo 4 TB", explicacion: "Cada una ve su tamaño prometido." }
+    - { texto: "Que no se puedan hacer instantáneas", explicacion: "No es el problema." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué formato de disco usa cada hipervisor de forma nativa?
+  opciones:
+    - { texto: "qcow2 en KVM, vmdk en VMware, vhdx en Hyper-V", correcta: true, explicacion: "raw lo usan todos; vdi es de VirtualBox." }
+    - { texto: "vhdx en KVM, qcow2 en Hyper-V", explicacion: "Al revés." }
+    - { texto: "Todos usan vmdk", explicacion: "Cada uno tiene el suyo." }
+    - { texto: "Todos usan raw", explicacion: "raw lo aceptan todos, pero cada uno tiene su formato." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué modo de red se usa normalmente para un servidor virtual de producción?
+  opciones:
+    - { texto: "Un puente, para que la VM quede en la red de la empresa (con su VLAN)", correcta: true, explicacion: "Como un equipo más." }
+    - { texto: "NAT", explicacion: "Desde afuera no se llega; sirve para laboratorios." }
+    - { texto: "Aislada", explicacion: "No tendría salida." }
+    - { texto: "Cualquiera", explicacion: "Depende de para qué, y en servidores es el puente." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una base de datos anda lenta en una VM de 16 vCPU, en un host de 32 hilos muy cargado. ¿Qué probás primero?
+  opciones:
+    - { texto: "Mirar el CPU ready o steal y bajarle las vCPU a lo que realmente usa", correcta: true, explicacion: "Con tantas vCPU espera más su turno." }
+    - { texto: "Subirle a 32 vCPU", explicacion: "Va a esperar todavía más." }
+    - { texto: "Darle más disco", explicacion: "No es el síntoma." }
+    - { texto: "Cambiar la placa de red", explicacion: "No tiene que ver." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve la opción discard en el disco de una VM?
+  opciones:
+    - { texto: "Para que, cuando la VM borra archivos, el espacio vuelva al almacenamiento", correcta: true, explicacion: "Si no, un disco dinámico solo crece." }
+    - { texto: "Para borrar el disco", explicacion: "No." }
+    - { texto: "Para descartar las instantáneas", explicacion: "No tiene que ver." }
+    - { texto: "Para que el disco sea preasignado", explicacion: "Es al revés." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace KSM en Proxmox?
+  opciones:
+    - { texto: "Guarda una sola vez las partes de memoria idénticas entre VM", correcta: true, explicacion: "Útil con muchas VM del mismo sistema." }
+    - { texto: "Comprime los discos", explicacion: "Es memoria." }
+    - { texto: "Agrega memoria al host", explicacion: "Ahorra la que ya hay." }
+    - { texto: "Mide el steal", explicacion: "No." }

@@ -2,7 +2,7 @@ import { VIRTUAL_MOUNTS } from '../storage'
 import { parseArgs } from '../args'
 import { register, type CommandContext } from '../shell'
 import { aclUnion, basename, FsError, modeString, normalizePath, octal, type DefaultAcl, type Inode, ROOT_CRED } from '../vfs'
-import { applyChmod, COLOR, fsErr, humanSize, lines, lsDate, readInputs, sizeOf } from './util'
+import { applyChmod, COLOR, fsErr, humanSize, lines, lsDate, readInputs, sizeOf, diskSizeOf } from './util'
 
 function colorName(name: string, node: Inode, tty: boolean): string {
   if (!tty) return name
@@ -773,7 +773,7 @@ register('du', {
           (p, node, depth) => {
             if (a.flags.has('x') && depth > 0 && mountTargets.has(p)) return false
             order.push({ abs: p, depth, dir: node.type === 'dir' })
-            sizes.set(p, node.type === 'dir' ? 4096 : sizeOf(node))
+            sizes.set(p, node.type === 'dir' ? 4096 : diskSizeOf(node))
           },
           (p) => {
             ctx.err(`du: cannot read directory '${t}${p.slice(abs.length)}': Permission denied\n`)

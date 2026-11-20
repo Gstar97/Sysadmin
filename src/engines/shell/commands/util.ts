@@ -27,6 +27,15 @@ export function humanSize(bytes: number): string {
   return (v < 10 ? (Math.ceil(v * 10) / 10).toFixed(1) : String(Math.ceil(v))) + units[i]
 }
 
+/** Lo que ocupa en el disco (du): en una imagen dispersa es menos que su tamaño aparente. */
+export function diskSizeOf(node: Inode): number {
+  if (node.type === 'file' && /^(QFI\u00fb|\u0000\u0000RAW)/.test(node.data)) {
+    const m = /"allocated":(\d+(?:\.\d+)?)/.exec(node.data)
+    if (m) return Math.round(Number(m[1]))
+  }
+  return sizeOf(node)
+}
+
 export function sizeOf(node: Inode): number {
   if (node.type === 'dir') return 4096
   if (node.type === 'symlink') return node.data.length
