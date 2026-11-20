@@ -1,0 +1,41 @@
+---
+titulo: RAID 5 con repuesto, falla y reconstrucción con mdadm, y NUT con una UPS simulada
+horas: 3
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - En mi VM, el RAID 5 con repuesto sobrevive a un reinicio como /dev/md0 y se monta en /datos.
+  - Simulé la falla de un disco, el repuesto entró solo y las sumas de verificación dieron bien.
+  - Dejé un disco nuevo como repuesto y el arreglo quedó clean.
+  - NUT lee la UPS simulada, avisa el corte y apagó la VM de forma ordenada.
+  - Documenté el RAID, el cambio de disco y la configuración de NUT.
+---
+
+import sim from './lab-hardware-sim.yaml'
+import pasos from './lab-hardware.yaml'
+
+## Objetivo
+
+Proteger un servidor de las dos fallas físicas más comunes: un disco que se rompe y un corte de luz. Vas a armar un RAID 5 con un disco de repuesto, ver cómo se recupera solo de una falla, y conectar el servidor a una UPS (simulada) para que se apague ordenado cuando se agote la batería.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: ubuntu01 con espacio para cinco discos virtuales de 2 GB (10 GB en total). No hace falta una UPS de verdad.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tu máquina virtual
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Hacé todo en la VM de laboratorio, nunca en tu PC: mdadm --create sobre el disco equivocado borra lo que tenga, y upsmon -c fsd apaga el equipo en el que lo corras.
+</Advertencia>
+
+## Para pensar
+
+1. Con discos de 16 TB, la reconstrucción del RAID 5 tardaría más de un día. ¿Qué cambiarías del diseño y por qué?
+2. Si dos de los discos son del mismo lote y fallan con días de diferencia, ¿de qué te protege el repuesto y de qué no?
+3. El RAID quedó perfecto y la UPS apagó todo bien. ¿Qué tendrías que tener además para recuperar los datos si alguien borra /datos por error?

@@ -1,0 +1,155 @@
+tipo: terminal
+shell: bash
+titulo: Un RAID 5 con repuesto y una UPS que apaga el servidor
+descripcion: >-
+  files02 (Ubuntu) tiene cinco discos nuevos de 10 GB, de /dev/sdb a /dev/sdf. Vas a armar un
+  RAID 5 con tres discos y uno de repuesto para /datos, ver cómo el repuesto entra solo cuando
+  falla un disco, dejar otro repuesto listo, y después conectar NUT a una UPS simulada
+  (dummy-ups) para probar un corte de luz completo. mdadm y NUT están instalados.
+estado_inicial:
+  distro: ubuntu
+  hostname: files02
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [mdadm, nut] }
+  discos:
+    - { nombre: sdb, tamano: 10G }
+    - { nombre: sdc, tamano: 10G }
+    - { nombre: sdd, tamano: 10G }
+    - { nombre: sde, tamano: 10G }
+    - { nombre: sdf, tamano: 10G }
+pasos:
+  - consigna: >-
+      Creá /dev/md0 como RAID 5 con /dev/sdb, /dev/sdc y /dev/sdd, y /dev/sde de repuesto.
+      Esperá a que termine de sincronizar.
+    verificar:
+      - { raid: md0, nivel: 5, estado: sano, activos: 3, repuestos: 1 }
+    pistas:
+      - "Con `--level=5 --raid-devices=3 --spare-devices=1` y los cuatro discos."
+      - "`sudo mdadm --create /dev/md0 --level=5 --raid-devices=3 --spare-devices=1 /dev/sdb /dev/sdc /dev/sdd /dev/sde` y después `sudo mdadm --wait /dev/md0`"
+    solucion:
+      - sudo mdadm --create /dev/md0 --level=5 --raid-devices=3 --spare-devices=1 /dev/sdb /dev/sdc /dev/sdd /dev/sde
+      - sudo mdadm --wait /dev/md0
+    explicacion: >-
+      Tres discos de 10 GB en RAID 5 dan 20 GB útiles: uno se va en paridad. El repuesto no
+      guarda nada: espera a que falle otro para ocupar su lugar.
+  - consigna: >-
+      Formatealo con ext4, montalo en /datos de forma permanente (fstab con el UUID), guardá la
+      definición en /etc/mdadm/mdadm.conf y actualizá el initramfs.
+    verificar:
+      - { montaje: /datos, dispositivo: /dev/md0 }
+      - { fstab: /datos, tipo: ext4 }
+      - { archivo: /etc/mdadm/mdadm.conf, contenido_incluye: 'ARRAY /dev/md0' }
+      - { comando_usado: 'update-initramfs' }
+    pistas:
+      - "`sudo mkfs.ext4 /dev/md0`, `sudo mkdir /datos`, la línea de fstab con el UUID de `sudo blkid /dev/md0`, `sudo mount -a`, `sudo mdadm --detail --scan | sudo tee -a /etc/mdadm/mdadm.conf` y `sudo update-initramfs -u`"
+    solucion:
+      - sudo mkfs.ext4 /dev/md0
+      - sudo mkdir /datos
+      - echo "UUID=$(sudo blkid -s UUID -o value /dev/md0) /datos ext4 defaults 0 2" | sudo tee -a /etc/fstab
+      - sudo systemctl daemon-reload
+      - sudo mount -a
+      - sudo mdadm --detail --scan | sudo tee -a /etc/mdadm/mdadm.conf
+      - sudo update-initramfs -u
+    explicacion: >-
+      En Ubuntu, el arreglo se arma al arrancar desde el initramfs: si no lo actualizás, puede
+      aparecer como /dev/md127. MAILADDR root ya viene en el archivo y mdmonitor está activo
+      desde la instalación (en Rocky hay que agregarlo y habilitarlo).
+  - consigna: Simulá que /dev/sdc falla y mirá /proc/mdstat enseguida.
+    verificar:
+      - { raid: md0, estado: reconstruyendo }
+      - { salida_contiene: 'recovery' }
+    pistas:
+      - "`sudo mdadm /dev/md0 --fail /dev/sdc` y `cat /proc/mdstat`"
+    solucion:
+      - sudo mdadm /dev/md0 --fail /dev/sdc
+      - cat /proc/mdstat
+    explicacion: >-
+      Nadie tocó nada y el repuesto (sde) ya está recibiendo los datos: recovery. Es la ventaja
+      del repuesto instalado: la ventana sin protección empieza a cerrarse en segundos, no
+      cuando alguien lee el correo y va con un disco.
+  - consigna: >-
+      Esperá a que termine, sacá el disco fallado del arreglo y agregá /dev/sdf como nuevo
+      repuesto.
+    verificar:
+      - { raid: md0, estado: sano, activos: 3, repuestos: 1 }
+      - { comando_usado: '--add' }
+    pistas:
+      - "`sudo mdadm --wait /dev/md0`, `sudo mdadm /dev/md0 --remove /dev/sdc` y `sudo mdadm /dev/md0 --add /dev/sdf`"
+    solucion:
+      - sudo mdadm --wait /dev/md0
+      - sudo mdadm /dev/md0 --remove /dev/sdc
+      - sudo mdadm /dev/md0 --add /dev/sdf
+      - sudo mdadm --detail /dev/md0
+    explicacion: >-
+      Al agregar un disco a un arreglo sano y completo, entra como repuesto (spare). Ahora puede
+      volver a fallar uno sin que nadie tenga que correr.
+  - consigna: >-
+      Ahora la UPS. Declarala en /etc/nut/ups.conf con el nombre simulada, driver dummy-ups y
+      port = simulada.dev, y creá /etc/nut/simulada.dev con ups.status OL y battery.charge 100.
+    verificar:
+      - { archivo: /etc/nut/ups.conf, contenido_incluye: 'dummy-ups' }
+      - { archivo: /etc/nut/simulada.dev, contenido_incluye: 'ups.status: OL' }
+    pistas:
+      - "`printf '[simulada]\\n\\tdriver = dummy-ups\\n\\tport = simulada.dev\\n' | sudo tee -a /etc/nut/ups.conf`"
+      - "`printf 'ups.status: OL\\nbattery.charge: 100\\nbattery.runtime: 1200\\n' | sudo tee /etc/nut/simulada.dev`"
+    solucion:
+      - "printf '[simulada]\\n\\tdriver = dummy-ups\\n\\tport = simulada.dev\\n' | sudo tee -a /etc/nut/ups.conf"
+      - "printf 'ups.status: OL\\nbattery.charge: 100\\nbattery.runtime: 1200\\n' | sudo tee /etc/nut/simulada.dev"
+    explicacion: >-
+      dummy-ups es un driver de NUT para pruebas: en lugar de hablar con una UPS, publica lo que
+      dice ese archivo, y cada vez que el archivo cambia lo vuelve a leer. Sirve para probar un
+      corte sin cortar la luz.
+  - consigna: >-
+      Configurá el resto como en la lección: MODE=standalone, el usuario monuser (clave
+      Ups-2026, upsmon primary) y el MONITOR de simulada@localhost. Reiniciá los dos servicios y
+      revisá la UPS con upsc.
+    verificar:
+      - { servicio: nut-server, activo: true }
+      - { servicio: nut-monitor, activo: true }
+      - { ups_estado: OL, ups: simulada }
+    pistas:
+      - "`sudo sed -i 's/^MODE=none/MODE=standalone/' /etc/nut/nut.conf`"
+      - "`printf '[monuser]\\n\\tpassword = Ups-2026\\n\\tupsmon primary\\n' | sudo tee -a /etc/nut/upsd.users` y `echo 'MONITOR simulada@localhost 1 monuser Ups-2026 primary' | sudo tee -a /etc/nut/upsmon.conf`"
+      - "`sudo systemctl restart nut-server nut-monitor` y `upsc simulada`"
+    solucion:
+      - sudo sed -i 's/^MODE=none/MODE=standalone/' /etc/nut/nut.conf
+      - "printf '[monuser]\\n\\tpassword = Ups-2026\\n\\tupsmon primary\\n' | sudo tee -a /etc/nut/upsd.users"
+      - "echo 'MONITOR simulada@localhost 1 monuser Ups-2026 primary' | sudo tee -a /etc/nut/upsmon.conf"
+      - sudo systemctl restart nut-server nut-monitor
+      - upsc simulada
+    explicacion: >-
+      Hasta acá, igual que con una UPS de verdad. driver.name: dummy-ups confirma que es la
+      simulada.
+  - consigna: >-
+      Se corta la luz: cambiá ups.status a OB en el archivo, revisá el estado con upsc y mirá qué
+      registró upsmon.
+    verificar:
+      - { ups_estado: OB, ups: simulada }
+      - { apagado_ups: false }
+      - { salida_contiene: 'on battery' }
+    pistas:
+      - "`sudo sed -i 's/ups.status: OL/ups.status: OB/' /etc/nut/simulada.dev`, `upsc simulada ups.status` y `sudo journalctl -u nut-monitor`"
+    solucion:
+      - "sudo sed -i 's/ups.status: OL/ups.status: OB/' /etc/nut/simulada.dev"
+      - upsc simulada ups.status
+      - sudo journalctl -u nut-monitor
+    explicacion: >-
+      upsmon avisa (UPS simulada@localhost on battery) pero no apaga: mientras quede batería,
+      espera, por si la luz vuelve. En la consola de todos los usuarios conectados aparece el
+      mismo aviso.
+  - consigna: >-
+      La batería se agota: cambiá ups.status a OB LB y mirá otra vez el registro de upsmon.
+    verificar:
+      - { apagado_ups: true }
+      - { salida_contiene: 'power-fail shutdown' }
+    pistas:
+      - "`sudo sed -i 's/ups.status: OB/ups.status: OB LB/' /etc/nut/simulada.dev` y `sudo journalctl -u nut-monitor`"
+    solucion:
+      - "sudo sed -i 's/ups.status: OB/ups.status: OB LB/' /etc/nut/simulada.dev"
+      - sudo journalctl -u nut-monitor
+    explicacion: >-
+      Con OB LB, upsmon ejecuta SHUTDOWNCMD y el servidor se apaga ordenado: los servicios se
+      detienen, los discos se desmontan bien y el RAID queda limpio. En el simulador el apagado
+      no ocurre de verdad, para que puedas seguir mirando; en la parte 2, en tu VM, sí.

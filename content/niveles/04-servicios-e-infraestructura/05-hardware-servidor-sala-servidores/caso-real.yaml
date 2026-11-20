@@ -1,0 +1,149 @@
+tipo: troubleshooting
+titulo: El segundo disco
+descripcion: >-
+  Incidente simulado. files01 es el servidor de archivos de Ejemplo S.A. (40 personas): un RAID 5
+  con mdadm de cuatro discos de 12 TB, comprados juntos hace cuatro años, con 21 TB ocupados.
+  Todas las noches a las 23 se hace un respaldo a otro servidor. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 8:40. Varias personas dicen que las carpetas compartidas "andan lentísimas" desde
+      que llegaron. El servidor responde y no hay errores en la red.
+    opciones:
+      - texto: Revisar el estado del arreglo y de los discos antes de tocar nada
+        ir_a: n_diag
+        minutos: 4
+      - texto: Reiniciar el servidor de archivos
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          Tarda en arrancar y sigue igual de lento. Reiniciar sin saber qué pasa es arriesgado:
+          si hubiera un problema de discos, un arranque es justo cuando más se exigen.
+      - texto: Decir que es la red y esperar a ver si se normaliza
+        ir_a: n1
+        minutos: 30
+        consecuencia: >-
+          No se normaliza. Media hora perdida, y la red estaba bien.
+  n_diag:
+    situacion: >-
+      El arreglo está degradado. Revisás desde cuándo, la salud de los otros discos y el último
+      respaldo.
+    evidencia:
+      - titulo: cat /proc/mdstat
+        contenido: |
+          md0 : active raid5 sdb[0] sdc[1](F) sdd[2] sde[3]
+                35156256768 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/3] [U_UU]
+      - titulo: sudo mail (el correo de root, que nadie lee)
+        contenido: |
+          >N  1 mdadm monitoring    Sat Nov 14 03:12  "Fail event on /dev/md0:files01"
+          This is an automatically generated mail message from mdadm
+          A Fail event had been detected on md device /dev/md0.
+          It could be related to component device /dev/sdc.
+      - titulo: sudo smartctl -A /dev/sdd (fragmento)
+        contenido: |2
+            5 Reallocated_Sector_Ct   0x0033   088   088   010    Pre-fail  Always       -       184
+          197 Current_Pending_Sector  0x0012   100   100   000    Old_age   Always       -       24
+          198 Offline_Uncorrectable   0x0010   100   100   000    Old_age   Offline      -       24
+      - titulo: El registro del respaldo
+        contenido: |
+          domingo 15/11 23:00  respaldo nocturno  terminado sin errores  (412 archivos nuevos o cambiados)
+    opciones:
+      - texto: Cambiar sdc por un disco nuevo y empezar la reconstrucción ya
+        ir_a: n_rebuild_sin
+        minutos: 20
+      - texto: Respaldar ahora mismo lo que cambió desde anoche, con el arreglo como está, antes de cualquier otra cosa
+        ir_a: n_backup
+        minutos: 25
+      - texto: Sacar sdd, que es el que tiene errores, y poner un disco nuevo en su lugar
+        ir_a: fin_sdd
+        minutos: 10
+  n_backup:
+    situacion: >-
+      El respaldo de lo cambiado esta mañana lee pocos archivos (unos 2 GB): termina en 20
+      minutos sin errores. Ahora sí, cambiás sdc por un disco nuevo y lo agregás al arreglo. La
+      reconstrucción va a leer los 12 TB de cada uno de los otros tres discos, sdd incluido.
+    evidencia:
+      - titulo: Tres horas después, en el registro del kernel
+        contenido: |
+          md/raid:md0: read error not correctable (sector 15032385536 on sdd).
+          md/raid:md0: Disk failure on sdd, disabling device.
+          md/raid:md0: Cannot continue operation (2/4 failed).
+      - titulo: cat /proc/mdstat
+        contenido: |
+          md0 : active raid5 sdf[4] sdb[0] sdd[2](F) sde[3] sdc[1](F)
+                [4/2] [U__U]
+    opciones:
+      - texto: Armar un arreglo nuevo con discos nuevos y restaurar el respaldo del domingo y el de esta mañana
+        ir_a: n_ok
+        minutos: 60
+      - texto: Forzar el armado (mdadm --assemble --force) y seguir trabajando así
+        ir_a: n_backup
+        minutos: 20
+        consecuencia: >-
+          Vuelve a montar, pero sobre un disco que se está muriendo y sin ninguna protección: los
+          sectores ilegibles de sdd son archivos dañados en silencio. --force sirve para rescatar
+          lo que no está en ningún respaldo, y acá ya está todo respaldado.
+      - texto: Mandar los discos a un laboratorio de recuperación de datos
+        ir_a: n_backup
+        minutos: 30
+        consecuencia: >-
+          Son días y mucho dinero para recuperar datos que ya tenés en los respaldos. Se usa
+          cuando no hay respaldo.
+  n_rebuild_sin:
+    situacion: >-
+      La reconstrucción empieza. A las 11:50, al 63 %, sdd tiene errores de lectura que no se
+      pueden corregir y mdadm lo marca como fallado. Con dos discos fallados de cuatro, el
+      arreglo se detiene. El último respaldo es el de anoche: todo lo que las 40 personas hicieron
+      esta mañana está solo en el arreglo caído.
+    evidencia:
+      - titulo: cat /proc/mdstat
+        contenido: |
+          md0 : active raid5 sdf[4] sdb[0] sdd[2](F) sde[3] sdc[1](F)
+                [4/2] [U__U]
+    opciones:
+      - texto: Forzar el armado (mdadm --assemble --force) con sdd, solo para copiar los archivos de esta mañana, y después restaurar el respaldo en un arreglo nuevo
+        ir_a: n_ok
+        minutos: 90
+      - texto: Restaurar el respaldo de anoche en un arreglo nuevo y avisar que se perdió la mañana
+        ir_a: fin_manana
+        minutos: 60
+      - texto: Volver a agregar sdd y reintentar la reconstrucción
+        ir_a: n_rebuild_sin
+        minutos: 180
+        consecuencia: >-
+          Falla otra vez en la misma zona, tres horas después: los sectores de sdd no se pueden
+          leer, y RAID 5 no tiene otra copia de lo que había en sdc.
+  n_ok:
+    final: exito
+    resumen: >-
+      El arreglo nuevo es un RAID 6 de cinco discos nuevos, de dos marcas o lotes distintos, más
+      un repuesto; se restauró el respaldo del domingo y lo de la mañana, y a las 9 del martes
+      todo funcionaba sin perder un archivo. La falla no fue mala suerte: fueron cinco cosas
+      apiladas. El aviso de mdadm llegó el sábado a las 3:12 al correo de root, que nadie leía:
+      dos días degradado sin que nadie supiera. Los cuatro discos eran del mismo lote y de la
+      misma edad, así que cuando falla uno, otro está cerca. Con discos de 12 TB, reconstruir un
+      RAID 5 lee 36 TB sin protección: un sector ilegible alcanza. No había repuesto instalado. Y
+      nunca se corrió un chequeo del arreglo, que habría encontrado los sectores dañados de sdd
+      antes. Lo que cambió: el correo de root va a una casilla del equipo y el estado del RAID y
+      SMART están en el monitoreo; smartd vigila los discos; el chequeo mensual del arreglo está
+      programado (checkarray en Ubuntu, raid-check en Rocky); RAID 6 con repuesto; y la
+      restauración se prueba cada tres meses. Lo que salvó la mañana del lunes fue el respaldo,
+      no el RAID.
+  fin_manana:
+    final: fracaso
+    resumen: >-
+      Los datos de hasta anoche volvieron, pero se perdió el trabajo de la mañana de 40 personas.
+      Se podía evitar de dos formas: con un respaldo de lo cambiado antes de empezar la
+      reconstrucción (20 minutos, con el arreglo degradado pero funcionando), o, ya con el
+      arreglo caído, forzando el armado solo para copiar esos archivos. La regla: con un arreglo
+      degradado, primero asegurar los datos, después reconstruir. Y la causa de fondo sigue
+      ahí: el aviso de la falla llegó el sábado a una casilla que nadie lee.
+  fin_sdd:
+    final: fracaso
+    resumen: >-
+      En un RAID 5 con sdc ya fallado, sacar sdd deja el arreglo con dos discos de cuatro: se
+      detiene en el acto. sdd tenía errores, pero era uno de los tres discos que todavía tenían
+      los datos. Hubo que restaurar el respaldo del domingo, y se perdió la mañana. Antes de
+      sacar un disco de un arreglo se mira /proc/mdstat o mdadm --detail: solo se saca el que
+      figura como fallado, y con el arreglo degradado, lo primero es respaldar.
