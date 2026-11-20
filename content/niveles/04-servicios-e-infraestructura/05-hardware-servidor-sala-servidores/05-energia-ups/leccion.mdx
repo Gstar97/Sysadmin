@@ -1,0 +1,97 @@
+---
+id: n4-m5-l5
+titulo: Energía y UPS
+minutos: 120
+objetivos:
+  - Diferenciar los tipos de UPS y elegir el adecuado para servidores.
+  - Calcular la potencia y la autonomía que hacen falta, sin confundir W con VA.
+  - Configurar NUT para que los servidores se apaguen ordenados antes de que se acabe la batería.
+  - Mantener y probar la UPS y sus baterías.
+glosario: [ups, nut]
+verificado: 2026-11
+---
+
+import nut from './nut.svg?raw'
+import tipos from './tipos.yaml'
+import ej from './ej-nut.yaml'
+
+Un corte de luz de dos segundos apaga de golpe un servidor sin protección: con suerte arranca bien, sin suerte queda una base de datos o un sistema de archivos dañado. La **UPS** (en español, SAI; en la calle, "la UPS") da energía desde sus baterías durante un corte. Pero tiene dos límites que conviene tener claros desde el principio: la batería dura minutos, no horas, y si nadie apaga los servidores antes de que se acabe, el resultado es el mismo apagón de golpe, solo que un rato más tarde.
+
+<AntesDeEmpezar>
+- Fuentes redundantes y PDU A y B (lecciones 4.5.1 y 4.5.4).
+- Servicios con systemd y journalctl (módulo 1.3).
+</AntesDeEmpezar>
+
+## Tipos de UPS
+
+<Emparejar ejercicio={tipos} />
+
+Además de los cortes, la red eléctrica tiene microcortes, bajas de tensión y picos (una tormenta, un motor grande que arranca en el edificio). Una UPS interactiva u online los filtra; por eso hasta un solo servidor de oficina debería tener la suya.
+
+## Cuánta UPS hace falta
+
+Las UPS se venden con dos números, por ejemplo **1500 VA / 1000 W**. Los **W** (vatios) son la potencia que realmente consumen los equipos; los **VA** (voltamperes) son tensión por corriente, y en equipos con fuentes como las de los servidores son algo más que los W. El número que manda es el de W: una UPS de 1500 VA no alimenta 1500 W.
+
+Para elegirla:
+
+1. **Sumar el consumo real** de lo que va a alimentar. El que dice la etiqueta de la fuente (por ejemplo 750 W) es el máximo; el real se mide con la placa de gestión, una PDU administrada o la misma UPS, y suele ser la mitad o menos.
+2. **No pasar del 80 %** de la capacidad en W: deja margen para los picos (cuando todos los servidores arrancan juntos) y para equipos que se agreguen.
+3. **Pedir la autonomía que hace falta para apagar todo ordenado**, más un margen, no "aguantar el corte". Si hay un generador, la que cubra hasta que arranque y tome la carga.
+
+<CalculadoraUps />
+
+## NUT: que los servidores se apaguen solos
+
+La UPS sabe cuándo se cortó la luz y cuánta batería queda, y lo informa por USB, por la red (con una placa SNMP) o por puerto serie. **NUT** (Network UPS Tools) es el software libre que lee esa información en Linux y apaga los equipos a tiempo. Está en los repositorios de Ubuntu (paquete `nut`) y de Rocky (en EPEL: `nut` y `nut-client`). Tiene tres partes:
+
+<Diagrama svg={nut} alt="Una UPS conectada por USB a srv01, el primary. En srv01, el driver (usbhid-ups) habla con la UPS según ups.conf; upsd (el servicio nut-server) publica el estado por la red, en el puerto 3493; y upsmon (nut-monitor) primary mira el estado y, con OB LB, avisa a los secondary, espera que se apaguen, se apaga y por último apaga la UPS. srv02 y srv03 tienen upsmon secondary, que pregunta a srv01 por la red (MONITOR rack1@srv01 ... secondary) y se apagan cuando avisa el primary." pie="Solo un equipo lee la UPS por USB; los demás le preguntan por la red." />
+
+- El **driver** habla con la UPS. Se configura en `ups.conf`.
+- **upsd** (el servicio `nut-server`) publica lo que informa el driver, para este equipo y para los de la red. Usuarios en `upsd.users`; para que escuche en la red, `LISTEN` en `upsd.conf`.
+- **upsmon** (el servicio `nut-monitor`) vigila el estado y apaga el equipo. Se configura en `upsmon.conf`.
+
+El estado de la UPS se lee con `upsc`: **OL** (con corriente, *on line*), **OB** (a batería, *on battery*) y **LB** (batería baja, *low battery*). Cuando aparece OB LB, upsmon apaga el equipo ordenado. `nut.conf` dice qué partes funcionan en este equipo: `standalone` (todo acá), `netserver` (todo acá y además lo publica en la red) o `netclient` (solo upsmon, que le pregunta a otro).
+
+<Terminal ejercicio={ej} />
+
+Con varios servidores en una UPS, uno es el **primary** (el que tiene el USB) y los demás son **secondary**: cuando la batería se agota, el primary avisa a todos, espera que se apaguen y recién entonces se apaga él (y, si está configurado, le ordena a la UPS que corte su salida, para que todo arranque solo cuando vuelva la luz). En Windows hay clientes de NUT (como WinNUT) y el software de cada fabricante (APC PowerChute, Eaton IPM), que cumplen el mismo papel. Con virtualización, el que se apaga es el servidor de virtualización, que antes apaga sus máquinas virtuales (Nivel 6).
+
+## Baterías y pruebas
+
+- Las baterías duran de **3 a 5 años**, y menos con calor: a partir de 25 °C, cada 8 a 10 °C más reducen su vida a la mitad. Se anota la fecha de cambio y se compran antes de que fallen. En las UPS de rack se cambian en caliente.
+- La UPS hace una **autoprueba** periódica (y se puede pedir con `upscmd`); si la batería no la pasa, lo avisa. Ese aviso se tiene que ver: alertas por correo o en el monitoreo.
+- Una vez al año, en una ventana de mantenimiento, se prueba el corte real: desenchufar la UPS y ver que los servidores se apagan solos, en orden, y que arrancan bien al volver la luz. Lo que nunca se probó, no se sabe si funciona.
+
+<EnSimple>
+La UPS da unos minutos de energía en un corte y filtra los problemas de la red eléctrica; para servidores, interactiva u online. Se elige por los W que realmente se consumen (no los VA), sin pasar del 80 %, y con la autonomía que hace falta para apagar todo ordenado. NUT lee la UPS: el driver habla con ella, upsd publica el estado y upsmon apaga el equipo cuando la batería se agota (OB LB); con varios servidores, uno es primary y los demás, secondary. Las baterías se cambian cada 3 a 5 años y el corte se prueba de verdad una vez al año.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Confundir VA con W">
+    Una UPS de 1500 VA no da 1500 W. El límite es el número en W, y conviene no pasar del 80 %.
+  </ErrorComun>
+  <ErrorComun titulo="Una UPS sin NUT ni apagado automático">
+    Cuando se acaba la batería, los servidores se apagan de golpe igual. Sin apagado automático, la UPS solo demora el problema.
+  </ErrorComun>
+  <ErrorComun titulo="Calcular con la etiqueta de la fuente">
+    La etiqueta es el máximo. Se mide el consumo real (gestión, PDU o la UPS) y se calcula con eso.
+  </ErrorComun>
+  <ErrorComun titulo="Baterías de seis años">
+    La UPS parece bien hasta el primer corte, y dura segundos. Se cambian a los 3 a 5 años y se vigila la autoprueba.
+  </ErrorComun>
+  <ErrorComun titulo="No probar nunca el corte">
+    Un usuario mal escrito en upsmon.conf o un servidor sin cliente aparecen el día del corte. Se prueba una vez al año.
+  </ErrorComun>
+  <ErrorComun titulo="El switch sin UPS">
+    Los servidores secondary se enteran del corte por la red: si el switch se apaga primero, no reciben el aviso. La red va a la UPS también.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- UPS offline, interactiva y online; para servidores, interactiva con onda senoidal u online. Generador para cortes largos.
+- Se elige por los W reales (no los VA), hasta el 80 %, con autonomía para apagar todo ordenado.
+- NUT: driver (ups.conf), upsd o nut-server (upsd.users, upsd.conf) y upsmon o nut-monitor (upsmon.conf); nut.conf con MODE.
+- upsc ups: OL con corriente, OB a batería, LB batería baja; con OB LB, upsmon apaga.
+- Un primary con el USB y los demás secondary por la red; el switch también en la UPS.
+- Baterías cada 3 a 5 años, autoprueba vigilada y un corte de prueba al año.
+</Resumen>

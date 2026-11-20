@@ -1,0 +1,70 @@
+tipo: terminal
+shell: bash
+titulo: Conectar la UPS del rack
+descripcion: >-
+  srv01 es el único servidor del rack conectado por USB a la UPS (una APC Smart-UPS 1500). NUT
+  ya está instalado. Vas a declarar la UPS, dejar que upsmon la vigile y leer qué informa. Los
+  archivos están en /etc/nut (en Rocky, en /etc/ups).
+estado_inicial:
+  distro: ubuntu
+  hostname: srv01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  paquetes: { instalados: [nut] }
+  ups: { marca: APC, modelo: Smart-UPS 1500, potencia_w: 1000, carga: 41, bateria: 100, autonomia_min: 18, estado: OL }
+pasos:
+  - consigna: Declará la UPS en /etc/nut/ups.conf con el nombre rack1, el driver usbhid-ups y port = auto.
+    verificar:
+      - { archivo: /etc/nut/ups.conf, contenido_incluye: "[rack1]" }
+      - { archivo: /etc/nut/ups.conf, contenido_incluye: "usbhid-ups" }
+    pistas:
+      - "Se agrega una sección como `[rack1]` con `driver = usbhid-ups` y `port = auto` debajo."
+      - "`printf '[rack1]\\n\\tdriver = usbhid-ups\\n\\tport = auto\\n' | sudo tee -a /etc/nut/ups.conf`"
+    solucion: ["printf '[rack1]\\n\\tdriver = usbhid-ups\\n\\tport = auto\\n' | sudo tee -a /etc/nut/ups.conf"]
+    explicacion: >-
+      usbhid-ups sirve para casi todas las UPS con USB actuales (APC, Eaton, CyberPower...). Con
+      port = auto busca la UPS en los puertos USB. Para las que se conectan por red (con placa
+      SNMP) se usa el driver snmp-ups.
+  - consigna: NUT viene apagado. Poné MODE=standalone en /etc/nut/nut.conf (la UPS, upsd y upsmon en este mismo equipo).
+    verificar:
+      - { archivo: /etc/nut/nut.conf, contenido_incluye: "MODE=standalone" }
+    pistas:
+      - "`sudo sed -i 's/^MODE=none/MODE=standalone/' /etc/nut/nut.conf`"
+    solucion: ["sudo sed -i 's/^MODE=none/MODE=standalone/' /etc/nut/nut.conf"]
+    explicacion: >-
+      standalone es una UPS y un servidor. Si otros servidores van a preguntarle a este por la
+      red, se usa netserver (y LISTEN en upsd.conf); en esos otros, netclient.
+  - consigna: Creá en /etc/nut/upsd.users el usuario monuser (clave Ups-2026, rol upsmon primary).
+    verificar:
+      - { archivo: /etc/nut/upsd.users, contenido_incluye: "password = Ups-2026" }
+    pistas:
+      - "`printf '[monuser]\\n\\tpassword = Ups-2026\\n\\tupsmon primary\\n' | sudo tee -a /etc/nut/upsd.users`"
+    solucion: ["printf '[monuser]\\n\\tpassword = Ups-2026\\n\\tupsmon primary\\n' | sudo tee -a /etc/nut/upsd.users"]
+    explicacion: >-
+      upsmon se conecta a upsd con un usuario, aunque estén en el mismo equipo. primary es el que
+      está conectado a la UPS y se apaga último; los demás servidores usan uno con rol secondary.
+  - consigna: Agregá en /etc/nut/upsmon.conf la línea que vigila rack1@localhost con ese usuario.
+    verificar:
+      - { archivo: /etc/nut/upsmon.conf, contenido_incluye: "MONITOR rack1@localhost" }
+    pistas:
+      - "El formato es `MONITOR ups@equipo cantidad usuario clave primary`."
+      - "`echo 'MONITOR rack1@localhost 1 monuser Ups-2026 primary' | sudo tee -a /etc/nut/upsmon.conf`"
+    solucion: ["echo 'MONITOR rack1@localhost 1 monuser Ups-2026 primary' | sudo tee -a /etc/nut/upsmon.conf"]
+    explicacion: >-
+      El 1 es cuántas fuentes de este servidor alimenta la UPS. SHUTDOWNCMD, en el mismo archivo,
+      es lo que ejecuta para apagar (por defecto, shutdown -h +0).
+  - consigna: Reiniciá nut-server y nut-monitor y revisá el estado de la UPS con upsc.
+    verificar:
+      - { servicio: nut-server, activo: true }
+      - { servicio: nut-monitor, activo: true }
+      - { ups_estado: OL, ups: rack1 }
+      - { comando_usado: 'upsc' }
+    pistas:
+      - "`sudo systemctl restart nut-server nut-monitor` y después `upsc rack1`"
+    solucion: ["sudo systemctl restart nut-server nut-monitor", "upsc rack1"]
+    explicacion: >-
+      ups.status OL: con corriente de la red. ups.load 41: usa el 41 % de su capacidad.
+      battery.runtime 1080: 18 minutos de autonomía con esta carga. Si se corta la luz pasa a
+      OB, y cuando la batería llega a battery.charge.low (LB), upsmon apaga el servidor. Lo que
+      falta es probarlo de verdad: en el laboratorio lo vas a hacer con una UPS simulada.

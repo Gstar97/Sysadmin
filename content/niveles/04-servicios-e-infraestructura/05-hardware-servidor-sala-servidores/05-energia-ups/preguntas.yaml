@@ -1,0 +1,96 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Se corta la luz y la UPS de los servidores dura 15 minutos. El corte dura dos horas. ¿Qué tendría que haber pasado?
+  opciones:
+    - { texto: "Que los servidores se apagaran solos, ordenados, antes de que se agotara la batería", correcta: true, explicacion: "Para eso está NUT (o el software del fabricante)." }
+    - { texto: "Nada: la UPS los protege", explicacion: "Solo por 15 minutos; después, apagón de golpe." }
+    - { texto: "Que alguien fuera a apagarlos a mano", explicacion: "Puede no haber nadie, sobre todo de noche." }
+    - { texto: "Comprar una UPS más grande", explicacion: "Ninguna batería dura horas a un precio razonable: para eso está el generador." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una UPS dice 1500 VA / 1000 W. ¿Cuánta carga conviene ponerle?
+  opciones:
+    - { texto: "Hasta unos 800 W: el 80 % de los W", correcta: true, explicacion: "Los VA no son los W, y se deja margen." }
+    - { texto: "1500 W", explicacion: "1500 son VA; en W, 1000." }
+    - { texto: "1000 W justos", explicacion: "Sin margen para picos." }
+    - { texto: "1200 W", explicacion: "Pasa su capacidad." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué tipo de UPS alimenta los equipos siempre desde el inversor, sin ningún corte al pasar a batería?
+  opciones:
+    - { texto: "Online (doble conversión)", correcta: true, explicacion: "La más cara y la que más energía gasta, la de las salas." }
+    - { texto: "Offline", explicacion: "Tiene un microcorte al pasar a batería." }
+    - { texto: "Interactiva", explicacion: "También pasa a batería con un corte muy breve." }
+    - { texto: "Cualquiera", explicacion: "Solo la online." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿En qué situación está esta UPS?
+  salida: |
+    $ upsc rack1 ups.status
+    OB
+    $ upsc rack1 battery.runtime
+    540
+  opciones:
+    - { texto: "Se cortó la luz: está a batería, con unos 9 minutos de autonomía", correcta: true, explicacion: "OB = on battery; 540 segundos." }
+    - { texto: "Todo normal", explicacion: "OL sería normal." }
+    - { texto: "La batería está baja y los servidores se están apagando", explicacion: "Eso sería OB LB." }
+    - { texto: "La UPS está apagada", explicacion: "Si estuviera apagada, upsc no podría leerla." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "¿En qué archivo de NUT se declara la UPS y su driver (por ejemplo usbhid-ups)?"
+  opciones:
+    - { texto: "ups.conf", correcta: true, explicacion: "Una sección por UPS, con driver y port." }
+    - { texto: "upsd.users", explicacion: "Ahí van los usuarios de upsd." }
+    - { texto: "upsmon.conf", explicacion: "Ahí va qué UPS vigila upsmon y cómo apaga." }
+    - { texto: "nut.conf", explicacion: "Ahí va el MODE: qué partes funcionan en este equipo." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Tres servidores en una UPS, uno con el USB. ¿Cómo se configura NUT?
+  opciones:
+    - { texto: "El del USB como primary (MODE=netserver) y los otros dos como secondary (MODE=netclient) que le preguntan por la red", correcta: true, explicacion: "El primary se apaga último." }
+    - { texto: "Los tres con usbhid-ups", explicacion: "Solo uno tiene el cable USB." }
+    - { texto: "Solo el del USB: los otros no hace falta", explicacion: "Se apagarían de golpe." }
+    - { texto: "Los tres como primary", explicacion: "Solo uno tiene la UPS." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cada cuánto se cambian las baterías de una UPS?
+  opciones:
+    - { texto: "Cada 3 a 5 años, menos si la sala es calurosa", correcta: true, explicacion: "A partir de 25 °C la vida útil baja rápido." }
+    - { texto: "Cuando dejan de funcionar", explicacion: "Te enterás en el corte." }
+    - { texto: "Cada 10 años", explicacion: "Muy pocas llegan." }
+    - { texto: "Nunca: duran lo que la UPS", explicacion: "Son lo primero que se gasta." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué significa el estado OB LB en upsc?
+  opciones:
+    - { texto: "A batería y con la batería baja: upsmon apaga los equipos", correcta: true, explicacion: "On battery, low battery." }
+    - { texto: "Con corriente y cargando", explicacion: "Eso sería OL CHRG." }
+    - { texto: "Sobrecarga", explicacion: "Sería OVER." }
+    - { texto: "Batería por cambiar", explicacion: "Sería RB (replace battery)." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El día del corte, srv02 (secondary) se apagó de golpe sin recibir el aviso, y srv01 (primary) se apagó bien. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "El switch no estaba en la UPS: srv02 perdió la red y nunca se enteró", correcta: true, explicacion: "La red también va a la UPS." }
+    - { texto: "srv02 tenía mucha batería", explicacion: "Comparten la misma UPS." }
+    - { texto: "El driver de srv02 estaba mal", explicacion: "Un secondary no usa driver." }
+    - { texto: "La UPS era muy grande", explicacion: "No tiene que ver." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuánta autonomía se le pide a la UPS si hay un generador?
+  opciones:
+    - { texto: "La suficiente para que el generador arranque y tome la carga, con margen (o para apagar todo ordenado si no arranca)", correcta: true, explicacion: "La UPS cubre el hueco; el generador, las horas." }
+    - { texto: "Varias horas", explicacion: "Eso lo da el generador." }
+    - { texto: "Ninguna", explicacion: "El generador tarda segundos en arrancar: sin UPS, se cortaría todo." }
+    - { texto: "Un día", explicacion: "No es práctico con baterías." }
