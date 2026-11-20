@@ -1,0 +1,114 @@
+---
+id: n5-m1-l3
+titulo: Ciclo de vida de una máquina virtual
+minutos: 120
+objetivos:
+  - Crear máquinas virtuales desde una plantilla o una imagen de la nube con cloud-init, en lugar de instalarlas a mano.
+  - Usar instantáneas y clones sabiendo qué son y qué no son.
+  - Cambiar los recursos de una VM y saber qué se aplica en caliente y qué necesita reiniciar.
+  - Dar de baja una VM sin dejar basura ni servicios rotos.
+glosario: [plantilla-vm, cloud-init, instantanea, clon-enlazado]
+verificado: 2026-11
+---
+
+import ciclo from './ciclo.svg?raw'
+import ej from './ej-ciclo.yaml'
+import baja from './baja.yaml'
+
+Instalar un servidor desde el ISO lleva media hora de pantallas y preguntas, y cada instalación termina un poco distinta de la anterior. Con máquinas virtuales no hace falta: se prepara una vez una **plantilla** y cada servidor nuevo sale de ahí en un minuto, igual a los demás. Esta lección recorre la vida completa de una VM, desde que nace hasta que se borra, que es la parte que más se olvida.
+
+<AntesDeEmpezar>
+- Recursos virtuales: vCPU, memoria y discos (lección 5.1.2).
+- Claves SSH (lección 1.6.2).
+- YAML (lo viste con Netplan en la lección 2.3.4).
+</AntesDeEmpezar>
+
+<Diagrama svg={ciclo} alt="La vida de una VM en cinco pasos: 1, la plantilla (imagen de la nube o VM generalizada, sin nombre, claves ni machine-id); 2, crear (clon completo o enlazado, más cloud-init en el primer arranque: nombre, usuarios, red y paquetes); 3, operar (parchear y respaldar, instantánea antes de un cambio y borrarla después, ajustar CPU, memoria y disco); 4, mover a otro host en frío o en vivo, y volver a operar; 5, dar de baja (respaldo final, borrar discos, sacarla del DNS, del monitoreo y de la documentación). Abajo, los discos de un clon enlazado con una instantánea: la base de la plantilla, de solo lectura; el disco de web01 con las diferencias; y el de después de la instantánea, con lo nuevo. Cada uno busca en el anterior lo que no tiene." pie="Si falla un archivo de la cadena, falla la VM: una instantánea no es un respaldo." />
+
+## Crear: plantillas e imágenes de la nube
+
+Hay dos caminos:
+
+- **Imágenes de la nube.** Ubuntu, Debian, Rocky y casi todas las distribuciones publican imágenes ya instaladas, mínimas, pensadas para crear VM (ubuntu-24.04-server-cloudimg, Rocky-10-GenericCloud). Pesan unos cientos de MB y no tienen usuarios ni nombre: eso lo pone cloud-init al primer arranque.
+- **Plantillas propias.** Una VM instalada y configurada a tu gusto (con el agente del hipervisor, el monitoreo, la configuración de la empresa) que después se **generaliza**: se le borra lo que tiene que ser único en cada servidor (el nombre, las claves SSH del servidor, el `/etc/machine-id`, las IP) y se convierte en plantilla. En Linux, `cloud-init clean` y `virt-sysprep` lo hacen; en Windows, `sysprep /generalize`. Si no se generaliza, todos los clones tienen el mismo machine-id y las mismas claves: el DHCP les da la misma IP y SSH avisa de un cambio de clave.
+
+Una plantilla tiene que mantenerse: si tiene un año, cada VM nueva arranca con un año de parches pendientes. Se actualiza todos los meses (en el Nivel 6 se automatiza con Packer y Ansible).
+
+## cloud-init
+
+**cloud-init** es el programa que, al primer arranque, lee la configuración que le pasa el hipervisor (o la nube) y prepara el servidor. Se usa en Proxmox, en libvirt, en Hyper-V, en VMware y en todas las nubes públicas, así que lo que aprendas acá sirve para todo. El archivo principal es el **user-data**:
+
+```yaml
+#cloud-config
+hostname: app01
+users:
+  - name: ana
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAA... ana@pc
+package_update: true
+packages: [qemu-guest-agent]
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+```
+
+Además están el **meta-data** (el identificador de la instancia) y el **network-config** (la red, si no es por DHCP). Corre solo la primera vez: si cambiás el user-data después, no pasa nada (salvo que reinicies cloud-init). Los errores se ven en `/var/log/cloud-init.log` y con `cloud-init status --long`.
+
+<Terminal ejercicio={ej} />
+
+## Instantáneas y clones
+
+Una **instantánea** congela el disco (y, si se pide, la memoria) en un momento, y lo que viene después se escribe en un archivo aparte. Sirve para volver atrás en segundos si un cambio sale mal. Tres cosas que no hay que olvidar:
+
+- **No es un respaldo**: vive en el mismo almacenamiento que la VM. Si se rompe el disco, se pierden la VM y la instantánea juntas.
+- **Se borra después**: cada instantánea es una capa más que hay que leer, el disco crece y la VM se vuelve más lenta. Una instantánea de hace tres meses es un problema, no una red de seguridad. Al borrarla, los cambios se consolidan en el disco.
+- **Con bases de datos, cuidado**: volver a una instantánea vuelve todo, incluidas las transacciones de después. Para eso están los respaldos de la base (módulo 4.3).
+
+Un **clon** es una VM nueva a partir de otra o de una plantilla. Un clon **completo** copia todo el disco y es independiente. Un clon **enlazado** usa la plantilla como base y guarda solo las diferencias: se crea en un segundo y ocupa poco, pero depende de la plantilla, que no se puede borrar mientras tenga clones.
+
+## Operar: cambiar los recursos
+
+Casi todo se puede cambiar, pero no todo en caliente:
+
+- **Memoria**: bajarla hasta el máximo con el globo, en caliente. Subir el máximo, al reiniciar (salvo que esté activa la memoria "hotplug").
+- **vCPU**: agregar en caliente solo hasta el máximo configurado y si el sistema lo soporta; en general, se cambia y se reinicia.
+- **Disco**: agrandar en caliente casi siempre (y después, adentro, agrandar la partición y el sistema de archivos, como en la lección 1.4.5). Achicar, casi nunca: se crea uno nuevo y se copian los datos.
+- **Red**: agregar o cambiar una placa, en caliente.
+
+## Dar de baja
+
+<Ordenar ejercicio={baja} />
+
+Las VM se crean en un minuto y nadie se acuerda de borrarlas. Al año aparecen decenas de **VM huérfanas**: nadie sabe de quién son, ocupan memoria y disco, y no tienen parches. Para que no pase: cada VM con un nombre que diga qué es, una descripción o etiqueta con el dueño y el proyecto, y una revisión cada tantos meses.
+
+<EnSimple>
+Una VM nace de una plantilla o una imagen de la nube y cloud-init le pone nombre, usuarios, claves y red al primer arranque. Las instantáneas sirven para volver atrás en un cambio, se borran después y no son respaldos. Los clones completos son independientes; los enlazados dependen de la plantilla. La memoria y el disco se agrandan en caliente; las vCPU, en general, al reiniciar. Y al final se da de baja con orden: confirmar, apagar, respaldar, borrar y limpiar el DNS, el monitoreo y la documentación.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Clonar una VM sin generalizarla">
+    Todos los clones con el mismo machine-id y las mismas claves: el DHCP les da la misma IP y SSH se queja. cloud-init clean o virt-sysprep antes de hacer la plantilla.
+  </ErrorComun>
+  <ErrorComun titulo="Usar instantáneas como respaldo">
+    Están en el mismo almacenamiento: si se pierde el disco, se pierde todo. El respaldo va a otro lado (módulo 5.6).
+  </ErrorComun>
+  <ErrorComun titulo="Instantáneas olvidadas">
+    Crecen sin parar y frenan la VM. Una instantánea es para un cambio puntual: se borra cuando el cambio salió bien.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse #cloud-config">
+    Sin esa primera línea, cloud-init no lee el archivo y la VM arranca sin usuario ni claves.
+  </ErrorComun>
+  <ErrorComun titulo="Borrar la plantilla de un clon enlazado">
+    El clon guarda solo sus diferencias: sin la base, no arranca. Por eso el hipervisor no deja borrarla.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Crear desde una imagen de la nube o una plantilla propia generalizada (cloud-init clean, virt-sysprep, sysprep), y mantenerla actualizada.
+- cloud-init: user-data con #cloud-config (hostname, users, ssh_authorized_keys, packages, runcmd), corre solo en el primer arranque.
+- Instantánea: para volver atrás en un cambio; se borra después; no es respaldo.
+- Clon completo (independiente) o enlazado (rápido, depende de la plantilla).
+- Memoria y disco se agrandan en caliente; vCPU, en general, al reiniciar; achicar un disco, casi nunca.
+- Dar de baja con orden y con dueño y etiquetas en cada VM, para que no queden huérfanas.
+</Resumen>

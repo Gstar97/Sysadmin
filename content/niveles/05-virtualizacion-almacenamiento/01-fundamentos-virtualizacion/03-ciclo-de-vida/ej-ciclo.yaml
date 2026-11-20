@@ -1,0 +1,93 @@
+tipo: terminal
+shell: bash
+titulo: De la imagen de la nube a la baja
+descripcion: >-
+  En kvm01 ya está descargada la imagen de nube de Ubuntu 24.04 en
+  /var/lib/libvirt/images/noble-server-cloudimg-amd64.img, y tu clave pública en
+  ~/.ssh/id_ed25519.pub. Vas a crear app01 en un minuto, sin instalar nada a mano, sacarle una
+  instantánea antes de un cambio y, al final, darla de baja sin dejar basura.
+estado_inicial:
+  distro: ubuntu
+  hostname: kvm01
+  usuario: ana
+  usuarios:
+    - { nombre: ana, sudo: true }
+  equipo: { cpus: 8, memoria_gb: 32, vmx: true }
+  paquetes: { instalados: [qemu-kvm, libvirt-daemon-system, virtinst] }
+  imagenes_disco:
+    - { ruta: /var/lib/libvirt/images/noble-server-cloudimg-amd64.img, formato: qcow2, virtual_gb: 3.5, disco_gb: 0.58 }
+  archivos:
+    /home/ana/.ssh/id_ed25519.pub: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK8z ana@pc\n"
+pasos:
+  - consigna: >-
+      Escribí ~/app01.yaml, el user-data de cloud-init: que empiece con #cloud-config, ponga el
+      nombre app01 y cree la usuaria ana con sudo y tu clave pública.
+    verificar:
+      - { archivo: /home/ana/app01.yaml, contenido_incluye: '#cloud-config' }
+      - { archivo: /home/ana/app01.yaml, contenido_incluye: 'hostname: app01' }
+      - { archivo: /home/ana/app01.yaml, contenido_incluye: 'ssh_authorized_keys' }
+    pistas:
+      - "La primera línea es `#cloud-config`; después `hostname: app01` y una lista `users:` con `- name: ana`, `sudo: ALL=(ALL) NOPASSWD:ALL` y `ssh_authorized_keys:`."
+      - "`printf '#cloud-config\\nhostname: app01\\nusers:\\n  - name: ana\\n    sudo: ALL=(ALL) NOPASSWD:ALL\\n    shell: /bin/bash\\n    ssh_authorized_keys:\\n      - %s\\n' \"$(cat ~/.ssh/id_ed25519.pub)\" > ~/app01.yaml`"
+    solucion:
+      - "printf '#cloud-config\\nhostname: app01\\nusers:\\n  - name: ana\\n    sudo: ALL=(ALL) NOPASSWD:ALL\\n    shell: /bin/bash\\n    ssh_authorized_keys:\\n      - %s\\n' \"$(cat ~/.ssh/id_ed25519.pub)\" > ~/app01.yaml"
+    explicacion: >-
+      La línea #cloud-config no es un comentario cualquiera: si falta, cloud-init ignora el
+      archivo entero. Corre una sola vez, en el primer arranque.
+  - consigna: >-
+      Creá el disco de app01 como un qcow2 de 20 GB que use la imagen de nube como base
+      (/var/lib/libvirt/images/app01.qcow2).
+    verificar:
+      - { imagen_disco: /var/lib/libvirt/images/app01.qcow2, respaldo: noble-server-cloudimg-amd64.img, tamano_virtual_gb: 20 }
+    pistas:
+      - "`sudo qemu-img create -f qcow2 -b noble-server-cloudimg-amd64.img -F qcow2 /var/lib/libvirt/images/app01.qcow2 20G` (con la base en la misma carpeta, como ruta relativa)."
+    solucion: ["sudo qemu-img create -f qcow2 -b noble-server-cloudimg-amd64.img -F qcow2 /var/lib/libvirt/images/app01.qcow2 20G"]
+    explicacion: >-
+      La base queda intacta y la puede usar cualquier otra VM; app01.qcow2 guarda solo sus
+      diferencias. Con la ruta relativa, la carpeta se puede mover entera sin romper la cadena.
+  - consigna: >-
+      Creá la VM app01 (2 vCPU, 2048 MiB) importando ese disco, con osinfo ubuntu24.04, la red
+      default y el user-data de cloud-init, sin quedarte en la consola. Después entrá a la consola
+      para ver que se llama app01.
+    verificar:
+      - { dominio: app01, estado: running, vcpus: 2, memoria_mb: 2048 }
+      - { salida_contiene: 'app01 login' }
+    pistas:
+      - "`sudo virt-install --name app01 --memory 2048 --vcpus 2 --disk /var/lib/libvirt/images/app01.qcow2 --import --osinfo ubuntu24.04 --network network=default --cloud-init user-data=$HOME/app01.yaml --noautoconsole` y `sudo virsh console app01`."
+    solucion:
+      - sudo virt-install --name app01 --memory 2048 --vcpus 2 --disk /var/lib/libvirt/images/app01.qcow2 --import --osinfo ubuntu24.04 --network network=default --cloud-init user-data=/home/ana/app01.yaml --noautoconsole
+      - sudo virsh console app01
+    explicacion: >-
+      En un minuto hay un servidor con nombre, usuaria, clave y red. Para la próxima, cambiás el
+      nombre en el user-data y repetís: así se arman diez servidores iguales sin errores de
+      tipeo. En Proxmox lo vas a hacer con una plantilla y qm clone.
+  - consigna: >-
+      Vas a actualizar app01. Sacale antes una instantánea llamada antes-de-actualizar y
+      listalas.
+    verificar:
+      - { dominio: app01, instantanea: antes-de-actualizar }
+      - { salida_contiene: 'antes-de-actualizar' }
+    pistas:
+      - "`sudo virsh snapshot-create-as app01 antes-de-actualizar` y `sudo virsh snapshot-list app01`."
+    solucion:
+      - sudo virsh snapshot-create-as app01 antes-de-actualizar
+      - sudo virsh snapshot-list app01
+    explicacion: >-
+      Si la actualización sale mal, snapshot-revert vuelve al estado de antes en segundos. Si
+      sale bien, se borra: una instantánea que queda meses hace crecer el disco y frena la VM.
+  - consigna: >-
+      El proyecto terminó. Dale de baja a app01: apagala, borrá su definición (con sus
+      instantáneas) y sus discos, pero dejá la imagen de nube para las próximas VM.
+    verificar:
+      - { dominio: app01, existe: false }
+      - { archivo: /var/lib/libvirt/images/app01.qcow2, existe: false }
+      - { imagen_disco: /var/lib/libvirt/images/noble-server-cloudimg-amd64.img }
+    pistas:
+      - "`sudo virsh destroy app01` y `sudo virsh undefine app01 --snapshots-metadata --remove-all-storage`."
+    solucion:
+      - sudo virsh destroy app01
+      - sudo virsh undefine app01 --snapshots-metadata --remove-all-storage
+    explicacion: >-
+      --remove-all-storage borra los discos de la VM (app01.qcow2), no la base, que no es suya.
+      En un equipo real, antes va un respaldo final, y después hay que sacarla del DNS, del
+      monitoreo y de la documentación: una VM olvidada sigue ocupando lugar y sin parches.

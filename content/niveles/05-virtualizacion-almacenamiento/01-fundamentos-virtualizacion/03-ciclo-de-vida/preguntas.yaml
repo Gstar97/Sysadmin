@@ -1,0 +1,89 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace cloud-init?
+  opciones:
+    - { texto: "En el primer arranque, prepara el servidor con la configuración que le pasa el hipervisor: nombre, usuarios, claves, red, paquetes", correcta: true, explicacion: "Se usa en todos los hipervisores y nubes." }
+    - { texto: "Respalda la VM en la nube", explicacion: "No es un respaldo." }
+    - { texto: "Instala el hipervisor", explicacion: "Corre adentro de la VM." }
+    - { texto: "Corre en cada arranque y aplica los cambios", explicacion: "Solo la primera vez." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Clonaste diez VM de una sin generalizar y el DHCP les da la misma IP a varias. ¿Por qué?
+  opciones:
+    - { texto: "Tienen el mismo /etc/machine-id, y el DHCP lo usa para identificarlas", correcta: true, explicacion: "Antes de hacer una plantilla se generaliza." }
+    - { texto: "Tienen la misma MAC", explicacion: "El hipervisor genera una MAC nueva en cada clon." }
+    - { texto: "El DHCP está mal configurado", explicacion: "El problema es la plantilla." }
+    - { texto: "Por la virtualización anidada", explicacion: "No tiene que ver." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Por qué una instantánea no es un respaldo?
+  opciones:
+    - { texto: "Porque vive en el mismo almacenamiento que la VM: si se pierde el disco, se pierden las dos", correcta: true, explicacion: "Un respaldo va a otro lado." }
+    - { texto: "Porque no se puede volver a ella", explicacion: "Se puede, en segundos." }
+    - { texto: "Porque no guarda el disco", explicacion: "Lo guarda." }
+    - { texto: "Sí es un respaldo", explicacion: "No lo es." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una VM tiene una instantánea de hace cinco meses. ¿Qué problema puede traer?
+  opciones:
+    - { texto: "El archivo de cambios creció mucho y la VM es más lenta; hay que borrarla (consolidar)", correcta: true, explicacion: "Una instantánea es para un cambio puntual." }
+    - { texto: "Ninguno", explicacion: "Crece y frena." }
+    - { texto: "Se borra sola", explicacion: "No." }
+    - { texto: "Protege mejor a la VM", explicacion: "No reemplaza al respaldo." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la diferencia entre un clon completo y uno enlazado?
+  opciones:
+    - { texto: "El completo copia todo el disco y es independiente; el enlazado guarda solo diferencias y depende de la plantilla", correcta: true, explicacion: "Por eso la plantilla no se puede borrar mientras tenga clones enlazados." }
+    - { texto: "El enlazado es más lento de crear", explicacion: "Es casi instantáneo." }
+    - { texto: "El completo comparte la memoria", explicacion: "No." }
+    - { texto: "Ninguna", explicacion: "Son muy distintos." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí la primera línea obligatoria de un user-data de cloud-init.
+  aceptadas: ["#cloud-config"]
+  explicacion: "Sin esa línea, cloud-init ignora el archivo."
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué se borra al generalizar una VM para usarla de plantilla? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "El /etc/machine-id", correcta: true, explicacion: "Tiene que ser único en cada servidor." }
+    - { texto: "Las claves SSH del servidor", correcta: true, explicacion: "Si no, todos los clones tienen la misma." }
+    - { texto: "El nombre y las IP fijas", correcta: true, explicacion: "Los pone cloud-init." }
+    - { texto: "El sistema operativo", explicacion: "Eso queda: es lo que se reutiliza." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué cambio de recursos casi nunca se hace sobre una VM?
+  opciones:
+    - { texto: "Achicar un disco", correcta: true, explicacion: "Se crea uno nuevo y se copian los datos." }
+    - { texto: "Agrandar un disco", explicacion: "Se hace en caliente casi siempre." }
+    - { texto: "Bajarle la memoria con el globo", explicacion: "Se hace en caliente." }
+    - { texto: "Agregarle una placa de red", explicacion: "También en caliente." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená cómo se crea una VM desde una imagen de nube con libvirt.
+  pasos:
+    - Escribir el user-data con #cloud-config
+    - Crear el disco qcow2 con la imagen como base (qemu-img create -b)
+    - Crear la VM con virt-install --import y --cloud-init
+    - Entrar por la consola o por SSH y comprobar el nombre y el usuario
+  explicacion: "Para la próxima VM, se cambia el user-data y se repite."
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Qué evita las VM huérfanas que nadie sabe de quién son?
+  opciones:
+    - { texto: "Que cada VM tenga nombre claro, dueño y proyecto anotados, y revisarlas cada tantos meses", correcta: true, explicacion: "Y darlas de baja con orden." }
+    - { texto: "Hacer más instantáneas", explicacion: "No ayuda." }
+    - { texto: "Comprar más almacenamiento", explicacion: "Solo posterga el problema." }
+    - { texto: "No crear VM", explicacion: "No es la idea." }
