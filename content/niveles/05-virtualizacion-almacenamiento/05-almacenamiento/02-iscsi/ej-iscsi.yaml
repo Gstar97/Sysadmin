@@ -1,0 +1,120 @@
+tipo: terminal
+shell: bash
+titulo: Un LUN de san01 para el clúster
+descripcion: >-
+  san01 (192.168.10.60, Ubuntu Server 24.04) tiene un disco nuevo de 500 GB (/dev/sdb) y ya tiene
+  targetcli instalado. pve01 (.21) y pve02 (.22) forman el clúster "produccion" y no tienen
+  almacenamiento compartido. Vas a convertir ese disco en un LUN y a usarlo desde los dos nodos
+  con LVM compartido. Desde san01 entrás por ssh como root a los dos nodos.
+estado_inicial:
+  distro: ubuntu
+  hostname: san01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [targetcli-fb] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.60/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  discos: [{ nombre: sdb, tamano: 500G }]
+  servidores:
+    - { hostname: pve01, ip: 192.168.10.21, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription, cluster: produccion } }
+    - { hostname: pve02, ip: 192.168.10.22, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription, cluster: produccion } }
+pasos:
+  - consigna: >-
+      Cada cliente iSCSI tiene un nombre propio, y el servidor solo deja entrar a los que conoce.
+      Mirá el nombre de iniciador de pve01 y el de pve02.
+    verificar:
+      - { comando_usado: "initiatorname.iscsi" }
+    pistas:
+      - "Está en /etc/iscsi/initiatorname.iscsi de cada nodo."
+      - "ssh root@pve01 cat /etc/iscsi/initiatorname.iscsi"
+    solucion:
+      - ssh root@pve01 cat /etc/iscsi/initiatorname.iscsi
+      - ssh root@pve02 cat /etc/iscsi/initiatorname.iscsi
+    explicacion: >-
+      El nombre (IQN) tiene la forma iqn.AÑO-MES.dominio-al-revés:algo. Proxmox lo genera al
+      instalar open-iscsi y no conviene cambiarlo. Copialos: los vas a necesitar en el paso
+      siguiente.
+  - consigna: >-
+      En san01, creá el backstore "lun0" con /dev/sdb, el destino
+      iqn.2026-11.lan.empresa:san01 con ese LUN, y dale permiso (ACL) a pve01. Por ahora, solo a
+      pve01.
+    verificar:
+      - { iscsi_destino: "iqn.2026-11.lan.empresa:san01", luns: 1, permite: "iqn.1993-08.org.debian:01:ed776cf752ff" }
+    pistas:
+      - "targetcli /backstores/block create name=lun0 dev=/dev/sdb"
+      - "targetcli /iscsi create iqn.2026-11.lan.empresa:san01"
+      - "targetcli /iscsi/iqn.2026-11.lan.empresa:san01/tpg1/luns create /backstores/block/lun0"
+      - "targetcli /iscsi/iqn.2026-11.lan.empresa:san01/tpg1/acls create IQN-DE-PVE01"
+    solucion:
+      - targetcli /backstores/block create name=lun0 dev=/dev/sdb
+      - targetcli /iscsi create iqn.2026-11.lan.empresa:san01
+      - targetcli /iscsi/iqn.2026-11.lan.empresa:san01/tpg1/luns create /backstores/block/lun0
+      - targetcli /iscsi/iqn.2026-11.lan.empresa:san01/tpg1/acls create iqn.1993-08.org.debian:01:ed776cf752ff
+      - targetcli ls
+    explicacion: >-
+      Tres capas: el backstore dice de dónde salen los datos (un disco entero, o un archivo con
+      fileio), el LUN lo expone dentro del destino, y la ACL dice quién puede entrar. targetcli ls
+      muestra el árbol entero. El portal quedó escuchando en todas las IP (0.0.0.0:3260): en
+      producción conviene limitarlo a la IP de la red de almacenamiento.
+  - consigna: >-
+      En pve01, agregá el destino como almacenamiento iSCSI "san01" (sin contenido propio), armá el
+      VG "vg_san" sobre el disco nuevo y agregalo como almacenamiento LVM compartido "san-lvm" para
+      discos de VM.
+    verificar:
+      - { en: pve01, verificar: { pve_almacenamiento: san-lvm, tipo: lvm, activo: true } }
+    pistas:
+      - "ssh root@pve01 pvesm add iscsi san01 --portal 192.168.10.60 --target iqn.2026-11.lan.empresa:san01 --content none"
+      - "El disco aparece como /dev/sdb en pve01 (miralo con lsblk): pvcreate y vgcreate."
+      - "ssh root@pve01 pvesm add lvm san-lvm --vgname vg_san --shared 1 --content images"
+    solucion:
+      - ssh root@pve01 pvesm add iscsi san01 --portal 192.168.10.60 --target iqn.2026-11.lan.empresa:san01 --content none
+      - ssh root@pve01 lsblk
+      - ssh root@pve01 pvcreate /dev/sdb
+      - ssh root@pve01 vgcreate vg_san /dev/sdb
+      - ssh root@pve01 pvesm add lvm san-lvm --vgname vg_san --shared 1 --content images
+    explicacion: >-
+      El almacenamiento iSCSI solo hace que el nodo inicie sesión; con --content none no guarda
+      nada directo en el LUN. Encima va LVM: cada disco de VM es un volumen lógico, y --shared 1
+      le avisa a Proxmox que todos los nodos ven el mismo VG, así que es él el que se encarga de
+      que un volumen lo use un solo nodo a la vez. Como la configuración de almacenamientos es
+      del clúster, pve02 ya tiene san01 y san-lvm en su lista.
+  - consigna: >-
+      Mirá el estado de los almacenamientos en pve02. Algo no anda: encontrá por qué y arreglalo
+      desde san01 (sin olvidarte de que la configuración de targetcli sobreviva a un reinicio).
+    verificar:
+      - { en: pve02, verificar: { pve_almacenamiento: san-lvm, activo: true } }
+      - { iscsi_destino: "iqn.2026-11.lan.empresa:san01", permite: "iqn.1993-08.org.debian:01:db7094dc1d3a", guardado: true }
+    pistas:
+      - "ssh root@pve02 pvesm status: san01 y san-lvm aparecen inactive."
+      - "pve02 no está en la ACL del destino: ssh root@pve02 iscsiadm -m session no muestra nada."
+      - "targetcli .../tpg1/acls create IQN-DE-PVE02 y después targetcli saveconfig."
+    solucion:
+      - ssh root@pve02 pvesm status
+      - targetcli /iscsi/iqn.2026-11.lan.empresa:san01/tpg1/acls create iqn.1993-08.org.debian:01:db7094dc1d3a
+      - targetcli saveconfig
+      - ssh root@pve02 pvesm status
+      - ssh root@pve02 vgs
+    explicacion: >-
+      Es el olvido más común al sumar un nodo: la configuración de Proxmox se copia sola, pero
+      la ACL del servidor iSCSI no. Apenas pve02 tiene permiso, inicia sesión, ve el disco y
+      encuentra el mismo vg_san que armó pve01 (LVM lee sus datos del propio disco). Y sin
+      saveconfig, el próximo reinicio de san01 deja a los dos nodos sin disco.
+  - consigna: >-
+      Comprobalo con una VM: creá en pve01 la VM 200 "app01" (2 GB de memoria, disco de 16 GB en
+      san-lvm, red en vmbr0), arrancala y migrala en vivo a pve02.
+    verificar:
+      - { en: pve01, verificar: { pve_vm: 200, nodo: pve02, estado: running } }
+    pistas:
+      - "ssh root@pve01 qm create 200 --name app01 --memory 2048 --scsi0 san-lvm:16 --net0 virtio,bridge=vmbr0"
+      - "ssh root@pve01 qm migrate 200 pve02 --online"
+    solucion:
+      - ssh root@pve01 qm create 200 --name app01 --memory 2048 --scsi0 san-lvm:16 --net0 virtio,bridge=vmbr0
+      - ssh root@pve01 qm start 200
+      - ssh root@pve01 qm migrate 200 pve02 --online
+    explicacion: >-
+      La migración solo copió la memoria: el disco ya estaba en el LUN que ven los dos. Eso es lo
+      que da un almacenamiento compartido. Lo que no da es protección del disco: si san01 se
+      apaga, se apagan todas las VM. Por eso una SAN seria tiene dos controladoras y dos caminos
+      de red (multipath).

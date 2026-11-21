@@ -1,0 +1,39 @@
+tipo: diagrama
+titulo: Las piezas de iSCSI
+puntos:
+  - id: backstore
+    titulo: Disco y backstore
+    area: { x: 5.8, y: 20.5, ancho: 26.7, alto: 27.9 }
+    texto: >-
+      El backstore es de dónde salen los datos del LUN: un disco entero (block, lo más rápido),
+      un volumen LVM o un archivo grande (fileio, cómodo para pruebas). En una SAN comercial esto
+      lo hace la propia caja, con sus discos en RAID.
+  - id: destino
+    titulo: El destino (target)
+    area: { x: 4.7, y: 56.3, ancho: 29, alto: 33.7 }
+    texto: >-
+      El destino tiene un nombre único (IQN), uno o más LUN y una lista de iniciadores permitidos
+      (ACL). Escucha en el puerto TCP 3260. Se puede sumar usuario y clave (CHAP), pero la
+      protección de verdad es que la red de almacenamiento esté aislada.
+  - id: red
+    titulo: La red de almacenamiento
+    area: { x: 38.4, y: 26, ancho: 23, alto: 63 }
+    texto: >-
+      iSCSI viaja por Ethernet común, pero no conviene mezclarlo con el tráfico de los usuarios:
+      una VLAN o, mejor, placas y switches propios, de 10 Gbps o más. Con dos placas y dos caminos
+      (multipath) se sobrevive a un cable o un switch caído; lo vas a ver más adelante.
+  - id: iniciadores
+    titulo: Los iniciadores (initiators)
+    area: { x: 65.1, y: 18.4, ancho: 30.8, alto: 24.2 }
+    texto: >-
+      Cada cliente tiene su propio IQN en /etc/iscsi/initiatorname.iscsi (en Windows, lo muestra
+      Get-InitiatorPort). Descubre los destinos de un servidor, inicia sesión y ve un disco nuevo:
+      /dev/sdb en Linux, un disco desconectado en Windows.
+  - id: lvm
+    titulo: LVM compartido
+    area: { x: 65.1, y: 62.1, ancho: 30.8, alto: 27.9 }
+    texto: >-
+      Los dos nodos ven el mismo disco, así que no se puede formatear con ext4 y montar en los dos.
+      Proxmox pone LVM encima: cada disco de VM es un volumen lógico y Proxmox se asegura de que
+      lo use un solo nodo a la vez. La contra: LVM común no tiene instantáneas en este modo
+      (Proxmox 9 las agregó como función en prueba).

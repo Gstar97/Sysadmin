@@ -1,0 +1,73 @@
+---
+id: n5-m5-l2
+titulo: "iSCSI: discos por la red"
+minutos: 150
+objetivos:
+  - Entender las piezas de iSCSI (destino, LUN, backstore, ACL, iniciador) y cómo se conectan.
+  - Crear un destino en Linux con targetcli y usarlo desde Proxmox con LVM compartido.
+  - Reconocer los errores típicos (la ACL que falta, la configuración sin guardar, la red compartida).
+glosario: [iscsi, iqn, lun, multipath]
+verificado: 2026-11
+---
+
+import iscsi from './iscsi.svg?raw'
+import iscsiDatos from './iscsi.yaml'
+import ejIscsi from './ej-iscsi.yaml'
+
+iSCSI es la forma más común de tener una SAN sin gastar en Fibre Channel: los comandos que normalmente viajan por el cable SATA o SAS del disco viajan dentro de TCP, por la red Ethernet. Un servidor (el destino) presenta discos y otro (el iniciador) los usa como si estuvieran adentro suyo. En esta lección vas a armar las dos puntas con Linux y a darle a un clúster de Proxmox su primer almacenamiento compartido de bloques.
+
+<AntesDeEmpezar>
+- LVM: PV, VG y LV (lección 1.4.5).
+- Qué es un LUN y por qué un disco compartido necesita coordinación (lección 5.5.1).
+- Clúster de Proxmox y migración en vivo (lecciones 5.4.2 y 5.4.3).
+</AntesDeEmpezar>
+
+## Las piezas
+
+<DiagramaInteractivo datos={iscsiDatos} svg={iscsi} alt="A la izquierda, san01, el destino: el disco /dev/sdb de 500 GB se convierte en el backstore lun0, que el destino iqn.2026-11.lan.empresa:san01 expone como LUN 0, con una lista de permitidos que incluye a pve01 y pve02 y un portal en el puerto 3260. En el medio, la red de almacenamiento: TCP 3260, red propia, 10 Gbps o más. A la derecha, los iniciadores pve01 y pve02, cada uno con su nombre iqn, ven el disco como /dev/sdb; abajo, el LVM compartido vg_san, donde cada disco de VM es un volumen lógico y Proxmox decide qué nodo usa cada uno." />
+
+Los nombres en iSCSI son largos pero tienen lógica. Un **IQN** se arma con `iqn.`, el año y mes en que se registró el dominio, el dominio al revés y un nombre a elección: `iqn.2026-11.lan.empresa:san01`. Lo tienen los destinos y también los iniciadores, y es lo que el destino mira para decidir quién entra.
+
+El camino completo:
+
+1. En el servidor: un **backstore** (el disco o archivo de donde salen los datos), un **destino** con un IQN, un **LUN** que lo expone y una **ACL** con los iniciadores permitidos.
+2. En el cliente: **descubrir** qué destinos ofrece el servidor (`iscsiadm -m discovery -t sendtargets -p IP`) e **iniciar sesión** (`iscsiadm -m node -T IQN --login`). Aparece un disco nuevo en `lsblk`.
+3. En Proxmox, el paso 2 lo hace solo: `pvesm add iscsi` inicia sesión en cada nodo del clúster.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejIscsi} />
+
+## Lo que conviene saber antes de usarlo en serio
+
+- **Guardá la configuración.** targetcli trabaja en memoria: sin `targetcli saveconfig`, un reinicio del servidor borra los destinos y los nodos se quedan sin discos. En la distribución de Ubuntu, el servicio que la vuelve a cargar al arrancar es `rtslib-fb-targetctl`; en Rocky, `target`.
+- **Red propia.** iSCSI tolera mal la pérdida de paquetes y las demoras: si comparte el enlace con los usuarios o con corosync, todo anda lento y el clúster se pone nervioso. VLAN propia como mínimo; placas propias, mejor. Las tramas grandes (jumbo frames, MTU 9000) ayudan, pero solo si están configuradas igual en las dos puntas y en el switch.
+- **Dos caminos.** Una SAN de verdad tiene dos controladoras y cada servidor llega por dos redes distintas; `multipathd` junta los dos caminos en un solo disco y, si uno se corta, sigue por el otro. Es un tema para más adelante, pero tenelo en cuenta: con un solo cable, un switch que se reinicia deja a todas las VM sin disco.
+- **Usuario y clave.** iSCSI admite CHAP (usuario y clave por destino), y conviene usarlo, pero no reemplaza a una red aislada: el tráfico viaja sin cifrar.
+- **En Windows** el iniciador viene incluido: se arranca el servicio MSiSCSI, se agrega el portal con `New-IscsiTargetPortal`, se conecta con `Connect-IscsiTarget -IsPersistent $true` y el disco aparece desconectado hasta que lo ponés en línea. Lo vas a hacer en el laboratorio del módulo.
+
+<EnSimple>
+iSCSI manda los comandos del disco por la red. El servidor (destino) presenta un disco como LUN y solo deja entrar a los clientes de su lista (ACL), que se reconocen por su nombre IQN. El cliente (iniciador) descubre el destino, inicia sesión y ve un disco nuevo. En un clúster de Proxmox, encima va LVM compartido. Lo que no hay que olvidar: la ACL de cada nodo, guardar la configuración y darle una red propia.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Sumar un nodo y olvidarse de la ACL">
+    La configuración de Proxmox llega sola al nodo nuevo, pero el servidor iSCSI no lo conoce: el almacenamiento aparece inactive y las VM no pueden migrar ahí.
+  </ErrorComun>
+  <ErrorComun titulo="No guardar la configuración de targetcli">
+    Todo funciona hasta el primer reinicio del servidor, y ahí se caen todas las VM a la vez.
+  </ErrorComun>
+  <ErrorComun titulo="Formatear el LUN con ext4 y montarlo en dos nodos">
+    Corrompe el sistema de archivos. Para compartirlo, LVM compartido (o un sistema de archivos de clúster).
+  </ErrorComun>
+  <ErrorComun titulo="iSCSI por la red de los usuarios o de corosync">
+    El tráfico de disco ahoga al resto. Red propia, y la de corosync, aparte.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Destino: backstore, IQN, LUN, ACL y portal en el puerto 3260 (targetcli en Linux).
+- Iniciador: su IQN en /etc/iscsi/initiatorname.iscsi; descubrir y luego iniciar sesión (iscsiadm).
+- En Proxmox: `pvesm add iscsi` y LVM compartido encima (`--shared 1`).
+- `targetcli saveconfig`, una ACL por nodo, red propia y, en serio, dos caminos (multipath).
+</Resumen>

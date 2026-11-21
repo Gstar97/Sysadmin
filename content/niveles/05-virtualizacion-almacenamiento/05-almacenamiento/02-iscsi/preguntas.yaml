@@ -1,0 +1,110 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En iSCSI, ¿quién es el destino (target) y quién el iniciador?
+  opciones:
+    - { texto: "El destino presenta los discos; el iniciador es el cliente que los usa", correcta: true, explicacion: "Por ejemplo, san01 y pve01." }
+    - { texto: "Al revés", explicacion: "El destino es el que tiene los discos." }
+    - { texto: "Los dos son servidores de archivos", explicacion: "iSCSI es de bloques." }
+    - { texto: "El destino es el switch", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un nodo nuevo del clúster muestra el almacenamiento iSCSI como inactive. Los otros nodos andan bien. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "El IQN del nodo nuevo no está en la ACL del destino", correcta: true, explicacion: "La configuración de Proxmox se copia; la ACL del servidor, no." }
+    - { texto: "El LUN está lleno", explicacion: "Afectaría a todos." }
+    - { texto: "Falta el paquete qemu", explicacion: "No tiene que ver." }
+    - { texto: "El clúster no tiene quórum", explicacion: "Afectaría a más cosas." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando de Linux que descubre los destinos que ofrece el servidor 192.168.10.60.
+  prompt: "root@web01:~#"
+  aceptadas:
+    - "iscsiadm -m discovery -t sendtargets -p 192.168.10.60"
+    - "iscsiadm -m discovery -t st -p 192.168.10.60"
+    - "iscsiadm --mode discovery --type sendtargets --portal 192.168.10.60"
+  explicacion: Después se inicia sesión con iscsiadm -m node -T IQN --login.
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Configuraste un destino con targetcli, todo anda, y a la semana se reinicia el servidor. Al volver, ningún cliente ve el disco. ¿Qué faltó?
+  opciones:
+    - { texto: "targetcli saveconfig", correcta: true, explicacion: "Sin guardar, la configuración vive solo en memoria." }
+    - { texto: "Reiniciar los clientes", explicacion: "No alcanza: el destino ya no existe." }
+    - { texto: "Abrir el puerto 22", explicacion: "iSCSI usa el 3260." }
+    - { texto: "Formatear el LUN", explicacion: "No." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué Proxmox pone LVM encima de un LUN compartido por varios nodos?
+  opciones:
+    - { texto: "Porque cada disco de VM queda en su propio volumen lógico y Proxmox controla que lo use un solo nodo a la vez", correcta: true, explicacion: "Con ext4 montado en los dos, se rompería." }
+    - { texto: "Porque iSCSI no funciona sin LVM", explicacion: "Funciona, pero no se podría compartir." }
+    - { texto: "Para cifrar los datos", explicacion: "LVM no cifra." }
+    - { texto: "Para que sea más rápido", explicacion: "No es el motivo." }
+- id: p06
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para presentar un disco por iSCSI con targetcli.
+  pasos:
+    - "Crear el backstore con el disco (/backstores/block create)"
+    - "Crear el destino con su IQN (/iscsi create)"
+    - "Agregar el LUN al destino (tpg1/luns create)"
+    - "Dar permiso a los iniciadores (tpg1/acls create)"
+    - "Guardar la configuración (saveconfig)"
+  explicacion: Sin el backstore no hay LUN; sin la ACL nadie entra; sin saveconfig, se pierde todo al reiniciar.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿En qué puerto escucha un destino iSCSI?
+  opciones:
+    - { texto: "TCP 3260", correcta: true, explicacion: "Es el puerto estándar." }
+    - { texto: "TCP 445", explicacion: "Es SMB." }
+    - { texto: "TCP 2049", explicacion: "Es NFS." }
+    - { texto: "UDP 5405", explicacion: "Es corosync." }
+- id: p08
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: En pve02 ves esto. ¿Qué pasa?
+  salida: |
+    root@pve02:~# pvesm status
+    Name             Type     Status           Total            Used       Available        %
+    local                 dir   active        98566144         4404019        94162125    4.47%
+    local-lvm         lvmthin   active       367001600               0       367001600    0.00%
+    san01               iscsi inactive               0               0               0    0.00%
+    san-lvm               lvm inactive               0               0               0    0.00%
+  opciones:
+    - { texto: "pve02 no pudo iniciar sesión en el destino, y por eso tampoco ve el VG que está encima", correcta: true, explicacion: "Revisá la ACL, la red y el firewall del puerto 3260." }
+    - { texto: "El LUN se borró", explicacion: "Los otros nodos lo verían igual de mal; revisá primero lo propio de pve02." }
+    - { texto: "Está todo bien: los almacenamientos compartidos siempre se ven así", explicacion: "Tienen que estar active." }
+    - { texto: "Falta formatear san-lvm con ext4", explicacion: "No se formatea." }
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 3
+  enunciado: ¿Qué conviene para un iSCSI de producción? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Una red propia, separada de la de los usuarios y la de corosync", correcta: true, explicacion: "Si no, compiten." }
+    - { texto: "Dos caminos de red con multipath", correcta: true, explicacion: "Sobrevive a un cable o switch caído." }
+    - { texto: "Una ACL con el IQN de cada nodo", correcta: true, explicacion: "Y CHAP como capa extra." }
+    - { texto: "Publicar el puerto 3260 en Internet para administrarlo de afuera", explicacion: "Jamás: el tráfico va sin cifrar." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde está el nombre de iniciador de un servidor Linux?
+  opciones:
+    - { texto: "En /etc/iscsi/initiatorname.iscsi", correcta: true, explicacion: "En Windows, Get-InitiatorPort." }
+    - { texto: "En /etc/hostname", explicacion: "Es otra cosa." }
+    - { texto: "En /etc/iscsi/iscsid.conf", explicacion: "Ahí está la configuración del servicio." }
+    - { texto: "En el destino", explicacion: "El destino guarda la lista de permitidos." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El clúster usa un único servidor iSCSI con un solo cable por nodo. ¿Cuál es el riesgo principal?
+  opciones:
+    - { texto: "Es un punto único de falla: si el servidor, un cable o el switch fallan, se quedan sin disco todas las VM", correcta: true, explicacion: "La SAN seria tiene dos controladoras y dos caminos." }
+    - { texto: "Ninguno: el clúster lo resuelve", explicacion: "La HA no arregla el disco compartido." }
+    - { texto: "Que vaya más rápido de la cuenta", explicacion: "No." }
+    - { texto: "Que se pierda el quórum", explicacion: "Es otro tema." }

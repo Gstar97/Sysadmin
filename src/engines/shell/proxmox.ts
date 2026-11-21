@@ -2328,8 +2328,8 @@ export function verifyProxmox(sys: System, check: object): { ok: boolean; label:
     let ok = !!st
     if (ok && c.tipo) ok = st!.type === c.tipo
     if (ok && c.contenido_incluye) ok = c.contenido_incluye.split(',').every((x) => st!.content.includes(x))
-    if (ok && c.activo !== undefined) ok = st!.enabled === c.activo
-    return { ok, label: `el almacenamiento ${c.pve_almacenamiento}${c.tipo ? ` de tipo ${c.tipo}` : ''}${c.contenido_incluye ? ` para ${c.contenido_incluye}` : ''}` }
+    if (ok && c.activo !== undefined) ok = storageActive(sys, st!) === c.activo
+    return { ok, label: `el almacenamiento ${c.pve_almacenamiento}${c.tipo ? ` de tipo ${c.tipo}` : ''}${c.contenido_incluye ? ` para ${c.contenido_incluye}` : ''}${c.activo === true ? ' andando en este nodo' : c.activo === false ? ' inactivo en este nodo' : ''}` }
   }
   if ('pve_puente' in check) {
     const c = check as { pve_puente: string; vlan_aware?: boolean; puerto?: string; direccion?: string }
