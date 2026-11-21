@@ -42,6 +42,7 @@ export const UBUNTU_VIRT: Record<string, PackageInfo> = {
   },
   virtinst: { summary: 'Programs to create and clone virtual machines', version: '1:4.1.0-3ubuntu0.1', commands: ['virt-install', 'virt-clone', 'virt-xml'] },
   'virt-manager': { summary: 'desktop application for managing virtual machines', version: '1:4.1.0-3ubuntu0.1', requires: ['virtinst', 'libvirt-clients'], commands: ['virt-manager'] },
+  'ceph-common': { summary: 'common utilities to mount and interact with a ceph storage cluster', version: '19.2.3-pve1', commands: ['ceph', 'rbd', 'rados'] },
   'zfsutils-linux': { summary: 'command-line tools to manage OpenZFS filesystems', version: '2.3.4-pve1', commands: ['zpool', 'zfs', 'zdb'] },
   'pve-qemu-kvm': { summary: 'Full virtualization on x86 hardware', version: '11.0.0-2', commands: ['qemu-img'] },
   'proxmox-ve': {

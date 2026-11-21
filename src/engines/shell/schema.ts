@@ -474,6 +474,15 @@ const stateShape = {
         .default([]),
       /** Nodos en modo mantenimiento. */
       mantenimiento: z.array(z.string()).default([]),
+      /** Ceph ya armado en el clúster (se define en un solo nodo). */
+      ceph: z
+        .strictObject({
+          red: z.string().default('10.10.20.0/24'),
+          mons: z.array(z.string()).default([]),
+          osds: z.array(z.strictObject({ nodo: z.string(), disco: z.string(), fallado: z.boolean().default(false) })).default([]),
+          pools: z.array(z.strictObject({ nombre: z.string(), size: z.number().int().default(3), min_size: z.number().int().default(2), usado_gb: z.number().default(0) })).default([]),
+        })
+        .optional(),
     })
     .optional(),
   /** Pools de ZFS ya creados sobre los discos del ejercicio (sdb, sdc...). */
@@ -782,6 +791,8 @@ const singleCheckSchema = z.union([
   z.strictObject({ iscsi_destino: z.string(), luns: z.number().int().optional(), permite: z.string().optional(), guardado: z.boolean().optional() }),
   /** Una sesión iSCSI abierta desde este equipo hacia ese destino. */
   z.strictObject({ iscsi_sesion: z.string(), discos: z.number().int().optional() }),
+  /** Ceph: salud (HEALTH_OK, HEALTH_WARN o cualquiera), monitores, OSD, un pool con size y min_size, o un flag. */
+  z.strictObject({ ceph: z.enum(['HEALTH_OK', 'HEALTH_WARN', 'HEALTH_ERR', 'cualquiera']), mons: z.number().int().optional(), osds: z.number().int().optional(), osds_up: z.number().int().optional(), pool: z.string().optional(), size: z.number().int().optional(), min_size: z.number().int().optional(), flag: z.string().optional() }),
   /** Una tarea de réplica de Proxmox (pvesr). */
   z.strictObject({ replica_pve: z.string(), destino: z.string().optional(), ok: z.boolean().optional() }),
   /** Clúster de Proxmox: nombre, nodos, cuántos en línea, quórum, dispositivo de quórum y votos esperados. */
