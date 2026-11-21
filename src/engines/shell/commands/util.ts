@@ -29,7 +29,7 @@ export function humanSize(bytes: number): string {
 
 /** Lo que ocupa en el disco (du): en una imagen dispersa es menos que su tamaño aparente. */
 export function diskSizeOf(node: Inode): number {
-  if (node.type === 'file' && /^(QFI\u00fb|\u0000\u0000RAW)/.test(node.data)) {
+  if (node.type === 'file' && (node.data.startsWith('QFI\u00fb') || node.data.startsWith('\u0000\u0000RAW'))) {
     const m = /"allocated":(\d+(?:\.\d+)?)/.exec(node.data)
     if (m) return Math.round(Number(m[1]))
   }

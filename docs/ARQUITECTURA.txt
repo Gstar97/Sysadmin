@@ -789,6 +789,41 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       cortes, incluido el apagado ordenado con OB LB.
     · Verificaciones nuevas: base_datos, consulta_bd, usuario_bd, correo_enviado,
       cola_vacia, exportado, raid, ups_estado y apagado_ups.
+  - Nivel 5, parte 1 (módulos 5.1 a 5.3, virtualización), en src/engines/shell y
+    src/engines/powershell:
+    · El equipo simulado se define en equipo (núcleos, memoria, modelo de CPU, si es
+      físico y si expone la virtualización), y lscpu, nproc, free, /proc/cpuinfo y
+      /proc/meminfo lo muestran. /dev/kvm aparece como dispositivo de caracteres cuando
+      el procesador tiene la extensión.
+    · Imágenes de disco (diskimage.ts): qemu-img (info, create con archivo base y
+      preallocation, convert, resize, check, snapshot) sobre qcow2, raw, vmdk, vhdx y
+      vdi, con tamaño virtual y ocupado distintos, como una imagen dinámica de verdad.
+      Cada imagen puede llevar qué sistema tiene adentro (Windows o Linux, BIOS o UEFI,
+      con o sin drivers VirtIO), que se conserva al convertir, importar y clonar.
+    · KVM y libvirt (libvirt.ts, virtpkgs.ts): virsh (dominios, instantáneas, redes y
+      almacenamiento), virt-install con cloud-init, virt-host-validate y
+      systemd-detect-virt; libvirtd en Ubuntu y los servicios modulares en Rocky; la red
+      default con NAT y las VM definidas en libvirt.
+    · Proxmox VE 9 (proxmox.ts): Debian 13 con su kernel, repositorios deb822 (el
+      enterprise da 401 sin suscripción), /etc/network/interfaces con puentes
+      vlan-aware y bonds aplicados con ifreload, qm (crear con import-from, plantillas,
+      clones enlazados y completos, instantáneas, importar y agrandar discos, cloud-init,
+      agente), pct, pveam, pvesm, vzdump y qmrestore (local o en un Proxmox Backup
+      Server, con respaldos incrementales y retención), pveum y pveversion. Al arrancar
+      una VM con un disco que vino de otro hipervisor se revisan el firmware (SeaBIOS u
+      OVMF), el bus del disco, los drivers VirtIO de Windows y el orden de arranque, y la
+      consola muestra el error que se vería de verdad. Desconectar un disco lo deja como
+      unused.
+    · Hyper-V (powershell/hyperv.ts): el rol funciona recién después de reiniciar y no
+      se instala sin virtualización en la CPU; conmutadores externo, interno y privado;
+      discos .vhdx dinámicos, fijos y diferenciales (New-VHD, Convert-VHD, Resize-VHD);
+      VM de generación 1 y 2 con memoria dinámica, VLAN, firmware y arranque seguro (un
+      Linux con la plantilla de Windows no arranca), puntos de control de producción y
+      estándar, servicios de integración, exportar e importar. Los cmdlets aceptan varias
+      VM a la vez, como los de verdad.
+    · Verificaciones nuevas: dominio, imagen_disco, red_libvirt, pve_vm (con arranca y
+      con_red), pve_ct, pve_respaldo, pve_almacenamiento, pve_puente, pve_usuario,
+      vm_hyperv, conmutador_hyperv y vhd.
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -912,7 +947,13 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     (CalculadoraUps: W y VA, carga y autonomía) y constructor de rack (ConstructorRack:
     ubicar equipos por unidades y revisar peso, aire, red, potencia y huecos, libre o con
     un inventario dado), sobre motores con pruebas en src/engines/hardware.
-  - Pendientes, con el nivel que los usa: simuladores de quórum y migración; consolas de Python
+  - Hechos en la Etapa 8a (Nivel 5): simulador de recursos de un host (SimuladorRecursos:
+    VM con vCPU y memoria sobre un host, sobreasignación, globo y qué pasa cuando no
+    alcanza) y comparador de plataformas (ComparadorPlataformas: criterios con pesos y
+    puntajes editables, y el costo de licencias de Proxmox, vSphere e Hyper-V a varios
+    años con los mínimos de núcleos de cada uno), sobre motores con pruebas en
+    src/engines/virtualizacion.
+  - Pendientes, con el nivel que los usa: simulador de quórum; consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; calculadoras de disponibilidad, cron y costos.
   - Los componentes pesados se cargan solo cuando una lección los usa.
@@ -1182,7 +1223,20 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       emparejar y 1 de ordenar. El simulador sumó lo descripto en 6.1 (Nivel 4, parte 2)
       y hay tres interactivos nuevos (6.9).
 
-  Etapa 8 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
+  Etapa 8 - Nivel 5, Virtualización y almacenamiento (en dos partes)
+    - 8a (HECHA, en revisión): módulos 5.1 Fundamentos de virtualización, 5.2 Proxmox VE
+      y 5.3 VMware vSphere y Hyper-V. 10 lecciones, cada módulo con laboratorio (en la
+      plataforma y en máquinas virtuales: KVM con libvirt y cloud-init; Proxmox VE
+      anidado con VM y contenedores en VLAN y Proxmox Backup Server; Hyper-V con dos VM y
+      la migración de una a Proxmox), examen y caso real; 101 preguntas, 63 tarjetas, 26
+      términos de glosario nuevos, 13 ejercicios de terminal (11 de Linux y 2 de
+      PowerShell), 8 diagramas clicables, 3 casos de diagnóstico, 3 de emparejar y 1 de
+      ordenar. El simulador sumó lo descripto en 6.1 (Nivel 5, parte 1) y hay dos
+      interactivos nuevos (6.9).
+    - 8b (pendiente): módulos 5.4 Clusters y alta disponibilidad, 5.5 Almacenamiento y
+      5.6 Backups y recuperación ante desastres, y el proyecto del nivel.
+
+  Etapa 9 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
 
 
 ============================================================================================
