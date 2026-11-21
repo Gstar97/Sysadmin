@@ -1,0 +1,87 @@
+tipo: pasos
+titulo: Un clúster de Proxmox de tres nodos en tus máquinas virtuales
+descripcion: >-
+  Vas a sumarle dos nodos al pve01 del laboratorio del módulo 5.2, armar el clúster con una red
+  propia para corosync, un NFS compartido, alta disponibilidad, y medir con un ping cuánto corta
+  una migración en vivo y cuánto la caída de un nodo. Necesitás unos 16 GB de memoria libres (4
+  por nodo y 2 para el NFS) y 200 GB de disco. Calculá unas cuatro horas.
+pasos:
+  - titulo: Dos nodos más y una red para corosync
+    detalle: >-
+      Creá pve02 y pve03 como pve01 (lab del módulo 5.2): 2 vCPU con virtualización anidada, 4 GB,
+      disco de 40 GB, la placa principal en la red de tu laboratorio. A los tres agregales una
+      segunda placa en una red interna nueva (en VirtualBox, "Red interna"; en Hyper-V, un
+      conmutador privado), que va a ser la de corosync. Instalá Proxmox VE 9 en pve02 y pve03 con
+      IP fija y los mismos repositorios que pve01. Bajá pve01 a 4 GB si hace falta.
+    comandos:
+      - "printf 'auto ens19\\niface ens19 inet static\\n\\taddress 10.10.10.21/24\\n' >> /etc/network/interfaces && ifreload -a"
+    comprobar: Desde pve01 hacés ping a 10.10.10.22 y 10.10.10.23 (cada nodo con su .2X en la red de corosync).
+  - titulo: Un NFS compartido
+    detalle: >-
+      Una VM chica nfs01 (Debian o Ubuntu Server, 1 vCPU, 2 GB, 60 GB de disco) en la red de tu
+      laboratorio, con un recurso exportado para los tres nodos (lo viste en la lección 4.4.4).
+    comandos:
+      - sudo apt install -y nfs-kernel-server
+      - sudo mkdir -p /srv/vms
+      - "echo '/srv/vms 192.168.56.0/24(rw,sync,no_root_squash,no_subtree_check)' | sudo tee -a /etc/exports"
+      - sudo exportfs -ra && sudo exportfs -v
+    comprobar: Desde pve01, showmount -e IP-de-nfs01 muestra /srv/vms.
+  - titulo: El clúster, con dos enlaces
+    detalle: >-
+      link0 es la red de corosync y link1 la de tu laboratorio, de respaldo. En pve01 se crea; en
+      los otros dos, se une con sus propias direcciones.
+    comandos:
+      - pvecm create lab --link0 10.10.10.21 --link1 192.168.56.21
+      - pvecm add 192.168.56.21 --link0 10.10.10.22 --link1 192.168.56.22
+      - pvecm add 192.168.56.21 --link0 10.10.10.23 --link1 192.168.56.23
+      - pvecm status && corosync-cfgtool -s
+    comprobar: pvecm status muestra 3 nodos, Quorate Yes, y corosync-cfgtool -s muestra los dos enlaces conectados en cada nodo.
+  - titulo: El almacenamiento compartido
+    detalle: Desde cualquier nodo (la configuración ya es compartida).
+    comandos:
+      - pvesm add nfs nfs-vms --server IP-de-nfs01 --export /srv/vms --content images,rootdir
+      - pvesm status
+    comprobar: nfs-vms aparece activo en los tres nodos.
+  - titulo: Una VM de prueba con alta disponibilidad
+    detalle: >-
+      Cloná tu plantilla de Ubuntu (lab del módulo 5.2) en nfs-vms, con 1 GB, y prendela. Ponela
+      bajo HA con una regla que prefiera pve02.
+    comandos:
+      - qm clone 9000 150 --name ha-test --full --storage nfs-vms
+      - qm set 150 --memory 1024 && qm start 150
+      - ha-manager add vm:150
+      - ha-manager rules add node-affinity prueba --resources vm:150 --nodes pve02:2
+      - ha-manager status
+    comprobar: ha-manager status muestra vm:150 en pve02, started.
+  - titulo: Medir una migración en vivo
+    detalle: >-
+      Desde tu PC, dejá un ping corriendo contra la IP de ha-test (en Linux, con -D para ver la
+      hora de cada respuesta). Mientras tanto, migrala a pve03 y contá cuántas respuestas se
+      perdieron.
+    comandos:
+      - ping -D IP-de-ha-test
+      - ha-manager migrate vm:150 pve03
+    comprobar: Se perdieron cero o una respuesta; anotalo.
+  - titulo: Medir la caída de un nodo
+    detalle: >-
+      Con el ping corriendo, apagá de golpe el nodo donde está ha-test desde tu hipervisor
+      (VirtualBox: Cerrar, Apagar la máquina; Hyper-V: Stop-VM -TurnOff; KVM: virsh destroy).
+      Mirá ha-manager status en otro nodo cada 30 segundos y anotá cuándo vuelve el ping.
+    comandos:
+      - watch -n 5 ha-manager status
+    comprobar: Tenés anotado el tiempo de corte (lo esperable son unos 2 a 3 minutos más el arranque de Ubuntu) y ha-test volvió en otro nodo.
+  - titulo: Ver el quórum con tus propios ojos
+    detalle: >-
+      Volvé a prender el nodo. Después apagá dos nodos (ordenadamente) y, en el que queda, mirá el
+      estado e intentá arrancar algo. Prendé los nodos otra vez.
+    comandos:
+      - pvecm status
+      - qm start 150
+    comprobar: El nodo solo muestra Quorate No y "cluster not ready - no quorum?" al intentar arrancar.
+  - titulo: Modo mantenimiento
+    detalle: Con los tres nodos arriba, pone en mantenimiento el nodo donde está ha-test y mirá cómo se va.
+    comandos:
+      - ha-manager crm-command node-maintenance enable pve03
+      - ha-manager status
+      - ha-manager crm-command node-maintenance disable pve03
+    comprobar: ha-test se movió en vivo y el ping no se cortó.

@@ -1,0 +1,40 @@
+---
+titulo: Cluster Proxmox de tres nodos con alta disponibilidad y migración en vivo, con la caída de un nodo medida
+horas: 4
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - Armé un clúster de tres nodos con dos enlaces de corosync y un NFS compartido.
+  - Medí con un ping cuánto corta una migración en vivo (casi nada) y cuánto la caída de un nodo con HA.
+  - Vi a un nodo solo quedarse sin quórum y no poder arrancar nada.
+  - Usé el modo mantenimiento para vaciar un nodo sin cortar las VM.
+---
+
+import sim from './lab-cluster-sim.yaml'
+import pasos from './lab-cluster.yaml'
+
+## Objetivo
+
+Dejar de creer que la alta disponibilidad funciona y comprobarlo: armar el clúster, ponerle reglas, apagar un nodo de golpe y medir. El número que anotes al final (cuánto tarda una VM en volver) es el que vas a usar para prometer, con fundamento, cuánto puede cortarse un servicio.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: el pve01 y la plantilla del laboratorio del módulo 5.2, unos 16 GB de memoria libres y 200 GB de disco.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Con Proxmox anidado, los tiempos son más largos que en servidores de verdad y la red de corosync comparte la placa física de tu computadora. Si aparecen avisos de corosync por latencia, cerrá otros programas pesados mientras hacés las pruebas.
+</Advertencia>
+
+## Para pensar
+
+1. En la parte 1, web01 terminó en pve03 por una regla que no tenía nada que ver con pve01. ¿Qué reglas pondrías en un clúster real con dos controladores de dominio, dos servidores web y una base de datos?
+2. El tiempo que mediste de corte, ¿alcanza para prometer 99,9 % de disponibilidad mensual? ¿Y 99,99 %? Hacé la cuenta con una caída de nodo por mes.
+3. Si la red de corosync se cayera pero la de tu laboratorio no, ¿qué pasaría con un solo enlace y qué pasa con los dos que configuraste?

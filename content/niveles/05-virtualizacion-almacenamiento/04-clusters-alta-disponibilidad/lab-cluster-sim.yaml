@@ -1,0 +1,123 @@
+tipo: terminal
+shell: bash
+titulo: Un clúster de tres nodos, probado de verdad
+descripcion: >-
+  pve01, pve02 y pve03 son tres Proxmox VE 9 recién instalados (192.168.10.21 a .23), con un NFS
+  compartido (nfs-vms) ya agregado en pve01. En pve01 corren web01 (VM 100, disco en el NFS) y
+  db01 (VM 101, disco en su local-lvm). Las placas de gestión responden en 192.168.10.121 a .123
+  (usuario admin, clave Bmc-2026).
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [ipmitool] }
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  bmc: { ip: 192.168.10.121, clave: Bmc-2026 }
+  proxmox:
+    repos: no-subscription
+    almacenamientos:
+      - { id: local, tipo: dir, contenido: [iso, vztmpl, backup], ruta: /var/lib/vz }
+      - { id: local-lvm, tipo: lvmthin, contenido: [images, rootdir] }
+      - { id: nfs-vms, tipo: nfs, contenido: [images], servidor: 192.168.10.50, export: /srv/vms, compartido: true }
+    vms:
+      - { id: 100, nombre: web01, estado: running, memoria: 4096, discos: { scsi0: "nfs-vms:100/vm-100-disk-0.qcow2,size=20G" }, red: { net0: "virtio,bridge=vmbr0" } }
+      - { id: 101, nombre: db01, estado: running, memoria: 8192, discos: { scsi0: "local-lvm:vm-101-disk-0,size=40G" }, red: { net0: "virtio,bridge=vmbr0" } }
+  servidores:
+    - { hostname: pve02, ip: 192.168.10.22, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription }, bmc: { ip: 192.168.10.122, clave: Bmc-2026 } }
+    - { hostname: pve03, ip: 192.168.10.23, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription }, bmc: { ip: 192.168.10.123, clave: Bmc-2026 } }
+pasos:
+  - consigna: Armá el clúster "lab" con los tres nodos y comprobá el quórum.
+    verificar:
+      - { pve_cluster: lab, nodos: 3, quorum: true }
+    pistas:
+      - "pvecm create lab; después ssh root@pve02 pvecm add 192.168.10.21 (y lo mismo en pve03)."
+    solucion:
+      - pvecm create lab
+      - ssh root@pve02 pvecm add 192.168.10.21
+      - ssh root@pve03 pvecm add 192.168.10.21
+      - pvecm status
+  - consigna: >-
+      db01 tiene el disco en el almacenamiento local de pve01, así que no podría sobrevivir a la
+      caída de ese nodo. Pasá su disco al NFS con la VM andando, sin dejar el viejo como unused.
+    verificar:
+      - { pve_vm: 101, estado: running, config: { scsi0: "nfs-vms:" } }
+    pistas:
+      - "qm disk move 101 scsi0 nfs-vms --delete 1"
+    solucion:
+      - qm disk move 101 scsi0 nfs-vms --delete 1
+    explicacion: >-
+      El disco se copia mientras la VM sigue andando (drive mirror) y al final se cambia de lugar.
+      Desde ahora, cualquier nodo puede arrancar db01.
+  - consigna: >-
+      Poné las dos VM bajo alta disponibilidad. db01 tiene que preferir pve01 (y si no, pve02);
+      web01 puede ir a cualquier nodo, pero nunca en el mismo que db01 (regla "separadas").
+    verificar:
+      - { pve_ha: "vm:100", estado: started }
+      - { pve_ha: "vm:101", estado: started, regla: db-en-pve01 }
+      - { pve_ha: "vm:100", regla: separadas }
+    pistas:
+      - "ha-manager add vm:100 y ha-manager add vm:101"
+      - "ha-manager rules add node-affinity db-en-pve01 --resources vm:101 --nodes pve01:2,pve02:1"
+      - "ha-manager rules add resource-affinity separadas --resources vm:100,vm:101 --affinity negative"
+    solucion:
+      - ha-manager add vm:100
+      - ha-manager add vm:101
+      - ha-manager rules add node-affinity db-en-pve01 --resources vm:101 --nodes pve01:2,pve02:1
+      - ha-manager rules add resource-affinity separadas --resources vm:100,vm:101 --affinity negative
+      - ha-manager status
+  - consigna: Mové web01 en vivo a pve03 con el administrador de HA.
+    verificar:
+      - { pve_vm: 100, nodo: pve03, estado: running }
+    pistas:
+      - "ha-manager migrate vm:100 pve03"
+    solucion:
+      - ha-manager migrate vm:100 pve03
+      - ha-manager status
+  - consigna: >-
+      La prueba que importa: apagá pve03 por su placa de gestión y medí cuánto tarda web01 en
+      volver a estar en marcha (andá mirando ha-manager status y haciendo pasar el tiempo de a 30
+      segundos). Anotá el tiempo.
+    verificar:
+      - { pve_encendido: pve03, encendido: false }
+      - { pve_ha: "vm:100", estado: started }
+      - { pve_vm: 100, nodo: pve02, estado: running }
+    pistas:
+      - "ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power off"
+      - "ha-manager status; sleep 30; ha-manager status; ..."
+    solucion:
+      - ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power off
+      - ha-manager status
+      - sleep 30
+      - sleep 30
+      - sleep 30
+      - sleep 30
+      - ha-manager status
+    explicacion: >-
+      Unos dos minutos de "fence" y después "started" en pve02: no fue a pve01 porque la regla
+      "separadas" no la deja estar con db01. A eso hay que sumarle lo que tarda el sistema de la
+      VM en arrancar. Ese es el número que va en tu documentación: "si se cae un nodo, sus VM
+      vuelven en unos 3 minutos".
+  - consigna: >-
+      Prendé pve03 otra vez. Después, para actualizar pve01, ponelo en modo mantenimiento y
+      comprobá que db01 se fue a pve02.
+    verificar:
+      - { pve_encendido: pve03 }
+      - { pve_mantenimiento: pve01 }
+      - { pve_vm: 101, nodo: pve02, estado: running }
+      - { pve_vm: 100, nodo: pve03, estado: running }
+    pistas:
+      - "ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power on"
+      - "ha-manager crm-command node-maintenance enable pve01"
+    solucion:
+      - ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power on
+      - ha-manager crm-command node-maintenance enable pve01
+      - ha-manager status
+    explicacion: >-
+      db01 se movió en vivo, sin corte, al segundo nodo de su regla: pve02. Pero ahí estaba web01,
+      y la regla "separadas" no las deja juntas, así que la HA movió también a web01, a pve03. Las
+      reglas se combinan: conviene pensarlas (y probarlas) antes del día que se necesitan.

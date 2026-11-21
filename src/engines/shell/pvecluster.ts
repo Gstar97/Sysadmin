@@ -319,6 +319,12 @@ function pickNode(c: PveCluster, r: HaResource, candidates: ClusterNode[]): Clus
 
 /** Avanza el estado del clúster: detecta nodos caídos, cerca, recupera y vuelve a su lugar. */
 export function haTick(c: PveCluster) {
+  haPass(c)
+  // Una segunda pasada acomoda lo que la primera movió (por ejemplo, reglas que se combinan).
+  haPass(c)
+}
+
+function haPass(c: PveCluster) {
   for (const n of c.nodes) {
     if (!nodeOnline(n)) {
       if (!c.down.has(n.name)) c.down.set(n.name, c.clock)
@@ -400,7 +406,9 @@ export function haTick(c: PveCluster) {
     const best = pickNode(c, r, alive.filter((n) => quorate(c, n)))
     const rule = c.rules.find((x) => !x.disable && x.type === 'node-affinity' && x.resources.includes(r.sid))
     const prio = (n?: string) => rule?.nodes.find((x) => x.node === n)?.prio ?? 0
-    const shouldMove = c.maintenance.has(where.name) || (rule && best && prio(best.name) > prio(where.name))
+    // Afinidad negativa: si un recurso que tiene que estar separado quedó en el mismo nodo, se mueve.
+    const together = c.rules.some((x) => !x.disable && x.type === 'resource-affinity' && x.affinity === 'negative' && x.resources.includes(r.sid) && x.resources.some((o) => o !== r.sid && c.ha.get(o)?.node === where.name))
+    const shouldMove = c.maintenance.has(where.name) || (rule && best && prio(best.name) > prio(where.name)) || (together && best && best !== where)
     if (shouldMove && best && best !== where) {
       const m = migrate(c, where, best, g, true, false)
       if ('out' in m) {
