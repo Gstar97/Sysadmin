@@ -1,0 +1,72 @@
+---
+id: n5-m6-l3
+titulo: Instantáneas, réplicas y backups
+minutos: 90
+objetivos:
+  - Distinguir instantánea, réplica y respaldo por dónde viven, qué las destruye y hasta cuándo permiten volver.
+  - Comprobar que una copia espejo copia también los borrados y los cifrados.
+  - Combinar las tres para cubrir un error chico, la caída de un equipo y un desastre.
+glosario: [instantanea, replica-datos, copia-inmutable]
+verificado: 2026-11
+---
+
+import comparacion from './comparacion.svg?raw'
+import comparacionDatos from './comparacion.yaml'
+import ejEspejo from './ej-espejo.yaml'
+
+"Tenemos respaldo: el servidor replica todo a otro cada noche." Es una de las frases que más veces se escuchan justo antes de un desastre. Instantáneas, réplicas y respaldos se parecen porque los tres son "otra copia", pero cubren problemas distintos, y confundirlos es la forma más común de quedarse sin datos teniendo copias.
+
+<AntesDeEmpezar>
+- Instantáneas de VM (lección 5.1.3) y de ZFS (lección 5.5.3).
+- restic (lección 5.6.2).
+</AntesDeEmpezar>
+
+## Tres cosas distintas
+
+<DiagramaInteractivo datos={comparacionDatos} svg={comparacion} alt="Tabla de tres columnas. Instantánea (ZFS, LVM, Proxmox, Hyper-V): está en los mismos discos; si se borra o cifra algo, la foto anterior sigue, hasta que se borre; si se pierde el equipo, se pierde con él; hacia atrás, horas o días; sirve para volver atrás un cambio. Réplica o espejo (pvesr, zfs send, rsync --delete, DFS-R): está en otro equipo; un borrado o cifrado se copia en la próxima pasada; si se pierde el equipo, sobrevive; hacia atrás, solo el último estado; sirve para seguir andando rápido. Respaldo (PBS, restic, Veeam): en otro equipo y medio; si se borra o cifra algo, queda la copia de antes con su historia; si se pierde el equipo, sobrevive; hacia atrás, meses o años; sirve para recuperarse de casi todo." />
+
+La pregunta que ordena todo es: **¿qué pasa con esta copia si alguien borra o cifra los datos originales?**
+
+- La instantánea se salva, salvo que el que borra tenga permisos para borrar también las instantáneas (un ransomware con root las borra primero).
+- La réplica no: su trabajo es parecerse al original, y lo hace con lo bueno y con lo malo.
+- El respaldo sí, si tiene historia suficiente y si el atacante no puede llegar a él.
+
+## Probalo
+
+<Terminal ejercicio={ejEspejo} />
+
+## Cómo se combinan
+
+No se elige una: cada una cubre una parte, y juntas dan un RPO y un RTO buenos a un costo razonable. Por ejemplo, para el servidor de archivos de una oficina:
+
+1. **Instantáneas de ZFS cada hora**, que se guardan 2 días: un usuario que borró algo a la mañana lo recupera en minutos, sin tocar los respaldos (y con Samba, se pueden mostrar como "Versiones anteriores" en Windows).
+2. **Réplica a otro nodo cada 15 minutos**: si se rompe el servidor, la VM arranca en el otro con, como mucho, 15 minutos de datos de menos (lo armaste en el laboratorio del módulo 5.5).
+3. **Respaldo nocturno al PBS** con 7 diarias, 4 semanales y 12 mensuales, y una copia al PBS de otra sede: para el error descubierto tarde y para el desastre.
+4. **Una copia inmutable afuera** (bucket con bloqueo de objetos o rest-server solo agregar): para el día que el atacante borra todo lo anterior.
+
+<EnSimple>
+Una instantánea es una foto en los mismos discos: rápida para volver atrás un cambio, pero se pierde con el equipo. Una réplica o espejo es una copia que se mantiene igual al original en otro equipo: sirve para seguir andando si el equipo se rompe, pero copia también los borrados y los cifrados. Un respaldo guarda copias con historia en otro lado: es el único que sirve para un error descubierto tarde o un ransomware, y solo si el atacante no lo puede borrar. Lo bueno es combinarlas.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Llamar respaldo a un rsync --delete o a una carpeta sincronizada">
+    Es un espejo: el borrado y el cifrado llegan en la próxima pasada.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar instantáneas de VM por semanas">
+    Ocupan cada vez más y hacen lenta la VM; si el almacenamiento se pierde, se van con ella. Son para horas o días.
+  </ErrorComun>
+  <ErrorComun titulo="Que el servidor respaldado pueda entrar al de respaldo con todos los permisos">
+    Una clave ssh de root de un lado al otro deja que un atacante borre las dos cosas. Solo agregar o un usuario sin permiso de borrar.
+  </ErrorComun>
+  <ErrorComun titulo="Restaurar encima sin revisar">
+    Si no sabés bien qué está dañado, restaurá a una carpeta aparte, revisá, y después mové.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Instantánea: mismos discos, para volver atrás un cambio; se pierde con el equipo.
+- Réplica o espejo: otro equipo, para seguir andando; copia los borrados y cifrados.
+- Respaldo: otro equipo y medio, con historia; el único que sirve para errores tardíos y ransomware.
+- Si el respaldado puede borrar el respaldo, un atacante también: hace falta una copia inmutable.
+- Se combinan: instantáneas horarias, réplica cada 15 minutos, respaldo nocturno, copia inmutable afuera.
+</Resumen>

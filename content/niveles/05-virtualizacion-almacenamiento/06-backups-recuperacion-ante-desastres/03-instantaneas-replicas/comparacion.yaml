@@ -1,0 +1,29 @@
+tipo: diagrama
+titulo: Instantánea, réplica y respaldo
+puntos:
+  - id: instantanea
+    titulo: Instantánea
+    area: { x: 20.9, y: 11.5, ancho: 25, alto: 85.5 }
+    texto: >-
+      Una foto del disco o del dataset en un momento, en los mismos discos. Sale al instante y es
+      lo mejor para volver atrás un cambio que salió mal (una actualización, un archivo borrado
+      hace un rato). Pero si se pierde el pool, el servidor o alguien con permisos las borra, se van
+      con todo. En Proxmox, además, una VM con instantáneas viejas acumula diferencias y se vuelve
+      lenta: no se dejan durante semanas.
+  - id: replica
+    titulo: Réplica o espejo
+    area: { x: 47.1, y: 11.5, ancho: 25, alto: 85.5 }
+    texto: >-
+      Una copia en otro equipo que se mantiene igual a la original: la réplica de pvesr, un zfs
+      send periódico, un rsync --delete, la replicación de DFS. Sirve para seguir andando rápido si
+      se cae el equipo principal. Pero copia todo, también lo malo: un borrado o un cifrado llega
+      en la próxima pasada. Algunas réplicas guardan un par de instantáneas viejas, pero no una
+      historia larga.
+  - id: respaldo
+    titulo: Respaldo
+    area: { x: 73.3, y: 11.5, ancho: 25, alto: 85.5 }
+    texto: >-
+      Copias con historia, en otro equipo y (mejor) en otro tipo de medio, con retención de meses
+      o años, verificadas y, al menos una, inmutable. Es lo único que sirve para recuperarse de un
+      borrado descubierto tarde, de un ransomware o de la pérdida de todo el sitio. Restaurar tarda
+      más que volver una instantánea o pasar a la réplica: se complementan.

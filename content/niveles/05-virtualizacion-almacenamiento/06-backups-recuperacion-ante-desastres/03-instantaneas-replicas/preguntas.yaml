@@ -1,0 +1,92 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Un rsync --delete cada noche a otro servidor, ¿es un respaldo?
+  opciones:
+    - { texto: "No: es un espejo, y los borrados y cifrados se copian en la próxima pasada", correcta: true, explicacion: "No guarda historia." }
+    - { texto: "Sí, porque está en otro servidor", explicacion: "Estar en otro lado no alcanza." }
+    - { texto: "Sí, si se hace todos los días", explicacion: "Sigue siendo un espejo." }
+    - { texto: "Solo si es por ssh", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un usuario borró un archivo hace una hora. ¿Qué es lo más rápido para recuperarlo?
+  opciones:
+    - { texto: "Una instantánea reciente (por ejemplo, de ZFS cada hora)", correcta: true, explicacion: "Para eso son." }
+    - { texto: "La réplica", explicacion: "Si ya pasó, también lo borró." }
+    - { texto: "El respaldo de afuera", explicacion: "Sirve, pero es lo más lento." }
+    - { texto: "No se puede", explicacion: "Sí se puede." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Se rompe la placa madre del servidor de archivos. ¿Qué permite volver a funcionar más rápido?
+  opciones:
+    - { texto: "La réplica en otro nodo: la VM arranca allá con los datos de la última pasada", correcta: true, explicacion: "Para eso es la réplica." }
+    - { texto: "Las instantáneas", explicacion: "Estaban en el servidor roto." }
+    - { texto: "El respaldo del mes pasado", explicacion: "Sirve, pero se pierde un mes." }
+    - { texto: "Un rsync nuevo", explicacion: "No hay de dónde." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un ransomware con permisos de root en el servidor de archivos, ¿qué suele hacer con las instantáneas locales?
+  opciones:
+    - { texto: "Las borra antes de cifrar", correcta: true, explicacion: "Por eso no reemplazan a un respaldo fuera de su alcance." }
+    - { texto: "No las puede tocar", explicacion: "Con root, puede." }
+    - { texto: "Las cifra pero se pueden leer", explicacion: "No." }
+    - { texto: "Las copia a otro lado", explicacion: "No." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas copian un borrado al poco tiempo? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Una réplica de pvesr cada 15 minutos", correcta: true, explicacion: "En la próxima pasada." }
+    - { texto: "Una carpeta sincronizada con la nube", correcta: true, explicacion: "Al instante." }
+    - { texto: "Un rsync --delete nocturno", correcta: true, explicacion: "Esa noche." }
+    - { texto: "Un respaldo de restic con retención de 30 días", explicacion: "Guarda la copia anterior." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El servidor de archivos respalda con restic por sftp a otro servidor, usando la clave ssh de root. ¿Cuál es el riesgo?
+  opciones:
+    - { texto: "Quien tome el servidor de archivos puede entrar al de respaldo y borrar el repositorio", correcta: true, explicacion: "Hace falta solo agregar o un destino que no se pueda borrar." }
+    - { texto: "Ninguno: restic cifra", explicacion: "Cifrar no impide borrar." }
+    - { texto: "Que sea lento", explicacion: "No es el riesgo principal." }
+    - { texto: "Que sftp no soporte deduplicación", explicacion: "Sí la soporta." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no conviene dejar una instantánea de una VM durante semanas?
+  opciones:
+    - { texto: "Porque acumula diferencias, ocupa cada vez más y hace más lenta la VM", correcta: true, explicacion: "Y no protege si se pierde el almacenamiento." }
+    - { texto: "Porque vence sola", explicacion: "No vence." }
+    - { texto: "Porque la licencia lo prohíbe", explicacion: "No." }
+    - { texto: "No hay problema", explicacion: "Sí lo hay." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace restic restore ID --target / --include /srv/compartido/Clientes?
+  opciones:
+    - { texto: "Restaura solo esa carpeta, en su ruta original, sin tocar el resto", correcta: true, explicacion: "Con --target / escribe cada archivo donde estaba." }
+    - { texto: "Restaura todo y borra lo demás", explicacion: "No borra nada." }
+    - { texto: "Restaura en /target", explicacion: "--target es la carpeta base." }
+    - { texto: "Borra la carpeta Clientes del respaldo", explicacion: "No." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená de lo más rápido a lo más lento para volver a tener un archivo borrado hace un rato, según dónde lo buscás.
+  pasos:
+    - "Instantánea local de hace una hora"
+    - "Réplica en otro nodo (si todavía no pasó la próxima pasada)"
+    - "Respaldo en el PBS de la misma red"
+    - "Copia inmutable en el almacenamiento de objetos de afuera"
+  explicacion: Cuanto más lejos y más protegida, más tarda; por eso se combinan.
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cuál de las tres sirve para recuperarse de un error que se descubre dos meses después?
+  opciones:
+    - { texto: "El respaldo con retención larga", correcta: true, explicacion: "Las instantáneas y réplicas no llegan tan atrás." }
+    - { texto: "La réplica", explicacion: "Tiene solo lo último." }
+    - { texto: "Las instantáneas horarias", explicacion: "Se guardan horas o días." }
+    - { texto: "Ninguna", explicacion: "El respaldo sí." }

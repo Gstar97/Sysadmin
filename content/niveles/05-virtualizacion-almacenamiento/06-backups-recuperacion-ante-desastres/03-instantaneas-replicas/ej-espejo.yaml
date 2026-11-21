@@ -1,0 +1,108 @@
+tipo: terminal
+shell: bash
+titulo: La copia espejo copió el desastre
+descripcion: >-
+  nas01 (192.168.10.41) comparte /srv/compartido con la oficina. Hasta hoy, "el respaldo" era un
+  rsync con --delete cada noche a /srv/espejo de nas02 (192.168.10.42). Vas a sumar un respaldo
+  de verdad con restic, en nas02 por sftp, y a ver qué pasa con cada uno cuando llega un
+  desastre. restic ya está instalado y desde nas01 entrás por ssh como root a nas02. Ninguno de
+  los dos es inmutable: también vas a ver por qué eso importa.
+estado_inicial:
+  distro: ubuntu
+  hostname: nas01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [restic] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.41/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /srv/compartido/Administracion/balance-2026.ods: { contenido: "Balance 2026 - version aprobada\n" }
+    /srv/compartido/Administracion/sueldos-noviembre.ods: { contenido: "Sueldos de noviembre\n" }
+    /srv/compartido/Clientes/Rivas SA/contrato.pdf: { contenido: "Contrato Rivas SA 2026\n" }
+    /srv/compartido/Clientes/Molinos del Sur/presupuesto.ods: { contenido: "Presupuesto Molinos del Sur\n" }
+    /root/.restic-clave: { contenido: "Clave-nas01-larga-2026\n", modo: "600" }
+    /root/simular-martes.sh:
+      modo: "755"
+      contenido: |
+        #!/bin/bash
+        # Simulación: alguien borra la carpeta de clientes y un programa malicioso "cifra" un archivo.
+        rm -r /srv/compartido/Clientes
+        echo "CIFRADO - pague para recuperar sus archivos" > /srv/compartido/Administracion/balance-2026.ods
+        echo "Listo: Clientes borrada y balance cifrado."
+  servidores:
+    - { hostname: nas02, ip: 192.168.10.42, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], archivos: { /srv/espejo/.keep: { contenido: "" } } }
+pasos:
+  - consigna: >-
+      Hacé las dos copias del lunes a la noche: el espejo de siempre (rsync -a --delete de
+      /srv/compartido/ a nas02:/srv/espejo/) y un respaldo con restic en
+      sftp:root@nas02:/srv/restic, con la clave que está en /root/.restic-clave.
+    verificar:
+      - { en: nas02, verificar: { archivo: "/srv/espejo/Clientes/Rivas SA/contrato.pdf" } }
+      - { en: nas02, verificar: { restic_repo: /srv/restic, instantaneas_min: 1, con_archivo: "/srv/compartido/Clientes/Rivas SA/contrato.pdf" } }
+    pistas:
+      - "rsync -a --delete /srv/compartido/ root@nas02:/srv/espejo/"
+      - "export RESTIC_REPOSITORY=sftp:root@nas02:/srv/restic RESTIC_PASSWORD_FILE=/root/.restic-clave"
+      - "restic init y restic backup /srv/compartido"
+    solucion:
+      - rsync -a --delete /srv/compartido/ root@nas02:/srv/espejo/
+      - export RESTIC_REPOSITORY=sftp:root@nas02:/srv/restic RESTIC_PASSWORD_FILE=/root/.restic-clave
+      - restic init
+      - restic backup /srv/compartido
+    explicacion: >-
+      Hasta acá, las dos copias tienen lo mismo. La diferencia aparece cuando algo sale mal.
+  - consigna: >-
+      Llega el martes: ejecutá /root/simular-martes.sh y después, como cada noche, las dos copias.
+      Mirá qué quedó en el espejo y qué hay en restic.
+    verificar:
+      - { en: nas02, verificar: { archivo: /srv/espejo/Clientes, existe: false } }
+      - { en: nas02, verificar: { restic_repo: /srv/restic, instantaneas_min: 2 } }
+    pistas:
+      - "/root/simular-martes.sh"
+      - "Las mismas dos copias de antes; después ssh root@nas02 find /srv/espejo y restic snapshots."
+    solucion:
+      - /root/simular-martes.sh
+      - rsync -a --delete /srv/compartido/ root@nas02:/srv/espejo/
+      - restic backup /srv/compartido
+      - ssh root@nas02 find /srv/espejo
+      - ssh root@nas02 cat /srv/espejo/Administracion/balance-2026.ods
+      - restic snapshots
+    explicacion: >-
+      El espejo hizo exactamente su trabajo: quedó igual al original, sin Clientes y con el
+      balance cifrado. restic también copió el martes (es lo que había), pero la copia del lunes
+      sigue ahí. Con restic diff entre las dos ves lo que se borró y lo que cambió.
+  - consigna: >-
+      Recuperá la carpeta Clientes y el balance aprobado desde la copia del lunes, en su lugar
+      original.
+    verificar:
+      - { archivo: "/srv/compartido/Clientes/Rivas SA/contrato.pdf", contenido_incluye: "Contrato Rivas SA 2026" }
+      - { archivo: /srv/compartido/Administracion/balance-2026.ods, contenido_incluye: "version aprobada" }
+    pistas:
+      - "restic snapshots muestra el ID de la copia del lunes (la primera)."
+      - "restic restore ID --target / --include /srv/compartido/Clientes --include /srv/compartido/Administracion/balance-2026.ods"
+    solucion:
+      - "restic restore $(restic snapshots --json | grep -o '\"short_id\":\"[0-9a-f]*\"' | head -1 | cut -d'\"' -f4) --target / --include /srv/compartido/Clientes --include /srv/compartido/Administracion/balance-2026.ods"
+      - ls -R /srv/compartido
+      - cat /srv/compartido/Administracion/balance-2026.ods
+    explicacion: >-
+      Con --target / restic escribe cada archivo en su ruta original, y con --include elegís solo
+      lo que hace falta, sin pisar el resto (sueldos-noviembre.ods quedó como estaba). En la
+      práctica, primero se restaura a una carpeta aparte para revisar, y después se mueve.
+  - consigna: >-
+      Ahora el peor caso: el atacante también usó la clave ssh de root que nas01 tiene para entrar
+      a nas02. Simulalo borrando el repositorio desde nas01 (ssh root@nas02 rm -rf /srv/restic) y
+      comprobá qué queda.
+    verificar:
+      - { en: nas02, verificar: { restic_repo: /srv/restic, existe: false } }
+      - { comando_usado: "restic snapshots" }
+    pistas:
+      - "ssh root@nas02 rm -rf /srv/restic y después restic snapshots."
+    solucion:
+      - ssh root@nas02 rm -rf /srv/restic
+      - restic snapshots
+    explicacion: >-
+      Nada. Con sftp, el que hace las copias puede borrarlas, y el que entra a nas01 puede todo lo
+      que puede nas01. Por eso la copia inmutable de la regla 3-2-1-1-0: un rest-server solo
+      agregar (lección anterior), un bucket con bloqueo de objetos o un disco desconectado. Lo vas
+      a armar completo en el laboratorio del módulo.
