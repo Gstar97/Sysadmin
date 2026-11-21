@@ -440,7 +440,8 @@ register('restic', {
     const hostF = opt(['--host', '-H'])
     const tagF = opt(['--tag'])
     const pathF = opt(['--path'])
-    const filtered = () => repo.snapshots.filter((s) => (!hostF || s.host === hostF) && (!tagF || tagF.split(',').every((t) => s.tags.includes(t))) && (!pathF || s.paths.includes(pathF))).sort((x, y) => x.time - y.time)
+    // En backup, --tag y --host son lo que se le pone a la copia nueva, no un filtro.
+    const filtered = () => repo.snapshots.filter((s) => verb === 'backup' || ((!hostF || s.host === hostF) && (!tagF || tagF.split(',').every((t) => s.tags.includes(t))) && (!pathF || s.paths.includes(pathF)))).sort((x, y) => x.time - y.time)
 
     switch (verb) {
       case 'snapshots': {
@@ -455,9 +456,9 @@ register('restic', {
         return 0
       }
       case 'backup': {
-        const tags = optAll('--tag').flatMap((t) => t.split(','))
+        const tags = [...(tagF ? [tagF] : []), ...optAll('--tag')].flatMap((t) => t.split(','))
         const excludes = optAll('--exclude').map((e) => (e.startsWith('*') ? e : normalizePath(ctx.sh.resolve(e))))
-        const hostName = opt(['--host']) ?? ctx.sys.hostname
+        const hostName = hostF ?? ctx.sys.hostname
         const paths = a.filter((x) => !x.startsWith('-')).map((p) => normalizePath(ctx.sh.resolve(p)))
         if (!paths.length) {
           ctx.err('Fatal: nothing to backup, please specify source files/dirs\n')

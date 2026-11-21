@@ -360,9 +360,17 @@ export class Shell {
     this.cwdStack.push(sys.users.get(user)?.home ?? '/')
     this.oneShotFloor.push(this.userStack.length)
     sys.refreshVirtual()
+    // Como ssh: el comando remoto arranca con el entorno del otro equipo, no con lo exportado acá.
+    const savedVars = this.vars
+    const savedExported = this.exported
+    this.vars = new Map()
+    this.exported = new Set()
+    this.resetEnv()
     try {
       return await fn()
     } finally {
+      this.vars = savedVars
+      this.exported = savedExported
       this.oneShotFloor.pop()
       this.sysStack.pop()
       this.remoteStack.pop()
