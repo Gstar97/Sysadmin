@@ -1,0 +1,99 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es una rama en Git?
+  opciones:
+    - { texto: "Un nombre que apunta a un commit y avanza con cada commit nuevo", correcta: true, explicacion: "Por eso crear una es instantáneo." }
+    - { texto: "Una copia completa de la carpeta", explicacion: "No copia nada." }
+    - { texto: "Un repositorio aparte", explicacion: "No." }
+    - { texto: "Un servidor", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Fusionás una rama en main y Git dice "Fast-forward". ¿Qué pasó?
+  opciones:
+    - { texto: "main no tenía commits nuevos, así que solo avanzó hasta la punta de la rama", correcta: true, explicacion: "No se creó un commit de fusión." }
+    - { texto: "Hubo un conflicto", explicacion: "No." }
+    - { texto: "Se borró la rama", explicacion: "No." }
+    - { texto: "Se creó un commit con dos padres", explicacion: "Eso es una fusión común." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué hay que hacer con este archivo después de git merge?
+  salida: |
+    server {
+    <<<<<<< HEAD
+        ssl_protocols TLSv1.3;
+    =======
+        ssl_protocols TLSv1.2 TLSv1.3;
+    >>>>>>> tls13
+    }
+  opciones:
+    - { texto: "Dejar la versión correcta sin las marcas, git add y git commit", correcta: true, explicacion: "Así se resuelve un conflicto." }
+    - { texto: "Hacer git commit tal cual", explicacion: "Quedarían las marcas y nginx no arrancaría." }
+    - { texto: "Borrar el archivo", explicacion: "No." }
+    - { texto: "Nada, Git lo resuelve solo", explicacion: "Por eso marcó las dos versiones." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Completá el comando que crea la rama nuevo-web y te pasa a ella.
+  prompt: "ana@admin01:~/infra$"
+  aceptadas:
+    - "git switch -c nuevo-web"
+    - "git checkout -b nuevo-web"
+  explicacion: Sale de donde estás parado.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un commit que ya está en main (y en los servidores) rompió algo. ¿Cómo lo deshacés?
+  opciones:
+    - { texto: "git revert ID: un commit nuevo que lo da vuelta, sin reescribir la historia", correcta: true, explicacion: "Lo compartido no se reescribe." }
+    - { texto: "git reset --hard al commit anterior y push --force", explicacion: "Reescribe lo que otros ya tienen." }
+    - { texto: "Borrar el repositorio", explicacion: "No." }
+    - { texto: "git branch -d main", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué Git se niega a hacer git branch -d de una rama?
+  opciones:
+    - { texto: "Porque tiene commits que no están fusionados en la rama actual, y se perderían", correcta: true, explicacion: "Con -D se fuerza." }
+    - { texto: "Porque es main", explicacion: "Podría ser, pero el motivo común es este." }
+    - { texto: "Porque no tiene commits", explicacion: "No." }
+    - { texto: "Por permisos", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Estás en medio de una fusión con conflictos y querés volver a como estaba antes. ¿Qué usás?
+  opciones:
+    - { texto: "git merge --abort", correcta: true, explicacion: "Deja todo como antes del merge." }
+    - { texto: "git revert", explicacion: "No es para esto." }
+    - { texto: "git branch -D", explicacion: "No." }
+    - { texto: "git init", explicacion: "No." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son buenas prácticas con ramas en un equipo de infraestructura? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "main representa lo que está en producción", correcta: true, explicacion: "Siempre aplicable." }
+    - { texto: "Una rama corta por cambio, con un nombre que diga qué es", correcta: true, explicacion: "Horas o pocos días." }
+    - { texto: "Borrar la rama después de fusionarla", correcta: true, explicacion: "Sus commits ya están en main." }
+    - { texto: "Ramas que duran meses con muchos cambios", explicacion: "Se alejan de main y la fusión duele." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Hiciste git reset --hard HEAD~3 por error y perdiste tres commits locales. ¿Hay forma de recuperarlos?
+  opciones:
+    - { texto: "Sí: git reflog muestra a dónde apuntaba HEAD antes, y desde ahí se recuperan", correcta: true, explicacion: "Por un tiempo, Git los guarda." }
+    - { texto: "No, se borraron para siempre", explicacion: "Git los guarda un tiempo." }
+    - { texto: "Solo si estaban en GitHub", explicacion: "No hace falta." }
+    - { texto: "Con git revert", explicacion: "No." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es HEAD?
+  opciones:
+    - { texto: "Dónde estás parado: normalmente, la rama actual", correcta: true, explicacion: "HEAD~1 es el commit anterior." }
+    - { texto: "El primer commit", explicacion: "No." }
+    - { texto: "El servidor central", explicacion: "No." }
+    - { texto: "La rama main siempre", explicacion: "Depende de dónde estés." }

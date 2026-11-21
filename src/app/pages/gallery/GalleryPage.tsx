@@ -14,6 +14,7 @@ import {
   SimuladorQuorum,
   CalculadoraCapacidad,
   PlanificadorRetencion,
+  SimuladorRamas,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
@@ -176,6 +177,10 @@ export default function GalleryPage() {
         <SimuladorQuorum />
         <CalculadoraCapacidad />
         <PlanificadorRetencion />
+      </Section>
+
+      <Section id="automatizacion" titulo="Automatización" descripcion="Simulador de ramas de Git: se escriben comandos (commit, branch, switch, merge, reset) y se ve cómo cambia el grafo de commits, con avance rápido, commits de fusión y commits que quedan huérfanos.">
+        <SimuladorRamas />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">

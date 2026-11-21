@@ -1,0 +1,102 @@
+---
+id: n6-m1-l3
+titulo: Ramas y fusiones
+minutos: 150
+objetivos:
+  - Usar ramas para probar cambios sin tocar lo que está en producción.
+  - Fusionar ramas, entender el avance rápido y el commit de fusión, y resolver conflictos.
+  - Deshacer cambios con revert y reset, sabiendo cuándo usar cada uno.
+glosario: [rama-git, fusion-git, conflicto-fusion]
+verificado: 2026-11
+---
+
+import fusiones from './fusiones.svg?raw'
+import ejRamas from './ej-ramas.yaml'
+
+En main está lo que se aplica en los servidores. ¿Dónde probás un cambio que todavía no sabés si anda, o uno que lleva días? En una **rama**: una línea de trabajo aparte que sale de main, avanza por su cuenta y, cuando está lista, se **fusiona** de vuelta. Es la herramienta que permite que varias personas (o vos, con varias cosas a la vez) trabajen sin pisarse.
+
+<AntesDeEmpezar>
+- Flujo básico: add, commit, status, diff (lección 6.1.2).
+</AntesDeEmpezar>
+
+## Qué es una rama
+
+Una rama es solo un **nombre que apunta a un commit**. Cuando hacés un commit, la rama en la que estás avanza al commit nuevo; las demás se quedan donde estaban. **HEAD** es "dónde estás parado": normalmente apunta a una rama.
+
+Probalo: escribí comandos y mirá cómo cambia el grafo.
+
+<SimuladorRamas />
+
+Los comandos de todos los días:
+
+- `git switch -c nombre`: crea una rama donde estás y te pasa a ella (`git checkout -b`, en tutoriales viejos).
+- `git switch nombre`: cambia de rama; Git pone los archivos como estaban en esa rama.
+- `git branch`: lista las ramas; `git branch -d nombre` borra una ya fusionada.
+- `git merge nombre`: trae los cambios de esa rama a la actual.
+
+## Dos formas de fusionar
+
+<Diagrama svg={fusiones} alt="A la izquierda, el avance rápido: main estaba en un commit y la rama tls13 agregó dos commits después; como main no tenía nada nuevo, git merge solo mueve main hasta la punta de la rama, la historia queda en una línea y no hay commit nuevo. A la derecha, el commit de fusión: main y tls13 avanzaron por separado, y git crea un commit con dos padres; si tocaron las mismas líneas, hay conflicto." />
+
+Cuando las dos ramas cambiaron las **mismas líneas** de un archivo, Git no adivina: deja las dos versiones marcadas en el archivo y espera que decidas.
+
+```text
+<<<<<<< HEAD
+    ssl_protocols TLSv1.3;
+=======
+    ssl_protocols TLSv1.2 TLSv1.3;
+>>>>>>> tls13
+```
+
+Arriba, lo de la rama donde estás (HEAD); abajo, lo que viene de la otra. Resolver es editar el archivo hasta que quede bien, sin las marcas, y después `git add` y `git commit`. Mientras tanto, `git status` muestra los archivos en conflicto y `git merge --abort` vuelve todo atrás.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejRamas} />
+
+## Deshacer: revert y reset
+
+| | git revert ID | git reset --hard ID |
+|---|---|---|
+| Qué hace | Crea un commit nuevo que hace lo contrario de otro | Mueve la rama hacia atrás y descarta todo lo posterior |
+| La historia | Queda completa, se ve qué se deshizo | Se reescribe: los commits descartados desaparecen de la rama |
+| Cuándo | Para deshacer algo que ya está compartido (en main, en el servidor) | Solo para commits tuyos que nadie más tiene |
+
+La regla: **lo que ya compartiste, no se reescribe**. Si otros (o los servidores) ya tienen esos commits, un reset te deja con una historia distinta a la de ellos, y lo vas a sufrir en la próxima lección. Y si te equivocaste con un reset, `git reflog` muestra a dónde apuntaba HEAD antes, por un tiempo.
+
+## Cómo organizar ramas
+
+Para un equipo de infraestructura chico alcanza con un esquema simple, el que usan la mayoría de los equipos hoy (a veces se lo llama "basado en el tronco"):
+
+- **main** siempre representa lo que está (o puede estar) en producción.
+- Cada cambio, en una **rama corta**, con un nombre que diga qué es (`tls13`, `nuevo-servidor-web`), que vive horas o pocos días.
+- Se fusiona en main después de revisarla (lo vas a ver con los pull requests en la próxima lección), y se borra.
+
+Las ramas que viven meses se alejan tanto de main que fusionarlas es un dolor. Si un cambio es grande, conviene partirlo en cambios chicos.
+
+<EnSimple>
+Una rama es un nombre que apunta a un commit y avanza con cada commit nuevo; sirve para probar un cambio sin tocar main. git switch -c crea una y git merge la trae de vuelta: si main no avanzó, solo se mueve (avance rápido); si las dos avanzaron, se crea un commit de fusión. Si cambiaron las mismas líneas, hay un conflicto: Git marca las dos versiones y vos decidís. Para deshacer algo compartido, git revert (un commit nuevo que lo da vuelta); git reset --hard solo para lo que nadie más tiene. Ramas cortas, una por cambio, y borrarlas al fusionar.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Trabajar directo en main">
+    Cualquier prueba llega a lo que se aplica en producción. Una rama por cambio.
+  </ErrorComun>
+  <ErrorComun titulo="Commitear con las marcas de conflicto">
+    El archivo queda con &lt;&lt;&lt;&lt;&lt;&lt;&lt; adentro y nginx no arranca. Revisá el archivo (y probalo) antes del git add.
+  </ErrorComun>
+  <ErrorComun titulo="git reset --hard sobre lo que ya compartiste">
+    Reescribe la historia que otros ya tienen. Para eso está git revert.
+  </ErrorComun>
+  <ErrorComun titulo="Ramas que viven meses">
+    Se alejan de main y la fusión se vuelve una pelea. Ramas cortas y cambios chicos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Rama: un nombre que apunta a un commit; HEAD es dónde estás.
+- git switch -c, git switch, git branch, git branch -d, git merge, git log --oneline --graph.
+- Avance rápido (main no tenía nada nuevo) o commit de fusión (con dos padres).
+- Conflicto: editar hasta que quede bien, sin marcas, git add y git commit; o git merge --abort.
+- git revert para deshacer lo compartido; git reset --hard solo para lo local; git reflog para rescatar.
+</Resumen>

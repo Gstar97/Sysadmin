@@ -1105,6 +1105,7 @@ register('git', {
         const pick = take('-S')
         const grep = take('-G')
         const author = take('--author')
+        const msgGrep = take('--grep')
         const fmt = take('--format', '--pretty')
         const ddash = args.indexOf('--')
         const paths = ddash >= 0 ? args.splice(ddash).slice(1) : []
@@ -1139,6 +1140,7 @@ register('git', {
         const parentTree = (c: Commit) => (c.parents[0] ? repo.commits.get(c.parents[0])!.tree : new Map<string, Entry>())
         if (paths.length) list = list.filter((c) => diffSnapshots(parentTree(c), c.tree, match).length)
         if (author) list = list.filter((c) => c.author.includes(author) || c.email.includes(author))
+        if (msgGrep) list = list.filter((c) => new RegExp(msgGrep, 'i').test(c.message))
         if (pick) {
           const count = (t: Snapshot) => [...t.values()].reduce((k, e) => k + e.data.split(pick).length - 1, 0)
           list = list.filter((c) => count(c.tree) !== count(parentTree(c)))

@@ -1,0 +1,120 @@
+tipo: terminal
+shell: bash
+titulo: Una rama para probar, un cambio urgente y un conflicto
+descripcion: >-
+  En ~/infra (en admin01) está la configuración de la tienda, con su historia. Te pidieron
+  habilitar TLS 1.3 en nginx, y querés probarlo en una rama aparte sin tocar main, que es lo que
+  se aplica en los servidores.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true }]
+  paquetes: { instalados: [git] }
+  archivos:
+    /home/ana/.gitconfig: { dueno: ana, contenido: "[user]\n\tname = Ana Gómez\n\temail = ana@ejemplo.test\n[init]\n\tdefaultBranch = main\n" }
+  git:
+    repos:
+      - ruta: /home/ana/infra
+        usuario: ana
+        commits:
+          - mensaje: Primera versión de la tienda
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    ssl_protocols TLSv1.2;\n    client_max_body_size 20m;\n}\n"
+          - mensaje: Caché de 30 días para las imágenes
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    ssl_protocols TLSv1.2;\n    client_max_body_size 20m;\n    location /img/ {\n        expires 30d;\n    }\n}\n"
+          - mensaje: Encabezado HSTS
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    ssl_protocols TLSv1.2;\n    add_header Strict-Transport-Security \"max-age=31536000\" always;\n    client_max_body_size 20m;\n    location /img/ {\n        expires 30d;\n    }\n}\n"
+pasos:
+  - consigna: >-
+      Creá la rama tls13, pasate a ella, y cambiá la línea de protocolos a
+      "ssl_protocols TLSv1.2 TLSv1.3;". Guardalo con el mensaje "Habilitar TLS 1.3".
+    verificar:
+      - { git_repo: /home/ana/infra, rama: tls13, ramas: [main, tls13], ultimo_mensaje: "TLS 1.3", limpio: true }
+    pistas:
+      - "git switch -c tls13"
+      - "sed -i 's/ssl_protocols TLSv1.2;/ssl_protocols TLSv1.2 TLSv1.3;/' nginx/tienda.conf"
+    solucion:
+      - cd ~/infra
+      - git switch -c tls13
+      - sed -i 's/ssl_protocols TLSv1.2;/ssl_protocols TLSv1.2 TLSv1.3;/' nginx/tienda.conf
+      - git commit -am "Habilitar TLS 1.3"
+      - git log --oneline --all
+    explicacion: >-
+      Una rama es solo un nombre que apunta a un commit y avanza con cada commit nuevo. main sigue
+      donde estaba: si mientras tanto alguien aplica main en los servidores, tu prueba no llega.
+  - consigna: >-
+      Llama seguridad: hay que dejar solo TLS 1.3 en producción, ya. Volvé a main y cambiá ahí la
+      línea a "ssl_protocols TLSv1.3;", con el mensaje "Solo TLS 1.3, pedido de seguridad".
+    verificar:
+      - { git_repo: /home/ana/infra, rama: main, ultimo_mensaje: "pedido de seguridad", limpio: true }
+    pistas:
+      - "git switch main"
+      - "sed -i 's/ssl_protocols TLSv1.2;/ssl_protocols TLSv1.3;/' nginx/tienda.conf"
+    solucion:
+      - git switch main
+      - grep ssl_protocols nginx/tienda.conf
+      - sed -i 's/ssl_protocols TLSv1.2;/ssl_protocols TLSv1.3;/' nginx/tienda.conf
+      - git commit -am "Solo TLS 1.3, pedido de seguridad"
+    explicacion: >-
+      Al volver a main, el archivo volvió a tener solo TLSv1.2: Git cambia los archivos para que
+      coincidan con la rama. Ahora las dos ramas avanzaron por separado y tocaron la misma línea.
+  - consigna: >-
+      Fusioná tls13 en main. Si hay conflicto, resolvelo quedándote con lo que pidió seguridad
+      (solo TLS 1.3) y terminá la fusión.
+    verificar:
+      - { git_repo: /home/ana/infra, rama: main, fusionada: tls13, en_conflicto: false, limpio: true }
+      - { archivo: /home/ana/infra/nginx/tienda.conf, contenido_incluye: "ssl_protocols TLSv1.3;" }
+      - { archivo: /home/ana/infra/nginx/tienda.conf, contenido_no_incluye: "<<<<<<<" }
+    pistas:
+      - "git merge tls13 avisa del conflicto; cat nginx/tienda.conf muestra las marcas."
+      - "Dejá una sola línea, ssl_protocols TLSv1.3;, sin las marcas (con nano, o con sed '/^<<<<<<<\\|^=======\\|^>>>>>>>/d' y borrando la otra versión)."
+      - "Después: git add nginx/tienda.conf y git commit -m \"Fusión de tls13\"."
+    solucion:
+      - git merge tls13
+      - cat nginx/tienda.conf
+      - sed -i '/^<<<<<<< /d; /^=======/d; /^>>>>>>> /d; /TLSv1.2 TLSv1.3/d' nginx/tienda.conf
+      - cat nginx/tienda.conf
+      - git add nginx/tienda.conf
+      - git commit -m "Fusión de tls13 (queda solo TLS 1.3)"
+    explicacion: >-
+      Git fusiona solo todo lo que puede; cuando las dos ramas cambiaron las mismas líneas, marca
+      las dos versiones entre <<<<<<< y >>>>>>> y deja que decida una persona. Resolver es editar
+      el archivo hasta que quede como tiene que quedar, sin las marcas, y después git add y git
+      commit. Si te arrepentís en el medio, git merge --abort vuelve a como estaba.
+  - consigna: >-
+      La rama tls13 ya cumplió su función: borrala y mirá cómo quedó la historia.
+    verificar:
+      - { git_repo: /home/ana/infra, ramas: [main] }
+      - { comando_usado: "git branch -d" }
+      - { comando_usado: "--graph" }
+    pistas:
+      - "git branch -d tls13 (con -d, Git se niega si la rama tiene algo sin fusionar)."
+      - "git log --oneline --graph"
+    solucion:
+      - git branch -d tls13
+      - git log --oneline --graph
+    explicacion: >-
+      Borrar la rama no borra sus commits: ya son parte de main a través del commit de fusión. Por
+      eso se borran las ramas una vez fusionadas.
+  - consigna: >-
+      Dos días después, la caché de 30 días resulta ser el problema de una página que no se
+      actualiza. Deshacé ese commit sin borrar la historia (hay otros cambios encima).
+    verificar:
+      - { git_repo: /home/ana/infra, ultimo_mensaje: "Revert", limpio: true }
+      - { archivo: /home/ana/infra/nginx/tienda.conf, contenido_no_incluye: "expires 30d" }
+      - { archivo: /home/ana/infra/nginx/tienda.conf, contenido_incluye: "Strict-Transport-Security" }
+    pistas:
+      - "git log --oneline --grep Caché muestra el commit."
+      - "git revert ID --no-edit"
+    solucion:
+      - git log --oneline --grep Caché
+      - git revert $(git log --format=%h --grep Caché) --no-edit
+      - git log --oneline
+    explicacion: >-
+      git revert crea un commit nuevo que hace lo contrario de uno viejo: la historia queda
+      completa y se ve qué se deshizo y cuándo. Los cambios posteriores (HSTS, TLS 1.3) quedan.
+      git reset --hard, en cambio, mueve la rama hacia atrás y descarta todo lo que había después:
+      sirve para tus commits locales que nadie más tiene, nunca para lo que ya compartiste.
