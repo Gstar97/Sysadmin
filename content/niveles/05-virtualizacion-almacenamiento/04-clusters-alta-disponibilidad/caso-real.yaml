@@ -1,0 +1,145 @@
+tipo: troubleshooting
+titulo: El reinicio que congeló el clúster
+descripcion: >-
+  Incidente simulado. Una distribuidora tiene un clúster de Proxmox de dos nodos (pve01 y pve02)
+  con 12 VM, varias bajo alta disponibilidad, y un NFS compartido. El sábado a las 9, un
+  compañero reinició pve02 para aplicar una actualización del kernel. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Sábado, 9:20. Te llaman: no anda nada. El ERP, el correo interno y el servidor de archivos
+      están caídos, y todos estaban en pve01, que nadie tocó. El compañero dice que pve02 "todavía
+      no volvió del reinicio".
+    evidencia:
+      - titulo: En pve01
+        contenido: |2
+            # pvecm status | grep -E 'Expected|Total|Quorum:|Flags'
+            Expected votes:   2
+            Total votes:      1
+            Quorum:           2 Activity blocked
+            Flags:
+            # qm start 110
+            cluster not ready - no quorum?
+      - titulo: journalctl -b -1 en pve01 (el arranque anterior)
+        contenido: |2
+            09:04:12 pve01 corosync[1402]: [KNET  ] link: host: 2 link: 0 is down
+            09:04:13 pve01 corosync[1402]: [QUORUM] This node is within the non-primary component and will NOT provide any services.
+            09:05:14 pve01 watchdog-mux[981]: client watchdog expired - disable watchdog updates
+            09:05:18 pve01 kernel: watchdog: watchdog0: watchdog did not stop!
+    opciones:
+      - texto: Entender qué pasó con pve01 y en qué estado está pve02 antes de tocar nada
+        ir_a: n_diagnostico
+        minutos: 10
+      - texto: Ejecutar pvecm expected 1 en pve01 ya mismo para recuperar el quórum
+        ir_a: n_expected_ciego
+        minutos: 5
+      - texto: Sacar las VM de la alta disponibilidad (ha-manager remove) para que dejen de reiniciarse
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          "cluster not ready - no quorum?": sin quórum, /etc/pve es de solo lectura y no se puede
+          cambiar la configuración de la HA. No es el camino.
+  n_diagnostico:
+    situacion: >-
+      Lo entendés: con dos nodos, cuando pve02 se fue, pve01 quedó con 1 voto de 2, sin quórum.
+      Como tenía VM bajo alta disponibilidad, su watchdog lo reinició al minuto (es el cercado,
+      funcionando como debe) y, al volver, sin quórum, no arrancó nada. El clúster nunca tuvo un
+      tercer voto. Falta saber qué pasa con pve02.
+    evidencia:
+      - titulo: La placa de gestión de pve02
+        contenido: |2
+            $ ipmitool -I lanplus -H 192.168.10.122 -U admin -P ******** chassis power status
+            Chassis Power is on
+            [consola remota] Loading Linux 7.0.4-1-pve ...
+            [consola remota] Gave up waiting for root file system device.
+            [consola remota] (initramfs) _
+    opciones:
+      - texto: Apagar pve02 por la placa de gestión, comprobar que está apagado y recién ahí bajar los votos esperados en pve01
+        ir_a: n_expected
+        minutos: 10
+      - texto: Arreglar el arranque de pve02 primero (arrancar con el kernel anterior y rehacer el initramfs)
+        ir_a: n_arreglar_primero
+        minutos: 45
+  n_expected_ciego:
+    situacion: >-
+      pve01 recupera el quórum y la HA empieza a arrancar las VM. Tuviste suerte: pve02 estaba
+      trabado en el arranque y no tenía nada corriendo. Pero si hubiera estado vivo con la red del
+      clúster cortada, las dos mitades podrían haber arrancado las mismas VM sobre el NFS: split
+      brain y datos rotos.
+    evidencia:
+      - titulo: Lo que no sabías
+        contenido: |2
+            pve02 podía estar: apagado, trabado en el arranque, o vivo y sin red de clúster.
+            Con expected 1 sin saberlo, en el tercer caso hay dos copias de cada VM.
+    opciones:
+      - texto: Confirmar ahora el estado de pve02 por su placa de gestión
+        ir_a: n_expected
+        minutos: 10
+  n_arreglar_primero:
+    situacion: >-
+      Arrancás pve02 con el kernel anterior y rehacés el initramfs. Funciona, pero entre una cosa
+      y otra pasan 45 minutos más con todo caído, cuando el problema de pve01 era solo de votos.
+    evidencia:
+      - titulo: pve02, de vuelta
+        contenido: |2
+            # pvecm status | grep -E 'Total|Flags'
+            Total votes:      2
+            Flags:            Quorate
+    opciones:
+      - texto: Con el clúster de vuelta, armar el plan para que no se repita
+        ir_a: n_plan
+        minutos: 30
+  n_expected:
+    situacion: >-
+      pve02 apagado por la placa de gestión (Chassis Power is off). En pve01, pvecm expected 1:
+      vuelve el quórum, la HA arranca las VM y en diez minutos todo anda. Después, con calma,
+      arreglás el arranque de pve02 (kernel anterior y update-initramfs) y lo volvés a sumar.
+    evidencia:
+      - titulo: pve01
+        contenido: |2
+            # pvecm expected 1
+            # pvecm status | grep -E 'Expected|Flags'
+            Expected votes:   1
+            Flags:            Quorate
+            # ha-manager status | grep service
+            service vm:110 (pve01, started)
+            service vm:111 (pve01, started)
+            service vm:120 (pve01, started)
+    opciones:
+      - texto: Con todo funcionando, armar el plan para que no se repita
+        ir_a: n_plan
+        minutos: 30
+  n_plan:
+    situacion: >-
+      El lunes te piden la propuesta. Lo que pasó fue de manual: un clúster de dos nodos sin
+      tercer voto se cae entero cuando se cae cualquiera de los dos, aunque sea por un reinicio
+      planificado.
+    evidencia:
+      - titulo: Opciones
+        contenido: |2
+            A. Un QDevice: corosync-qnetd en una VM o equipo fuera del clúster (el NFS sirve)
+            B. Un tercer nodo (más caro, pero suma capacidad)
+            C. Seguir así y "acordarse" de bajar los votos antes de cada reinicio
+    opciones:
+      - texto: "Proponer A ya mismo (QDevice en otro equipo) y B para el presupuesto del año; y un procedimiento: antes de reiniciar un nodo, modo mantenimiento y verificar el quórum"
+        ir_a: n_ok
+        minutos: 60
+      - texto: Proponer C, que no cuesta nada
+        ir_a: n_plan
+        minutos: 10
+        consecuencia: >-
+          Depende de que nadie se olvide nunca, y no cubre la caída no planificada de un nodo (una
+          fuente que se quema): ahí no hay tiempo de bajar votos. El tercer voto es la solución.
+  n_ok:
+    final: exito
+    resumen: >-
+      Con un QDevice en el servidor del NFS, el clúster aguanta la caída de cualquiera de los dos
+      nodos. La causa del sábado fue de diseño: un clúster de dos nodos sin tercer voto se queda
+      sin quórum cuando falta cualquiera, y con VM bajo alta disponibilidad el watchdog reinicia
+      al que queda (para protegerse de un split brain). Lo que funcionó: leer pvecm status y el
+      registro antes de actuar; confirmar por la placa de gestión que el otro nodo estaba apagado
+      antes de usar pvecm expected 1 (sin esa confirmación, es la receta del split brain); y
+      separar el arreglo urgente (los votos) del arreglo de fondo (el arranque de pve02 y el
+      QDevice). Para la próxima: modo mantenimiento antes de reiniciar, y nunca dos nodos sin un
+      tercer voto.
