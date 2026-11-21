@@ -1044,6 +1044,7 @@ const common: Record<string, PackageInfo> = {
   wget: { summary: 'A utility for retrieving files using the HTTP or FTP protocols', version: '1.24.5', commands: ['wget'] },
   nano: { summary: 'A small text editor', version: '8.1', commands: ['nano'] },
   git: { summary: 'Fast Version Control System', version: '2.47.1', commands: ['git'] },
+  gitleaks: { summary: 'Scan git repos (or files) for secrets', version: '8.18.2', commands: ['gitleaks'] },
   tree: { summary: 'File system tree viewer', version: '2.1.0', commands: ['tree'] },
   htop: { summary: 'Interactive process viewer', version: '3.3.0', commands: ['htop'] },
   rsync: { summary: 'A program for synchronizing files over a network', version: '3.3.0', commands: ['rsync'] },

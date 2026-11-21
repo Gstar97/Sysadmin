@@ -50,6 +50,7 @@ import { verifyZfs } from './zfs'
 import { verifyIscsi } from './iscsi'
 import { verifyCeph } from './ceph'
 import { verifyBackup } from './backup'
+import { verifyGit } from './git'
 import './diskimage'
 
 export { Shell, COMMANDS } from './shell'
@@ -202,6 +203,8 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if (hwResult) return hwResult
   const lvResult = verifyLibvirt(sys, check)
   if (lvResult) return lvResult
+  const gitResult = verifyGit(sys, check)
+  if (gitResult) return gitResult
   const backupResult = verifyBackup(sys, check)
   if (backupResult) return backupResult
   const cephResult = verifyCeph(sys, check)

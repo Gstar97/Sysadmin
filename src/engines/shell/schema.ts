@@ -485,6 +485,25 @@ const stateShape = {
         .optional(),
     })
     .optional(),
+  /** Repositorios de Git que ya existen en este equipo, con su historia. */
+  git: z
+    .strictObject({
+      repos: z
+        .array(
+          z.strictObject({
+            ruta: z.string(),
+            bare: z.boolean().default(false),
+            rama: z.string().default('main'),
+            /** Dueño de los archivos (si no, root). */
+            usuario: z.string().optional(),
+            remotos: z.record(z.string(), z.string()).default({}),
+            /** Commits en orden, cada uno con los archivos que cambia (null = se borra). Sin commits y con origin: es un clon. */
+            commits: z.array(z.strictObject({ mensaje: z.string(), autor: z.string().optional(), correo: z.string().optional(), archivos: z.record(z.string(), z.string().nullable()) })).default([]),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
   /** Repositorios de restic que ya existen en este equipo (en una carpeta o en un bucket de objetos). */
   restic: z
     .strictObject({
@@ -814,6 +833,25 @@ const singleCheckSchema = z.union([
   z.strictObject({ red_libvirt: z.string(), activa: z.boolean().optional(), autostart: z.boolean().optional() }),
   /** Una VM (pve_vm) o un contenedor (pve_ct) de Proxmox: estado, nombre, plantilla, instantánea y valores de su configuración. */
   z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional(), arranca: z.boolean().optional(), con_red: z.boolean().optional(), nodo: z.string().optional() }),
+  /** Un repositorio de Git: rama, commits, si está limpio, archivos versionados, remoto, conflictos, historial. */
+  z.strictObject({
+    git_repo: z.string(),
+    existe: z.boolean().optional(),
+    rama: z.string().optional(),
+    ramas: z.array(z.string()).optional(),
+    commits_min: z.number().int().optional(),
+    limpio: z.boolean().optional(),
+    versionado: z.string().optional(),
+    no_versionado: z.string().optional(),
+    ultimo_mensaje: z.string().optional(),
+    remoto: z.string().optional(),
+    sincronizado: z.boolean().optional(),
+    en_conflicto: z.boolean().optional(),
+    etiqueta: z.string().optional(),
+    historial_no_contiene: z.string().optional(),
+    fusionada: z.string().optional(),
+    hook: z.string().optional(),
+  }),
   /** Un repositorio de restic (carpeta de este equipo o s3:bucket/prefijo de su almacenamiento de objetos). */
   z.strictObject({ restic_repo: z.string(), existe: z.boolean().optional(), instantaneas_min: z.number().int().optional(), con_ruta: z.string().optional(), con_archivo: z.string().optional(), etiqueta: z.string().optional(), clave: z.string().optional() }),
   /** rest-server corriendo en este equipo y sus opciones. */
