@@ -1,0 +1,78 @@
+---
+id: n5-m5-l1
+titulo: DAS, NAS, SAN y almacenamiento de objetos
+minutos: 120
+objetivos:
+  - Diferenciar almacenamiento de bloques, de archivos y de objetos, y saber para qué sirve cada uno.
+  - Entender qué es una SAN y por qué un mismo disco compartido entre servidores necesita algo que lo coordine.
+  - Comparar discos y redes de almacenamiento por latencia, operaciones por segundo y ancho de banda.
+glosario: [red-almacenamiento-san, nas-almacenamiento, almacenamiento-objetos, lun, hiperconvergencia]
+verificado: 2026-11
+---
+
+import tipos from './tipos.svg?raw'
+import tiposDatos from './tipos.yaml'
+import cual from './cual.yaml'
+
+Hasta ahora, los discos de las VM vivían en los discos de cada nodo, en un NFS o en un Proxmox Backup Server. En este módulo vas a ver las formas serias de guardar datos en una empresa: cómo se comparten discos por la red, cómo ZFS protege los datos en un servidor y cómo Ceph los reparte entre varios. Antes, el mapa: hay cuatro formas de darle espacio a un servidor, y cada una sirve para algo distinto.
+
+<AntesDeEmpezar>
+- Discos, particiones, LVM y RAID (lecciones 1.4.1 a 1.4.6 y 4.5.2).
+- NFS y Samba (lecciones 4.4.4 y 4.4.5).
+- Clúster y almacenamiento compartido (módulo 5.4).
+</AntesDeEmpezar>
+
+## Las cuatro formas
+
+<DiagramaInteractivo datos={tiposDatos} svg={tipos} alt="Cuatro columnas. DAS, disco conectado directo: un servidor con sus discos propios (SATA, SAS, NVMe); lo ve un solo servidor, es el más rápido y simple; el servidor ve un disco; por ejemplo, los discos de un nodo con ZFS o RAID. NAS, archivos por la red: un servidor que usa un servidor de archivos por NFS o SMB; muchos clientes a la vez, el NAS maneja el sistema de archivos; el cliente ve una carpeta; por ejemplo, un NFS para VM. SAN, bloques por la red: un servidor que usa un almacenamiento (LUN) por iSCSI o Fibre Channel; red propia y rápida, el servidor formatea y, para compartir entre varios, hace falta algo que lo coordine; el servidor ve un disco. Objetos, por HTTP (S3): un programa o servidor que guarda objetos en buckets por la API S3; casi sin límite de tamaño, objetos enteros con metadatos y versiones; el programa ve una URL; por ejemplo, copias de respaldo." />
+
+La diferencia que más importa es **qué ve el servidor**:
+
+- **Bloques** (DAS y SAN): ve un disco vacío, lo formatea él y maneja su sistema de archivos. Es lo más rápido y lo que usan las bases de datos y los discos de VM.
+- **Archivos** (NAS): ve una carpeta; el sistema de archivos lo maneja el NAS. Muchos clientes pueden usar la misma carpeta sin coordinarse entre ellos.
+- **Objetos**: no ve ni disco ni carpeta, sino una dirección web donde guarda y pide objetos enteros. No se puede "abrir un archivo y cambiar una línea": se sube el objeto de nuevo.
+
+Un detalle de la SAN que cuesta caro si se olvida: **un LUN es un disco**, y si dos servidores lo formatean con ext4 o NTFS y lo montan a la vez, cada uno cree que es el único dueño y lo destruyen en minutos. Para compartir un LUN entre los nodos de un clúster hace falta algo que lo coordine: LVM compartido en Proxmox, VMFS en VMware o los CSV en Windows.
+
+<Emparejar ejercicio={cual} />
+
+## Hiperconvergencia
+
+La tendencia de los últimos años es no comprar una SAN aparte: cada nodo del clúster aporta sus discos y un software los junta en un almacenamiento compartido repartido entre todos. Eso es la **hiperconvergencia**: Ceph en Proxmox, vSAN en VMware, Storage Spaces Direct en Windows (Azure Local). Sirve para crecer de a un servidor y no depender de un equipo caro, pero pide una red rápida entre los nodos (25 Gbps o más es lo normal hoy) y al menos tres nodos. Lo vas a ver en la lección 5.5.4.
+
+## Cómo se mide
+
+Tres números, que ya conocés del Nivel 0 y ahora se vuelven importantes:
+
+- **Latencia**: cuánto tarda una operación. Un disco mecánico, unos 5 a 10 ms; un SSD SATA, unos 0,1 ms; un NVMe, 0,02 ms. Por la red se suma lo que tarda la red, por eso una SAN o un Ceph piden redes rápidas y propias.
+- **IOPS** (operaciones por segundo): cuántas lecturas o escrituras chicas al azar aguanta. Lo que más piden las VM y las bases de datos. Un disco mecánico hace unas 150; un NVMe, cientos de miles.
+- **Ancho de banda**: cuántos MB por segundo mueve en lecturas grandes y seguidas. Lo que importa para respaldos y videos.
+
+Una red de 1 Gbps mueve como máximo unos 110 MB/s: menos que un solo SSD. Por eso el almacenamiento en red empieza en 10 Gbps, y por eso conviene una red propia para él, separada de la de los usuarios (y de la de corosync).
+
+<EnSimple>
+Hay cuatro formas de darle espacio a un servidor: discos propios (DAS), una carpeta compartida por la red (NAS, con NFS o SMB), un disco por la red (SAN, con iSCSI o Fibre Channel) y objetos por HTTPS (S3). Las dos primeras de bloques las formatea el servidor; si varios comparten el mismo disco, algo tiene que coordinarlos. La hiperconvergencia junta los discos de los nodos en un almacenamiento compartido. Se mide con latencia, IOPS y ancho de banda, y por eso pide redes rápidas y propias.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Montar el mismo LUN en dos servidores con un sistema de archivos común">
+    Los dos escriben sin coordinarse y lo destruyen. Hace falta LVM compartido, VMFS, CSV o un sistema de archivos de clúster.
+  </ErrorComun>
+  <ErrorComun titulo="Almacenamiento en red por la red de los usuarios">
+    Compiten por el mismo enlace: el respaldo de la noche frena todas las VM. Red propia, de 10 Gbps o más.
+  </ErrorComun>
+  <ErrorComun titulo="Usar almacenamiento de objetos como si fuera un disco">
+    Se puede "montar" un bucket con programas especiales, pero es lento y frágil para trabajar archivos. Los objetos son para guardar y leer enteros.
+  </ErrorComun>
+  <ErrorComun titulo="Mirar solo los TB">
+    Un almacenamiento grande pero lento hace andar mal a todas las VM. Para VM y bases de datos importan las IOPS y la latencia.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- DAS: discos propios, lo más rápido; NAS: carpetas por NFS o SMB; SAN: discos (LUN) por iSCSI, FC o NVMe-oF; objetos: S3 por HTTPS.
+- Bloques: el servidor formatea; archivos: el NAS maneja el sistema de archivos; objetos: se guardan enteros.
+- Un LUN compartido necesita coordinación (LVM compartido, VMFS, CSV).
+- Hiperconvergencia: los discos de los nodos forman el almacenamiento compartido (Ceph, vSAN, S2D).
+- Latencia, IOPS y ancho de banda; el almacenamiento en red pide 10 Gbps o más y red propia.
+</Resumen>

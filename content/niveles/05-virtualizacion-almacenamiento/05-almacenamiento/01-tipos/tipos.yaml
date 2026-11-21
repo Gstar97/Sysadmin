@@ -1,0 +1,35 @@
+tipo: diagrama
+titulo: DAS, NAS, SAN y objetos
+puntos:
+  - id: das
+    titulo: DAS (almacenamiento conectado directo)
+    area: { x: 2.3, y: 10, ancho: 22.7, alto: 82.5 }
+    texto: >-
+      Los discos dentro del servidor (o en un gabinete conectado por SAS). Es lo más rápido y
+      barato, y lo que usa ZFS en un nodo o Ceph en cada nodo. El límite: si el servidor se apaga,
+      nadie más llega a esos discos (salvo que algo los replique, como Ceph o pvesr).
+  - id: nas
+    titulo: NAS (almacenamiento en red, de archivos)
+    area: { x: 27, y: 10, ancho: 22.7, alto: 82.5 }
+    texto: >-
+      Un servidor que comparte carpetas por NFS (Linux) o SMB (Windows), como viste en el módulo
+      4.4. El NAS maneja el sistema de archivos, así que muchos clientes pueden usar la misma
+      carpeta a la vez sin pisarse. En Proxmox, un NFS es la forma más simple de tener
+      almacenamiento compartido para un clúster.
+  - id: san
+    titulo: SAN (red de almacenamiento, de bloques)
+    area: { x: 51.6, y: 10, ancho: 22.7, alto: 82.5 }
+    texto: >-
+      Un equipo que presenta discos (LUN) por la red: el servidor los ve como un disco más y los
+      formatea él. Por iSCSI (sobre la red Ethernet común), Fibre Channel (una red aparte, propia
+      de las SAN) o NVMe over Fabrics (lo más nuevo y rápido). Si dos servidores formatean el mismo
+      LUN con un sistema de archivos común, lo rompen: hace falta algo que coordine (LVM
+      compartido en Proxmox, VMFS en VMware, CSV en Windows).
+  - id: objetos
+    titulo: Almacenamiento de objetos (S3)
+    area: { x: 76.3, y: 10, ancho: 21.4, alto: 82.5 }
+    texto: >-
+      Se guardan y se piden objetos enteros (un archivo con sus metadatos) por HTTPS, con la API
+      S3 de Amazon, que copiaron todos: MinIO, Ceph (RGW), Backblaze B2, Wasabi. No sirve para el
+      disco de una VM, pero sí para copias de respaldo, porque escala sin límite, guarda versiones
+      y puede hacer objetos inmodificables por un tiempo (lo vas a usar en el módulo 5.6).
