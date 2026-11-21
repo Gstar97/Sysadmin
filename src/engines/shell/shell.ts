@@ -195,6 +195,8 @@ export class Shell {
   /** Para los niveles abiertos con ssh: el nombre con el que se conectó (para "Connection to X closed."). */
   private remoteStack: (string | undefined)[]
   private userStack: string[]
+  /** Profundidad de los niveles abiertos por "ssh servidor comando" (no se cierran desde adentro). */
+  private oneShotFloor: number[] = []
   private cwdStack: string[]
   vars = new Map<string, string>()
   exported = new Set<string>()
@@ -341,7 +343,9 @@ export class Shell {
   /** Cierra todas las sesiones abiertas en un servidor que se apagó. Devuelve el nombre con el que se entró. */
   dropHost(sys: System): string | undefined {
     let name: string | undefined
-    while (this.userStack.length > 1 && this.sysStack.includes(sys)) {
+    // Los niveles de un "ssh servidor comando" los cierra ese mismo ssh al terminar.
+    const floor = Math.max(1, ...this.oneShotFloor)
+    while (this.userStack.length > floor && this.sysStack.slice(floor).includes(sys)) {
       const p = this.popUser()
       if (p && p.remote) name = p.remote
     }
@@ -354,9 +358,11 @@ export class Shell {
     this.remoteStack.push(undefined)
     this.userStack.push(user)
     this.cwdStack.push(sys.users.get(user)?.home ?? '/')
+    this.oneShotFloor.push(this.userStack.length)
     try {
       return await fn()
     } finally {
+      this.oneShotFloor.pop()
       this.sysStack.pop()
       this.remoteStack.pop()
       this.userStack.pop()

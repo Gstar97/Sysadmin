@@ -5,6 +5,8 @@
 import type { PackageInfo } from './packages'
 
 export const ROCKY_VIRT: Record<string, PackageInfo> = {
+  targetcli: { summary: 'An administration shell for storage targets', version: '2.1.58-3.el10', services: [{ name: 'target', description: 'Restore LIO kernel target configuration', ports: [], enabledByDefault: false, activeAfterInstall: false }], commands: ['targetcli'] },
+  'iscsi-initiator-utils': { summary: 'iSCSI daemon and utility programs', version: '6.2.1.9-21.el10', services: [{ name: 'iscsid', description: 'Open-iSCSI', ports: [], enabledByDefault: true, activeAfterInstall: true }], commands: ['iscsiadm'] },
   'qemu-img': { summary: 'QEMU command line tool for manipulating disk images', version: '9.1.0-15.el10', commands: ['qemu-img'] },
   'qemu-kvm': { summary: 'QEMU is a machine emulator and virtualizer', version: '9.1.0-15.el10', requires: ['qemu-img'], commands: [] },
   libvirt: {
@@ -24,6 +26,8 @@ export const ROCKY_VIRT: Record<string, PackageInfo> = {
 }
 
 export const UBUNTU_VIRT: Record<string, PackageInfo> = {
+  'targetcli-fb': { summary: 'Command shell for managing the Linux LIO kernel target', version: '1:2.1.53-1.1', services: [{ name: 'rtslib-fb-targetctl', description: 'Restore LIO kernel target configuration', ports: [], enabledByDefault: true, activeAfterInstall: true }], commands: ['targetcli'] },
+  'open-iscsi': { summary: 'iSCSI initiator tools', version: '2.1.9-3ubuntu5', services: [{ name: 'iscsid', description: 'iSCSI initiator daemon (iscsid)', ports: [], enabledByDefault: true, activeAfterInstall: true }], commands: ['iscsiadm'] },
   'qemu-utils': { summary: 'QEMU utilities', version: '1:8.2.2+ds-0ubuntu1.4', commands: ['qemu-img'] },
   'qemu-system-x86': { summary: 'QEMU full system emulation binaries (x86)', version: '1:8.2.2+ds-0ubuntu1.4', requires: ['qemu-utils'], commands: ['qemu-system-x86_64'] },
   'qemu-kvm': { summary: 'QEMU Full virtualization on x86 hardware (transitional package)', version: '1:8.2.2+ds-0ubuntu1.4', requires: ['qemu-system-x86'], commands: [] },
@@ -43,7 +47,7 @@ export const UBUNTU_VIRT: Record<string, PackageInfo> = {
   'proxmox-ve': {
     summary: 'Proxmox Virtual Environment',
     version: '9.2.0',
-    requires: ['pve-qemu-kvm', 'zfsutils-linux'],
+    requires: ['pve-qemu-kvm', 'zfsutils-linux', 'open-iscsi'],
     services: [
       { name: 'pveproxy', description: 'PVE API Proxy Server', ports: [8006], enabledByDefault: true, activeAfterInstall: true },
       { name: 'pvedaemon', description: 'PVE API Daemon', ports: [85], enabledByDefault: true, activeAfterInstall: true },

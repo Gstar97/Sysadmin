@@ -92,3 +92,20 @@ describe('Clúster de conmutación por error', () => {
     expect(verifyPs(s, { cluster_win: 'CLU01', quorum: false }).ok).toBe(true)
   })
 })
+
+describe('Iniciador iSCSI de Windows', () => {
+  it('servicio, portal, conexión persistente y los discos que aparecen desconectados', async () => {
+    const s = createPsSession({ equipo: 'HV01', dominio: 'empresa.local', red: { ip: '192.168.10.31' }, iscsi: { portales: [{ ip: '192.168.10.60', destinos: [{ iqn: 'iqn.2026-11.lan.empresa:san01', luns_gb: [500, 1] }] }] } })
+    expect((await run(s, 'New-IscsiTargetPortal -TargetPortalAddress 192.168.10.60')).err).toContain('has not been started')
+    await run(s, 'Set-Service MSiSCSI -StartupType Automatic')
+    await run(s, 'Start-Service MSiSCSI')
+    await run(s, 'New-IscsiTargetPortal -TargetPortalAddress 192.168.10.60')
+    expect((await run(s, 'Get-IscsiTarget')).out).toContain('iqn.2026-11.lan.empresa:san01')
+    expect((await run(s, 'Get-InitiatorPort')).out).toContain('iqn.1991-05.com.microsoft:hv01.empresa.local')
+    await run(s, 'Get-IscsiTarget | Connect-IscsiTarget -IsPersistent $true')
+    expect(verifyPs(s, { iscsi_conectado: 'iqn.2026-11.lan.empresa:san01', persistente: true }).ok).toBe(true)
+    const d = (await run(s, 'Get-Disk | Where-Object BusType -eq iSCSI')).out
+    expect(d).toMatch(/500 GB/)
+    expect(d).toContain('Offline')
+  })
+})

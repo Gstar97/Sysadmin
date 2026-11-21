@@ -47,7 +47,11 @@ export interface PveGuest {
 
 export interface PveStorage {
   id: string
-  type: 'dir' | 'lvmthin' | 'lvm' | 'zfspool' | 'nfs' | 'cifs' | 'pbs'
+  type: 'dir' | 'lvmthin' | 'lvm' | 'zfspool' | 'nfs' | 'cifs' | 'pbs' | 'iscsi' | 'rbd'
+  /** iSCSI: el destino. */
+  target?: string
+  /** LVM: el grupo de volúmenes. */
+  vgname?: string
   content: string[]
   path?: string
   server?: string
@@ -103,7 +107,11 @@ export function pveOf(sys: System): Pve | undefined {
 }
 
 /** Lo que otros módulos le agregan a Proxmox sin que este archivo dependa de ellos. */
-export const pveHooks: { datasetExists?: (sys: System, name: string) => boolean } = {}
+export const pveHooks: {
+  datasetExists?: (sys: System, name: string) => boolean
+  iscsiLogin?: (ctx: CommandContext, portal: string, target: string) => string | undefined
+  rbdPool?: (sys: System, pool: string) => boolean
+} = {}
 
 export const PVE_VERSION = '9.2.1'
 export const PVE_KERNEL = '7.0.4-1-pve'
@@ -1782,12 +1790,12 @@ register('pvesm', {
           ctx.err(`create storage failed: storage ID '${id}' already defined\n`)
           return 1
         }
-        const types = ['dir', 'nfs', 'cifs', 'pbs', 'lvmthin', 'lvm', 'zfspool']
+        const types = ['dir', 'nfs', 'cifs', 'pbs', 'lvmthin', 'lvm', 'zfspool', 'iscsi', 'rbd']
         if (!types.includes(type)) {
           ctx.err(`400 Parameter verification failed.\ntype: value '${type}' does not have a value in the enumeration '${types.join(', ')}'\n`)
           return 1
         }
-        const content = (opts.get('content') ?? (type === 'pbs' ? 'backup' : type === 'dir' ? 'iso,vztmpl,backup' : 'images,rootdir')).split(',')
+        const content = (opts.get('content') ?? (type === 'pbs' ? 'backup' : type === 'dir' ? 'iso,vztmpl,backup' : type === 'iscsi' ? 'none' : 'images,rootdir')).split(',')
         if (type === 'nfs' || type === 'cifs') {
           if (!opts.get('server') || !opts.get(type === 'nfs' ? 'export' : 'share')) {
             ctx.err(`400 Parameter verification failed.\n${!opts.get('server') ? 'server' : type === 'nfs' ? 'export' : 'share'}: property is missing and it is not optional\n`)
@@ -1815,6 +1823,35 @@ register('pvesm', {
             return 1
           }
         }
+        if (type === 'iscsi') {
+          for (const req of ['portal', 'target']) {
+            if (!opts.get(req)) {
+              ctx.err(`400 Parameter verification failed.\n${req}: property is missing and it is not optional\n`)
+              return 1
+            }
+          }
+          if (pveHooks.iscsiLogin) {
+            const e = pveHooks.iscsiLogin(ctx, opts.get('portal')!, opts.get('target')!)
+            if (e) {
+              ctx.err(`create storage failed: ${e}\n`)
+              return 1
+            }
+          }
+        }
+        if (type === 'lvm') {
+          if (!opts.get('vgname')) {
+            ctx.err(`400 Parameter verification failed.\nvgname: property is missing and it is not optional\n`)
+            return 1
+          }
+          if (!sys.storage.vgs.has(opts.get('vgname')!)) {
+            ctx.err(`create storage failed: volume group '${opts.get('vgname')}' not found\n`)
+            return 1
+          }
+        }
+        if (type === 'rbd' && pveHooks.rbdPool && !pveHooks.rbdPool(sys, opts.get('pool') ?? id)) {
+          ctx.err(`create storage failed: pool '${opts.get('pool') ?? id}' does not exist\n`)
+          return 1
+        }
         if (type === 'zfspool') {
           if (!opts.get('pool')) {
             ctx.err(`400 Parameter verification failed.\npool: property is missing and it is not optional\n`)
@@ -1829,7 +1866,7 @@ register('pvesm', {
           ctx.err(`400 Parameter verification failed.\npath: property is missing and it is not optional\n`)
           return 1
         }
-        pve.storages.set(id, { id, type: type as PveStorage['type'], content, path: opts.get('path') ?? opts.get('pool'), server: opts.get('server'), export: opts.get('export') ?? opts.get('share'), datastore: opts.get('datastore'), username: opts.get('username'), fingerprint: opts.get('fingerprint'), totalBytes: type === 'pbs' ? 2000 * GiB : type === 'nfs' ? 1000 * GiB : 200 * GiB, enabled: opts.get('disable') !== '1', shared: ['nfs', 'cifs', 'pbs'].includes(type) || opts.get('shared') === '1' })
+        pve.storages.set(id, { id, type: type as PveStorage['type'], content, target: opts.get('target'), vgname: opts.get('vgname'), path: opts.get('path') ?? opts.get('pool') ?? (type === 'rbd' ? id : undefined), server: opts.get('server'), export: opts.get('export') ?? opts.get('share'), datastore: opts.get('datastore'), username: opts.get('username'), fingerprint: opts.get('fingerprint'), totalBytes: type === 'pbs' ? 2000 * GiB : type === 'nfs' ? 1000 * GiB : 200 * GiB, enabled: opts.get('disable') !== '1', shared: ['nfs', 'cifs', 'pbs', 'iscsi', 'rbd'].includes(type) || opts.get('shared') === '1' })
         if (type === 'nfs' || type === 'cifs') sys.vfs.mkdirp(`/mnt/pve/${id}`, ROOT_CRED)
         writeStorageCfg(sys, pve)
         if (type === 'pbs') ctx.out(`Successfully added storage '${id}'\n`)

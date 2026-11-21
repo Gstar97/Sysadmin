@@ -12,6 +12,7 @@ import './ad-ops'
 import { initialGroupPolicy } from './gpo'
 import { initialHyperV, verifyHyperV } from './hyperv'
 import { verifyFailover } from './failover'
+import { verifyIscsiWin } from './iscsi'
 import { buildAdStore, computerObject, ouPathToDn, sameDn, store, type AdStore } from './ad'
 import { BASE_RULES, DC_RULES, Lab, ruleObject } from './machine'
 import { psCheckSchema, psStateSchema, type PsCheckInput, type PsServerState, type PsStateInput } from './schema'
@@ -40,6 +41,7 @@ const BASE_SERVICES: ServiceSeed[] = [
   { name: 'LanmanServer', display: 'Server', status: 'Running', start: 'Automatic' },
   { name: 'LanmanWorkstation', display: 'Workstation', status: 'Running', start: 'Automatic' },
   { name: 'MpsSvc', display: 'Windows Defender Firewall', status: 'Running', start: 'Automatic' },
+  { name: 'MSiSCSI', display: 'Microsoft iSCSI Initiator Service', status: 'Stopped', start: 'Manual' },
   { name: 'Netlogon', display: 'Netlogon', status: 'Stopped', start: 'Manual' },
   { name: 'RpcSs', display: 'Remote Procedure Call (RPC)', status: 'Running', start: 'Automatic' },
   { name: 'Schedule', display: 'Task Scheduler', status: 'Running', start: 'Automatic' },
@@ -137,7 +139,7 @@ export function isDomainController(state: PsServerState, lab?: Lab): boolean {
   return !!state.dominio && (!!state.ad || (state.controlador_dominio && !!lab?.adStores.has(state.dominio.toLowerCase())))
 }
 
-const BASE_MODULES = ['CimCmdlets', 'DnsClient', 'Microsoft.PowerShell.LocalAccounts', 'Microsoft.PowerShell.Management', 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Utility', 'NetAdapter', 'NetConnection', 'NetSecurity', 'NetTCPIP', 'PackageManagement', 'PowerShellGet', 'PSReadLine', 'ScheduledTasks', 'ServerManager', 'SmbShare', 'Storage']
+const BASE_MODULES = ['CimCmdlets', 'DnsClient', 'Microsoft.PowerShell.LocalAccounts', 'Microsoft.PowerShell.Management', 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Utility', 'NetAdapter', 'NetConnection', 'NetSecurity', 'NetTCPIP', 'PackageManagement', 'PowerShellGet', 'PSReadLine', 'ScheduledTasks', 'ServerManager', 'SmbShare', 'Storage', 'iSCSI']
 
 function buildComputer(state: PsServerState, lab: Lab): PsSession {
   const s = new PsSession(state)
@@ -407,7 +409,7 @@ export function verifyPs(s: PsSession, raw: PsCheckInput): CheckResult {
     const re = safeRegex(check.comando_usado, 'i')
     return { ok: !!re && s.history.some((h) => re.test(h)), label: 'se usó el comando pedido' }
   }
-  return verifyFailover(s, check as Record<string, unknown>) ?? verifyHyperV(s, check as Record<string, unknown>) ?? verifyAd(s, check) ?? verifyServices(s, check) ?? verifyWsus(s, check as Record<string, unknown>) ?? verifySystem(s, check)
+  return verifyIscsiWin(s, check as Record<string, unknown>) ?? verifyFailover(s, check as Record<string, unknown>) ?? verifyHyperV(s, check as Record<string, unknown>) ?? verifyAd(s, check) ?? verifyServices(s, check) ?? verifyWsus(s, check as Record<string, unknown>) ?? verifySystem(s, check)
 }
 
 function safeRegex(pattern: string, flags: string): RegExp | undefined {

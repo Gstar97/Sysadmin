@@ -94,6 +94,12 @@ const stateShape = {
     )
     .optional(),
   /** Hyper-V: si el rol ya está instalado, el tamaño del host y lo que ya está armado. */
+  /** Servidores iSCSI que se ven en la red: sus destinos, LUN (en GB) y, si se dice, qué iniciadores pueden entrar. */
+  iscsi: z
+    .strictObject({
+      portales: z.array(z.strictObject({ ip: z.string(), destinos: z.array(z.strictObject({ iqn: z.string(), luns_gb: z.array(z.number()), permitidos: z.array(z.string()).optional() })) })).default([]),
+    })
+    .optional(),
   hyperv: z
     .strictObject({
       instalado: z.boolean().default(true),
@@ -369,6 +375,7 @@ const psSingleCheckSchema = z.union([
   z.strictObject({ cluster_win: z.string(), nodos: z.number().int().optional(), testigo: z.enum(['FileShare', 'Cloud', 'Disk', 'Ninguno']).optional(), quorum: z.boolean().optional(), csv: z.number().int().optional() }),
   z.strictObject({ rol_cluster: z.string(), propietario: z.string().optional(), estado: z.enum(['Online', 'Offline', 'Failed']).optional() }),
   z.strictObject({ nodo_cluster: z.string(), estado: z.enum(['Up', 'Down', 'Paused']) }),
+  z.strictObject({ iscsi_conectado: z.string(), persistente: z.boolean().optional() }),
   z.strictObject({ conmutador_hyperv: z.string(), tipo: z.enum(['External', 'Internal', 'Private']).optional() }),
   z.strictObject({ vhd: z.string(), tipo: z.enum(['Dynamic', 'Fixed', 'Differencing']).optional(), tamano_gb: z.number().optional(), padre: z.string().optional() }),
   z.strictObject({ nombre_equipo: z.string(), pendiente: z.boolean().optional() }),

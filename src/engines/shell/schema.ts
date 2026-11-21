@@ -396,7 +396,7 @@ const stateShape = {
         .array(
           z.strictObject({
             id: z.string(),
-            tipo: z.enum(['dir', 'lvmthin', 'lvm', 'zfspool', 'nfs', 'cifs', 'pbs']),
+            tipo: z.enum(['dir', 'lvmthin', 'lvm', 'zfspool', 'nfs', 'cifs', 'pbs', 'iscsi', 'rbd']),
             contenido: z.array(z.string()),
             ruta: z.string().optional(),
             servidor: z.string().optional(),
@@ -778,6 +778,10 @@ const singleCheckSchema = z.union([
   z.strictObject({ zpool: z.string(), existe: z.boolean().optional(), estado: z.enum(['ONLINE', 'DEGRADED', 'UNAVAIL', 'FAULTED']).optional(), tipo: z.enum(['mirror', 'raidz1', 'raidz2', 'raidz3', 'stripe']).optional(), discos: z.array(z.string()).optional(), scrub_hecho: z.boolean().optional(), resilver_hecho: z.boolean().optional() }),
   /** Un dataset o volumen de ZFS: propiedades e instantáneas. */
   z.strictObject({ dataset: z.string(), existe: z.boolean().optional(), propiedad: z.record(z.string(), z.string()).optional(), instantanea: z.string().optional() }),
+  /** Un destino iSCSI del servidor (LIO): LUN, iniciador permitido y configuración guardada. */
+  z.strictObject({ iscsi_destino: z.string(), luns: z.number().int().optional(), permite: z.string().optional(), guardado: z.boolean().optional() }),
+  /** Una sesión iSCSI abierta desde este equipo hacia ese destino. */
+  z.strictObject({ iscsi_sesion: z.string(), discos: z.number().int().optional() }),
   /** Una tarea de réplica de Proxmox (pvesr). */
   z.strictObject({ replica_pve: z.string(), destino: z.string().optional(), ok: z.boolean().optional() }),
   /** Clúster de Proxmox: nombre, nodos, cuántos en línea, quórum, dispositivo de quórum y votos esperados. */

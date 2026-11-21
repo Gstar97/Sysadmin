@@ -47,6 +47,7 @@ import { verifyLibvirt } from './libvirt'
 import { verifyProxmox } from './proxmox'
 import { verifyCluster } from './pvecluster'
 import { verifyZfs } from './zfs'
+import { verifyIscsi } from './iscsi'
 import './diskimage'
 
 export { Shell, COMMANDS } from './shell'
@@ -199,6 +200,8 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if (hwResult) return hwResult
   const lvResult = verifyLibvirt(sys, check)
   if (lvResult) return lvResult
+  const iscsiResult = verifyIscsi(sys, check)
+  if (iscsiResult) return iscsiResult
   const zfsResult = verifyZfs(sys, check)
   if (zfsResult) return zfsResult
   const clusterResult = verifyCluster(sys, check)
