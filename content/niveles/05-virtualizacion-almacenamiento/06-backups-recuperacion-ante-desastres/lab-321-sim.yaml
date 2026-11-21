@@ -1,0 +1,160 @@
+tipo: terminal
+shell: bash
+titulo: 3-2-1-1-0 de punta a punta, con un ataque simulado
+descripcion: >-
+  fs01 (192.168.10.32) es el servidor de archivos y pve01 (.21) el Proxmox con web01 (VM 100) y
+  erp01 (VM 101), que se respaldan en pbs01, un Proxmox Backup Server de la misma sala. La
+  empresa contrató almacenamiento de objetos afuera (s3, en 192.168.10.80, puerto 9000) con un
+  bucket "respaldos-fs01" con bloqueo de objetos de 30 días. En fs01, /root/.restic-env tiene
+  las variables de acceso al bucket y /root/.restic-clave, la clave del repositorio. Estás en
+  fs01, y entrás por ssh como root a pve01.
+estado_inicial:
+  distro: ubuntu
+  hostname: fs01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [restic] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.32/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /srv/datos/Administracion/balance-2026.ods: { contenido: "Balance 2026 - version aprobada\n" }
+    /srv/datos/Administracion/sueldos-noviembre.ods: { contenido: "Sueldos de noviembre\n" }
+    /srv/datos/Clientes/Rivas SA/contrato.pdf: { contenido: "Contrato Rivas SA 2026\n" }
+    /root/.restic-clave: { contenido: "Clave-fs01-larga-2026\n", modo: "600" }
+    /root/.restic-env:
+      modo: "600"
+      contenido: |
+        export AWS_ACCESS_KEY_ID=fs01-respaldo
+        export AWS_SECRET_ACCESS_KEY=Pq7-Lr2x-Vh9n-Ka4m
+        export RESTIC_REPOSITORY=s3:http://s3:9000/respaldos-fs01/fs01
+        export RESTIC_PASSWORD_FILE=/root/.restic-clave
+    /root/simular-ataque.sh:
+      modo: "755"
+      contenido: |
+        #!/bin/bash
+        # Simulación de un ransomware que entró con la clave de root de fs01.
+        source /root/.restic-env
+        for f in /srv/datos/Administracion/*.ods "/srv/datos/Clientes/Rivas SA/contrato.pdf"; do
+          echo "CIFRADO - pague para recuperar" > "$f"
+        done
+        echo "Pisando la copia buena con una cifrada y borrando las viejas..."
+        restic backup /srv/datos
+        restic forget --keep-last 1 --prune
+        echo "Ataque terminado."
+  servidores:
+    - hostname: pve01
+      ip: 192.168.10.21
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+      proxmox:
+        repos: no-subscription
+        almacenamientos:
+          - { id: local-lvm, tipo: lvmthin, contenido: [images, rootdir] }
+          - { id: pbs01, tipo: pbs, contenido: [backup], servidor: 192.168.10.75, datastore: principal, usuario: "backup@pbs", huella: "a3:9f:12:7c:5e:0b:44:d1:8e:2a:6f:93:c4:17:b8:05:e6:3d:72:aa:19:5c:80:fe:4b:21:d9:6a:37:c0:8b:5f" }
+        vms:
+          - { id: 100, nombre: web01, estado: running, discos: { scsi0: "local-lvm:vm-100-disk-0,size=32G" }, red: { net0: "virtio,bridge=vmbr0" } }
+          - { id: 101, nombre: erp01, estado: running, agente: true, discos: { scsi0: "local-lvm:vm-101-disk-0,size=80G" }, red: { net0: "virtio,bridge=vmbr0" } }
+    - hostname: s3
+      ip: 192.168.10.80
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      objetos:
+        claves: [{ acceso: fs01-respaldo, secreto: Pq7-Lr2x-Vh9n-Ka4m }]
+        buckets: [{ nombre: respaldos-fs01, bloqueo_dias: 30 }]
+pasos:
+  - consigna: >-
+      La copia local: respaldá las dos VM de pve01 en pbs01, en modo snapshot.
+    verificar:
+      - { en: pve01, verificar: { pve_respaldo: 100, almacenamiento: pbs01, cantidad: 1 } }
+      - { en: pve01, verificar: { pve_respaldo: 101, almacenamiento: pbs01, cantidad: 1 } }
+    pistas:
+      - "ssh root@pve01 vzdump --all --storage pbs01 --mode snapshot"
+    solucion:
+      - ssh root@pve01 vzdump --all --storage pbs01 --mode snapshot
+    explicacion: >-
+      Ya hay dos copias de las VM (la que corre y la del PBS), pero las dos están en la misma
+      sala y el PBS lo administran las mismas claves: le faltan el "afuera" y el "inmutable".
+  - consigna: >-
+      La copia de afuera e inmutable: cargá las variables de /root/.restic-env, creá el
+      repositorio en el bucket y respaldá /srv/datos.
+    verificar:
+      - { en: s3, verificar: { restic_repo: "s3:respaldos-fs01/fs01", instantaneas_min: 1, con_archivo: "/srv/datos/Clientes/Rivas SA/contrato.pdf" } }
+    pistas:
+      - "source /root/.restic-env"
+      - "restic init y restic backup /srv/datos"
+    solucion:
+      - source /root/.restic-env
+      - restic init
+      - restic backup /srv/datos
+    explicacion: >-
+      Con esto, los datos de fs01 tienen copia fuera del sitio y en otro tipo de medio. Las VM
+      también deberían tener copia afuera: en un caso real, un sync job del PBS a otro PBS remoto,
+      o la exportación de los respaldos al almacenamiento de objetos.
+  - consigna: >-
+      El 1 inmutable: comprobá que, aun con todas las claves de fs01, no se pueden borrar las
+      copias del bucket.
+    verificar:
+      - { comando_usado: "forget" }
+      - { en: s3, verificar: { restic_repo: "s3:respaldos-fs01/fs01", instantaneas_min: 1 } }
+    pistas:
+      - "restic forget --keep-last 0 --prune no se acepta; probá borrar la instantánea por su ID: restic forget ID"
+    solucion:
+      - "restic forget $(restic snapshots --json | grep -o '\"short_id\":\"[0-9a-f]*\"' | head -1 | cut -d'\"' -f4)"
+    explicacion: >-
+      "WORM protected": el bucket no deja borrar nada hasta que pasen los 30 días, ni con la clave
+      del dueño. La retención en este bucket se aplica sola cuando vencen los plazos (o con una
+      clave distinta, que no está en fs01).
+  - consigna: >-
+      El 0 errores: revisá el repositorio leyendo el 10 % de los datos.
+    verificar:
+      - { comando_usado: "--read-data-subset" }
+    pistas:
+      - "restic check --read-data-subset 10%"
+    solucion:
+      - restic check --read-data-subset 10%
+    explicacion: >-
+      Programado cada semana, con aviso si falla. La restauración de prueba la vas a hacer ahora,
+      de la peor manera.
+  - consigna: >-
+      Llega el ataque: ejecutá /root/simular-ataque.sh y mirá qué consiguió y qué no.
+    verificar:
+      - { archivo: /srv/datos/Administracion/balance-2026.ods, contenido_incluye: CIFRADO }
+      - { en: s3, verificar: { restic_repo: "s3:respaldos-fs01/fs01", instantaneas_min: 2 } }
+    pistas:
+      - "/root/simular-ataque.sh"
+    solucion:
+      - /root/simular-ataque.sh
+      - cat /srv/datos/Administracion/balance-2026.ods
+      - restic snapshots
+    explicacion: >-
+      Cifró los archivos, hizo una copia nueva con los archivos cifrados (si solo se mirara la
+      última, estaría todo perdido) e intentó borrar la copia buena con las claves que encontró en
+      fs01, pero el bucket lo rechazó. Ese es todo el sentido del "1 inmutable", y también de
+      tener retención: la copia de antes del ataque sigue ahí.
+  - consigna: >-
+      El simulacro cronometrado: restaurá /srv/datos desde la copia de antes del ataque, en su
+      lugar, midiendo cuánto tarda con time, y anotá el resultado en /root/simulacros.txt.
+    verificar:
+      - { archivo: /srv/datos/Administracion/balance-2026.ods, contenido_incluye: "version aprobada" }
+      - { archivo: "/srv/datos/Clientes/Rivas SA/contrato.pdf", contenido_incluye: "Contrato Rivas SA 2026" }
+      - { archivo: /root/simulacros.txt, contenido_incluye: fs01 }
+      - { comando_usado: "time restic" }
+    pistas:
+      - "restic snapshots: la copia buena es la de antes del ataque (la primera)."
+      - "time restic restore ID --target /"
+      - "echo \"$(date +%F) fs01 /srv/datos desde S3 inmutable: ... segundos, OK\" >> /root/simulacros.txt"
+    solucion:
+      - "time restic restore $(restic snapshots --json | grep -o '\"short_id\":\"[0-9a-f]*\"' | head -1 | cut -d'\"' -f4) --target /"
+      - cat /srv/datos/Administracion/balance-2026.ods
+      - echo "$(date +%F) fs01 /srv/datos desde S3 inmutable, restauracion completa en segundos, datos OK" >> /root/simulacros.txt
+    explicacion: >-
+      Los datos volvieron desde la única copia que el atacante no pudo tocar. En un caso real,
+      antes de restaurar habría que limpiar o reinstalar fs01 (el atacante tenía root ahí) y
+      cambiar todas las claves, incluidas las del bucket. Y el tiempo que mediste se compara con el
+      RTO: con terabytes y una conexión a internet común, bajar todo puede tardar días, y eso
+      tiene que estar escrito en el plan.

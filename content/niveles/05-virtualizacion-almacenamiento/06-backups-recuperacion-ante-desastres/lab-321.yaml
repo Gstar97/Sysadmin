@@ -1,0 +1,117 @@
+tipo: pasos
+titulo: Un esquema 3-2-1-1-0 para el clúster del laboratorio
+descripcion: >-
+  Sobre el clúster de los laboratorios anteriores (pve01 a pve03, nfs01) y el Proxmox Backup
+  Server del laboratorio del módulo 5.2, vas a armar las copias locales con retención y
+  verificación, una copia "afuera" en un servidor solo agregar, opcionalmente una copia en un
+  bucket con bloqueo de objetos, y un simulacro cronometrado. Hace falta una VM más, offsite01
+  (Debian o Ubuntu Server, 1 vCPU, 1 GB, 40 GB), en una red distinta de la del laboratorio para
+  que haga de "otra sede". Calculá unas cuatro horas.
+pasos:
+  - titulo: Respaldos nocturnos de todo el clúster en el PBS, con retención
+    detalle: >-
+      En la interfaz de Proxmox: Datacenter, Backup, Add. Todos los nodos, todas las VM, al
+      almacenamiento del PBS, modo snapshot, a las 01:00. En la pestaña Retention: 7 diarias, 4
+      semanales, 6 mensuales. Corré la tarea una vez a mano ("Run now").
+    comandos:
+      - pvesh get /cluster/backup
+      - pvesm list pbs01
+    comprobar: Cada VM tiene una copia en el PBS, y la tarea figura en Datacenter, Backup con la retención configurada.
+  - titulo: Verificación y limpieza en el PBS
+    detalle: >-
+      En la interfaz del PBS (puerto 8007), en el datastore: un Verify Job semanal que vuelva a
+      verificar copias de más de 30 días, y la Garbage Collection programada todos los días. Corré
+      las dos a mano una vez y mirá el resultado en Tasks.
+    comandos:
+      - proxmox-backup-manager verify-job list
+      - proxmox-backup-manager garbage-collection status principal
+    comprobar: El verify termina sin errores y la garbage collection informa cuánto espacio quedó en uso.
+    si_falla: Si el nombre del datastore no es "principal", usá el que creaste en el laboratorio del módulo 5.2 (proxmox-backup-manager datastore list).
+  - titulo: offsite01, un rest-server solo agregar en "otra sede"
+    detalle: >-
+      Bajá el binario de rest-server de su página oficial de versiones en GitHub
+      (github.com/restic/rest-server/releases), creá un usuario de sistema y un servicio de systemd
+      con --append-only --private-repos. Si tu virtualizador lo permite, poné offsite01 en otra red
+      y abrí solo el puerto 8000 desde el laboratorio.
+    comandos:
+      - sudo useradd --system --home-dir /srv/restic --create-home rest-server
+      - sudo install -m 755 rest-server /usr/local/bin/rest-server
+      - sudo apt install -y apache2-utils && sudo htpasswd -B -c /srv/restic/.htpasswd nfs01
+      - sudo chown -R rest-server:rest-server /srv/restic
+      - sudo systemctl daemon-reload && sudo systemctl enable --now rest-server
+    archivo:
+      ruta: /etc/systemd/system/rest-server.service
+      contenido: |
+        [Unit]
+        Description=Rest Server
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=simple
+        User=rest-server
+        Group=rest-server
+        ExecStart=/usr/local/bin/rest-server --path /srv/restic --listen :8000 --append-only --private-repos
+        Restart=always
+
+        [Install]
+        WantedBy=multi-user.target
+    comprobar: systemctl status rest-server muestra el servicio activo y journalctl -u rest-server dice "Append only mode enabled".
+  - titulo: Los archivos de nfs01 a offsite01 con restic, todas las noches
+    detalle: >-
+      En nfs01 (que sigue teniendo los datos del NFS). La clave del repositorio va a un archivo con
+      permisos 600 y, además, impresa o en tu gestor de contraseñas. El timer hace la copia cada
+      noche y el script avisa si falla.
+    comandos:
+      - sudo apt install -y restic
+      - echo 'una-clave-larga-y-unica' | sudo tee /root/.restic-clave && sudo chmod 600 /root/.restic-clave
+      - sudo RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r rest:http://nfs01:CLAVE-HTPASSWD@IP-DE-OFFSITE01:8000/nfs01/ init
+      - sudo RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r rest:http://nfs01:CLAVE-HTPASSWD@IP-DE-OFFSITE01:8000/nfs01/ backup /srv --tag diario
+    variantes:
+      - nombre: El timer
+        detalle: "Un servicio oneshot que ejecuta restic backup y un timer con OnCalendar=*-*-* 02:00:00 y Persistent=true (como en la lección 1.3.4)."
+        comandos:
+          - sudo systemctl enable --now respaldo-restic.timer
+          - systemctl list-timers respaldo-restic.timer
+    comprobar: restic snapshots muestra la copia, y systemctl list-timers muestra la próxima ejecución.
+  - titulo: (Opcional) La copia inmutable en un bucket con bloqueo de objetos
+    detalle: >-
+      Si tenés cuenta en un proveedor con almacenamiento de objetos compatible con S3 y bloqueo de
+      objetos (Backblaze B2, Wasabi, AWS S3 y otros; varios tienen una capa gratuita o de prueba),
+      creá un bucket con Object Lock activado y una retención por defecto de 30 días en modo
+      cumplimiento (compliance), y una clave de acceso solo para ese bucket. Después, un segundo
+      repositorio de restic ahí. Cuidado: en modo cumplimiento, nada se puede borrar hasta que venza
+      el plazo, ni siquiera vos, y se paga ese espacio.
+    comandos:
+      - export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
+      - sudo -E RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r s3:https://ENDPOINT-DEL-PROVEEDOR/NOMBRE-DEL-BUCKET/nfs01 init
+    comprobar: Un restic forget de la copia por su ID falla con un error de objeto protegido.
+  - titulo: El ataque simulado
+    detalle: >-
+      En nfs01, "cifrá" una carpeta de prueba (no la de las VM del NFS) y hacé que el atacante
+      intente lo peor con las claves que encuentra en nfs01.
+    comandos:
+      - sudo mkdir -p /srv/prueba && echo "dato importante" | sudo tee /srv/prueba/documento.txt
+      - sudo RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r rest:http://nfs01:CLAVE@IP-DE-OFFSITE01:8000/nfs01/ backup /srv --tag diario
+      - echo "CIFRADO" | sudo tee /srv/prueba/documento.txt
+      - sudo RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r rest:http://nfs01:CLAVE@IP-DE-OFFSITE01:8000/nfs01/ forget --keep-last 1 --prune
+    comprobar: El forget falla con "403 Forbidden" y restic snapshots sigue mostrando todas las copias.
+  - titulo: El simulacro, con el reloj corriendo
+    detalle: >-
+      Elegí un RTO para la prueba (por ejemplo, 1 hora) y arrancá un cronómetro. Restaurá la VM de
+      prueba desde el PBS a un número nuevo, sin red, y arrancala; restaurá /srv/prueba desde
+      offsite01 a su lugar. Pará el cronómetro cuando las dos cosas estén comprobadas.
+    comandos:
+      - time qmrestore pbs01:backup/vm/150/FECHA 950 --storage local-lvm --unique 1
+      - qm set 950 --name prueba-restauracion --net0 virtio,bridge=vmbr0,link_down=1 && qm start 950
+      - time sudo RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r rest:http://nfs01:CLAVE@IP-DE-OFFSITE01:8000/nfs01/ restore latest --target /tmp/r --include /srv/prueba
+    comprobar: La VM 950 arranca (miralo por la consola), /tmp/r/srv/prueba/documento.txt dice "dato importante" en la copia anterior al "ataque" (usá su ID, no latest), y anotaste los tiempos.
+  - titulo: El registro y el plan
+    detalle: >-
+      Anotá el simulacro (fecha, qué se restauró, desde dónde, cuánto tardó, qué falló) y empezá
+      el plan de recuperación del laboratorio con la plantilla de la lección 5.6.5: roles (vos),
+      inventario y dependencias, orden de recuperación, dónde están las claves y los procedimientos
+      que acabás de usar. Borrá la VM 950 al terminar.
+    comandos:
+      - qm stop 950 && qm destroy 950
+    comprobar: Tenés un archivo de simulacros con al menos una entrada y un primer borrador del plan, guardado también fuera del laboratorio.

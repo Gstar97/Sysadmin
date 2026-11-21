@@ -1,0 +1,168 @@
+tipo: troubleshooting
+titulo: El lunes que todo decía .crypt9
+descripcion: >-
+  Incidente simulado. Una distribuidora de 60 personas tiene un clúster de Proxmox de tres nodos
+  con 14 VM (controlador de dominio, ERP con PostgreSQL, servidor de archivos, correo interno y
+  otras), un Proxmox Backup Server en la misma sala y, desde hace tres meses, una copia nocturna
+  con restic a un bucket externo con bloqueo de objetos de 30 días. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 7:40. Llaman desde administración: ningún archivo de la unidad compartida abre, todos
+      terminan en .crypt9 y en cada carpeta hay un LEEME_PARA_RECUPERAR.txt. Al rato, el ERP deja
+      de responder.
+    evidencia:
+      - titulo: La carpeta compartida
+        contenido: |2
+            balance-2026.ods.crypt9
+            sueldos-noviembre.ods.crypt9
+            LEEME_PARA_RECUPERAR.txt
+      - titulo: LEEME_PARA_RECUPERAR.txt
+        contenido: |2
+            Sus archivos fueron cifrados. Tambien sus copias de seguridad.
+            Tienen 72 horas para pagar. Si no, publicamos sus datos.
+    opciones:
+      - texto: Contener primero, desconectar la sede de internet en el firewall, aislar los servidores sin apagarlos y avisar a la gerencia y al seguro
+        ir_a: n_contener
+        minutos: 20
+      - texto: Restaurar ya mismo todo desde el PBS para que la gente pueda trabajar
+        ir_a: n_apurado
+        minutos: 30
+      - texto: Apagar todos los servidores y equipos de golpe
+        ir_a: n_contener
+        minutos: 40
+        consecuencia: >-
+          Frena el cifrado, pero se pierde lo que había en memoria (procesos, conexiones del
+          atacante) que el equipo de respuesta necesitaba, y apagar 14 VM y tres nodos a mano lleva
+          tiempo. Lo correcto era cortar internet y aislar. Igual, la situación queda contenida.
+  n_apurado:
+    situacion: >-
+      Entrás al PBS para restaurar y el datastore está vacío. Mientras mirás, el servidor de
+      archivos vuelve a cifrar lo poco que quedaba: el atacante sigue adentro y con internet.
+    evidencia:
+      - titulo: Proxmox Backup Server, datastore principal
+        contenido: |2
+            Snapshots: 0
+            Task log, 03:12: prune group vm/101 - removed 31 snapshots (user root@pam)
+            Task log, 03:14: garbage collection - removed 1.82 TiB
+    opciones:
+      - texto: Contener ahora (cortar internet y aislar) y recién después pensar en restaurar
+        ir_a: n_contener
+        minutos: 20
+  n_contener:
+    situacion: >-
+      Con la sede sin internet y los servidores aislados, revisás qué quedó. El PBS está vacío: el
+      atacante entró con root@pam (la misma clave que el clúster), borró las copias y corrió la
+      limpieza. La carpeta de respaldos del servidor de archivos también está cifrada. En el
+      registro de la VPN aparece de dónde vino.
+    evidencia:
+      - titulo: Registro de la VPN del firewall
+        contenido: |2
+            2026-11-09 23:41  usuario jgomez  conectado desde 185.x.x.x
+            2026-11-10 02:15  usuario jgomez  conectado desde 185.x.x.x
+            ...
+            2026-11-23 02:58  usuario jgomez  conectado desde 185.x.x.x
+            (jgomez dejó la empresa en septiembre; la VPN no pide segundo factor)
+      - titulo: El bucket externo (desde una notebook limpia, con la clave impresa del sobre)
+        contenido: |2
+            # restic snapshots | tail -4
+            8e1c4b2a  2026-11-20 02:00:11  respaldo01   /mnt/vzdump /srv/datos
+            41d0a7f3  2026-11-21 02:00:09  respaldo01   /mnt/vzdump /srv/datos
+            c3b98e5d  2026-11-22 02:00:14  respaldo01   /mnt/vzdump /srv/datos
+            ---
+            31 snapshots  (el atacante intentó borrarlas: "WORM protected")
+    opciones:
+      - texto: Restaurar todo desde la copia del bucket más nueva (la de ayer)
+        ir_a: n_ultima
+        minutos: 30
+      - texto: Restaurar los sistemas desde una copia de antes de que entrara el atacante (antes del 9 de noviembre), y rescatar de las copias nuevas solo datos
+        ir_a: n_limpio
+        minutos: 30
+      - texto: Pagar el rescate, que sale menos que tres días sin trabajar
+        ir_a: n_pagar
+        minutos: 60
+  n_pagar:
+    situacion: >-
+      Se paga. Llega un programa para descifrar que anda con algunos archivos y rompe otros, y a la
+      semana los datos de clientes aparecen publicados igual. Las copias inmutables estaban ahí,
+      sanas, todo el tiempo.
+    evidencia:
+      - titulo: El programa de descifrado
+        contenido: |2
+            Procesados: >-
+              48211   OK: 39120   Error: 9091
+    opciones:
+      - texto: Volver a lo que había que hacer, restaurar desde el bucket
+        ir_a: n_limpio
+        minutos: 60
+  n_ultima:
+    situacion: >-
+      Restaurás todo desde la copia de ayer en servidores reinstalados. A los dos días, una tarea
+      programada en el controlador de dominio vuelve a abrir una conexión hacia afuera: la copia de
+      ayer tenía la puerta trasera que el atacante dejó hace dos semanas.
+    evidencia:
+      - titulo: Tareas programadas del controlador de dominio restaurado
+        contenido: |2
+            \Microsoft\Windows\WinUpdateCheck   creada 2026-11-10 03:02   powershell -enc JABjAD0A...
+    opciones:
+      - texto: Volver a empezar con los sistemas desde una copia de antes del 9 de noviembre
+        ir_a: n_limpio
+        minutos: 120
+  n_limpio:
+    situacion: >-
+      El plan: reinstalar los tres nodos de Proxmox desde cero, en una red aislada, restaurar los
+      sistemas desde la copia del 8 de noviembre (antes de la entrada) y después traer de las copias
+      más nuevas solo datos (documentos, el volcado de la base del ERP de anoche), revisados. La
+      gerencia pregunta por qué no se restaura primero el ERP, que es lo que más se necesita.
+    evidencia:
+      - titulo: El plan de recuperación, página 4 (impreso)
+        contenido: |2
+            Orden: 1) red y firewall  2) Proxmox y PBS  3) DNS y controlador de dominio
+                   4) PostgreSQL y archivos  5) ERP, correo  6) puestos y VPN
+            Credenciales: cambiar todas antes de reconectar (incluida krbtgt, dos veces)
+    opciones:
+      - texto: Seguir el orden del plan, cambiar todas las credenciales y explicarle a la gerencia por qué
+        ir_a: n_orden
+        minutos: 300
+      - texto: Restaurar el ERP primero para calmar a la gerencia
+        ir_a: n_limpio
+        minutos: 90
+        consecuencia: >-
+          El ERP arranca pero nadie puede iniciar sesión (no hay controlador de dominio) y no
+          encuentra la base por nombre (no hay DNS). Se pierden 90 minutos para volver al orden
+          del plan.
+  n_orden:
+    situacion: >-
+      En unas 30 horas está todo andando: los sistemas desde el 8 de noviembre, los documentos y
+      la base del ERP desde la copia de anoche (revisados y sin ejecutables), todas las claves
+      nuevas, la cuenta de jgomez dada de baja y la VPN con segundo factor. Se perdieron las
+      últimas horas del domingo. Falta el informe.
+    evidencia:
+      - titulo: Lo que se encontró
+        contenido: |2
+            - VPN sin segundo factor y una cuenta de un ex empleado activa.
+            - El PBS usaba root@pam, la misma clave del clúster: el atacante borró todo.
+            - La copia local del servidor de archivos estaba en una carpeta del mismo servidor.
+            - La copia inmutable del bucket: intacta. La clave estaba impresa en un sobre.
+    opciones:
+      - texto: "Informe con causas y cambios: segundo factor y baja de cuentas; PBS con usuario propio sin permiso de borrar y un PBS remoto que trae las copias; mantener la copia inmutable; simulacro cada trimestre; y dar aviso de los datos personales expuestos según la ley"
+        ir_a: n_ok
+        minutos: 60
+      - texto: Informe que diga que fue un ataque muy sofisticado e imposible de evitar
+        ir_a: n_orden
+        minutos: 20
+        consecuencia: >-
+          No fue sofisticado: entró por una VPN sin segundo factor con la cuenta de un ex empleado.
+          Un informe así no corrige nada y el próximo ataque entra por el mismo lado.
+  n_ok:
+    final: exito
+    resumen: >-
+      La empresa volvió a funcionar en unas 30 horas sin pagar, gracias a la única copia que el
+      atacante no pudo borrar: la del bucket con bloqueo de objetos, cuya clave estaba fuera de los
+      sistemas. Lo que funcionó: contener antes de restaurar, restaurar los sistemas desde antes de
+      la entrada del atacante (la retención de 30 días lo hizo posible) y traer de las copias nuevas
+      solo datos revisados, seguir el orden del plan (identidad antes que aplicaciones) y cambiar
+      todas las credenciales. Lo que lo hizo posible: una VPN sin segundo factor, una cuenta de un ex
+      empleado activa y un servidor de respaldo administrado con la misma clave que todo lo demás.
+      En la regla 3-2-1-1-0, el "1 inmutable" fue la diferencia entre 30 horas y perder la empresa.

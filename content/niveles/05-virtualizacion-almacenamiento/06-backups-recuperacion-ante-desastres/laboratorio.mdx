@@ -1,0 +1,40 @@
+---
+titulo: Esquema 3-2-1-1-0 con PBS local, copia de afuera solo agregar, copia inmutable y un simulacro cronometrado
+horas: 4
+verificacion:
+  - Resolví el laboratorio simulado completo, ataque incluido.
+  - Programé los respaldos de todo el clúster en el PBS con retención, verify y garbage collection.
+  - Armé un rest-server solo agregar en otra red y respaldé con restic a diario con un timer.
+  - Comprobé que el "atacante" no pudo borrar las copias.
+  - Hice un simulacro cronometrado, lo anoté y empecé el plan de recuperación.
+---
+
+import sim from './lab-321-sim.yaml'
+import pasos from './lab-321.yaml'
+
+## Objetivo
+
+Armar todas las piezas de la regla 3-2-1-1-0 y comprobarlas como las comprobaría un atacante: con las claves del servidor respaldado en la mano, intentando borrar las copias. Al final vas a tener números (cuánto tarda restaurar) y el primer borrador del plan de recuperación, que vas a completar en el proyecto del nivel.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: el clúster de los laboratorios anteriores, el PBS del módulo 5.2 y una VM chica más (offsite01). Opcionalmente, una cuenta en un proveedor de almacenamiento de objetos con bloqueo de objetos.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Si usás un proveedor real con bloqueo de objetos en modo cumplimiento, nada de lo que subas se va a poder borrar hasta que venza el plazo, y se cobra ese espacio. Para el laboratorio, subí poco y usá un plazo corto (1 o 2 días).
+</Advertencia>
+
+## Para pensar
+
+1. ¿Qué copia de tu laboratorio sobrevive a cada uno de estos desastres: el disco del PBS se rompe; un incendio en "la sala" (todo menos offsite01); un atacante con root en nfs01; un atacante con root en el PBS?
+2. El tiempo que mediste, ¿cumple el RTO que elegiste? ¿Y si tuvieras que bajar todo desde offsite01 por una conexión de 50 Mbps?
+3. ¿Dónde guardaste la clave del repositorio de restic? Si mañana se pierden todas tus máquinas virtuales, ¿la podés recuperar?
