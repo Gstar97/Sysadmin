@@ -1,0 +1,47 @@
+tipo: diagrama
+titulo: Capas de la recuperación
+puntos:
+  - id: fisico
+    titulo: 1. Lo físico y la red
+    area: { x: 7, y: 86.8, ancho: 72.1, alto: 12.1 }
+    texto: >-
+      Sin energía, internet, firewall y switches no hay nada que restaurar. Si el desastre fue el
+      sitio entero (un incendio), esta capa es conseguir otro lugar: otra sede, un centro de datos
+      alquilado o la nube. La configuración de los equipos de red tiene que estar respaldada
+      aparte.
+  - id: plataforma
+    titulo: 2. La plataforma
+    area: { x: 9.1, y: 72.6, ancho: 67.9, alto: 12.1 }
+    texto: >-
+      Los hipervisores (reinstalar Proxmox es rápido si está documentado), el almacenamiento y,
+      sobre todo, el servidor de respaldo: si el PBS también se perdió, primero hay que levantar
+      uno y traer las copias desde la copia de afuera, y eso puede llevar horas o días según el
+      enlace.
+  - id: identidad
+    titulo: 3. Identidad y nombres
+    area: { x: 11.2, y: 58.4, ancho: 63.7, alto: 12.1 }
+    texto: >-
+      DNS, controladores de dominio y DHCP van antes que cualquier aplicación: sin ellos nadie
+      inicia sesión, las aplicaciones no encuentran la base y los equipos no tienen dirección. Es
+      la capa que más se olvida en los planes y la que primero hace falta.
+  - id: datos
+    titulo: 4. Los datos
+    area: { x: 13.3, y: 44.2, ancho: 59.5, alto: 12.1 }
+    texto: >-
+      Bases de datos y servidores de archivos, en el orden en que los necesitan las aplicaciones.
+      Acá se decide desde qué copia: después de un ransomware, una de antes de que entrara el
+      atacante, no la última.
+  - id: aplicaciones
+    titulo: 5. Las aplicaciones
+    area: { x: 15.3, y: 30, ancho: 55.3, alto: 12.1 }
+    texto: >-
+      En el orden que dice el análisis de impacto: primero lo que más cuesta tener parado (la
+      facturación, el sistema de turnos), después el resto. Cada una con su procedimiento escrito y
+      una prueba de que anda (iniciar sesión, emitir una factura de prueba).
+  - id: personas
+    titulo: 6. Las personas
+    area: { x: 17.4, y: 15.8, ancho: 51.2, alto: 12.1 }
+    texto: >-
+      Puestos de trabajo, accesos remotos y, todo el tiempo, comunicación: avisar a la gerencia, a
+      los usuarios, a clientes y proveedores, y, si hubo datos personales comprometidos, a quien
+      corresponda según la ley.

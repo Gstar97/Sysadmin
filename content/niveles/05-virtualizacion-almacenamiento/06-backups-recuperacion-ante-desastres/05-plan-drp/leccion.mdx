@@ -1,0 +1,98 @@
+---
+id: n5-m6-l5
+titulo: Plan de recuperación ante desastres
+minutos: 150
+objetivos:
+  - Escribir un plan de recuperación con roles, inventario, dependencias, orden y procedimientos.
+  - Decidir el orden de recuperación a partir de las dependencias y del impacto de cada servicio.
+  - Planificar la respuesta a un ransomware y los simulacros que mantienen vivo el plan.
+glosario: [plan-recuperacion-desastres, analisis-impacto, sitio-alternativo, rpo-rto]
+verificado: 2026-11
+---
+
+import capas from './capas.svg?raw'
+import capasDatos from './capas.yaml'
+import orden from './orden.yaml'
+import sitios from './sitios.yaml'
+
+Tener buenos respaldos es la mitad. La otra mitad es saber qué hacer con ellos el peor día: qué se restaura primero, quién decide, dónde están las claves, a quién se avisa y cómo se vuelve a trabajar. Eso es el **plan de recuperación ante desastres** (DRP, por sus siglas en inglés), y se escribe con calma, mucho antes de necesitarlo, porque el día del desastre nadie piensa bien.
+
+<AntesDeEmpezar>
+- Estrategia de respaldo, RPO y RTO (lección 5.6.1).
+- Restauración probada y simulacros (lección 5.6.4).
+- Clúster y alta disponibilidad (módulo 5.4).
+</AntesDeEmpezar>
+
+## Qué es un desastre
+
+No solo un incendio. Para el plan, un desastre es cualquier cosa que deje servicios importantes parados más allá de su RTO: un ransomware, la sala de servidores inundada, un corte de luz de dos días, el robo de los equipos, un error que borró la base de producción, la caída del proveedor de internet. El plan dice **quién declara el desastre** y a partir de qué momento (por ejemplo, "si el ERP no puede volver en 2 horas con los procedimientos normales").
+
+## Qué tiene el plan
+
+1. **Alcance y objetivos**: qué servicios cubre y con qué RPO y RTO, salidos del **análisis de impacto** (cuánto cuesta cada hora parado cada servicio, hecho con quien lo usa).
+2. **Roles y contactos**: quién coordina, quién restaura qué, quién habla con la gerencia y con los usuarios. Con reemplazo para cada uno y teléfonos fuera del sistema de la empresa (el correo y la central telefónica pueden estar caídos).
+3. **Inventario y dependencias**: qué hay, dónde corre, de qué depende. El orden de recuperación sale de ahí:
+
+<DiagramaInteractivo datos={capasDatos} svg={capas} alt="Seis capas apiladas, de abajo hacia arriba: 1, lo físico y la red (energía, internet, firewall, switches); 2, la plataforma (hipervisores, almacenamiento, PBS); 3, identidad y nombres (DNS, controladores de dominio, DHCP); 4, los datos (bases de datos, servidor de archivos); 5, las aplicaciones (ERP, correo, sitio web, sistemas internos); 6, las personas (puestos, VPN, teléfonos, avisos). Una flecha indica que se recupera desde abajo, primero, hacia arriba, al final; sin DNS ni dominio, nada más arranca bien." />
+
+4. **Procedimientos paso a paso** (runbooks) para cada servicio: desde dónde se restaura, con qué comandos, cómo se comprueba que anda. Escritos para que los pueda seguir alguien que no es quien los armó, un domingo a la madrugada.
+5. **Dónde están las cosas**: los respaldos (y cuál usar), las claves de cifrado, las contraseñas de emergencia, las licencias, los contratos de soporte. En un sobre cerrado, en una caja fuerte, en el gestor de contraseñas con acceso de emergencia: no solo en el servidor que se perdió.
+6. **Sitio alternativo**: dónde se restaura si el lugar no sirve más.
+7. **Comunicación**: qué se avisa, a quién y cuándo, incluidas las obligaciones legales si hubo datos personales comprometidos.
+8. **Pruebas y actualización**: cuándo se hace el simulacro y quién actualiza el plan cuando cambia algo.
+
+El plan vive **impreso y fuera de la infraestructura** además de en la wiki: el día que lo necesitás, la wiki está en uno de los servidores caídos.
+
+## Dónde restaurar
+
+<Emparejar ejercicio={sitios} />
+
+## El caso del ransomware
+
+Es el desastre más probable hoy para una pyme, y tiene reglas propias:
+
+- **Contener primero**: desconectar de internet, aislar los equipos afectados, no apagar todo a lo loco (la memoria tiene evidencia). Llamar a quien sepa de respuesta a incidentes y, si hay seguro, avisar al seguro antes de tocar nada.
+- **No restaurar encima de lo infectado**: los hipervisores se reinstalan desde cero, y se restaura en un entorno limpio.
+- **Elegir bien la copia**: los atacantes suelen estar adentro días o semanas antes de cifrar. La copia de anoche puede tener su puerta trasera; hay que buscar desde cuándo están y restaurar de antes (y por eso importa la retención larga).
+- **Cambiar todas las credenciales**: las del dominio, las de los administradores, las de los respaldos, las de la nube. Las viejas las tiene el atacante.
+- **Pagar no garantiza nada**: muchas veces la clave no funciona bien o los datos se publican igual, y financia el próximo ataque. Con una copia inmutable probada, la decisión es mucho más fácil.
+
+<Ordenar ejercicio={orden} />
+
+## Simulacros
+
+Un plan que nunca se probó tiene huecos que solo aparecen al usarlo: el procedimiento que asumía un servidor que ya no existe, la clave que nadie encuentra, el enlace que tarda tres días en bajar los respaldos. Por eso, además de las restauraciones mensuales de la lección anterior:
+
+- **Ejercicio de mesa**, una o dos veces por año: el equipo se sienta con el plan y alguien plantea un desastre ("es lunes a las 8 y el ERP muestra archivos cifrados"); se recorre qué haría cada uno, sin tocar nada. Barato y muy revelador.
+- **Simulacro técnico**: restaurar de verdad un servicio completo (o todos) en el sitio alternativo, con el reloj corriendo, siguiendo el plan escrito. Lo vas a hacer en el proyecto del nivel.
+- Después de cada uno, **se corrige el plan**.
+
+<EnSimple>
+El plan de recuperación ante desastres dice qué hacer cuando todo se cae: quién decide y quién hace cada cosa, qué hay y de qué depende cada servicio, en qué orden se recupera (de la red y la plataforma hacia los nombres y el dominio, después los datos, las aplicaciones y las personas), cómo se restaura cada cosa paso a paso, dónde están las copias y las claves, dónde se restaura si el lugar no sirve y a quién se avisa. Con ransomware: contener, restaurar en limpio desde una copia de antes de que entrara el atacante y cambiar todas las claves. Se escribe antes, se guarda impreso, se prueba y se corrige.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Un plan que vive solo en la wiki interna">
+    El día del desastre, la wiki está caída. Impreso y en un lugar fuera de la infraestructura.
+  </ErrorComun>
+  <ErrorComun titulo="Restaurar las aplicaciones antes que el dominio y el DNS">
+    Arrancan pero no funcionan: nadie inicia sesión y no encuentran la base. El orden sale de las dependencias.
+  </ErrorComun>
+  <ErrorComun titulo="Restaurar la copia de anoche después de un ransomware">
+    El atacante pudo estar adentro desde antes y dejar una puerta trasera. Buscar desde cuándo y restaurar de antes.
+  </ErrorComun>
+  <ErrorComun titulo="Un plan que depende de una sola persona">
+    Si esa persona está de vacaciones o se fue de la empresa, no hay plan. Roles con reemplazo y procedimientos que cualquiera pueda seguir.
+  </ErrorComun>
+  <ErrorComun titulo="Escribirlo y no probarlo nunca">
+    Los huecos aparecen el peor día. Ejercicio de mesa y simulacro técnico, y corregir después de cada uno.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Desastre: todo lo que deja servicios importantes parados más allá de su RTO; el plan dice quién lo declara.
+- El plan: alcance (con análisis de impacto), roles, inventario y dependencias, procedimientos, dónde están copias y claves, sitio alternativo, comunicación, pruebas.
+- Orden: red y plataforma, identidad (DNS, dominio), datos, aplicaciones, personas.
+- Ransomware: contener, restaurar en limpio desde antes del ataque, cambiar todas las credenciales; pagar no garantiza nada.
+- Impreso y fuera de la infraestructura; ejercicios de mesa y simulacros técnicos, y corregir el plan después de cada uno.
+</Resumen>
