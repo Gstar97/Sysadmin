@@ -1,0 +1,61 @@
+tipo: terminal
+shell: bash
+titulo: app01 llega a Proxmox
+descripcion: >-
+  Copiaste el disco exportado de app01 (D:\Export\app01\Virtual Hard Disks\app01.vhdx) a
+  /mnt/migracion en pve01. De tu inventario: Ubuntu, generación 2 (UEFI con arranque seguro), 2
+  procesadores, memoria dinámica de 1 a 4 GB y la VLAN 20. vmbr0 ya acepta VLAN (vlan-aware) y
+  el respaldo va a local.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /etc/network/interfaces: "auto lo\niface lo inet loopback\n\niface eno1 inet manual\n\nauto vmbr0\niface vmbr0 inet static\n\taddress 192.168.10.21/24\n\tgateway 192.168.10.1\n\tbridge-ports eno1\n\tbridge-stp off\n\tbridge-fd 0\n\tbridge-vlan-aware yes\n\tbridge-vids 2-4094\n\nsource /etc/network/interfaces.d/*\n"
+  proxmox: { repos: no-subscription }
+  imagenes_disco:
+    - { ruta: /mnt/migracion/app01.vhdx, formato: vhdx, virtual_gb: 40, disco_gb: 6.8, sistema: { so: linux, uefi: true } }
+pasos:
+  - consigna: >-
+      Creá la VM 130, app01, con lo que dice el inventario: 2 vCPU, memoria de 4096 MB con el globo
+      en 1024 como mínimo, la placa virtio en vmbr0 con la VLAN 20, virtio-scsi-single, el agente
+      activado, el firmware que corresponde con su disco EFI y el disco de Hyper-V importado como
+      scsi0 de arranque. Encendela y comprobá que arranca y tiene red.
+    verificar:
+      - { pve_vm: 130, nombre: app01, estado: running, arranca: true, con_red: true, config: { bios: ovmf, scsi0: 'local-lvm:vm-130-disk-1', net0: 'tag=20', balloon: '1024' } }
+    pistas:
+      - "Generación 2 es UEFI: --bios ovmf --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1 --machine q35"
+      - "El disco EFI se crea primero (disk-0); el importado queda como disk-1."
+      - "--net0 virtio,bridge=vmbr0,tag=20 --memory 4096 --balloon 1024"
+      - "--scsi0 local-lvm:0,import-from=/mnt/migracion/app01.vhdx --boot order=scsi0"
+    solucion:
+      - qm create 130 --name app01 --cores 2 --memory 4096 --balloon 1024 --ostype l26 --bios ovmf --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1 --machine q35 --net0 virtio,bridge=vmbr0,tag=20 --scsihw virtio-scsi-single --agent 1 --scsi0 local-lvm:0,import-from=/mnt/migracion/app01.vhdx,discard=on --boot order=scsi0
+      - qm start 130
+      - qm status 130
+    explicacion: >-
+      Con SeaBIOS no arranca: el disco tiene una partición EFI y ningún sector de arranque de
+      BIOS. pre-enrolled-keys=1 carga las claves de Microsoft en el disco EFI, así que el arranque
+      seguro sigue funcionando con el cargador firmado de Ubuntu, igual que en Hyper-V. En la vida
+      real, ahora entrarías por la consola a cambiar hyperv-daemons por qemu-guest-agent y a
+      revisar el nombre de la placa en Netplan.
+  - consigna: Hacé el primer respaldo de app01 en local (modo snapshot, comprimido con zstd) y comprobá que quedó.
+    verificar:
+      - { pve_respaldo: 130, almacenamiento: local }
+      - { salida_contiene: "vzdump-qemu-130" }
+    pistas:
+      - "vzdump 130 --storage local --mode snapshot --compress zstd"
+      - "pvesm list local --content backup"
+    solucion:
+      - vzdump 130 --storage local --mode snapshot --compress zstd
+      - pvesm list local --content backup
+    explicacion: >-
+      "El respaldo funciona" es parte de la prueba de una migración: una VM nueva que no entra en
+      los respaldos es un riesgo que nadie ve hasta que hace falta. Fijate en la línea "skipping
+      guest-agent 'fs-freeze'": el agente está activado en la VM pero todavía no se instaló
+      adentro, así que el respaldo no puede congelar el sistema de archivos. Es lo primero que se
+      arregla. Cuando app01 lleve unos días andando bien, recién ahí se borra en HV01.

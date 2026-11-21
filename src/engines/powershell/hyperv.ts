@@ -7,7 +7,7 @@
  * Los discos son archivos del sistema de archivos del servidor con su tamaño virtual y lo que
  * ocupan; Remove-VM borra la máquina pero deja sus discos, como en el equipo real.
  */
-import { BOOT_HOOKS, cmdlet, formatDotnetDate, PsError, PsSession, asArray, type CmdletContext } from './session'
+import { BOOT_HOOKS, CMDLETS, cmdlet, formatDotnetDate, PsError, PsSession, asArray, type CmdletContext } from './session'
 import { psObject, toText, VIEWS, type PsObject } from './values'
 import type { PsServerState } from './schema'
 
@@ -1135,14 +1135,15 @@ export function initialHyperV(s: PsSession) {
     const mods = (s.data.modules ??= []) as string[]
     if (!mods.includes('Hyper-V')) mods.push('Hyper-V')
   }
-  if (!st.instalado) return
-  const h: HyperV = { switches: [], vms: [], cpus: st.procesadores, memoryBytes: st.memoria_gb * GB, vmPath: 'C:\\ProgramData\\Microsoft\\Windows\\Hyper-V', vhdPath: 'C:\\ProgramData\\Microsoft\\Windows\\Virtual Hard Disks' }
-  HV.set(s, h)
-  for (const sw of st.conmutadores) h.switches.push({ name: sw.nombre, type: sw.tipo, adapter: sw.tipo === 'External' ? s.state.red.adaptador : undefined, allowMgmt: sw.tipo !== 'Private', id: guid() })
+  // Los archivos de disco existen aunque el rol todavía no esté instalado.
   for (const d of st.discos) {
     const path = s.resolvePath(d.ruta)
     writeVhd(s, path, { format: /\.vhd$/i.test(path) ? 'VHD' : 'VHDX', type: d.tipo, size: d.tamano_gb * GB, parent: d.padre, id: guid() }, d.ocupado_gb !== undefined ? d.ocupado_gb * GB : d.tipo === 'Fixed' ? d.tamano_gb * GB : 4 * MB)
   }
+  if (!st.instalado) return
+  const h: HyperV = { switches: [], vms: [], cpus: st.procesadores, memoryBytes: st.memoria_gb * GB, vmPath: 'C:\\ProgramData\\Microsoft\\Windows\\Hyper-V', vhdPath: 'C:\\ProgramData\\Microsoft\\Windows\\Virtual Hard Disks' }
+  HV.set(s, h)
+  for (const sw of st.conmutadores) h.switches.push({ name: sw.nombre, type: sw.tipo, adapter: sw.tipo === 'External' ? s.state.red.adaptador : undefined, allowMgmt: sw.tipo !== 'Private', id: guid() })
   for (const v of st.vms) {
     const vm: HvVm = {
       name: v.nombre,
@@ -1214,4 +1215,17 @@ export function verifyHyperV(s: PsSession, check: Record<string, unknown>): { ok
     return { ok, label: `el disco ${c.vhd}${c.tipo ? ` de tipo ${c.tipo}` : ''}${c.tamano_gb !== undefined ? ` de ${c.tamano_gb} GB` : ''}` }
   }
   return undefined
+}
+
+// Como los de verdad, los cmdlets de Hyper-V aceptan varias VM (-Name dc-lab, app01): se
+// ejecutan una vez por cada una y se juntan los resultados.
+for (const [key, def] of CMDLETS) {
+  if (def.module !== 'Hyper-V' || /^new-/.test(key)) continue
+  const run = def.run
+  def.run = (ctx) => {
+    const p = ctx.params.has('vmname') ? 'vmname' : ctx.params.has('name') ? 'name' : undefined
+    const v = p ? ctx.params.get(p) : undefined
+    if (!p || !Array.isArray(v) || v.length < 2) return run(ctx)
+    return v.flatMap((one) => run({ ...ctx, params: new Map([...ctx.params, [p, one]]) }))
+  }
 }

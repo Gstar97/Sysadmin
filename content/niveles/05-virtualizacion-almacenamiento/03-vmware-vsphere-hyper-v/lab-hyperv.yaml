@@ -1,0 +1,136 @@
+tipo: pasos
+titulo: Hyper-V con dos VM y la migración de una a Proxmox
+descripcion: >-
+  Vas a instalar Windows Server 2025 con Hyper-V como VM de tu hipervisor (virtualización
+  anidada), crear un conmutador externo y uno interno con NAT, dos VM Linux, y pasar una de ellas
+  al Proxmox del laboratorio del módulo 5.2. Necesitás unos 10 GB de memoria libres (8 para hv01
+  y 2 para pve01, que podés achicar mientras tanto) y 120 GB de disco. Calculá unas tres horas.
+pasos:
+  - titulo: Descargar Windows Server 2025 y Ubuntu Server
+    detalle: >-
+      Del Centro de evaluación de Microsoft, el ISO de Windows Server 2025 (la evaluación dura 180
+      días, como viste en 3.1.1). De ubuntu.com, el ISO de Ubuntu Server LTS. Verificá las sumas
+      SHA256 que publican.
+    comprobar: Tenés los dos ISO y las sumas coinciden.
+  - titulo: La VM hv01, con virtualización anidada
+    detalle: >-
+      En tu hipervisor: 4 vCPU con la virtualización anidada activada (VirtualBox: Sistema,
+      Procesador, Habilitar VT-x/AMD-V anidado; VMware Workstation: Virtualizar Intel VT-x/EPT o
+      AMD-V/RVI; Hyper-V: el primer comando de abajo, con la VM apagada), 8 GB de memoria fija, un
+      disco de 60 GB para el sistema y otro de 60 GB para las VM, y la placa en modo puente (o en
+      la red de tu laboratorio). Igual que con pve01, el hipervisor de afuera tiene que dejar
+      pasar MAC ajenas para que las VM de adentro salgan a la red.
+    comandos:
+      - "Set-VMProcessor -VMName hv01 -ExposeVirtualizationExtensions $true"
+      - "Set-VMNetworkAdapter -VMName hv01 -MacAddressSpoofing On"
+    comprobar: La VM está creada, con la virtualización anidada y el ISO de Windows Server en la lectora.
+  - titulo: Instalar Windows Server y preparar el disco de las VM
+    detalle: >-
+      Instalá Windows Server 2025 Datacenter (con Experiencia de escritorio, para tener el
+      Administrador de Hyper-V; o Server Core si querés practicar todo por PowerShell). Ponele el
+      nombre HV01 y una IP fija de tu laboratorio. Después inicializá el segundo disco como D:.
+    comandos:
+      - "Rename-Computer -NewName HV01 -Restart"
+      - "Get-Disk | Where-Object PartitionStyle -eq 'RAW' | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -DriveLetter D -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel VMs"
+    comprobar: >-
+      Get-Volume muestra D: con unos 60 GB libres.
+  - titulo: El rol Hyper-V
+    detalle: >-
+      Si falla diciendo que el procesador no tiene las capacidades de virtualización necesarias,
+      la virtualización anidada no está activada en hv01: apagala y revisá el paso 2.
+    comandos:
+      - "Install-WindowsFeature Hyper-V -IncludeManagementTools -Restart"
+      - "Set-VMHost -VirtualMachinePath D:\\Hyper-V -VirtualHardDiskPath D:\\Hyper-V"
+    comprobar: Después del reinicio, Get-VMHost responde y muestra las rutas en D:.
+  - titulo: Los conmutadores, con NAT para el interno
+    detalle: >-
+      Desde la consola de hv01, no por Escritorio remoto: al crear el externo, la red se corta
+      unos segundos. El interno crea en el host la placa "vEthernet (Interno)"; le das la
+      dirección 172.16.0.1 y Windows hace NAT para esa red, así las VM del interno salen a
+      internet sin estar en la red de tu laboratorio.
+    comandos:
+      - "New-VMSwitch -Name Externo -NetAdapterName Ethernet -AllowManagementOS $true"
+      - "New-VMSwitch -Name Interno -SwitchType Internal"
+      - "New-NetIPAddress -InterfaceAlias 'vEthernet (Interno)' -IPAddress 172.16.0.1 -PrefixLength 24"
+      - "New-NetNat -Name LabNat -InternalIPInterfaceAddressPrefix 172.16.0.0/24"
+    comprobar: Get-VMSwitch muestra los dos, Get-NetNat muestra LabNat y hv01 sigue teniendo red por vEthernet (Externo).
+  - titulo: app01, en el conmutador externo
+    detalle: >-
+      Copiá el ISO de Ubuntu a D:\ISO. Creá la VM e instalá Ubuntu desde la consola (vmconnect o
+      el Administrador de Hyper-V), con OpenSSH. Durante la instalación tomá IP por DHCP de tu
+      laboratorio. Antes de apagarla para migrar, ya vas a dejarle instalado qemu-guest-agent.
+    comandos:
+      - "New-VM -Name app01 -Generation 2 -MemoryStartupBytes 2GB -NewVHDPath D:\\Hyper-V\\app01.vhdx -NewVHDSizeBytes 30GB -SwitchName Externo"
+      - "Set-VM -Name app01 -ProcessorCount 2 -DynamicMemory -MemoryMinimumBytes 1GB -MemoryMaximumBytes 3GB"
+      - "Add-VMDvdDrive -VMName app01 -Path D:\\ISO\\ubuntu-26.04-live-server-amd64.iso"
+      - "Set-VMFirmware -VMName app01 -SecureBootTemplate MicrosoftUEFICertificateAuthority -FirstBootDevice (Get-VMDvdDrive -VMName app01)"
+      - "Start-VM app01; vmconnect localhost app01"
+    comprobar: app01 arranca solo (ya sin el ISO), tiene una IP de tu laboratorio y entrás por SSH desde tu PC.
+  - titulo: lab02, en el conmutador interno
+    detalle: >-
+      Una segunda VM chica (1 GB, disco de 15 GB, también Ubuntu Server) en Interno. Como ahí no
+      hay DHCP, en la instalación poné IP fija 172.16.0.10/24, puerta de enlace 172.16.0.1 y un DNS
+      público o el de tu laboratorio.
+    comandos:
+      - "New-VM -Name lab02 -Generation 2 -MemoryStartupBytes 1GB -NewVHDPath D:\\Hyper-V\\lab02.vhdx -NewVHDSizeBytes 15GB -SwitchName Interno"
+      - "Set-VMFirmware -VMName lab02 -SecureBootTemplate MicrosoftUEFICertificateAuthority"
+      - "ping -c 2 172.16.0.1 && ping -c 2 1.1.1.1"
+    comprobar: Desde lab02 llegás a 172.16.0.1 y a internet (por el NAT), pero no a la IP de app01 en la red de tu laboratorio salvo que abras el camino a propósito.
+  - titulo: Puntos de control
+    detalle: >-
+      Hacé un punto de control de lab02, borrá algo a propósito adentro (por ejemplo, el
+      archivo /etc/motd) y volvé al punto de control. Después borralo.
+    comandos:
+      - "Checkpoint-VM -Name lab02 -SnapshotName antes-de-romper"
+      - "Restore-VMCheckpoint -VMName lab02 -Name antes-de-romper -Confirm:$false"
+      - "Remove-VMCheckpoint -VMName lab02 -Name antes-de-romper"
+    comprobar: Después de restaurar, el archivo volvió, y Get-VMCheckpoint -VMName lab02 no muestra nada.
+  - titulo: Preparar app01 para la mudanza
+    detalle: >-
+      Adentro de app01, instalá el agente de QEMU (en Hyper-V no hace nada, pero en Proxmox lo vas
+      a necesitar desde el primer arranque) y anotá cómo se llama la placa de red y qué dice el
+      Netplan. Después, en hv01: sin puntos de control, apagada y exportada.
+    comandos:
+      - "sudo apt install -y qemu-guest-agent && ip -br link && cat /etc/netplan/*.yaml"
+      - "Get-VMCheckpoint -VMName app01 | Remove-VMCheckpoint"
+      - "Stop-VM app01"
+      - "Export-VM -Name app01 -Path D:\\Export"
+    comprobar: En D:\Export\app01\Virtual Hard Disks está app01.vhdx, y app01 sigue en hv01, apagada.
+  - titulo: Copiar el disco a pve01
+    detalle: >-
+      Prendé pve01 (el del módulo 5.2). Windows Server trae el cliente de OpenSSH, así que podés
+      copiar con scp desde hv01. Si pve01 tiene poco espacio, agregale un disco antes.
+    comandos:
+      - "ssh root@IP-de-pve01 mkdir -p /mnt/migracion"
+      - "scp 'D:\\Export\\app01\\Virtual Hard Disks\\app01.vhdx' root@IP-de-pve01:/mnt/migracion/"
+      - "qemu-img info /mnt/migracion/app01.vhdx"
+    comprobar: qemu-img info en pve01 muestra file format vhdx y virtual size 30 GiB.
+  - titulo: Crear la VM en Proxmox y arrancarla
+    detalle: >-
+      Con lo que anotaste: UEFI con claves precargadas (era de generación 2 con arranque seguro),
+      el disco importado como scsi0 de arranque, la placa virtio en vmbr0 y el agente. Abrí la
+      consola de la VM en la web de Proxmox.
+    comandos:
+      - "qm create 130 --name app01 --cores 2 --memory 3072 --balloon 1024 --ostype l26 --bios ovmf --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1 --machine q35 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --agent 1 --scsi0 local-lvm:0,import-from=/mnt/migracion/app01.vhdx,discard=on --boot order=scsi0"
+      - "qm start 130"
+    comprobar: En la consola ves arrancar Ubuntu y podés iniciar sesión.
+  - titulo: Arreglar la red adentro y comprobar el agente
+    detalle: >-
+      Lo más probable es que app01 haya arrancado sin red: en Hyper-V la placa se llamaba eth0 y
+      ahora tiene otro nombre (ens18, o enp6s18 con la máquina q35). Fijate cuál con ip -br link
+      y corregí el Netplan desde la consola. Como la MAC cambió, si tu DHCP tenía una reserva
+      para app01, actualizala.
+    comandos:
+      - "ip -br link"
+      - "sudo sed -i 's/eth0/enp6s18/' /etc/netplan/*.yaml && sudo netplan apply"
+      - "qm agent 130 network-get-interfaces"
+    comprobar: app01 tiene IP, entrás por SSH como antes y qm agent 130 ping no da error.
+  - titulo: Respaldar y dar de baja la vieja
+    detalle: >-
+      Respaldá app01 en tu Proxmox Backup Server del módulo 5.2 (o en local). Anotá cuánto tardó
+      cada paso de la migración: es el número que vas a usar para planificar una migración real.
+      Recién después de unos días sin problemas, borrás app01 en hv01.
+    comandos:
+      - "vzdump 130 --storage pbs01 --mode snapshot"
+      - "Remove-VM -Name app01 -Force"
+    comprobar: El respaldo terminó sin el aviso "skipping guest-agent", y tenés anotados los tiempos.

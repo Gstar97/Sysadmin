@@ -1,0 +1,48 @@
+---
+titulo: Hyper-V con dos VM y conmutadores interno y externo, y la migración de una VM de Hyper-V a Proxmox
+horas: 3
+verificacion:
+  - Resolví las dos partes del laboratorio simulado.
+  - Instalé Windows Server 2025 con Hyper-V en una VM con virtualización anidada.
+  - Tengo un conmutador externo y uno interno con NAT, y una VM en cada uno con la red funcionando.
+  - Usé un punto de control para deshacer un cambio y después lo borré.
+  - Migré app01 de Hyper-V a Proxmox, arreglé la red adentro y el agente de QEMU responde.
+  - Respaldé app01 en Proxmox y anoté cuánto tardó cada paso de la migración.
+---
+
+import hvsim from './lab-hyperv-sim.yaml'
+import migsim from './lab-migracion-sim.yaml'
+import pasos from './lab-hyperv.yaml'
+
+## Objetivo
+
+Manejar Hyper-V con soltura desde PowerShell y hacer, de punta a punta, la tarea que más se repite hoy en las empresas: sacar una VM de un hipervisor y ponerla a andar en otro, sin perder nada en el camino.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: unos 10 GB de memoria libres y 120 GB de disco, la virtualización anidada activada, salida a internet, el ISO de evaluación de Windows Server 2025 y el de Ubuntu Server. Y el pve01 del laboratorio del módulo 5.2.
+
+## Parte 1: en el laboratorio simulado
+
+Primero, el host Hyper-V:
+
+<Terminal ejercicio={hvsim} />
+
+Después, la llegada de app01 a Proxmox:
+
+<Terminal ejercicio={migsim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Hyper-V anidado adentro de otro hipervisor anda, pero lento, y algunas combinaciones fallan (por ejemplo, VirtualBox con Hyper-V activado en el mismo Windows). Si tu computadora tiene Windows 11 Pro o Enterprise, podés hacer la parte de Hyper-V directamente ahí, activando la característica Hyper-V: los cmdlets son los mismos.
+</Advertencia>
+
+## Para pensar
+
+1. dc-lab usa un disco diferencial sobre una base. ¿Qué pasaría si alguien abre la base, la actualiza con Windows Update y la cierra? ¿Cómo lo evitarías?
+2. app01 no tenía instantáneas al exportarla. ¿Qué habría pasado si copiabas solo el .vhdx con un punto de control vivo?
+3. En la migración, ¿qué datos tuviste que sacar del inventario porque no viajan en el disco? Armá la lista para la próxima VM.

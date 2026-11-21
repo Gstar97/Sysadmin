@@ -1,0 +1,120 @@
+tipo: terminal
+shell: powershell
+titulo: Un host Hyper-V con dos VM, listo para migrar una
+descripcion: >-
+  HV01 es un Windows Server 2025 Datacenter recién instalado, sin el rol Hyper-V. En D:\Base está
+  ws2025-base.vhdx, un Windows Server 2025 preparado con Sysprep para usar como base, y en D:\ISO
+  la imagen de Ubuntu Server. Vas a armar un controlador de dominio de laboratorio aislado y un
+  servidor de aplicaciones en la red de la empresa (VLAN 20), y a dejar listo app01 para pasarlo
+  a Proxmox.
+estado_inicial:
+  equipo: HV01
+  edicion: Datacenter
+  red: { ip: 192.168.10.31, adaptador: Ethernet }
+  discos:
+    - { numero: 1, tamano_gb: 500, estilo: GPT, particiones: [{ letra: D, tamano_gb: 499, sistema: NTFS, etiqueta: VMs }] }
+  archivos:
+    'D:\ISO\ubuntu-26.04-live-server-amd64.iso': { tamano_mb: 3100 }
+    'D:\Hyper-V': { tipo: directorio }
+  hyperv:
+    instalado: false
+    procesadores: 16
+    memoria_gb: 64
+    discos:
+      - { ruta: 'D:\Base\ws2025-base.vhdx', tamano_gb: 60, tipo: Dynamic, ocupado_gb: 11 }
+pasos:
+  - consigna: Instalá el rol Hyper-V con sus herramientas de administración y reiniciá el servidor.
+    verificar:
+      - { caracteristica: Hyper-V }
+      - { comando_usado: "restart" }
+    pistas:
+      - "Install-WindowsFeature Hyper-V -IncludeManagementTools -Restart"
+    solucion:
+      - Install-WindowsFeature Hyper-V -IncludeManagementTools -Restart
+    explicacion: >-
+      Sin reiniciar, el rol figura instalado pero los cmdlets fallan: el hipervisor tiene que
+      arrancar antes que Windows.
+  - consigna: >-
+      Que las VM y sus discos vayan a D:\Hyper-V. Creá el conmutador Externo sobre la placa
+      Ethernet, compartido con el host, y el conmutador Interno, para el laboratorio aislado.
+    verificar:
+      - { conmutador_hyperv: Externo, tipo: External }
+      - { conmutador_hyperv: Interno, tipo: Internal }
+      - { comando_usado: "set-vmhost" }
+    pistas:
+      - "Set-VMHost -VirtualMachinePath D:\\Hyper-V -VirtualHardDiskPath D:\\Hyper-V"
+      - "New-VMSwitch -Name Externo -NetAdapterName Ethernet -AllowManagementOS $true"
+      - "New-VMSwitch -Name Interno -SwitchType Internal"
+    solucion:
+      - Set-VMHost -VirtualMachinePath D:\Hyper-V -VirtualHardDiskPath D:\Hyper-V
+      - New-VMSwitch -Name Externo -NetAdapterName Ethernet -AllowManagementOS $true
+      - New-VMSwitch -Name Interno -SwitchType Internal
+  - consigna: >-
+      Creá dc-lab a partir de la base, sin copiarla: un disco diferencial D:\Hyper-V\dc-lab.vhdx
+      cuyo padre sea ws2025-base.vhdx. La VM: generación 2, 4 GB fijos, 2 procesadores, conectada
+      a Interno. Encendela.
+    verificar:
+      - { vhd: 'D:\Hyper-V\dc-lab.vhdx', tipo: Differencing, padre: ws2025-base.vhdx }
+      - { vm_hyperv: dc-lab, estado: Running, generacion: 2, procesadores: 2, memoria_dinamica: false, conmutador: Interno, con_disco: 'D:\Hyper-V\dc-lab.vhdx' }
+    pistas:
+      - "New-VHD -Path D:\\Hyper-V\\dc-lab.vhdx -ParentPath D:\\Base\\ws2025-base.vhdx -Differencing"
+      - "New-VM -Name dc-lab -Generation 2 -MemoryStartupBytes 4GB -VHDPath D:\\Hyper-V\\dc-lab.vhdx -SwitchName Interno"
+      - "Set-VM -Name dc-lab -ProcessorCount 2"
+    solucion:
+      - New-VHD -Path D:\Hyper-V\dc-lab.vhdx -ParentPath D:\Base\ws2025-base.vhdx -Differencing
+      - New-VM -Name dc-lab -Generation 2 -MemoryStartupBytes 4GB -VHDPath D:\Hyper-V\dc-lab.vhdx -SwitchName Interno
+      - Set-VM -Name dc-lab -ProcessorCount 2
+      - Start-VM dc-lab
+    explicacion: >-
+      El diferencial arranca casi vacío y guarda solo lo que dc-lab cambia; con la misma base
+      podés sacar diez VM de laboratorio en segundos. Por eso la base no se toca nunca más: si
+      cambia, todos sus hijos quedan inservibles. Un controlador de dominio usa memoria fija
+      (Active Directory no se lleva bien con que le saquen memoria) y va en Interno para que no
+      choque con el dominio de la empresa.
+  - consigna: >-
+      Creá app01: Ubuntu, generación 2, disco nuevo de 40 GB en D:\Hyper-V\app01.vhdx, 2
+      procesadores, memoria dinámica (2 GB al arrancar, entre 1 y 4 GB), en Externo y la VLAN 20,
+      con la ISO de Ubuntu y la plantilla de arranque seguro para Linux. Encendela para instalar.
+    verificar:
+      - { vm_hyperv: app01, estado: Running, generacion: 2, procesadores: 2, memoria_dinamica: true, conmutador: Externo, vlan: 20, con_disco: 'D:\Hyper-V\app01.vhdx' }
+      - { comando_usado: "set-vmfirmware" }
+    pistas:
+      - "New-VM -Name app01 -Generation 2 -MemoryStartupBytes 2GB -NewVHDPath D:\\Hyper-V\\app01.vhdx -NewVHDSizeBytes 40GB -SwitchName Externo"
+      - "Set-VMFirmware -VMName app01 -SecureBootTemplate MicrosoftUEFICertificateAuthority"
+    solucion:
+      - New-VM -Name app01 -Generation 2 -MemoryStartupBytes 2GB -NewVHDPath D:\Hyper-V\app01.vhdx -NewVHDSizeBytes 40GB -SwitchName Externo
+      - Set-VM -Name app01 -ProcessorCount 2 -DynamicMemory -MemoryMinimumBytes 1GB -MemoryMaximumBytes 4GB
+      - Add-VMDvdDrive -VMName app01 -Path D:\ISO\ubuntu-26.04-live-server-amd64.iso
+      - Set-VMFirmware -VMName app01 -SecureBootTemplate MicrosoftUEFICertificateAuthority
+      - Set-VMNetworkAdapterVlan -VMName app01 -Access -VlanId 20
+      - Start-VM app01
+  - consigna: Hacé un punto de control llamado lab-listo en las dos VM y comprobá que se crearon.
+    verificar:
+      - { vm_hyperv: dc-lab, punto_de_control: lab-listo }
+      - { vm_hyperv: app01, punto_de_control: lab-listo }
+      - { salida_contiene: "lab-listo" }
+    pistas:
+      - "Checkpoint-VM -Name dc-lab, app01 -SnapshotName lab-listo"
+    solucion:
+      - Checkpoint-VM -Name dc-lab, app01 -SnapshotName lab-listo
+      - Get-VMCheckpoint -VMName dc-lab, app01
+  - consigna: >-
+      Ahora app01 se va a Proxmox. Dejala lista: borrá su punto de control (para que el disco
+      quede consolidado en un solo archivo), apagala ordenadamente y exportala a D:\Export.
+    verificar:
+      - { comando_usado: "remove-vmcheckpoint" }
+      - { vm_hyperv: app01, estado: Off }
+      - { vhd: 'D:\Export\app01\Virtual Hard Disks\app01.vhdx', tamano_gb: 40 }
+    pistas:
+      - "Remove-VMCheckpoint -VMName app01 -Name lab-listo"
+      - "Stop-VM app01 (sin -TurnOff: el sistema se apaga bien)."
+      - "Export-VM -Name app01 -Path D:\\Export"
+    solucion:
+      - Remove-VMCheckpoint -VMName app01 -Name lab-listo
+      - Stop-VM app01
+      - Export-VM -Name app01 -Path D:\Export
+    explicacion: >-
+      Con un punto de control, el disco está partido en el .vhdx y uno o más .avhdx; al borrarlo,
+      Hyper-V los une. Exportar con la VM apagada deja una copia consistente, y app01 sigue en
+      HV01 por si la migración sale mal. Anotá lo que no viaja en el disco: generación 2 (UEFI),
+      VLAN 20 y 2 procesadores.

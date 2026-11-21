@@ -202,8 +202,12 @@ export function formatDefault(items: unknown[]): string {
     }
     // Agrupar elementos consecutivos del mismo tipo.
     const t = typeName(first)
+    // Sin una vista propia (por ejemplo, lo que sale de Select-Object), se agrupan los objetos
+    // que tienen las mismas propiedades, aunque vengan de tipos distintos: es una sola tabla.
+    const shape = (o: unknown) => (VIEWS[typeName(o)] || typeName(o).startsWith('Deserialized.') || o instanceof Map ? typeName(o) : `shape:${propNames(o).join(',')}`)
+    const k = shape(first)
     let j = i
-    while (j < items.length && typeName(items[j]) === t && !isScalar(items[j])) j++
+    while (j < items.length && !isScalar(items[j]) && shape(items[j]) === k) j++
     const group = items.slice(i, j)
     i = j
     if (first instanceof Map) {
