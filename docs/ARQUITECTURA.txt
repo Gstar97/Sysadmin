@@ -824,6 +824,49 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     · Verificaciones nuevas: dominio, imagen_disco, red_libvirt, pve_vm (con arranca y
       con_red), pve_ct, pve_respaldo, pve_almacenamiento, pve_puente, pve_usuario,
       vm_hyperv, conmutador_hyperv y vhd.
+  - Nivel 5, parte 2 (módulos 5.4 a 5.6, clústeres, almacenamiento y respaldos):
+    · Clúster de Proxmox (pvecluster.ts): pvecm (crear, unir, estado, votos esperados,
+      QDevice), quórum real entre los nodos del ejercicio, /etc/pve de solo lectura sin
+      quórum, alta disponibilidad con ha-manager (recursos, reglas de afinidad a nodos y
+      entre recursos, modo mantenimiento), cercado por watchdog a los 60 segundos y
+      recuperación a los 2 minutos (el tiempo avanza con sleep), y migración en vivo o en
+      frío con discos locales, compartidos o replicados. Apagar un nodo por su placa de
+      gestión, reiniciarlo o cortarle la red lo saca del clúster de verdad.
+    · Clúster de Windows (powershell/failover.ts): Test-Cluster, New-Cluster (con su
+      objeto de equipo en AD), testigo de archivo, nube o disco, quórum dinámico, discos
+      CSV, roles de VM, mover roles, pausar y vaciar nodos, y la conmutación cuando se
+      apaga un nodo.
+    · iSCSI (iscsi.ts y powershell/iscsi.ts): targetcli (backstores, destinos, LUN, ACL,
+      saveconfig; sin guardar, se pierde al reiniciar), iscsiadm, el almacenamiento iSCSI
+      de Proxmox con LVM compartido encima (el mismo VG en todos los nodos que entran al
+      LUN; el que no tiene permiso lo ve inactive y no recibe migraciones), y el iniciador
+      de Windows (MSiSCSI, portales, conexión persistente, discos desconectados).
+    · ZFS (zfs.ts): zpool (espejos, RAIDZ, estado con errores, scrub y resilver que avanzan
+      con el tiempo, replace, clear, import y export) y zfs (datasets con propiedades
+      heredables, cuotas, solo lectura de verdad, volúmenes, instantáneas que guardan los
+      archivos, rollback, clones, send y receive completos e incrementales por ssh), los
+      zvols de Proxmox y la réplica entre nodos con pvesr.
+    · Ceph (ceph.ts): pveceph (instalar, iniciar, monitores, managers, OSD sobre LVM,
+      pools con size y min_size y su almacenamiento RBD), ceph -s, health detail, osd tree,
+      df y flags; OSD que caen y pasan a out a los 10 minutos, degradación, falta de hosts
+      para rehacer copias y entrada y salida bloqueada bajo min_size; ceph-volume lvm list,
+      y smartctl con el disco fallando en los servidores físicos.
+    · Respaldos (backup.ts): restic (init, backup con etiquetas y exclusiones, snapshots,
+      diff, find, ls, forget con la misma política que el restic de verdad, prune, check
+      con lectura de datos, restore, stats) contra una carpeta, sftp, un rest-server (con
+      htpasswd, repositorios privados y modo solo agregar, que rechaza los borrados) o un
+      almacenamiento de objetos S3 con bloqueo de objetos (que tampoco deja borrar hasta
+      que vence el plazo). Los archivos se guardan de verdad y un repositorio se pierde si
+      se borra o se cifra su config. Las copias protegidas de Proxmox quedan afuera de la
+      retención, qmrestore tiene en cuenta link_down, y time mide comandos sumando lo que
+      tardaría el trabajo de verdad.
+    · Otros cambios: ssh ejecuta el comando remoto con el entorno del otro equipo (no con
+      las variables exportadas del local) y actualiza su estado antes de cada comando; y
+      las unidades propias de systemd aceptan binarios ELF.
+    · Verificaciones nuevas: pve_cluster, pve_ha, pve_mantenimiento, pve_encendido, nodo
+      en pve_vm y pve_ct, zpool, dataset, replica_pve, iscsi_destino, iscsi_sesion, ceph,
+      restic_repo y rest_server (bash); cluster_win, rol_cluster, nodo_cluster e
+      iscsi_conectado (PowerShell).
   - Límites honestos: si se usa un comando que el simulador no tiene, lo dice y sugiere
     practicarlo en el laboratorio real.
   - En el teléfono aparece una fila de teclas de ayuda (Tab, Ctrl, flechas, |, /).
@@ -953,7 +996,14 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     puntajes editables, y el costo de licencias de Proxmox, vSphere e Hyper-V a varios
     años con los mínimos de núcleos de cada uno), sobre motores con pruebas en
     src/engines/virtualizacion.
-  - Pendientes, con el nivel que los usa: simulador de quórum; consolas de Python
+  - Hechos en la Etapa 8b (Nivel 5): simulador de quórum (SimuladorQuorum: nodos que se
+    caen, redes partidas, QDevice y votos esperados, con qué mitad sigue andando),
+    calculadora de capacidad (CalculadoraCapacidad: espejos y RAIDZ de ZFS, réplicas y
+    erasure coding de Ceph, con lo útil, lo recomendable y cuántas fallas aguanta) y
+    planificador de retención (PlanificadorRetencion: qué copias quedan con una política
+    como la de restic o PBS, hasta cuándo se puede volver, cuánto ocupan y de qué copia se
+    vuelve si el daño fue hace tantos días).
+  - Pendientes, con el nivel que los usa: consolas de Python
     (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; calculadoras de disponibilidad, cron y costos.
   - Los componentes pesados se cargan solo cuando una lección los usa.
@@ -1233,8 +1283,17 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       PowerShell), 8 diagramas clicables, 3 casos de diagnóstico, 3 de emparejar y 1 de
       ordenar. El simulador sumó lo descripto en 6.1 (Nivel 5, parte 1) y hay dos
       interactivos nuevos (6.9).
-    - 8b (pendiente): módulos 5.4 Clusters y alta disponibilidad, 5.5 Almacenamiento y
-      5.6 Backups y recuperación ante desastres, y el proyecto del nivel.
+    - 8b (HECHA, en revisión): módulos 5.4 Clusters y alta disponibilidad, 5.5
+      Almacenamiento y 5.6 Backups y recuperación ante desastres, y el proyecto del nivel
+      ("Cluster de virtualización con recuperación ante desastres"). 13 lecciones, cada
+      módulo con laboratorio (en la plataforma y en máquinas virtuales: clúster de tres
+      nodos con alta disponibilidad y la caída de un nodo medida; ZFS con réplica, un LUN
+      iSCSI para Proxmox y Windows, y Ceph; el esquema 3-2-1-1-0 con un ataque simulado y
+      un simulacro cronometrado), examen y caso real; 138 preguntas, 72 tarjetas, 38
+      términos de glosario nuevos, 18 ejercicios de terminal (16 de Linux y 2 de
+      PowerShell, incluida la maqueta del proyecto), 11 diagramas clicables, 3 casos de
+      diagnóstico, 3 de emparejar y 1 de ordenar. El simulador sumó lo descripto en 6.1
+      (Nivel 5, parte 2) y hay tres interactivos nuevos (6.9).
 
   Etapa 9 en adelante - Un nivel por etapa, en orden, con la misma calidad y formato.
 
