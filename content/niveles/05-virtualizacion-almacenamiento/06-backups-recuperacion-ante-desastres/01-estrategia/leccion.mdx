@@ -1,0 +1,93 @@
+---
+id: n5-m6-l1
+titulo: Estrategia de backup
+minutos: 150
+objetivos:
+  - Diseñar un esquema de copias con la regla 3-2-1-1-0 y explicar para qué está cada pieza.
+  - Acordar RPO y RTO por servicio y traducirlos en frecuencia y forma de restaurar.
+  - Elegir qué respaldar y con qué retención, sabiendo cuánto ocupa y hasta cuándo se puede volver.
+glosario: [regla-321, rpo-rto, copia-inmutable, retencion-gfs, rotacion-respaldos]
+verificado: 2026-11
+---
+
+import regla from './regla.svg?raw'
+import reglaDatos from './regla.yaml'
+import rpoRto from './rpo-rto.svg?raw'
+import rto from './rto.yaml'
+
+En la lección 3.5.5 viste la regla 3-2-1 y respaldaste un Windows Server. En este módulo vas a hacer lo mismo para toda la plataforma: VM, contenedores, servidores de archivos y bases de datos, con copias que sobrevivan a un ransomware y un plan para volver a funcionar después de un desastre. Antes de cualquier herramienta, la estrategia: sin ella, se respalda lo que es fácil y no lo que importa.
+
+<AntesDeEmpezar>
+- Respaldos en Windows Server, la regla 3-2-1, RPO y RTO (lección 3.5.5).
+- Proxmox Backup Server (lección 5.2.4).
+- Instantáneas y réplica de ZFS (lección 5.5.3).
+</AntesDeEmpezar>
+
+## La regla 3-2-1-1-0
+
+La regla 3-2-1 tiene más de veinte años y sigue valiendo, pero el ransomware obligó a agregarle dos números:
+
+<DiagramaInteractivo datos={reglaDatos} svg={regla} alt="Cinco columnas. 3 copias de los datos: los de trabajo y dos copias más, por ejemplo el servidor de archivos, el Proxmox Backup Server y una copia en otra sede; una sola copia es ninguna copia. 2 tipos de medio, que no fallen por la misma causa, por ejemplo discos del PBS y almacenamiento de objetos, o cinta, o un NAS aparte; no dos carpetas en el mismo disco. 1 fuera del sitio, lejos de un incendio, una inundación o un robo, por ejemplo rest-server en otra sede o un bucket S3 de un proveedor; otra sala del mismo edificio no alcanza. 1 inmutable o aislada, que nadie pueda borrar ni con la clave de administrador, por ejemplo un bucket con bloqueo de objetos por 30 días o un rest-server solo agregar; la que sobrevive a un ransomware. 0 errores al verificar: copias revisadas y restauraciones probadas, por ejemplo verificación semanal y un simulacro por mes; una copia que nunca se probó es una esperanza." />
+
+Lo que **no** es un respaldo, aunque se parezca: el RAID, las tres copias de Ceph, una réplica de ZFS, una carpeta sincronizada con la nube. Todos copian el desastre al instante: si alguien borra una carpeta o un ransomware cifra los archivos, el cambio llega a todas las copias. Lo vas a ver con tus ojos en la lección 5.6.3.
+
+## RPO y RTO, por servicio
+
+<Diagrama svg={rpoRto} alt="Una línea de tiempo. A la izquierda, la última copia buena; en el medio, el desastre; a la derecha, el momento en que todo anda de nuevo. Entre la última copia y el desastre, en rojo, los datos que se pierden: eso es el RPO, cuánto se puede perder, y lo decide la frecuencia de las copias. Entre el desastre y la vuelta, en amarillo, el tiempo sin servicio: eso es el RTO, cuánto se puede tardar en volver, y lo decide cómo y desde dónde se restaura." />
+
+Los dos números se traducen en decisiones concretas:
+
+- **RPO** de un día: una copia por noche alcanza. De 15 minutos: copias cada 15 minutos, réplica de ZFS o las copias del registro de la base de datos. De cero: solo con almacenamiento compartido o replicación síncrona (y eso no es un respaldo).
+- **RTO** de una semana: se puede restaurar todo desde la copia de afuera, aunque tarde días en bajar. De una hora: la copia tiene que estar cerca (un PBS en la misma red) y la restauración, ensayada. De minutos: alta disponibilidad o "restauración en vivo" (arrancar la VM directamente desde el respaldo mientras se copia).
+
+No hay un número para toda la empresa. Se acuerda por servicio, con quien lo usa:
+
+<Emparejar ejercicio={rto} />
+
+## Qué respaldar
+
+Lo obvio (los datos y las VM) y lo que se olvida:
+
+- **Bases de datos**, con un volcado consistente (`mysqldump --single-transaction`, `pg_dump`) o con la VM en modo snapshot y el agente de invitado, que congela el disco un instante. Copiar los archivos de una base corriendo da una copia que puede no arrancar (lección 4.3.4).
+- **La configuración de la infraestructura**: `/etc/pve` de Proxmox, la configuración de los switches y del firewall, los DNS, los certificados. Sin eso, reconstruir lleva días.
+- **Las claves de los respaldos**: la clave de un repositorio de restic o la de cifrado del PBS. Si se pierden con el servidor, las copias no sirven para nada. Van impresas en un sobre o en el gestor de contraseñas, fuera del sistema que protegen.
+- **Los servicios en la nube**: Microsoft 365 y Google Workspace guardan lo borrado un tiempo, pero no son un respaldo con la retención que la empresa necesita.
+- **La documentación**: el plan de recuperación (lección 5.6.5) tiene que estar en papel o en otro lado, porque el día que lo necesitás, la wiki interna también está caída.
+
+## Cuánto tiempo guardar
+
+Guardar todas las copias para siempre no entra en ningún disco; guardar solo la última no sirve si el problema se descubre tarde (un archivo que se dañó hace un mes, un ransomware que estuvo dormido semanas). La salida es el esquema **abuelo, padre, hijo** (GFS): muchas copias recientes y cada vez menos hacia atrás. Por ejemplo, 7 diarias, 4 semanales y 12 mensuales: unas 23 copias que cubren un año. Probalo:
+
+<PlanificadorRetencion />
+
+Tres cosas que este planificador deja ver: con solo 7 diarias, un daño de hace un mes no tiene arreglo; las copias mensuales casi no suman espacio gracias a la deduplicación; y el RPO no depende de la retención sino de la frecuencia. Además, la ley o los contratos pueden obligar a guardar cierta información por años (facturación, sueldos): eso se resuelve con una copia anual aparte, no estirando la retención de todo.
+
+<EnSimple>
+Una estrategia de respaldo dice qué se copia, cada cuánto, dónde y por cuánto tiempo. La regla 3-2-1-1-0: tres copias, en dos tipos de medio, una afuera, una que nadie pueda borrar y cero errores al probarlas. RPO es cuántos datos se pueden perder y RTO cuánto se puede tardar en volver: se acuerdan por servicio y deciden la frecuencia y la forma de restaurar. Se respaldan también la configuración, las bases de datos bien hechas y las claves de los respaldos, guardadas aparte. Y se guardan muchas copias recientes y pocas viejas (diarias, semanales y mensuales).
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Contar el RAID, Ceph o una réplica como respaldo">
+    Protegen contra un disco roto, no contra un borrado, un cifrado o un error: el cambio llega a todas las copias al instante.
+  </ErrorComun>
+  <ErrorComun titulo="Todas las copias accesibles con la misma clave">
+    El ransomware entra con la clave de administrador y borra todo, respaldos incluidos. Una copia tiene que ser inmutable o estar desconectada.
+  </ErrorComun>
+  <ErrorComun titulo="Guardar la clave del repositorio solo en el servidor respaldado">
+    Si se pierde el servidor, se pierde la clave, y las copias cifradas no se pueden abrir. La clave, impresa y en otro lado.
+  </ErrorComun>
+  <ErrorComun titulo="El mismo RPO y RTO para todo">
+    Sale carísimo o queda corto. Se acuerdan por servicio, empezando por los que más cuesta tener parados.
+  </ErrorComun>
+  <ErrorComun titulo="Retención de una semana">
+    Muchos problemas se descubren tarde. Con solo 7 diarias, un daño de hace un mes no tiene vuelta.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- 3-2-1-1-0: tres copias, dos medios, una afuera, una inmutable o aislada, cero errores al verificar.
+- RAID, Ceph, réplicas y sincronización no son respaldos: copian el desastre.
+- RPO (frecuencia) y RTO (forma y lugar de restaurar), acordados por servicio.
+- Respaldar también configuración, bases de datos consistentes, claves (guardadas aparte) y la documentación.
+- Retención abuelo, padre, hijo: muchas copias recientes y pocas viejas; la ley puede pedir copias anuales aparte.
+</Resumen>

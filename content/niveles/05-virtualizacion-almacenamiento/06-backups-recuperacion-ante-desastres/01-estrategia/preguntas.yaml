@@ -1,0 +1,100 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué agrega la regla 3-2-1-1-0 a la 3-2-1 de siempre?
+  opciones:
+    - { texto: "Una copia inmutable o desconectada y cero errores al verificar las copias", correcta: true, explicacion: "Por el ransomware y por las copias que nunca se probaron." }
+    - { texto: "Una copia más en el mismo servidor", explicacion: "No suma nada." }
+    - { texto: "Un RAID 1 y un RAID 0", explicacion: "No." }
+    - { texto: "Copias cada 1 hora y 0 minutos de corte", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una empresa tiene Ceph con 3 copias de todo y dice que no necesita respaldos. ¿Qué le contestás?
+  opciones:
+    - { texto: "Que Ceph protege contra un disco o un servidor roto, pero un borrado o un cifrado llega a las tres copias al instante", correcta: true, explicacion: "Las copias de Ceph no son respaldos." }
+    - { texto: "Que tiene razón", explicacion: "No." }
+    - { texto: "Que alcanza con pasar a 4 copias", explicacion: "Seguiría copiando el desastre." }
+    - { texto: "Que necesita un RAID debajo de Ceph", explicacion: "Tampoco." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El sistema de facturación necesita un RPO de 15 minutos. ¿Qué decisión se desprende de eso?
+  opciones:
+    - { texto: "Hacer copias (o réplicas del registro de la base) por lo menos cada 15 minutos", correcta: true, explicacion: "El RPO lo decide la frecuencia." }
+    - { texto: "Guardar las copias 15 años", explicacion: "Eso es retención." }
+    - { texto: "Restaurar en menos de 15 minutos", explicacion: "Eso sería el RTO." }
+    - { texto: "Comprar discos más rápidos", explicacion: "No necesariamente." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué un ransomware moderno es tan peligroso para los respaldos?
+  opciones:
+    - { texto: "Porque busca y borra los respaldos con las claves de administrador antes de cifrar", correcta: true, explicacion: "Por eso hace falta una copia que no se pueda borrar." }
+    - { texto: "Porque los respaldos no se pueden cifrar", explicacion: "Sí se pueden." }
+    - { texto: "Porque rompe los discos", explicacion: "No." }
+    - { texto: "Porque los respaldos son lentos", explicacion: "No es eso." }
+- id: p05
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué de esto conviene incluir en la estrategia de respaldo? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "La configuración de Proxmox, switches y firewall", correcta: true, explicacion: "Sin eso, reconstruir lleva días." }
+    - { texto: "Las claves de los repositorios, guardadas fuera del sistema", correcta: true, explicacion: "Sin la clave, las copias no se abren." }
+    - { texto: "Volcados consistentes de las bases de datos", correcta: true, explicacion: "Copiar los archivos de una base corriendo puede dar una copia rota." }
+    - { texto: "La carpeta de archivos temporales del sistema", explicacion: "No hace falta." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con una copia diaria y retención de 7 diarias, alguien descubre hoy que un archivo se dañó hace 20 días. ¿Qué pasa?
+  opciones:
+    - { texto: "No hay copia de antes del daño: se perdió", correcta: true, explicacion: "Por eso conviene sumar semanales y mensuales." }
+    - { texto: "Se restaura la de hace 7 días y listo", explicacion: "Esa copia ya tiene el archivo dañado." }
+    - { texto: "Se restaura la de hace 20 días", explicacion: "Ya no existe." }
+    - { texto: "Depende del RTO", explicacion: "Es un tema de retención." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es el RTO?
+  opciones:
+    - { texto: "Cuánto tiempo puede estar parado un servicio hasta volver a funcionar", correcta: true, explicacion: "Lo decide cómo y desde dónde se restaura." }
+    - { texto: "Cuántos datos se pueden perder", explicacion: "Eso es el RPO." }
+    - { texto: "Cuántas copias se guardan", explicacion: "Eso es retención." }
+    - { texto: "La velocidad de la red", explicacion: "No." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál de estas es una copia "fuera del sitio" de verdad?
+  opciones:
+    - { texto: "Un servidor de respaldo en otra sede de la empresa, en otra ciudad", correcta: true, explicacion: "Un incendio no se lleva las dos." }
+    - { texto: "Un NAS en otra sala del mismo edificio", explicacion: "El mismo incendio o robo." }
+    - { texto: "Un disco USB conectado al mismo servidor", explicacion: "Está en el mismo lugar, y conectado." }
+    - { texto: "Otra carpeta del mismo servidor", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: La gerencia pide RPO cero y RTO de cinco minutos para todos los sistemas. ¿Cómo respondés?
+  opciones:
+    - { texto: "Explicando cuánto cuesta y proponiendo números por servicio, según lo que cuesta cada uno parado", correcta: true, explicacion: "Para casi todo, esos números no se justifican." }
+    - { texto: "Aceptando: es cuestión de comprar más discos", explicacion: "No alcanza con discos." }
+    - { texto: "Activando más copias de Ceph", explicacion: "Eso no es un respaldo." }
+    - { texto: "Diciendo que es imposible", explicacion: "Para algunos servicios se puede, pagando." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es la retención "abuelo, padre, hijo" (GFS)?
+  opciones:
+    - { texto: "Guardar muchas copias recientes (diarias) y cada vez menos hacia atrás (semanales, mensuales)", correcta: true, explicacion: "Cubre mucho tiempo con pocas copias." }
+    - { texto: "Tres copias en tres lugares", explicacion: "Eso es la regla 3-2-1." }
+    - { texto: "Una copia por usuario", explicacion: "No." }
+    - { texto: "Copias completas, incrementales y diferenciales", explicacion: "Son tipos de copia, no retención." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde conviene guardar la clave de cifrado del repositorio de respaldos?
+  opciones:
+    - { texto: "Impresa en un sobre cerrado y en el gestor de contraseñas, fuera de los servidores respaldados", correcta: true, explicacion: "Para tenerla aunque se pierda todo." }
+    - { texto: "En un archivo en el mismo servidor", explicacion: "Se pierde con el servidor." }
+    - { texto: "En la cabeza del sysadmin", explicacion: "Las personas se van." }
+    - { texto: "No hace falta guardarla", explicacion: "Sin ella, las copias no se abren." }
