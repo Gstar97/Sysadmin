@@ -338,6 +338,16 @@ export class Shell {
     return { remote }
   }
 
+  /** Cierra todas las sesiones abiertas en un servidor que se apagó. Devuelve el nombre con el que se entró. */
+  dropHost(sys: System): string | undefined {
+    let name: string | undefined
+    while (this.userStack.length > 1 && this.sysStack.includes(sys)) {
+      const p = this.popUser()
+      if (p && p.remote) name = p.remote
+    }
+    return name
+  }
+
   /** Ejecuta una acción en otro servidor, como un usuario (ssh servidor comando, scp). */
   async onHost<T>(sys: System, user: string, fn: () => Promise<T>): Promise<T> {
     this.sysStack.push(sys)

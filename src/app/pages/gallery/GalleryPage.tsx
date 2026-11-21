@@ -11,6 +11,7 @@ import {
   CalculadoraUps,
   ConstructorRack,
   SimuladorRecursos,
+  SimuladorQuorum,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
@@ -167,9 +168,10 @@ export default function GalleryPage() {
         <ConstructorRack inventario={['ups', 'srv2u', 'srv2u', 'nas', 'srv1u', 'sw', 'patch', 'org', 'fw']} />
       </Section>
 
-      <Section id="virtualizacion" titulo="Virtualización" descripcion="Simulador de recursos virtuales (vCPU y memoria prometidas contra lo que tiene el servidor, con globo y páginas compartidas) y comparador de plataformas (matriz de decisión con pesos y el costo de licencias con tus precios).">
+      <Section id="virtualizacion" titulo="Virtualización" descripcion="Simulador de recursos virtuales (vCPU y memoria prometidas contra lo que tiene el servidor, con globo y páginas compartidas), comparador de plataformas (matriz de decisión con pesos y el costo de licencias con tus precios) y simulador de quórum (nodos que se caen, redes partidas, QDevice y votos esperados).">
         <SimuladorRecursos />
         <ComparadorPlataformas />
+        <SimuladorQuorum />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">

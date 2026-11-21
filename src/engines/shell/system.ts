@@ -282,6 +282,8 @@ export class System {
   reachable = new Set<string>()
   /** Los otros servidores de la red del ejercicio (para ssh y scp). */
   lab: System[] = []
+  /** El servidor está apagado (por la placa de gestión o con poweroff): nadie lo ve en la red. */
+  poweredOff = false
   /** Configuración de sshd con la que arrancó el servicio (cambia al reiniciarlo o recargarlo). */
   sshd?: SshdConf
   /** Puertos de ssh.socket en Ubuntu (se regeneran con systemctl daemon-reload). */
@@ -361,7 +363,7 @@ export class System {
     const usuarios = currentDefined || state.usuario === 'root' ? [...state.usuarios] : [{ nombre: state.usuario, grupos: [] as string[], sudo: true, bloqueado: false, clave_ssh: false } as (typeof state.usuarios)[number], ...state.usuarios]
     usuarios.sort((a, b) => Number(b.nombre === state.usuario) - Number(a.nombre === state.usuario))
     const first = usuarios[0]?.nombre === state.usuario ? usuarios.shift() : undefined
-    if (first) this.addUser(first.nombre, { uid: first.uid, shell: first.shell, home: first.home, gecos: first.comentario, createHome: true })
+    if (first && !this.users.has(first.nombre)) this.addUser(first.nombre, { uid: first.uid, shell: first.shell, home: first.home, gecos: first.comentario, createHome: true })
     for (const g of state.grupos) if (!this.groups.has(g.nombre)) this.addGroup(g.nombre, g.gid)
     if (first) usuarios.unshift(first)
     for (const u of usuarios) {
@@ -587,6 +589,19 @@ export class System {
 
   /** Módulos que completan el servidor a partir del estado del ejercicio (web, TLS...). */
   static initHooks: ((sys: System, state: BashState) => void)[] = []
+  /** Cuando ya están creados y conectados todos los servidores del ejercicio. */
+  static labHooks: ((all: System[], states: BashState[]) => void)[] = []
+  /** sleep: pasa el tiempo (para lo que depende de esperar, como la alta disponibilidad). */
+  static sleepHooks: ((sys: System, seconds: number) => void)[] = []
+  /** Un servidor se apaga (on = false), se prende (on = true) o se reinicia (los dos, seguidos). */
+  static powerHooks: ((sys: System, on: boolean) => void)[] = []
+
+  /** Apaga o prende el servidor y avisa a los que dependen de eso (un clúster, por ejemplo). */
+  setPower(on: boolean) {
+    if (this.poweredOff === !on) return
+    this.poweredOff = !on
+    for (const h of System.powerHooks) h(this, on)
+  }
   /** Lo que hace un paquete al instalarse además de copiar archivos (carpetas con dueño, un cluster...). */
   static installHooks: Record<string, (sys: System) => void> = {}
 
@@ -812,6 +827,7 @@ export class System {
   }
 
   ownIps(): string[] {
+    if (this.poweredOff) return []
     return ['127.0.0.1', ...this.interfaces.filter((i) => i.up && i.ip).map((i) => i.ip!.split('/')[0])]
   }
 

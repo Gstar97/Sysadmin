@@ -90,6 +90,8 @@ export interface Pve {
   /** Puentes aplicados (lo que leyó ifreload). */
   bridges: Map<string, { ports: string[]; vlanAware: boolean; address?: string; vids?: string }>
   nextPid: number
+  /** El clúster del que es parte (lo maneja pvecluster.ts). */
+  cluster?: import('./pvecluster').PveCluster
 }
 
 const PVE = new WeakMap<System, Pve>()
@@ -161,7 +163,7 @@ function gb(n: number) {
   return Math.round(n * GiB)
 }
 
-function hex(n: number) {
+export function hex(n: number) {
   return Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('')
 }
 
@@ -171,7 +173,7 @@ function mac() {
 }
 
 /** "local-lvm:32" o "local-lvm:vm-100-disk-0,size=32G" → partes. */
-function parseDrive(v: string): { volid?: string; storage: string; newSize?: number; opts: Map<string, string>; importFrom?: string } {
+export function parseDrive(v: string): { volid?: string; storage: string; newSize?: number; opts: Map<string, string>; importFrom?: string } {
   const [first, ...rest] = v.split(',')
   const opts = new Map(rest.map((p) => p.split('=') as [string, string]))
   const [storage, vol] = first.split(':')
@@ -184,7 +186,7 @@ function sizeStr(b: number) {
   return Number.isInteger(g) ? `${g}G` : `${Math.round(b / 1024 / 1024)}M`
 }
 
-function fmtTime(t: number) {
+export function fmtTime(t: number) {
   const d = new Date(t)
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
@@ -209,7 +211,7 @@ System.initHooks.push((sys, state) => {
   setupNode(sys, state.proxmox, state)
 })
 
-function confPath(g: PveGuest) {
+export function confPath(g: PveGuest) {
   return g.type === 'qemu' ? `/etc/pve/qemu-server/${g.vmid}.conf` : `/etc/pve/lxc/${g.vmid}.conf`
 }
 
@@ -695,13 +697,13 @@ function bootCheck(pve: Pve, g: PveGuest) {
   }
 }
 
-function stopGuest(g: PveGuest) {
+export function stopGuest(g: PveGuest) {
   g.status = 'stopped'
   g.pid = undefined
   g.ip = undefined
 }
 
-function storageCheck(pve: Pve, id: string, content: string): string | undefined {
+export function storageCheck(pve: Pve, id: string, content: string): string | undefined {
   const st = pve.storages.get(id)
   if (!st) return `storage '${id}' does not exist`
   if (!st.enabled) return `storage '${id}' is disabled`
@@ -721,9 +723,16 @@ function nextDiskName(pve: Pve, storage: string, vmid: number, prefix = 'vm') {
   return `${prefix}-${vmid}-disk-${i}`
 }
 
+/** Los volúmenes que se ven en un almacenamiento: en uno compartido de un clúster, los de todos los nodos. */
+export function storageVolumes(pve: Pve, storage: string): PveVolume[] {
+  const shared = pve.storages.get(storage)?.shared && pve.cluster
+  const pools = shared ? pve.cluster!.nodes.map((n) => n.pve.volumes) : [pve.volumes]
+  return pools.flatMap((m) => [...m.values()].filter((v) => v.storage === storage))
+}
+
 function usedBytes(pve: Pve, storage: string) {
   let n = 0
-  for (const v of pve.volumes.values()) if (v.storage === storage) n += v.content === 'images' || v.content === 'rootdir' ? v.size * 0.18 : v.size
+  for (const v of storageVolumes(pve, storage)) n += v.content === 'images' || v.content === 'rootdir' ? v.size * 0.18 : v.size
   return Math.round(n + (pve.storages.get(storage)?.type === 'dir' ? 4.2 * GiB : 0))
 }
 
@@ -731,7 +740,7 @@ function usedBytes(pve: Pve, storage: string) {
 // Respaldos
 // ---------------------------------------------------------------------------------------
 
-function guestName(g: PveGuest) {
+export function guestName(g: PveGuest) {
   return g.conf.get(g.type === 'qemu' ? 'name' : 'hostname') ?? `${g.vmid}`
 }
 
@@ -764,7 +773,7 @@ function makeBackup(sys: System, pve: Pve, g: PveGuest, storage: string, time: n
 // qm
 // ---------------------------------------------------------------------------------------
 
-function parseOpts(args: string[]): { pos: string[]; opts: Map<string, string> } {
+export function parseOpts(args: string[]): { pos: string[]; opts: Map<string, string> } {
   const pos: string[] = []
   const opts = new Map<string, string>()
   for (let i = 0; i < args.length; i++) {
@@ -785,7 +794,7 @@ function parseOpts(args: string[]): { pos: string[]; opts: Map<string, string> }
   return { pos, opts }
 }
 
-function needRoot(ctx: CommandContext): boolean {
+export function needRoot(ctx: CommandContext): boolean {
   if (ctx.sh.user === 'root') return true
   ctx.err('only root can run this command\n')
   return false
@@ -799,7 +808,7 @@ function node(ctx: CommandContext): Pve | undefined {
 
 const QM_KEYS = new Set(['name', 'memory', 'balloon', 'cores', 'sockets', 'cpu', 'ostype', 'scsihw', 'boot', 'agent', 'onboot', 'startup', 'description', 'tags', 'bios', 'machine', 'efidisk0', 'tpmstate0', 'serial0', 'vga', 'protection', 'ciuser', 'cipassword', 'sshkeys', 'ipconfig0', 'ipconfig1', 'nameserver', 'searchdomain', 'citype', 'numa', 'hotplug', 'kvm'])
 
-function isDriveKey(k: string) {
+export function isDriveKey(k: string) {
   return /^(scsi|virtio|sata|ide)\d+$|^efidisk0$|^tpmstate0$/.test(k)
 }
 
@@ -1703,7 +1712,7 @@ register('pvesm', {
           return 1
         }
         const content = opts.get('content')
-        const vols = [...pve.volumes.values()].filter((v) => v.storage === id && (!content || v.content === content) && (!opts.has('vmid') || v.vmid === Number(opts.get('vmid')))).sort((a, b) => a.volid.localeCompare(b.volid))
+        const vols = storageVolumes(pve, id!).filter((v) => (!content || v.content === content) && (!opts.has('vmid') || v.vmid === Number(opts.get('vmid')))).sort((a, b) => a.volid.localeCompare(b.volid))
         const w = Math.max(5, ...vols.map((v) => v.volid.length))
         ctx.out(`${'Volid'.padEnd(w)} ${'Format'.padEnd(7)} ${'Type'.padEnd(8)} ${'Size'.padStart(12)} VMID\n`)
         for (const v of vols) ctx.out(`${v.volid.padEnd(w)} ${v.format.padEnd(7)} ${v.content.padEnd(8)} ${String(Math.round(v.size)).padStart(12)} ${v.vmid ?? ''}\n`)
@@ -2133,11 +2142,22 @@ register('pveum', {
 export function verifyProxmox(sys: System, check: object): { ok: boolean; label: string } | undefined {
   const pve = pveOf(sys)
   if ('pve_vm' in check || 'pve_ct' in check) {
-    const c = check as { pve_vm?: number; pve_ct?: number; existe?: boolean; estado?: string; nombre?: string; plantilla?: boolean; config?: Record<string, string>; instantanea?: string; arranca?: boolean; con_red?: boolean }
+    const c = check as { pve_vm?: number; pve_ct?: number; existe?: boolean; estado?: string; nombre?: string; plantilla?: boolean; config?: Record<string, string>; instantanea?: string; arranca?: boolean; con_red?: boolean; nodo?: string }
     const id = (c.pve_vm ?? c.pve_ct)!
     const type = c.pve_vm !== undefined ? 'qemu' : 'lxc'
     const what = type === 'qemu' ? `la VM ${id}` : `el contenedor ${id}`
-    const g = pve?.guests.get(id)
+    // En un clúster, el invitado puede estar en cualquier nodo.
+    let g = pve?.guests.get(id)
+    let where = g ? pve!.node : undefined
+    if (!g && pve?.cluster) {
+      for (const n of pve.cluster.nodes) {
+        const x = n.pve.guests.get(id)
+        if (x) {
+          g = x
+          where = n.name
+        }
+      }
+    }
     if (c.existe === false) return { ok: !g || g.type !== type, label: `${what} no existe` }
     let ok = !!g && g.type === type
     const parts: string[] = []
@@ -2152,6 +2172,10 @@ export function verifyProxmox(sys: System, check: object): { ok: boolean; label:
     if (ok && c.plantilla !== undefined) {
       ok = g!.template === c.plantilla
       parts.push(c.plantilla ? 'convertida en plantilla' : 'que no es plantilla')
+    }
+    if (ok && c.nodo) {
+      ok = where === c.nodo
+      parts.push(`en el nodo ${c.nodo}`)
     }
     if (ok && c.arranca !== undefined) {
       ok = (g!.status === 'running' && !g!.bootFail) === c.arranca

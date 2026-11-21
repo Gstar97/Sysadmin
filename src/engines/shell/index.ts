@@ -45,6 +45,7 @@ import { verifyRaid } from './raid'
 import { verifyHardware } from './serverhw'
 import { verifyLibvirt } from './libvirt'
 import { verifyProxmox } from './proxmox'
+import { verifyCluster } from './pvecluster'
 import './diskimage'
 
 export { Shell, COMMANDS } from './shell'
@@ -103,6 +104,7 @@ function linkHosts(base: System, state: BashState) {
   for (const s of all) for (const [n, ip] of Object.entries(names)) s.dnsRecords[n] ??= ip
   // Los equipos que piden dirección por DHCP la reciben al arrancar si hay un servidor Kea funcionando.
   for (const s of all) for (const i of s.interfaces) if (i.dhcp && !i.ip) dhcpConfigure(s, i.name)
+  for (const h of System.labHooks) h(all, [state, ...remotes.map((r) => r.spec as unknown as BashState)])
   // known_hosts del usuario del ejercicio.
   const user = base.users.get(state.usuario)
   if (!user) return
@@ -196,6 +198,8 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if (hwResult) return hwResult
   const lvResult = verifyLibvirt(sys, check)
   if (lvResult) return lvResult
+  const clusterResult = verifyCluster(sys, check)
+  if (clusterResult) return clusterResult
   const pveResult = verifyProxmox(sys, check)
   if (pveResult) return pveResult
   if ('alcanza' in check) {

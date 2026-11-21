@@ -43,6 +43,7 @@ export const INTERACTIVE_COMPONENTS = [
   'ConstructorRack',
   'SimuladorRecursos',
   'ComparadorPlataformas',
+  'SimuladorQuorum',
 ] as const
 
 export const REQUIRED_BLOCKS = [

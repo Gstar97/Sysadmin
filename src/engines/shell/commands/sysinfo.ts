@@ -1,7 +1,7 @@
 import { parseArgs } from '../args'
 import { checkCrontab } from '../editor'
 import { BUILTINS, COMMANDS, formatPrintf, jobFor, register, type CommandContext } from '../shell'
-import { commOf, priorityName, priorityNumber, type JournalEntry } from '../system'
+import { commOf, priorityName, priorityNumber, System, type JournalEntry } from '../system'
 import { ROOT_CRED } from '../vfs'
 import { commandPackage } from '../packages'
 import { cpuFlags, dmiBiosText, efibootmgrText } from '../hardware'
@@ -839,6 +839,16 @@ register('sleep', {
       ctx.err("sleep: missing operand\nTry 'sleep --help' for more information.\n")
       return 1
     }
+    let secs = 0
+    for (const a of ctx.args) {
+      const m = /^(\d+(?:\.\d+)?)([smhd]?)$/.exec(a)
+      if (!m) {
+        ctx.err(`sleep: invalid time interval '${a}'\nTry 'sleep --help' for more information.\n`)
+        return 1
+      }
+      secs += Number(m[1]) * { '': 1, s: 1, m: 60, h: 3600, d: 86400 }[m[2]]!
+    }
+    for (const h of System.sleepHooks) h(ctx.sys, secs)
     return 0
   },
 })
@@ -973,6 +983,16 @@ register(['reboot', 'shutdown', 'poweroff', 'halt'], {
     if (ctx.sh.user !== 'root') {
       ctx.err('Call to Reboot failed: Access denied\n')
       return 1
+    }
+    // En un servidor al que se entró por ssh, se apaga (o se reinicia) de verdad: se corta la sesión.
+    if (ctx.sys !== ctx.sh.baseSys) {
+      const sys = ctx.sys
+      const reboot = ctx.name === 'reboot' || (ctx.name === 'shutdown' && ctx.args.includes('-r'))
+      const name = ctx.sh.dropHost(sys) ?? sys.hostname
+      ctx.out(`Connection to ${name} closed by remote host.\nConnection to ${name} closed.\n`)
+      sys.setPower(false)
+      if (reboot) sys.setPower(true)
+      return 0
     }
     ctx.err('[simulador] El servidor no se reinicia ni se apaga en el simulador. En producción, antes de hacerlo hay que avisar y tener una ventana de mantenimiento.\n')
     return 0

@@ -451,6 +451,29 @@ const stateShape = {
       respaldos: z.array(z.strictObject({ vmid: z.number().int(), tipo: z.enum(['qemu', 'lxc']).default('qemu'), almacenamiento: z.string().default('local'), dias_atras: z.number().default(1), proteger: z.boolean().default(false) })).default([]),
       usuarios: z.array(z.strictObject({ id: z.string(), comentario: z.string().optional() })).default([]),
       permisos: z.array(z.strictObject({ ruta: z.string(), usuario: z.string(), rol: z.string() })).default([]),
+      /** El nodo ya es parte de un clúster con ese nombre: los nodos del ejercicio con el mismo nombre forman el clúster. */
+      cluster: z.string().optional(),
+      /** IP del equipo con corosync-qnetd que da el voto extra (dispositivo de quórum). */
+      qdevice: z.string().optional(),
+      /** Recursos de alta disponibilidad (vm:ID o ct:ID). */
+      ha: z
+        .array(z.strictObject({ id: z.string(), estado: z.enum(['started', 'stopped', 'disabled', 'ignored']).default('started'), max_reinicios: z.number().int().default(1), max_reubicaciones: z.number().int().default(1) }))
+        .default([]),
+      /** Reglas de HA: afinidad a nodos ("pve01:2") o entre recursos. */
+      reglas_ha: z
+        .array(
+          z.strictObject({
+            id: z.string(),
+            tipo: z.enum(['node-affinity', 'resource-affinity']).default('node-affinity'),
+            recursos: z.array(z.string()),
+            nodos: z.array(z.string()).default([]),
+            estricta: z.boolean().default(false),
+            afinidad: z.enum(['positive', 'negative']).optional(),
+          }),
+        )
+        .default([]),
+      /** Nodos en modo mantenimiento. */
+      mantenimiento: z.array(z.string()).default([]),
     })
     .optional(),
   /** Imágenes de disco de máquinas virtuales (qcow2, raw, vmdk, vhdx) que ya están en el equipo. */
@@ -714,7 +737,14 @@ const singleCheckSchema = z.union([
   z.strictObject({ imagen_disco: z.string(), formato: z.string().optional(), respaldo: z.string().optional(), tamano_virtual_gb: z.number().optional() }),
   z.strictObject({ red_libvirt: z.string(), activa: z.boolean().optional(), autostart: z.boolean().optional() }),
   /** Una VM (pve_vm) o un contenedor (pve_ct) de Proxmox: estado, nombre, plantilla, instantánea y valores de su configuración. */
-  z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional(), arranca: z.boolean().optional(), con_red: z.boolean().optional() }),
+  z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional(), arranca: z.boolean().optional(), con_red: z.boolean().optional(), nodo: z.string().optional() }),
+  /** Clúster de Proxmox: nombre, nodos, cuántos en línea, quórum, dispositivo de quórum y votos esperados. */
+  z.strictObject({ pve_cluster: z.string(), nodos: z.number().int().optional(), en_linea: z.number().int().optional(), quorum: z.boolean().optional(), qdevice: z.boolean().optional(), votos_esperados: z.number().int().optional() }),
+  /** Un recurso de alta disponibilidad (vm:ID): estado que muestra ha-manager, nodo y regla. */
+  z.strictObject({ pve_ha: z.string(), existe: z.boolean().optional(), estado: z.string().optional(), nodo: z.string().optional(), regla: z.string().optional() }),
+  z.strictObject({ pve_mantenimiento: z.string(), activo: z.boolean().optional() }),
+  /** Un servidor del ejercicio prendido o apagado. */
+  z.strictObject({ pve_encendido: z.string(), encendido: z.boolean().optional() }),
   z.strictObject({ pve_ct: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
   /** Respaldos de un invitado (en un almacenamiento): al menos uno, o exactamente cantidad. */
   z.strictObject({ pve_respaldo: z.number().int(), almacenamiento: z.string().optional(), cantidad: z.number().int().optional() }),

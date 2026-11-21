@@ -153,7 +153,7 @@ function sensors(b: BmcSpec & { power: 'on' | 'off' }) {
   return rows
 }
 
-function ipmiRun(ctx: CommandContext, b: BmcSpec & { power: 'on' | 'off' }, cmd: string[], remote: boolean): number {
+function ipmiRun(ctx: CommandContext, b: BmcSpec & { power: 'on' | 'off' }, cmd: string[], remote: boolean, target: System): number {
   const [a, b2, c] = cmd
   const pad = (t: string, n: number) => t.padEnd(n)
   if (a === 'sdr' || a === 'sensor') {
@@ -189,6 +189,13 @@ function ipmiRun(ctx: CommandContext, b: BmcSpec & { power: 'on' | 'off' }, cmd:
       else if (c === 'on' || c === 'off' || c === 'cycle' || c === 'reset' || c === 'soft') {
         if (!remote) ctx.err('[simulador] Apagar desde el propio servidor corta tu sesión: en la práctica, esto se hace por la red (-I lanplus -H ...) desde otro equipo.\n')
         b.power = c === 'off' || c === 'soft' ? 'off' : 'on'
+        // Por la red, el servidor se apaga, se prende o se reinicia de verdad (en el propio, no: cortaría la sesión).
+        if (remote) {
+          if (c === 'cycle' || c === 'reset') {
+            target.setPower(false)
+            target.setPower(true)
+          } else target.setPower(c === 'on')
+        }
         ctx.out(`Chassis Power Control: ${c === 'on' ? 'Up/On' : c === 'off' ? 'Down/Off' : c === 'soft' ? 'Soft' : c === 'cycle' ? 'Cycle' : 'Reset'}\n`)
       } else ctx.err('chassis power Commands: status, on, off, cycle, reset, diag, soft\n')
       return 0
@@ -256,7 +263,7 @@ register('ipmitool', {
         ctx.err('Error: Unable to establish IPMI v2 / RMCP+ session\n')
         return 1
       }
-      return ipmiRun(ctx, b, cmd, true)
+      return ipmiRun(ctx, b, cmd, true, target)
     }
     const b = BMC.get(sys)
     if (!b) {
@@ -267,7 +274,7 @@ register('ipmitool', {
       ctx.err('Could not open device at /dev/ipmi0 or /dev/ipmi/0 or /dev/ipmidev/0: Permission denied\n')
       return 1
     }
-    return ipmiRun(ctx, b, cmd, false)
+    return ipmiRun(ctx, b, cmd, false, sys)
   },
 })
 

@@ -53,8 +53,16 @@ export const UBUNTU_VIRT: Record<string, PackageInfo> = {
       { name: 'spiceproxy', description: 'PVE SPICE Proxy Server', ports: [3128], enabledByDefault: true, activeAfterInstall: true },
       { name: 'pve-ha-lrm', description: 'PVE Local HA Resource Manager Daemon', ports: [], enabledByDefault: true, activeAfterInstall: true },
       { name: 'pve-ha-crm', description: 'PVE Cluster HA Resource Manager Daemon', ports: [], enabledByDefault: true, activeAfterInstall: true },
+      { name: 'corosync', description: 'Corosync Cluster Engine', ports: [5405], enabledByDefault: false, activeAfterInstall: false },
     ],
     commands: [],
+  },
+  'corosync-qdevice': { summary: 'cluster engine quorum device daemon', version: '3.0.3-4', commands: ['corosync-qdevice-tool'] },
+  'corosync-qnetd': {
+    summary: 'cluster engine quorum device network daemon',
+    version: '3.0.3-4',
+    services: [{ name: 'corosync-qnetd', description: 'Corosync Qdevice Network daemon', ports: [5403], enabledByDefault: true, activeAfterInstall: true }],
+    commands: ['corosync-qnetd-tool'],
   },
   'cloud-image-utils': { summary: 'cloud image management utilities', version: '0.33-1', commands: ['cloud-localds'] },
 }

@@ -59,6 +59,7 @@ const RaidSimulatorView = lazy(() => import('@/interactive/hardware/RaidSimulato
 const UpsCalculatorView = lazy(() => import('@/interactive/hardware/UpsCalculator').then((m) => ({ default: m.UpsCalculator })))
 const RackBuilderView = lazy(() => import('@/interactive/hardware/RackBuilder').then((m) => ({ default: m.RackBuilder })))
 const ResourceSimulatorView = lazy(() => import('@/interactive/virtualizacion/ResourceSimulator').then((m) => ({ default: m.ResourceSimulator })))
+const QuorumSimulatorView = lazy(() => import('@/interactive/virtualizacion/QuorumSimulator').then((m) => ({ default: m.QuorumSimulator })))
 const PlatformComparatorView = lazy(() => import('@/interactive/virtualizacion/PlatformComparator').then((m) => ({ default: m.PlatformComparator })))
 const HttpBuilderView = lazy(() => import('@/interactive/web/HttpBuilder').then((m) => ({ default: m.HttpBuilder })))
 const PermissionSimulatorView = lazy(() => import('@/interactive/windows/PermissionSimulator').then((m) => ({ default: m.PermissionSimulator })))
@@ -391,6 +392,14 @@ export function SimuladorRecursos() {
   )
 }
 
+export function SimuladorQuorum() {
+  return (
+    <Island>
+      <QuorumSimulatorView />
+    </Island>
+  )
+}
+
 export function ComparadorPlataformas() {
   return (
     <Island>
@@ -693,6 +702,7 @@ export const mdxComponents = {
   CalculadoraUps,
   ConstructorRack,
   SimuladorRecursos,
+  SimuladorQuorum,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
