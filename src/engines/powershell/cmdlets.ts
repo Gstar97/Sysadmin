@@ -1367,6 +1367,7 @@ const FEATURE_MODULES: Record<string, string> = {
   'fs-dfs-replication': 'DFSR',
   'fs-resource-manager': 'FileServerResourceManager',
   'hyper-v': 'Hyper-V',
+  'failover-clustering': 'FailoverClusters',
 }
 /** Servicio que crea cada rol al instalarse. */
 const FEATURE_SERVICES: Record<string, [string, string]> = {

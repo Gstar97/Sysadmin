@@ -365,6 +365,10 @@ const psSingleCheckSchema = z.union([
   z.strictObject({ comando_usado: z.string() }),
   /** Una máquina virtual de Hyper-V: estado, procesadores, memoria, conmutador, VLAN, generación, punto de control, disco. */
   z.strictObject({ vm_hyperv: z.string(), existe: z.boolean().optional(), estado: z.enum(['Running', 'Off', 'Saved', 'Paused']).optional(), procesadores: z.number().int().optional(), memoria_mb: z.number().int().optional(), memoria_dinamica: z.boolean().optional(), conmutador: z.string().optional(), vlan: z.number().int().optional(), generacion: z.number().int().optional(), punto_de_control: z.string().optional(), arranque_automatico: z.string().optional(), con_disco: z.string().optional() }),
+  /** Clúster de conmutación por error: nodos, testigo (FileShare, Cloud, Disk o Ninguno), quórum y CSV. */
+  z.strictObject({ cluster_win: z.string(), nodos: z.number().int().optional(), testigo: z.enum(['FileShare', 'Cloud', 'Disk', 'Ninguno']).optional(), quorum: z.boolean().optional(), csv: z.number().int().optional() }),
+  z.strictObject({ rol_cluster: z.string(), propietario: z.string().optional(), estado: z.enum(['Online', 'Offline', 'Failed']).optional() }),
+  z.strictObject({ nodo_cluster: z.string(), estado: z.enum(['Up', 'Down', 'Paused']) }),
   z.strictObject({ conmutador_hyperv: z.string(), tipo: z.enum(['External', 'Internal', 'Private']).optional() }),
   z.strictObject({ vhd: z.string(), tipo: z.enum(['Dynamic', 'Fixed', 'Differencing']).optional(), tamano_gb: z.number().optional(), padre: z.string().optional() }),
   z.strictObject({ nombre_equipo: z.string(), pendiente: z.boolean().optional() }),
