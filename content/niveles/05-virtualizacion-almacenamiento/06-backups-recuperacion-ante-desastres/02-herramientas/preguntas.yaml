@@ -1,0 +1,102 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué ventaja tiene una copia deduplicada (PBS, restic) frente a las incrementales clásicas?
+  opciones:
+    - { texto: "Cada copia sirve sola para restaurar y solo se guarda lo nuevo", correcta: true, explicacion: "Los pedazos se guardan una vez y cada copia es una lista completa." }
+    - { texto: "Ocupa más pero es más rápida", explicacion: "Ocupa menos." }
+    - { texto: "No necesita clave", explicacion: "No tiene que ver." }
+    - { texto: "No hace falta verificarla", explicacion: "Siempre hace falta." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con incrementales clásicas (completa el domingo, incrementales de lunes a sábado), ¿qué hace falta para restaurar el jueves?
+  opciones:
+    - { texto: "La completa del domingo y las incrementales de lunes a jueves", correcta: true, explicacion: "Si una se daña, las siguientes no sirven." }
+    - { texto: "Solo la del jueves", explicacion: "La del jueves tiene solo lo que cambió ese día." }
+    - { texto: "La del domingo y la del jueves", explicacion: "Eso sería con diferenciales." }
+    - { texto: "Todas las de la semana", explicacion: "Las del viernes y sábado no." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El cliente respalda con restic en un rest-server con --append-only. ¿Qué pasa si ejecuta restic forget --prune desde el cliente?
+  opciones:
+    - { texto: "Falla con 403: el servidor no deja borrar; la retención se aplica en el servidor", correcta: true, explicacion: "Es lo que lo protege de un ransomware en el cliente." }
+    - { texto: "Borra las copias viejas normalmente", explicacion: "No en modo solo agregar." }
+    - { texto: "Borra todo el repositorio", explicacion: "No." }
+    - { texto: "Cambia la clave", explicacion: "No." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando de restic que respalda /srv/datos con la etiqueta diario, sin los archivos .tmp.
+  prompt: "root@fs01:~#"
+  aceptadas:
+    - "restic backup /srv/datos --tag diario --exclude '*.tmp'"
+    - "restic backup /srv/datos --tag diario --exclude \"*.tmp\""
+    - "restic backup --tag diario --exclude '*.tmp' /srv/datos"
+    - "restic backup --exclude '*.tmp' --tag diario /srv/datos"
+  explicacion: El repositorio y la clave se toman de RESTIC_REPOSITORY y RESTIC_PASSWORD_FILE.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En PBS borraste muchas copias viejas con prune, pero el datastore sigue igual de lleno. ¿Qué falta?
+  opciones:
+    - { texto: "Correr la garbage collection, que libera los pedazos que ya no usa ninguna copia", correcta: true, explicacion: "Prune solo borra las listas." }
+    - { texto: "Reiniciar el PBS", explicacion: "No libera nada." }
+    - { texto: "Un verify", explicacion: "Verify comprueba, no libera." }
+    - { texto: "Esperar un mes", explicacion: "No pasa solo." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué quiere decir que restic cifra "del lado del cliente"?
+  opciones:
+    - { texto: "Que los datos salen cifrados del servidor respaldado y el lugar donde se guardan no los puede leer", correcta: true, explicacion: "Por eso perder la clave es perder las copias." }
+    - { texto: "Que el servidor de respaldo cifra al recibir", explicacion: "Es al revés." }
+    - { texto: "Que solo se cifra la conexión", explicacion: "Se cifran los datos guardados." }
+    - { texto: "Que el cliente necesita un certificado", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Respaldaste dos veces hoy y aplicás forget --keep-daily 7. ¿Qué pasa con las dos copias de hoy?
+  opciones:
+    - { texto: "Queda la más nueva y se borra la otra: una por día", correcta: true, explicacion: "Para conservar varias del mismo día, --keep-last o --keep-hourly." }
+    - { texto: "Quedan las dos", explicacion: "keep-daily guarda una por día." }
+    - { texto: "Se borran las dos", explicacion: "La más nueva queda." }
+    - { texto: "Depende del tamaño", explicacion: "No." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué tareas conviene programar en un Proxmox Backup Server? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Prune (retención)", correcta: true, explicacion: "Para que no se llene." }
+    - { texto: "Garbage collection", correcta: true, explicacion: "Para liberar el espacio de verdad." }
+    - { texto: "Verify", correcta: true, explicacion: "Para saber que las copias están sanas." }
+    - { texto: "Desfragmentación diaria", explicacion: "No existe en PBS." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una copia de PBS marcada como protegida, ¿alcanza como copia inmutable contra un ransomware?
+  opciones:
+    - { texto: "No: quien tenga permisos de administrador (o los robe) le puede sacar la protección y borrarla", correcta: true, explicacion: "Sirve contra la retención automática, no contra un atacante." }
+    - { texto: "Sí: nadie la puede borrar nunca", explicacion: "Se le puede sacar la protección." }
+    - { texto: "Sí, si está cifrada", explicacion: "El cifrado no impide borrar." }
+    - { texto: "Solo si es la más nueva", explicacion: "No." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la forma más común en que un esquema de respaldos falla sin que nadie lo note?
+  opciones:
+    - { texto: "La tarea deja de correr o empieza a fallar y no hay ningún aviso", correcta: true, explicacion: "Por eso hay que avisar cuando termina bien y alertar si no llega el aviso." }
+    - { texto: "Los discos se llenan de golpe", explicacion: "Pasa, pero se ve." }
+    - { texto: "La deduplicación borra datos", explicacion: "No." }
+    - { texto: "El cifrado se rompe solo", explicacion: "No." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué herramienta corresponde a cada cosa en una empresa con Proxmox y algunos servidores Linux con PostgreSQL?
+  opciones:
+    - { texto: "PBS para las VM, pg_dump para la base y restic (u otra de archivos) para los volcados y carpetas", correcta: true, explicacion: "Cada cosa con su herramienta." }
+    - { texto: "restic para todo, copiando /var/lib/postgresql en caliente", explicacion: "La copia de la base podría no arrancar." }
+    - { texto: "Solo instantáneas de ZFS", explicacion: "No son respaldos." }
+    - { texto: "Windows Server Backup", explicacion: "No en Linux." }

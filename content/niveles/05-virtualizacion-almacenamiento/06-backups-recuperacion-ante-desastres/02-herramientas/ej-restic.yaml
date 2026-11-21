@@ -1,0 +1,110 @@
+tipo: terminal
+shell: bash
+titulo: restic contra un servidor que no deja borrar
+descripcion: >-
+  fs01 (192.168.10.32, Ubuntu Server 24.04) es el servidor de archivos de la oficina, con los
+  datos en /srv/datos, y ya tiene restic instalado. backup01 (192.168.10.70), en la sala de la
+  otra sede, tiene rest-server y apache2-utils instalados, con la carpeta /srv/restic, pero el
+  servicio todavía no arrancó. Desde fs01 entrás por ssh como root a backup01.
+estado_inicial:
+  distro: ubuntu
+  hostname: fs01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [restic] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.32/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /srv/datos/Administracion/balance-2026.ods: { contenido: "Balance 2026 - borrador 3\n" }
+    /srv/datos/Administracion/sueldos-noviembre.ods: { contenido: "Sueldos de noviembre\n", tamano: 380K }
+    /srv/datos/Clientes/Rivas SA/contrato.pdf: { contenido: "Contrato Rivas SA\n", tamano: 910K }
+    /srv/datos/Clientes/Rivas SA/~lock.contrato.tmp: { contenido: "temporal\n" }
+  servidores:
+    - { hostname: backup01, ip: 192.168.10.70, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], paquetes: { instalados: [rest-server, apache2-utils, restic] } }
+pasos:
+  - consigna: >-
+      En backup01: creá el usuario "fs01" con la clave Rest-fs01 para rest-server (en
+      /srv/restic/.htpasswd), agregale al servicio las opciones --append-only y --private-repos, y
+      arrancalo para que quede activo también después de un reinicio.
+    verificar:
+      - { en: backup01, verificar: { rest_server: true, solo_agregar: true, con_clave: true } }
+      - { en: backup01, verificar: { servicio: rest-server, activo: true, habilitado: true } }
+    pistas:
+      - "ssh root@backup01 htpasswd -B -b -c /srv/restic/.htpasswd fs01 Rest-fs01"
+      - "La línea ExecStart está en /etc/systemd/system/rest-server.service: agregale --append-only --private-repos (con sed, o entrando por ssh y usando nano)."
+      - "Después: systemctl daemon-reload y systemctl enable --now rest-server."
+    solucion:
+      - ssh root@backup01 htpasswd -B -b -c /srv/restic/.htpasswd fs01 Rest-fs01
+      - "ssh root@backup01 \"sed -i 's#--listen :8000#--listen :8000 --append-only --private-repos#' /etc/systemd/system/rest-server.service\""
+      - ssh root@backup01 systemctl daemon-reload
+      - ssh root@backup01 systemctl enable --now rest-server
+      - ssh root@backup01 systemctl status rest-server
+    explicacion: >-
+      Con --private-repos, cada usuario solo puede usar el repositorio que se llama como él
+      (/fs01/), así un servidor no puede tocar las copias de otro. Con --append-only, el cliente
+      puede agregar copias pero no borrar ni cambiar nada: si un ransomware entra a fs01 con sus
+      claves, no puede destruir las copias. En producción se agrega TLS (--tls), porque la clave
+      viaja en cada pedido.
+  - consigna: >-
+      En fs01, guardá la clave del repositorio en /root/.restic-clave (que solo root la pueda leer)
+      con el texto "Respaldo-fs01-2026-largo", y creá el repositorio en backup01 usando el
+      usuario fs01.
+    verificar:
+      - { archivo: /root/.restic-clave, modo: "600", contenido_incluye: Respaldo-fs01-2026-largo }
+      - { en: backup01, verificar: { restic_repo: /srv/restic/fs01, clave: Respaldo-fs01-2026-largo } }
+    pistas:
+      - "echo 'Respaldo-fs01-2026-largo' > /root/.restic-clave y chmod 600 /root/.restic-clave"
+      - "export RESTIC_REPOSITORY=rest:http://fs01:Rest-fs01@backup01:8000/fs01/ y export RESTIC_PASSWORD_FILE=/root/.restic-clave"
+      - "restic init"
+    solucion:
+      - echo 'Respaldo-fs01-2026-largo' > /root/.restic-clave
+      - chmod 600 /root/.restic-clave
+      - export RESTIC_REPOSITORY=rest:http://fs01:Rest-fs01@backup01:8000/fs01/
+      - export RESTIC_PASSWORD_FILE=/root/.restic-clave
+      - restic init
+    explicacion: >-
+      restic cifra todo en fs01 antes de mandarlo: backup01 guarda datos que no puede leer. Por
+      eso la clave es lo más importante de todo: sin ella, las copias no sirven para nada. Va
+      también a un lugar fuera de fs01 (impresa, en el gestor de contraseñas), como viste en la
+      lección anterior.
+  - consigna: >-
+      Respaldá /srv/datos con la etiqueta "diario" sin los archivos temporales (*.tmp). Después
+      cambiá balance-2026.ods (agregale una línea), volvé a respaldar y mirá la lista de copias y
+      qué cambió entre las dos.
+    verificar:
+      - { en: backup01, verificar: { restic_repo: /srv/restic/fs01, instantaneas_min: 2, etiqueta: diario, con_archivo: /srv/datos/Administracion/balance-2026.ods } }
+    pistas:
+      - "restic backup /srv/datos --tag diario --exclude '*.tmp'"
+      - "restic snapshots y restic diff ID1 ID2"
+    solucion:
+      - restic backup /srv/datos --tag diario --exclude '*.tmp'
+      - echo "Ajuste de diciembre" >> /srv/datos/Administracion/balance-2026.ods
+      - restic backup /srv/datos --tag diario --exclude '*.tmp'
+      - restic snapshots
+    explicacion: >-
+      La segunda copia leyó solo lo que cambió (1 changed, 2 unmodified) y subió unos pocos KiB:
+      restic parte los archivos en pedazos y guarda cada pedazo una sola vez (deduplicación). Por
+      eso se puede hacer una copia completa cada noche sin que el repositorio crezca de más: cada
+      instantánea es completa para restaurar, aunque solo se haya guardado lo nuevo.
+  - consigna: >-
+      Intentá aplicar la retención desde fs01 (7 diarias, 4 semanales y 12 mensuales, con
+      --prune). Después aplicala donde corresponde: en backup01, sobre la carpeta del repositorio.
+    verificar:
+      - { comando_usado: "forget" }
+      - { en: backup01, verificar: { restic_repo: /srv/restic/fs01, instantaneas_min: 1 } }
+      - { en: backup01, verificar: { salida_contiene: "remove 1 snapshots" } }
+    pistas:
+      - "restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune (desde fs01, falla con 403)."
+      - "ssh root@backup01 \"RESTIC_PASSWORD=Respaldo-fs01-2026-largo restic -r /srv/restic/fs01 forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune\""
+    solucion:
+      - restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
+      - "ssh root@backup01 \"RESTIC_PASSWORD=Respaldo-fs01-2026-largo restic -r /srv/restic/fs01 forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune\""
+    explicacion: >-
+      Desde fs01, rest-server rechaza el borrado (403): justamente lo que queríamos. La limpieza se
+      hace en backup01, que lee la carpeta directamente, con una tarea programada propia (y con la
+      clave en un archivo protegido, no escrita en el comando como acá, que queda en el historial).
+      Fijate qué borró: con --keep-daily, de cada día queda solo la copia más nueva, así que de las
+      dos de hoy se fue la primera. Si querés conservar varias del mismo día, se agrega
+      --keep-last o --keep-hourly.

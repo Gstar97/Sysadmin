@@ -1922,11 +1922,13 @@ register('pvesm', {
         ctx.out('Backup                                                       Backup-ID  Time                 Keep\n')
         for (const [vmid, list] of [...byVm].sort(([a], [b]) => a - b)) {
           const sorted = list.sort((a, b) => b.ctime - a.ctime)
+          // Las protegidas se quedan siempre y no ocupan lugar en las reglas.
+          const candidates = sorted.filter((v) => !v.protected)
           const keep = new Set<PveVolume>()
-          sorted.slice(0, keepLast).forEach((v) => keep.add(v))
+          candidates.slice(0, keepLast).forEach((v) => keep.add(v))
           const bucket = (n: number, key: (d: Date) => string) => {
             const seen = new Set<string>()
-            for (const v of sorted) {
+            for (const v of candidates) {
               if (seen.size >= n) break
               const k = key(new Date(v.ctime))
               if (seen.has(k)) continue

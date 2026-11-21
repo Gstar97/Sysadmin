@@ -1,0 +1,167 @@
+tipo: terminal
+shell: bash
+titulo: Retención y copias protegidas en Proxmox Backup Server
+descripcion: >-
+  pve01 respalda todas las noches sus dos VM, web01 (100) y erp01 (101), en el almacenamiento
+  pbs01, un Proxmox Backup Server. Nadie configuró la retención: hay 45 días de copias de cada
+  una y el datastore está al 87 %. La copia de web01 de hace 44 días es la del cierre de año y
+  está protegida. Esta noche hay que actualizar erp01.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox:
+    repos: no-subscription
+    almacenamientos:
+      - { id: local, tipo: dir, contenido: [iso, vztmpl, backup], ruta: /var/lib/vz }
+      - { id: local-lvm, tipo: lvmthin, contenido: [images, rootdir] }
+      - { id: pbs01, tipo: pbs, contenido: [backup], servidor: 192.168.10.75, datastore: principal, usuario: "backup@pbs", huella: "a3:9f:12:7c:5e:0b:44:d1:8e:2a:6f:93:c4:17:b8:05:e6:3d:72:aa:19:5c:80:fe:4b:21:d9:6a:37:c0:8b:5f" }
+    vms:
+      - { id: 100, nombre: web01, estado: running, discos: { scsi0: "local-lvm:vm-100-disk-0,size=32G" }, red: { net0: "virtio,bridge=vmbr0" } }
+      - { id: 101, nombre: erp01, estado: running, agente: true, discos: { scsi0: "local-lvm:vm-101-disk-0,size=80G" }, red: { net0: "virtio,bridge=vmbr0" } }
+    respaldos:
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 0.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 0.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 1.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 1.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 2.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 2.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 3.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 3.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 4.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 4.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 5.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 5.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 6.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 6.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 7.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 7.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 8.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 8.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 9.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 9.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 10.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 10.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 11.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 11.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 12.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 12.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 13.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 13.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 14.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 14.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 15.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 15.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 16.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 16.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 17.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 17.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 18.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 18.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 19.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 19.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 20.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 20.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 21.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 21.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 22.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 22.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 23.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 23.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 24.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 24.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 25.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 25.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 26.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 26.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 27.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 27.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 28.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 28.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 29.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 29.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 30.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 30.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 31.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 31.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 32.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 32.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 33.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 33.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 34.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 34.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 35.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 35.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 36.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 36.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 37.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 37.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 38.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 38.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 39.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 39.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 40.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 40.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 41.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 41.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 42.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 42.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 43.4 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 43.4 }
+      - { vmid: 100, almacenamiento: pbs01, dias_atras: 44.4, proteger: true }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 44.4 }
+pasos:
+  - consigna: Mirá cuántas copias de web01 hay en pbs01 y de qué fechas.
+    verificar:
+      - { comando_usado: "pvesm list" }
+    pistas:
+      - "pvesm list pbs01 --vmid 100"
+    solucion:
+      - pvesm list pbs01 --vmid 100
+    explicacion: >-
+      Una por noche desde hace 45 días, más la protegida del cierre. En PBS cada copia es completa
+      para restaurar pero se guarda deduplicada, así que 45 copias no ocupan 45 veces el disco;
+      igual, sin retención, el datastore crece hasta llenarse.
+  - consigna: >-
+      Probá primero sin borrar nada (--dry-run 1) qué quedaría con 7 diarias, 4 semanales y 6
+      mensuales, y después aplicalo de verdad.
+    verificar:
+      - { pve_respaldo: 100, almacenamiento: pbs01, cantidad: 11 }
+      - { pve_respaldo: 101, almacenamiento: pbs01, cantidad: 10 }
+    pistas:
+      - "pvesm prune-backups pbs01 --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --dry-run 1"
+      - "El mismo comando sin --dry-run lo aplica."
+    solucion:
+      - pvesm prune-backups pbs01 --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --dry-run 1
+      - pvesm prune-backups pbs01 --keep-daily 7 --keep-weekly 4 --keep-monthly 6
+      - pvesm list pbs01 --vmid 100
+    explicacion: >-
+      Con --dry-run se ve qué haría sin tocar nada: conviene siempre antes de borrar copias. La
+      protegida quedó aunque no entra en ninguna regla. Ojo: en PBS, borrar una copia no libera
+      el espacio enseguida, porque los pedazos pueden ser de otras copias; lo libera la "garbage
+      collection" del datastore, que se programa en el PBS. En producción, la retención se
+      configura una vez (en la tarea de respaldo o como "prune job" del PBS) y no a mano.
+  - consigna: >-
+      Antes de actualizar erp01, hacé una copia que no se borre con la retención, con una nota
+      que diga para qué es ("erp01 antes de actualizar"). Comprobá que la retención no la toca.
+    verificar:
+      - { comando_usado: "--protected 1" }
+      - { pve_respaldo: 101, almacenamiento: pbs01, cantidad: 11 }
+    pistas:
+      - "vzdump 101 --storage pbs01 --mode snapshot --protected 1 --notes-template '{{guestname}} antes de actualizar'"
+      - "Después, volvé a correr la retención y mirá la lista."
+    solucion:
+      - vzdump 101 --storage pbs01 --mode snapshot --protected 1 --notes-template '{{guestname}} antes de actualizar'
+      - pvesm prune-backups pbs01 --keep-daily 7 --keep-weekly 4 --keep-monthly 6
+      - pvesm list pbs01 --vmid 101
+    explicacion: >-
+      Como erp01 tiene el agente de invitado, el respaldo congeló el sistema de archivos un
+      instante (fs-freeze) para que la copia sea consistente, y como ya había copias anteriores,
+      solo leyó lo que cambió (dirty-bitmap). La protegida queda hasta que alguien le saque la
+      protección, que es lo que querés para el "por si acaso" de un cambio grande. Pero una copia
+      protegida no es inmutable: un administrador (o quien robe su clave) se la puede sacar.
