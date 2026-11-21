@@ -1,0 +1,223 @@
+tipo: troubleshooting
+titulo: El pool que se puso lento un lunes
+descripcion: >-
+  Incidente simulado. Un estudio contable de 30 personas tiene sus carpetas compartidas en nas01,
+  un Ubuntu Server con un pool ZFS "tank" de cuatro discos de 4 TB en RAIDZ1, con 8,6 TB usados.
+  Una tarea nocturna manda una copia con zfs send a nas02, en otra oficina. En el armario hay un
+  disco de 4 TB nuevo, de repuesto. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 10:05. Varios usuarios se quejan de que abrir y guardar planillas en la unidad
+      compartida tarda muchísimo desde temprano. El servidor responde y nadie tocó nada el fin de
+      semana.
+    evidencia:
+      - titulo: zpool status tank
+        contenido: |2
+              pool: tank
+             state: DEGRADED
+            status: One or more devices are faulted in response to persistent errors.
+                    Sufficient replicas exist for the pool to continue functioning in a
+                    degraded state.
+            action: Replace the faulted device, or use 'zpool clear' to mark the device
+                    repaired.
+              scan: scrub repaired 0B in 09:41:12 with 0 errors on Sun Sep 14 09:41:13 2026
+            config:
+
+                    NAME        STATE     READ WRITE CKSUM
+                    tank        DEGRADED     0     0     0
+                      raidz1-0  DEGRADED     0     0     0
+                        sdb     ONLINE       0     0     0
+                        sdc     FAULTED     96   214     0  too many errors
+                        sdd     ONLINE       0     0     0
+                        sde     ONLINE       0     0     2
+
+            errors: No known data errors
+      - titulo: journalctl -k --since "-6h" | tail -4
+        contenido: |2
+            Nov 23 06:12:41 nas01 kernel: ata3.00: failed command: READ FPDMA QUEUED
+            Nov 23 06:12:41 nas01 kernel: ata3: hard resetting link
+            Nov 23 06:12:52 nas01 kernel: sd 2:0:0:0: [sdc] tag#14 FAILED Result: hostbyte=DID_OK driverbyte=DRIVER_OK
+            Nov 23 06:13:20 nas01 zed[1188]: eid=4417 class=statechange pool='tank' vdev=sdc vdev_state=FAULTED
+    opciones:
+      - texto: Antes de tocar nada, revisar la salud de los otros tres discos y el estado de la copia en nas02
+        ir_a: n_diag
+        minutos: 15
+      - texto: Ejecutar zpool clear tank para limpiar los errores y que vuelva a ONLINE
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          sdc vuelve a ONLINE unos segundos, ZFS intenta usarlo, el disco tarda en cada lectura
+          (los usuarios lo sienten) y a los dos minutos vuelve a FAULTED. clear sirve para un error
+          pasajero, como un cable flojo que ya arreglaste; con un disco que se está muriendo solo
+          suma lentitud.
+      - texto: Reiniciar nas01 para ver si se arregla la lentitud
+        ir_a: n_reinicio
+        minutos: 20
+  n_reinicio:
+    situacion: >-
+      nas01 tarda en arrancar: el kernel reintenta sdc varias veces. Vuelve con el pool igual de
+      DEGRADED y la misma lentitud, y estuvo 20 minutos sin servicio. El reinicio no cambió nada:
+      el problema es de los discos, no del sistema.
+    evidencia:
+      - titulo: zpool status -x
+        contenido: |2
+            pool 'tank' is degraded
+    opciones:
+      - texto: Revisar los otros discos y la copia en nas02
+        ir_a: n_diag
+        minutos: 15
+  n_diag:
+    situacion: >-
+      Juntás lo que hace falta para decidir. Con RAIDZ1 y un disco caído, el pool no tiene más
+      protección: cada lectura de lo que estaba en sdc se rearma con la paridad de los otros tres
+      (por eso la lentitud), y si falla otro disco antes de terminar el reemplazo, se pierde el pool
+      entero. Y hay dos malas noticias.
+    evidencia:
+      - titulo: smartctl -A en los otros discos (resumido)
+        contenido: |2
+            /dev/sdb   Reallocated_Sector_Ct 0     Current_Pending_Sector 0
+            /dev/sdd   Reallocated_Sector_Ct 0     Current_Pending_Sector 0
+            /dev/sde   Reallocated_Sector_Ct 56    Current_Pending_Sector 24
+      - titulo: La tarea de copia a nas02
+        contenido: |2
+            # zfs list -t snapshot -o name,creation -s creation tank/compartido | tail -2
+            tank/compartido@auto-2026-11-19   Wed Nov 19 23:00 2026
+            tank/compartido@auto-2026-11-20   Thu Nov 20 23:00 2026
+            # ssh nas02 zfs list -t snapshot -o name backup/compartido | tail -1
+            backup/compartido@auto-2026-11-19
+            # journalctl -u copia-nas02 --since "-4d" | grep -i error | tail -1
+            Nov 21 23:00:07 nas01 copia-nas02.sh[90211]: cannot receive incremental stream: destination backup/compartido has been modified
+    opciones:
+      - texto: Primero poner al día la copia en nas02 (instantánea nueva y envío), y recién después reemplazar sdc
+        ir_a: n_copia
+        minutos: 40
+      - texto: Reemplazar sdc ya mismo con el disco de repuesto, para salir cuanto antes del estado degradado
+        ir_a: n_directo
+        minutos: 20
+      - texto: Pedir dos discos nuevos al proveedor y esperar a que lleguen para cambiar sdc y sde juntos
+        ir_a: n_esperar
+        minutos: 10
+  n_esperar:
+    situacion: >-
+      El proveedor los trae mañana a la tarde. Pasan 30 horas con el pool degradado, los usuarios
+      quejándose y sde acumulando sectores dañados. Y no se pueden cambiar dos discos juntos en
+      RAIDZ1: sacar el segundo con el primero sin reconstruir es perder el pool. Fue tiempo perdido.
+    evidencia:
+      - titulo: smartctl -A /dev/sde, al día siguiente
+        contenido: |2
+            Reallocated_Sector_Ct 88     Current_Pending_Sector 40
+    opciones:
+      - texto: Poner al día la copia en nas02 y reemplazar sdc con el repuesto que estaba en el armario
+        ir_a: n_copia
+        minutos: 40
+  n_directo:
+    situacion: >-
+      El resilver arranca. A las cinco horas, sde empieza a dar errores de lectura justo mientras
+      ZFS lee todo para reconstruir sdc. Termina, pero con dos archivos dañados de forma permanente,
+      y la última copia buena en nas02 es del miércoles.
+    evidencia:
+      - titulo: zpool status -v tank
+        contenido: |2
+              scan: resilvered 2.14T in 07:52:31 with 2 errors on Mon Nov 23 18:31:04 2026
+            errors: Permanent errors have been detected in the following files:
+
+                    /tank/compartido/Clientes/Rivas SA/balance-2026.xlsx
+                    /tank/compartido/Sueldos/liquidacion-noviembre.ods
+    opciones:
+      - texto: Recuperar los dos archivos de la copia del miércoles en nas02 y avisar a los dueños que perdieron los cambios desde entonces
+        ir_a: n_sde
+        minutos: 45
+  n_copia:
+    situacion: >-
+      La copia fallaba desde el viernes porque alguien había guardado un archivo en
+      backup/compartido de nas02. Lo sacás del medio (el dataset de nas02 pasa a readonly=on),
+      volvés a la instantánea del miércoles con zfs rollback en nas02 y mandás el incremental hasta
+      una instantánea de hoy. La copia queda al día en 35 minutos. Ahora, el reemplazo.
+    evidencia:
+      - titulo: En nas02
+        contenido: |2
+            # zfs list -t snapshot -o name backup/compartido | tail -1
+            backup/compartido@manual-2026-11-23-1045
+            # zfs get -H -o value readonly backup/compartido
+            on
+    opciones:
+      - texto: Cambiar sdc por el disco de repuesto (zpool replace tank sdc sdf) y dejar correr el resilver
+        ir_a: n_resilver
+        minutos: 20
+  n_resilver:
+    situacion: >-
+      El resilver arranca: va a leer los 8,6 TB de los otros discos para rearmar lo que tenía sdc.
+      Calcula unas 8 horas, y mientras tanto los usuarios siguen notando el servidor lento.
+    evidencia:
+      - titulo: zpool status tank
+        contenido: |2
+              scan: resilver in progress since Mon Nov 23 11:21:02 2026
+                    1.02T / 8.60T scanned at 312M/s, 268G / 2.15T issued at 81.9M/s
+                    267G resilvered, 12.15% done, 06:41:08 to go
+            config:
+                      raidz1-0       DEGRADED     0     0     0
+                        sdb          ONLINE       0     0     0
+                        replacing-1  DEGRADED     0     0     0
+                          sdc        FAULTED     96   214     0  too many errors
+                          sdf        ONLINE       0     0     0  (resilvering)
+                        sdd          ONLINE       0     0     0
+                        sde          ONLINE       0     0     2
+    opciones:
+      - texto: Avisar a los usuarios que hasta la noche va a estar lento, y postergar la copia nocturna y cualquier tarea pesada hasta que termine
+        ir_a: n_resilver_ok
+        minutos: 10
+      - texto: Cancelar el resilver (zpool detach tank sdf) y hacerlo de noche, cuando nadie trabaja
+        ir_a: n_resilver
+        minutos: 15
+        consecuencia: >-
+          Se pierde lo avanzado y el pool sigue un día entero sin protección, con sde débil. Es al
+          revés: lo urgente es salir del estado degradado, aunque el servidor ande más lento unas
+          horas. Volvés a lanzar el reemplazo.
+  n_resilver_ok:
+    situacion: >-
+      A las 19:40 el resilver termina sin errores y el pool vuelve a ONLINE. Los usuarios del día
+      siguiente encuentran todo rápido. Queda sde, con sectores dañados que siguen aumentando.
+    evidencia:
+      - titulo: zpool status tank
+        contenido: |2
+              scan: resilvered 2.15T in 08:19:12 with 0 errors on Mon Nov 23 19:40:14 2026
+            errors: No known data errors
+    opciones:
+      - texto: Pedir otro disco y cambiar sde en cuanto llegue, de a uno y con la copia al día
+        ir_a: n_sde
+        minutos: 20
+  n_sde:
+    situacion: >-
+      Con el disco nuevo, sde se reemplaza el miércoles a la noche, con la copia en nas02 al día y
+      sin usuarios trabajando. El pool queda ONLINE con cuatro discos sanos. El jueves te piden
+      que propongas qué cambiar.
+    evidencia:
+      - titulo: Lo que encontraste
+        contenido: |2
+            - Pool RAIDZ1 con discos de 4 TB: un solo disco de margen, y 8 horas de resilver.
+            - Último scrub: 14 de septiembre (no se estaba haciendo el mensual).
+            - zed sin correo configurado: nadie se enteró de que sdc estaba fallando a las 6:13.
+            - La copia a nas02 falló tres noches seguidas sin que nadie lo viera.
+    opciones:
+      - texto: "Proponer: pasar a RAIDZ2 (pool nuevo y migración con send/receive) en el próximo recambio; scrub mensual; zed y la tarea de copia con aviso por correo; dejar siempre un disco de repuesto; y nas02 en solo lectura"
+        ir_a: n_ok
+        minutos: 60
+      - texto: Proponer comprar discos de mejor marca
+        ir_a: n_sde
+        minutos: 10
+        consecuencia: >-
+          Todos los discos fallan, de cualquier marca. Lo que falló acá fue no enterarse a tiempo y
+          tener un solo disco de margen.
+  n_ok:
+    final: exito
+    resumen: >-
+      La lentitud tenía una causa concreta: un pool RAIDZ1 con un disco que se estaba muriendo
+      (primero, reintentos en cada lectura; después, todo rearmado desde la paridad). Lo que
+      funcionó: no confundir el síntoma con el problema (ni clear ni reinicios), mirar la salud de
+      los otros discos antes de reconstruir, poner al día la copia antes de meterle horas de
+      lectura intensa a un pool sin margen, y aceptar unas horas de lentitud para salir rápido del
+      estado degradado. Lo que lo había hecho peligroso: RAIDZ1 con discos grandes, sin scrub
+      mensual, sin avisos de zed y con una copia que fallaba en silencio. Un respaldo que nadie
+      revisa no es un respaldo, y de eso se trata el módulo que sigue.

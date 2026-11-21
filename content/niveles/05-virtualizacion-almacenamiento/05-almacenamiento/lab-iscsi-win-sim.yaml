@@ -1,0 +1,67 @@
+tipo: terminal
+shell: powershell
+titulo: Un disco iSCSI para el servidor de archivos de Windows
+descripcion: >-
+  FS01 es un Windows Server 2025 del dominio empresa.local. En san01 (192.168.10.60) ya
+  crearon el destino iqn.2026-11.lan.empresa:fs01 con un LUN de 2 TB y le dieron permiso al
+  iniciador de FS01. Vas a conectar FS01 al LUN, de forma que vuelva solo después de un
+  reinicio, y a dejarlo listo como unidad E: "Datos".
+estado_inicial:
+  equipo: FS01
+  dominio: empresa.local
+  red: { ip: 192.168.10.32, adaptador: Ethernet }
+  iscsi:
+    portales:
+      - ip: 192.168.10.60
+        destinos:
+          - { iqn: "iqn.2026-11.lan.empresa:fs01", luns_gb: [2048], permitidos: ["iqn.1991-05.com.microsoft:fs01.empresa.local"] }
+pasos:
+  - consigna: >-
+      Arrancá el iniciador iSCSI de Windows, dejalo para que arranque solo, y mirá el nombre de
+      iniciador de FS01 (el que tienen que tener en la ACL del destino).
+    verificar:
+      - { servicio: MSiSCSI, estado: Running, inicio: Automatic }
+    pistas:
+      - "Start-Service MSiSCSI y Set-Service MSiSCSI -StartupType Automatic"
+      - "Get-InitiatorPort muestra el NodeAddress."
+    solucion:
+      - Set-Service MSiSCSI -StartupType Automatic
+      - Start-Service MSiSCSI
+      - Get-InitiatorPort
+    explicacion: >-
+      En Windows Server el iniciador viene instalado pero apagado. El nombre se arma con el del
+      equipo y el dominio: si renombrás el servidor, cambia, y hay que actualizar la ACL.
+  - consigna: Agregá el portal de san01 y conectate al destino de forma persistente.
+    verificar:
+      - { iscsi_conectado: "iqn.2026-11.lan.empresa:fs01", persistente: true }
+    pistas:
+      - "New-IscsiTargetPortal -TargetPortalAddress 192.168.10.60"
+      - "Get-IscsiTarget | Connect-IscsiTarget -IsPersistent $true"
+    solucion:
+      - New-IscsiTargetPortal -TargetPortalAddress 192.168.10.60
+      - Get-IscsiTarget
+      - Get-IscsiTarget | Connect-IscsiTarget -IsPersistent $true
+      - Get-IscsiSession
+    explicacion: >-
+      Sin -IsPersistent la conexión anda hasta el próximo reinicio, y ahí el disco desaparece
+      (con las carpetas compartidas que estuvieran ahí). Es el mismo olvido que el saveconfig de
+      targetcli, pero del otro lado.
+  - consigna: >-
+      El LUN aparece como un disco desconectado. Ponelo en línea, inicializalo con GPT y creá
+      un volumen NTFS en E: con la etiqueta "Datos" que use todo el disco.
+    verificar:
+      - { volumen: E, sistema: NTFS, etiqueta: Datos, tamano_min_gb: 2000 }
+    pistas:
+      - "Get-Disk muestra el disco nuevo (BusType iSCSI, Offline)."
+      - "Set-Disk -Number N -IsOffline $false, Initialize-Disk -Number N -PartitionStyle GPT"
+      - "New-Partition -DiskNumber N -UseMaximumSize -DriveLetter E | Format-Volume -FileSystem NTFS -NewFileSystemLabel Datos"
+    solucion:
+      - Get-Disk
+      - Set-Disk -Number 1 -IsOffline $false
+      - Initialize-Disk -Number 1 -PartitionStyle GPT
+      - New-Partition -DiskNumber 1 -UseMaximumSize -DriveLetter E | Format-Volume -FileSystem NTFS -NewFileSystemLabel Datos
+      - Get-Volume
+    explicacion: >-
+      Windows Server deja desconectado todo disco de una SAN, a propósito: así no toma por error
+      un LUN que está usando otro servidor. Como en Linux, un LUN se formatea en un solo equipo,
+      salvo que haya algo que coordine (en Windows, un clúster con CSV).

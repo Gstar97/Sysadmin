@@ -1,0 +1,43 @@
+---
+titulo: ZFS con réplica entre dos nodos, un LUN iSCSI para Proxmox y Windows, y Ceph en el clúster del laboratorio
+horas: 4
+verificacion:
+  - Resolví los dos laboratorios simulados.
+  - Armé un pool ZFS en espejo en dos nodos, con réplica de una VM y una migración en vivo.
+  - Recuperé un archivo de una instantánea sin hacer rollback y mandé una copia con send y receive.
+  - Usé un LUN iSCSI desde los tres nodos con LVM compartido y otro desde Windows, persistente.
+  - Armé Ceph con un OSD por nodo, apagué un nodo y seguí lo que hacía ceph -s.
+---
+
+import simZfs from './lab-zfs-sim.yaml'
+import simWin from './lab-iscsi-win-sim.yaml'
+import pasos from './lab-almacenamiento.yaml'
+
+## Objetivo
+
+Usar las tres formas de almacenamiento del módulo en el mismo clúster y ver, con tus ojos, qué gana y qué pierde cada una cuando un nodo se cae: con ZFS y réplica, la VM vuelve con unos minutos de datos de menos; con el LUN iSCSI, todo depende de san01; con Ceph, no se pierde nada, pero el clúster queda degradado hasta que vuelve el nodo.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: el clúster del laboratorio del módulo 5.4 (pve01 a pve03 y nfs01), unos 220 GB más de disco (se ocupan de a poco) y, si podés, 6 GB de memoria por nodo. Un Windows Server del Nivel 3 para el paso de Windows.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={simZfs} />
+
+<Terminal ejercicio={simWin} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+<Advertencia>
+Ceph en Proxmox anidado anda lento y es sensible a la memoria: es para entender cómo se comporta, no para medir rendimiento. Si tu computadora no da para tres nodos con 6 GB, hacé la parte de Ceph al final y apagá nfs01 y el Windows mientras tanto.
+</Advertencia>
+
+## Para pensar
+
+1. Anotá, para cada una de las tres formas, qué se perdió y cuánto tardó la VM en volver cuando apagaste el nodo. ¿Cuál elegirías para el ERP de una empresa de 50 personas con tres servidores? ¿Y para su servidor web?
+2. El LUN iSCSI lo sirve una sola VM (nfs01). ¿Qué tendría que tener una SAN de verdad para no ser el punto único de falla del clúster?
+3. Con tres nodos, Ceph no pudo rehacer la tercera copia. ¿Qué cambia con cuatro? ¿Y qué pasa con el espacio libre que necesita para hacerlo?

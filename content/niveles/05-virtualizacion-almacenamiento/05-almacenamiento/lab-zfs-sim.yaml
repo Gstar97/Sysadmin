@@ -1,0 +1,115 @@
+tipo: terminal
+shell: bash
+titulo: Replicación de ZFS entre nodos, probada con una caída
+descripcion: >-
+  pve01, pve02 y pve03 (192.168.10.21 a .23) forman el clúster "produccion". pve01 y pve02 tienen
+  cada uno un pool ZFS "tank" (dos discos de 1 TB en espejo) agregado a Proxmox como local-zfs;
+  pve03 es un nodo chico, sin ZFS. No hay almacenamiento compartido. En pve01 corre web01 (VM
+  100), con el disco en local-zfs. Las placas de gestión responden en 192.168.10.121 a .123
+  (usuario admin, clave Bmc-2026).
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [ipmitool] }
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  bmc: { ip: 192.168.10.121, clave: Bmc-2026 }
+  discos: [{ nombre: sdb, tamano: 1T }, { nombre: sdc, tamano: 1T }]
+  zfs:
+    pools:
+      - { nombre: tank, tipo: mirror, discos: [sdb, sdc], datasets: [{ nombre: tank/vms }] }
+  proxmox:
+    repos: no-subscription
+    cluster: produccion
+    almacenamientos:
+      - { id: local, tipo: dir, contenido: [iso, vztmpl, backup], ruta: /var/lib/vz }
+      - { id: local-zfs, tipo: zfspool, contenido: [images, rootdir], ruta: tank/vms }
+    vms:
+      - { id: 100, nombre: web01, estado: running, memoria: 4096, discos: { scsi0: "local-zfs:vm-100-disk-0,size=32G" }, red: { net0: "virtio,bridge=vmbr0" } }
+  servidores:
+    - hostname: pve02
+      ip: 192.168.10.22
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+      bmc: { ip: 192.168.10.122, clave: Bmc-2026 }
+      discos: [{ nombre: sdb, tamano: 1T }, { nombre: sdc, tamano: 1T }]
+      zfs: { pools: [{ nombre: tank, tipo: mirror, discos: [sdb, sdc], datasets: [{ nombre: tank/vms }] }] }
+      proxmox: { repos: no-subscription, cluster: produccion }
+    - hostname: pve03
+      ip: 192.168.10.23
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      equipo: { cpus: 8, memoria_gb: 32, fisico: true }
+      bmc: { ip: 192.168.10.123, clave: Bmc-2026 }
+      proxmox: { repos: no-subscription, cluster: produccion }
+pasos:
+  - consigna: Mirá dónde está el disco de web01 en el pool e intentá migrarla en vivo a pve02. ¿Qué pasa y por qué?
+    verificar:
+      - { comando_usado: "zfs list" }
+      - { comando_usado: "qm migrate" }
+    pistas:
+      - "zfs list -r tank muestra el volumen del disco."
+      - "qm migrate 100 pve02 --online"
+    solucion:
+      - zfs list -r tank
+      - qm migrate 100 pve02 --online
+    explicacion: >-
+      El disco es un volumen de ZFS en los discos de pve01: para migrar en vivo habría que copiar los
+      32 GB enteros con --with-local-disks, y mientras tanto la VM depende de un solo nodo. La
+      réplica resuelve las dos cosas.
+  - consigna: Creá la tarea de réplica 100-0 de web01 hacia pve02, cada 15 minutos, y comprobá que corrió bien.
+    verificar:
+      - { replica_pve: "100-0", destino: pve02, ok: true }
+    pistas:
+      - "pvesr create-local-job 100-0 pve02 --schedule '*/15'"
+      - "pvesr status"
+    solucion:
+      - pvesr create-local-job 100-0 pve02 --schedule '*/15'
+      - pvesr status
+      - ssh root@pve02 zfs list -t all -r tank
+    explicacion: >-
+      La primera vez viaja el disco entero; después, cada 15 minutos, solo lo que cambió (una
+      instantánea y un envío incremental, como en la lección 5.5.3). En pve02 ya hay una copia del
+      disco con su instantánea __replicate_100-0_... Para que funcione, los dos nodos tienen que
+      tener un pool con el mismo nombre y el mismo almacenamiento.
+  - consigna: Ahora sí, migrá web01 en vivo a pve02 y fijate qué viaja.
+    verificar:
+      - { pve_vm: 100, nodo: pve02, estado: running }
+    pistas:
+      - "qm migrate 100 pve02 --online --with-local-disks"
+    solucion:
+      - qm migrate 100 pve02 --online --with-local-disks
+      - pvesr status
+    explicacion: >-
+      Solo viajó lo que cambió desde la última réplica, y la memoria. Además, la tarea de réplica
+      se dio vuelta sola: ahora copia de pve02 hacia pve01, así que la VM sigue teniendo una copia
+      en otro nodo.
+  - consigna: >-
+      Poné web01 bajo alta disponibilidad, apagá pve02 de golpe por su placa de gestión y esperá
+      unos minutos. ¿Dónde vuelve a arrancar web01 y por qué ahí?
+    verificar:
+      - { pve_ha: "vm:100", estado: started, nodo: pve01 }
+    pistas:
+      - "ha-manager add vm:100"
+      - "ipmitool -I lanplus -H 192.168.10.122 -U admin -P Bmc-2026 chassis power off"
+      - "sleep 3m y ha-manager status"
+    solucion:
+      - ha-manager add vm:100
+      - ipmitool -I lanplus -H 192.168.10.122 -U admin -P Bmc-2026 chassis power off
+      - sleep 3m
+      - ha-manager status
+      - pvecm status
+    explicacion: >-
+      Volvió en pve01, el único nodo que tenía una copia del disco (pve03 no tiene ZFS). El clúster
+      siguió con quórum (2 de 3) y, después del cercado, la HA la arrancó con la última réplica:
+      se perdió lo que cambió desde la última copia, como mucho 15 minutos. Ese es el precio de no
+      tener almacenamiento compartido, y por eso la réplica sirve para un servidor web o un
+      controlador de dominio, y no tanto para una base de datos con movimiento constante.

@@ -1,0 +1,135 @@
+tipo: pasos
+titulo: ZFS, iSCSI y Ceph en el clúster de tus máquinas virtuales
+descripcion: >-
+  Sobre el clúster de tres nodos del laboratorio del módulo 5.4 (pve01 a pve03 y nfs01) vas a
+  armar las tres formas de almacenamiento del módulo: ZFS con réplica entre dos nodos, un LUN
+  iSCSI para Proxmox y otro para un Windows Server, y Ceph con un disco por nodo. Hace falta
+  sumar discos virtuales (unos 220 GB más, que se ocupan de a poco) y, para la parte de Windows,
+  un Windows Server del Nivel 3. Calculá unas cuatro horas.
+pasos:
+  - titulo: Discos nuevos para los nodos y para nfs01
+    detalle: >-
+      Con las VM apagadas, agregá a pve01 y pve02 dos discos de 20 GB cada uno (para ZFS), a los
+      tres nodos un disco de 32 GB (para Ceph) y a nfs01 un disco de 50 GB (para iSCSI). En
+      VirtualBox, controladora SATA; en Hyper-V, SCSI. Encendé todo y comprobá que el clúster
+      sigue con quórum.
+    comandos:
+      - lsblk -o NAME,SIZE,MODEL,SERIAL
+      - ls -l /dev/disk/by-id/ | grep -v part
+      - pvecm status | grep -E 'Quorate|Total votes'
+    comprobar: En pve01 y pve02 ves sdb y sdc de 20 GB y sdd de 32 GB; en pve03, sdb de 32 GB; en nfs01, sdb de 50 GB.
+  - titulo: Un pool ZFS en espejo en pve01 y otro en pve02
+    detalle: >-
+      En cada uno de los dos, con los nombres de /dev/disk/by-id (los de tu VM van a ser distintos
+      a los del ejemplo). El almacenamiento de Proxmox se agrega una sola vez, limitado a los dos
+      nodos que tienen el pool.
+    comandos:
+      - zpool create -o ashift=12 tank mirror /dev/disk/by-id/ata-VBOX_HARDDISK_VB1111 /dev/disk/by-id/ata-VBOX_HARDDISK_VB2222
+      - zfs create tank/vms
+      - zpool status tank
+      - pvesm add zfspool local-zfs --pool tank/vms --nodes pve01,pve02 --content images,rootdir
+    comprobar: pvesm status en pve01 y en pve02 muestra local-zfs active; en pve03 no aparece.
+  - titulo: Una VM en ZFS, con réplica y migración
+    detalle: >-
+      Creá una VM chica de prueba (o restaurá la plantilla del módulo 5.2) con el disco en
+      local-zfs. Programá la réplica a pve02 y migrala en vivo con un ping corriendo desde tu
+      computadora.
+    comandos:
+      - qm clone 9000 150 --name zfs-prueba --full --storage local-zfs && qm start 150
+      - pvesr create-local-job 150-0 pve02 --schedule '*/15'
+      - pvesr status
+      - zfs list -t all -r tank
+      - qm migrate 150 pve02 --online --with-local-disks
+    comprobar: pvesr status muestra la tarea OK y, después de migrar, la réplica dada vuelta (de pve02 a pve01).
+  - titulo: Instantáneas y una copia con send y receive
+    detalle: >-
+      En pve01 creá un dataset para documentos, sacá una instantánea, borrá un archivo y
+      recuperalo con un clon. Después mandá la instantánea a nfs01 si le instalaste ZFS, o a pve02.
+    comandos:
+      - zfs create -o compression=lz4 tank/docs && cp -r /etc/pve /tank/docs/
+      - zfs snapshot tank/docs@antes && rm -r /tank/docs/pve/nodes
+      - zfs clone tank/docs@antes tank/recupero && cp -r /tank/recupero/pve/nodes /tank/docs/pve/ && zfs destroy tank/recupero
+      - zfs send tank/docs@antes | ssh root@pve02 zfs receive tank/docs-copia
+      - zpool scrub tank && zpool status tank
+    comprobar: /tank/docs/pve/nodes volvió, y en pve02 zfs list muestra tank/docs-copia con la instantánea antes.
+  - titulo: nfs01 también es san01, con dos destinos iSCSI
+    detalle: >-
+      Uno para Proxmox (con permiso para los tres nodos) y otro para Windows. Partí el disco de 50
+      GB con LVM para tener dos LUN. Copiá el InitiatorName de cada nodo (cat
+      /etc/iscsi/initiatorname.iscsi) y, del Windows, el NodeAddress de Get-InitiatorPort.
+    comandos:
+      - sudo apt install -y targetcli-fb
+      - sudo pvcreate /dev/sdb && sudo vgcreate vg_lun /dev/sdb
+      - sudo lvcreate -n pve -L 30G vg_lun && sudo lvcreate -n win -l 100%FREE vg_lun
+      - sudo targetcli /backstores/block create name=pve dev=/dev/vg_lun/pve
+      - sudo targetcli /backstores/block create name=win dev=/dev/vg_lun/win
+      - sudo targetcli /iscsi create iqn.2026-11.lan.lab:pve
+      - sudo targetcli /iscsi/iqn.2026-11.lan.lab:pve/tpg1/luns create /backstores/block/pve
+      - sudo targetcli /iscsi/iqn.2026-11.lan.lab:pve/tpg1/acls create IQN-DE-PVE01
+      - sudo targetcli /iscsi create iqn.2026-11.lan.lab:win
+      - sudo targetcli /iscsi/iqn.2026-11.lan.lab:win/tpg1/luns create /backstores/block/win
+      - sudo targetcli /iscsi/iqn.2026-11.lan.lab:win/tpg1/acls create IQN-DEL-WINDOWS
+      - sudo targetcli saveconfig && sudo targetcli ls
+    comprobar: targetcli ls muestra los dos destinos, cada uno con su LUN y sus ACL (repetí la de pve01 para pve02 y pve03).
+  - titulo: El LUN en Proxmox, con LVM compartido
+    detalle: >-
+      Desde pve01. Antes de crear el VG, comprobá en lsblk de qué letra es el disco iSCSI (no
+      confundirlo con los discos de ZFS o de Ceph).
+    comandos:
+      - pvesm add iscsi san01 --portal IP-de-nfs01 --target iqn.2026-11.lan.lab:pve --content none
+      - lsblk -o NAME,SIZE,TRAN
+      - pvcreate /dev/sdX && vgcreate vg_san /dev/sdX
+      - pvesm add lvm san-lvm --vgname vg_san --shared 1 --content images,rootdir
+      - pvesm status
+    comprobar: san01 y san-lvm aparecen active en los tres nodos. Si alguno dice inactive, revisá la ACL de ese nodo en san01.
+  - titulo: El otro LUN en Windows Server
+    detalle: >-
+      En el servidor de archivos del Nivel 3 (o cualquier Windows Server en la red del
+      laboratorio), como en el ejercicio simulado.
+    comandos:
+      - Set-Service MSiSCSI -StartupType Automatic; Start-Service MSiSCSI
+      - New-IscsiTargetPortal -TargetPortalAddress IP-de-nfs01
+      - Get-IscsiTarget | Connect-IscsiTarget -IsPersistent $true
+      - Get-Disk | Where-Object BusType -eq iSCSI
+      - Set-Disk -Number N -IsOffline $false; Initialize-Disk -Number N -PartitionStyle GPT
+      - New-Partition -DiskNumber N -UseMaximumSize -DriveLetter E | Format-Volume -FileSystem NTFS -NewFileSystemLabel Datos
+    comprobar: >-
+      Después de reiniciar Windows, la unidad E: sigue estando (la conexión era persistente).
+  - titulo: Ceph en los tres nodos
+    detalle: >-
+      Usá la red de corosync del módulo 5.4 (10.10.10.0/24) como red de Ceph: en un laboratorio
+      alcanza; en producción sería una red aparte y más rápida. Los OSD van en el disco de 32 GB
+      de cada nodo (sdd en pve01 y pve02, sdb en pve03; verificalo con lsblk).
+    comandos:
+      - pveceph install --repository no-subscription
+      - pveceph init --network 10.10.10.0/24
+      - pveceph mon create
+      - pveceph osd create /dev/sdd
+      - pveceph pool create vms --add_storages
+      - ceph -s && ceph osd tree && ceph df
+    comprobar: Después de repetir install, mon create y osd create en pve02 y pve03, ceph -s muestra HEALTH_OK con 3 mon y 3 OSD up.
+  - titulo: Una VM en Ceph y un nodo que se cae
+    detalle: >-
+      Pasá el disco de la VM de prueba a Ceph, ponela bajo alta disponibilidad y apagá de golpe el
+      nodo donde corre (desde VirtualBox o Hyper-V, "apagar", no "cerrar"). Mirá ceph -s desde otro
+      nodo cada minuto durante 15 minutos.
+    comandos:
+      - qm disk move 150 scsi0 vms --delete 1
+      - ha-manager add vm:150
+      - watch -n 30 ceph -s
+    comprobar: >-
+      La VM vuelve en otro nodo en 2 a 3 minutos. Ceph pasa a HEALTH_WARN con 1 OSD down; a los 10
+      minutos lo marca out, pero con 3 nodos no tiene dónde rehacer la tercera copia y sigue
+      degradado hasta que encendés el nodo, cuando vuelve a HEALTH_OK.
+    si_falla: >-
+      Si las VM se congelan por completo, revisá que el pool tenga min_size 2 (ceph osd pool get vms
+      min_size) y que queden dos monitores en quórum. Con Proxmox anidado y 4 GB por nodo, Ceph
+      puede quedarse sin memoria: subí los nodos a 6 GB si podés.
+  - titulo: Un mantenimiento prolijo
+    detalle: Reiniciá un nodo con noout, como en el ejercicio de la lección 5.5.4.
+    comandos:
+      - ceph osd set noout
+      - ha-manager crm-command node-maintenance enable pve03
+      - reboot
+      - ha-manager crm-command node-maintenance disable pve03 && ceph osd unset noout
+    comprobar: Durante el reinicio, ceph osd tree muestra el OSD de pve03 down pero con REWEIGHT 1 (sigue in), y al final ceph -s vuelve a HEALTH_OK sin flags.
