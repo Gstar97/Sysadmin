@@ -44,6 +44,7 @@ export const INTERACTIVE_COMPONENTS = [
   'SimuladorRecursos',
   'ComparadorPlataformas',
   'SimuladorQuorum',
+  'CalculadoraCapacidad',
 ] as const
 
 export const REQUIRED_BLOCKS = [
