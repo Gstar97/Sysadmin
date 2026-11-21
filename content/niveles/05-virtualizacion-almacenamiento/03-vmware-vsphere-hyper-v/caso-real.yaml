@@ -1,0 +1,154 @@
+tipo: troubleshooting
+titulo: La renovación que se triplicó
+descripcion: >-
+  Caso simulado de decisión. Una empresa de logística tiene todo en VMware vSphere: tres hosts
+  ESXi 8, vCenter, una SAN iSCSI y 38 VM. Sos el sysadmin a cargo y la gerencia te pide una
+  respuesta. Los precios son de ejemplo. Cada decisión suma minutos de tu trabajo.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 9:00. El gerente de administración te reenvía la cotización de la renovación: la
+      suscripción vence en 75 días y el costo anual pasó de US$ 6.400 a US$ 19.200. "¿Esto es
+      así? ¿Qué hacemos? Necesito una respuesta para el directorio del jueves."
+    evidencia:
+      - titulo: La cotización
+        contenido: |2
+            VMware vSphere Foundation (VVF) – suscripción 1 año
+            Hosts: >-
+              3   Procesadores por host: 2   Núcleos por procesador: 12
+            Núcleos facturados: 96 (mínimo 16 por procesador)
+            Precio por núcleo/año: US$ 200        Total anual: US$ 19.200
+            Renovación anterior (soporte de licencias perpetuas vSphere Standard): US$ 6.400
+      - titulo: Lo que hay
+        contenido: |2
+            esx01, esx02, esx03: 2 × 12 núcleos, 384 GB de RAM cada uno
+            SAN iSCSI con un datastore VMFS de 20 TB (40 % libre)
+            38 VM: 22 Windows Server (AD, archivos, ERP, SQL Server, terminal), 16 Linux (web, monitoreo, VPN)
+            Windows Server Datacenter licenciado en los 3 hosts (24 núcleos cada uno, comprado en 2024)
+            Respaldos: Veeam Backup & Replication, todas las noches
+            Equipo: vos (Windows y Linux) y una persona de soporte que sabe Windows y PowerShell
+    opciones:
+      - texto: Hacer las cuentas y el inventario antes de responder (alternativas, costos, plazos y lo que sabe el equipo)
+        ir_a: n_cuentas
+        minutos: 180
+      - texto: Proponer migrar todo a Proxmox este fin de semana, porque es gratis
+        ir_a: fin_apurado
+        minutos: 60
+      - texto: Responder que no hay alternativa y firmar la renovación
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          El gerente pregunta por qué cuesta el triple y si otras empresas siguen pagando eso. No
+          tenés respuesta, así que te pide que vuelvas el jueves con las alternativas antes de
+          firmar nada.
+  n_cuentas:
+    situacion: >-
+      Con el comparador de la lección 5.3.3 y las cotizaciones de dos proveedores, armás la tabla
+      a cinco años. El dato que más pesa: las licencias Datacenter de Windows Server ya están
+      pagadas para los tres hosts, así que Hyper-V no suma costo de hipervisor. Las 22 VM con
+      Windows se pagan igual con cualquier plataforma.
+    evidencia:
+      - titulo: Costo del hipervisor a cinco años
+        contenido: |2
+            VMware VVF                        96 núcleos × US$ 200 × 5   = US$ 96.000
+            Proxmox VE (Basic, 6 zócalos)     6 × US$ 380 × 5            = US$ 11.400
+            Hyper-V                           incluido en Datacenter     = US$ 0
+            (Windows Server Datacenter de las VM: ya comprado, igual en las tres)
+      - titulo: Lo que no es plata
+        contenido: |2
+            Veeam: soporta Hyper-V y Proxmox (y restaura VM de VMware en los dos)
+            SAN iSCSI: Hyper-V la usa con CSV en un clúster; Proxmox, con LVM compartido
+            Equipo: los dos saben Windows y PowerShell; solo vos sabés Linux
+            Plazo: 75 días para 38 VM, con el cierre contable del mes en el medio
+    opciones:
+      - texto: Armar una prueba piloto con Hyper-V y con Proxmox, migrando tres VM no críticas a cada uno, antes de decidir
+        ir_a: n_piloto
+        minutos: 480
+      - texto: Elegir Proxmox directamente, porque en la tabla es el que más se parece a VMware
+        ir_a: n_cuentas
+        minutos: 30
+        consecuencia: >-
+          Puede ser una buena elección, pero la estás tomando sin probar nada y dejando afuera
+          que la otra persona del equipo no sabe Linux. Si mañana te vas de vacaciones, nadie
+          puede atender el clúster. Hay que probarlo antes.
+      - texto: Elegir Hyper-V directamente, porque es el más barato
+        ir_a: n_cuentas
+        minutos: 30
+        consecuencia: >-
+          Puede ser la mejor, pero no probaste cómo migran las VM Linux ni si el clúster con la SAN
+          que tienen funciona como esperás. Una tarde de prueba evita sorpresas de semanas.
+  n_piloto:
+    situacion: >-
+      Después de dos días de prueba, con un host prestado del proveedor: las dos plataformas
+      funcionan con la SAN y con Veeam. En Proxmox, la VM Windows se cayó con
+      INACCESSIBLE_BOOT_DEVICE hasta que instalaste virtio-win; en Hyper-V, Veeam restauró las
+      VM directo. Lo que más pesa: tu compañero de soporte pudo operar Hyper-V solo; Proxmox, no.
+    evidencia:
+      - titulo: Tiempos de la prueba (por VM, promedio)
+        contenido: |2
+            Hyper-V   (restauración con Veeam)        Windows: 35 min   Linux: 50 min
+            Proxmox   (importación del disco)         Windows: 70 min   Linux: 40 min
+            38 VM con Hyper-V: 22 × 35 + 16 × 50 = unas 26 horas de migración, más pruebas
+      - titulo: El calendario
+        contenido: |2
+            Día 75: vence la suscripción de VMware (sin ella, sin actualizaciones ni soporte)
+            Días 25 a 32: cierre contable (el ERP y SQL Server no se tocan)
+    opciones:
+      - texto: Proponer Hyper-V y un plan por etapas, con una renovación corta de VMware como red de seguridad si el plan se atrasa
+        ir_a: n_plan
+        minutos: 120
+      - texto: Proponer Hyper-V y migrar las 38 VM en dos fines de semana para terminar cuanto antes
+        ir_a: n_piloto
+        minutos: 20
+        consecuencia: >-
+          Son unas 26 horas de migración sin contar pruebas, con dos personas: no entra en dos
+          fines de semana sin tocar el ERP, y si algo falla el lunes no hay tiempo de volver
+          atrás. Mejor por grupos, con tiempo para probar cada uno.
+  n_plan:
+    situacion: >-
+      Armás el plan. Los tres hosts tienen 1.152 GB de memoria y las VM usan 610 GB: con dos hosts
+      (768 GB) entran todas, así que se puede vaciar uno, reinstalarlo con Windows Server y
+      Hyper-V, y arrancar el clúster nuevo al lado del viejo. Falta decidir cómo seguir.
+    evidencia:
+      - titulo: El plan (borrador)
+        contenido: |2
+            Semana 1: vaciar esx03 con vMotion; instalar Hyper-V; conectarlo a la SAN (LUN nuevo)
+            Semanas 2-3: migrar las 16 Linux y las Windows no críticas (de a grupos, con prueba)
+            Semana 4: cierre contable: no se migra nada
+            Semana 5: vaciar esx02, sumarlo al clúster Hyper-V (dos nodos: ya hay alta disponibilidad)
+            Semanas 6-7: AD, archivos, terminal; el ERP y SQL Server en una ventana de sábado
+            Semana 8: esx01 se suma al clúster; se apagan vCenter y VMware
+            Cada VM vieja queda apagada (y respaldada) dos semanas antes de borrarse
+    opciones:
+      - texto: Presentar el plan, con los costos, los riesgos y el plan B, y pedir aprobación
+        ir_a: n_ok
+        minutos: 60
+      - texto: Comprar tres servidores nuevos para migrar en paralelo y no tocar los actuales
+        ir_a: n_plan
+        minutos: 30
+        consecuencia: >-
+          Tres servidores nuevos cuestan más que varios años de la diferencia de licencias, y los
+          actuales tienen años de vida por delante. Liberar un host a la vez, con la capacidad que
+          sobra, resuelve lo mismo sin comprar nada.
+  n_ok:
+    final: exito
+    resumen: >-
+      El directorio aprobó el plan el jueves. Se renovó VMware por un año como red de seguridad
+      (con la condición de no renovar más), y la migración terminó en nueve semanas, sin cortes
+      fuera de las ventanas anunciadas. Aun pagando ese año puente, el ahorro de hipervisor a cinco años ronda los US$ 77.000.
+      Lo que lo hizo funcionar: responder con números y no con opiniones (incluyendo que las
+      licencias de Windows se pagan igual con cualquier plataforma); probar antes de elegir, con
+      VM reales y con la persona que va a operar el sistema; elegir lo que el equipo puede
+      sostener, no lo más barato en el papel; migrar por etapas, fuera del cierre contable, con
+      capacidad para volver atrás; y mantener cada VM vieja apagada y respaldada hasta estar
+      seguros de la nueva.
+  fin_apurado:
+    final: fracaso
+    resumen: >-
+      El sábado se migraron 20 VM a Proxmox en un servidor viejo que había en el depósito. El
+      lunes, cinco VM Windows no arrancaban (sin drivers VirtIO), Veeam no tenía configurado el
+      nuevo destino, así que esas VM pasaron el fin de semana sin respaldo, y el ERP quedó en un
+      servidor sin redundancia. Se volvió a VMware el martes, con dos días de trabajo perdidos y la
+      renovación igual por firmar. Proxmox no era el problema: el problema fue decidir sin
+      números, sin prueba y sin plan, y migrar todo junto en un fin de semana.
