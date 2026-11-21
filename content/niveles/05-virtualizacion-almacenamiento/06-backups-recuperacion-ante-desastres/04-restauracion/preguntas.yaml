@@ -1,0 +1,103 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: La tarea de respaldo termina bien todas las noches. ¿Qué sabés con eso?
+  opciones:
+    - { texto: "Que corrió y guardó algo, pero no que la copia se pueda leer ni restaurar", correcta: true, explicacion: "Es el primer escalón, no el último." }
+    - { texto: "Que los respaldos están perfectos", explicacion: "No necesariamente." }
+    - { texto: "Que se cumple el RTO", explicacion: "El RTO se mide restaurando." }
+    - { texto: "Nada", explicacion: "Algo sabés: que corrió." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: restic check pasa sin errores, pero check --read-data-subset 10% encuentra paquetes dañados. ¿Cómo puede ser?
+  opciones:
+    - { texto: "El check rápido revisa la estructura sin leer los datos; el daño está en los datos guardados", correcta: true, explicacion: "Por eso hay que leer los datos, rotando." }
+    - { texto: "Es un error de restic", explicacion: "No." }
+    - { texto: "La clave es incorrecta", explicacion: "Con clave incorrecta no abre." }
+    - { texto: "El 10 % siempre da error", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué se restaura una VM de prueba con link_down=1 o en una red aislada?
+  opciones:
+    - { texto: "Para que no choque con la original: misma IP, mismo nombre, misma identidad", correcta: true, explicacion: "Un controlador de dominio duplicado o un ERP que factura dos veces son desastres." }
+    - { texto: "Para que restaure más rápido", explicacion: "No cambia la velocidad." }
+    - { texto: "Porque sin red no se puede arrancar", explicacion: "Arranca igual." }
+    - { texto: "Para ahorrar licencias", explicacion: "No." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que restaura la copia pbs01:backup/vm/101/2026-11-21T02:00:00Z como VM 901, en local-lvm, con MAC nuevas.
+  prompt: "root@pve01:~#"
+  aceptadas:
+    - "qmrestore pbs01:backup/vm/101/2026-11-21T02:00:00Z 901 --storage local-lvm --unique 1"
+    - "qmrestore pbs01:backup/vm/101/2026-11-21T02:00:00Z 901 --unique 1 --storage local-lvm"
+    - "qmrestore pbs01:backup/vm/101/2026-11-21T02:00:00Z 901 --storage local-lvm --unique true"
+  explicacion: --unique 1 genera MAC nuevas para las placas de red.
+- id: p05
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los escalones de verificación, del que menos prueba al que más.
+  pasos:
+    - "La tarea terminó bien"
+    - "La estructura del repositorio está sana"
+    - "Los datos se pueden leer (lectura de datos o verify)"
+    - "Restaurar archivos y compararlos"
+    - "Restaurar la VM aislada y probar la aplicación"
+    - "Simulacro completo cronometrado contra el RTO"
+  explicacion: Los primeros se automatizan; los últimos se agendan y se anotan.
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué mide de verdad el RTO?
+  opciones:
+    - { texto: "Un simulacro completo, siguiendo el plan, con el reloj corriendo", correcta: true, explicacion: "Incluye todo, no solo copiar el disco." }
+    - { texto: "La velocidad del PBS", explicacion: "Es una parte." }
+    - { texto: "El tamaño del respaldo", explicacion: "Influye, pero no mide." }
+    - { texto: "La frecuencia de las copias", explicacion: "Eso es el RPO." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene anotar de cada simulacro? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Qué se restauró, desde dónde y cuánto tardó", correcta: true, explicacion: "Para comparar contra el RTO." }
+    - { texto: "Qué falló y qué se cambió", correcta: true, explicacion: "Es lo más valioso." }
+    - { texto: "La fecha", correcta: true, explicacion: "Para ver la evolución." }
+    - { texto: "La clave del repositorio", explicacion: "Nunca en un registro." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es la restauración en vivo de Proxmox Backup Server?
+  opciones:
+    - { texto: "Arrancar la VM mientras el disco se sigue copiando desde el respaldo", correcta: true, explicacion: "Disponible en minutos, más lenta al principio." }
+    - { texto: "Restaurar sin apagar la original", explicacion: "No es eso." }
+    - { texto: "Una copia que se actualiza sola", explicacion: "No." }
+    - { texto: "Restaurar por la web", explicacion: "Se puede, pero no es eso." }
+- id: p09
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Restauraste el respaldo de anoche a una carpeta aparte y comparaste. ¿Qué te dice esto?
+  salida: |
+    root@fs01:~# diff -r /srv/datos /srv/prueba/srv/datos
+    Only in /srv/datos/Administracion: informe-hoy.ods
+    diff -r /srv/datos/Administracion/balance-2026.ods /srv/prueba/srv/datos/Administracion/balance-2026.ods
+    1c1
+    < Balance 2026 - version 4
+    ---
+    > Balance 2026 - version 3
+  opciones:
+    - { texto: "La copia funciona: las diferencias son lo que se cambió hoy, después del respaldo", correcta: true, explicacion: "Es lo esperado." }
+    - { texto: "El respaldo está dañado", explicacion: "Si estuviera dañado no restauraría." }
+    - { texto: "Se perdió el balance", explicacion: "Está, en la versión de anoche." }
+    - { texto: "Hay que borrar informe-hoy.ods", explicacion: "No." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Hacen simulacros todos los meses, siempre con el servidor web. ¿Qué mejorarías?
+  opciones:
+    - { texto: "Rotar qué se prueba, empezando por lo más crítico y lo más difícil (la base de datos, el controlador de dominio)", correcta: true, explicacion: "Lo fácil casi siempre anda." }
+    - { texto: "Nada, alcanza", explicacion: "No prueba lo que importa." }
+    - { texto: "Hacerlos cada día", explicacion: "No es la frecuencia, es qué se prueba." }
+    - { texto: "Dejar de hacerlos", explicacion: "No." }

@@ -620,6 +620,8 @@ function bridgeOk(pve: Pve, g: PveGuest): string | undefined {
 
 function guestIp(_sys: System, pve: Pve, g: PveGuest): string | undefined {
   const net = g.conf.get('net0') ?? ''
+  // Con el cable "desconectado" (link_down=1), la VM no tiene red.
+  if (/link_down=1/.test(net)) return undefined
   const fixed = /ip=(\d+\.\d+\.\d+\.\d+)/.exec(net)?.[1] ?? /ip=(\d+\.\d+\.\d+\.\d+)/.exec(g.conf.get('ipconfig0') ?? '')?.[1]
   if (fixed) return fixed
   const br = /bridge=([^,]+)/.exec(net)?.[1]
@@ -2097,6 +2099,8 @@ function restore(ctx: CommandContext, pve: Pve, type: 'qemu' | 'lxc', pos: strin
     const size = Number(/size=(\d+)G/.exec(v)?.[1] ?? 8) * GiB
     const name = /cloudinit/.test(v) ? `vm-${vmid}-cloudinit` : nextDiskName(pve, st, vmid)
     addVolume(pve, { volid: `${st}:${name}`, storage: st, vmid, size, format: 'raw', content: type === 'qemu' ? 'images' : 'rootdir' })
+    // Unos 400 MiB/s desde PBS (salteando ceros), un poco menos desde un archivo vma.
+    if (!/cloudinit/.test(v)) sys.workMs += Math.round((size * 0.14) / (vol.storage && pve.storages.get(vol.storage)?.type === 'pbs' ? 400 * 1048576 : 250 * 1048576) * 1000) + 4000
     conf.set(k, v.replace(d.volid, `${st}:${name}`))
     if (type === 'qemu' && !/cloudinit/.test(v) && vol.storage && pve.storages.get(vol.storage)?.type === 'pbs') {
       const pst = pve.storages.get(vol.storage)!

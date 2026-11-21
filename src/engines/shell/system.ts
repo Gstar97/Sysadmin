@@ -282,6 +282,8 @@ export class System {
   reachable = new Set<string>()
   /** Los otros servidores de la red del ejercicio (para ssh y scp). */
   lab: System[] = []
+  /** Lo que tardaría de verdad el último trabajo pesado (restauraciones, copias), para time. */
+  workMs = 0
   /** El servidor está apagado (por la placa de gestión o con poweroff): nadie lo ve en la red. */
   poweredOff = false
   /** Configuración de sshd con la que arrancó el servicio (cambia al reiniciarlo o recargarlo). */

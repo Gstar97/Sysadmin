@@ -1,0 +1,81 @@
+---
+id: n5-m6-l4
+titulo: Restauración probada
+minutos: 120
+objetivos:
+  - Verificar respaldos en niveles, desde la tarea terminada hasta el simulacro cronometrado.
+  - Encontrar una copia dañada leyendo los datos y actuar antes de necesitarla.
+  - Restaurar archivos y VM sin afectar a lo que está en producción, y medir el tiempo contra el RTO.
+glosario: [simulacro-restauracion, rpo-rto, copia-inmutable]
+verificado: 2026-11
+---
+
+import escalera from './escalera.svg?raw'
+import escaleraDatos from './escalera.yaml'
+import ejVerificar from './ej-verificar.yaml'
+import ejVm from './ej-restaurar-vm.yaml'
+
+Casi todas las historias de terror sobre respaldos tienen la misma forma: las copias "andaban" (la tarea terminaba bien todas las noches) y el día que hicieron falta, no servían. La clave se había perdido, la base de datos estaba copiada a medio escribir, el disco de respaldo tenía errores, o nadie sabía cómo restaurar y se tardó tres días. El "0 errores" de la regla 3-2-1-1-0 se consigue de una sola manera: probando.
+
+<AntesDeEmpezar>
+- restic y Proxmox Backup Server (lección 5.6.2).
+- qmrestore y las VM de Proxmox (lecciones 5.2.2 y 5.2.4).
+- RPO y RTO (lección 5.6.1).
+</AntesDeEmpezar>
+
+## Qué tan seguro estás
+
+<DiagramaInteractivo datos={escaleraDatos} svg={escalera} alt="Una escalera de seis escalones, de más fácil a más trabajo y más certeza. 1, la tarea terminó bien, cada noche. 2, la estructura está sana, cada semana. 3, los datos se pueden leer, cada semana, rotando. 4, restaurar archivos y comparar, cada mes. 5, restaurar la VM aislada y probarla, cada mes o trimestre. 6, simulacro completo y cronometrado, una o dos veces por año." />
+
+Los primeros tres escalones se automatizan y se miran en el monitoreo; los otros tres se agendan, como cualquier tarea, y se anotan. Si nunca subiste del escalón 1, no sabés si tenés respaldos.
+
+## Manos a la obra: verificar copias
+
+<Terminal ejercicio={ejVerificar} />
+
+## Manos a la obra: restaurar una VM
+
+<Terminal ejercicio={ejVm} />
+
+## Cómo restaurar sin hacer daño
+
+- **Nunca encima de lo que anda**, salvo que sea lo que está roto. Primero a otro lado (otra carpeta, otra VM), se revisa, y después se reemplaza.
+- **Aislada de la red**: una copia de un controlador de dominio, un servidor de correo o un ERP que se conecta a la red puede duplicar identidades, mandar correos viejos o facturar dos veces.
+- **Con nombre distinto** y anotada: la VM de prueba que alguien encuentra un mes después sin saber qué es termina conectada a la red.
+- **Lo más importante primero**: en un desastre real, el orden de restauración lo dice el plan (lección 5.6.5), empezando por lo que los demás necesitan (DNS, controladores de dominio, la red).
+
+En Proxmox Backup Server hay dos ayudas para acortar el RTO: la **restauración en vivo** (la VM arranca mientras se copia el disco, más lenta al principio pero disponible en minutos) y la **restauración de archivos sueltos** desde la interfaz, sin restaurar la VM entera.
+
+## El registro de simulacros
+
+Cada prueba se anota: fecha, qué se restauró, desde dónde, cuánto tardó, qué falló y qué se cambió. Ese registro es lo que te permite decir con números si se cumple el RTO, lo que muestra en una auditoría que los respaldos se prueban, y lo que deja ver cuando el tiempo de restauración empieza a crecer.
+
+<EnSimple>
+Que la tarea de respaldo termine bien no prueba que la copia sirva. Hay que subir la escalera: revisar la estructura, leer los datos para encontrar copias dañadas, restaurar archivos y compararlos, restaurar VM enteras aisladas de la red y, una o dos veces por año, hacer un simulacro completo con el reloj corriendo. Se restaura siempre a otro lado, sin red y con otro nombre, y cada prueba se anota.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Mirar solo si la tarea terminó bien">
+    No prueba que la copia se pueda leer ni restaurar. Hace falta leer los datos y restaurar de verdad.
+  </ErrorComun>
+  <ErrorComun titulo="Probar solo con el check rápido">
+    Revisa la estructura pero no lee los datos: un disco de respaldo que se está dañando pasa sin problemas.
+  </ErrorComun>
+  <ErrorComun titulo="Restaurar una VM de prueba con la red conectada">
+    Misma IP, mismo nombre y misma identidad que la original: conflictos y, en el peor caso, datos duplicados o pisados.
+  </ErrorComun>
+  <ErrorComun titulo="No anotar los simulacros">
+    Sin registro no hay forma de saber si se cumple el RTO ni de mostrar que se prueba.
+  </ErrorComun>
+  <ErrorComun titulo="Probar siempre lo mismo">
+    Se prueba el servidor fácil y nunca la base de datos complicada. Rotar qué se prueba, empezando por lo más crítico.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Escalera: tarea terminada, estructura, lectura de datos, restaurar y comparar, VM aislada, simulacro completo.
+- restic check --read-data-subset y los verify de PBS encuentran copias dañadas antes de necesitarlas.
+- Restaurar a otro lado: otra carpeta, otra VM con --unique 1, sin red (link_down=1), con otro nombre.
+- time y el registro de simulacros: el RTO se mide, no se supone.
+- PBS acorta el RTO con restauración en vivo y de archivos sueltos.
+</Resumen>

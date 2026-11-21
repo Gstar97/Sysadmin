@@ -1,0 +1,97 @@
+tipo: terminal
+shell: bash
+titulo: Copias que parecen sanas
+descripcion: >-
+  fs01 respalda /srv/datos todas las noches con restic en dos lugares: /srv/restic (un disco
+  aparte del mismo servidor) y sftp:root@backup02:/srv/restic-fs01 (en otra sede). Los dos
+  repositorios usan la clave de /root/.restic-clave. Los informes de cada noche dicen "snapshot
+  saved" desde hace dos semanas. Hoy te toca la revisión mensual.
+estado_inicial:
+  distro: ubuntu
+  hostname: fs01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [restic] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.32/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /srv/datos/Administracion/balance-2026.ods: { contenido: "Balance 2026 - version aprobada\n" }
+    /srv/datos/Administracion/sueldos-noviembre.ods: { contenido: "Sueldos de noviembre\n" }
+    /srv/datos/Clientes/Rivas SA/contrato.pdf: { contenido: "Contrato Rivas SA 2026\n" }
+    /root/.restic-clave: { contenido: "Clave-fs01-larga-2026\n", modo: "600" }
+  restic:
+    repos:
+      - ruta: /srv/restic
+        clave: Clave-fs01-larga-2026
+        instantaneas: [{ dias_atras: 13, rutas: [/srv/datos] }, { dias_atras: 6, rutas: [/srv/datos] }, { dias_atras: 1, rutas: [/srv/datos] }]
+  servidores:
+    - hostname: backup02
+      ip: 192.168.10.71
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      restic:
+        repos:
+          - ruta: /srv/restic-fs01
+            clave: Clave-fs01-larga-2026
+            origen: fs01
+            dañado: true
+            instantaneas: [{ dias_atras: 13, rutas: [/srv/datos] }, { dias_atras: 6, rutas: [/srv/datos] }, { dias_atras: 1, rutas: [/srv/datos] }]
+pasos:
+  - consigna: >-
+      Revisá los dos repositorios con restic check, primero solo la estructura y después leyendo
+      el 10 % de los datos. ¿Están sanos los dos?
+    verificar:
+      - { comando_usado: "--read-data-subset" }
+      - { comando_usado: "sftp:root@backup02" }
+    pistas:
+      - "export RESTIC_PASSWORD_FILE=/root/.restic-clave"
+      - "restic -r /srv/restic check y restic -r /srv/restic check --read-data-subset 10%"
+      - "Lo mismo con -r sftp:root@backup02:/srv/restic-fs01"
+    solucion:
+      - export RESTIC_PASSWORD_FILE=/root/.restic-clave
+      - restic -r /srv/restic check
+      - restic -r /srv/restic check --read-data-subset 10%
+      - restic -r sftp:root@backup02:/srv/restic-fs01 check
+      - restic -r sftp:root@backup02:/srv/restic-fs01 check --read-data-subset 10%
+    explicacion: >-
+      El de backup02 pasa el check rápido (la estructura está bien) pero tiene paquetes de datos
+      dañados: solo aparece al leerlos. Puede ser un disco que empieza a fallar en backup02 o un
+      problema en la red. Por eso el check con lectura de datos se programa seguido, rotando el
+      pedazo (--read-data-subset 1/10, 2/10...) para leer todo en algunas semanas.
+  - consigna: >-
+      No confiés en ese repositorio: empezá uno nuevo en backup02, en /srv/restic-fs01-nuevo (con
+      la misma clave), y hacé ahí una copia de /srv/datos.
+    verificar:
+      - { en: backup02, verificar: { restic_repo: /srv/restic-fs01-nuevo, instantaneas_min: 1 } }
+    pistas:
+      - "restic -r sftp:root@backup02:/srv/restic-fs01-nuevo init"
+      - "restic -r sftp:root@backup02:/srv/restic-fs01-nuevo backup /srv/datos"
+    solucion:
+      - restic -r sftp:root@backup02:/srv/restic-fs01-nuevo init
+      - restic -r sftp:root@backup02:/srv/restic-fs01-nuevo backup /srv/datos
+      - restic -r sftp:root@backup02:/srv/restic-fs01-nuevo check --read-data
+    explicacion: >-
+      El viejo no se borra todavía: puede tener copias viejas que el nuevo no tiene (y restic
+      repair puede rescatar parte). Pero hay que revisar el disco de backup02 (smartctl) antes de
+      seguir confiando en él, y avisar: durante dos semanas, la copia de afuera no servía y nadie
+      lo sabía.
+  - consigna: >-
+      Ahora la prueba que más importa: restaurá la última copia de /srv/restic en
+      /srv/prueba-restauracion y comparala con los datos actuales.
+    verificar:
+      - { archivo: "/srv/prueba-restauracion/srv/datos/Clientes/Rivas SA/contrato.pdf" }
+      - { comando_usado: "diff -r" }
+    pistas:
+      - "restic -r /srv/restic restore latest --target /srv/prueba-restauracion"
+      - "diff -r /srv/datos /srv/prueba-restauracion/srv/datos"
+    solucion:
+      - restic -r /srv/restic restore latest --target /srv/prueba-restauracion
+      - diff -r /srv/datos /srv/prueba-restauracion/srv/datos && echo "Sin diferencias"
+    explicacion: >-
+      Sin diferencias: la copia de anoche tiene lo mismo que hoy, y se puede leer de punta a punta
+      con la clave que guardaste. Eso es el 0 de la regla 3-2-1-1-0. En una restauración real
+      habría diferencias (lo que cambió desde anoche), y diff te dice exactamente cuáles. Al
+      terminar, se borra la carpeta de prueba.

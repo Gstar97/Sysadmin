@@ -1,0 +1,82 @@
+tipo: terminal
+shell: bash
+titulo: Restaurar una VM sin molestar a la original
+descripcion: >-
+  erp01 (VM 101) corre en pve01 y se respalda cada noche en pbs01. El RTO acordado para el ERP es
+  de una hora. Para comprobar que se cumple, vas a restaurar la copia más nueva como una VM nueva
+  (901), sin red para que no choque con la original, arrancarla y medir cuánto tarda.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox:
+    repos: no-subscription
+    almacenamientos:
+      - { id: local, tipo: dir, contenido: [iso, vztmpl, backup], ruta: /var/lib/vz }
+      - { id: local-lvm, tipo: lvmthin, contenido: [images, rootdir] }
+      - { id: pbs01, tipo: pbs, contenido: [backup], servidor: 192.168.10.75, datastore: principal, usuario: "backup@pbs", huella: "a3:9f:12:7c:5e:0b:44:d1:8e:2a:6f:93:c4:17:b8:05:e6:3d:72:aa:19:5c:80:fe:4b:21:d9:6a:37:c0:8b:5f" }
+    vms:
+      - { id: 101, nombre: erp01, estado: running, agente: true, memoria: 8192, discos: { scsi0: "local-lvm:vm-101-disk-0,size=80G" }, red: { net0: "virtio=BC:24:11:5E:0A:01,bridge=vmbr0" } }
+    respaldos:
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 2.3 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 1.3 }
+      - { vmid: 101, almacenamiento: pbs01, dias_atras: 0.3 }
+pasos:
+  - consigna: >-
+      Buscá la copia más nueva de erp01 en pbs01 y restaurala como VM 901 en local-lvm, con
+      direcciones MAC nuevas, midiendo cuánto tarda con time.
+    verificar:
+      - { pve_vm: 901, existe: true }
+      - { comando_usado: "time qmrestore" }
+      - { comando_usado: "--unique" }
+    pistas:
+      - "pvesm list pbs01 --vmid 101: la última línea es la más nueva."
+      - "time qmrestore pbs01:backup/vm/101/FECHA 901 --storage local-lvm --unique 1"
+    solucion:
+      - pvesm list pbs01 --vmid 101
+      - time qmrestore $(pvesm list pbs01 --vmid 101 | tail -1 | cut -d' ' -f1) 901 --storage local-lvm --unique 1
+    explicacion: >-
+      --unique 1 le da a la copia MAC nuevas, para que no choque con la original si llegara a
+      compartir la red. El tiempo que mide time es parte del RTO, pero no todo: falta arrancar,
+      revisar que la aplicación ande y, en un desastre real, conseguir dónde restaurar.
+  - consigna: >-
+      Antes de arrancarla, cambiale el nombre a erp01-prueba y desconectale la red (link_down=1).
+      Arrancala y comprobá que quedó corriendo sin red.
+    verificar:
+      - { pve_vm: 901, estado: running, nombre: erp01-prueba, con_red: false, config: { net0: "link_down=1" } }
+    pistas:
+      - "qm set 901 --name erp01-prueba --net0 virtio,bridge=vmbr0,link_down=1"
+      - "qm start 901"
+    solucion:
+      - qm set 901 --name erp01-prueba --net0 virtio,bridge=vmbr0,link_down=1
+      - qm start 901
+      - qm status 901
+    explicacion: >-
+      Una copia de un servidor con la misma IP y el mismo nombre en la red puede causar desastres:
+      conflictos de IP, un controlador de dominio duplicado, un ERP que manda facturas dos veces.
+      Por eso se prueba sin red, o en una red aislada (un bridge sin salida, o con una VLAN que no
+      llega a ningún lado), y se mira por la consola.
+  - consigna: >-
+      Supongamos que por la consola comprobaste que el ERP arranca y la base abre. Anotá el
+      resultado del simulacro en /root/simulacros.txt (fecha, qué se restauró, cuánto tardó y si
+      cumple el RTO de una hora) y borrá la VM de prueba.
+    verificar:
+      - { archivo: /root/simulacros.txt, contenido_incluye: erp01 }
+      - { pve_vm: 901, existe: false }
+    pistas:
+      - "echo \"$(date +%F) erp01 desde pbs01: restauración 33 s, arranque OK, cumple RTO 1 h\" >> /root/simulacros.txt"
+      - "qm stop 901 && qm destroy 901"
+    solucion:
+      - echo "$(date +%F) erp01 desde pbs01 a VM 901 sin red - restauracion de 33 s, arranque y base OK - cumple el RTO de 1 h" >> /root/simulacros.txt
+      - qm stop 901
+      - qm destroy 901
+    explicacion: >-
+      El registro de simulacros es lo que te deja decir "lo probamos y tardó tanto", y lo que pide
+      cualquier auditoría. Si un mes el tiempo crece (más datos, un PBS más lento), se ve antes de
+      que haga falta de verdad. Y la VM de prueba se borra: dejarla olvidada consume disco y,
+      peor, alguien la puede conectar a la red.

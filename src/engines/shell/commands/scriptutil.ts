@@ -5,6 +5,7 @@
 import { register, type CommandContext } from '../shell'
 import { FsError, ROOT_CRED, type Inode } from '../vfs'
 import { lines, readInputs } from './util'
+import { parse } from '../parser'
 
 // ---------------------------------------------------------------------------------------
 // tar
@@ -500,6 +501,26 @@ register('chpasswd', {
       u.lastChange = Math.floor(Date.now() / 86_400_000)
     }
     ctx.sys.syncAccountFiles()
+    return code
+  },
+})
+
+// time: mide cuánto tarda un comando. Además del tiempo real, suma lo que el simulador dice que
+// tardaría el trabajo (una restauración de varios GB no tarda lo mismo que en el navegador).
+register('time', {
+  usage: 'time COMANDO [ARGUMENTOS...]',
+  async run(ctx) {
+    if (!ctx.args.length) {
+      ctx.err('\nreal\t0m0.000s\nuser\t0m0.000s\nsys\t0m0.000s\n')
+      return 0
+    }
+    const q = (a: string) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)
+    const t0 = Date.now()
+    ctx.sys.workMs = 0
+    const code = await ctx.sh.exec(parse(ctx.args.map(q).join(' ')), { stdin: ctx.stdin, out: ctx.out, err: ctx.err, isTTY: ctx.isTTY })
+    const ms = Date.now() - t0 + ctx.sys.workMs
+    const fmt = (v: number) => `${Math.floor(v / 60000)}m${((v % 60000) / 1000).toFixed(3)}s`
+    ctx.err(`\nreal\t${fmt(ms)}\nuser\t${fmt(Math.round(ms * 0.04))}\nsys\t${fmt(Math.round(ms * 0.02))}\n`)
     return code
   },
 })

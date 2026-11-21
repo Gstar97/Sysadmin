@@ -1,0 +1,33 @@
+tipo: diagrama
+titulo: Escalera de verificación
+puntos:
+  - id: tarea
+    titulo: 1. La tarea terminó bien
+    area: { x: 2.3, y: 69.4, ancho: 15.6, alto: 25.0 }
+    texto: >-
+      Es lo que casi todos miran, y lo que menos dice: que la tarea terminó no quiere decir que copió lo que hacía falta (una carpeta que se movió, una base que no se volcó) ni que lo guardado se pueda leer. Igual, tiene que avisar si falla, y avisar también si un día no corre.
+  - id: estructura
+    titulo: 2. La estructura está sana
+    area: { x: 18.5, y: 58.9, ancho: 15.6, alto: 35.6 }
+    texto: >-
+      restic check o el verify rápido de PBS revisan que los índices y las instantáneas estén completos y coherentes. Es rápido, pero no lee los datos: un paquete dañado en el disco pasa este control.
+  - id: datos
+    titulo: 3. Los datos se pueden leer
+    area: { x: 34.7, y: 48.3, ancho: 15.6, alto: 46.1 }
+    texto: >-
+      restic check --read-data-subset (rotando la parte que lee) o los verify jobs de PBS leen los datos y comprueban sus sumas de verificación. Es lo que encuentra un disco de respaldo que se está muriendo o una copia corrupta en la red.
+  - id: archivos
+    titulo: 4. Restaurar archivos y comparar
+    area: { x: 50.8, y: 37.8, ancho: 15.6, alto: 56.7 }
+    texto: >-
+      Se restaura de verdad, a otra carpeta, y se compara con el original (diff -r, sha256sum) o se abre algún archivo. Prueba también lo que nadie más prueba: que la clave guardada funciona y que el procedimiento está escrito.
+  - id: vm
+    titulo: 5. Restaurar la VM aislada y probarla
+    area: { x: 67.0, y: 27.2, ancho: 15.6, alto: 67.2 }
+    texto: >-
+      qmrestore a un número nuevo, con MAC nuevas y sin red (o en una red aislada), arrancar y mirar por la consola que el sistema y la aplicación anden. Así se encuentran los respaldos que copian bien pero no arrancan.
+  - id: simulacro
+    titulo: 6. Simulacro completo
+    area: { x: 83.1, y: 16.7, ancho: 15.6, alto: 77.8 }
+    texto: >-
+      Restaurar un servicio entero como si hubiera pasado el desastre, con el reloj corriendo, siguiendo el plan escrito (lección 5.6.5) y comparando contra el RTO. Es el único que mide el RTO de verdad, y el que encuentra lo que falta en el plan.

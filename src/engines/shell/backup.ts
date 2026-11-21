@@ -649,6 +649,7 @@ register('restic', {
           ctx.err(`ignoring error for ${root}: ${(e as Error).message}\nFatal: There were 1 errors\n`)
           return 1
         }
+        ctx.sys.workMs += Math.round((bytes / (150 * MiB)) * 1000) + 800
         ctx.out(`${opened}[0:00] 100.00%  ${n} files/dirs ${human(bytes)}, total ${n} files/dirs ${human(bytes)}\nrestoring snapshot ${snap.id.slice(0, 8)} of [${snap.paths.join(' ')}] at ${new Date(snap.time).toISOString().replace('T', ' ').replace(/\..*/, '')} by ${snap.user}@${snap.host} to ${root}\nSummary: Restored ${n} files/dirs (${human(bytes)}) in 0:0${Math.min(9, 1 + Math.floor(bytes / (300 * MiB)))}\n`)
         return 0
       }
