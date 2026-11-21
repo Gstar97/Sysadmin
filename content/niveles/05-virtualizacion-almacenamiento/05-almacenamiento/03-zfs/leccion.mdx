@@ -1,0 +1,103 @@
+---
+id: n5-m5-l3
+titulo: ZFS
+minutos: 210
+objetivos:
+  - Entender cómo se arma un pool de ZFS (vdevs, espejos, RAIDZ) y por qué la protección está en cada vdev.
+  - Crear datasets con propiedades, sacar instantáneas y recuperar un archivo sin perder lo demás.
+  - Mandar copias a otro servidor con send y receive, y cuidar la salud del pool con scrub.
+glosario: [zfs, vdev, copy-on-write, scrub, arc]
+verificado: 2026-11
+---
+
+import zfs from './zfs.svg?raw'
+import zfsDatos from './zfs.yaml'
+import ejZfs from './ej-zfs.yaml'
+import ejSend from './ej-send.yaml'
+
+En el módulo 1.4 armaste discos con particiones, mdadm, LVM y ext4: cuatro herramientas, cada una con su parte. ZFS hace todo eso junto, y agrega algo que ninguna de esas tiene: sabe si un dato se dañó. Es el sistema de almacenamiento de cabecera de Proxmox, de TrueNAS y de muchos servidores de archivos, y lo vas a encontrar en casi cualquier empresa que use Proxmox.
+
+<AntesDeEmpezar>
+- Discos, LVM y RAID por software (lecciones 1.4.5 y 4.5.2).
+- Instantáneas y clones de VM (lección 5.1.3).
+- Tipos de almacenamiento (lección 5.5.1).
+</AntesDeEmpezar>
+
+## Las ideas que lo hacen distinto
+
+**Copia al escribir (copy-on-write).** ZFS nunca pisa un bloque: escribe la versión nueva en otro lugar y recién al final cambia el puntero. Si se corta la luz a mitad de camino, queda la versión vieja entera. Por eso las instantáneas salen gratis: alcanza con no liberar los bloques viejos.
+
+**Suma de verificación de todo.** Cada bloque tiene su suma de verificación guardada aparte. Al leer, ZFS la compara: si no coincide, el dato se dañó (un disco que empieza a fallar, un cable, un bit que cambió solo con los años) y, si hay otra copia en el espejo o en la paridad, lo arregla y avisa. Un RAID común no se da cuenta: devuelve el dato dañado.
+
+**Todo en uno.** Pool, datasets y volúmenes reemplazan a mdadm, LVM y mkfs. No hay que dimensionar particiones: los datasets comparten el espacio libre del pool y se les pone una cuota si hace falta.
+
+<DiagramaInteractivo datos={zfsDatos} svg={zfs} alt="Arriba, el pool tank: 2 TB útiles de 4 discos de 1 TB, formado por dos vdev en espejo, mirror-0 con sdb y sdc y mirror-1 con sdd y sde; los datos se reparten entre los dos. Abajo, lo que comparte el espacio libre del pool: el dataset tank/compartido, un sistema de archivos montado en /tank/compartido con compresión lz4 y cuota de 500 GB; su instantánea tank/compartido@lunes, de solo lectura, que ocupa solo lo que cambió y sirve para rollback, clone y send; y el volumen tank/vms/vm-100-disk-0, un disco virtual que usa Proxmox para las VM." />
+
+## Elegir cómo armar el pool
+
+La decisión más importante, porque **no se puede cambiar después** sin mover los datos a otro lado:
+
+- **Espejos** (dos discos o más con lo mismo): la mitad del espacio, pero lo más rápido para VM y bases de datos, y lo más fácil de agrandar (se suma otro par). Dos espejos juntos es el equivalente a RAID 10.
+- **RAIDZ1, RAIDZ2, RAIDZ3**: como RAID 5 y 6, con 1, 2 o 3 discos de paridad. Más espacio útil, pero más lentos para escrituras chicas al azar. Para archivos y respaldos, RAIDZ2 es lo más común; con discos de más de 4 TB, RAIDZ1 es arriesgado porque reconstruir lleva tanto tiempo que puede fallar otro disco en el medio.
+- **Nunca** un pool de discos sueltos para datos que importan, y **nunca** ZFS encima de un RAID por hardware: ZFS tiene que ver los discos directamente (una placa HBA o una controladora en modo IT), si no, no puede arreglar nada.
+
+Probá cuánto espacio te queda con cada esquema:
+
+<CalculadoraCapacidad modo="zfs" />
+
+Y al crear el pool, `ashift=12` siempre (los discos actuales escriben de a 4 KiB; con el valor equivocado, todo anda más lento y no tiene arreglo).
+
+## Manos a la obra: pool, dataset e instantáneas
+
+<Terminal ejercicio={ejZfs} />
+
+Propiedades que vas a usar seguido: `compression=lz4` (o `zstd` para datos fríos), `quota` y `reservation` (tope y mínimo de espacio), `recordsize` (16K para bases de datos, el 128K de siempre para archivos), `atime=off` (no anotar cada lectura) y `readonly`.
+
+## Copias a otro servidor
+
+Las instantáneas viven en los mismos discos: si se quema el servidor, se van con él. `zfs send` y `zfs receive` las mandan a otro equipo, y después solo lo que cambió.
+
+<Terminal ejercicio={ejSend} />
+
+En Proxmox esto mismo viene armado: si los nodos de un clúster tienen un pool ZFS con el mismo nombre, los discos de una VM se pueden replicar a otro nodo cada tantos minutos con `pvesr create-local-job 100-0 pve02 --schedule '*/15'` (o desde la pestaña Replication de la VM). Por dentro son instantáneas y envíos incrementales como los de recién. Así una VM puede migrar rápido o recuperarse en otro nodo sin almacenamiento compartido, perdiendo como mucho los últimos minutos. Lo vas a armar en el laboratorio del módulo.
+
+## La memoria: el ARC
+
+ZFS usa la memoria RAM libre como caché de lectura (el ARC). En Linux, por defecto puede tomar hasta la mitad de la RAM, y eso en un servidor de VM es un problema: le quita memoria a las máquinas. Desde Proxmox 8.1, el instalador lo limita al 10 % de la RAM (con un máximo de 16 GiB); en otras instalaciones se ajusta con `zfs_arc_max` en `/etc/modprobe.d/zfs.conf`. Que `free` muestre poca memoria libre en un servidor con ZFS no es un problema: el ARC la devuelve si alguien la pide.
+
+## Cuidar el pool
+
+- **Scrub** una vez por mes (en Debian y Ubuntu ya viene programado): lee todo y arregla lo que encuentre.
+- **Avisos**: el servicio `zed` manda un correo cuando un disco falla o un scrub encuentra errores. Sin avisos, un pool puede estar DEGRADED durante meses hasta que se rompe el segundo disco.
+- **Ocupación**: por encima del 80 % el pool se vuelve lento, porque al copiar al escribir cuesta encontrar lugar libre.
+- **Reemplazo de un disco**: `zpool replace tank VIEJO NUEVO` y ZFS reconstruye (resilver) solo lo que había, no el disco entero. Lo vas a practicar en el caso real del módulo.
+
+<EnSimple>
+ZFS junta en una sola herramienta el RAID, el manejo de volúmenes y el sistema de archivos. Nunca pisa datos (escribe al lado), así que las instantáneas salen gratis, y guarda una suma de verificación de cada bloque, así que se da cuenta si algo se dañó y lo arregla con la otra copia. El pool se arma con grupos de discos (espejos o RAIDZ) y la forma no se cambia después. Las instantáneas no son respaldo: para eso, send y receive a otro servidor. Y hay que mirarlo: scrub mensual, avisos por correo y no pasarse del 80 %.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="ZFS encima de un RAID por hardware">
+    ZFS ve un solo disco y no puede arreglar nada: detecta el daño pero no tiene otra copia. Placa HBA o modo IT, siempre.
+  </ErrorComun>
+  <ErrorComun titulo="Sumar un disco suelto a un pool con espejos">
+    zpool add tank sdf crea un vdev sin protección: si ese disco muere, se pierde todo el pool. ZFS avisa ("mismatched replication level") y hay que forzarlo para hacerlo mal.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que las instantáneas son el respaldo">
+    Están en los mismos discos. Un incendio, un robo o un pool dañado se las lleva.
+  </ErrorComun>
+  <ErrorComun titulo="ashift equivocado o nombres sdX en producción">
+    El ashift no se cambia nunca; y las letras de los discos pueden cambiar al reiniciar. /dev/disk/by-id y ashift=12.
+  </ErrorComun>
+  <ErrorComun titulo="Hacer rollback para recuperar un archivo">
+    Se pierde todo lo que cambió después. Para un archivo: clone o .zfs/snapshot.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Pool de vdevs (espejo o RAIDZ); la protección está en cada vdev; la forma no se cambia; ashift=12.
+- Copia al escribir y suma de verificación: instantáneas gratis y daños detectados y arreglados.
+- Datasets con propiedades heredables (lz4, quota, recordsize); zvols para discos de VM.
+- Instantáneas: rollback (todo), clone o .zfs/snapshot (un archivo); send/receive (completo e incremental) para copias.
+- ARC limitado en servidores de VM; scrub mensual, avisos con zed, menos del 80 % ocupado.
+</Resumen>

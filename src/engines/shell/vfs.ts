@@ -142,6 +142,8 @@ export class VFS {
   inodes = new Map<number, Inode>()
   /** Montajes de red activos (los más largos primero). */
   remotes: RemoteBinding[] = []
+  /** Rutas de sistemas de archivos locales de solo lectura (por ejemplo, un dataset con readonly=on). */
+  readonlyRoots: string[] = []
   private activating = false
   /** Rutas que dan error de entrada y salida (un sistema de archivos sobre un disco o arreglo caído). */
   ioGuard?: (abs: string) => boolean
@@ -206,6 +208,10 @@ export class VFS {
 
   /** Hace la operación en el servidor; los errores vuelven con la ruta local. */
   private via<T>(path: string, cred: Cred, write: boolean, fn: (v: VFS, p: string, c: Cred) => T): { v: T } | undefined {
+    if (write && this.readonlyRoots.length) {
+      const abs = normalizePath(path)
+      if (this.readonlyRoots.some((r) => abs === r || abs.startsWith(r + '/'))) throw new FsError('EROFS', abs)
+    }
     const r = this.remoteOf(path)
     if (!r) return undefined
     if (write && r.b.readonly) throw new FsError('EROFS', normalizePath(path))

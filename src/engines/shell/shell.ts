@@ -359,6 +359,7 @@ export class Shell {
     this.userStack.push(user)
     this.cwdStack.push(sys.users.get(user)?.home ?? '/')
     this.oneShotFloor.push(this.userStack.length)
+    sys.refreshVirtual()
     try {
       return await fn()
     } finally {

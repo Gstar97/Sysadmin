@@ -1,0 +1,46 @@
+tipo: diagrama
+titulo: Las piezas de ZFS
+puntos:
+  - id: pool
+    titulo: El pool
+    area: { x: 2.3, y: 9.5, ancho: 95.3, alto: 10 }
+    texto: >-
+      Todo el espacio de los discos junto. ZFS hace a la vez de RAID, de LVM y de sistema de
+      archivos: no hay mdadm, ni particiones, ni mkfs. El pool reparte los datos entre sus vdevs,
+      y si un vdev entero se pierde, se pierde el pool entero.
+  - id: vdev0
+    titulo: Un vdev (grupo de discos)
+    area: { x: 5.1, y: 19.5, ancho: 40.7, alto: 26 }
+    texto: >-
+      La redundancia está dentro de cada vdev: un espejo (mirror) de 2 o 3 discos, o un RAIDZ
+      (como RAID 5, 6 o "7": raidz1, raidz2, raidz3). Un pool hecho con discos sueltos no tiene
+      ninguna protección: si se rompe uno, se pierde todo.
+  - id: vdev1
+    titulo: Agregar espacio
+    area: { x: 54.2, y: 19.5, ancho: 40.7, alto: 26 }
+    texto: >-
+      El pool crece sumando otro vdev igual (zpool add tank mirror sdf sdg). Ojo con sumar un disco
+      suelto por error: queda como un vdev sin protección y ya no se puede sacar fácil. Desde
+      OpenZFS 2.3 también se puede agrandar un RAIDZ de a un disco.
+  - id: dataset
+    titulo: Dataset
+    area: { x: 5.1, y: 67, ancho: 27.9, alto: 26 }
+    texto: >-
+      Un sistema de archivos dentro del pool, con propiedades propias (compresión, cuota,
+      instantáneas) que heredan sus hijos. Se crea en un segundo y se monta solo. Conviene un
+      dataset por cosa que quieras manejar distinto: uno para documentos, otro para bases de datos.
+  - id: snapshot
+    titulo: Instantánea
+    area: { x: 36, y: 67, ancho: 27.9, alto: 26 }
+    texto: >-
+      Una foto de solo lectura del dataset en un momento. Sale al instante y no ocupa nada hasta
+      que los archivos cambian. Sirve para volver atrás (rollback), sacar un archivo (clone o
+      .zfs/snapshot) o mandar una copia a otro servidor (send). No es un respaldo: vive en los
+      mismos discos.
+  - id: zvol
+    titulo: Volumen (zvol)
+    area: { x: 67, y: 67, ancho: 27.9, alto: 26 }
+    texto: >-
+      Un disco virtual hecho con espacio del pool: se ve como /dev/zvol/... y lo usa Proxmox para
+      los discos de las VM en un almacenamiento zfspool. Tiene instantáneas y se puede mandar con
+      send igual que un dataset.

@@ -1,0 +1,84 @@
+tipo: terminal
+shell: bash
+titulo: Una copia en otro servidor con send y receive
+descripcion: >-
+  nas01 tiene el pool "tank" con el dataset tank/compartido. nas02 (192.168.10.42), en el otro
+  extremo del edificio, tiene el pool "backup" vacío. Vas a mandar una copia de tank/compartido a
+  nas02 y a mantenerla al día. Desde nas01 entrás por ssh como root a nas02.
+estado_inicial:
+  distro: ubuntu
+  hostname: nas01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [zfsutils-linux] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.41/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  discos:
+    - { nombre: sdb, tamano: 1T }
+    - { nombre: sdc, tamano: 1T }
+  zfs:
+    pools:
+      - { nombre: tank, tipo: mirror, discos: [sdb, sdc], datasets: [{ nombre: tank/compartido, propiedades: { compression: lz4 } }] }
+  servidores:
+    - hostname: nas02
+      ip: 192.168.10.42
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      paquetes: { instalados: [zfsutils-linux] }
+      discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }]
+      zfs: { pools: [{ nombre: backup, tipo: mirror, discos: [sdb, sdc] }] }
+pasos:
+  - consigna: >-
+      Guardá en tank/compartido un archivo acta.txt con el texto "Acta del 20 de noviembre", sacá
+      la instantánea "2026-11-20" y mandala completa a nas02 como backup/compartido.
+    verificar:
+      - { en: nas02, verificar: { dataset: backup/compartido, instantanea: "2026-11-20" } }
+    pistas:
+      - "zfs snapshot tank/compartido@2026-11-20"
+      - "zfs send tank/compartido@2026-11-20 | ssh root@nas02 zfs receive backup/compartido"
+    solucion:
+      - echo "Acta del 20 de noviembre" > /tank/compartido/acta.txt
+      - zfs snapshot tank/compartido@2026-11-20
+      - zfs send tank/compartido@2026-11-20 | ssh root@nas02 zfs receive backup/compartido
+      - ssh root@nas02 zfs list -t all -r backup
+    explicacion: >-
+      zfs send convierte la instantánea en un chorro de datos y zfs receive lo vuelve a armar del
+      otro lado, con sus propiedades. Por eso se manda una instantánea y no el dataset vivo: es
+      una foto que no cambia mientras viaja. La primera vez viaja todo.
+  - consigna: >-
+      Para que nadie toque la copia por error, dejá backup/compartido como solo lectura en nas02 y
+      comprobá que no se puede escribir.
+    verificar:
+      - { en: nas02, verificar: { dataset: backup/compartido, propiedad: { readonly: "on" } } }
+    pistas:
+      - "ssh root@nas02 zfs set readonly=on backup/compartido"
+      - "ssh root@nas02 touch /backup/compartido/prueba tiene que fallar."
+    solucion:
+      - ssh root@nas02 zfs set readonly=on backup/compartido
+      - ssh root@nas02 touch /backup/compartido/prueba
+    explicacion: >-
+      Si alguien cambia la copia, el próximo envío incremental falla (o, con receive -F, se pisan
+      sus cambios sin aviso). readonly=on bloquea la escritura en el sistema de archivos, pero
+      zfs receive sigue pudiendo actualizarla.
+  - consigna: >-
+      Llegó el 21: cambiá acta.txt (agregale una línea "Corrección del 21"), sacá la instantánea
+      "2026-11-21" y mandá a nas02 solo lo que cambió desde la anterior.
+    verificar:
+      - { en: nas02, verificar: { dataset: backup/compartido, instantanea: "2026-11-21" } }
+      - { en: nas02, verificar: { archivo: /backup/compartido/acta.txt, contenido_incluye: "Corrección del 21" } }
+    pistas:
+      - "zfs send -i 2026-11-20 tank/compartido@2026-11-21 | ssh root@nas02 zfs receive backup/compartido"
+    solucion:
+      - echo "Corrección del 21" >> /tank/compartido/acta.txt
+      - zfs snapshot tank/compartido@2026-11-21
+      - zfs send -i 2026-11-20 tank/compartido@2026-11-21 | ssh root@nas02 zfs receive backup/compartido
+      - ssh root@nas02 cat /backup/compartido/acta.txt
+    explicacion: >-
+      El envío incremental lleva solo los bloques que cambiaron entre las dos instantáneas: con
+      terabytes de datos, son minutos en vez de horas. Para que funcione, la instantánea de
+      partida (2026-11-20) tiene que existir en los dos lados; si la borrás en nas01, hay que
+      volver a mandar todo. Herramientas como sanoid y syncoid automatizan esto: sacan
+      instantáneas, las borran según una política y mandan los incrementales.

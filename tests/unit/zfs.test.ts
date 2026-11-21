@@ -109,3 +109,20 @@ describe('ZFS en Proxmox y pvesr', () => {
     expect(verifyBash(sh, { pve_ha: 'vm:100', nodo: 'pve01', estado: 'started' }).ok).toBe(true)
   })
 })
+
+describe('ZFS de solo lectura', () => {
+  it('readonly=on bloquea la escritura, pero receive y rollback siguen andando', async () => {
+    const { run } = await session(nas)
+    await run('zpool create tank mirror sdb sdc')
+    await run('zfs create tank/docs')
+    await run('echo uno > /tank/docs/a.txt')
+    await run('zfs snapshot tank/docs@s1')
+    await run('echo dos > /tank/docs/a.txt')
+    await run('zfs set readonly=on tank/docs')
+    expect((await run('touch /tank/docs/b')).err).toContain('Read-only file system')
+    expect((await run('zfs rollback tank/docs@s1')).code).toBe(0)
+    expect((await run('cat /tank/docs/a.txt')).out).toBe('uno\n')
+    await run('zfs set readonly=off tank/docs')
+    expect((await run('touch /tank/docs/b')).code).toBe(0)
+  })
+})

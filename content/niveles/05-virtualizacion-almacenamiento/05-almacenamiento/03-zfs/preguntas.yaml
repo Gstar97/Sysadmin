@@ -1,0 +1,126 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace ZFS que un RAID común con ext4 no hace?
+  opciones:
+    - { texto: "Detecta datos dañados con sumas de verificación y los arregla con la otra copia", correcta: true, explicacion: "Un RAID común devuelve el dato dañado sin darse cuenta." }
+    - { texto: "Funciona sin discos", explicacion: "No." }
+    - { texto: "No necesita redundancia", explicacion: "Sin otra copia, detecta pero no arregla." }
+    - { texto: "Es más rápido siempre", explicacion: "Depende." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un pool tiene dos vdevs en espejo. ¿Qué pasa si se rompen los dos discos de un mismo espejo?
+  opciones:
+    - { texto: "Se pierde el pool entero", correcta: true, explicacion: "Los datos están repartidos entre los vdevs: sin uno, no hay pool." }
+    - { texto: "Se pierde la mitad de los archivos", explicacion: "Se pierde todo." }
+    - { texto: "Nada: el otro espejo tiene copia", explicacion: "Cada espejo tiene sus propios datos." }
+    - { texto: "El pool queda DEGRADED pero anda", explicacion: "Eso pasa si se rompe un solo disco de un espejo." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Alguien borró un archivo el martes. Hay una instantánea del lunes y desde entonces se guardaron muchos archivos nuevos. ¿Qué conviene?
+  opciones:
+    - { texto: "Copiar el archivo desde un clon de la instantánea (o desde .zfs/snapshot) y no hacer rollback", correcta: true, explicacion: "El rollback borraría todo lo del martes." }
+    - { texto: "zfs rollback al lunes", explicacion: "Se pierde todo lo nuevo." }
+    - { texto: "Restaurar el respaldo de la semana pasada", explicacion: "Hay algo más nuevo." }
+    - { texto: "No se puede recuperar", explicacion: "Está en la instantánea." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que crea el pool tank con dos espejos (sdb con sdc, y sdd con sde) y ashift 12.
+  prompt: "root@nas01:~#"
+  aceptadas:
+    - "zpool create -o ashift=12 tank mirror sdb sdc mirror sdd sde"
+    - "zpool create -o ashift=12 tank mirror /dev/sdb /dev/sdc mirror /dev/sdd /dev/sde"
+  explicacion: Cada "mirror" empieza un vdev nuevo con los discos que siguen.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no se pone ZFS encima de un RAID por hardware?
+  opciones:
+    - { texto: "Porque ZFS ve un solo disco y, aunque detecte un daño, no tiene otra copia para arreglarlo", correcta: true, explicacion: "Además, la caché de la controladora puede mentirle sobre lo que ya escribió." }
+    - { texto: "Porque no se puede instalar", explicacion: "Se puede, y es el error." }
+    - { texto: "Porque el RAID por hardware es más lento", explicacion: "No es el motivo." }
+    - { texto: "Por la licencia", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace zfs send -i lunes tank/docs@martes?
+  opciones:
+    - { texto: "Manda solo lo que cambió entre la instantánea lunes y la martes", correcta: true, explicacion: "Del otro lado tiene que existir lunes." }
+    - { texto: "Manda todo el dataset", explicacion: "Eso es sin -i." }
+    - { texto: "Borra lunes", explicacion: "No." }
+    - { texto: "Compara los dos días y muestra las diferencias", explicacion: "Eso es zfs diff." }
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    root@nas01:~# zpool status tank
+      pool: tank
+     state: ONLINE
+      scan: scrub repaired 128K in 01:12:40 with 0 errors on Sun Nov  9 01:36:41 2026
+    config:
+
+            NAME        STATE     READ WRITE CKSUM
+            tank        ONLINE       0     0     0
+              mirror-0  ONLINE       0     0     0
+                sdb     ONLINE       0     0     0
+                sdc     ONLINE       0     0     4
+    errors: No known data errors
+  opciones:
+    - { texto: "El scrub encontró y arregló 128K dañados en sdc; conviene vigilar ese disco (SMART)", correcta: true, explicacion: "No se perdió nada, pero sdc dio errores de suma de verificación." }
+    - { texto: "Se perdieron 128K de datos", explicacion: "Dice repaired y 0 errors." }
+    - { texto: "El pool está roto", explicacion: "Está ONLINE." }
+    - { texto: "Está todo perfecto, no hay nada que mirar", explicacion: "Los errores CKSUM en sdc son un aviso." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor Proxmox con ZFS muestra en free casi toda la memoria usada y las VM no arrancan por falta de memoria. ¿Qué revisás?
+  opciones:
+    - { texto: "El tamaño máximo del ARC (zfs_arc_max)", correcta: true, explicacion: "En un servidor de VM conviene limitarlo." }
+    - { texto: "El ashift", explicacion: "No tiene que ver con la memoria." }
+    - { texto: "La compresión", explicacion: "No." }
+    - { texto: "El scrub", explicacion: "No." }
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas son buenas prácticas con ZFS? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Scrub mensual y avisos por correo con zed", correcta: true, explicacion: "Para enterarte antes de que falle el segundo disco." }
+    - { texto: "No pasar del 80 % ocupado", correcta: true, explicacion: "Después se pone lento." }
+    - { texto: "Usar /dev/disk/by-id al crear el pool", correcta: true, explicacion: "Las letras sdX pueden cambiar." }
+    - { texto: "Activar dedup en todo para ahorrar espacio", explicacion: "Gasta muchísima RAM; solo en casos muy puntuales." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué compresión conviene casi siempre en un dataset?
+  opciones:
+    - { texto: "lz4", correcta: true, explicacion: "Tan rápida que casi no se nota; zstd comprime más para datos fríos." }
+    - { texto: "Ninguna", explicacion: "Casi siempre conviene lz4." }
+    - { texto: "gzip-9", explicacion: "Muy lenta." }
+    - { texto: "dedup", explicacion: "No es compresión." }
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Tenés 6 discos de 8 TB para un servidor de archivos. ¿Qué esquema es el más razonable?
+  opciones:
+    - { texto: "RAIDZ2: aguanta dos discos rotos, que importa porque reconstruir 8 TB lleva muchas horas", correcta: true, explicacion: "Unos 32 TB útiles." }
+    - { texto: "RAIDZ1, para tener más espacio", explicacion: "Con discos tan grandes, arriesgado." }
+    - { texto: "Los 6 discos sueltos", explicacion: "Sin protección." }
+    - { texto: "Un RAID por hardware con ZFS encima", explicacion: "No." }
+- id: p12
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este script manda cada noche la copia a nas02. ¿Qué línea está mal?
+  archivo: |
+    #!/bin/bash
+    HOY=$(date +%F)
+    AYER=$(date -d yesterday +%F)
+    zfs snapshot tank/compartido@$HOY
+    zfs destroy tank/compartido@$AYER
+    zfs send -i $AYER tank/compartido@$HOY | ssh root@nas02 zfs receive backup/compartido
+  lineas_con_error: [5]
+  explicacion: Borra la instantánea de ayer antes de usarla como punto de partida del envío incremental, así que el send falla. Se borra después de mandar (y mejor conservar varias).

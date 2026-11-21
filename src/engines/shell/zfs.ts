@@ -248,6 +248,8 @@ function capture(sys: System, root: string): TreeEntry[] {
 
 function restore(sys: System, root: string, files: TreeEntry[]) {
   const vfs = sys.vfs
+  // receive y rollback escriben aunque el dataset sea de solo lectura.
+  vfs.readonlyRoots = []
   const skip = otherMountpoints(sys, root).filter((m) => m.startsWith(root + '/'))
   vfs.mkdirp(root, ROOT_CRED)
   for (const name of vfs.readdir(root, ROOT_CRED)) {
@@ -363,6 +365,20 @@ function pveZvols(sys: System, p: ZPool, parent: string): VirtualZvol[] {
 }
 
 /** Para que proxmox.ts sepa si existe un dataset (pvesm add zfspool). */
+/** Los datasets con readonly=on (propio o heredado) no dejan escribir en su punto de montaje. */
+function syncReadonly(sys: System) {
+  const roots: string[] = []
+  for (const p of pools(sys).values())
+    for (const d of p.datasets.values()) {
+      if (d.type !== 'filesystem' || prop(p, d, 'readonly').value !== 'on') continue
+      const mp = mountpoint(p, d)
+      if (mp) roots.push(mp)
+    }
+  sys.vfs.readonlyRoots = roots
+}
+
+System.refreshHooks.push(syncReadonly)
+
 export function datasetExists(sys: System, name: string): boolean {
   for (const p of pools(sys).values()) if (!p.exported && p.datasets.has(name)) return true
   return false

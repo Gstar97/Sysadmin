@@ -1,0 +1,121 @@
+tipo: terminal
+shell: bash
+titulo: Un pool, una carpeta y el archivo que alguien borró
+descripcion: >-
+  nas01 (Ubuntu Server 24.04, con zfsutils-linux instalado) es el servidor de archivos de la
+  oficina. Le pusieron cuatro discos de 1 TB (sdb a sde) conectados a una placa HBA, sin RAID
+  por hardware. Las planillas de administración están por ahora en /srv/planillas.
+estado_inicial:
+  distro: ubuntu
+  hostname: nas01
+  usuario: root
+  paquetes: { instalados: [zfsutils-linux] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.41/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  discos:
+    - { nombre: sdb, tamano: 1T }
+    - { nombre: sdc, tamano: 1T }
+    - { nombre: sdd, tamano: 1T }
+    - { nombre: sde, tamano: 1T }
+  archivos:
+    /srv/planillas/presupuesto-2027.ods: { contenido: "Presupuesto 2027 - version aprobada por directorio\n" }
+    /srv/planillas/sueldos-noviembre.ods: { contenido: "Sueldos de noviembre\n" }
+    /srv/planillas/proveedores.ods: { contenido: "Lista de proveedores\n" }
+pasos:
+  - consigna: >-
+      Creá el pool "tank" con dos espejos (sdb con sdc, y sdd con sde), con ashift=12, y mirá su
+      estado y su tamaño.
+    verificar:
+      - { zpool: tank, estado: ONLINE, tipo: mirror, discos: [sdb, sdc, sdd, sde] }
+    pistas:
+      - "Cada espejo se escribe como mirror DISCO DISCO, uno después del otro."
+      - "zpool create -o ashift=12 tank mirror sdb sdc mirror sdd sde"
+    solucion:
+      - zpool create -o ashift=12 tank mirror sdb sdc mirror sdd sde
+      - zpool status tank
+      - zpool list tank
+    explicacion: >-
+      Dos espejos en un pool es lo que en RAID se llama RAID 10: 2 TB útiles de 4, aguanta un disco
+      roto por espejo y es rápido para VM y bases de datos. ashift=12 le dice a ZFS que los discos
+      escriben de a 4 KiB; se elige al crear y no se puede cambiar después, así que conviene
+      ponerlo siempre. En producción se usan los nombres de /dev/disk/by-id en vez de sdb,
+      porque las letras pueden cambiar al reiniciar.
+  - consigna: >-
+      Creá el dataset tank/compartido con compresión lz4 y una cuota de 500 GB, y copiá ahí las
+      planillas de /srv/planillas.
+    verificar:
+      - { dataset: tank/compartido, propiedad: { compression: lz4, quota: 500G } }
+      - { archivo: /tank/compartido/presupuesto-2027.ods }
+    pistas:
+      - "zfs create -o compression=lz4 tank/compartido"
+      - "zfs set quota=500G tank/compartido"
+      - "cp /srv/planillas/* /tank/compartido/"
+    solucion:
+      - zfs create -o compression=lz4 tank/compartido
+      - zfs set quota=500G tank/compartido
+      - cp /srv/planillas/* /tank/compartido/
+      - zfs list -o name,used,avail,quota,compression
+    explicacion: >-
+      Un dataset es como una carpeta con propiedades propias: compresión, cuota, instantáneas.
+      Se monta solo (en /tank/compartido) sin tocar /etc/fstab. lz4 es tan rápida que casi
+      siempre conviene: se ahorra espacio y, como se lee menos del disco, a veces hasta va más
+      rápido. Los datasets hijos heredan las propiedades del padre.
+  - consigna: >-
+      Sacá la instantánea "lunes" de tank/compartido. Después, simulá lo que pasó el martes:
+      alguien borró presupuesto-2027.ods y otra persona guardó un archivo nuevo, informe-martes.txt
+      (con cualquier contenido).
+    verificar:
+      - { dataset: tank/compartido, instantanea: lunes }
+      - { archivo: /tank/compartido/presupuesto-2027.ods, existe: false }
+      - { archivo: /tank/compartido/informe-martes.txt }
+    pistas:
+      - "zfs snapshot tank/compartido@lunes"
+      - "rm /tank/compartido/presupuesto-2027.ods y echo algo > /tank/compartido/informe-martes.txt"
+    solucion:
+      - zfs snapshot tank/compartido@lunes
+      - rm /tank/compartido/presupuesto-2027.ods
+      - echo "Informe del martes" > /tank/compartido/informe-martes.txt
+      - zfs list -t snapshot
+    explicacion: >-
+      La instantánea es instantánea de verdad: no copia nada, solo marca el momento. Al principio
+      no ocupa lugar; a medida que cambian los archivos, guarda lo viejo y empieza a ocupar.
+  - consigna: >-
+      Devolvé presupuesto-2027.ods sin perder informe-martes.txt (un rollback lo borraría) y sin
+      dejar nada extra en el pool.
+    verificar:
+      - { archivo: /tank/compartido/presupuesto-2027.ods, contenido_incluye: "aprobada por directorio" }
+      - { archivo: /tank/compartido/informe-martes.txt }
+      - { dataset: tank/recupero, existe: false }
+    pistas:
+      - "Un clon es un dataset nuevo que arranca igual que la instantánea."
+      - "zfs clone tank/compartido@lunes tank/recupero"
+      - "Copiá el archivo desde /tank/recupero y después zfs destroy tank/recupero."
+    solucion:
+      - zfs clone tank/compartido@lunes tank/recupero
+      - cp /tank/recupero/presupuesto-2027.ods /tank/compartido/
+      - zfs destroy tank/recupero
+      - ls /tank/compartido
+    explicacion: >-
+      zfs rollback vuelve todo el dataset al lunes: es lo que querés después de un desastre
+      grande (un virus que cifró todo), no para un archivo. Para un archivo, el clon (o la carpeta
+      oculta .zfs/snapshot/lunes/, que en un servidor real se puede leer directo) te deja elegir
+      qué traer. El clon depende de la instantánea, por eso se borra al terminar.
+  - consigna: >-
+      Revisá todos los datos del pool con un scrub, esperá a que termine (sleep) y comprobá que no
+      encontró errores.
+    verificar:
+      - { zpool: tank, scrub_hecho: true }
+    pistas:
+      - "zpool scrub tank"
+      - "sleep 10m y después zpool status tank."
+    solucion:
+      - zpool scrub tank
+      - sleep 10m
+      - zpool status tank
+    explicacion: >-
+      ZFS guarda una suma de verificación de cada bloque: al leer, sabe si el dato se dañó y, si
+      hay otra copia (el espejo), lo arregla solo. El scrub lee todo a propósito para encontrar
+      lo que nadie lee seguido. En Ubuntu y Debian ya viene programado el segundo domingo de cada
+      mes; el resultado hay que mirarlo (o mejor, que llegue por correo con zed).
