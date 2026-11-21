@@ -1,0 +1,97 @@
+tipo: terminal
+shell: bash
+titulo: Dos VM que llegan de otros hipervisores
+descripcion: >-
+  La empresa deja VMware y Hyper-V. En pve01 ya están, en /mnt/migracion, los discos exportados
+  de dos VM apagadas: web02.vmdk, un Ubuntu que venía de VMware, y erp01.vhdx, un Windows Server
+  2022 de generación 2 que venía de Hyper-V y al que nadie le instaló los drivers VirtIO. La ISO
+  virtio-win ya está subida a local. Las dos van a vmbr0.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox: { repos: no-subscription, isos: [virtio-win-0.1.285.iso] }
+  imagenes_disco:
+    - { ruta: /mnt/migracion/web02.vmdk, formato: vmdk, virtual_gb: 40, disco_gb: 9.2, sistema: { so: linux, uefi: false } }
+    - { ruta: /mnt/migracion/erp01.vhdx, formato: vhdx, virtual_gb: 80, disco_gb: 34.5, sistema: { so: windows, uefi: true } }
+pasos:
+  - consigna: Mirá los dos discos con qemu-img (formato, tamaño virtual y lo que ocupan).
+    verificar:
+      - { comando_usado: "qemu-img info" }
+      - { salida_contiene: "vhdx" }
+    pistas:
+      - "qemu-img info /mnt/migracion/web02.vmdk"
+    solucion:
+      - qemu-img info /mnt/migracion/web02.vmdk
+      - qemu-img info /mnt/migracion/erp01.vhdx
+    explicacion: >-
+      Los dos son dinámicos: ocupan bastante menos que su tamaño virtual. Al importarlos a
+      local-lvm (un LVM-thin) siguen ocupando solo lo escrito. Lo que qemu-img no te dice es cómo
+      arrancaba cada VM: eso sale del inventario que se hace antes (web02 usaba BIOS; erp01, como
+      toda VM de generación 2, UEFI).
+  - consigna: >-
+      Creá la VM 121, web02, con 2 vCPU, 2048 MB, la placa virtio en vmbr0, virtio-scsi-single, el
+      agente activado y el disco de VMware importado directamente como scsi0 en local-lvm, como
+      disco de arranque. Encendela.
+    verificar:
+      - { pve_vm: 121, nombre: web02, estado: running, arranca: true, con_red: true, config: { scsi0: 'local-lvm:vm-121-disk-0' } }
+    pistas:
+      - "qm create acepta --scsi0 local-lvm:0,import-from=/ruta/al/disco: lee vmdk, vhdx y qcow2 sin convertir antes."
+      - "No te olvides de --boot order=scsi0."
+    solucion:
+      - qm create 121 --name web02 --cores 2 --memory 2048 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --agent 1 --ostype l26 --scsi0 local-lvm:0,import-from=/mnt/migracion/web02.vmdk,discard=on --boot order=scsi0
+      - qm start 121
+    explicacion: >-
+      Linux ya trae los drivers VirtIO, así que arranca sin más. Lo que suele fallar en la vida
+      real es la red: la placa se llamaba ens192 en VMware y en Proxmox aparece como ens18, así
+      que hay que corregir el Netplan (lección 2.3.4) desde la consola. Y conviene cambiar
+      open-vm-tools por qemu-guest-agent.
+  - consigna: >-
+      Ahora erp01, VM 120: 4 vCPU, 8192 MB, tipo de sistema win11, firmware UEFI (OVMF) con su disco
+      EFI en local-lvm, máquina q35, la placa virtio en vmbr0, virtio-scsi-single y el agente
+      activado. Importá el disco de Hyper-V a local-lvm y conectalo de forma que Windows arranque
+      aunque todavía no tenga los drivers VirtIO; agregale la ISO virtio-win como lectora y encendela.
+    verificar:
+      - { pve_vm: 120, nombre: erp01, estado: running, arranca: true, config: { bios: ovmf, sata0: 'local-lvm:vm-120-disk-1' } }
+    pistas:
+      - "qm create 120 --name erp01 --cores 4 --memory 8192 --ostype win11 --bios ovmf --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1 --machine q35 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --agent 1"
+      - "qm disk import 120 /mnt/migracion/erp01.vhdx local-lvm (queda como unused0: el disk-0 es el disco EFI)."
+      - "Sin drivers VirtIO, Windows solo ve discos SATA o IDE: qm set 120 --sata0 local-lvm:vm-120-disk-1 --boot order=sata0"
+      - "qm set 120 --ide2 local:iso/virtio-win-0.1.285.iso,media=cdrom"
+    solucion:
+      - qm create 120 --name erp01 --cores 4 --memory 8192 --ostype win11 --bios ovmf --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1 --machine q35 --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --agent 1
+      - qm disk import 120 /mnt/migracion/erp01.vhdx local-lvm
+      - qm set 120 --sata0 local-lvm:vm-120-disk-1 --boot order=sata0 --ide2 local:iso/virtio-win-0.1.285.iso,media=cdrom
+      - qm start 120
+    explicacion: >-
+      Con el disco en scsi0, Windows se cae al arrancar con INACCESSIBLE_BOOT_DEVICE: no tiene el
+      driver para verlo. Con BIOS en vez de OVMF, ni siquiera encuentra de dónde arrancar, porque
+      se instaló en modo UEFI. SATA es más lento, pero sirve para entrar e instalar los drivers
+      con virtio-win-guest-tools.exe, que trae también el agente de QEMU.
+  - consigna: >-
+      Con los drivers ya instalados, apagá erp01 ordenadamente, pasá el disco de SATA a scsi0 (como
+      disco de arranque), sacá la lectora y volvé a encenderla. Comprobá con el agente que tiene
+      dirección IP.
+    verificar:
+      - { pve_vm: 120, estado: running, arranca: true, con_red: true, config: { scsi0: 'local-lvm:vm-120-disk-1', boot: 'order=scsi0' } }
+      - { salida_contiene: "ip-address" }
+    pistas:
+      - "qm shutdown 120 (ya hay agente, así que el apagado ordenado funciona)."
+      - "qm set 120 --delete sata0 deja el disco como unused0; qm set 120 --scsi0 local-lvm:vm-120-disk-1 lo vuelve a conectar."
+      - "qm agent 120 network-get-interfaces"
+    solucion:
+      - qm shutdown 120
+      - qm set 120 --delete sata0,ide2
+      - qm set 120 --scsi0 local-lvm:vm-120-disk-1,discard=on --boot order=scsi0
+      - qm start 120
+      - qm agent 120 network-get-interfaces
+    explicacion: >-
+      Quitar un disco en Proxmox no lo borra: queda como unused hasta que lo conectes de nuevo o lo
+      borres a propósito. Ahora erp01 usa VirtIO SCSI y la placa virtio, que andan mucho más
+      rápido. Falta lo que no se ve desde acá: activar Windows de nuevo si hace falta (cambió el
+      hardware), revisar la IP fija y probar la aplicación.

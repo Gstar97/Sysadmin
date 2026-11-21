@@ -1,0 +1,91 @@
+---
+id: n5-m3-l3
+titulo: Elegir una plataforma
+minutos: 90
+objetivos:
+  - Comparar Proxmox VE, vSphere e Hyper-V con criterios que importan a la empresa, no solo con el precio.
+  - Calcular el costo de licencias de cada opción con los números de una infraestructura real.
+  - Planificar y hacer la migración de una VM de VMware o Hyper-V a Proxmox, con los tropiezos típicos de firmware, drivers y red.
+glosario: [virtio-win]
+verificado: 2026-11
+---
+
+import migracion from './migracion.svg?raw'
+import ej from './ej-migrar.yaml'
+
+Ya conocés las tres plataformas. La pregunta que te van a hacer es "¿cuál usamos?", y la respuesta honesta casi siempre es "depende": de qué hay hoy, de cuánta plata hay, de qué sabe el equipo y de qué tan grande es la empresa. Lo que sí podés hacer es ordenar esa decisión para que no dependa de quién grita más fuerte en la reunión.
+
+<AntesDeEmpezar>
+- Proxmox VE (módulo 5.2), vSphere e Hyper-V (lecciones 5.3.1 y 5.3.2).
+- Las licencias de Windows Server (lección 3.1.1).
+</AntesDeEmpezar>
+
+## Comparar con criterios
+
+El precio importa, pero no es lo único. Lo que suele pesar en una empresa:
+
+- **Costo**: el hipervisor y, aparte, las licencias de Windows Server de las VM, que se pagan igual con cualquier hipervisor (se licencian los núcleos físicos del host).
+- **Lo que ya sabe el equipo**: una plataforma que nadie domina sale cara aunque sea gratis. Es el criterio que más se subestima.
+- **Respaldos**: si la herramienta de respaldo que ya usan (Veeam, por ejemplo) soporta la plataforma nueva.
+- **Soporte**: del fabricante y de empresas de tu zona que lo conozcan.
+- **Integración**: con Active Directory y las herramientas de Microsoft (gana Hyper-V); con Linux y contenedores (gana Proxmox).
+- **Escala**: para cientos de servidores con redes y almacenamiento definidos por software, vSphere sigue siendo el más completo.
+
+Probalo con tus números. Mové los pesos según lo que le importa a tu empresa, cambiá los puntajes si no estás de acuerdo con los de fábrica y cargá la infraestructura y los precios que te pasen los proveedores:
+
+<ComparadorPlataformas />
+
+Hay más opciones que estas tres: **XCP-ng** (libre, heredero de Citrix XenServer), **Nutanix AHV** (con su propio almacenamiento distribuido) o directamente llevar parte de los servidores a la nube. *Para más adelante*: cuándo conviene la nube y cuándo los servidores propios.
+
+## Cómo se migra una VM
+
+<Diagrama svg={migracion} alt="Los cinco pasos para migrar una VM a Proxmox. Uno, preparar en el hipervisor viejo: inventario de CPU, memoria, discos, red e IP y firmware; en Windows, instalar los drivers virtio-win; sin instantáneas. Dos, copiar con la VM apagada: exportar el disco vmdk de VMware o vhdx de Hyper-V, o usar el asistente de importación de ESXi. Tres, importar en Proxmox con qm disk import o qm create con import-from, que leen vmdk y vhdx (si no, qemu-img). Cuatro, ajustar antes de encender: firmware SeaBIOS u OVMF, disco en SATA primero y en SCSI con drivers, red virtio y agente. Cinco, probar: arranca y tiene red, la aplicación anda, el respaldo funciona; la VM vieja queda apagada un tiempo. Si algo falla en el paso cinco, la VM vieja sigue ahí." pie="La regla de oro: la VM original no se borra hasta que la nueva anduvo bien un tiempo." />
+
+Las tres formas más comunes de llevar una VM a Proxmox:
+
+- **El asistente de importación de ESXi** (desde Proxmox VE 8.2): se agrega el host ESXi como un almacenamiento de tipo ESXi, se elige la VM y Proxmox copia los discos y arma la configuración solo. Es lo más cómodo para muchas VM de VMware.
+- **Copiar el disco e importarlo**: se exporta el .vmdk o el .vhdx, se copia al nodo y se importa con `qm disk import` o con `import-from` al crear la VM. Sirve para cualquier origen, incluido Hyper-V. Si el formato no se lee directo, `qemu-img convert` lo pasa a qcow2 o raw.
+- **Restaurar desde el respaldo**: algunas herramientas de respaldo (Veeam, entre otras) restauran una VM de VMware o Hyper-V directamente en Proxmox. *Para más adelante*.
+
+Lo que se rompe, y conviene saber de antemano:
+
+- **El firmware**: si la VM vieja arrancaba con UEFI (toda VM de generación 2 de Hyper-V, y muchas de VMware), en Proxmox va con OVMF y un disco EFI; si arrancaba con BIOS, con SeaBIOS. Con el equivocado, no encuentra de dónde arrancar.
+- **Los drivers en Windows**: Windows no trae los drivers VirtIO. Si el disco se conecta como SCSI o VirtIO, se cae al arrancar con **INACCESSIBLE_BOOT_DEVICE**. Lo ideal es instalar virtio-win antes de migrar; si no se hizo, se arranca con el disco en SATA, se instalan y recién ahí se pasa a SCSI.
+- **El nombre de la placa en Linux**: cambia (de ens192 a ens18, por ejemplo) y la configuración de red queda apuntando a una placa que no existe.
+- **La MAC y la IP**: la placa nueva tiene otra MAC. Si el DHCP reserva direcciones por MAC, o si Windows tenía una IP fija en la placa vieja, hay que rehacerlo.
+- **Las herramientas del hipervisor viejo**: se desinstalan las VMware Tools o los servicios de integración que ya no sirven y se instala el agente de QEMU.
+- **Las licencias atadas al hardware**: Windows puede pedir activarse de nuevo, y algunos programas viejos se licencian por la MAC.
+
+## Hacelo vos
+
+<Terminal ejercicio={ej} />
+
+<EnSimple>
+Para elegir plataforma se comparan costos (el hipervisor y, aparte, los Windows de las VM), lo que sabe el equipo, el respaldo, el soporte, la integración y la escala. Para migrar una VM a Proxmox se usa el asistente de ESXi o se copia el disco y se importa con qm. Lo que hay que ajustar: el firmware (BIOS o UEFI, igual que antes), el disco en SATA hasta que Windows tenga los drivers VirtIO, la red y el agente. Y la VM vieja no se borra hasta que la nueva anduvo bien.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Elegir solo por el precio de la licencia">
+    Una plataforma que el equipo no conoce cuesta en horas, errores y caídas. Se cuenta todo: capacitación, soporte, respaldos y el tiempo de migrar.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de las licencias de Windows">
+    Pasarse a Proxmox no hace gratis a las VM con Windows Server: se siguen licenciando por los núcleos físicos del host.
+  </ErrorComun>
+  <ErrorComun titulo="Copiar el disco con la VM encendida">
+    La copia queda a medio escribir y puede no arrancar o perder datos. Se apaga la VM (o se usa una herramienta que haga una copia consistente).
+  </ErrorComun>
+  <ErrorComun titulo="Conectar el disco de Windows como SCSI de entrada">
+    INACCESSIBLE_BOOT_DEVICE. Primero SATA y los drivers de virtio-win; después SCSI.
+  </ErrorComun>
+  <ErrorComun titulo="Borrar la VM original al terminar la copia">
+    Si algo falla en las pruebas, no hay vuelta atrás. Queda apagada (y respaldada) hasta que la nueva anduvo bien un tiempo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Criterios: costo (hipervisor + Windows de las VM), lo que sabe el equipo, respaldos, soporte, integración, escala.
+- Migrar a Proxmox: asistente de ESXi (desde 8.2), copiar el .vmdk o .vhdx e importarlo (qm disk import, import-from), o restaurar desde el respaldo.
+- Ajustes: firmware igual que antes (SeaBIOS u OVMF con disco EFI), Windows en SATA hasta instalar virtio-win, red (nombre de placa, MAC, IP), agente de QEMU.
+- Quitar un disco en Proxmox lo deja como unused: no se pierde.
+- La VM original queda apagada hasta que la nueva se probó.
+</Resumen>

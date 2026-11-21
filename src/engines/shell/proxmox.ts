@@ -855,7 +855,8 @@ function applyQmOpts(sys: System, pve: Pve, g: PveGuest, opts: Map<string, strin
       if (d.newSize !== undefined) {
         const se = storageCheck(pve, d.storage, 'images')
         if (se) return { error: `400 Parameter verification failed.\n${k}: ${se}` }
-        let size = d.newSize
+        // El disco EFI y el estado del TPM son chicos, sin importar el número que se ponga.
+        let size = k === 'efidisk0' || k === 'tpmstate0' ? 4 * 1024 * 1024 : d.newSize
         let sistema: GuestSystem | undefined
         if (d.importFrom) {
           const img = readImage(sys, d.importFrom)
@@ -1378,7 +1379,7 @@ register('qm', {
         }
         if (cmd === 'ping') return 0
         if (cmd === 'network-get-interfaces') {
-          ctx.out(JSON.stringify([{ name: 'lo', 'ip-addresses': [{ 'ip-address': '127.0.0.1', 'ip-address-type': 'ipv4', prefix: 8 }], 'hardware-address': '00:00:00:00:00:00' }, { name: 'eth0', 'ip-addresses': g.ip ? [{ 'ip-address': g.ip, 'ip-address-type': 'ipv4', prefix: 24 }] : [], 'hardware-address': (/=([0-9A-F:]{17})/i.exec(g.conf.get('net0') ?? '')?.[1] ?? '').toLowerCase() }], null, 3) + '\n')
+          ctx.out(JSON.stringify([{ name: 'lo', 'ip-addresses': [{ 'ip-address': '127.0.0.1', 'ip-address-type': 'ipv4', prefix: 8 }], 'hardware-address': '00:00:00:00:00:00' }, { name: /^win/.test(g.conf.get('ostype') ?? '') ? 'Ethernet' : 'eth0', 'ip-addresses': g.ip ? [{ 'ip-address': g.ip, 'ip-address-type': 'ipv4', prefix: 24 }] : [], 'hardware-address': (/=([0-9A-F:]{17})/i.exec(g.conf.get('net0') ?? '')?.[1] ?? '').toLowerCase() }], null, 3) + '\n')
           return 0
         }
         if (cmd === 'get-osinfo') {

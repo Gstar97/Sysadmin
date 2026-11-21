@@ -1,0 +1,95 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Una empresa pasa de vSphere a Proxmox. ¿Qué pasa con las licencias de las VM con Windows Server?
+  opciones:
+    - { texto: "Se siguen pagando: se licencian los núcleos físicos del host, con cualquier hipervisor", correcta: true, explicacion: "Lo que se ahorra es el hipervisor." }
+    - { texto: "Dejan de hacer falta, porque Proxmox es libre", explicacion: "Proxmox es libre; Windows no." }
+    - { texto: "Se pagan por cada VM, no por núcleos", explicacion: "Se licencian los núcleos del host." }
+    - { texto: "Solo hacen falta si se contrata la suscripción de Proxmox", explicacion: "No tienen relación." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Importaste a Proxmox el disco de un Windows Server que venía de Hyper-V, lo conectaste como scsi0 y al arrancar aparece INACCESSIBLE_BOOT_DEVICE. ¿Qué hacés?
+  opciones:
+    - { texto: "Conectás el disco como sata0, arrancás, instalás los drivers de virtio-win y después lo pasás a scsi0", correcta: true, explicacion: "Windows no trae los drivers VirtIO." }
+    - { texto: "Reinstalás Windows", explicacion: "No hace falta." }
+    - { texto: "Cambiás el firmware a SeaBIOS", explicacion: "Si venía de generación 2, necesita OVMF; el problema es el driver del disco." }
+    - { texto: "Convertís el disco a qcow2", explicacion: "El formato no es el problema." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Migraste una VM de generación 2 de Hyper-V y al encenderla, en la consola, ves esto. ¿Qué falta?
+  salida: |
+    Booting from Hard Disk...
+    Boot failed: not a bootable disk
+    No bootable device.
+  opciones:
+    - { texto: "La VM arranca con BIOS (SeaBIOS) y el sistema se instaló en UEFI: hace falta --bios ovmf y un disco EFI", correcta: true, explicacion: "Generación 2 es UEFI." }
+    - { texto: "Los drivers VirtIO", explicacion: "Ese error sería una pantalla azul, ya con Windows arrancando." }
+    - { texto: "Más memoria", explicacion: "No." }
+    - { texto: "El disco está vacío", explicacion: "Es el firmware." }
+- id: p04
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene hacer antes de copiar el disco de una VM Windows desde VMware? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Anotar CPU, memoria, discos, IP y si arranca con BIOS o UEFI", correcta: true, explicacion: "El inventario." }
+    - { texto: "Instalar los drivers de virtio-win", correcta: true, explicacion: "Así arranca directo con SCSI." }
+    - { texto: "Consolidar o borrar las instantáneas", correcta: true, explicacion: "Si no, se copia un disco a medias." }
+    - { texto: "Borrar la VM original para liberar espacio", explicacion: "Queda apagada hasta que la nueva se probó." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Migraste un Ubuntu de VMware a Proxmox. Arranca, pero no tiene red. ¿Qué es lo más probable?
+  opciones:
+    - { texto: "La placa cambió de nombre (de ens192 a ens18) y el Netplan apunta a la vieja", correcta: true, explicacion: "Se corrige desde la consola de la VM." }
+    - { texto: "Linux no tiene drivers VirtIO", explicacion: "Los trae en el kernel." }
+    - { texto: "Falta el firmware UEFI", explicacion: "Si arranca, el firmware está bien." }
+    - { texto: "Hay que reinstalar open-vm-tools", explicacion: "En Proxmox se usa el agente de QEMU." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando para importar el disco /mnt/migracion/app.vmdk a la VM 130, en el almacenamiento local-lvm.
+  aceptadas: ["qm disk import 130 /mnt/migracion/app.vmdk local-lvm", "qm importdisk 130 /mnt/migracion/app.vmdk local-lvm"]
+  explicacion: "Queda como unused0; después se conecta con qm set 130 --scsi0 (o --sata0) y se agrega al orden de arranque."
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En Proxmox hacés qm set 120 --delete sata0. ¿Qué pasa con el disco?
+  opciones:
+    - { texto: "Queda desconectado como unused0: no se borra", correcta: true, explicacion: "Se vuelve a conectar con qm set 120 --scsi0 ..." }
+    - { texto: "Se borra para siempre", explicacion: "Eso pasa al borrar el unused." }
+    - { texto: "Se pasa a SCSI solo", explicacion: "No." }
+    - { texto: "Da error si la VM está apagada", explicacion: "No." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para migrar una VM a Proxmox.
+  pasos:
+    - "Hacer el inventario e instalar los drivers que hagan falta en el hipervisor viejo"
+    - "Apagar la VM y exportar su disco"
+    - "Importar el disco en Proxmox"
+    - "Ajustar firmware, bus del disco, red y agente"
+    - "Probar que arranca, tiene red y la aplicación anda"
+    - "Después de un tiempo sin problemas, borrar la VM vieja"
+  explicacion: "La VM vieja es tu plan B hasta el final."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una empresa de 3 hosts tiene todo en Windows, licencias Datacenter compradas y un equipo que sabe PowerShell y nada de Linux. Su renovación de VMware se triplicó. ¿Qué es lo más razonable evaluar primero?
+  opciones:
+    - { texto: "Hyper-V: ya pagan Datacenter (que lo incluye) y el equipo conoce las herramientas", correcta: true, explicacion: "Proxmox también sería posible, pero con más aprendizaje." }
+    - { texto: "Quedarse en VMware sin pensar", explicacion: "Puede ser, pero hay que hacer las cuentas." }
+    - { texto: "Proxmox, porque es gratis", explicacion: "Gratis no es lo único: el equipo no sabe Linux." }
+    - { texto: "Pasar todo a contenedores", explicacion: "No es una migración de hipervisor." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué hace el asistente de importación de ESXi de Proxmox?
+  opciones:
+    - { texto: "Se conecta a un host ESXi, copia los discos de la VM elegida y arma su configuración en Proxmox", correcta: true, explicacion: "Está desde Proxmox VE 8.2." }
+    - { texto: "Convierte Proxmox en ESXi", explicacion: "No." }
+    - { texto: "Instala VMware Tools", explicacion: "No." }
+    - { texto: "Respalda vCenter", explicacion: "No." }
