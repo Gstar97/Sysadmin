@@ -1,0 +1,165 @@
+---
+titulo: Cluster de virtualización con recuperación ante desastres
+horas: 24
+entregables:
+  - Tres nodos Proxmox (pueden ser anidados) con almacenamiento compartido (Ceph, o ZFS con replicación).
+  - Alta disponibilidad probada con migración en vivo y caída de nodo.
+  - Proxmox Backup Server con copia inmutable y copia fuera del sitio.
+  - Plan de recuperación ante desastres escrito y simulacro de restauración medido contra RPO y RTO.
+---
+
+import maqueta from './proyecto-maqueta.yaml'
+import verificacion from './proyecto-verificacion.yaml'
+
+## El pedido
+
+Este proyecto cierra el Nivel 5. Ejemplo S.A. creció: los servidores del Nivel 3 y del Nivel 4 ya no entran en dos equipos, y un susto reciente puso la recuperación en la agenda de la gerencia.
+
+```text
+De: Martín Sosa <martin.sosa@ejemplo.test>
+Asunto: Los servidores, de una vez
+
+Hola. Te resumo lo que hablamos con la gerencia:
+
+- Compramos tres servidores iguales. La idea es que todo (el dominio, el ERP, la tienda,
+  los archivos) corra en ellos y que si se rompe uno, sigamos trabajando.
+- A una empresa amiga le cifraron todo, respaldos incluidos, y estuvo dos semanas parada.
+  Queremos saber qué nos pasaría a nosotros y que no nos pase.
+- Necesitamos saber cuánto podemos perder y cuánto tardamos en volver si pasa algo, con
+  números, no con "debería andar".
+- Hay presupuesto para un almacenamiento de objetos afuera. Nada de licencias caras.
+- Queremos un documento que diga qué hacer si pasa lo peor, que lo pueda seguir otro.
+
+Gracias,
+Martín
+```
+
+Vas a trabajar en tres lugares: el **papel** (el diseño y el plan), la **plataforma** (la maqueta) y tus **máquinas virtuales**: el clúster de tres nodos de los laboratorios del nivel, nfs01, el PBS y offsite01, más las VM de los niveles anteriores que puedas mover adentro.
+
+| Fase | Se apoya en | Tiempo estimado |
+| --- | --- | --- |
+| 1. Relevamiento, análisis de impacto y diseño | Módulos 5.1 y 5.6 | 3 h |
+| 2. Maqueta en la plataforma | Módulos 5.4 a 5.6 | 2 h |
+| 3. El clúster y la red | Módulos 5.2 y 5.4 | 3 h |
+| 4. Almacenamiento compartido | Módulo 5.5 | 3 h |
+| 5. Las VM y la alta disponibilidad | Módulos 5.2 y 5.4 | 3 h |
+| 6. Respaldos 3-2-1-1-0 | Módulo 5.6 | 3 h |
+| 7. Plan de recuperación | Lección 5.6.5 | 3 h |
+| 8. Pruebas de falla y simulacro | Todo el nivel | 4 h |
+
+## 1. Relevamiento, análisis de impacto y diseño
+
+En tu cuaderno, antes de tocar nada:
+
+- **Inventario**: cada servicio de Ejemplo S.A. (los del Nivel 3 y del Nivel 4), qué VM lo corre, cuánta CPU, memoria y disco necesita, y de qué depende.
+- **Análisis de impacto**: con Martín, cuánto cuesta cada hora sin cada servicio y cuántos datos se pueden perder. De ahí salen el RPO y el RTO de cada uno. Tabla con: servicio, RPO, RTO, prioridad de recuperación.
+- **Capacidad**: la suma de lo que piden las VM contra lo que dan tres nodos, dejando lugar para que entre todo en dos (si se cae uno, los otros dos tienen que poder con la carga). Usá el simulador de recursos del módulo 5.1 y la calculadora de capacidad del 5.5.
+- **Almacenamiento**: Ceph o ZFS con réplica, con el porqué (lección 5.5.4 y laboratorio del 5.5). Si es ZFS con réplica, qué RPO tiene cada VM.
+- **Redes**: la de gestión, la de corosync (dos enlaces), la de almacenamiento y la de las VM, con sus VLAN.
+- **Respaldos**: el esquema 3-2-1-1-0 concreto (qué copia, dónde, con qué retención), con la cuenta del espacio (planificador de retención de la lección 5.6.1).
+
+**Criterio de calidad:** el diseño dice qué pasa si se cae cualquier pieza (un disco, un nodo, un switch, el PBS, la sala) y cuánto se tarda en volver.
+
+## 2. Maqueta en la plataforma
+
+El clúster entero en el simulador, de cero a un simulacro: clúster, Ceph, discos movidos, alta disponibilidad, caída de nodo medida, respaldos con copia inmutable y restauración cronometrada.
+
+<Terminal ejercicio={maqueta} />
+
+## 3. El clúster y la red
+
+En tus máquinas virtuales, como en el laboratorio del módulo 5.4:
+
+- Tres nodos actualizados, con el mismo repositorio, hora sincronizada y nombres que se resuelven.
+- El clúster con **dos enlaces de corosync**, uno en su propia red.
+- Usuarios con permisos por rol (nadie usa root@pam para el día a día) y segundo factor para los administradores (lección 5.2.1).
+
+**Criterio de calidad:** `pvecm status` muestra los tres nodos y los dos enlaces, y cortar la red de corosync de un nodo no le hace perder el quórum.
+
+## 4. Almacenamiento compartido
+
+- **Ceph** con un OSD por nodo (o dos), el pool `vms` con 3 copias y min_size 2, la red de Ceph separada; o **ZFS** en espejo en cada nodo con réplica cada 15 minutos para cada VM.
+- Un almacenamiento NFS o iSCSI para las ISO y plantillas, si te sirve.
+
+**Criterio de calidad:** `ceph -s` en HEALTH_OK (o `pvesr status` sin errores), y el espacio libre alcanza para perder un nodo.
+
+## 5. Las VM y la alta disponibilidad
+
+- Las VM de los niveles anteriores (o equivalentes de prueba): el controlador de dominio, el servidor de archivos, la base de datos y la tienda, movidas al almacenamiento compartido.
+- Alta disponibilidad para las críticas, con reglas: los dos controladores de dominio (si tenés dos) en nodos distintos, la base y la tienda donde convenga.
+- El agente de invitado instalado en todas, para respaldos consistentes.
+
+**Criterio de calidad:** podés vaciar un nodo con el modo mantenimiento sin que nadie lo note y volver a llenarlo.
+
+## 6. Respaldos 3-2-1-1-0
+
+Como en el laboratorio del módulo 5.6:
+
+- **Copia 2**: todas las VM al PBS cada noche, con retención, verify semanal y garbage collection. El PBS con su propio usuario de Proxmox, con permiso de respaldar pero no de borrar (rol DatastoreBackup), no con root@pam.
+- **Copia 3, afuera**: offsite01 con rest-server solo agregar (o un PBS remoto que trae las copias con sync), para los datos y la configuración (`/etc/pve`, la configuración de red y del firewall).
+- **El 1 inmutable**: el bucket con bloqueo de objetos, si tenés cuenta, o offsite01 en modo solo agregar con la retención aplicada desde offsite01.
+- **Las claves**: la de cifrado del PBS y la de restic, impresas y en el gestor de contraseñas, fuera del clúster.
+- **Avisos**: correo si una tarea falla y si un día no llega la confirmación de que anduvo.
+
+**Criterio de calidad:** con las claves de root de los tres nodos y de nfs01, un "atacante" no puede borrar al menos una copia completa.
+
+## 7. Plan de recuperación
+
+El documento, en texto plano, siguiendo la lección 5.6.5:
+
+```text
+EJEMPLO S.A. — PLAN DE RECUPERACIÓN ANTE DESASTRES
+Versión: ...   Fecha: ...   Responsable: ...   Próxima revisión: ...
+
+1. ALCANCE Y OBJETIVOS: servicios cubiertos; tabla de RPO, RTO y prioridad (del análisis
+   de impacto).
+2. QUIÉN DECLARA EL DESASTRE y con qué criterio.
+3. ROLES Y CONTACTOS: coordinador, técnicos, comunicación; reemplazos; teléfonos fuera de
+   los sistemas de la empresa; proveedores (internet, hardware, almacenamiento de objetos).
+4. INVENTARIO Y DEPENDENCIAS: servidores, VM, redes, qué depende de qué.
+5. ORDEN DE RECUPERACIÓN: red, plataforma, identidad, datos, aplicaciones, personas.
+6. DÓNDE ESTÁN LAS COPIAS Y LAS CLAVES: cada copia, su retención, cómo acceder; dónde está
+   el sobre con las claves.
+7. PROCEDIMIENTOS: reinstalar un nodo y volver a sumarlo; restaurar una VM desde el PBS;
+   levantar un PBS nuevo y traer las copias desde afuera; restaurar desde el bucket;
+   recuperar el dominio; volver a la normalidad.
+8. ESCENARIOS: un disco, un nodo, el almacenamiento, el PBS, la sala completa, ransomware
+   (con contención, elección de la copia y cambio de credenciales).
+9. COMUNICACIÓN: a quién se avisa, cuándo y con qué mensaje; obligaciones legales.
+10. PRUEBAS: calendario de verificaciones y simulacros; registro de simulacros.
+11. HISTORIAL DE CAMBIOS.
+```
+
+**Criterio de calidad:** otra persona puede seguir el procedimiento "la sala se incendió" con el plan impreso y las claves del sobre, sin preguntarte nada.
+
+## 8. Pruebas de falla y simulacro
+
+Con el plan en la mano, rompé cosas a propósito y anotá qué pasó, cuánto tardó y qué cambiaste:
+
+1. **Migración en vivo** de la VM más pesada con un ping corriendo: cuántos paquetes se perdieron.
+2. **Caída de un nodo** (apagado de golpe): cuánto tardan en volver las VM con alta disponibilidad, y qué hace el almacenamiento.
+3. **Un disco que se rompe** (sacá un disco virtual de un nodo): Ceph o ZFS, cómo se ve y cómo se reemplaza.
+4. **Una VM borrada "por error"**: restauración desde el PBS, cronometrada.
+5. **El simulacro grande**: suponé que se perdió la sala. En un Proxmox aparte (o un nodo reinstalado), levantá lo crítico solo desde la copia de afuera, siguiendo el plan, con el reloj corriendo. Compará cada tiempo con el RTO del análisis de impacto.
+
+**Criterio de calidad:** cada RTO y RPO de la tabla tiene al lado un número medido, y el plan tiene al menos una corrección que salió del simulacro.
+
+## Verificación final
+
+<PasosGuiados ejercicio={verificacion} />
+
+## Revisión antes de entregar
+
+| Criterio | Falta | Bien | Muy bien |
+| --- | --- | --- | --- |
+| Clúster | Nodos sueltos | Clúster de tres nodos con quórum | Dos enlaces de corosync, permisos por rol y segundo factor |
+| Almacenamiento | Discos locales sin réplica | Ceph sano, o ZFS con réplica para cada VM | Red propia, espacio calculado para perder un nodo y reemplazo de disco probado |
+| Alta disponibilidad | Sin HA | HA para las VM críticas | Reglas de afinidad, modo mantenimiento usado y caída de nodo medida |
+| Respaldos | Una copia en la misma sala | PBS con retención y copia afuera | 3-2-1-1-0 completo, verify, avisos y prueba del "atacante" documentada |
+| Plan | Sin documento | Plan con orden, roles y procedimientos | Escenarios completos, impreso, y corregido después del simulacro |
+| Simulacro | Sin pruebas | Restauración de una VM cronometrada | Simulacro de pérdida de la sala con tiempos comparados contra el RTO |
+| Operación | Sin registro | Registro de simulacros | Calendario de verificaciones y simulacros en marcha |
+
+<Consejo>
+Guardá el plan impreso donde lo vayas a encontrar, junto con el sobre de las claves, y tomá instantáneas de todo con el nombre `entrega-nivel-5`. En el Nivel 6 este clúster pasa a administrarse como código (Ansible) y con un sistema de monitoreo que avisa de cada falla que hoy probaste a mano.
+</Consejo>

@@ -1,0 +1,215 @@
+tipo: terminal
+shell: bash
+titulo: "Maqueta: el clúster de Ejemplo S.A., de cero a un simulacro de desastre"
+descripcion: >-
+  pve01, pve02 y pve03 (192.168.10.21 a .23) son tres Proxmox VE 9 recién instalados, sin
+  clúster, con una segunda placa en la red 10.10.20.0/24 para el almacenamiento y dos discos de
+  2 TB vacíos (sdb y sdc) cada uno. En pve01 ya corren dc01 (VM 100, controlador de dominio) y
+  erp01 (VM 101), con los discos en su local-lvm, y está agregado pbs01, el Proxmox Backup Server
+  de la sala. Afuera, la empresa contrató almacenamiento de objetos (s3, puerto 9000) con el
+  bucket "respaldos-vm" con bloqueo de objetos de 30 días; las variables de acceso están en
+  /root/.restic-env de pve01. Las placas de gestión responden en .121 a .123 (admin, Bmc-2026).
+  Estás en pve01 y entrás por ssh como root a los otros dos.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [ipmitool, restic] }
+  equipo: { cpus: 32, memoria_gb: 128, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+      - { nombre: ens2f0, ip: 10.10.20.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }]
+  bmc: { ip: 192.168.10.121, clave: Bmc-2026 }
+  archivos:
+    /root/.restic-clave: { contenido: "Clave-respaldos-vm-2026-larga\n", modo: "600" }
+    /root/.restic-env:
+      modo: "600"
+      contenido: |
+        export AWS_ACCESS_KEY_ID=pve-respaldo
+        export AWS_SECRET_ACCESS_KEY=Zx8-Qm4t-Lp2w-Rk7n
+        export RESTIC_REPOSITORY=s3:http://s3:9000/respaldos-vm/pve01
+        export RESTIC_PASSWORD_FILE=/root/.restic-clave
+  proxmox:
+    repos: no-subscription
+    almacenamientos:
+      - { id: local, tipo: dir, contenido: [iso, vztmpl, backup], ruta: /var/lib/vz }
+      - { id: local-lvm, tipo: lvmthin, contenido: [images, rootdir] }
+      - { id: pbs01, tipo: pbs, contenido: [backup], servidor: 192.168.10.75, datastore: principal, usuario: "backup@pbs", huella: "a3:9f:12:7c:5e:0b:44:d1:8e:2a:6f:93:c4:17:b8:05:e6:3d:72:aa:19:5c:80:fe:4b:21:d9:6a:37:c0:8b:5f" }
+    vms:
+      - { id: 100, nombre: dc01, estado: running, memoria: 4096, agente: true, discos: { scsi0: "local-lvm:vm-100-disk-0,size=60G" }, red: { net0: "virtio,bridge=vmbr0" } }
+      - { id: 101, nombre: erp01, estado: running, memoria: 8192, agente: true, discos: { scsi0: "local-lvm:vm-101-disk-0,size=80G" }, red: { net0: "virtio,bridge=vmbr0" } }
+  servidores:
+    - hostname: pve02
+      ip: 192.168.10.22
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      equipo: { cpus: 32, memoria_gb: 128, fisico: true }
+      red:
+        interfaces:
+          - { nombre: eno1, ip: 192.168.10.22/24, estado: UP }
+          - { nombre: ens2f0, ip: 10.10.20.22/24, estado: UP }
+        puerta_enlace: 192.168.10.1
+      discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }]
+      bmc: { ip: 192.168.10.122, clave: Bmc-2026 }
+      proxmox: { repos: no-subscription }
+    - hostname: pve03
+      ip: 192.168.10.23
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      equipo: { cpus: 32, memoria_gb: 128, fisico: true }
+      red:
+        interfaces:
+          - { nombre: eno1, ip: 192.168.10.23/24, estado: UP }
+          - { nombre: ens2f0, ip: 10.10.20.23/24, estado: UP }
+        puerta_enlace: 192.168.10.1
+      discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }]
+      bmc: { ip: 192.168.10.123, clave: Bmc-2026 }
+      proxmox: { repos: no-subscription }
+    - hostname: s3
+      ip: 192.168.10.80
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: root, clave_ssh: true }]
+      objetos:
+        claves: [{ acceso: pve-respaldo, secreto: Zx8-Qm4t-Lp2w-Rk7n }]
+        buckets: [{ nombre: respaldos-vm, bloqueo_dias: 30 }]
+pasos:
+  - consigna: Armá el clúster "produccion" en pve01 y uní pve02 y pve03.
+    verificar:
+      - { pve_cluster: produccion, nodos: 3, quorum: true }
+    pistas:
+      - "pvecm create produccion, y en cada uno de los otros: ssh root@pve02 pvecm add 192.168.10.21"
+    solucion:
+      - pvecm create produccion
+      - ssh root@pve02 pvecm add 192.168.10.21
+      - ssh root@pve03 pvecm add 192.168.10.21
+      - pvecm status
+    explicacion: >-
+      Tres votos: el clúster sigue con quórum si se cae cualquiera de los tres. En producción,
+      corosync tendría su propia red (y una segunda de respaldo), como en el módulo 5.4.
+  - consigna: >-
+      Armá Ceph en los tres nodos con la red 10.10.20.0/24: un monitor por nodo, los dos discos de
+      cada uno como OSD, y el pool "vms" agregado como almacenamiento.
+    verificar:
+      - { ceph: HEALTH_OK, mons: 3, osds: 6, pool: vms, size: 3, min_size: 2 }
+      - { pve_almacenamiento: vms, tipo: rbd }
+    pistas:
+      - "pveceph install --repository no-subscription en los tres; pveceph init --network 10.10.20.0/24 en uno."
+      - "pveceph mon create y pveceph osd create /dev/sdb y /dev/sdc en cada nodo."
+      - "pveceph pool create vms --add_storages"
+    solucion:
+      - pveceph install --repository no-subscription
+      - ssh root@pve02 pveceph install --repository no-subscription
+      - ssh root@pve03 pveceph install --repository no-subscription
+      - pveceph init --network 10.10.20.0/24
+      - pveceph mon create
+      - ssh root@pve02 pveceph mon create
+      - ssh root@pve03 pveceph mon create
+      - pveceph osd create /dev/sdb
+      - pveceph osd create /dev/sdc
+      - ssh root@pve02 pveceph osd create /dev/sdb
+      - ssh root@pve02 pveceph osd create /dev/sdc
+      - ssh root@pve03 pveceph osd create /dev/sdb
+      - ssh root@pve03 pveceph osd create /dev/sdc
+      - pveceph pool create vms --add_storages
+      - ceph -s
+    explicacion: >-
+      12 TB en bruto, unos 4 TB útiles con 3 copias, y unos 3,2 TB para usar sin pasar del 80 %.
+      Con tres nodos, si se cae uno, Ceph queda degradado hasta que vuelve: anotalo en el diseño
+      como el motivo para pedir un cuarto nodo.
+  - consigna: Mové los discos de dc01 y erp01 a Ceph sin apagarlas, borrando los de local-lvm.
+    verificar:
+      - { pve_vm: 100, estado: running, config: { scsi0: "vms:" } }
+      - { pve_vm: 101, estado: running, config: { scsi0: "vms:" } }
+    pistas:
+      - "qm disk move 100 scsi0 vms --delete 1"
+    solucion:
+      - qm disk move 100 scsi0 vms --delete 1
+      - qm disk move 101 scsi0 vms --delete 1
+    explicacion: >-
+      El disco se copia con la VM andando y al final se cambia de lugar. Ahora cualquier nodo
+      puede correr las dos VM.
+  - consigna: >-
+      Poné las dos VM bajo alta disponibilidad y migrá erp01 en vivo a pve03.
+    verificar:
+      - { pve_ha: "vm:100", estado: started }
+      - { pve_ha: "vm:101", estado: started, nodo: pve03 }
+    pistas:
+      - "ha-manager add vm:100 y ha-manager add vm:101"
+      - "qm migrate 101 pve03 --online (con HA, el pedido lo hace el administrador de HA)."
+    solucion:
+      - ha-manager add vm:100
+      - ha-manager add vm:101
+      - qm migrate 101 pve03 --online
+      - ha-manager status
+    explicacion: >-
+      La migración copió solo la memoria: el disco está en Ceph, que ven los tres nodos.
+  - consigna: >-
+      Probá la caída: apagá pve03 de golpe por su placa de gestión, esperá unos minutos y comprobá
+      dónde quedó erp01 y cómo está Ceph. Después volvé a encender pve03 y dejá erp01 en pve01
+      (las copias de esta noche se hacen desde ahí).
+    verificar:
+      - { pve_encendido: pve03, encendido: true }
+      - { pve_ha: "vm:101", estado: started, nodo: pve01 }
+    pistas:
+      - "ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power off"
+      - "sleep 3m, ha-manager status y ceph -s. Después, chassis power on."
+      - "ha-manager migrate vm:101 pve01"
+    solucion:
+      - ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power off
+      - sleep 3m
+      - ha-manager status
+      - ceph -s
+      - ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power on
+      - ha-manager migrate vm:101 pve01
+    explicacion: >-
+      A los 60 segundos el clúster cercó a pve03 y a los 2 minutos erp01 volvió en otro nodo, con
+      los datos intactos (Ceph tenía otras dos copias). Ese tiempo es el RTO de una caída de nodo,
+      y es el número que va al documento. Ceph estuvo degradado mientras pve03 estuvo apagado.
+      vzdump respalda las VM del nodo donde corre: en producción, la tarea de respaldo se crea en
+      Datacenter, Backup, y corre en todos los nodos a la vez.
+  - consigna: >-
+      Las copias: respaldá las dos VM en pbs01 (la copia local) y en local (la carpeta que se manda
+      afuera), y mandá esa carpeta con restic al bucket con bloqueo, cargando /root/.restic-env.
+    verificar:
+      - { pve_respaldo: 101, almacenamiento: pbs01, cantidad: 1 }
+      - { en: s3, verificar: { restic_repo: "s3:respaldos-vm/pve01", instantaneas_min: 1 } }
+    pistas:
+      - "vzdump 100 101 --storage pbs01 --mode snapshot y lo mismo con --storage local"
+      - "source /root/.restic-env, restic init y restic backup /var/lib/vz/dump"
+    solucion:
+      - vzdump 100 101 --storage pbs01 --mode snapshot
+      - vzdump 100 101 --storage local --mode snapshot --compress zstd
+      - source /root/.restic-env
+      - restic init
+      - restic backup /var/lib/vz/dump --tag vm
+    explicacion: >-
+      Tres copias (las VM, el PBS y el bucket), en dos medios, una afuera e inmutable. En un caso
+      real, la copia a la carpeta local y el restic irían en una tarea nocturna, y además un PBS
+      remoto con sync, que restaura mucho más rápido que bajar todo del bucket.
+  - consigna: >-
+      El simulacro: restaurá erp01 desde pbs01 como VM 901, con MAC nuevas, sin red y con el nombre
+      erp01-simulacro, arrancala, midiendo con time, y anotá el resultado en /root/simulacros.txt.
+    verificar:
+      - { pve_vm: 901, estado: running, nombre: erp01-simulacro, con_red: false }
+      - { archivo: /root/simulacros.txt, contenido_incluye: erp01 }
+      - { comando_usado: "time qmrestore" }
+    pistas:
+      - "pvesm list pbs01 --vmid 101 muestra la copia."
+      - "time qmrestore COPIA 901 --storage vms --unique 1"
+      - "qm set 901 --name erp01-simulacro --net0 virtio,bridge=vmbr0,link_down=1 y qm start 901"
+    solucion:
+      - time qmrestore $(pvesm list pbs01 --vmid 101 | tail -1 | cut -d' ' -f1) 901 --storage vms --unique 1
+      - qm set 901 --name erp01-simulacro --net0 virtio,bridge=vmbr0,link_down=1
+      - qm start 901
+      - echo "$(date +%F) erp01 desde pbs01 a VM 901 en Ceph, sin red - restauracion y arranque OK" >> /root/simulacros.txt
+    explicacion: >-
+      Con este número y el de la caída de nodo, el documento puede decir con fundamento cuánto
+      tarda volver en cada escenario: un nodo caído (minutos, con HA), una VM dañada (lo que
+      mediste) y la sala perdida (bajar del bucket a otro lugar: horas o días, según el enlace).

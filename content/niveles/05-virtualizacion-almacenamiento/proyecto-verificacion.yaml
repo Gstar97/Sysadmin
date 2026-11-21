@@ -1,0 +1,48 @@
+tipo: pasos
+titulo: Verificación final antes de entregar
+descripcion: >-
+  Recorré estos pasos con todo encendido y, si podés, después de reiniciar los tres nodos de a
+  uno: una plataforma que solo anda mientras nadie la toca no está terminada.
+pasos:
+  - titulo: El clúster y el quórum
+    comandos:
+      - pvecm status
+      - corosync-cfgtool -s
+      - ha-manager status
+    comprobar: Tres nodos, Quorate Yes, dos enlaces conectados en cada nodo y las VM críticas en started.
+  - titulo: El almacenamiento compartido
+    comandos:
+      - ceph -s
+      - ceph osd tree
+      - ceph df
+    comprobar: HEALTH_OK (o pvesr status sin errores si elegiste ZFS) y menos del 70 % usado, para poder perder un nodo.
+    si_falla: Si ceph -s muestra flags como noout, sacalas; si hay OSD down, revisá el disco y el servicio antes de entregar.
+  - titulo: Un nodo vacío y de vuelta
+    comandos:
+      - ha-manager crm-command node-maintenance enable pve02
+      - ha-manager status
+      - ha-manager crm-command node-maintenance disable pve02
+    comprobar: Con el mantenimiento activado, pve02 queda sin VM y las VM siguen andando en los otros; al desactivarlo, vuelven.
+  - titulo: Las copias
+    comandos:
+      - pvesh get /cluster/backup
+      - pvesm list pbs01 | tail -5
+      - proxmox-backup-manager verify-job list
+    comprobar: La tarea de respaldo cubre todas las VM, con retención; hay copias de anoche y el verify terminó sin errores.
+  - titulo: La copia que nadie puede borrar
+    detalle: Desde nfs01 (o el equipo que respalda a offsite01), con sus claves.
+    comandos:
+      - sudo RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r rest:http://USUARIO:CLAVE@IP-DE-OFFSITE01:8000/USUARIO/ snapshots
+      - sudo RESTIC_PASSWORD_FILE=/root/.restic-clave restic -r rest:http://USUARIO:CLAVE@IP-DE-OFFSITE01:8000/USUARIO/ forget --keep-last 1
+    comprobar: El forget falla con 403 y las copias siguen todas.
+  - titulo: Una restauración, ahora
+    comandos:
+      - time qmrestore COPIA-DEL-PBS 990 --storage vms --unique 1
+      - qm set 990 --net0 virtio,bridge=vmbr0,link_down=1 && qm start 990
+      - qm stop 990 && qm destroy 990
+    comprobar: La VM restaurada arranca (miralo por la consola) y el tiempo está anotado en el registro de simulacros.
+  - titulo: Los papeles
+    comprobar: >-
+      Tenés el diseño, la tabla de RPO y RTO con los tiempos medidos al lado, el plan de
+      recuperación impreso, el registro de simulacros y el sobre con las claves en un lugar que no
+      es la sala de servidores.
