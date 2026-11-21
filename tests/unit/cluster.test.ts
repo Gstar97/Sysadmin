@@ -166,3 +166,14 @@ describe('Clúster de Proxmox', () => {
     expect((await run('ssh root@pve03 uptime')).err).toMatch(/No route to host|timed out/)
   })
 })
+
+describe('qm disk move', () => {
+  it('pasa un disco local a un almacenamiento compartido con la VM andando, y después se puede poner bajo HA', async () => {
+    const { run, sh } = await session(armado(3))
+    const r = await run('qm disk move 101 scsi0 nfs-vms --delete 1')
+    expect(r.out).toContain('drive mirror is starting')
+    expect(verifyBash(sh, { pve_vm: 101, config: { scsi0: 'nfs-vms:101/vm-101-disk-0.qcow2' } }).ok).toBe(true)
+    expect((await run('qm migrate 101 pve02 --online')).out).toContain('migration finished successfully')
+    expect((await run('qm disk move 101 scsi0 nfs-vms')).err).toBeTruthy()
+  })
+})

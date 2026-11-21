@@ -1,0 +1,91 @@
+tipo: terminal
+shell: bash
+titulo: Vaciar un nodo para actualizarlo
+descripcion: >-
+  El clúster "produccion" tiene tres nodos (pve01, pve02, pve03) y un NFS compartido (nfs-vms).
+  Esta noche hay que actualizar y reiniciar pve01 sin cortar nada, así que primero hay que sacar
+  todo lo que corre ahí. En pve01 están web01 (VM 100, disco en nfs-vms), app01 (VM 102, disco en
+  nfs-vms, con una ISO montada desde el almacenamiento local), db01 (VM 101, disco en su
+  local-lvm) y el contenedor dns01 (200, en local-lvm). Ninguna está bajo alta disponibilidad.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox:
+    repos: no-subscription
+    cluster: produccion
+    isos: [debian-13.2.0-amd64-netinst.iso]
+    almacenamientos:
+      - { id: local, tipo: dir, contenido: [iso, vztmpl, backup], ruta: /var/lib/vz }
+      - { id: local-lvm, tipo: lvmthin, contenido: [images, rootdir] }
+      - { id: nfs-vms, tipo: nfs, contenido: [images], servidor: 192.168.10.50, export: /srv/vms, compartido: true }
+    vms:
+      - { id: 100, nombre: web01, estado: running, memoria: 4096, discos: { scsi0: "nfs-vms:100/vm-100-disk-0.qcow2,size=20G" }, red: { net0: "virtio,bridge=vmbr0" } }
+      - { id: 101, nombre: db01, estado: running, memoria: 8192, discos: { scsi0: "local-lvm:vm-101-disk-0,size=40G" }, red: { net0: "virtio,bridge=vmbr0" } }
+      - { id: 102, nombre: app01, estado: running, discos: { scsi0: "nfs-vms:102/vm-102-disk-0.qcow2,size=30G", ide2: "local:iso/debian-13.2.0-amd64-netinst.iso,media=cdrom" }, red: { net0: "virtio,bridge=vmbr0" } }
+    cts:
+      - { id: 200, nombre: dns01, estado: running, rootfs: "local-lvm:vm-200-disk-0,size=8G", red: "name=eth0,bridge=vmbr0,ip=192.168.10.53/24,gw=192.168.10.1" }
+  servidores:
+    - { hostname: pve02, ip: 192.168.10.22, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription, cluster: produccion } }
+    - { hostname: pve03, ip: 192.168.10.23, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription, cluster: produccion } }
+pasos:
+  - consigna: Migrá web01 a pve02 sin apagarla.
+    verificar:
+      - { pve_vm: 100, nodo: pve02, estado: running }
+    pistas:
+      - "qm migrate 100 pve02 --online"
+    solucion:
+      - qm migrate 100 pve02 --online
+    explicacion: >-
+      Su disco está en el NFS, que ven todos los nodos: solo viaja la memoria. Fijate en el
+      registro las vueltas de copia y el "downtime" de unos milisegundos.
+  - consigna: Migrá app01 a pve02 en vivo. Si algo lo impide, resolvelo sin apagar la VM.
+    verificar:
+      - { pve_vm: 102, nodo: pve02, estado: running }
+    pistas:
+      - "Leé el error: la ISO está en local, que pve02 no ve."
+      - "qm set 102 --ide2 none,media=cdrom saca la ISO de la lectora."
+    solucion:
+      - qm migrate 102 pve02 --online
+      - qm set 102 --ide2 none,media=cdrom
+      - qm migrate 102 pve02 --online
+    explicacion: >-
+      Una ISO montada desde un almacenamiento local es un "recurso local": el destino no la ve.
+      Pasa lo mismo con un USB o una placa conectados directo a la VM (passthrough). La lectora
+      queda vacía y se puede volver a montar en el destino.
+  - consigna: Migrá db01 a pve03 en vivo, aunque su disco esté en el almacenamiento local de pve01.
+    verificar:
+      - { pve_vm: 101, nodo: pve03, estado: running }
+    pistas:
+      - "qm migrate 101 pve03 --online --with-local-disks"
+    solucion:
+      - qm migrate 101 pve03 --online --with-local-disks
+    explicacion: >-
+      Con --with-local-disks, Proxmox copia también el disco (al local-lvm de pve03) mientras la
+      VM sigue andando, y recién al final pasa la memoria. Tarda mucho más (todo el disco viaja
+      por la red) y, después, db01 sigue con disco local: si pve03 se cae, nadie la puede
+      arrancar. Para una base importante, mejor moverle el disco a un almacenamiento compartido.
+  - consigna: >-
+      Migrá el contenedor dns01 a pve03 (los contenedores no se migran en vivo: se reinician en el
+      destino) y comprobá que pve01 quedó vacío.
+    verificar:
+      - { pve_ct: 200, nodo: pve03, estado: running }
+      - { comando_usado: "qm list" }
+    pistas:
+      - "pct migrate 200 pve03 --restart"
+      - "qm list y pct list en pve01."
+    solucion:
+      - pct migrate 200 pve03 --restart
+      - qm list
+      - pct list
+    explicacion: >-
+      Un contenedor comparte el núcleo del nodo, así que no se puede "congelar" y llevar a otro:
+      se apaga, se copia y se arranca del otro lado. Son unos segundos de corte: para el DNS,
+      conviene tener dos y migrarlos de a uno. Con pve01 vacío ya se puede actualizar y
+      reiniciar.

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" font-family="system-ui, sans-serif" font-size="12">
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">Cómo viaja la memoria en una migración en vivo</text>
+  <g stroke="currentColor" stroke-width="1.2">
+    <rect x="20" y="40" width="170" height="190" rx="8" fill="var(--surface, #fff)"/>
+    <rect x="670" y="40" width="170" height="190" rx="8" fill="var(--surface, #fff)"/>
+    <rect x="230" y="50" width="400" height="34" rx="6" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="230" y="94" width="300" height="34" rx="6" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="230" y="138" width="170" height="34" rx="6" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="230" y="182" width="90" height="34" rx="6" fill="var(--warn-soft, #fbf0d0)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.6" fill="none">
+    <path d="M630 67 L665 67"/><path d="M659 62 L667 67 L659 72"/>
+    <path d="M530 111 L665 111"/><path d="M659 106 L667 111 L659 116"/>
+    <path d="M400 155 L665 155"/><path d="M659 150 L667 155 L659 160"/>
+    <path d="M320 199 L665 199"/><path d="M659 194 L667 199 L659 204"/>
+  </g>
+  <g fill="currentColor" text-anchor="middle">
+    <text x="105" y="64" font-weight="700">pve01 (origen)</text>
+    <g font-size="10.5"><text x="105" y="92">la VM sigue corriendo</text><text x="105" y="108">y cambia memoria</text><text x="105" y="124">mientras se copia</text><text x="105" y="176">al final se pausa</text><text x="105" y="192">unos milisegundos</text></g>
+    <text x="755" y="64" font-weight="700">pve02 (destino)</text>
+    <g font-size="10.5"><text x="755" y="92">una VM igual, en pausa,</text><text x="755" y="108">que va recibiendo</text><text x="755" y="124">la memoria</text><text x="755" y="176">arranca justo donde</text><text x="755" y="192">quedó la original</text></g>
+    <g font-size="10.5">
+      <text x="430" y="71">1. Toda la memoria (por ejemplo, 8 GB)</text>
+      <text x="380" y="115">2. Lo que cambió mientras tanto</text>
+      <text x="315" y="159">3. Lo que cambió otra vez</text>
+      <text x="275" y="203">4. Pausa</text>
+    </g>
+    <text x="430" y="252" font-size="11">Cada vuelta copia menos. Cuando lo que falta entra en el tiempo de pausa permitido (100 ms en Proxmox),</text>
+    <text x="430" y="270" font-size="11">se pausa la VM, se copia el resto y el estado del procesador, y sigue en el destino. Los usuarios no lo notan.</text>
+    <text x="430" y="288" font-size="11">Si la VM escribe memoria más rápido de lo que la red copia, nunca termina: hace falta una red de migración más rápida.</text>
+  </g>
+</svg>

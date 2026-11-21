@@ -745,7 +745,7 @@ const singleCheckSchema = z.union([
   z.strictObject({ pve_mantenimiento: z.string(), activo: z.boolean().optional() }),
   /** Un servidor del ejercicio prendido o apagado. */
   z.strictObject({ pve_encendido: z.string(), encendido: z.boolean().optional() }),
-  z.strictObject({ pve_ct: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional() }),
+  z.strictObject({ pve_ct: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional(), nodo: z.string().optional() }),
   /** Respaldos de un invitado (en un almacenamiento): al menos uno, o exactamente cantidad. */
   z.strictObject({ pve_respaldo: z.number().int(), almacenamiento: z.string().optional(), cantidad: z.number().int().optional() }),
   z.strictObject({ pve_almacenamiento: z.string(), tipo: z.string().optional(), contenido_incluye: z.string().optional(), activo: z.boolean().optional(), existe: z.boolean().optional() }),

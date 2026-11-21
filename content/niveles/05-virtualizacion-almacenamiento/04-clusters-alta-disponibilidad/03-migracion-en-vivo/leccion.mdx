@@ -1,0 +1,80 @@
+---
+id: n5-m4-l3
+titulo: Migración en vivo
+minutos: 120
+objetivos:
+  - Entender cómo se mueve una VM encendida de un nodo a otro sin que los usuarios lo noten.
+  - Reconocer qué impide una migración (recursos locales, discos locales, tipo de CPU) y cómo resolverlo.
+  - Vaciar un nodo antes de un mantenimiento, con VM, discos locales y contenedores.
+glosario: [vmotion]
+verificado: 2026-11
+---
+
+import precopia from './precopia.svg?raw'
+import ej from './ej-migrar.yaml'
+
+La migración en vivo es lo que hace que el mantenimiento de un clúster sea aburrido, en el buen sentido: se vacía un nodo moviendo sus VM encendidas a los otros, se actualiza, se reinicia y se vuelven a traer, sin que nadie se entere. Es la misma idea que vMotion en VMware y Live Migration en Hyper-V.
+
+<AntesDeEmpezar>
+- Cluster de Proxmox y alta disponibilidad (lección 5.4.2).
+- Recursos virtuales: memoria, discos y redes de una VM (lección 5.1.2).
+</AntesDeEmpezar>
+
+## Cómo funciona
+
+El disco, si está en almacenamiento compartido, no se mueve: el nodo nuevo ya lo ve. Lo que hay que llevar es lo que la VM tiene "en la cabeza": su memoria y el estado del procesador. El problema es que mientras se copia, la VM sigue andando y cambiando la memoria. La solución es copiar en vueltas:
+
+<Diagrama svg={precopia} alt="La memoria viaja de pve01 (origen), donde la VM sigue corriendo y cambiando memoria mientras se copia, a pve02 (destino), donde una VM igual en pausa la va recibiendo. Primero se copia toda la memoria, por ejemplo 8 GB; después lo que cambió mientras tanto; después lo que cambió otra vez, cada vuelta más chica; al final, una pausa de milisegundos para copiar el resto y el estado del procesador, y la VM sigue en el destino. Si la VM escribe memoria más rápido de lo que la red copia, nunca termina." pie="La pausa final dura milisegundos: las conexiones de los usuarios ni se cortan." />
+
+Al terminar, el nodo nuevo avisa a la red que la VM ahora está ahí (los switches aprenden en qué puerto está su MAC) y el viejo la descarta. Lo que conviene saber:
+
+- **El tiempo depende de la memoria y de la red.** 8 GB por una red de 1 Gbps tardan más de un minuto; por una de 10 Gbps, unos segundos. En el centro de datos se configura una **red de migración** aparte (Centro de datos, Opciones, Configuración de migración) para no saturar la de los usuarios.
+- **Una VM que escribe mucha memoria puede no terminar nunca**: cada vuelta hay tanto para copiar como la anterior. Pasa con bases de datos muy cargadas en redes lentas. Se resuelve con una red más rápida o migrando en un momento tranquilo.
+- **La CPU tiene que ser compatible.** La VM "ve" un modelo de procesador. Con el tipo `host` ve exactamente el del nodo, con todas sus instrucciones: rinde un poco más, pero si el otro nodo tiene un procesador distinto, la VM puede colgarse al llegar. Por eso Proxmox usa por defecto un modelo genérico (`x86-64-v2-AES`) que anda en cualquier procesador de los últimos años. En un clúster con servidores de distintas generaciones, se elige el modelo del más viejo.
+
+## Lo que impide migrar
+
+- **Recursos locales**: una ISO montada desde un almacenamiento local, un USB o una placa conectados directo a la VM (passthrough). Se sacan antes, o la VM no se mueve.
+- **Discos en almacenamiento local**: se pueden llevar con `--with-local-disks`, que copia el disco entero por la red mientras la VM sigue andando. Funciona, pero tarda (40 GB son varios minutos) y la VM sigue con disco local en el destino, sin protección de alta disponibilidad.
+- **Contenedores**: no se migran en vivo (comparten el núcleo del nodo). Se migran con `--restart`: se apagan, se copian y arrancan en el destino, con unos segundos de corte.
+
+Otras formas de mover cosas:
+
+- **Migración sin encender** (offline): para VM apagadas; copia el disco si es local.
+- **Mover solo el disco** a otro almacenamiento, con la VM andando: `qm disk move 101 scsi0 nfs-vms`. Así db01 deja de tener disco local.
+- **Migración masiva**: en la web, botón derecho sobre el nodo, Migrar todo. Útil antes de un mantenimiento.
+- **VM con alta disponibilidad**: `qm migrate` le pide al administrador de HA que la mueva, y el modo mantenimiento (lección 5.4.2) las mueve solas.
+
+## Hacelo vos
+
+<Terminal ejercicio={ej} />
+
+<EnSimple>
+Migrar en vivo es mover una VM encendida a otro nodo: si el disco es compartido, solo viaja la memoria, en vueltas cada vez más chicas, y al final una pausa de milisegundos que nadie nota. Lo que lo impide: una ISO o un dispositivo local montado, un disco local (se puede llevar con --with-local-disks, pero tarda) o una CPU incompatible. Los contenedores se migran reiniciándolos. Así se vacía un nodo antes de un mantenimiento sin cortar nada.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar el tipo de CPU host en un clúster con servidores distintos">
+    La VM anda bien hasta que se la migra a un nodo con otro procesador: ahí puede colgarse. En clústeres mixtos, el modelo del procesador más viejo.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar ISOs montadas">
+    Una ISO en un almacenamiento local bloquea la migración. Se desmonta al terminar la instalación.
+  </ErrorComun>
+  <ErrorComun titulo="Migrar por la misma red que usan los usuarios">
+    Una migración llena el enlace y todo el resto anda lento. Red de migración aparte, de 10 Gbps si se puede.
+  </ErrorComun>
+  <ErrorComun titulo="Conformarse con --with-local-disks">
+    Sirve para salir del paso, pero la VM sigue sin protección. A la larga, el disco se pasa a almacenamiento compartido.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de los contenedores">
+    No se migran en vivo: si es un servicio importante, se tienen dos y se migran de a uno.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Con disco compartido solo viaja la memoria: copia en vueltas y una pausa final de milisegundos.
+- El tiempo depende de la memoria y de la red: red de migración aparte y rápida.
+- CPU: el tipo por defecto (x86-64-v2-AES) migra a cualquier nodo; host, solo entre procesadores iguales.
+- Bloquean: ISO o dispositivos locales, discos locales (--with-local-disks los copia), contenedores (se migran con --restart).
+- qm migrate ID NODO --online; qm disk move para pasar un disco a almacenamiento compartido.
+</Resumen>

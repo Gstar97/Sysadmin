@@ -1,0 +1,94 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: En una migración en vivo con el disco en almacenamiento compartido, ¿qué se copia de un nodo a otro?
+  opciones:
+    - { texto: "La memoria de la VM y el estado del procesador", correcta: true, explicacion: "El disco ya lo ven los dos nodos." }
+    - { texto: "El disco entero", explicacion: "Solo con discos locales." }
+    - { texto: "Nada: la VM se reinicia en el otro nodo", explicacion: "Eso es lo que hace la HA cuando se cae un nodo." }
+    - { texto: "Solo la configuración", explicacion: "También la memoria." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué la memoria se copia en varias vueltas?
+  opciones:
+    - { texto: "Porque la VM sigue andando y cambiando memoria mientras se copia: cada vuelta lleva lo que cambió", correcta: true, explicacion: "Al final, una pausa de milisegundos para lo último." }
+    - { texto: "Porque la red no aguanta todo junto", explicacion: "No es por eso." }
+    - { texto: "Para verificar que no haya errores", explicacion: "No." }
+    - { texto: "Por seguridad", explicacion: "No." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué hay que hacer para poder migrar esta VM?
+  salida: |
+    # qm migrate 102 pve02 --online
+    can't migrate local disk 'local:iso/debian-13.2.0-amd64-netinst.iso': local cdrom image
+    ERROR: migration aborted (duration 00:00:01): problem with local resource
+  opciones:
+    - { texto: "Sacar la ISO de la lectora (qm set 102 --ide2 none,media=cdrom)", correcta: true, explicacion: "pve02 no ve el almacenamiento local de pve01." }
+    - { texto: "Agregar --with-local-disks", explicacion: "Es para discos, no para una ISO." }
+    - { texto: "Apagar la VM", explicacion: "No hace falta." }
+    - { texto: "Copiar la ISO a todos los nodos", explicacion: "Podría servir, pero lo simple es desmontarla." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un clúster tiene dos nodos con procesadores de 2022 y uno de 2018. Las VM usan el tipo de CPU host. ¿Qué puede pasar?
+  opciones:
+    - { texto: "Una VM que arrancó en un nodo nuevo puede colgarse al migrarla al viejo, porque usa instrucciones que ese procesador no tiene", correcta: true, explicacion: "Se usa el modelo del procesador más viejo." }
+    - { texto: "Nada: host siempre migra", explicacion: "Solo entre procesadores iguales." }
+    - { texto: "Las VM andan más lentas en los nuevos", explicacion: "No." }
+    - { texto: "No se puede crear el clúster", explicacion: "Se puede." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando para migrar en vivo la VM 101, que tiene el disco en el almacenamiento local, al nodo pve03.
+  aceptadas: ["qm migrate 101 pve03 --online --with-local-disks", "qm migrate 101 pve03 --with-local-disks --online"]
+  explicacion: "Copia el disco por la red mientras la VM sigue andando; tarda bastante más."
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cómo se migra un contenedor LXC?
+  opciones:
+    - { texto: "Con --restart: se apaga, se copia y arranca en el destino, con unos segundos de corte", correcta: true, explicacion: "Los contenedores no se migran en vivo." }
+    - { texto: "En vivo, igual que una VM", explicacion: "Comparten el núcleo del nodo: no se puede." }
+    - { texto: "No se pueden migrar", explicacion: "Sí, reiniciándolos." }
+    - { texto: "Solo con almacenamiento compartido", explicacion: "También con local." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una base de datos muy cargada no termina nunca de migrar por una red de 1 Gbps. ¿Por qué?
+  opciones:
+    - { texto: "Escribe memoria más rápido de lo que la red la copia: cada vuelta tiene tanto como la anterior", correcta: true, explicacion: "Red de migración más rápida o un momento más tranquilo." }
+    - { texto: "El disco es muy grande", explicacion: "Con disco compartido no viaja." }
+    - { texto: "Falta quórum", explicacion: "No." }
+    - { texto: "La VM tiene poca memoria", explicacion: "Al revés." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para actualizar pve01 sin cortar el servicio.
+  pasos:
+    - "Migrar en vivo las VM de pve01 a los otros nodos"
+    - "Migrar con --restart los contenedores (si son servicios duplicados, de a uno)"
+    - "Comprobar que pve01 quedó vacío (qm list, pct list)"
+    - "Actualizar y reiniciar pve01"
+    - "Volver a traer las VM, si corresponde"
+  explicacion: "Con las VM bajo HA, el modo mantenimiento hace los primeros pasos solo."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: db01 tiene el disco en el local-lvm de pve01. ¿Cómo hacés para que pueda estar bajo alta disponibilidad?
+  opciones:
+    - { texto: "Mover el disco a un almacenamiento compartido con la VM andando (qm disk move 101 scsi0 nfs-vms)", correcta: true, explicacion: "Después se la agrega con ha-manager add." }
+    - { texto: "Migrarla con --with-local-disks", explicacion: "Sigue con disco local, en otro nodo." }
+    - { texto: "Ponerle más memoria", explicacion: "No tiene nada que ver." }
+    - { texto: "No se puede", explicacion: "Sí se puede." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Cómo se llama la migración en vivo en VMware?
+  opciones:
+    - { texto: "vMotion", correcta: true, explicacion: "En Hyper-V, Live Migration." }
+    - { texto: "vCenter", explicacion: "Es la administración." }
+    - { texto: "vSAN", explicacion: "Es almacenamiento." }
+    - { texto: "DRS", explicacion: "DRS usa vMotion para balancear." }

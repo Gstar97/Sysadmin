@@ -1071,6 +1071,7 @@ register('qm', {
     if (verb === 'cloudinit' && args[0]) verb = `cloudinit ${args.shift()}`
     if (verb === 'importdisk') verb = 'disk import'
     if (verb === 'resize') verb = 'disk resize'
+    if (verb === 'move_disk' || verb === 'move-disk') verb = 'disk move'
     if (verb === 'help' || verb === '--help') {
       ctx.out('USAGE: qm <COMMAND> [ARGS] [OPTIONS]\n\n       qm clone <vmid> <newid> [OPTIONS]\n       qm config <vmid> [OPTIONS]\n       qm create <vmid> [OPTIONS]\n       qm delsnapshot <vmid> <snapname> [OPTIONS]\n       qm destroy <vmid> [OPTIONS]\n       qm disk import <vmid> <source> <storage> [OPTIONS]\n       qm disk resize <vmid> <disk> <size> [OPTIONS]\n       qm list  [OPTIONS]\n       qm listsnapshot <vmid>\n       qm rollback <vmid> <snapname> [OPTIONS]\n       qm set <vmid> [OPTIONS]\n       qm shutdown <vmid> [OPTIONS]\n       qm snapshot <vmid> <snapname> [OPTIONS]\n       qm start <vmid> [OPTIONS]\n       qm status <vmid> [OPTIONS]\n       qm stop <vmid> [OPTIONS]\n       qm template <vmid> [OPTIONS]\n')
       return 0
@@ -1316,6 +1317,54 @@ register('qm', {
         g.osReady = true
         saveConf(sys, g)
         ctx.out(`importing disk '${src}' to VM ${g.vmid} ...\n${lvCreated(pve, storage, name)}  Logical volume pve/${name} changed.\ntransferred 0.0 B of ${(size / GiB).toFixed(1)} GiB (0.00%)\ntransferred ${(size / GiB).toFixed(1)} GiB of ${(size / GiB).toFixed(1)} GiB (100.00%)\nunused${u}: successfully imported disk '${storage}:${name}'\n`)
+        return 0
+      }
+      case 'disk move': {
+        const g = getGuest(ctx, pve, pos[0], 'qemu')
+        if (!g) return 1
+        const key = pos[1]
+        const target = pos[2] ?? opts.get('storage')
+        const v = key ? g.conf.get(key) : undefined
+        if (!key || !v || !isDriveKey(key) || v.includes('media=cdrom')) {
+          ctx.err(`400 Parameter verification failed.\ndisk: value '${key ?? ''}' does not have a value in the enumeration\n`)
+          return 1
+        }
+        if (!target) {
+          ctx.err('400 not enough arguments\nqm disk move <vmid> <disk> [<storage>] [OPTIONS]\n')
+          return 1
+        }
+        const se = storageCheck(pve, target, 'images')
+        if (se) {
+          ctx.err(`${se}\n`)
+          return 1
+        }
+        const d = parseDrive(v)
+        const vol = d.volid ? pve.volumes.get(d.volid) : undefined
+        if (!vol) return 1
+        if (vol.storage === target) {
+          ctx.err(`unable to move disk to the same storage\n`)
+          return 1
+        }
+        if (g.snapshots.length) {
+          ctx.err(`you can't move a disk with snapshots and delete the source\n`)
+          if (opts.get('delete') === '1') return 1
+        }
+        const st = pve.storages.get(target)!
+        const name = nextDiskName(pve, target, g.vmid)
+        const fileBased = st.type === 'dir' || st.type === 'nfs' || st.type === 'cifs'
+        const volid = fileBased ? `${target}:${g.vmid}/${name}.qcow2` : `${target}:${name}`
+        addVolume(pve, { volid, storage: target, vmid: g.vmid, size: vol.size, format: fileBased ? 'qcow2' : 'raw', content: 'images', sistema: vol.sistema })
+        const gb = (vol.size / GiB).toFixed(1)
+        ctx.out(`create full clone of drive ${key} (${d.volid})\n${fileBased ? `Formatting '${st.type === 'dir' ? st.path : `/mnt/pve/${target}`}/images/${g.vmid}/${name}.qcow2', fmt=qcow2 cluster_size=65536 extended_l2=off preallocation=metadata compression_type=zlib size=${vol.size} lazy_refcounts=off refcount_bits=16\n` : lvCreated(pve, target, name)}${g.status === 'running' ? `drive mirror is starting for drive-${key}\ndrive-${key}: transferred 0.0 B of ${gb} GiB (0.00%) in 0s\ndrive-${key}: transferred ${gb} GiB of ${gb} GiB (100.00%) in 1m 12s, ready\nall 'mirror' jobs are ready\ndrive-${key}: Completing block job...\ndrive-${key}: Completed successfully.\ndrive-${key}: mirror-job finished\n` : `transferred 0.0 B of ${gb} GiB (0.00%)\ntransferred ${gb} GiB of ${gb} GiB (100.00%)\n`}`)
+        const rest = [...d.opts].map(([o, x]) => `${o}=${x}`).filter((x) => !x.startsWith('size='))
+        g.conf.set(key, [volid, ...rest, `size=${sizeStr(vol.size)}`].join(','))
+        if (opts.get('delete') === '1') pve.volumes.delete(d.volid!)
+        else {
+          let u = 0
+          while (g.conf.has(`unused${u}`)) u++
+          g.conf.set(`unused${u}`, d.volid!)
+        }
+        saveConf(sys, g)
         return 0
       }
       case 'disk resize': {
