@@ -14,6 +14,9 @@ import { ROOT_CRED, normalizePath, type Cred } from './vfs'
 import { GiB, MiB } from './storage'
 import type { BashState } from './schema'
 import { hostByIp, inbound, routeTo, sourceIp } from './hosts'
+import { applyPolicy, type KeepPolicy } from '../virtualizacion/retencion'
+
+export { applyPolicy }
 
 // ---------------------------------------------------------------------------------------
 // Modelo
@@ -308,58 +311,6 @@ function initialSnapshot(sys: System, paths: string[], time: number, tags: strin
 // ---------------------------------------------------------------------------------------
 // Política de retención (igual que restic forget)
 // ---------------------------------------------------------------------------------------
-
-export interface KeepPolicy {
-  last?: number
-  hourly?: number
-  daily?: number
-  weekly?: number
-  monthly?: number
-  yearly?: number
-  withinDays?: number
-}
-
-function isoWeek(d: Date): string {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-  const day = t.getUTCDay() || 7
-  t.setUTCDate(t.getUTCDate() + 4 - day)
-  const y = t.getUTCFullYear()
-  const w = Math.ceil(((t.getTime() - Date.UTC(y, 0, 1)) / 86_400_000 + 1) / 7)
-  return `${y}-${w}`
-}
-
-/** Qué instantáneas se quedan (por índice, ordenadas de la más nueva a la más vieja) y por qué. */
-export function applyPolicy(times: number[], p: KeepPolicy, now = Date.now()): { keep: boolean; reasons: string[] }[] {
-  const res = times.map(() => ({ keep: false, reasons: [] as string[] }))
-  const rules: [keyof KeepPolicy, string, (d: Date) => string][] = [
-    ['last', 'last snapshot', (d) => String(d.getTime()) + Math.random()],
-    ['hourly', 'hourly snapshot', (d) => `${d.toDateString()} ${d.getHours()}`],
-    ['daily', 'daily snapshot', (d) => d.toDateString()],
-    ['weekly', 'weekly snapshot', isoWeek],
-    ['monthly', 'monthly snapshot', (d) => `${d.getFullYear()}-${d.getMonth()}`],
-    ['yearly', 'yearly snapshot', (d) => String(d.getFullYear())],
-  ]
-  for (const [k, label, key] of rules) {
-    let left = p[k] ?? 0
-    let lastKey: string | undefined
-    for (let i = 0; i < times.length && left !== 0; i++) {
-      const kk = key(new Date(times[i]))
-      if (kk !== lastKey) {
-        res[i].keep = true
-        res[i].reasons.push(label)
-        lastKey = kk
-        if (left > 0) left--
-      }
-    }
-  }
-  if (p.withinDays) times.forEach((t, i) => {
-    if (now - t <= p.withinDays! * 86_400_000) {
-      res[i].keep = true
-      res[i].reasons.push(`within ${p.withinDays}d`)
-    }
-  })
-  return res
-}
 
 // ---------------------------------------------------------------------------------------
 // restic

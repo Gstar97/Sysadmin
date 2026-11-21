@@ -13,6 +13,7 @@ import {
   SimuladorRecursos,
   SimuladorQuorum,
   CalculadoraCapacidad,
+  PlanificadorRetencion,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
@@ -169,11 +170,12 @@ export default function GalleryPage() {
         <ConstructorRack inventario={['ups', 'srv2u', 'srv2u', 'nas', 'srv1u', 'sw', 'patch', 'org', 'fw']} />
       </Section>
 
-      <Section id="virtualizacion" titulo="Virtualización" descripcion="Simulador de recursos virtuales (vCPU y memoria prometidas contra lo que tiene el servidor, con globo y páginas compartidas), comparador de plataformas (matriz de decisión con pesos y el costo de licencias con tus precios) simulador de quórum (nodos que se caen, redes partidas, QDevice y votos esperados) y calculadora de capacidad (espejos y RAIDZ de ZFS, réplicas y erasure coding de Ceph).">
+      <Section id="virtualizacion" titulo="Virtualización" descripcion="Simulador de recursos virtuales (vCPU y memoria prometidas contra lo que tiene el servidor, con globo y páginas compartidas), comparador de plataformas (matriz de decisión con pesos y el costo de licencias con tus precios), simulador de quórum (nodos que se caen, redes partidas, QDevice y votos esperados) calculadora de capacidad (espejos y RAIDZ de ZFS, réplicas y erasure coding de Ceph) y planificador de retención (qué copias quedan con una política, hasta cuándo se puede volver y cuánto ocupan).">
         <SimuladorRecursos />
         <ComparadorPlataformas />
         <SimuladorQuorum />
         <CalculadoraCapacidad />
+        <PlanificadorRetencion />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">

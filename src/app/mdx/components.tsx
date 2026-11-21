@@ -59,6 +59,7 @@ const RaidSimulatorView = lazy(() => import('@/interactive/hardware/RaidSimulato
 const UpsCalculatorView = lazy(() => import('@/interactive/hardware/UpsCalculator').then((m) => ({ default: m.UpsCalculator })))
 const RackBuilderView = lazy(() => import('@/interactive/hardware/RackBuilder').then((m) => ({ default: m.RackBuilder })))
 const ResourceSimulatorView = lazy(() => import('@/interactive/virtualizacion/ResourceSimulator').then((m) => ({ default: m.ResourceSimulator })))
+const RetentionPlannerView = lazy(() => import('@/interactive/virtualizacion/RetentionPlanner').then((m) => ({ default: m.RetentionPlanner })))
 const CapacityCalculatorView = lazy(() => import('@/interactive/virtualizacion/CapacityCalculator').then((m) => ({ default: m.CapacityCalculator })))
 const QuorumSimulatorView = lazy(() => import('@/interactive/virtualizacion/QuorumSimulator').then((m) => ({ default: m.QuorumSimulator })))
 const PlatformComparatorView = lazy(() => import('@/interactive/virtualizacion/PlatformComparator').then((m) => ({ default: m.PlatformComparator })))
@@ -393,6 +394,14 @@ export function SimuladorRecursos() {
   )
 }
 
+export function PlanificadorRetencion() {
+  return (
+    <Island>
+      <RetentionPlannerView />
+    </Island>
+  )
+}
+
 export function CalculadoraCapacidad(props: { modo?: 'zfs' | 'ceph' | 'ambos' }) {
   return (
     <Island>
@@ -713,6 +722,7 @@ export const mdxComponents = {
   SimuladorRecursos,
   SimuladorQuorum,
   CalculadoraCapacidad,
+  PlanificadorRetencion,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
