@@ -1,0 +1,98 @@
+---
+id: n5-m5-l4
+titulo: Ceph
+minutos: 210
+objetivos:
+  - Entender cómo Ceph reparte los datos entre servidores (MON, MGR, OSD, PG y CRUSH) y qué pasa cuando algo falla.
+  - Armar Ceph en un clúster de Proxmox y crear un pool replicado para las VM.
+  - Diagnosticar un OSD caído, reemplazar un disco y hacer un mantenimiento sin mover datos de más.
+glosario: [ceph, osd, crush, grupo-ubicacion, hiperconvergencia]
+verificado: 2026-11
+---
+
+import ceph from './ceph.svg?raw'
+import cephDatos from './ceph.yaml'
+import ejCeph from './ej-ceph.yaml'
+import ejFalla from './ej-ceph-falla.yaml'
+
+ZFS protege los datos dentro de un servidor; si el servidor se apaga, sus discos se apagan con él. Ceph hace lo contrario: reparte cada dato en varios servidores, así que se puede perder un disco o un nodo entero y todo sigue andando. Es el almacenamiento hiperconvergente que trae Proxmox: los discos de los nodos del clúster forman un solo almacenamiento compartido, sin comprar una SAN.
+
+<AntesDeEmpezar>
+- Clúster de Proxmox, quórum y alta disponibilidad (módulo 5.4).
+- Tipos de almacenamiento e hiperconvergencia (lección 5.5.1).
+- Qué hace un RAID y qué es la redundancia (lección 4.5.2).
+</AntesDeEmpezar>
+
+## Cómo está armado
+
+<DiagramaInteractivo datos={cephDatos} svg={ceph} alt="Arriba, tres cajas: web01, una VM cuyo disco está en el pool vms y que le habla directo a los OSD; los monitores (MON) en pve01, pve02 y pve03, que guardan el mapa del clúster y votan como corosync, con 2 de 3 alcanza, y sin quórum no se lee ni se escribe nada; y el manager (MGR), con métricas y panel, uno activo y los otros de reserva. En el medio, una franja: cada objeto de 4 MiB cae en un grupo (PG) y CRUSH elige 3 OSD en 3 hosts distintos para ese grupo. Abajo, los tres nodos con dos OSD cada uno: osd.0 en pve01 tiene la copia principal, y la manda a osd.2 en pve02 y a osd.5 en pve03." />
+
+Ceph guarda **objetos**. El disco de una VM (un RBD) se parte en objetos de 4 MiB; cada objeto cae en un **PG** (un grupo de ubicación) y, para cada PG, una fórmula llamada **CRUSH** elige en qué OSD van las copias. No hay una tabla central de "qué está dónde": cualquiera que tenga el mapa del clúster lo puede calcular. Por eso Ceph escala a miles de discos.
+
+Lo que más importa del pool:
+
+- **size**: cuántas copias guarda (3, casi siempre).
+- **min_size**: cuántas tienen que estar disponibles para aceptar escrituras (2). Con menos, Ceph frena la escritura antes que arriesgar los datos.
+- **Dominio de falla**: por defecto el host, así que las 3 copias van a 3 nodos distintos.
+
+Con 3 copias, de 12 TB en bruto quedan 4 TB útiles, y conviene no pasar del 80 % para tener lugar donde rehacer copias. Hay otra forma, la **codificación de borrado** (erasure coding: como un RAID 6 repartido entre servidores, más espacio útil pero más lenta y con más nodos), que es un tema para más adelante. Comparalo:
+
+<CalculadoraCapacidad modo="ceph" />
+
+## Lo que pide
+
+Ceph no es para cualquiera, y conviene saberlo antes de proponerlo:
+
+- **Tres nodos como mínimo**, y mejor cuatro o más: con tres, si se cae uno, no hay dónde rehacer la tercera copia y el clúster queda degradado hasta que vuelve.
+- **Red rápida y propia**: 25 Gbps es lo normal hoy (10 Gbps alcanza para empezar), separada de la de los usuarios y de corosync. Cada escritura viaja a otros dos nodos antes de confirmarse.
+- **Discos SSD de centro de datos** (con protección contra cortes de luz). Los SSD de escritorio andan bien en las pruebas y muy mal con carga real.
+- **Memoria**: unos 4 GB de RAM por OSD, además de la de las VM.
+- **Discos enteros, sin RAID**: un OSD por disco. La protección la da Ceph.
+
+## Manos a la obra: armarlo
+
+<Terminal ejercicio={ejCeph} />
+
+## Cuando algo falla
+
+Ceph sabe arreglarse solo, pero hay que entender qué está haciendo:
+
+1. Un OSD deja de responder: queda **down**. Los datos que tenía están con una copia menos (**degraded**), pero se siguen leyendo y escribiendo con las que quedan.
+2. A los **10 minutos**, si no volvió, Ceph lo marca **out** y empieza a rehacer las copias que faltan en los otros OSD (**recovery** o **backfill**). Eso genera mucho tráfico entre nodos.
+3. Cuando termina, los PG vuelven a **active+clean**: los datos tienen otra vez sus 3 copias. Queda pendiente cambiar el disco.
+
+Si lo que se cae es un nodo para un reinicio planificado, no conviene que pase el paso 2: para eso está el flag **noout**.
+
+<Terminal ejercicio={ejFalla} />
+
+Los estados que vas a ver en `ceph -s`: **HEALTH_OK** (todo bien), **HEALTH_WARN** (algo degradado o un aviso, pero los datos andan) y **HEALTH_ERR** (algo serio: datos inaccesibles o un disco lleno). Y si `ceph -s` no responde, el problema son los monitores.
+
+<EnSimple>
+Ceph reparte cada dato en tres copias, en tres servidores distintos, usando los discos de los nodos del clúster. Los monitores llevan el mapa y votan; cada disco es un OSD; una fórmula (CRUSH) decide dónde va cada copia. Si se rompe un disco, los datos siguen andando con dos copias, y a los 10 minutos Ceph rehace la tercera en otro lado. Pide al menos tres nodos, red rápida y propia, SSD buenos y bastante memoria. Para un reinicio planificado, noout, y sacarlo después.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Ceph sobre una red de 1 Gbps o compartida">
+    Todo anda lento y las VM se congelan cuando Ceph reconstruye. Red propia de 10 Gbps como mínimo, mejor 25.
+  </ErrorComun>
+  <ErrorComun titulo="min_size 1 para que “no se frene”">
+    Con una sola copia aceptando escrituras, si se rompe ese disco se pierden datos. min_size 2 con size 3.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse de sacar noout">
+    Un disco que se rompa de verdad no se reconstruye nunca, porque Ceph espera que vuelva.
+  </ErrorComun>
+  <ErrorComun titulo="Llenar el pool">
+    Cerca del 85 % Ceph avisa y al 95 % deja de escribir. Y sin lugar libre, no puede rehacer las copias de un nodo caído.
+  </ErrorComun>
+  <ErrorComun titulo="Destruir un OSD sin esperar">
+    Si se destruye antes de que Ceph termine de rehacer las copias (y hay otro problema al mismo tiempo), se pueden perder datos. Primero out, esperar active+clean, después destroy.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- MON (mapa y quórum, 3 o 5), MGR (métricas), OSD (uno por disco); objetos en PG, ubicados por CRUSH.
+- Pool replicado: size 3, min_size 2, cada copia en un host distinto; 1/3 del espacio en bruto, hasta el 80 %.
+- Pide 3 nodos o más, red propia de 10 a 25 Gbps, SSD de centro de datos y RAM por OSD.
+- Falla: down (degraded), a los 10 minutos out y recovery, después active+clean; noout para mantenimientos.
+- Diagnóstico: ceph -s, ceph health detail, ceph osd tree, ceph df; reemplazo: out, destroy --cleanup, create.
+</Resumen>

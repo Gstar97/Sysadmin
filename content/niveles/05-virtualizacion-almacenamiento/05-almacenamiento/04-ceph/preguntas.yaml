@@ -1,0 +1,122 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué diferencia principal tiene Ceph con ZFS?
+  opciones:
+    - { texto: "Ceph reparte las copias entre varios servidores; ZFS protege los datos dentro de uno", correcta: true, explicacion: "Con Ceph se puede perder un nodo entero." }
+    - { texto: "Ceph no tiene redundancia", explicacion: "Guarda varias copias." }
+    - { texto: "ZFS necesita tres servidores", explicacion: "Es al revés." }
+    - { texto: "Son lo mismo", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un pool tiene size 3 y min_size 2. Se caen dos de los tres nodos. ¿Qué pasa con las VM?
+  opciones:
+    - { texto: "Se frena la entrada y salida: queda una sola copia, menos que min_size", correcta: true, explicacion: "Además se pierde el quórum de monitores." }
+    - { texto: "Siguen andando normalmente", explicacion: "Con una copia, Ceph no acepta escrituras." }
+    - { texto: "Se pierden los datos", explicacion: "La copia que queda está; vuelven al volver los nodos." }
+    - { texto: "Ceph rehace las copias en el nodo que queda", explicacion: "Cada copia tiene que ir a un host distinto." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué se pone ceph osd set noout antes de reiniciar un nodo?
+  opciones:
+    - { texto: "Para que Ceph no marque sus OSD como out y no empiece a mover datos mientras el nodo vuelve", correcta: true, explicacion: "Y hay que sacarlo después." }
+    - { texto: "Para que las VM no se apaguen", explicacion: "No tiene que ver con las VM." }
+    - { texto: "Para que el nodo arranque más rápido", explicacion: "No." }
+    - { texto: "Para borrar los OSD del nodo", explicacion: "Al contrario." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    root@pve01:~# ceph -s
+      cluster:
+        health: HEALTH_WARN
+                1 osds down
+                Degraded data redundancy: 51200/307206 objects degraded (16.667%), 43 pgs degraded
+      services:
+        mon: 3 daemons, quorum pve01,pve02,pve03 (age 2w)
+        osd: 6 osds: 5 up (since 3m), 6 in (since 2w)
+  opciones:
+    - { texto: "Un OSD se cayó hace unos minutos; los datos siguen accesibles con una copia menos y todavía no empezó a reubicarlos", correcta: true, explicacion: "Sigue in: no pasaron los 10 minutos." }
+    - { texto: "Se perdieron datos", explicacion: "Degraded no es perdido." }
+    - { texto: "Se perdió el quórum de monitores", explicacion: "Los 3 están en quórum." }
+    - { texto: "Está todo bien", explicacion: "Hay un OSD caído." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no conviene un clúster de Ceph de solo tres nodos para datos críticos, aunque funcione?
+  opciones:
+    - { texto: "Porque si se cae un nodo, no hay un tercer host donde rehacer la copia que falta: queda degradado hasta que vuelve", correcta: true, explicacion: "Con 4 nodos, Ceph se reconstruye solo." }
+    - { texto: "Porque Ceph no arranca con tres nodos", explicacion: "Arranca." }
+    - { texto: "Porque no hay quórum", explicacion: "Con 3 monitores hay quórum." }
+    - { texto: "Porque se necesita una SAN", explicacion: "No." }
+- id: p06
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para reemplazar un disco roto de un OSD.
+  pasos:
+    - "Identificar el OSD caído y su disco (ceph osd tree, ceph-volume lvm list, smartctl)"
+    - "Esperar (o forzar con ceph osd out) que pase a out y que Ceph rehaga las copias"
+    - "Destruir el OSD (pveceph osd destroy ID --cleanup)"
+    - "Cambiar el disco físico"
+    - "Crear el OSD en el disco nuevo (pveceph osd create /dev/sdX)"
+  explicacion: Hasta que el clúster no vuelve a active+clean, conviene no destruir nada.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es un OSD en Ceph?
+  opciones:
+    - { texto: "El servicio que guarda los datos en un disco: uno por disco", correcta: true, explicacion: "Object Storage Daemon." }
+    - { texto: "Un monitor", explicacion: "Es otra pieza." }
+    - { texto: "Un pool", explicacion: "No." }
+    - { texto: "Una VM", explicacion: "No." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué pide Ceph para andar bien en producción? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Una red propia de 10 Gbps o más (25 es lo normal hoy)", correcta: true, explicacion: "Cada escritura viaja a otros nodos." }
+    - { texto: "SSD de centro de datos con protección contra cortes", correcta: true, explicacion: "Los de escritorio rinden mal con carga real." }
+    - { texto: "Memoria para los OSD (unos 4 GB por disco)", correcta: true, explicacion: "Además de la de las VM." }
+    - { texto: "Un RAID por hardware debajo de cada OSD", explicacion: "Discos enteros, la protección la da Ceph." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con seis discos de 2 TB repartidos en tres nodos y un pool de 3 copias, ¿cuánto se puede guardar con comodidad?
+  opciones:
+    - { texto: "Unos 3,2 TB: 12 TB en bruto, un tercio útil y hasta el 80 %", correcta: true, explicacion: "4 TB útiles, sin pasar del 80 %." }
+    - { texto: "12 TB", explicacion: "Es el espacio en bruto." }
+    - { texto: "6 TB", explicacion: "Eso sería con 2 copias." }
+    - { texto: "8 TB", explicacion: "No." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ceph -s no responde y se queda esperando hasta que corta. ¿Qué es lo primero que sospechás?
+  opciones:
+    - { texto: "Que no hay quórum de monitores", correcta: true, explicacion: "Sin monitores, nadie tiene el mapa." }
+    - { texto: "Un OSD caído", explicacion: "Eso se ve en ceph -s, no lo cuelga." }
+    - { texto: "El pool lleno", explicacion: "Se vería como HEALTH_ERR." }
+    - { texto: "Falta el manager", explicacion: "Sin MGR, ceph -s responde igual." }
+- id: p11
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que crea el pool vms y lo agrega como almacenamiento de Proxmox.
+  prompt: "root@pve01:~#"
+  aceptadas:
+    - "pveceph pool create vms --add_storages"
+    - "pveceph pool create vms --add_storages 1"
+    - "pveceph pool create vms --size 3 --min_size 2 --add_storages"
+    - "pveceph pool create vms --size 3 --min_size 2 --add_storages 1"
+  explicacion: size 3 y min_size 2 son los valores por defecto.
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Terminaste un mantenimiento con noout y te olvidaste de sacarlo. A la semana se rompe un disco. ¿Qué pasa?
+  opciones:
+    - { texto: "El OSD queda down pero nunca pasa a out, así que Ceph no rehace las copias y los datos quedan degradados", correcta: true, explicacion: "Por eso ceph -s muestra el flag como aviso." }
+    - { texto: "Se pierden los datos", explicacion: "Quedan con dos copias." }
+    - { texto: "Ceph lo reconstruye igual", explicacion: "noout se lo impide." }
+    - { texto: "El clúster se apaga", explicacion: "No." }

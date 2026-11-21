@@ -15,6 +15,7 @@ import { GiB, MiB } from './storage'
 import type { BashState } from './schema'
 import { pveOf, pveHooks, type Pve } from './proxmox'
 import { nodeOnline, type ClusterNode, type PveCluster } from './pvecluster'
+import { markDiskFailing } from './serverhw'
 
 interface Osd {
   id: number
@@ -281,7 +282,10 @@ function makeOsd(sys: System, c: Ceph, host: string, dev: string): Osd | string 
   if (!d) return `unable to get device info for '${dev}'`
   const path = `/dev/${d.name}`
   if (d.parts.length || sys.storage.holder(path) || sys.storage.sigs.has(path)) return `device '${path}' is already in use`
-  const id = c.osds.reduce((m, o) => Math.max(m, o.id + 1), 0)
+  // Como ceph osd new: el número libre más bajo (el de un OSD destruido se vuelve a usar).
+  let id = 0
+  while (c.osds.some((o) => o.id === id && !o.destroyed)) id++
+  c.osds = c.osds.filter((o) => o.id !== id)
   const vg = `ceph-${Math.random().toString(16).slice(2, 10)}-${Math.random().toString(16).slice(2, 6)}`
   sys.storage.sigs.set(path, { type: 'LVM2_member', uuid: sys.storage.newUuid('LVM2_member'), size: d.size, baseUsed: 0 })
   const v = { name: vg, uuid: sys.storage.newUuid('LVM2_member'), pvs: [path], lvs: [] }
@@ -314,7 +318,10 @@ System.labHooks.push((all, states) => {
       const n = nodes.find((x) => x.name === o.nodo)
       if (!n) continue
       const r = makeOsd(n.sys, c, o.nodo, o.disco)
-      if (typeof r !== 'string') r.failed = o.fallado
+      if (typeof r !== 'string') {
+        r.failed = o.fallado
+        if (o.fallado) markDiskFailing(n.sys, r.dev)
+      }
     }
     ensureMgrPool(c)
     for (const p of st.pools) {
@@ -661,3 +668,34 @@ export function verifyCeph(sys: System, check: object): { ok: boolean; label: st
   }
   return { ok, label: `Ceph está ${parts.join(', ')}` }
 }
+
+// ceph-volume lvm list: qué disco tiene cada OSD de este nodo.
+register('ceph-volume', {
+  usage: 'ceph-volume lvm list [DISPOSITIVO]',
+  path: '/usr/sbin',
+  run(ctx) {
+    const pve = pveOf(ctx.sys)
+    const c = pve ? cephOf(pve) : undefined
+    if (ctx.sh.user !== 'root') {
+      ctx.err('-->  RuntimeError: Unable to load caller info: root privileges are required\n')
+      return 1
+    }
+    if (ctx.args[0] !== 'lvm' || ctx.args[1] !== 'list') {
+      ctx.err('usage: ceph-volume lvm list [DEVICE]\n[simulador] Solo está ceph-volume lvm list.\n')
+      return 2
+    }
+    const only = ctx.args[2]
+    const mine = (c?.osds ?? []).filter((o) => !o.destroyed && o.host === pve!.node && (!only || o.dev === only))
+    if (!mine.length) {
+      ctx.err('No valid Ceph lvm devices found\n')
+      return 1
+    }
+    for (const o of mine) {
+      const vg = [...ctx.sys.storage.vgs.values()].find((v) => v.pvs.includes(o.dev))
+      const lv = vg?.lvs[0]
+      const path = vg && lv ? `/dev/${vg.name}/${lv.name}` : o.dev
+      ctx.out(`\n\n====== osd.${o.id} =======\n\n  [block]       ${path}\n\n      block device              ${path}\n      block uuid                ${(vg?.uuid ?? '').slice(0, 38)}\n      cephx lockbox secret      \n      cluster fsid              ${c!.fsid}\n      cluster name              ceph\n      crush device class        \n      encrypted                 0\n      osd id                    ${o.id}\n      osdspec affinity          \n      type                      block\n      vdo                       0\n      devices                   ${o.dev}\n`)
+    }
+    return 0
+  },
+})

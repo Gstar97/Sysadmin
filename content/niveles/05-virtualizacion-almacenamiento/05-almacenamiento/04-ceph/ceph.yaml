@@ -1,0 +1,48 @@
+tipo: diagrama
+titulo: Las piezas de Ceph
+puntos:
+  - id: cliente
+    titulo: El cliente (la VM)
+    area: { x: 2.3, y: 10, ancho: 22.1, alto: 21 }
+    texto: >-
+      Proxmox usa el disco de la VM como un RBD (un disco de bloques hecho de objetos de 4 MiB).
+      El cliente le pide el mapa a los monitores y después calcula solo dónde está cada objeto:
+      no hay un servidor central por el que pase todo, y por eso Ceph crece sin cuello de botella.
+  - id: mons
+    titulo: Monitores (MON)
+    area: { x: 27.4, y: 10, ancho: 45.1, alto: 21 }
+    texto: >-
+      Guardan el mapa del clúster y votan, igual que corosync: hace falta mayoría. Siempre en
+      número impar, 3 o 5. Sin quórum de monitores, todo se detiene (ceph -s ni siquiera
+      responde). Usan poco disco y poca CPU, así que van en los mismos nodos.
+  - id: mgr
+    titulo: Manager (MGR)
+    area: { x: 75.6, y: 10, ancho: 22.1, alto: 21 }
+    texto: >-
+      Junta estadísticas y ofrece el panel y los módulos (alertas, métricas para Prometheus). Uno
+      está activo y los demás esperan; si no hay ninguno, los datos siguen andando pero ceph -s
+      deja de mostrar el uso.
+  - id: crush
+    titulo: PG y CRUSH
+    area: { x: 2.3, y: 36.5, ancho: 95.3, alto: 8.5 }
+    texto: >-
+      Los objetos se agrupan en PG (grupos de ubicación) y CRUSH, una fórmula, decide qué OSD
+      guarda cada PG respetando la regla: cada copia en un host distinto. Si un OSD desaparece,
+      CRUSH recalcula y Ceph mueve solo lo necesario. El número de PG lo ajusta solo el
+      autoescalado.
+  - id: osd
+    titulo: OSD (un disco)
+    area: { x: 4.7, y: 61, ancho: 11.6, alto: 18 }
+    texto: >-
+      Un servicio por disco, que guarda los datos (BlueStore, directo sobre el disco, sin sistema
+      de archivos). La copia principal recibe la escritura y la manda a las otras dos; la VM recién
+      sigue cuando las copias necesarias confirmaron. Por eso la red entre nodos pesa tanto en la
+      latencia.
+  - id: host
+    titulo: El host como dominio de falla
+    area: { x: 35.1, y: 50, ancho: 29.8, alto: 46 }
+    texto: >-
+      Con la regla de siempre, dos copias del mismo dato nunca van al mismo nodo. Se puede perder un
+      nodo entero (con sus dos discos) sin perder datos. Con solo 3 nodos y 3 copias, si se cae
+      uno, Ceph no tiene a dónde rehacer la tercera copia: queda degradado hasta que vuelve. Por
+      eso, si se puede, 4 nodos o más.

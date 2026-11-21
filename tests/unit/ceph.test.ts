@@ -85,3 +85,19 @@ describe('Ceph', () => {
     expect(verifyBash(sh, { ceph: 'HEALTH_OK' }).ok).toBe(true)
   })
 })
+
+describe('Ceph: diagnóstico de un OSD roto', () => {
+  it('ceph-volume dice qué disco es y smartctl muestra el disco fallando; el reemplazo vuelve a usar el número', async () => {
+    const st = base({ osds: [1, 2, 3].flatMap((n) => [{ nodo: `pve0${n}`, disco: 'sdb' }, { nodo: `pve0${n}`, disco: 'sdc', fallado: n === 2 }]), pools: [{ nombre: 'vms', usado_gb: 400 }] })
+    st.servidores![0] = { ...st.servidores![0], discos: [...discos, { nombre: 'sdd', tamano: '1T' }] }
+    const { run, sh } = await session(st)
+    expect((await run('ssh root@pve02 ceph-volume lvm list')).out).toMatch(/osd id\s+3[\s\S]*devices\s+\/dev\/sdc/)
+    expect((await run('ssh root@pve02 smartctl -H /dev/sdc')).out).toContain('FAILED!')
+    expect((await run('ssh root@pve02 smartctl -H /dev/sdb')).out).toContain('PASSED')
+    expect((await run('ssh root@pve02 pveceph osd destroy 3 --cleanup')).err).toContain('in use')
+    await run('ceph osd out 3')
+    expect((await run('ssh root@pve02 pveceph osd destroy 3 --cleanup')).code).toBe(0)
+    expect((await run('ssh root@pve02 pveceph osd create /dev/sdd')).out).toContain('osd ID: 3')
+    expect(verifyBash(sh, { ceph: 'HEALTH_OK', osds: 6, osds_up: 6 }).ok).toBe(true)
+  })
+})

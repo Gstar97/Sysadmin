@@ -1,0 +1,102 @@
+tipo: terminal
+shell: bash
+titulo: Un disco que se rompe y un nodo que hay que reiniciar
+descripcion: >-
+  El clúster "produccion" (pve01, pve02 y pve03) usa Ceph con seis OSD de 2 TB y el pool "vms"
+  con 1,2 TB de datos. El monitoreo avisa que Ceph está en HEALTH_WARN. En pve02 hay un disco
+  nuevo de 2 TB (sdd) que el técnico de guardia conectó esta mañana. Estás en pve01.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  equipo: { cpus: 32, memoria_gb: 128, fisico: true }
+  red: { interfaces: [{ nombre: eno1, ip: 192.168.10.21/24, estado: UP }], puerta_enlace: 192.168.10.1 }
+  discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }]
+  proxmox:
+    repos: no-subscription
+    cluster: produccion
+    ceph:
+      red: 10.10.20.0/24
+      osds:
+        - { nodo: pve01, disco: sdb }
+        - { nodo: pve01, disco: sdc }
+        - { nodo: pve02, disco: sdb }
+        - { nodo: pve02, disco: sdc, fallado: true }
+        - { nodo: pve03, disco: sdb }
+        - { nodo: pve03, disco: sdc }
+      pools: [{ nombre: vms, usado_gb: 1200 }]
+  servidores:
+    - { hostname: pve02, ip: 192.168.10.22, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 32, memoria_gb: 128, fisico: true }, discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }, { nombre: sdd, tamano: 2T }], proxmox: { repos: no-subscription, cluster: produccion } }
+    - { hostname: pve03, ip: 192.168.10.23, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 32, memoria_gb: 128, fisico: true }, discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }], proxmox: { repos: no-subscription, cluster: produccion } }
+pasos:
+  - consigna: Averiguá qué le pasa a Ceph y cuál es el OSD con problemas (número, nodo y disco).
+    verificar:
+      - { comando_usado: "ceph osd tree" }
+      - { comando_usado: "ceph health detail" }
+    pistas:
+      - "ceph -s da el resumen; ceph health detail, cada aviso con el OSD que lo causa."
+      - "ceph osd tree muestra en qué host está; ssh root@pve02 ceph-volume lvm list, en qué disco; y smartctl -H, si el disco está roto."
+    solucion:
+      - ceph -s
+      - ceph health detail
+      - ceph osd tree
+      - ssh root@pve02 ceph-volume lvm list
+      - ssh root@pve02 smartctl -H /dev/sdc
+    explicacion: >-
+      osd.3, en pve02, sobre /dev/sdc, está down, y SMART confirma que el disco se está muriendo
+      (si SMART dijera PASSED, lo primero sería mirar el servicio ceph-osd@3 y su registro).
+      Mientras el OSD siga "in", los datos que tenía están con una copia menos (degraded): siguen
+      accesibles, porque quedan 2 copias y min_size es 2.
+  - consigna: >-
+      Ceph espera 10 minutos antes de reubicar los datos de un OSD caído. Esperá a que osd.3 pase
+      a "out" y mirá cómo queda el clúster.
+    verificar:
+      - { ceph: HEALTH_WARN, osds_up: 5 }
+      - { comando_usado: "sleep" }
+    pistas:
+      - "sleep 11m y después ceph -s y ceph osd tree (REWEIGHT 0 quiere decir out)."
+    solucion:
+      - sleep 11m
+      - ceph -s
+      - ceph osd tree
+    explicacion: >-
+      Al pasar a out, Ceph rehízo las copias que faltaban en los OSD que quedan (en un clúster real,
+      eso lleva de minutos a horas y se ve como recovery en ceph -s). Los PG vuelven a
+      active+clean: los datos están otra vez con 3 copias, aunque con menos espacio libre. Queda el
+      aviso de que hay un OSD caído.
+  - consigna: Reemplazá osd.3 por un OSD nuevo en el disco sdd de pve02 y dejá Ceph sano.
+    verificar:
+      - { ceph: HEALTH_OK, osds: 6, osds_up: 6 }
+    pistas:
+      - "Primero se destruye el OSD roto: ssh root@pve02 pveceph osd destroy 3 --cleanup"
+      - "Después: ssh root@pve02 pveceph osd create /dev/sdd"
+    solucion:
+      - ssh root@pve02 pveceph osd destroy 3 --cleanup
+      - ssh root@pve02 pveceph osd create /dev/sdd
+      - ceph -s
+      - ceph osd tree
+    explicacion: >-
+      destroy lo saca del mapa y borra su clave; --cleanup limpia el disco viejo. El OSD nuevo
+      toma el número libre más bajo (vuelve a ser osd.3) y Ceph le empieza a mandar datos para
+      equilibrar. Nada de esto necesitó apagar una VM.
+  - consigna: >-
+      Hay que reiniciar pve03 para instalar actualizaciones. Hacelo sin que Ceph empiece a
+      reubicar datos mientras está apagado, y dejá todo como estaba.
+    verificar:
+      - { comando_usado: "ceph osd set noout" }
+      - { comando_usado: "ceph osd unset noout" }
+      - { ceph: HEALTH_OK }
+    pistas:
+      - "ceph osd set noout antes, y ceph osd unset noout cuando pve03 vuelva."
+    solucion:
+      - ceph osd set noout
+      - ssh root@pve03 reboot
+      - ceph -s
+      - ceph osd unset noout
+      - ceph -s
+    explicacion: >-
+      Un reinicio dura menos de 10 minutos casi siempre, pero si se demora (una actualización de
+      firmware, un disco que tarda), Ceph empezaría a copiar terabytes que después tendría que
+      volver a mover. noout le dice "ya vuelve, no hagas nada". Lo importante es sacarlo después:
+      con noout puesto, un disco que se rompa de verdad no se reconstruye nunca.

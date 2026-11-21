@@ -1,0 +1,105 @@
+tipo: terminal
+shell: bash
+titulo: Ceph en el clúster de tres nodos
+descripcion: >-
+  pve01, pve02 y pve03 (192.168.10.21 a .23) forman el clúster "produccion" de Proxmox VE 9,
+  sin suscripción. Cada uno tiene dos discos de 2 TB vacíos (sdb y sdc) y una segunda placa de
+  25 Gbps conectada a un switch aparte, con la red 10.10.20.0/24 para Ceph. Estás en pve01 y
+  entrás por ssh como root a los otros dos.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  equipo: { cpus: 32, memoria_gb: 128, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+      - { nombre: ens2f0, ip: 10.10.20.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }]
+  proxmox: { repos: no-subscription, cluster: produccion }
+  servidores:
+    - { hostname: pve02, ip: 192.168.10.22, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 32, memoria_gb: 128, fisico: true }, discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }], proxmox: { repos: no-subscription, cluster: produccion } }
+    - { hostname: pve03, ip: 192.168.10.23, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 32, memoria_gb: 128, fisico: true }, discos: [{ nombre: sdb, tamano: 2T }, { nombre: sdc, tamano: 2T }], proxmox: { repos: no-subscription, cluster: produccion } }
+pasos:
+  - consigna: Instalá Ceph en los tres nodos.
+    verificar:
+      - { paquete: ceph-common }
+      - { en: pve02, verificar: { paquete: ceph-common } }
+      - { en: pve03, verificar: { paquete: ceph-common } }
+    pistas:
+      - "pveceph install. Si falla con 401, fijate qué repositorio usa por defecto."
+      - "Sin suscripción: pveceph install --repository no-subscription (y lo mismo con ssh root@pve02 ...)."
+    solucion:
+      - pveceph install --repository no-subscription
+      - ssh root@pve02 pveceph install --repository no-subscription
+      - ssh root@pve03 pveceph install --repository no-subscription
+    explicacion: >-
+      Igual que con Proxmox, el repositorio enterprise pide suscripción. Ceph se instala en todos
+      los nodos que vayan a tener monitores, OSD o que vayan a usar el almacenamiento.
+  - consigna: >-
+      Iniciá la configuración de Ceph con la red 10.10.20.0/24 y creá un monitor en cada nodo.
+    verificar:
+      - { ceph: cualquiera, mons: 3 }
+    pistas:
+      - "pveceph init --network 10.10.20.0/24 (una sola vez, en un nodo)."
+      - "pveceph mon create en cada uno."
+    solucion:
+      - pveceph init --network 10.10.20.0/24
+      - pveceph mon create
+      - ssh root@pve02 pveceph mon create
+      - ssh root@pve03 pveceph mon create
+      - ceph -s
+    explicacion: >-
+      Tres monitores, como los tres votos de corosync: con uno caído, los otros dos siguen teniendo
+      mayoría. El primer monitor crea también un manager (MGR); conviene sumar uno de reserva en
+      otro nodo con pveceph mgr create. ceph -s todavía muestra un aviso: no hay ningún OSD.
+  - consigna: Convertí los dos discos de cada nodo en OSD.
+    verificar:
+      - { ceph: cualquiera, osds: 6, osds_up: 6 }
+    pistas:
+      - "pveceph osd create /dev/sdb y /dev/sdc, en cada nodo."
+    solucion:
+      - pveceph osd create /dev/sdb
+      - pveceph osd create /dev/sdc
+      - ssh root@pve02 pveceph osd create /dev/sdb
+      - ssh root@pve02 pveceph osd create /dev/sdc
+      - ssh root@pve03 pveceph osd create /dev/sdb
+      - ssh root@pve03 pveceph osd create /dev/sdc
+      - ceph osd tree
+    explicacion: >-
+      Un OSD por disco, nunca un RAID debajo: la protección la da Ceph copiando entre servidores.
+      ceph osd tree muestra el árbol que usa CRUSH: la raíz, los hosts y sus OSD. Como las copias
+      van a hosts distintos, perder un servidor entero no pierde datos.
+  - consigna: >-
+      Creá el pool "vms" (3 copias, mínimo 2) y agregalo como almacenamiento de Proxmox. Comprobá
+      que Ceph quedó sano.
+    verificar:
+      - { ceph: HEALTH_OK, pool: vms, size: 3, min_size: 2 }
+      - { pve_almacenamiento: vms, tipo: rbd }
+    pistas:
+      - "pveceph pool create vms --add_storages (size 3 y min_size 2 son los valores de siempre)."
+    solucion:
+      - pveceph pool create vms --add_storages
+      - ceph -s
+      - ceph df
+      - pvesm status
+    explicacion: >-
+      size 3 es cuántas copias guarda; min_size 2, cuántas tienen que estar para aceptar
+      escrituras. Con 12 TB en bruto quedan unos 4 TB útiles, y conviene no pasar del 80 % para
+      que haya lugar donde rehacer las copias si se cae un nodo. ceph df muestra ese MAX AVAIL.
+  - consigna: Creá en pve01 la VM 300 "erp01" con un disco de 32 GB en vms, arrancala y migrala en vivo a pve03.
+    verificar:
+      - { pve_vm: 300, nodo: pve03, estado: running }
+    pistas:
+      - "qm create 300 --name erp01 --memory 4096 --scsi0 vms:32 --net0 virtio,bridge=vmbr0"
+      - "qm migrate 300 pve03 --online"
+    solucion:
+      - qm create 300 --name erp01 --memory 4096 --scsi0 vms:32 --net0 virtio,bridge=vmbr0
+      - qm start 300
+      - qm migrate 300 pve03 --online
+    explicacion: >-
+      El disco está repartido entre los seis OSD de los tres nodos, así que cualquier nodo lo puede
+      usar: la migración solo copia la memoria, y la alta disponibilidad puede arrancar la VM en
+      otro nodo si se cae el suyo, sin perder nada.

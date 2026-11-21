@@ -48,7 +48,7 @@ export const UBUNTU_VIRT: Record<string, PackageInfo> = {
   'proxmox-ve': {
     summary: 'Proxmox Virtual Environment',
     version: '9.2.0',
-    requires: ['pve-qemu-kvm', 'zfsutils-linux', 'open-iscsi'],
+    requires: ['pve-qemu-kvm', 'zfsutils-linux', 'open-iscsi', 'smartmontools'],
     services: [
       { name: 'pveproxy', description: 'PVE API Proxy Server', ports: [8006], enabledByDefault: true, activeAfterInstall: true },
       { name: 'pvedaemon', description: 'PVE API Daemon', ports: [85], enabledByDefault: true, activeAfterInstall: true },

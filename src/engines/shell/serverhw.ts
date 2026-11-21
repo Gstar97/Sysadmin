@@ -26,12 +26,37 @@ System.initHooks.push((sys, state) => {
   if (state.ups) UPS.set(sys, structuredClone(state.ups))
 })
 
+/**
+ * Los datos SMART de un disco. En un servidor físico, un disco sin datos en el ejercicio es un
+ * disco sano cualquiera (en una VM, los discos no tienen SMART).
+ */
+function smartSpec(sys: System, dev: string): SmartSpec | undefined {
+  const known = SMART.get(sys)?.[dev]
+  if (known || !sys.physical) return known
+  const disk = sys.storage.disks.get(dev.replace('/dev/', ''))
+  if (!disk || disk.name === 'sda' || disk.name.startsWith('sr')) return undefined
+  const all = SMART.get(sys) ?? {}
+  SMART.set(sys, all)
+  let h = 0
+  for (const ch of sys.hostname + dev) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  all[dev] = { estado: 'ok', reasignados: 0, pendientes: 0, horas: 8000 + (h % 20000), temperatura: 33 + (h % 6), familia: 'Seagate Exos 7E10', modelo: 'ST4000NM024B', serie: `ZC${h.toString(36).toUpperCase().slice(0, 6)}` }
+  return all[dev]
+}
+
+/** Otro motor marca un disco como roto (por ejemplo, el de un OSD de Ceph fallado). */
+export function markDiskFailing(sys: System, dev: string) {
+  const all = SMART.get(sys) ?? {}
+  SMART.set(sys, all)
+  const prev = all[dev] ?? smartSpec(sys, dev)
+  all[dev] = { estado: 'fallando', reasignados: 3152, pendientes: 488, horas: prev?.horas ?? 31877, temperatura: prev?.temperatura ?? 41, familia: prev?.familia ?? 'Seagate Exos 7E10', modelo: prev?.modelo ?? 'ST4000NM024B', serie: prev?.serie ?? 'ZC9F4K21' }
+}
+
 // ---------------------------------------------------------------------------------------
 // smartctl
 // ---------------------------------------------------------------------------------------
 
 function smartHeader(sys: System) {
-  const k = sys.distro === 'rocky' ? KERNEL_VERSION.rocky : KERNEL_VERSION.ubuntu
+  const k = sys.kernelRelease ?? (sys.distro === 'rocky' ? KERNEL_VERSION.rocky : KERNEL_VERSION.ubuntu)
   return `smartctl 7.4 2023-08-01 r5530 [x86_64-linux-${k}] (local build)\nCopyright (C) 2002-23, Bruce Allen, Christian Franke, www.smartmontools.org\n\n`
 }
 
@@ -77,7 +102,7 @@ register('smartctl', {
     const flags = new Set(ctx.args.filter((a) => /^-[a-zA-Z]+$/.test(a)).flatMap((a) => [...a.slice(1)]))
     const long = (n: string) => ctx.args.includes(n)
     const all = flags.has('a') || long('--all') || long('-x')
-    const spec = SMART.get(sys)?.[dev]
+    const spec = smartSpec(sys, dev)
     let out = smartHeader(sys)
     if (!spec) {
       // Disco virtual: no hay SMART.
