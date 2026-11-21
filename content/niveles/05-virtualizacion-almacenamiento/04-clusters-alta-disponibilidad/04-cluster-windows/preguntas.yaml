@@ -1,0 +1,95 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es un CSV en un clúster de Windows?
+  opciones:
+    - { texto: "Un disco compartido que todos los nodos montan a la vez en C:\\ClusterStorage, donde van las VM", correcta: true, explicacion: "Cluster Shared Volume." }
+    - { texto: "Un archivo de texto con los nodos", explicacion: "Acá no es un archivo separado por comas." }
+    - { texto: "El testigo", explicacion: "No." }
+    - { texto: "La red del clúster", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es el equivalente en Proxmox del testigo de un clúster de Windows?
+  opciones:
+    - { texto: "El dispositivo de quórum (QDevice)", correcta: true, explicacion: "Los dos dan un voto extra." }
+    - { texto: "El almacenamiento compartido", explicacion: "Ese es el CSV." }
+    - { texto: "ha-manager", explicacion: "No." }
+    - { texto: "El watchdog", explicacion: "Es el cercado." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un clúster de Windows de dos nodos sin testigo. Se cae HV01 y el clúster entero se detiene; otro día se cayó HV02 y siguió funcionando. ¿Por qué?
+  opciones:
+    - { texto: "El quórum dinámico le dejó el voto a HV01 y se lo sacó a HV02: si cae el que tiene el voto, no hay mayoría", correcta: true, explicacion: "Con un testigo no depende de qué nodo se caiga." }
+    - { texto: "HV01 tiene más memoria", explicacion: "No tiene que ver." }
+    - { texto: "Es un error de Windows", explicacion: "Es como funciona el quórum dinámico." }
+    - { texto: "El CSV estaba en HV01", explicacion: "El CSV es de los dos." }
+- id: p04
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Dónde puede estar el testigo de un clúster de dos nodos? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Un recurso compartido en otro servidor del dominio", correcta: true, explicacion: "File share witness." }
+    - { texto: "Una cuenta de almacenamiento de Azure", correcta: true, explicacion: "Cloud Witness." }
+    - { texto: "Un disco pequeño de la SAN", correcta: true, explicacion: "Disk witness." }
+    - { texto: "Un recurso compartido en HV01", explicacion: "Si se cae HV01, se lleva el testigo." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  prompt: "PS> "
+  enunciado: Escribí el comando para drenar HV02 (pausarlo y mover sus VM a otros nodos).
+  aceptadas: ["Suspend-ClusterNode -Name HV02 -Drain", "Suspend-ClusterNode HV02 -Drain", "Suspend-ClusterNode -Drain -Name HV02"]
+  explicacion: "Para volver: Resume-ClusterNode -Name HV02 -Failback Immediate."
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Agregaste una VM al clúster y viste este aviso. ¿Qué pasa con esa VM?
+  salida: |
+    PS> Add-ClusterVirtualMachineRole -VMName local01
+    WARNING: The virtual machine 'local01' has files on local storage (D:\VMs\local01.vhdx). It will not be able to fail over to another node until they are moved to a Cluster Shared Volume (Move-VMStorage).
+  opciones:
+    - { texto: "Es un rol del clúster, pero si su nodo se cae no puede arrancar en otro: hay que mover sus archivos al CSV", correcta: true, explicacion: "Move-VMStorage lo hace con la VM andando." }
+    - { texto: "Está protegida igual", explicacion: "No: los otros nodos no ven D:." }
+    - { texto: "No se agregó", explicacion: "Se agregó, con el aviso." }
+    - { texto: "Hay que reinstalarla", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué los nodos de un clúster de Windows tienen que estar en el mismo dominio?
+  opciones:
+    - { texto: "Porque el clúster es una cuenta de equipo en Active Directory, y los nodos se autentican entre sí con el dominio", correcta: true, explicacion: "Existen clústeres sin dominio para casos especiales; para Hyper-V, se usa el dominio." }
+    - { texto: "Por la licencia", explicacion: "No." }
+    - { texto: "Por la red", explicacion: "No." }
+    - { texto: "No hace falta", explicacion: "Para este uso, sí." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para armar un clúster de Hyper-V de dos nodos.
+  pasos:
+    - "Instalar Failover Clustering en los dos nodos"
+    - "Validar con Test-Cluster y resolver los problemas"
+    - "Crear el clúster con New-Cluster"
+    - "Configurar el testigo"
+    - "Agregar el disco de la SAN como CSV"
+    - "Crear las VM en el CSV y agregarlas como roles"
+  explicacion: "El testigo va enseguida: un clúster de dos nodos sin testigo es frágil."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace Cluster-Aware Updating?
+  opciones:
+    - { texto: "Actualiza los nodos de a uno: drena, actualiza, reinicia, reanuda y sigue con el siguiente", correcta: true, explicacion: "Las VM nunca se cortan." }
+    - { texto: "Actualiza todos los nodos a la vez", explicacion: "Cortaría todo." }
+    - { texto: "Actualiza las VM", explicacion: "Los nodos." }
+    - { texto: "Actualiza el CSV", explicacion: "No." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre mover una VM con Live y con Quick?
+  opciones:
+    - { texto: "Live no corta; Quick guarda el estado, la pasa y la restaura, con unos segundos de corte", correcta: true, explicacion: "Live es lo normal." }
+    - { texto: "Quick es más rápido y no corta", explicacion: "Corta unos segundos." }
+    - { texto: "Son iguales", explicacion: "No." }
+    - { texto: "Live apaga la VM", explicacion: "No." }

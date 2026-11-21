@@ -1,0 +1,91 @@
+---
+id: n5-m4-l4
+titulo: Clúster de conmutación por error de Windows
+minutos: 150
+objetivos:
+  - Reconocer las piezas de un clúster de conmutación por error con Hyper-V y sus equivalentes en Proxmox.
+  - Crear un clúster de dos nodos con PowerShell, con testigo y volumen compartido, y agregarle VM.
+  - Hacer el mantenimiento de un nodo sin cortar las VM, y entender cómo decide el quórum en Windows.
+glosario: [csv-cluster, testigo-quorum]
+verificado: 2026-11
+---
+
+import wsfc from './wsfc.svg?raw'
+import wsfcDatos from './wsfc.yaml'
+import ej from './ej-wsfc.yaml'
+
+Lo que en Proxmox es el clúster con alta disponibilidad, en Windows Server es el **clúster de conmutación por error** (Failover Clustering). Es una característica de Windows Server que sirve para varias cosas (servidores de archivos, SQL Server), y la más común es hacer que las VM de Hyper-V sobrevivan a la caída de un servidor. Las ideas son las mismas que viste en Proxmox; cambian los nombres y las herramientas.
+
+<AntesDeEmpezar>
+- Hyper-V (lección 5.3.2) y PowerShell remoto (lección 3.2.5).
+- Active Directory: dominios y cuentas de equipo (módulo 3.3).
+- Alta disponibilidad, quórum y migración en vivo (lecciones 5.4.1 a 5.4.3).
+</AntesDeEmpezar>
+
+## Las piezas
+
+<DiagramaInteractivo datos={wsfcDatos} svg={wsfc} alt="Un clúster de conmutación por error con Hyper-V. Arriba, CLU01 con la IP 192.168.10.30: el nombre del clúster, una cuenta de equipo en Active Directory. En el medio, dos nodos con Windows Server y Hyper-V: HV01 con web01 y sql01, HV02 con app01; cada VM es un rol del clúster que se mueve en vivo de un nodo a otro. Entre ellos, las redes: administración y clientes, clúster (latido), migración en vivo y almacenamiento iSCSI. Abajo, los volúmenes compartidos del clúster (CSV): un disco de la SAN que ven los dos nodos, montado en C:\ClusterStorage\Volume1, donde van los vhdx y la configuración de las VM; el testigo, el tercer voto (un recurso compartido, un disco o Azure); y el mantenimiento: drenar un nodo y Cluster-Aware Updating." />
+
+Las equivalencias con Proxmox:
+
+| Windows | Proxmox |
+|---|---|
+| Nodo con Hyper-V y Failover Clustering | Nodo de Proxmox |
+| Nombre del clúster (CNO), en Active Directory | El nombre del clúster en corosync |
+| Testigo (recurso compartido, disco o Azure) | Dispositivo de quórum (QDevice) |
+| Volumen compartido del clúster (CSV) | Almacenamiento compartido (NFS, iSCSI con LVM, Ceph) |
+| VM agregada como rol | VM con ha-manager add |
+| Drenar el nodo (Suspend-ClusterNode -Drain) | Modo mantenimiento |
+| Cluster-Aware Updating | (se hace a mano, nodo por nodo) |
+
+Requisitos: todos los nodos en el **mismo dominio**, con la misma versión de Windows Server, los mismos conmutadores virtuales (con los mismos nombres) y acceso al mismo almacenamiento. Para administrarlo: el **Administrador de clústeres de conmutación por error**, Windows Admin Center o el módulo **FailoverClusters** de PowerShell.
+
+## El quórum en Windows
+
+La regla es la misma (más de la mitad de los votos), con dos agregados:
+
+- **Quórum dinámico**: cuando un nodo se apaga de forma ordenada, Windows le saca el voto y recalcula, así el clúster puede bajar de a uno hasta quedar con un solo nodo. Con dos nodos y sin testigo, uno de los dos queda sin voto: si se cae ese, el clúster sigue; si se cae el otro, se cae todo. Es una lotería, y por eso con dos nodos el testigo es indispensable.
+- **Testigo dinámico**: el testigo vota solo cuando hace falta para desempatar.
+
+Microsoft recomienda configurar siempre un testigo, en un lugar que no dependa de los nodos: un recurso compartido en otro servidor, o **Cloud Witness** (una cuenta de almacenamiento de Azure, que cuesta centavos).
+
+## Hacelo vos
+
+<Terminal ejercicio={ej} />
+
+## Para más adelante
+
+- **Storage Spaces Direct** y **Azure Local**: almacenamiento compartido hecho con los discos de los propios nodos (como Ceph en Proxmox), administrado desde Azure.
+- **Clústeres estirados** entre dos sitios, con Storage Replica.
+- **Cluster-Aware Updating** programado, que actualiza los nodos de a uno en una ventana.
+
+<EnSimple>
+El clúster de conmutación por error de Windows es lo mismo que el clúster de Proxmox con otros nombres: los nodos con Hyper-V comparten un disco de la SAN (el CSV, en C:\ClusterStorage), las VM se agregan como roles y, si su nodo se cae, arrancan en otro. El nombre del clúster es una cuenta de Active Directory, y el tercer voto lo da un testigo (un recurso compartido o Azure). Para mantenimiento, se drena el nodo y sus VM se van en vivo.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Dos nodos sin testigo">
+    El quórum dinámico deja a uno solo con voto: si se cae justo ese, se cae el clúster. Siempre testigo.
+  </ErrorComun>
+  <ErrorComun titulo="El testigo en un nodo del mismo clúster">
+    Si se cae ese nodo, se lleva el testigo. Va en otro servidor o en Azure.
+  </ErrorComun>
+  <ErrorComun titulo="VM con archivos fuera del CSV">
+    Quedan atadas a su nodo: el clúster no puede moverlas ni recuperarlas. Todo en C:\ClusterStorage.
+  </ErrorComun>
+  <ErrorComun titulo="Conmutadores virtuales con nombres distintos">
+    Una VM conectada a "Externo" no puede ir a un nodo donde se llama "External". Mismos nombres en todos.
+  </ErrorComun>
+  <ErrorComun titulo="Ignorar los avisos de Test-Cluster">
+    Un solo camino de red o un disco que no ven todos los nodos son problemas que aparecen el día de la falla. Se leen y se resuelven.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Failover Clustering + Hyper-V: nodos del mismo dominio, almacenamiento compartido, mismos conmutadores.
+- Install-WindowsFeature Failover-Clustering, Test-Cluster, New-Cluster -Name -Node -StaticAddress.
+- Testigo con Set-ClusterQuorum (-FileShareWitness, -CloudWitness o -DiskWitness); siempre, y fuera de los nodos.
+- Add-ClusterSharedVolume: C:\ClusterStorage\VolumeN; ahí van las VM.
+- Add-ClusterVirtualMachineRole, Move-ClusterVirtualMachineRole (Live o Quick).
+- Mantenimiento: Suspend-ClusterNode -Drain y Resume-ClusterNode -Failback Immediate; Cluster-Aware Updating.
+</Resumen>

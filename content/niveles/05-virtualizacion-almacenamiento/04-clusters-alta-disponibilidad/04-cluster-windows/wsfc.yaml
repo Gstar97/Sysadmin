@@ -1,0 +1,55 @@
+tipo: diagrama
+titulo: Las piezas de un clúster de Windows
+puntos:
+  - id: cno
+    titulo: El nombre del clúster (CNO)
+    area: { x: 34.9, y: 8.8, ancho: 30.2, alto: 13 }
+    texto: >-
+      Al crear el clúster se crea una cuenta de equipo en Active Directory (CLU01$) con su propia
+      IP. Con ese nombre se administra el clúster desde cualquier lado, y es la cuenta a la que se
+      le dan permisos, por ejemplo sobre el recurso compartido del testigo. Por eso los nodos
+      tienen que estar en el mismo dominio.
+  - id: hv01
+    titulo: Los nodos
+    area: { x: 4.7, y: 27.9, ancho: 29.1, alto: 32.6 }
+    texto: >-
+      Hasta 64 servidores con la misma versión de Windows Server, el rol Hyper-V, la
+      característica Failover Clustering y los mismos conmutadores virtuales (con el mismo
+      nombre: si en un nodo se llama Externo y en otro External, las VM no se pueden mover).
+  - id: hv02
+    titulo: Los roles
+    area: { x: 66.3, y: 27.9, ancho: 29.1, alto: 32.6 }
+    texto: >-
+      Cada VM que se agrega al clúster es un "rol": el clúster la vigila y, si su nodo se cae, la
+      vuelve a arrancar en otro. Con la migración en vivo (Live Migration) se mueve sin corte; con
+      la rápida (Quick), se guarda, se pasa y se restaura, con un corte de unos segundos.
+  - id: redes
+    titulo: Las redes
+    area: { x: 37.2, y: 32.6, ancho: 25.6, alto: 23.3 }
+    texto: >-
+      Como en Proxmox, conviene separar el tráfico: administración y clientes, el latido entre
+      nodos, la migración en vivo y el almacenamiento (iSCSI, en su propia red y con dos caminos).
+      Test-Cluster avisa si los nodos tienen un solo camino entre sí.
+  - id: csv
+    titulo: Volúmenes compartidos del clúster (CSV)
+    area: { x: 4.7, y: 67.4, ancho: 46.5, alto: 27.9 }
+    texto: >-
+      Un disco de la SAN que todos los nodos montan a la vez en C:\ClusterStorage\VolumeN. Ahí
+      van los discos y la configuración de las VM, así cualquier nodo puede arrancarlas. Una VM
+      con archivos en el disco local de un nodo queda atada a ese nodo. Para más adelante: Storage
+      Spaces Direct, que arma el almacenamiento compartido con los discos de los propios nodos
+      (como Ceph en Proxmox).
+  - id: testigo
+    titulo: El testigo
+    area: { x: 53.5, y: 67.4, ancho: 19.8, alto: 27.9 }
+    texto: >-
+      El voto extra para el quórum: un recurso compartido en otro servidor (que no sea un nodo del
+      clúster), un disco pequeño de la SAN o una cuenta de almacenamiento de Azure (Cloud
+      Witness). Con dos nodos es indispensable; Microsoft recomienda configurarlo siempre.
+  - id: mant
+    titulo: El mantenimiento
+    area: { x: 75.6, y: 67.4, ancho: 22.1, alto: 27.9 }
+    texto: >-
+      Drenar un nodo (Suspend-ClusterNode -Drain) lo pausa y manda sus VM en vivo a los otros.
+      Cluster-Aware Updating hace lo mismo con las actualizaciones de Windows: drena un nodo, lo
+      actualiza, lo reinicia, lo reanuda y sigue con el siguiente.

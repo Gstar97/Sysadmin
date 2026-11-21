@@ -1,0 +1,123 @@
+tipo: terminal
+shell: powershell
+titulo: Dos nodos Hyper-V en clúster
+descripcion: >-
+  HV01 (donde estás) y HV02 son dos Windows Server 2025 Datacenter del dominio empresa.local, con
+  Hyper-V y un conmutador Externo cada uno. Los dos ven el mismo disco de la SAN por iSCSI (el
+  disco 2, de 500 GB). FS01 es el servidor de archivos y tiene la carpeta C:\Testigo para el
+  testigo del clúster. La IP reservada para el clúster es 192.168.10.30.
+estado_inicial:
+  equipo: HV01
+  edicion: Datacenter
+  dominio: empresa.local
+  red: { ip: 192.168.10.31, adaptador: Ethernet, dns: [192.168.10.10] }
+  discos:
+    - { numero: 1, tamano_gb: 200, estilo: GPT, particiones: [{ letra: D, tamano_gb: 199, sistema: NTFS }] }
+    - { numero: 2, tamano_gb: 500, bus: iSCSI, estilo: GPT }
+  hyperv: { conmutadores: [{ nombre: Externo, tipo: External }] }
+  servidores:
+    - { equipo: DC01, dominio: empresa.local, controlador_dominio: true, red: { ip: 192.168.10.10, dns: [127.0.0.1] }, ad: {} }
+    - equipo: HV02
+      edicion: Datacenter
+      dominio: empresa.local
+      red: { ip: 192.168.10.32, adaptador: Ethernet, dns: [192.168.10.10] }
+      discos:
+        - { numero: 1, tamano_gb: 200, estilo: GPT, particiones: [{ letra: D, tamano_gb: 199, sistema: NTFS }] }
+        - { numero: 2, tamano_gb: 500, bus: iSCSI, estilo: GPT }
+      hyperv: { conmutadores: [{ nombre: Externo, tipo: External }] }
+    - { equipo: FS01, dominio: empresa.local, red: { ip: 192.168.10.20, dns: [192.168.10.10] }, archivos: { 'C:\Testigo': { tipo: directorio } } }
+pasos:
+  - consigna: Instalá la característica de clústeres (con sus herramientas) en HV01 y en HV02, y validá la configuración.
+    verificar:
+      - { caracteristica: Failover-Clustering }
+      - { en: HV02, verificar: { caracteristica: Failover-Clustering } }
+      - { comando_usado: "test-cluster" }
+    pistas:
+      - "Install-WindowsFeature Failover-Clustering -IncludeManagementTools"
+      - "Invoke-Command -ComputerName HV02 { Install-WindowsFeature Failover-Clustering -IncludeManagementTools }"
+      - "Test-Cluster -Node HV01, HV02"
+    solucion:
+      - Install-WindowsFeature Failover-Clustering -IncludeManagementTools
+      - Invoke-Command -ComputerName HV02 { Install-WindowsFeature Failover-Clustering -IncludeManagementTools }
+      - Test-Cluster -Node HV01, HV02
+    explicacion: >-
+      Test-Cluster revisa los nodos, las redes, el almacenamiento y Hyper-V, y deja un informe.
+      Microsoft solo da soporte a clústeres que pasan la validación; los avisos (un solo camino
+      de red, por ejemplo) se leen y se deciden, no se ignoran.
+  - consigna: Creá el clúster CLU01 con los dos nodos y la IP 192.168.10.30, y mirá sus nodos.
+    verificar:
+      - { cluster_win: CLU01, nodos: 2 }
+      - { salida_contiene: "HV02" }
+    pistas:
+      - "New-Cluster -Name CLU01 -Node HV01, HV02 -StaticAddress 192.168.10.30"
+      - "Get-ClusterNode"
+    solucion:
+      - New-Cluster -Name CLU01 -Node HV01, HV02 -StaticAddress 192.168.10.30
+      - Get-ClusterNode
+    explicacion: >-
+      El aviso al crearlo es por el quórum: con dos nodos y sin testigo, el quórum dinámico le
+      saca el voto a uno. Si se cae ese, el clúster sigue; si se cae el otro, se cae todo. Fijate
+      con Get-ClusterNode | Select-Object Name, NodeWeight.
+  - consigna: >-
+      Configurá el testigo en un recurso compartido de FS01: compartí C:\Testigo como "Testigo",
+      con control total para la cuenta del clúster (EMPRESA\CLU01$), y usalo como testigo.
+    verificar:
+      - { cluster_win: CLU01, testigo: FileShare, quorum: true }
+    pistas:
+      - "Invoke-Command -ComputerName FS01 { New-SmbShare -Name Testigo -Path C:\\Testigo -FullAccess 'EMPRESA\\CLU01$' }"
+      - "Set-ClusterQuorum -FileShareWitness \\\\FS01\\Testigo"
+    solucion:
+      - "Invoke-Command -ComputerName FS01 { New-SmbShare -Name Testigo -Path C:\\Testigo -FullAccess 'EMPRESA\\CLU01$' }"
+      - Set-ClusterQuorum -FileShareWitness \\FS01\Testigo
+      - Get-ClusterQuorum
+    explicacion: >-
+      El testigo no puede estar en un nodo del mismo clúster (si se cae ese nodo, se lleva el
+      testigo con él). Sin otro servidor a mano, la alternativa es Cloud Witness: una cuenta de
+      almacenamiento de Azure, que cuesta centavos por mes.
+  - consigna: Convertí el disco de la SAN (Cluster Disk 1) en un volumen compartido del clúster (CSV).
+    verificar:
+      - { cluster_win: CLU01, csv: 1 }
+    pistas:
+      - "Add-ClusterSharedVolume -Name 'Cluster Disk 1'"
+    solucion:
+      - Add-ClusterSharedVolume -Name 'Cluster Disk 1'
+      - Get-ClusterSharedVolume
+    explicacion: >-
+      Ahora los dos nodos ven C:\ClusterStorage\Volume1 a la vez. Ahí van las VM que tienen que
+      poder moverse.
+  - consigna: >-
+      Creá web01 en el CSV (generación 2, 2 GB, disco nuevo de 40 GB, todo en
+      C:\ClusterStorage\Volume1, conectada a Externo), encendela y agregala al clúster como rol.
+    verificar:
+      - { rol_cluster: web01, propietario: HV01, estado: Online }
+    pistas:
+      - "New-VM -Name web01 -Generation 2 -MemoryStartupBytes 2GB -Path C:\\ClusterStorage\\Volume1 -NewVHDPath C:\\ClusterStorage\\Volume1\\web01\\web01.vhdx -NewVHDSizeBytes 40GB -SwitchName Externo"
+      - "Add-ClusterVirtualMachineRole -VMName web01"
+    solucion:
+      - New-VM -Name web01 -Generation 2 -MemoryStartupBytes 2GB -Path C:\ClusterStorage\Volume1 -NewVHDPath C:\ClusterStorage\Volume1\web01\web01.vhdx -NewVHDSizeBytes 40GB -SwitchName Externo
+      - Start-VM web01
+      - Add-ClusterVirtualMachineRole -VMName web01
+      - Get-ClusterGroup
+    explicacion: >-
+      Una VM creada con Hyper-V no es del clúster hasta que se la agrega como rol. Si sus archivos
+      quedaran en D:, el clúster avisa: no podría arrancarla en otro nodo.
+  - consigna: >-
+      Hay que actualizar HV01: drenalo (que web01 se vaya en vivo a HV02) y, cuando termine el
+      mantenimiento, reanudalo trayendo de vuelta lo que tenía.
+    verificar:
+      - { nodo_cluster: HV01, estado: Up }
+      - { rol_cluster: web01, propietario: HV01, estado: Online }
+      - { comando_usado: "suspend-clusternode" }
+    pistas:
+      - "Suspend-ClusterNode -Name HV01 -Drain"
+      - "Get-ClusterGroup muestra que web01 está en HV02."
+      - "Resume-ClusterNode -Name HV01 -Failback Immediate"
+    solucion:
+      - Suspend-ClusterNode -Name HV01 -Drain
+      - Get-ClusterGroup
+      - Resume-ClusterNode -Name HV01 -Failback Immediate
+      - Get-ClusterGroup
+    explicacion: >-
+      Mientras HV01 está pausado, el clúster no le manda roles. Es lo mismo que hace
+      Cluster-Aware Updating con cada nodo, de a uno, para instalar las actualizaciones de
+      Windows sin cortar las VM.
