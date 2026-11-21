@@ -16,6 +16,7 @@
 import { COMMANDS, register, type CommandContext } from './shell'
 import { System } from './system'
 import { ROOT_CRED } from './vfs'
+import { replicatedTo } from './zfs'
 import { confPath, fmtTime, guestName, isDriveKey, needRoot, parseDrive, parseOpts, pveOf, saveConf, startGuest, stopGuest, type Pve, type PveGuest } from './proxmox'
 
 export interface ClusterNode {
@@ -228,7 +229,9 @@ function moveGuest(src: ClusterNode, dst: ClusterNode, g: PveGuest) {
   for (const [volid, v] of [...src.pve.volumes]) {
     if (v.vmid !== g.vmid || v.content === 'backup') continue
     src.pve.volumes.delete(volid)
-    dst.pve.volumes.set(volid, v)
+    // Lo que queda en el origen pasa a ser la réplica (si había una tarea de réplica).
+    if (dst.pve.volumes.get(volid)?.replica) src.pve.volumes.set(volid, { ...v, replica: true })
+    dst.pve.volumes.set(volid, { ...v, replica: false })
   }
   saveConf(dst.sys, g)
 }
@@ -246,7 +249,10 @@ function migrate(_c: PveCluster, src: ClusterNode, dst: ClusterNode, g: PveGuest
   const t0 = Date.now()
   const running = g.status === 'running'
   if (g.type === 'lxc' && running && !online) return { error: `CT is running - use online migration (--restart) or stop it first` }
-  const disks = localDisks(src.pve, g)
+  // Los discos ZFS replicados con pvesr ya están en el destino: solo viaja lo último que cambió.
+  const all = localDisks(src.pve, g)
+  const replicated = all.filter((d) => !d.cdrom && replicatedTo(dst.pve, d.volid))
+  const disks = all.filter((d) => !replicated.includes(d))
   const cd = disks.find((d) => d.cdrom)
   if (cd) return { error: `can't migrate local disk '${cd.volid}': local cdrom image\nERROR: migration aborted (duration 00:00:01): problem with local resource` }
   if (running && g.type === 'qemu' && disks.length && !withLocal) return { error: `ERROR: migration aborted (duration 00:00:01): can't live migrate attached local disks without with-local-disks option` }
@@ -266,6 +272,7 @@ function migrate(_c: PveCluster, src: ClusterNode, dst: ClusterNode, g: PveGuest
     if (running) startGuest(dst.sys, dst.pve, g)
     return { out }
   }
+  for (const d of replicated) out += `${ts} found local, replicated disk '${d.volid}' (attached)\n${ts} replicating disk changes\n${ts} end replication job\n`
   if (!running) out += `${ts} use dedicated network address for sending migration traffic (${dst.ip})\n${ts} starting migration of VM ${g.vmid} to node '${dst.name}' (${dst.ip})\n`
   else out += `${ts} starting migration of VM ${g.vmid} to node '${dst.name}' (${dst.ip})\n`
   for (const d of disks) out += `${ts} found local disk '${d.volid}' (attached)\n`
@@ -373,8 +380,11 @@ function haPass(c: PveCluster) {
         r.status = 'fence'
         continue
       }
-      const target = pickNode(c, r, alive.filter((n) => quorate(c, n)))
-      const local = localDisks(where.pve, found.g).filter((d) => !d.cdrom)
+      // Con discos locales replicados (ZFS + pvesr), solo sirven los nodos que tienen la réplica.
+      const candidates = alive.filter((n) => quorate(c, n))
+      const withReplica = candidates.filter((n) => localDisks(where.pve, found.g).every((d) => d.cdrom || replicatedTo(n.pve, d.volid)))
+      const target = pickNode(c, r, withReplica.length ? withReplica : candidates)
+      const local = localDisks(where.pve, found.g).filter((d) => !d.cdrom && !(target && replicatedTo(target.pve, d.volid)))
       if (!target) {
         r.status = 'fence'
         continue

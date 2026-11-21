@@ -70,7 +70,7 @@ function devName(path: string): string {
   return path.replace(/^\/dev\//, '')
 }
 
-const FSVER: Record<FsType, string> = { xfs: '', ext4: '1.0', vfat: 'FAT32', swap: '1', LVM2_member: 'LVM2 001' }
+const FSVER: Record<FsType, string> = { xfs: '', ext4: '1.0', vfat: 'FAT32', swap: '1', LVM2_member: 'LVM2 001', zfs_member: '5000' }
 
 // ---------------------------------------------------------------------------------------
 // lsblk y blkid
@@ -689,7 +689,7 @@ register('wipefs', {
       ctx.err(`wipefs: error: ${dev}: probing initialization failed: Device or resource busy\n`)
       return 1
     }
-    const magic: Record<FsType, [string, string]> = { xfs: ['0x00000000', '58 46 53 42'], ext4: ['0x00000438', '53 ef'], vfat: ['0x00000052', '46 41 54 33 32 20 20 20'], swap: ['0x00000ff6', '53 57 41 50 53 50 41 43 45 32'], LVM2_member: ['0x00000218', '4c 56 4d 32 20 30 30 31'] }
+    const magic: Record<FsType, [string, string]> = { xfs: ['0x00000000', '58 46 53 42'], ext4: ['0x00000438', '53 ef'], vfat: ['0x00000052', '46 41 54 33 32 20 20 20'], swap: ['0x00000ff6', '53 57 41 50 53 50 41 43 45 32'], LVM2_member: ['0x00000218', '4c 56 4d 32 20 30 30 31'], zfs_member: ['0x0003f000', '0c b1 ba 00 00 00 00 00'] }
     if (!all) {
       ctx.out('DEVICE OFFSET     TYPE UUID LABEL\n')
       if (sig) ctx.out(`${devName(c)} ${magic[sig.type][0]} ${sig.type} ${sig.uuid} ${sig.label ?? ''}\n`)

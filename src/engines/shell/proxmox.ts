@@ -71,6 +71,8 @@ export interface PveVolume {
   notes?: string
   /** Para los discos importados de otro hipervisor: el sistema que tienen adentro. */
   sistema?: GuestSystem
+  /** Copia de un disco ZFS que pvesr mantiene en este nodo (no está conectada a ninguna VM). */
+  replica?: boolean
   /** Para los respaldos: qué tenía la configuración del invitado. */
   guest?: { type: 'qemu' | 'lxc'; conf: [string, string][]; vmid: number }
   /** Un respaldo que no se puede borrar (protegido). */
@@ -99,6 +101,9 @@ const PVE = new WeakMap<System, Pve>()
 export function pveOf(sys: System): Pve | undefined {
   return PVE.get(sys)
 }
+
+/** Lo que otros módulos le agregan a Proxmox sin que este archivo dependa de ellos. */
+export const pveHooks: { datasetExists?: (sys: System, name: string) => boolean } = {}
 
 export const PVE_VERSION = '9.2.1'
 export const PVE_KERNEL = '7.0.4-1-pve'
@@ -1810,11 +1815,21 @@ register('pvesm', {
             return 1
           }
         }
+        if (type === 'zfspool') {
+          if (!opts.get('pool')) {
+            ctx.err(`400 Parameter verification failed.\npool: property is missing and it is not optional\n`)
+            return 1
+          }
+          if (pveHooks.datasetExists && !pveHooks.datasetExists(sys, opts.get('pool')!)) {
+            ctx.err(`create storage failed: zfs error: cannot open '${opts.get('pool')}': dataset does not exist\n`)
+            return 1
+          }
+        }
         if (type === 'dir' && !opts.get('path')) {
           ctx.err(`400 Parameter verification failed.\npath: property is missing and it is not optional\n`)
           return 1
         }
-        pve.storages.set(id, { id, type: type as PveStorage['type'], content, path: opts.get('path'), server: opts.get('server'), export: opts.get('export') ?? opts.get('share'), datastore: opts.get('datastore'), username: opts.get('username'), fingerprint: opts.get('fingerprint'), totalBytes: type === 'pbs' ? 2000 * GiB : type === 'nfs' ? 1000 * GiB : 200 * GiB, enabled: opts.get('disable') !== '1', shared: ['nfs', 'cifs', 'pbs'].includes(type) || opts.get('shared') === '1' })
+        pve.storages.set(id, { id, type: type as PveStorage['type'], content, path: opts.get('path') ?? opts.get('pool'), server: opts.get('server'), export: opts.get('export') ?? opts.get('share'), datastore: opts.get('datastore'), username: opts.get('username'), fingerprint: opts.get('fingerprint'), totalBytes: type === 'pbs' ? 2000 * GiB : type === 'nfs' ? 1000 * GiB : 200 * GiB, enabled: opts.get('disable') !== '1', shared: ['nfs', 'cifs', 'pbs'].includes(type) || opts.get('shared') === '1' })
         if (type === 'nfs' || type === 'cifs') sys.vfs.mkdirp(`/mnt/pve/${id}`, ROOT_CRED)
         writeStorageCfg(sys, pve)
         if (type === 'pbs') ctx.out(`Successfully added storage '${id}'\n`)

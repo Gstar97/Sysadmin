@@ -11,7 +11,7 @@ export const MiB = 1024 ** 2
 export const GiB = 1024 ** 3
 const EXTENT = 4 * MiB
 
-export type FsType = 'xfs' | 'ext4' | 'vfat' | 'swap' | 'LVM2_member'
+export type FsType = 'xfs' | 'ext4' | 'vfat' | 'swap' | 'LVM2_member' | 'zfs_member'
 
 export interface FsSig {
   type: FsType
@@ -127,6 +127,8 @@ const GPT_TYPES: Record<string, string> = {
   'linux swap': '0657FD6D-A4AB-43C4-84E5-0933C84B4F4F',
   'efi system': 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B',
   'bios boot': '21686148-6449-6E6F-744E-656564454649',
+  'solaris /usr & apple zfs': '6A898CC3-1DD2-11B2-99A6-080020736631',
+  'solaris reserved 1': '6A945A3B-1DD2-11B2-99A6-080020736631',
 }
 export const MBR_TYPES: Record<string, string> = { '83': 'Linux', '8e': 'Linux LVM', '82': 'Linux swap / Solaris', ef: 'EFI (FAT-12/16/32)', '5': 'Extended', '7': 'HPFS/NTFS/exFAT', b: 'W95 FAT32', c: 'W95 FAT32 (LBA)' }
 

@@ -476,6 +476,42 @@ const stateShape = {
       mantenimiento: z.array(z.string()).default([]),
     })
     .optional(),
+  /** Pools de ZFS ya creados sobre los discos del ejercicio (sdb, sdc...). */
+  zfs: z
+    .strictObject({
+      pools: z
+        .array(
+          z.strictObject({
+            nombre: z.string(),
+            tipo: z.enum(['mirror', 'raidz1', 'raidz2', 'raidz3', 'stripe']).default('mirror'),
+            discos: z.array(z.string()).default([]),
+            /** Varios grupos (por ejemplo, dos espejos): si se define, reemplaza a tipo y discos. */
+            vdevs: z.array(z.strictObject({ tipo: z.enum(['mirror', 'raidz1', 'raidz2', 'raidz3', 'stripe']), discos: z.array(z.string()) })).optional(),
+            ashift: z.number().int().default(12),
+            propiedades: z.record(z.string(), z.string()).default({}),
+            datasets: z
+              .array(
+                z.strictObject({
+                  nombre: z.string(),
+                  usado_gb: z.number().default(0),
+                  volumen_gb: z.number().optional(),
+                  propiedades: z.record(z.string(), z.string()).default({}),
+                  instantaneas: z.array(z.string()).default([]),
+                }),
+              )
+              .default([]),
+            /** Discos con errores (FAULTED): el disco está fallando de verdad. */
+            fallados: z.array(z.string()).default([]),
+            /** Discos que no aparecen (UNAVAIL). */
+            sin_conectar: z.array(z.string()).default([]),
+            ultimo_scrub_dias: z.number().optional(),
+            /** Archivos con errores permanentes (se perdieron datos). */
+            errores_datos: z.array(z.string()).default([]),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
   /** Imágenes de disco de máquinas virtuales (qcow2, raw, vmdk, vhdx) que ya están en el equipo. */
   imagenes_disco: z
     .array(
@@ -738,6 +774,12 @@ const singleCheckSchema = z.union([
   z.strictObject({ red_libvirt: z.string(), activa: z.boolean().optional(), autostart: z.boolean().optional() }),
   /** Una VM (pve_vm) o un contenedor (pve_ct) de Proxmox: estado, nombre, plantilla, instantánea y valores de su configuración. */
   z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional(), arranca: z.boolean().optional(), con_red: z.boolean().optional(), nodo: z.string().optional() }),
+  /** Un pool de ZFS: salud, tipo, discos, y si terminó un scrub o un resilver. */
+  z.strictObject({ zpool: z.string(), existe: z.boolean().optional(), estado: z.enum(['ONLINE', 'DEGRADED', 'UNAVAIL', 'FAULTED']).optional(), tipo: z.enum(['mirror', 'raidz1', 'raidz2', 'raidz3', 'stripe']).optional(), discos: z.array(z.string()).optional(), scrub_hecho: z.boolean().optional(), resilver_hecho: z.boolean().optional() }),
+  /** Un dataset o volumen de ZFS: propiedades e instantáneas. */
+  z.strictObject({ dataset: z.string(), existe: z.boolean().optional(), propiedad: z.record(z.string(), z.string()).optional(), instantanea: z.string().optional() }),
+  /** Una tarea de réplica de Proxmox (pvesr). */
+  z.strictObject({ replica_pve: z.string(), destino: z.string().optional(), ok: z.boolean().optional() }),
   /** Clúster de Proxmox: nombre, nodos, cuántos en línea, quórum, dispositivo de quórum y votos esperados. */
   z.strictObject({ pve_cluster: z.string(), nodos: z.number().int().optional(), en_linea: z.number().int().optional(), quorum: z.boolean().optional(), qdevice: z.boolean().optional(), votos_esperados: z.number().int().optional() }),
   /** Un recurso de alta disponibilidad (vm:ID): estado que muestra ha-manager, nodo y regla. */
