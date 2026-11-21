@@ -1,0 +1,91 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: Un servicio con 99,9 % de disponibilidad, ¿cuánto puede estar cortado por año?
+  opciones:
+    - { texto: "Unas 8,8 horas", correcta: true, explicacion: "0,1 % de 8.760 horas." }
+    - { texto: "Unos 53 minutos", explicacion: "Eso es 99,99 %." }
+    - { texto: "Unos 5 minutos", explicacion: "Eso es 99,999 %." }
+    - { texto: "Unos 3,6 días", explicacion: "Eso es 99 %." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Se cae uno de los nodos de un clúster de Proxmox con alta disponibilidad. ¿Qué ven los usuarios de las VM de ese nodo?
+  opciones:
+    - { texto: "Un corte de unos minutos: las VM se apagan de golpe y vuelven a arrancar en otro nodo", correcta: true, explicacion: "La alta disponibilidad acorta el corte, no lo evita." }
+    - { texto: "Nada: las VM siguen funcionando sin corte", explicacion: "Eso sería tolerancia a fallos." }
+    - { texto: "Las VM quedan apagadas hasta que vuelva el nodo", explicacion: "Eso pasa sin alta disponibilidad (o sin almacenamiento compartido)." }
+    - { texto: "Las VM se restauran desde el último respaldo", explicacion: "No: arrancan desde el mismo disco compartido." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un clúster de dos nodos sin dispositivo de quórum se apaga uno. ¿Qué pasa con el otro?
+  opciones:
+    - { texto: "Se queda sin quórum (1 voto de 2) y no puede arrancar ni crear nada", correcta: true, explicacion: "Por eso hace falta un tercer voto." }
+    - { texto: "Sigue normalmente y arranca las VM del otro", explicacion: "Sin mayoría no decide nada." }
+    - { texto: "Se apaga también", explicacion: "Solo se reinicia si tenía VM bajo HA (el watchdog)." }
+    - { texto: "Se convierte en un nodo suelto", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es el split brain?
+  opciones:
+    - { texto: "Dos partes de un clúster, sin verse, que deciden a la vez y arrancan la misma VM, rompiendo los datos", correcta: true, explicacion: "El quórum lo evita." }
+    - { texto: "Un disco partido en dos", explicacion: "No." }
+    - { texto: "Una VM con dos procesadores", explicacion: "No." }
+    - { texto: "Dos clústeres en la misma red", explicacion: "No." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Para qué sirve el cercado (fencing)?
+  opciones:
+    - { texto: "Para estar seguro de que el nodo que no responde está apagado antes de arrancar sus VM en otro", correcta: true, explicacion: "Quizás solo perdió la red y sus VM siguen escribiendo." }
+    - { texto: "Para bloquear el acceso de los usuarios", explicacion: "No." }
+    - { texto: "Para separar las VM por VLAN", explicacion: "No." }
+    - { texto: "Para respaldar el clúster", explicacion: "No." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas cosas NO resuelve un clúster de alta disponibilidad? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Que alguien borre una base de datos por error", correcta: true, explicacion: "Para eso, respaldos." }
+    - { texto: "Un ransomware que cifra los discos", correcta: true, explicacion: "Cifra el almacenamiento compartido." }
+    - { texto: "Un incendio en la sala donde están todos los nodos", correcta: true, explicacion: "Para eso, recuperación ante desastres." }
+    - { texto: "Que se rompa la placa madre de un nodo", explicacion: "Eso sí lo resuelve." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tres nodos, cada uno con 256 GB de memoria. ¿Hasta cuánta memoria deberían usar en total las VM para que el clúster aguante la caída de un nodo?
+  opciones:
+    - { texto: "Unos 512 GB: lo que entra en dos nodos", correcta: true, explicacion: "N+1: siempre un nodo de sobra." }
+    - { texto: "768 GB", explicacion: "Si se cae uno, no hay dónde arrancar sus VM." }
+    - { texto: "256 GB", explicacion: "Alcanza, pero es más de lo necesario dejar libre." }
+    - { texto: "No importa: el globo lo resuelve", explicacion: "El globo no fabrica memoria." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene una red propia para corosync?
+  opciones:
+    - { texto: "Porque necesita baja latencia sin sobresaltos: un pico de tráfico de almacenamiento o respaldos puede hacer que los nodos se crean muertos", correcta: true, explicacion: "No necesita mucho ancho de banda, sí estabilidad." }
+    - { texto: "Porque necesita mucho ancho de banda", explicacion: "Necesita poco." }
+    - { texto: "Por seguridad, nada más", explicacion: "El motivo principal es la latencia." }
+    - { texto: "No conviene: es mejor compartirla", explicacion: "Es el error clásico." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un clúster de cuatro nodos, dos en cada sala, pierde el enlace entre las salas. ¿Qué pasa?
+  opciones:
+    - { texto: "Ninguna sala tiene mayoría (2 de 4): se bloquea todo; por eso se prefiere un número impar o un tercer sitio con un QDevice", correcta: true, explicacion: "Con 4 votos hacen falta 3." }
+    - { texto: "Las dos salas siguen funcionando", explicacion: "Eso sería split brain." }
+    - { texto: "Sigue la sala con más VM", explicacion: "El quórum cuenta votos, no VM." }
+    - { texto: "Sigue la sala del nodo 1", explicacion: "Solo con un QDevice (que desempata por el ID más bajo)." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es un punto único de falla?
+  opciones:
+    - { texto: "Una pieza que, si se rompe, deja todo sin servicio", correcta: true, explicacion: "El único switch, el único enlace, el único almacenamiento..." }
+    - { texto: "El disco más lento", explicacion: "No." }
+    - { texto: "Un error del sistema", explicacion: "No." }
+    - { texto: "El nodo con más VM", explicacion: "No necesariamente." }

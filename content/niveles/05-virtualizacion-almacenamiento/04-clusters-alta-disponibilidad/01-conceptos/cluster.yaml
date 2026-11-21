@@ -1,0 +1,57 @@
+tipo: diagrama
+titulo: Las piezas de un clúster de alta disponibilidad
+puntos:
+  - id: servicio
+    titulo: La red de servicio
+    area: { x: 2.3, y: 8.2, ancho: 95.3, alto: 9.1 }
+    texto: >-
+      Por donde los usuarios llegan a las VM. Si una VM vuelve a arrancar en otro nodo, tiene que
+      quedar en la misma red (los mismos puentes y VLAN en todos los nodos): si no, arranca pero
+      nadie la alcanza.
+  - id: nodos
+    titulo: Los nodos
+    area: { x: 4.7, y: 25, ancho: 59, alto: 29.5 }
+    texto: >-
+      Servidores parecidos entre sí (misma versión del hipervisor, mismos puentes, CPU compatibles)
+      y con espacio de sobra: si uno se cae, los demás tienen que poder cargar con sus VM. Eso es
+      N+1: siempre un nodo más de los que hacen falta.
+  - id: caido
+    titulo: El nodo que se cae
+    area: { x: 68.6, y: 25, ancho: 26.7, alto: 29.5 }
+    texto: >-
+      Sus VM se cortan: la alta disponibilidad no evita el corte, lo acorta. El clúster espera a
+      estar seguro de que el nodo está muerto (cercado) y recién ahí arranca sus VM en otro nodo.
+      Desde que se cae hasta que la VM vuelve pasan uno a tres minutos, más lo que tarda en
+      arrancar el sistema de la VM.
+  - id: corosync
+    titulo: La red del clúster
+    area: { x: 2.3, y: 59.5, ancho: 95.3, alto: 9.1 }
+    texto: >-
+      Por acá los nodos se dicen "sigo vivo" muchas veces por segundo. No necesita mucho ancho de
+      banda, pero sí poca latencia (menos de 5 ms) y nada de sobresaltos: si la comparte con el
+      almacenamiento o con los respaldos, un pico de tráfico puede hacer que un nodo crea que los
+      otros se murieron. Lo ideal es una red propia, y una segunda de respaldo.
+  - id: almacenamiento
+    titulo: El almacenamiento compartido
+    area: { x: 2.3, y: 75, ancho: 45.3, alto: 20.5 }
+    texto: >-
+      Los discos de las VM tienen que estar donde todos los nodos los vean (NFS, iSCSI, Ceph), o
+      replicados a los otros nodos (ZFS con réplica, con la pérdida de los últimos minutos). Una VM
+      con el disco en el almacenamiento local de un nodo muerto no puede arrancar en ningún otro
+      lado. Lo vas a ver en el módulo 5.5.
+  - id: quorum
+    titulo: El quórum
+    area: { x: 50, y: 75, ancho: 22.1, alto: 20.5 }
+    texto: >-
+      Para tomar decisiones (como arrancar en otro lado las VM de un nodo que no responde), una
+      parte del clúster tiene que tener más de la mitad de los votos. Así, si la red se parte,
+      nunca hay dos grupos arrancando la misma VM a la vez. Con dos nodos, un tercer voto lo da un
+      dispositivo de quórum (QDevice) o un testigo.
+  - id: fencing
+    titulo: El cercado (fencing)
+    area: { x: 74.4, y: 75, ancho: 23.3, alto: 20.5 }
+    texto: >-
+      Antes de arrancar una VM en otro nodo hay que estar seguro de que el nodo original ya no la
+      tiene corriendo, porque si las dos copias escriben en el mismo disco, se rompe. Proxmox usa
+      un watchdog: un nodo que pierde el quórum se reinicia solo. Otros sistemas apagan el nodo
+      por su placa de gestión (IPMI).

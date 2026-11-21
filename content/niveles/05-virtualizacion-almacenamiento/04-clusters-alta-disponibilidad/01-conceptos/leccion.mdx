@@ -1,0 +1,116 @@
+---
+id: n5-m4-l1
+titulo: Conceptos de alta disponibilidad
+minutos: 120
+objetivos:
+  - Traducir un porcentaje de disponibilidad a minutos de corte por mes y por año, y saber qué se puede prometer.
+  - Encontrar los puntos únicos de falla de una instalación y saber qué resuelve (y qué no) un clúster.
+  - Entender el quórum, el split brain y el cercado, y por qué un clúster de dos nodos necesita un tercer voto.
+glosario: [alta-disponibilidad, punto-unico-falla, sla, quorum, split-brain, fencing]
+verificado: 2026-11
+---
+
+import cluster from './cluster.svg?raw'
+import clusterDatos from './cluster.yaml'
+
+Hasta ahora, cada servidor de virtualización era una isla: si se rompía la placa madre a las tres de la mañana, todas sus VM quedaban apagadas hasta que alguien llegara, cambiara la pieza o restaurara los respaldos en otro equipo. Con un **clúster de alta disponibilidad**, otro servidor se da cuenta solo y vuelve a arrancar esas VM en un par de minutos. Antes de armarlo conviene entender qué promete y qué no, porque es el tema en el que más se confunden las expectativas.
+
+<AntesDeEmpezar>
+- Proxmox VE (módulo 5.2): un nodo, sus VM, sus almacenamientos y sus puentes.
+- Redes: VLAN y troncales (lecciones 2.4.2 y 2.4.3), y la gestión fuera de banda (lección 4.5.3).
+</AntesDeEmpezar>
+
+## Disponibilidad en números
+
+La disponibilidad es el porcentaje del tiempo en que un servicio anda. Dicho así suena bien, pero se entiende mejor en minutos de corte:
+
+| Disponibilidad | Corte por año | Corte por mes | Qué hace falta, más o menos |
+|---|---|---|---|
+| 99 % | 3,65 días | 7,3 horas | Un buen servidor y buenos respaldos |
+| 99,9 % ("tres nueves") | 8,8 horas | 44 minutos | Componentes redundantes y un clúster |
+| 99,99 % ("cuatro nueves") | 53 minutos | 4,4 minutos | Clúster, redes y almacenamiento duplicados, procedimientos ensayados |
+| 99,999 % ("cinco nueves") | 5 minutos | 26 segundos | Varios sitios y aplicaciones preparadas para eso |
+
+Cada nueve más cuesta mucho más que el anterior. Y un detalle que se olvida: el número incluye los cortes planificados. Si cada mes reiniciás el servidor para actualizar y eso lleva 20 minutos, ya no llegás a cuatro nueves aunque nunca se rompa nada.
+
+Ese porcentaje, por escrito, es el **SLA** (acuerdo de nivel de servicio): lo que se le promete a quien usa el servicio. Antes de prometer un número, hacé la cuenta con los cortes que ya sabés que vas a tener.
+
+## Puntos únicos de falla
+
+Un **punto único de falla** es cualquier pieza que, si se rompe, deja todo sin servicio. En una instalación típica hay más de los que parecen: el servidor, claro, pero también el único switch, el único enlace a internet, el almacenamiento donde están todos los discos, la única fuente de energía o la única persona que sabe cómo funciona todo.
+
+La alta disponibilidad se trata de ir sacándolos de a uno: dos fuentes en cada servidor, dos switches, discos en RAID, y para el servidor completo, un clúster. Siempre se razona igual: ¿qué pasa si esta pieza se rompe ahora?
+
+## Qué es (y qué no es) un clúster de alta disponibilidad
+
+Un clúster es un grupo de servidores (nodos) que se vigilan entre sí. Si uno deja de responder, los demás arrancan sus VM. Sus piezas, en el diagrama (tocá cada parte):
+
+<DiagramaInteractivo datos={clusterDatos} svg={cluster} alt="Un clúster de tres nodos. Arriba, la red de servicio por la que los usuarios llegan a las VM. En el medio, tres nodos: pve01 con web01 y dc01, pve02 con db01, erp01 y app02, y pve03 caído, cuya VM app02 arrancó en pve02. Debajo, la red del clúster (corosync), dedicada y de baja latencia. Abajo, tres piezas: el almacenamiento compartido (NFS, iSCSI, Ceph o ZFS con réplica), sin el cual otro nodo no puede arrancar la VM; el quórum, mayoría de votos (2 de 3; con dos nodos, un QDevice o un testigo da el tercero); y el cercado, asegurarse de que el nodo caído está apagado antes de arrancar la VM en otro." />
+
+Lo que conviene tener claro:
+
+- **La alta disponibilidad no evita el corte, lo acorta.** Si un nodo se cae, sus VM se apagan de golpe (como si les cortaras la luz) y vuelven a arrancar en otro nodo. Para los usuarios son unos minutos sin servicio.
+- **La tolerancia a fallos** es otra cosa: una copia de la VM corriendo al mismo tiempo en otro nodo, sin ningún corte. Existe (vSphere la tiene, con muchas limitaciones), pero es cara y casi nunca se usa. *Para más adelante*.
+- **No es un respaldo.** Si alguien borra una base de datos, el clúster mantiene disponible... la base borrada. Si un virus cifra los discos, los cifra en el almacenamiento compartido. Los respaldos siguen siendo obligatorios (módulo 5.6).
+- **No cubre el sitio entero.** Si se incendia la sala, se caen todos los nodos juntos. Para eso está la recuperación ante desastres (lección 5.6.5).
+
+## Quórum y split brain
+
+Imaginá un clúster de dos nodos y que se corta el cable que los une. Cada uno ve que el otro no responde. Si los dos piensan "se cayó mi compañero, arranco sus VM", ahora hay dos copias de cada VM escribiendo en el mismo disco compartido: los datos se rompen. Eso se llama **split brain** (cerebro dividido).
+
+La solución es el **quórum**: cada nodo tiene un voto, y solo puede tomar decisiones la parte del clúster que reúne más de la mitad de los votos. Con tres nodos, si uno queda aislado, los otros dos tienen 2 votos de 3 y siguen; el aislado tiene 1 de 3 y se queda quieto. Como no puede haber dos mayorías a la vez, no puede haber split brain.
+
+La contracara: **con dos nodos, si se cae uno, el otro tiene 1 voto de 2 y no tiene mayoría**. Se bloquea, aunque esté perfecto. Por eso un clúster de dos nodos necesita un tercer voto: en Proxmox, un **dispositivo de quórum** (QDevice: un servicio chiquito en otro equipo, que puede ser una Raspberry Pi o una VM fuera del clúster); en Windows, un **testigo** (un recurso compartido, un disco o una cuenta de almacenamiento en Azure). Y por la misma razón se usan cantidades impares de nodos.
+
+Probalo:
+
+<SimuladorQuorum />
+
+## Cercado (fencing)
+
+El quórum evita que dos partes del clúster decidan a la vez. Pero falta algo: antes de arrancar en otro nodo las VM del que no responde, hay que estar **seguro** de que ese nodo ya no las está corriendo. Quizás no está muerto: quizás solo perdió la red del clúster y sus VM siguen escribiendo en el disco compartido.
+
+Eso es el **cercado** (fencing): asegurarse de que el nodo perdido está apagado de verdad. Hay dos formas:
+
+- **Desde afuera**: otro nodo lo apaga por su placa de gestión (IPMI, iDRAC, iLO; lección 4.5.3) o le corta la energía.
+- **Desde adentro**: cada nodo tiene un watchdog, un temporizador que lo reinicia si deja de "patearlo". Un nodo con VM bajo alta disponibilidad que pierde el quórum deja de patearlo a propósito y se reinicia solo en un minuto. Así, cuando los demás esperan ese minuto, saben que el perdido ya se apagó. Proxmox usa este método.
+
+## Lo que necesita un clúster para funcionar bien
+
+1. **Al menos tres votos**: tres nodos, o dos más un QDevice o testigo.
+2. **Capacidad de sobra (N+1)**: si se cae un nodo, los otros tienen que poder cargar con sus VM. Con tres nodos, cada uno debería usar menos de dos tercios de su memoria.
+3. **Una red del clúster dedicada**, de baja latencia y, si se puede, duplicada.
+4. **Almacenamiento compartido** (o replicado) para las VM que tienen que ser de alta disponibilidad.
+5. **Nodos iguales**: misma versión, mismos puentes y VLAN, CPU compatibles.
+6. **Procedimientos probados**: apagar un nodo a propósito, en una ventana anunciada, y medir cuánto tarda en volver todo. Un clúster que nunca se probó es una suposición.
+
+<EnSimple>
+La disponibilidad se mide en minutos de corte: tres nueves son unas nueve horas por año. Un clúster de alta disponibilidad hace que, si se cae un servidor, otro arranque sus VM en un par de minutos: acorta el corte, no lo evita, y no reemplaza a los respaldos. Para no terminar con dos copias de la misma VM, solo decide la parte del clúster que tiene la mayoría de los votos (quórum), y antes de arrancar las VM en otro lado se asegura de que el nodo perdido está apagado (cercado). Con dos nodos hace falta un tercer voto.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Un clúster de dos nodos sin tercer voto">
+    Funciona hasta que se cae uno: el otro se queda sin quórum y no arranca nada. Hace falta un QDevice (o testigo) o un tercer nodo.
+  </ErrorComun>
+  <ErrorComun titulo="Llenar los nodos hasta el tope">
+    Si cada nodo usa el 90 % de su memoria, cuando se cae uno no hay dónde arrancar sus VM. Se planifica con un nodo de sobra.
+  </ErrorComun>
+  <ErrorComun titulo="La red del clúster compartida con el almacenamiento">
+    Un respaldo grande o una migración llenan el enlace, corosync pierde mensajes y los nodos empiezan a creer que los otros se murieron. Red propia para el clúster.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que la alta disponibilidad reemplaza al respaldo">
+    Mantiene disponible lo que hay, incluso lo borrado o lo cifrado. Los respaldos siguen siendo obligatorios.
+  </ErrorComun>
+  <ErrorComun titulo="Prometer un número sin hacer la cuenta">
+    Cuatro nueves son 4 minutos por mes, incluidos los cortes planificados. Antes de prometer, sumá las ventanas de mantenimiento.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- 99,9 % son unas 9 horas de corte por año; 99,99 %, unos 53 minutos. Los cortes planificados cuentan.
+- Punto único de falla: lo que, si se rompe, deja todo sin servicio. Se van sacando de a uno.
+- Un clúster arranca en otro nodo las VM del que se cayó: acorta el corte, no lo evita; no es un respaldo ni cubre el sitio entero.
+- Quórum: decide solo la parte con más de la mitad de los votos, así no hay split brain. Dos nodos necesitan un tercer voto.
+- Cercado: antes de arrancar la VM en otro nodo, asegurarse de que el original está apagado (watchdog o IPMI).
+- Requisitos: tres votos, un nodo de sobra, red del clúster dedicada, almacenamiento compartido, nodos iguales y pruebas.
+</Resumen>
