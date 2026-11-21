@@ -1,0 +1,95 @@
+---
+id: n5-m4-l2
+titulo: Cluster de Proxmox
+minutos: 180
+objetivos:
+  - Armar un clúster de Proxmox VE con pvecm y entender qué se comparte entre los nodos.
+  - Poner VM bajo alta disponibilidad con ha-manager y reglas de afinidad, y probar la caída de un nodo.
+  - Mantener el clúster en el tiempo (dispositivo de quórum, modo mantenimiento y sacar un nodo sin romper nada).
+glosario: [corosync, dispositivo-quorum, watchdog]
+verificado: 2026-11
+---
+
+import linea from './linea.svg?raw'
+import ej from './ej-cluster.yaml'
+
+En Proxmox, el clúster viene incluido: no hay que instalar nada ni pagar nada aparte. Con dos comandos, tres nodos sueltos pasan a administrarse como uno solo desde cualquiera de sus webs, y con uno más, una VM queda protegida contra la caída de su servidor.
+
+<AntesDeEmpezar>
+- Conceptos de alta disponibilidad: quórum, cercado, almacenamiento compartido (lección 5.4.1).
+- Proxmox VE, almacenamientos y redes (módulo 5.2).
+</AntesDeEmpezar>
+
+## Antes de armarlo
+
+- **Misma versión** de Proxmox en todos los nodos, y actualizados.
+- **Nombres únicos** que se resuelvan entre sí (DNS o /etc/hosts) y la **hora sincronizada** (chrony viene configurado).
+- **Los nodos que se unen tienen que estar vacíos**: sin VM ni contenedores. Al unirse, su configuración se reemplaza por la del clúster.
+- **Una red para corosync**, de baja latencia, separada del almacenamiento y de los respaldos. Corosync puede usar hasta ocho enlaces (link0, link1...): si se cae uno, sigue por otro. Usa los puertos UDP 5405 a 5412.
+- **Almacenamiento compartido** para las VM que vayan a tener alta disponibilidad (NFS, iSCSI, Ceph; módulo 5.5).
+
+## Crear el clúster y unir nodos
+
+En el primer nodo, `pvecm create NOMBRE` (o en la web: Centro de datos, Clúster, Crear clúster). En cada uno de los demás, `pvecm add IP-DE-UN-NODO-DEL-CLÚSTER` (o en la web: Unir clúster, pegando la "información de unión" que muestra el primero). Para elegir la red de corosync: `--link0 IP-en-esa-red`, y `--link1` para la de respaldo.
+
+A partir de ahí, `/etc/pve` es compartido: es una pequeña base de datos (pmxcfs) que se replica entre todos los nodos. Ahí viven la configuración de las VM, los almacenamientos, los usuarios, los permisos y el firewall. Por eso, **sin quórum, /etc/pve queda de solo lectura**: no se puede crear, arrancar ni cambiar ninguna VM. Las que ya corrían siguen corriendo.
+
+Cada VM sigue siendo de un nodo (está en `/etc/pve/nodes/NODO/qemu-server/`), y `qm` se usa en el nodo donde está. Los ID son únicos en todo el clúster.
+
+## Alta disponibilidad
+
+Una VM queda bajo alta disponibilidad con `ha-manager add vm:ID`. Desde ese momento, el administrador de HA es quien la mantiene en el estado pedido: si alguien hace `qm stop`, en realidad le pide a la HA que la detenga. Los estados: **started** (que esté en marcha), **stopped** (detenida, pero lista para recuperarse), **disabled** (detenida y sin tocar) e **ignored** (la HA no hace nada, por ejemplo para mantenimiento manual).
+
+Con las **reglas** (desde Proxmox VE 9; antes eran "grupos") se dice dónde tiene que vivir:
+
+- **Afinidad a nodos**: `--nodes pve03:2,pve02:1` prefiere pve03 y, si no puede, pve02. Con `--strict 1`, solo esos nodos; sin strict, si no están, cualquier otro.
+- **Afinidad entre recursos**: dos VM juntas (positive) o separadas (negative), por ejemplo los dos controladores de dominio o los dos servidores web de un balanceo, para que no se caigan juntos.
+
+Lo que pasa cuando se cae un nodo:
+
+<Diagrama svg={linea} alt="Línea de tiempo de una recuperación. A los 0 segundos, pve03 se apaga y sus VM se cortan de golpe. A los pocos segundos, corosync deja de verlo; pve01 y pve02 siguen con quórum (2 de 3) y ha-manager muestra fence. Al minuto, si pve03 no estaba muerto sino aislado, su watchdog ya lo reinició: ahora sí se sabe que está apagado. A los dos minutos, más o menos, el administrador de HA arranca las VM en otro nodo según las reglas. Después, lo que tarde el sistema de la VM en arrancar. Las VM sin alta disponibilidad, o con el disco en el almacenamiento local de pve03, quedan apagadas hasta que vuelva." pie="Unos dos minutos más el arranque de la VM: eso es lo que ve un usuario cuando se cae un nodo." />
+
+El cercado en Proxmox lo hace un **watchdog** en cada nodo (por defecto, uno por software; si el servidor tiene uno por hardware, mejor). Un nodo con VM bajo HA que pierde el quórum se reinicia solo al minuto, para que el resto pueda arrancar sus VM sin riesgo.
+
+## Hacelo vos
+
+<Terminal ejercicio={ej} />
+
+## Mantener el clúster
+
+- **Dos nodos**: necesitan un **dispositivo de quórum** (QDevice). Se instala `corosync-qnetd` en un equipo fuera del clúster (una VM en otro lado, una Raspberry Pi), `corosync-qdevice` en cada nodo, y se corre `pvecm qdevice setup IP`. En clústeres con número impar de nodos no se recomienda.
+- **Mantenimiento de un nodo** (actualizar, cambiar una pieza): `ha-manager crm-command node-maintenance enable pve02` mueve sus VM con HA a otros nodos en vivo; después se trabaja tranquilo y se termina con `disable`. Las VM sin HA hay que migrarlas a mano (lección 5.4.3).
+- **Qué hace un nodo al apagarlo ordenadamente**: lo define la política de apagado de la HA (Centro de datos, Opciones). Por defecto, si es un reinicio, las VM esperan a que vuelva; si es un apagado, se mueven a otro nodo.
+- **Sacar un nodo para siempre**: se migran sus VM, se apaga y, desde otro nodo, `pvecm delnode NOMBRE`. Ese servidor **no se vuelve a prender conectado a la misma red** sin reinstalarlo: cree que todavía es parte del clúster.
+- **Nunca** se usa `pvecm expected 1` para salir del paso con la red partida: si las dos partes lo hacen, hay split brain. Solo cuando estás seguro de que el resto de los nodos está apagado.
+
+<EnSimple>
+En Proxmox, el clúster viene incluido: pvecm create en el primer nodo y pvecm add en los demás (vacíos). La configuración (/etc/pve) se comparte, y sin quórum queda de solo lectura. Con ha-manager add, una VM con el disco en almacenamiento compartido vuelve a arrancar en otro nodo unos dos minutos después de que se cae el suyo; con reglas de afinidad se elige dónde. Con dos nodos hace falta un QDevice, y para mantenimiento está el modo mantenimiento.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Intentar unir un nodo que ya tiene VM">
+    pvecm add lo rechaza ("this host already contains virtual guests"). Se respaldan, se borran, se une el nodo y se restauran.
+  </ErrorComun>
+  <ErrorComun titulo="Poner bajo HA una VM con el disco local">
+    Si su nodo se cae, ningún otro ve el disco y la HA la deja en error. Primero se mueve el disco a un almacenamiento compartido.
+  </ErrorComun>
+  <ErrorComun titulo="Prender un nodo sacado con delnode">
+    Sigue teniendo la configuración del clúster y puede confundir a los demás. Se reinstala antes de volver a conectarlo.
+  </ErrorComun>
+  <ErrorComun titulo="Usar pvecm expected para recuperar el quórum con la red partida">
+    Es la receta del split brain. Solo con la certeza de que los otros nodos están apagados.
+  </ErrorComun>
+  <ErrorComun titulo="No probar nunca la caída de un nodo">
+    El día que pase de verdad, aparecen las VM con disco local, las reglas mal puestas y los nodos sin memoria libre. Se prueba en una ventana anunciada.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Requisitos: misma versión, nombres y hora bien, nodos a unir vacíos, red de corosync propia (link0 y link1), almacenamiento compartido.
+- pvecm create en un nodo, pvecm add IP en los demás; pvecm status y pvecm nodes para ver el estado.
+- /etc/pve se comparte y, sin quórum, queda de solo lectura.
+- ha-manager add vm:ID; estados started, stopped, disabled, ignored; reglas de afinidad a nodos y entre recursos.
+- Recuperación: unos dos minutos (cercado con watchdog) más el arranque de la VM.
+- QDevice para dos nodos, modo mantenimiento, delnode sin volver a prender el nodo, y nunca expected con la red partida.
+</Resumen>

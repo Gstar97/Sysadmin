@@ -1,0 +1,115 @@
+tipo: terminal
+shell: bash
+titulo: Tres nodos, un clúster y una VM que sobrevive
+descripcion: >-
+  pve01, pve02 y pve03 son tres Proxmox VE 9 recién instalados en la red 192.168.10.0/24 (.21,
+  .22 y .23). pve01 ya tiene web01 (VM 100, con el disco en el NFS compartido nfs-vms) y db01 (VM
+  101, con el disco en su local-lvm). pve02 y pve03 están vacíos. La placa de gestión de pve03
+  responde en 192.168.10.123 (usuario admin, clave Bmc-2026). Desde pve01 entrás por ssh como
+  root a los otros dos.
+estado_inicial:
+  distro: ubuntu
+  hostname: pve01
+  usuario: root
+  usuarios: [{ nombre: root, clave_ssh: true }]
+  paquetes: { instalados: [ipmitool] }
+  equipo: { cpus: 16, memoria_gb: 64, fisico: true }
+  red:
+    interfaces:
+      - { nombre: eno1, ip: 192.168.10.21/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  proxmox:
+    repos: no-subscription
+    almacenamientos:
+      - { id: local, tipo: dir, contenido: [iso, vztmpl, backup], ruta: /var/lib/vz }
+      - { id: local-lvm, tipo: lvmthin, contenido: [images, rootdir] }
+      - { id: nfs-vms, tipo: nfs, contenido: [images], servidor: 192.168.10.50, export: /srv/vms, compartido: true }
+    vms:
+      - { id: 100, nombre: web01, estado: running, discos: { scsi0: "nfs-vms:100/vm-100-disk-0.qcow2,size=20G" }, red: { net0: "virtio,bridge=vmbr0" } }
+      - { id: 101, nombre: db01, estado: running, discos: { scsi0: "local-lvm:vm-101-disk-0,size=40G" }, red: { net0: "virtio,bridge=vmbr0" } }
+  servidores:
+    - { hostname: pve02, ip: 192.168.10.22, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription } }
+    - { hostname: pve03, ip: 192.168.10.23, distro: ubuntu, usuarios: [{ nombre: root, clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: no-subscription }, bmc: { ip: 192.168.10.123, clave: Bmc-2026 } }
+pasos:
+  - consigna: Antes de unir nada, comprobá que los tres nodos tienen la misma versión de Proxmox.
+    verificar:
+      - { comando_usado: "pveversion" }
+      - { salida_contiene: "pve-manager/9" }
+    pistas:
+      - "ssh root@pve02 pveversion muestra la del otro nodo sin quedarte adentro."
+    solucion:
+      - pveversion
+      - ssh root@pve02 pveversion
+      - ssh root@pve03 pveversion
+    explicacion: >-
+      Un clúster con versiones distintas funciona durante una actualización, pero no se arma así:
+      se unen nodos iguales. También hace falta que cada nodo resuelva el nombre de los otros y
+      que tengan la hora sincronizada.
+  - consigna: Creá el clúster "produccion" en pve01 y uní pve02 y pve03 (cada uno se une desde sí mismo).
+    verificar:
+      - { pve_cluster: produccion, nodos: 3, quorum: true }
+      - { en: pve03, verificar: { pve_cluster: produccion, nodos: 3 } }
+    pistas:
+      - "En pve01: pvecm create produccion"
+      - "En los otros: ssh root@pve02 pvecm add 192.168.10.21 (la IP de un nodo que ya está en el clúster)."
+    solucion:
+      - pvecm create produccion
+      - ssh root@pve02 pvecm add 192.168.10.21
+      - ssh root@pve03 pvecm add 192.168.10.21
+      - pvecm status
+    explicacion: >-
+      pvecm add se ejecuta en el nodo que se une, no en el que ya está. Por eso pve02 y pve03
+      tenían que estar vacíos: al unirse, su configuración se reemplaza por la del clúster (sus
+      almacenamientos, usuarios y permisos pasan a ser los de pve01). Fijate en pvecm status:
+      Expected votes 3, Quorum 2.
+  - consigna: >-
+      Poné web01 bajo alta disponibilidad y creá la regla de afinidad "web-en-pve03" para que viva
+      en pve03 (prioridad 2) y, si no puede, en pve02 (prioridad 1). Mirá el estado.
+    verificar:
+      - { pve_ha: "vm:100", estado: started, nodo: pve03, regla: web-en-pve03 }
+    pistas:
+      - "ha-manager add vm:100"
+      - "ha-manager rules add node-affinity web-en-pve03 --resources vm:100 --nodes pve03:2,pve02:1"
+      - "ha-manager status"
+    solucion:
+      - ha-manager add vm:100
+      - ha-manager rules add node-affinity web-en-pve03 --resources vm:100 --nodes pve03:2,pve02:1
+      - ha-manager status
+    explicacion: >-
+      Apenas existe la regla, el administrador de HA migra web01 en vivo a pve03, el nodo
+      preferido. db01 no podría estar bajo HA: su disco está en el local-lvm de pve01 y ningún
+      otro nodo lo ve.
+  - consigna: >-
+      Ahora la prueba de verdad: apagá pve03 por su placa de gestión, como si se cortara la
+      energía. Seguí el estado de la HA hasta que web01 vuelva a estar en marcha en otro nodo.
+    verificar:
+      - { pve_encendido: pve03, encendido: false }
+      - { pve_ha: "vm:100", estado: started, nodo: pve02 }
+    pistas:
+      - "ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power off"
+      - "ha-manager status muestra 'fence' mientras espera; sleep 60 hace pasar el tiempo."
+    solucion:
+      - ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power off
+      - ha-manager status
+      - sleep 60
+      - sleep 60
+      - ha-manager status
+    explicacion: >-
+      Primero pve03 aparece como "old timestamp - dead?" y web01 en estado "fence": el clúster
+      espera estar seguro de que pve03 está apagado. A los dos minutos la recupera en pve02, que
+      es el siguiente de la regla. Para los usuarios fue un corte de unos minutos, más lo que
+      tardó web01 en arrancar.
+  - consigna: Prendé pve03 de nuevo y mirá adónde va web01.
+    verificar:
+      - { pve_encendido: pve03 }
+      - { pve_ha: "vm:100", estado: started, nodo: pve03 }
+    pistas:
+      - "ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power on"
+    solucion:
+      - ipmitool -I lanplus -H 192.168.10.123 -U admin -P Bmc-2026 chassis power on
+      - ha-manager status
+    explicacion: >-
+      Vuelve sola a pve03, en vivo, porque la regla dice que lo prefiere. Es cómodo, pero si un
+      nodo se cae y se levanta varias veces, la VM va y viene: si no querés eso, la regla no tiene
+      que preferir un nodo por encima de los otros, o se configura el recurso para que no vuelva
+      solo.

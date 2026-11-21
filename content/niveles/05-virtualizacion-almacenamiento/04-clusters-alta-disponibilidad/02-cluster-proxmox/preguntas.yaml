@@ -1,0 +1,104 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Dónde se ejecuta pvecm add?
+  opciones:
+    - { texto: "En el nodo que se une, con la IP de un nodo que ya está en el clúster", correcta: true, explicacion: "El que se une se conecta al clúster." }
+    - { texto: "En el primer nodo, con la IP del que se une", explicacion: "Es al revés." }
+    - { texto: "En cualquier nodo", explicacion: "No." }
+    - { texto: "En un equipo fuera del clúster", explicacion: "Eso es el QDevice." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Querés unir pve04 al clúster y ves esto. ¿Qué hacés?
+  salida: |
+    # pvecm add 192.168.10.21
+    ...
+    detected the following error(s):
+    * this host already contains virtual guests
+    Check if node may join a cluster failed!
+  opciones:
+    - { texto: "Respaldar las VM de pve04, borrarlas, unir el nodo y restaurarlas", correcta: true, explicacion: "El nodo que se une tiene que estar vacío." }
+    - { texto: "Usar --force", explicacion: "No resuelve el problema: la configuración del nodo se reemplazaría." }
+    - { texto: "Crear otro clúster", explicacion: "No hace falta." }
+    - { texto: "Reinstalar pve01", explicacion: "No tiene nada que ver." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un clúster de tres nodos pierde dos. En el que queda, ¿qué pasa con /etc/pve?
+  opciones:
+    - { texto: "Queda de solo lectura: sin quórum no se puede crear, arrancar ni cambiar ninguna VM", correcta: true, explicacion: "Las que ya corrían siguen." }
+    - { texto: "Sigue igual", explicacion: "No tiene mayoría." }
+    - { texto: "Se borra", explicacion: "No." }
+    - { texto: "Se copia al almacenamiento compartido", explicacion: "No." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Escribí el comando para poner la VM 120 bajo alta disponibilidad.
+  aceptadas: ["ha-manager add vm:120", "ha-manager add vm:120 --state started", "ha-manager add 120"]
+  explicacion: "El estado por defecto es started: si estaba detenida, la HA la arranca."
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Se cayó pve02 hace 40 segundos. ¿Qué significa esta salida?
+  salida: |
+    # ha-manager status
+    quorum OK
+    master pve01 (active, Fri Nov 20 10:14:02 2026)
+    lrm pve01 (idle, Fri Nov 20 10:14:02 2026)
+    lrm pve02 (old timestamp - dead?, Fri Nov 20 10:13:20 2026)
+    lrm pve03 (active, Fri Nov 20 10:14:02 2026)
+    service vm:100 (pve02, fence)
+  opciones:
+    - { texto: "El clúster tiene quórum y está esperando a estar seguro de que pve02 está apagado para recuperar la VM 100 en otro nodo", correcta: true, explicacion: "En un minuto o dos aparece started en otro nodo." }
+    - { texto: "La VM 100 se perdió", explicacion: "No: está esperando el cercado." }
+    - { texto: "El clúster se quedó sin quórum", explicacion: "Dice quorum OK." }
+    - { texto: "pve02 está en mantenimiento", explicacion: "Diría maintenance mode." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés que los dos controladores de dominio (VM 110 y 111) nunca queden en el mismo nodo. ¿Qué usás?
+  opciones:
+    - { texto: "Una regla de afinidad entre recursos negativa (separados)", correcta: true, explicacion: "Así no se caen los dos juntos." }
+    - { texto: "Una regla de afinidad a nodos con strict", explicacion: "Podría servir, pero ata cada uno a nodos fijos." }
+    - { texto: "Ponerlos en VLAN distintas", explicacion: "La VLAN no decide el nodo." }
+    - { texto: "No se puede", explicacion: "Sí se puede." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cómo hace Proxmox el cercado (fencing)?
+  opciones:
+    - { texto: "Con un watchdog: un nodo con VM bajo HA que pierde el quórum se reinicia solo al minuto", correcta: true, explicacion: "Así los demás saben que pueden arrancar sus VM." }
+    - { texto: "Apagando el nodo por SSH", explicacion: "Si el nodo está aislado, no se llega por SSH." }
+    - { texto: "No hace cercado", explicacion: "Sí lo hace." }
+    - { texto: "Borrando el nodo del clúster", explicacion: "No." }
+- id: p08
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para actualizar pve02 sin cortar las VM con alta disponibilidad.
+  pasos:
+    - "ha-manager crm-command node-maintenance enable pve02"
+    - "Esperar que ha-manager status muestre sus VM en otros nodos"
+    - "Migrar a mano las VM de pve02 que no están bajo HA"
+    - "Actualizar y reiniciar pve02"
+    - "ha-manager crm-command node-maintenance disable pve02"
+  explicacion: "El modo mantenimiento mueve solo las VM con HA; las otras hay que moverlas a mano."
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un clúster de dos nodos tiene la red entre ellos cortada. Alguien propone correr pvecm expected 1 en los dos para que vuelvan a funcionar. ¿Qué pasa?
+  opciones:
+    - { texto: "Cada uno cree que tiene quórum y pueden arrancar las mismas VM: split brain", correcta: true, explicacion: "expected 1 solo con la certeza de que el otro está apagado." }
+    - { texto: "Se arregla el clúster", explicacion: "Se rompe." }
+    - { texto: "No pasa nada", explicacion: "Pasa algo grave." }
+    - { texto: "Se crea un QDevice", explicacion: "No." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace falta para que un clúster de dos nodos aguante la caída de uno?
+  opciones:
+    - { texto: "Un dispositivo de quórum: corosync-qnetd en otro equipo y pvecm qdevice setup", correcta: true, explicacion: "Da el tercer voto." }
+    - { texto: "Más memoria", explicacion: "No resuelve el quórum." }
+    - { texto: "Dos redes de corosync", explicacion: "Ayudan con la red, no con el voto." }
+    - { texto: "Nada", explicacion: "Sin tercer voto se bloquea." }
