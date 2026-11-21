@@ -4,7 +4,7 @@
  * nuevos (aparecen en lsblk). Las ACL del servidor deciden qué iniciadores entran, y sin
  * saveconfig la configuración se pierde al reiniciar.
  */
-import { register, type CommandContext } from './shell'
+import { register } from './shell'
 import { System } from './system'
 import { ROOT_CRED } from './vfs'
 import { GiB, MiB, type Disk } from './storage'
@@ -50,6 +50,7 @@ function lio(sys: System): LioState {
 
 function hexOf(seed: string, n: number) {
   let h = 2166136261
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0
   let out = ''
   for (let i = 0; out.length < n; i++) {
     h = Math.imul(h ^ (seed.charCodeAt(i % seed.length) + i), 16777619) >>> 0
@@ -298,37 +299,84 @@ function nextDiskName(sys: System): { name: string; minor: number } {
   return { name: 'sdz', minor: 400 }
 }
 
-function reachTarget(ctx: CommandContext, ip: string): System | string {
-  const host = hostByIp(ctx.sys, ip)
-  if (!host || !routeTo(ctx.sys, ip)) return `cannot make connection to ${ip}: No route to host`
-  const fw = inbound(host, 3260, 'tcp', sourceIp(ctx.sys, ip))
+function reachTarget(sys: System, ip: string): System | string {
+  const host = hostByIp(sys, ip)
+  if (!host || host.poweredOff || !routeTo(sys, ip)) return `cannot make connection to ${ip}: No route to host`
+  const fw = inbound(host, 3260, 'tcp', sourceIp(sys, ip))
   if (fw === 'drop') return `cannot make connection to ${ip}: Connection timed out`
   if (fw === 'reject') return `cannot make connection to ${ip}: No route to host`
   if (!LIO.get(host)?.targets.length) return `cannot make connection to ${ip}: Connection refused`
   return host
 }
 
-function login(ctx: CommandContext, host: System, iqn: string, portal: string): string | undefined {
+function login(sys: System, host: System, iqn: string, portal: string): string | undefined {
   const t = lio(host).targets.find((x) => x.iqn === iqn)
   if (!t) return `iscsiadm: Could not login to [iface: default, target: ${iqn}, portal: ${portal},3260].\niscsiadm: initiator reported error (19 - encountered non-retryable iSCSI login failure)\niscsiadm: Could not log into all portals`
-  if (!t.acls.includes(initiatorName(ctx.sys)))
+  if (!t.acls.includes(initiatorName(sys)))
     return `iscsiadm: Could not login to [iface: default, target: ${iqn}, portal: ${portal},3260].\niscsiadm: initiator reported error (24 - iSCSI login failed due to authorization failure)\niscsiadm: Could not log into all portals`
-  const sessions = SESSIONS.get(ctx.sys) ?? []
-  SESSIONS.set(ctx.sys, sessions)
+  const sessions = SESSIONS.get(sys) ?? []
+  SESSIONS.set(sys, sessions)
   if (sessions.some((x) => x.target === iqn)) return undefined
   const disks: string[] = []
   for (const l of t.luns) {
     const b = lio(host).backstores.find((x) => x.name === l)!
-    const { name, minor } = nextDiskName(ctx.sys)
+    const { name, minor } = nextDiskName(sys)
     const d: Disk = { name, size: b.size, model: l, ptid: '', parts: [], major: 8, minor, rota: true }
-    ctx.sys.storage.disks.set(name, d)
+    sys.storage.disks.set(name, d)
     disks.push(name)
-    ctx.sys.journal.push({ time: Date.now(), unit: 'kernel', priority: 5, message: `sd ${7 + sessions.length}:0:0:${t.luns.indexOf(l)}: [${name}] Attached SCSI disk`, ident: 'kernel' })
+    sys.journal.push({ time: Date.now(), unit: 'kernel', priority: 5, message: `sd ${7 + sessions.length}:0:0:${t.luns.indexOf(l)}: [${name}] Attached SCSI disk`, ident: 'kernel' })
   }
-  ctx.sys.storage.syncDevFiles()
   sessions.push({ target: iqn, portal, host, disks })
+  syncSharedLvm(sys)
+  sys.storage.syncDevFiles()
   return undefined
 }
+
+/**
+ * Un LUN es el mismo disco para todos los que iniciaron sesión: si un nodo armó LVM encima, los
+ * demás ven el mismo VG y los mismos volúmenes lógicos (LVM lee los metadatos del disco).
+ */
+function syncSharedLvm(sys: System) {
+  const mine = SESSIONS.get(sys)
+  if (!mine?.length) return
+  let changed = false
+  for (const ses of mine) {
+    ses.disks.forEach((d, i) => {
+      const dev = `/dev/${d}`
+      for (const peer of sys.lab) {
+        if (peer === sys || peer.poweredOff) continue
+        const pd = SESSIONS.get(peer)?.find((x) => x.host === ses.host && x.target === ses.target)?.disks[i]
+        if (!pd) continue
+        const pdev = `/dev/${pd}`
+        const pvg = [...peer.storage.vgs.values()].find((v) => v.pvs.includes(pdev))
+        if (!pvg) continue
+        let vg = sys.storage.vgs.get(pvg.name)
+        if (vg && vg.uuid !== pvg.uuid) continue
+        const sig = peer.storage.sigs.get(pdev)
+        if (sig && sys.storage.sigs.get(dev)?.uuid !== sig.uuid) {
+          sys.storage.sigs.set(dev, { ...sig })
+          changed = true
+        }
+        if (!vg) {
+          vg = { name: pvg.name, uuid: pvg.uuid, pvs: [dev], lvs: [] }
+          sys.storage.vgs.set(pvg.name, vg)
+          changed = true
+        }
+        for (const lv of pvg.lvs) if (!vg.lvs.some((l) => l.name === lv.name)) {
+          vg.lvs.push({ name: lv.name, size: lv.size, minor: Math.max(-1, ...[...sys.storage.vgs.values()].flatMap((v) => v.lvs.map((l) => l.minor))) + 1 })
+          changed = true
+        }
+        const before = vg.lvs.length
+        vg.lvs = vg.lvs.filter((l) => pvg.lvs.some((p) => p.name === l.name))
+        if (vg.lvs.length !== before) changed = true
+        break
+      }
+    })
+  }
+  if (changed) sys.storage.syncDevFiles()
+}
+
+System.refreshHooks.push((sys) => syncSharedLvm(sys))
 
 register('iscsiadm', {
   usage: 'iscsiadm -m discovery -t sendtargets -p IP | -m node -T IQN -p IP --login|--logout | -m session',
@@ -356,7 +404,7 @@ register('iscsiadm', {
         return 7
       }
       const ip = sys.resolveHost(p.split(':')[0]) ?? p
-      const host = reachTarget(ctx, ip)
+      const host = reachTarget(sys, ip)
       if (typeof host === 'string') {
         ctx.err(`iscsiadm: ${host}\niscsiadm: cannot make connection to ${ip}: No route to host\niscsiadm: connection login retries (reopen_max) 5 exceeded\niscsiadm: Could not perform SendTargets discovery: iSCSI PDU timed out\n`)
         return 4
@@ -381,7 +429,7 @@ register('iscsiadm', {
         let code = 0
         for (const n of list) {
           ctx.out(`Logging in to [iface: default, target: ${n.target}, portal: ${n.portal},3260]\n`)
-          const e = login(ctx, n.host, n.target, n.portal)
+          const e = login(sys, n.host, n.target, n.portal)
           if (e) {
             ctx.err(e + '\n')
             code = 24
@@ -457,13 +505,19 @@ export function verifyIscsi(sys: System, check: object): { ok: boolean; label: s
 }
 
 // pvesm add iscsi: el nodo descubre el destino e inicia sesión.
-pveHooks.iscsiLogin = (ctx, portal, target) => {
-  const ip = ctx.sys.resolveHost(portal.split(':')[0]) ?? portal
-  const host = reachTarget(ctx, ip)
+pveHooks.iscsiLogin = (sys, portal, target) => {
+  const ip = sys.resolveHost(portal.split(':')[0]) ?? portal
+  const host = reachTarget(sys, ip)
   if (typeof host === 'string') return host
-  const nodes = NODES.get(ctx.sys) ?? []
-  NODES.set(ctx.sys, nodes)
+  const nodes = NODES.get(sys) ?? []
+  NODES.set(sys, nodes)
   if (!nodes.some((n) => n.target === target)) nodes.push({ target, portal: ip, host })
-  const e = login(ctx, host, target, ip)
+  const e = login(sys, host, target, ip)
   return e ? e.split('\n')[1]?.replace(/^iscsiadm: /, '') : undefined
+}
+
+// Como pvestatd: cada nodo inicia sesión solo en los destinos de los almacenamientos iSCSI.
+pveHooks.iscsiActive = (sys, portal, target) => {
+  if (SESSIONS.get(sys)?.some((x) => x.target === target)) return true
+  return !pveHooks.iscsiLogin!(sys, portal, target)
 }

@@ -50,6 +50,7 @@ export interface PveStorage {
   type: 'dir' | 'lvmthin' | 'lvm' | 'zfspool' | 'nfs' | 'cifs' | 'pbs' | 'iscsi' | 'rbd'
   /** iSCSI: el destino. */
   target?: string
+  portal?: string
   /** LVM: el grupo de volúmenes. */
   vgname?: string
   content: string[]
@@ -109,7 +110,8 @@ export function pveOf(sys: System): Pve | undefined {
 /** Lo que otros módulos le agregan a Proxmox sin que este archivo dependa de ellos. */
 export const pveHooks: {
   datasetExists?: (sys: System, name: string) => boolean
-  iscsiLogin?: (ctx: CommandContext, portal: string, target: string) => string | undefined
+  iscsiLogin?: (sys: System, portal: string, target: string) => string | undefined
+  iscsiActive?: (sys: System, portal: string, target: string) => boolean
   rbdPool?: (sys: System, pool: string) => boolean
 } = {}
 
@@ -737,6 +739,19 @@ function nextDiskName(pve: Pve, storage: string, vmid: number, prefix = 'vm') {
 }
 
 /** Los volúmenes que se ven en un almacenamiento: en uno compartido de un clúster, los de todos los nodos. */
+/** Si el almacenamiento anda en este nodo: el destino iSCSI responde y deja entrar, el VG está. */
+export function storageActive(sys: System, s: PveStorage): boolean {
+  if (!s.enabled) return false
+  if (s.type === 'iscsi' && s.portal && s.target && pveHooks.iscsiActive) return pveHooks.iscsiActive(sys, s.portal, s.target)
+  if (s.type === 'lvm' && s.vgname) {
+    const pve = pveOf(sys)
+    // El VG puede estar sobre un LUN de un almacenamiento iSCSI que todavía no inició sesión.
+    for (const b of pve?.storages.values() ?? []) if (b.type === 'iscsi' && b.enabled) storageActive(sys, b)
+    return sys.storage.vgs.has(s.vgname)
+  }
+  return true
+}
+
 export function storageVolumes(pve: Pve, storage: string): PveVolume[] {
   const shared = pve.storages.get(storage)?.shared && pve.cluster
   const pools = shared ? pve.cluster!.nodes.map((n) => n.pve.volumes) : [pve.volumes]
@@ -1760,6 +1775,10 @@ register('pvesm', {
             ctx.out(`${s.id.padEnd(16)} ${s.type.padStart(8)} ${'disabled'.padStart(8)} ${'0'.padStart(15)} ${'0'.padStart(15)} ${'0'.padStart(15)}    N/A\n`)
             continue
           }
+          if (!storageActive(sys, s)) {
+            ctx.out(`${s.id.padEnd(16)} ${s.type.padStart(8)} ${'inactive'.padStart(8)} ${'0'.padStart(15)} ${'0'.padStart(15)} ${'0'.padStart(15)}  0.00%\n`)
+            continue
+          }
           const total = Math.round(s.totalBytes / 1024)
           const used = Math.round(usedBytes(pve, s.id) / 1024)
           ctx.out(`${s.id.padEnd(16)} ${s.type.padStart(8)} ${'active'.padStart(8)} ${String(total).padStart(15)} ${String(used).padStart(15)} ${String(total - used).padStart(15)} ${((used / total) * 100).toFixed(2).padStart(7)}%\n`)
@@ -1831,7 +1850,7 @@ register('pvesm', {
             }
           }
           if (pveHooks.iscsiLogin) {
-            const e = pveHooks.iscsiLogin(ctx, opts.get('portal')!, opts.get('target')!)
+            const e = pveHooks.iscsiLogin(sys, opts.get('portal')!, opts.get('target')!)
             if (e) {
               ctx.err(`create storage failed: ${e}\n`)
               return 1
@@ -1866,7 +1885,7 @@ register('pvesm', {
           ctx.err(`400 Parameter verification failed.\npath: property is missing and it is not optional\n`)
           return 1
         }
-        pve.storages.set(id, { id, type: type as PveStorage['type'], content, target: opts.get('target'), vgname: opts.get('vgname'), path: opts.get('path') ?? opts.get('pool') ?? (type === 'rbd' ? id : undefined), server: opts.get('server'), export: opts.get('export') ?? opts.get('share'), datastore: opts.get('datastore'), username: opts.get('username'), fingerprint: opts.get('fingerprint'), totalBytes: type === 'pbs' ? 2000 * GiB : type === 'nfs' ? 1000 * GiB : 200 * GiB, enabled: opts.get('disable') !== '1', shared: ['nfs', 'cifs', 'pbs', 'iscsi', 'rbd'].includes(type) || opts.get('shared') === '1' })
+        pve.storages.set(id, { id, type: type as PveStorage['type'], content, portal: opts.get('portal'), target: opts.get('target'), vgname: opts.get('vgname'), path: opts.get('path') ?? opts.get('pool') ?? (type === 'rbd' ? id : undefined), server: opts.get('server'), export: opts.get('export') ?? opts.get('share'), datastore: opts.get('datastore'), username: opts.get('username'), fingerprint: opts.get('fingerprint'), totalBytes: type === 'pbs' ? 2000 * GiB : type === 'nfs' ? 1000 * GiB : 200 * GiB, enabled: opts.get('disable') !== '1', shared: ['nfs', 'cifs', 'pbs', 'iscsi', 'rbd'].includes(type) || opts.get('shared') === '1' })
         if (type === 'nfs' || type === 'cifs') sys.vfs.mkdirp(`/mnt/pve/${id}`, ROOT_CRED)
         writeStorageCfg(sys, pve)
         if (type === 'pbs') ctx.out(`Successfully added storage '${id}'\n`)

@@ -75,3 +75,36 @@ describe('iSCSI', () => {
     expect(verifyBash(sh, { en: 'pve01', verificar: { pve_almacenamiento: 'san-lvm', tipo: 'lvm' } }).ok).toBe(true)
   })
 })
+
+describe('iSCSI compartido en un clúster', () => {
+  const st2: BashStateInput = {
+    ...st,
+    servidores: [
+      { hostname: 'pve01', ip: '192.168.10.21', clave_conocida: 'si', distro: 'ubuntu', usuarios: [{ nombre: 'root', clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: 'no-subscription', cluster: 'produccion' } },
+      { hostname: 'pve02', ip: '192.168.10.22', clave_conocida: 'si', distro: 'ubuntu', usuarios: [{ nombre: 'root', clave_ssh: true }], equipo: { cpus: 16, memoria_gb: 64, fisico: true }, proxmox: { repos: 'no-subscription', cluster: 'produccion' } },
+    ],
+  }
+  it('el nodo sin ACL ve el almacenamiento inactivo; con ACL ve el mismo VG y la VM migra', async () => {
+    const { run, sh } = await session(st2)
+    await run('targetcli /backstores/block create name=lun0 dev=/dev/sdb')
+    await run(`targetcli /iscsi create ${IQN}`)
+    await run(`targetcli /iscsi/${IQN}/tpg1/luns create /backstores/block/lun0`)
+    const iqn1 = (await run('ssh root@pve01 cat /etc/iscsi/initiatorname.iscsi')).out.match(/InitiatorName=(\S+)/)![1]
+    const iqn2 = (await run('ssh root@pve02 cat /etc/iscsi/initiatorname.iscsi')).out.match(/InitiatorName=(\S+)/)![1]
+    await run(`targetcli /iscsi/${IQN}/tpg1/acls create ${iqn1}`)
+    expect((await run(`ssh root@pve01 pvesm add iscsi san01 --portal 192.168.10.60 --target ${IQN} --content none`)).code).toBe(0)
+    await run('ssh root@pve01 pvcreate /dev/sdb')
+    await run('ssh root@pve01 vgcreate vg_san /dev/sdb')
+    expect((await run('ssh root@pve01 pvesm add lvm san-lvm --vgname vg_san --shared 1 --content images')).code).toBe(0)
+    const r = await run('ssh root@pve01 qm create 200 --name app01 --memory 2048 --scsi0 san-lvm:16 --net0 virtio,bridge=vmbr0')
+    expect(r.code, r.err).toBe(0)
+    await run('ssh root@pve01 qm start 200')
+    expect((await run('ssh root@pve02 pvesm status')).out).toMatch(/san-lvm\s+lvm\s+inactive/)
+    expect((await run('ssh root@pve01 qm migrate 200 pve02 --online')).err).toContain("storage 'san-lvm' is not available")
+    await run(`targetcli /iscsi/${IQN}/tpg1/acls create ${iqn2}`)
+    expect((await run('ssh root@pve02 pvesm status')).out).toMatch(/san-lvm\s+lvm\s+active/)
+    expect((await run('ssh root@pve02 vgs')).out).toContain('vg_san')
+    expect((await run('ssh root@pve01 qm migrate 200 pve02 --online')).code).toBe(0)
+    expect(verifyBash(sh, { en: 'pve01', verificar: { pve_vm: 200, nodo: 'pve02', estado: 'running' } }).ok).toBe(true)
+  })
+})

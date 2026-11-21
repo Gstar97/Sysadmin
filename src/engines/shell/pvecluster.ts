@@ -17,7 +17,7 @@ import { COMMANDS, register, type CommandContext } from './shell'
 import { System } from './system'
 import { ROOT_CRED } from './vfs'
 import { replicatedTo } from './zfs'
-import { confPath, fmtTime, guestName, isDriveKey, needRoot, parseDrive, parseOpts, pveOf, saveConf, startGuest, stopGuest, type Pve, type PveGuest } from './proxmox'
+import { confPath, fmtTime, guestName, isDriveKey, needRoot, parseDrive, parseOpts, pveOf, saveConf, startGuest, stopGuest, storageActive, type Pve, type PveGuest } from './proxmox'
 
 export interface ClusterNode {
   name: string
@@ -248,6 +248,13 @@ function stamp() {
 function migrate(_c: PveCluster, src: ClusterNode, dst: ClusterNode, g: PveGuest, online: boolean, withLocal: boolean): { out: string } | { error: string } {
   const t0 = Date.now()
   const running = g.status === 'running'
+  // Un almacenamiento compartido también tiene que andar en el destino (el LUN, el VG, el NFS).
+  for (const [k, v] of g.conf) {
+    if (!isDriveKey(k) && !/^(rootfs|mp\d+)$/.test(k)) continue
+    const st = (parseDrive(v).volid ?? v.split(',')[0]).split(':')[0]
+    const sto = dst.pve.storages.get(st)
+    if (sto?.shared && !storageActive(dst.sys, sto)) return { error: `ERROR: migration aborted (duration 00:00:01): storage '${st}' is not available on node '${dst.name}'` }
+  }
   if (g.type === 'lxc' && running && !online) return { error: `CT is running - use online migration (--restart) or stop it first` }
   // Los discos ZFS replicados con pvesr ya están en el destino: solo viaja lo último que cambió.
   const all = localDisks(src.pve, g)
@@ -258,7 +265,8 @@ function migrate(_c: PveCluster, src: ClusterNode, dst: ClusterNode, g: PveGuest
   if (running && g.type === 'qemu' && disks.length && !withLocal) return { error: `ERROR: migration aborted (duration 00:00:01): can't live migrate attached local disks without with-local-disks option` }
   for (const d of disks) {
     const st = d.volid.split(':')[0]
-    if (!dst.pve.storages.get(st)?.enabled) return { error: `ERROR: migration aborted (duration 00:00:01): storage '${st}' is not available on node '${dst.name}'` }
+    const sto = dst.pve.storages.get(st)
+    if (!sto?.enabled || !storageActive(dst.sys, sto)) return { error: `ERROR: migration aborted (duration 00:00:01): storage '${st}' is not available on node '${dst.name}'` }
   }
   const ts = stamp()
   let out = ''
