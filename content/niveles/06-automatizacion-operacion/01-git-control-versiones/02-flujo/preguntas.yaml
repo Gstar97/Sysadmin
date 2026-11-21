@@ -1,0 +1,108 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace git add?
+  opciones:
+    - { texto: "Pasa cambios al área de preparación, para que entren en el próximo commit", correcta: true, explicacion: "Todavía no los guarda en la historia." }
+    - { texto: "Guarda un commit", explicacion: "Eso es git commit." }
+    - { texto: "Sube los cambios a GitHub", explicacion: "Eso es git push." }
+    - { texto: "Crea un repositorio", explicacion: "Eso es git init." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre git diff y git diff --staged?
+  opciones:
+    - { texto: "git diff compara el trabajo con la preparación; --staged, la preparación con el último commit", correcta: true, explicacion: "Antes de commitear, mirá --staged." }
+    - { texto: "Son iguales", explicacion: "No." }
+    - { texto: "--staged muestra lo que está en GitHub", explicacion: "No." }
+    - { texto: "git diff muestra la historia", explicacion: "Eso es git log." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Agregaste .env al .gitignore, pero el .env ya estaba en un commit de la semana pasada. ¿Qué pasa?
+  opciones:
+    - { texto: "Sigue en la historia: .gitignore solo evita que entren archivos nuevos", correcta: true, explicacion: "Hay que cambiar la contraseña y limpiar la historia." }
+    - { texto: "Git lo borra de todos los commits", explicacion: "No." }
+    - { texto: "Git avisa y lo saca", explicacion: "No." }
+    - { texto: "No pasa nada malo", explicacion: "La contraseña sigue visible en la historia." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que descarta los cambios sin guardar de scripts/respaldo.sh.
+  prompt: "ana@admin01:~/infra$"
+  aceptadas:
+    - "git restore scripts/respaldo.sh"
+    - "git checkout -- scripts/respaldo.sh"
+  explicacion: Lo deja como en la última versión guardada; lo descartado no tiene vuelta.
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué va a entrar en el próximo commit?
+  salida: |
+    ana@admin01:~/infra$ git status
+    On branch main
+    Changes to be committed:
+      (use "git restore --staged <file>..." to unstage)
+    	modified:   nginx/tienda.conf
+
+    Changes not staged for commit:
+      (use "git add <file>..." to update what will be committed)
+      (use "git restore <file>..." to discard changes in working directory)
+    	modified:   scripts/respaldo.sh
+
+    Untracked files:
+      (use "git add <file>..." to include in what will be committed)
+    	.env
+  opciones:
+    - { texto: "Solo el cambio de nginx/tienda.conf", correcta: true, explicacion: "Es lo único preparado." }
+    - { texto: "Los tres archivos", explicacion: "Solo lo preparado." }
+    - { texto: "tienda.conf y respaldo.sh", explicacion: "respaldo.sh no está preparado." }
+    - { texto: "Nada", explicacion: "tienda.conf está preparado." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene poner en un .gitignore de un repositorio de configuraciones? (Elegí todas las correctas.)
+  opciones:
+    - { texto: ".env y archivos de claves", correcta: true, explicacion: "Los secretos no van al repositorio." }
+    - { texto: "*.log", correcta: true, explicacion: "Cambian solos y no son configuración." }
+    - { texto: "Archivos temporales o generados", correcta: true, explicacion: "Se pueden volver a generar." }
+    - { texto: "Los archivos de configuración de nginx", explicacion: "Justamente es lo que hay que versionar." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Preparaste un archivo por error. ¿Cómo lo sacás de la preparación sin perder lo que editaste?
+  opciones:
+    - { texto: "git restore --staged archivo", correcta: true, explicacion: "Lo editado queda en el directorio de trabajo." }
+    - { texto: "git restore archivo", explicacion: "Eso descarta lo editado." }
+    - { texto: "rm archivo", explicacion: "Lo borra del disco." }
+    - { texto: "git commit", explicacion: "Lo guardaría." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué comando dice en qué rama estás y qué archivos cambiaron?
+  opciones:
+    - { texto: "git status", correcta: true, explicacion: "El que más se usa." }
+    - { texto: "git log", explicacion: "Muestra la historia." }
+    - { texto: "git init", explicacion: "Crea el repositorio." }
+    - { texto: "git config", explicacion: "Configura Git." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená el recorrido seguro de un cambio.
+  pasos:
+    - "Editar el archivo"
+    - "git status y git diff para ver qué cambió"
+    - "git add con los archivos de ese cambio"
+    - "git diff --staged para revisar qué va a entrar"
+    - "git commit -m con un mensaje que diga qué y por qué"
+  explicacion: Revisar antes del commit es la última oportunidad fácil de ver un error.
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál de estos commits está mejor armado?
+  opciones:
+    - { texto: "Un commit con el cambio de caché de nginx, con el mensaje \"Caché de 30 días para las imágenes\"", correcta: true, explicacion: "Un cambio con sentido y un mensaje claro." }
+    - { texto: "Un commit con todo lo del día, \"cambios del martes\"", explicacion: "Mezcla cosas y no se puede deshacer por partes." }
+    - { texto: "Un commit con el cambio y el .env, \"listo\"", explicacion: "Entró una contraseña." }
+    - { texto: "Un commit vacío", explicacion: "No." }

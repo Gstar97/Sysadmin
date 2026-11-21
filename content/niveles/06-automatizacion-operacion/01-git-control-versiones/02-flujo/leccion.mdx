@@ -1,0 +1,88 @@
+---
+id: n6-m1-l2
+titulo: Flujo básico
+minutos: 150
+objetivos:
+  - Entender las tres zonas de Git (trabajo, preparación y repositorio) y moverse entre ellas.
+  - Armar commits con un solo cambio con sentido, revisando antes qué entra.
+  - Ignorar lo que no se versiona y deshacer cambios con seguridad.
+glosario: [area-preparacion, gitignore, commit-git]
+verificado: 2026-11
+---
+
+import areas from './areas.svg?raw'
+import areasDatos from './areas.yaml'
+import ejFlujo from './ej-flujo.yaml'
+
+En la lección anterior hiciste commits con `git add .` y `git commit -a`, que guardan todo lo que cambió. Funciona mientras trabajás en una sola cosa, pero un día normal tocás varias: un cambio listo, otro a medias, una prueba que olvidaste borrar. Git tiene una zona intermedia para elegir qué va en cada commit, y entenderla es lo que separa usar Git de pelearse con él.
+
+<AntesDeEmpezar>
+- Por qué versionar y los primeros commits (lección 6.1.1).
+- Editar archivos con nano y sed (lecciones 1.1.8 y 1.7.6).
+</AntesDeEmpezar>
+
+## Las tres zonas
+
+<DiagramaInteractivo datos={areasDatos} svg={areas} alt="Tres zonas. El directorio de trabajo, con los archivos que editás: tienda.conf modificado, respaldo.sh modificado y .env sin versionar. El área de preparación, con lo que va a entrar en el próximo commit: tienda.conf. El repositorio, con los commits. git add pasa cambios del trabajo a la preparación; git commit, de la preparación al repositorio; git restore --staged saca algo de la preparación; y git restore archivo descarta lo que no preparaste. git diff compara el trabajo con la preparación, y git diff --staged, la preparación con el último commit." />
+
+El recorrido de un cambio es siempre el mismo:
+
+1. Editás archivos (directorio de trabajo).
+2. Elegís qué cambios van juntos con `git add` (área de preparación).
+3. Los guardás con `git commit` (repositorio).
+
+Y los dos comandos que conviene correr antes de cada commit: `git status` (qué hay en cada zona) y `git diff --staged` (exactamente qué vas a guardar).
+
+## Manos a la obra
+
+<Terminal ejercicio={ejFlujo} />
+
+## .gitignore
+
+Un archivo `.gitignore` en la raíz del repositorio dice qué no versionar, una regla por línea:
+
+```text
+# Secretos: nunca al repositorio
+.env
+*.key
+# Generado o que cambia solo
+*.log
+__pycache__/
+/tmp/
+```
+
+`*` vale cualquier cosa dentro de un nombre, una barra al final quiere decir "carpeta" y una al principio, "solo en la raíz". `git check-ignore -v archivo` dice qué regla lo ignora. Y lo más importante: `.gitignore` solo evita que entren archivos nuevos. Si algo ya está en un commit, sigue en la historia.
+
+## Buenos commits
+
+- **Un cambio con sentido por commit**: "Caché de 30 días para las imágenes", no "cambios del martes".
+- **El mensaje en una primera línea corta** (hasta unos 50 caracteres), en el modo de una orden o un título: qué hace el commit. Si hace falta explicar el porqué, va en un párrafo aparte.
+- **Revisar antes de guardar**: `git diff --staged`. Es la última oportunidad fácil de ver una contraseña o una línea de prueba.
+- **Commits seguidos**: un commit chico y frecuente es fácil de entender y de deshacer.
+
+<EnSimple>
+Git tiene tres zonas: los archivos que editás, una zona de preparación donde elegís qué va en el próximo commit, y el repositorio con los commits. git add pasa cambios a la preparación, git commit los guarda, git diff y git diff --staged muestran qué cambió en cada paso, y git restore deshace lo que no preparaste. El .gitignore dice qué no versionar (secretos, logs), pero no saca lo que ya entró. Cada commit, un solo cambio con un mensaje que diga qué y por qué.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="git add . sin mirar">
+    Entran las pruebas, los logs y las contraseñas. git status y git diff --staged antes de cada commit.
+  </ErrorComun>
+  <ErrorComun titulo="Agregar .env al .gitignore después de commitearlo">
+    El .gitignore no lo saca de la historia: la contraseña sigue en el commit viejo. Hay que cambiarla y limpiar la historia (caso del módulo).
+  </ErrorComun>
+  <ErrorComun titulo="git restore para “ver qué pasa”">
+    Descarta los cambios sin guardar y no tienen vuelta. Si dudás, guardalos antes en un commit o con git stash.
+  </ErrorComun>
+  <ErrorComun titulo="Commits de “todo lo que hice hoy”">
+    Mezclan cambios que no tienen nada que ver y no se pueden deshacer por separado.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Tres zonas: trabajo, preparación (staging) y repositorio.
+- git add elige qué entra; git commit lo guarda; git status y git diff --staged, antes de cada commit.
+- git restore archivo descarta cambios sin guardar; git restore --staged archivo saca de la preparación.
+- .gitignore: secretos, logs y archivos generados; no saca lo que ya está en un commit.
+- Un cambio con sentido por commit, con un mensaje corto que diga qué y por qué.
+</Resumen>

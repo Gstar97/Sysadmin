@@ -499,6 +499,8 @@ const stateShape = {
             remotos: z.record(z.string(), z.string()).default({}),
             /** Commits en orden, cada uno con los archivos que cambia (null = se borra). Sin commits y con origin: es un clon. */
             commits: z.array(z.strictObject({ mensaje: z.string(), autor: z.string().optional(), correo: z.string().optional(), archivos: z.record(z.string(), z.string().nullable()) })).default([]),
+            /** Cambios sin guardar en el árbol de trabajo después del último commit (null = se borra el archivo). */
+            cambios: z.record(z.string(), z.string().nullable()).default({}),
           }),
         )
         .default([]),

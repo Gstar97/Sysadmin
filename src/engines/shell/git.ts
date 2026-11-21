@@ -337,7 +337,7 @@ function unified(path: string, a: Entry | undefined, b: Entry | undefined, aLabe
   if (!a) out += `new file mode 100${(b!.mode & 0o777).toString(8)}\n`
   else if (!b) out += `deleted file mode 100${(a.mode & 0o777).toString(8)}\n`
   else if (a.mode !== b.mode) out += `old mode 100${(a.mode & 0o777).toString(8)}\nnew mode 100${(b.mode & 0o777).toString(8)}\n`
-  out += `index ${sha(a?.data ?? '').slice(0, 7)}..${sha(b?.data ?? '').slice(0, 7)}\n`
+  out += `index ${a ? sha(a.data).slice(0, 7) : '0000000'}..${b ? sha(b.data).slice(0, 7) : '0000000'}${a && b && a.mode === b.mode ? ` 100${(a.mode & 0o777).toString(8)}` : ''}\n`
   if (a?.data === b?.data) return out
   out += `--- ${a ? `${aLabel}/${path}` : '/dev/null'}\n+++ ${b ? `${bLabel}/${path}` : '/dev/null'}\n`
   const o = ops(aL, bL)
@@ -885,39 +885,33 @@ register('git', {
           for (const p of untracked) ctx.out(`?? ${fromCwd(p)}\n`)
           return 0
         }
-        let out = repo.detached ? `HEAD detached at ${short(repo.head)}\n` : `On branch ${branchName(repo)}\n`
+        let head1 = repo.detached ? `HEAD detached at ${short(repo.head)}\n` : `On branch ${branchName(repo)}\n`
         const up = repo.upstream.get(branchName(repo))
         const tip = headCommit(repo)?.id
+        let upLine = ''
         if (up && tip && !repo.detached) {
           const remoteTip = repo.refs.get(`refs/remotes/${up}`)
-          if (!remoteTip) out += `Your branch is based on '${up}', but the upstream is gone.\n  (use "git branch --unset-upstream" to fixup)\n`
+          if (!remoteTip) upLine = `Your branch is based on '${up}', but the upstream is gone.\n  (use "git branch --unset-upstream" to fixup)\n`
           else {
             const ahead = history(repo, [tip]).filter((c) => !ancestors(repo, remoteTip).has(c.id)).length
             const behind = history(repo, [remoteTip]).filter((c) => !ancestors(repo, tip).has(c.id)).length
-            if (!ahead && !behind) out += `Your branch is up to date with '${up}'.\n`
-            else if (ahead && !behind) out += `Your branch is ahead of '${up}' by ${ahead} commit${ahead > 1 ? 's' : ''}.\n  (use "git push" to publish your local commits)\n`
-            else if (!ahead && behind) out += `Your branch is behind '${up}' by ${behind} commit${behind > 1 ? 's' : ''}, and can be fast-forwarded.\n  (use "git pull" to update your local branch)\n`
-            else out += `Your branch and '${up}' have diverged,\nand have ${ahead} and ${behind} different commits each, respectively.\n  (use "git pull" if you want to integrate the remote branch with yours)\n`
+            if (!ahead && !behind) upLine = `Your branch is up to date with '${up}'.\n`
+            else if (ahead && !behind) upLine = `Your branch is ahead of '${up}' by ${ahead} commit${ahead > 1 ? 's' : ''}.\n  (use "git push" to publish your local commits)\n`
+            else if (!ahead && behind) upLine = `Your branch is behind '${up}' by ${behind} commit${behind > 1 ? 's' : ''}, and can be fast-forwarded.\n  (use "git pull" to update your local branch)\n`
+            else upLine = `Your branch and '${up}' have diverged,\nand have ${ahead} and ${behind} different commits each, respectively.\n  (use "git pull" if you want to integrate the remote branch with yours)\n`
           }
         }
-        if (!headCommit(repo)) out += '\nNo commits yet\n'
-        if (repo.merging) out += conflicted.length ? `\nYou have unmerged paths.\n  (fix conflicts and run "git commit")\n  (use "git merge --abort" to abort the merge)\n` : `\nAll conflicts fixed but you are still merging.\n  (use "git commit" to conclude merge)\n`
+        head1 += upLine
+        const blocks: string[] = []
+        if (!headCommit(repo)) blocks.push('No commits yet\n')
+        if (repo.merging) blocks.push(conflicted.length ? `You have unmerged paths.\n  (fix conflicts and run "git commit")\n  (use "git merge --abort" to abort the merge)\n` : `All conflicts fixed but you are still merging.\n  (use "git commit" to conclude merge)\n`)
         const stagedOk = staged.filter((p) => !conflicted.includes(p))
-        if (stagedOk.length) {
-          out += `\nChanges to be committed:\n  (use "git ${headCommit(repo) ? 'restore --staged' : 'rm --cached'} <file>..." to unstage)\n`
-          for (const p of stagedOk) out += `\t${!head.has(p) ? 'new file:   ' : !repo.index.has(p) ? 'deleted:    ' : 'modified:   '}${fromCwd(p)}\n`
-        }
-        if (conflicted.length) {
-          out += `\nUnmerged paths:\n  (use "git add <file>..." to mark resolution)\n`
-          for (const p of conflicted) out += `\tboth modified:   ${fromCwd(p)}\n`
-        }
+        if (stagedOk.length) blocks.push(`Changes to be committed:\n  (use "git ${headCommit(repo) ? 'restore --staged' : 'rm --cached'} <file>..." to unstage)\n` + stagedOk.map((p) => `\t${!head.has(p) ? 'new file:   ' : !repo.index.has(p) ? 'deleted:    ' : 'modified:   '}${fromCwd(p)}\n`).join(''))
+        if (conflicted.length) blocks.push(`Unmerged paths:\n  (use "git add <file>..." to mark resolution)\n` + conflicted.map((p) => `\tboth modified:   ${fromCwd(p)}\n`).join(''))
         const unstagedOk = unstaged.filter((p) => !conflicted.includes(p))
-        if (unstagedOk.length) {
-          out += `\nChanges not staged for commit:\n  (use "git add${unstagedOk.some((p) => !work.has(p)) ? '/rm' : ''} <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n`
-          for (const p of unstagedOk) out += `\t${!work.has(p) ? 'deleted:    ' : 'modified:   '}${fromCwd(p)}\n`
-        }
+        if (unstagedOk.length) blocks.push(`Changes not staged for commit:\n  (use "git add${unstagedOk.some((p) => !work.has(p)) ? '/rm' : ''} <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n` + unstagedOk.map((p) => `\t${!work.has(p) ? 'deleted:    ' : 'modified:   '}${fromCwd(p)}\n`).join(''))
         if (untracked.length) {
-          out += `\nUntracked files:\n  (use "git add <file>..." to include in what will be committed)\n`
+          let u = `Untracked files:\n  (use "git add <file>..." to include in what will be committed)\n`
           const shown = new Set<string>()
           for (const p of untracked) {
             // Como git: una carpeta entera sin versionar se muestra como carpeta.
@@ -932,15 +926,20 @@ register('git', {
             }
             if (!shown.has(label)) {
               shown.add(label)
-              out += `\t${fromCwd(label)}\n`
+              u += `\t${fromCwd(label)}\n`
             }
           }
+          blocks.push(u)
         }
+        let tail = ''
         if (!stagedOk.length && !unstagedOk.length && !conflicted.length) {
-          if (untracked.length) out += `\nnothing added to commit but untracked files present (use "git add" to track)\n`
-          else if (!headCommit(repo)) out += `\nnothing to commit (create/copy files and use "git add" to track)\n`
-          else if (!repo.merging) out += `nothing to commit, working tree clean\n`
-        } else if (!stagedOk.length) out += `no changes added to commit (use "git add" and/or "git commit -a")\n`
+          if (untracked.length) tail = `nothing added to commit but untracked files present (use "git add" to track)\n`
+          else if (!headCommit(repo)) tail = `nothing to commit (create/copy files and use "git add" to track)\n`
+          else if (!repo.merging) tail = `nothing to commit, working tree clean\n`
+        } else if (!stagedOk.length) tail = `no changes added to commit (use "git add" and/or "git commit -a")\n`
+        // Como git: bloques separados por una línea en blanco; "nothing to commit" va pegado si no hay bloques.
+        let out = head1 + (upLine && blocks.length ? '\n' : '') + blocks.join('\n')
+        if (tail) out += (blocks.length && (untracked.length || !stagedOk.length) ? '\n' : '') + tail
         ctx.out(out)
         return 0
       }
@@ -2221,6 +2220,11 @@ System.initHooks.push((sys, state: BashState) => {
     if (!spec.bare && parent) {
       writeTree(sys, spec.ruta, new Map(), tree)
       repo.index = new Map(tree)
+    }
+    for (const [p, data] of Object.entries(spec.cambios)) {
+      if (data === null) {
+        if (sys.vfs.exists(`${spec.ruta}/${p}`, ROOT_CRED)) sys.vfs.unlink(`${spec.ruta}/${p}`, ROOT_CRED)
+      } else putFile(sys, spec.ruta, p, { data, mode: /\.(sh|py)$/.test(p) ? 0o755 : 0o644 })
     }
     if (spec.usuario) {
       const u = sys.users.get(spec.usuario)

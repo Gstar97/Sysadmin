@@ -1,0 +1,101 @@
+tipo: terminal
+shell: bash
+titulo: Elegir qué entra en cada commit
+descripcion: >-
+  Ana trabajó toda la tarde en ~/infra (un repositorio con tres commits) y dejó varias cosas a
+  medias: cambió la caché de la tienda en nginx (un cambio que está listo), dejó una línea de
+  prueba en el script de respaldo que no debería quedar, y aparecieron archivos que no tienen
+  que versionarse: un .env con la clave de la base y un log.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true }]
+  paquetes: { instalados: [git] }
+  archivos:
+    /home/ana/.gitconfig: { dueno: ana, contenido: "[user]\n\tname = Ana Gómez\n\temail = ana@ejemplo.test\n[init]\n\tdefaultBranch = main\n" }
+  git:
+    repos:
+      - ruta: /home/ana/infra
+        usuario: ana
+        commits:
+          - mensaje: Primera versión de la tienda y del respaldo
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    client_max_body_size 2m;\n    location / {\n        proxy_pass http://tienda;\n    }\n}\n"
+              scripts/respaldo.sh: "#!/bin/bash\nset -euo pipefail\nrestic backup /srv/datos --tag diario\n"
+          - mensaje: HTTPS con la CA interna
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    ssl_certificate /etc/ssl/tienda.crt;\n    client_max_body_size 2m;\n    location / {\n        proxy_pass http://tienda;\n    }\n}\n"
+          - mensaje: Límite de subida a 20 MB para las fotos de marketing
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    ssl_certificate /etc/ssl/tienda.crt;\n    client_max_body_size 20m;\n    location / {\n        proxy_pass http://tienda;\n    }\n}\n"
+        cambios:
+          nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    ssl_certificate /etc/ssl/tienda.crt;\n    client_max_body_size 20m;\n    location / {\n        proxy_pass http://tienda;\n    }\n    location /img/ {\n        expires 30d;\n    }\n}\n"
+          scripts/respaldo.sh: "#!/bin/bash\nset -euo pipefail\necho \"PRUEBA ANA - borrar\"\nrestic backup /srv/datos --tag diario\n"
+          .env: "DB_PASSWORD=Tienda-2026-secreta\n"
+          nginx/acceso.log: "192.168.10.50 - - [21/Nov/2026] GET / 200\n"
+pasos:
+  - consigna: Mirá en qué estado quedó el repositorio y qué cambió en cada archivo versionado.
+    verificar:
+      - { comando_usado: "git status" }
+      - { comando_usado: "git diff" }
+    pistas:
+      - "git status muestra qué está modificado y qué no está versionado."
+      - "git diff muestra los cambios línea por línea."
+    solucion:
+      - cd ~/infra
+      - git status
+      - git diff
+    explicacion: >-
+      Dos archivos modificados (uno con un cambio bueno y otro con una línea de prueba) y dos sin
+      versionar. Lo que no hay que hacer es git add . y commitear todo junto: entrarían la prueba,
+      el log y la contraseña.
+  - consigna: >-
+      Guardá en un commit solo el cambio de nginx, revisando antes qué vas a guardar. Mensaje:
+      "Caché de 30 días para las imágenes".
+    verificar:
+      - { git_repo: /home/ana/infra, commits_min: 4, ultimo_mensaje: "Caché de 30 días", limpio: false }
+      - { comando_usado: "git diff --staged" }
+    pistas:
+      - "git add nginx/tienda.conf (solo ese archivo)."
+      - "git diff --staged muestra lo que va a entrar en el commit."
+    solucion:
+      - git add nginx/tienda.conf
+      - git diff --staged
+      - git commit -m "Caché de 30 días para las imágenes"
+      - git status
+    explicacion: >-
+      El área de preparación es para esto: elegir qué entra. El script de respaldo sigue
+      modificado, pero no se guardó. Un commit por cambio con sentido hace que la historia se
+      pueda leer y que un cambio se pueda deshacer sin llevarse otros.
+  - consigna: >-
+      Que Git ignore el .env y cualquier archivo .log, y guardá esa regla en un commit con el
+      mensaje "Ignorar secretos y logs".
+    verificar:
+      - { git_repo: /home/ana/infra, versionado: .gitignore, no_versionado: .env, ultimo_mensaje: "Ignorar" }
+    pistas:
+      - "Un archivo .gitignore en la raíz, con una regla por línea: .env y *.log"
+      - "printf '.env\\n*.log\\n' > .gitignore; git add .gitignore; git commit -m ..."
+    solucion:
+      - printf '.env\n*.log\n' > .gitignore
+      - git status
+      - git add .gitignore
+      - git commit -m "Ignorar secretos y logs"
+    explicacion: >-
+      git status ya no muestra el .env ni el log. El .gitignore se versiona, así vale para todos los
+      que usen el repositorio. Ojo: solo ignora archivos que todavía no están versionados; si un
+      secreto ya entró en un commit, .gitignore no lo saca (eso es el caso del módulo).
+  - consigna: Descartá la línea de prueba del script de respaldo y dejá el repositorio sin cambios pendientes.
+    verificar:
+      - { git_repo: /home/ana/infra, limpio: true }
+      - { archivo: /home/ana/infra/scripts/respaldo.sh, contenido_no_incluye: PRUEBA }
+    pistas:
+      - "git restore scripts/respaldo.sh"
+    solucion:
+      - git restore scripts/respaldo.sh
+      - git status
+      - git log --oneline
+    explicacion: >-
+      git restore devuelve el archivo a la última versión guardada. Es la forma segura de "deshacer
+      lo que toqué", pero no tiene vuelta: esa línea no estaba en ningún commit. Y "working tree
+      clean" es el estado al que conviene llegar antes de irse.
