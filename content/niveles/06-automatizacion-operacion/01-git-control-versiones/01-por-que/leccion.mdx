@@ -1,0 +1,75 @@
+---
+id: n6-m1-l1
+titulo: Por qué versionar
+minutos: 90
+objetivos:
+  - Explicar qué problemas resuelve el control de versiones en el trabajo de un sysadmin.
+  - Entender qué es un repositorio y qué es un commit.
+  - Crear un repositorio, guardar cambios con buenos mensajes y ver versiones anteriores.
+glosario: [control-versiones, repositorio-git, commit-git]
+verificado: 2026-11
+---
+
+import antes from './antes-despues.svg?raw'
+import antesDatos from './antes-despues.yaml'
+import ejPrimer from './ej-primer-repo.yaml'
+
+Hasta acá configuraste servidores a mano: editabas un archivo, probabas y, con suerte, guardabas una copia .bak antes. Funciona con un servidor y una persona. Con diez servidores, tres personas y un año de cambios, ya no: nadie sabe qué versión es la buena, por qué alguien cambió una línea, ni cuándo se rompió algo. Este nivel trata de dejar de hacer las cosas a mano, y el primer paso es guardar todo lo que configurás en un **sistema de control de versiones**. El que usa todo el mundo es **Git**.
+
+<AntesDeEmpezar>
+- Terminal, archivos y editores (módulo 1.1).
+- Scripting en Bash (módulo 1.7): vas a versionar tus scripts.
+</AntesDeEmpezar>
+
+## El problema
+
+<DiagramaInteractivo datos={antesDatos} svg={antes} alt="A la izquierda, una carpeta de nginx a mano con tienda.conf, tienda.conf.bak, tienda.conf.bak2, tienda.conf.viejo-anda, tienda.conf.20260312 y tienda.conf.NO-TOCAR, y las preguntas cuál es la buena, quién cambió qué, por qué y cuándo se rompió; además, en otro servidor, una copia distinta que alguien editó directamente: la historia está en la cabeza de alguien. A la derecha, el mismo archivo en un repositorio, con cuatro commits en línea: Primera versión, HTTPS con la CA interna, Caché para /img y Límite de subida a 20 MB, cada uno con autor, fecha e identificador: cada cambio con quién, cuándo, qué y por qué, y se puede volver a cualquier punto con un comando." />
+
+## Qué es Git
+
+- Un **repositorio** es una carpeta cuyo historial maneja Git. La historia vive en una carpeta oculta, `.git`; los archivos de afuera son archivos comunes que editás como siempre.
+- Un **commit** es una foto de todos los archivos del repositorio en un momento, con el autor, la fecha y un mensaje. Cada commit tiene un identificador (como `a41c9e2`) y apunta al anterior: así se forma la historia.
+- Git es **distribuido**: cada copia del repositorio tiene la historia completa. Se puede trabajar sin red y después sincronizar con un servidor central (GitHub, GitLab, Gitea o un servidor propio).
+
+Git lo creó Linus Torvalds en 2005 para el kernel de Linux, y hoy es la herramienta común de desarrolladores y de administradores: las configuraciones, los scripts, los playbooks de Ansible del módulo 6.3, los paneles de monitoreo, la documentación. A todo eso se lo llama **infraestructura como código**, y su base es que lo que define cómo están los servidores vive en un repositorio.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejPrimer} />
+
+## Lo que Git te da
+
+- **Historia**: quién cambió qué, cuándo y por qué. `git log` y `git blame` (lección 6.1.5) responden "¿quién tocó esta línea?".
+- **Diferencias**: `git diff` muestra exactamente qué cambió, antes de guardarlo y entre dos momentos cualesquiera.
+- **Volver atrás**: cualquier archivo, a cualquier versión.
+- **Trabajar en paralelo**: ramas para probar un cambio sin tocar lo que anda (lección 6.1.3).
+- **Una sola fuente de verdad**: un repositorio central del que todos los servidores toman la configuración (lecciones 6.1.4 y 6.1.5).
+
+Y lo que **no** te da: no es un respaldo de los servidores (solo guarda lo que pusiste en él) y no es lugar para contraseñas (cualquiera que lo clone las ve, y quedan en la historia para siempre: lo vas a ver en el caso del módulo).
+
+<EnSimple>
+Git guarda fotos de una carpeta, llamadas commits, cada una con quién la sacó, cuándo y un mensaje que explica qué cambió y por qué. Así deja de haber archivos .bak sin explicación: se ve toda la historia, qué cambió entre dos fotos, y se puede volver a cualquiera. La historia vive en la carpeta .git. Primero se le dice a Git quién sos (nombre y correo), después git init, git add y git commit. Git no reemplaza a los respaldos y no es lugar para contraseñas.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Mensajes como “cambios” o “arreglo”">
+    Dentro de un año no dicen nada. El mensaje explica qué se hizo y por qué, en una línea corta.
+  </ErrorComun>
+  <ErrorComun titulo="Un commit gigante con un mes de cambios">
+    No se puede saber qué cambio rompió qué ni deshacer uno solo. Un commit por cambio con sentido.
+  </ErrorComun>
+  <ErrorComun titulo="Creer que el repositorio es un respaldo">
+    Si está solo en tu equipo, se pierde con tu equipo. Va a un servidor central, y los servidores se siguen respaldando.
+  </ErrorComun>
+  <ErrorComun titulo="Guardar contraseñas en el repositorio">
+    Quedan en la historia aunque después las borres. Lo vas a ver en el caso del módulo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Control de versiones: la historia de cada cambio, con quién, cuándo, qué y por qué.
+- Repositorio: la carpeta con su historia en .git. Commit: una foto con autor, fecha y mensaje.
+- Git es distribuido: cada copia tiene la historia entera; se sincroniza con un servidor central.
+- Una vez por equipo: git config --global user.name, user.email e init.defaultBranch main.
+- git init, git status, git add, git commit -m, git diff, git log, git show COMMIT:archivo.
+</Resumen>

@@ -1,0 +1,102 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es un commit en Git?
+  opciones:
+    - { texto: "Una foto de los archivos del repositorio en un momento, con autor, fecha y mensaje", correcta: true, explicacion: "Y apunta al commit anterior." }
+    - { texto: "Una copia de seguridad del servidor", explicacion: "No respalda el servidor." }
+    - { texto: "Un archivo .bak", explicacion: "Justamente lo que reemplaza." }
+    - { texto: "Un servidor de GitHub", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Dónde guarda Git la historia de un repositorio?
+  opciones:
+    - { texto: "En la carpeta oculta .git dentro del repositorio", correcta: true, explicacion: "Si se borra .git, se borra la historia." }
+    - { texto: "En /etc/git", explicacion: "No." }
+    - { texto: "Solo en GitHub", explicacion: "Cada copia tiene la historia completa." }
+    - { texto: "En ~/.gitconfig", explicacion: "Ahí está tu configuración." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Hacés tu primer commit en un equipo nuevo y Git dice "Author identity unknown". ¿Qué falta?
+  opciones:
+    - { texto: "Configurar user.name y user.email", correcta: true, explicacion: "Con git config --global." }
+    - { texto: "Hacer git init", explicacion: "Eso ya estaba." }
+    - { texto: "Una cuenta de GitHub", explicacion: "No hace falta para trabajar localmente." }
+    - { texto: "Permisos de root", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es el mejor mensaje de commit?
+  opciones:
+    - { texto: "Límite de subida a 20 MB para las fotos de marketing", correcta: true, explicacion: "Dice qué y por qué." }
+    - { texto: "cambios", explicacion: "No dice nada." }
+    - { texto: "arreglo nginx", explicacion: "No dice qué ni por qué." }
+    - { texto: "asdf", explicacion: "No." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que muestra cómo era nginx/tienda.conf en el commit anterior al último.
+  prompt: "ana@admin01:~/infra$"
+  aceptadas:
+    - "git show HEAD~1:nginx/tienda.conf"
+    - "git show HEAD^:nginx/tienda.conf"
+  explicacion: HEAD es el último commit; HEAD~1, el anterior.
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué un repositorio de Git no es un respaldo?
+  opciones:
+    - { texto: "Porque solo guarda lo que pusiste en él, y si está en un solo disco se pierde con ese disco", correcta: true, explicacion: "Los servidores se siguen respaldando." }
+    - { texto: "Porque Git borra lo viejo", explicacion: "No borra nada." }
+    - { texto: "Porque está cifrado", explicacion: "No está cifrado." }
+    - { texto: "Porque es lento", explicacion: "No." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué quiere decir que Git sea distribuido?
+  opciones:
+    - { texto: "Que cada copia del repositorio tiene la historia completa y se puede trabajar sin el servidor", correcta: true, explicacion: "Después se sincroniza." }
+    - { texto: "Que se instala en varios servidores a la vez", explicacion: "No." }
+    - { texto: "Que solo anda en la nube", explicacion: "No." }
+    - { texto: "Que cada archivo está en un servidor distinto", explicacion: "No." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué cosas de un sysadmin conviene versionar con Git? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Archivos de configuración", correcta: true, explicacion: "Con su historia." }
+    - { texto: "Scripts", correcta: true, explicacion: "Sí." }
+    - { texto: "Playbooks de Ansible", correcta: true, explicacion: "Lo vas a ver en el módulo 6.3." }
+    - { texto: "Las contraseñas de las bases de datos", explicacion: "Nunca en texto plano en el repositorio." }
+- id: p09
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué te dice esta salida?
+  salida: |
+    ana@admin01:~/infra$ git diff
+    diff --git a/nginx/tienda.conf b/nginx/tienda.conf
+    --- a/nginx/tienda.conf
+    +++ b/nginx/tienda.conf
+    @@ -1,4 +1,4 @@
+     server {
+         listen 443 ssl;
+         server_name tienda.ejemplo.test;
+    -    client_max_body_size 2m;
+    +    client_max_body_size 20m;
+  opciones:
+    - { texto: "Que en tienda.conf se cambió el límite de 2m a 20m y todavía no se guardó en un commit", correcta: true, explicacion: "git diff sin opciones muestra lo que no está preparado." }
+    - { texto: "Que se borró el archivo", explicacion: "No." }
+    - { texto: "Que se agregó la línea listen", explicacion: "Esa es contexto, sin + ni -." }
+    - { texto: "Que hay un error de sintaxis", explicacion: "No dice nada de eso." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es la "infraestructura como código"?
+  opciones:
+    - { texto: "Que lo que define cómo están los servidores vive en archivos versionados en un repositorio", correcta: true, explicacion: "Configuraciones, scripts, playbooks." }
+    - { texto: "Programar aplicaciones web", explicacion: "No." }
+    - { texto: "Instalar servidores sin sistema operativo", explicacion: "No." }
+    - { texto: "Escribir la documentación en Word", explicacion: "No." }

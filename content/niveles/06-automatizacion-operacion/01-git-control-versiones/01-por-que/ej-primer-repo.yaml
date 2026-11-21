@@ -1,0 +1,105 @@
+tipo: terminal
+shell: bash
+titulo: El primer repositorio de configuraciones
+descripcion: >-
+  En admin01 (Ubuntu Server 24.04), la carpeta ~/infra tiene las configuraciones que Ana fue
+  juntando de los servidores: el sitio de la tienda para nginx y el script de respaldo. Hasta hoy,
+  las versiones eran copias con .bak. Git ya está instalado.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true }]
+  paquetes: { instalados: [git] }
+  archivos:
+    /home/ana/infra/nginx/tienda.conf:
+      dueno: ana
+      contenido: |
+        server {
+            listen 443 ssl;
+            server_name tienda.ejemplo.test;
+            client_max_body_size 2m;
+            location / {
+                proxy_pass http://tienda;
+            }
+        }
+    /home/ana/infra/scripts/respaldo.sh:
+      dueno: ana
+      modo: "755"
+      contenido: |
+        #!/bin/bash
+        set -euo pipefail
+        restic backup /srv/datos --tag diario
+pasos:
+  - consigna: >-
+      Antes de usar Git en un equipo nuevo, decile quién sos: tu nombre "Ana Gómez", tu correo
+      ana@ejemplo.test, y que la rama inicial se llame main.
+    verificar:
+      - { archivo: /home/ana/.gitconfig, contenido_incluye: ana@ejemplo.test }
+      - { archivo: /home/ana/.gitconfig, contenido_incluye: "defaultbranch = main" }
+    pistas:
+      - "git config --global user.name \"Ana Gómez\""
+      - "git config --global user.email ana@ejemplo.test"
+      - "git config --global init.defaultBranch main"
+    solucion:
+      - git config --global user.name "Ana Gómez"
+      - git config --global user.email ana@ejemplo.test
+      - git config --global init.defaultBranch main
+      - cat ~/.gitconfig
+    explicacion: >-
+      Cada commit lleva el nombre y el correo de quien lo hizo: es lo que después permite saber
+      quién cambió qué. Se configura una vez por usuario y por equipo (queda en ~/.gitconfig).
+      "main" es el nombre que usan hoy GitHub, GitLab y casi todos; "master" es el nombre viejo.
+  - consigna: >-
+      Convertí ~/infra en un repositorio y guardá todo lo que hay en un primer commit con el
+      mensaje "Configuraciones iniciales".
+    verificar:
+      - { git_repo: /home/ana/infra, commits_min: 1, versionado: nginx/tienda.conf, limpio: true }
+    pistas:
+      - "cd ~/infra y git init"
+      - "git add . y git commit -m \"Configuraciones iniciales\""
+    solucion:
+      - cd ~/infra
+      - git init
+      - git status
+      - git add .
+      - git commit -m "Configuraciones iniciales"
+    explicacion: >-
+      git init crea la carpeta oculta .git, que es el repositorio: ahí se guarda toda la historia.
+      Los archivos de afuera siguen siendo archivos comunes. git status es el comando que más vas
+      a usar: dice en qué rama estás y qué cambió.
+  - consigna: >-
+      Marketing necesita subir fotos más grandes: cambiá client_max_body_size a 20m, mirá la
+      diferencia antes de guardarla y hacé el commit con un mensaje que explique el cambio.
+    verificar:
+      - { git_repo: /home/ana/infra, commits_min: 2, limpio: true, ultimo_mensaje: "20" }
+      - { comando_usado: "git diff" }
+    pistas:
+      - "sed -i 's/2m;/20m;/' nginx/tienda.conf (o con nano)"
+      - "git diff muestra el cambio; git commit -am \"Límite de subida a 20 MB para las fotos de marketing\""
+    solucion:
+      - sed -i 's/client_max_body_size 2m;/client_max_body_size 20m;/' nginx/tienda.conf
+      - git diff
+      - git commit -am "Límite de subida a 20 MB para las fotos de marketing"
+      - git log
+    explicacion: >-
+      git diff muestra, línea por línea, qué se va a guardar: lo que empieza con - se va y lo que
+      empieza con + entra. Un buen mensaje dice qué y por qué ("para las fotos de marketing"), no
+      "cambios" ni "arreglo": dentro de un año, el porqué es lo único que no se puede deducir.
+  - consigna: >-
+      Tres semanas después alguien pregunta cómo estaba el límite antes. Mirá la versión de
+      tienda.conf del primer commit sin cambiar nada de lo actual.
+    verificar:
+      - { comando_usado: "git show" }
+      - { salida_contiene: "client_max_body_size 2m" }
+    pistas:
+      - "git log --oneline muestra los commits; HEAD~1 es el anterior al último."
+      - "git show HEAD~1:nginx/tienda.conf"
+    solucion:
+      - git log --oneline
+      - git show HEAD~1:nginx/tienda.conf
+    explicacion: >-
+      Ninguna versión se pierde: con git show COMMIT:archivo ves cualquier archivo tal como era, y
+      con git log -p, cada cambio con su mensaje. Ojo: Git no reemplaza a los respaldos. El
+      repositorio guarda la historia de lo que pusiste en él, y si está en un solo disco, se pierde
+      con el disco; por eso, en la lección 6.1.4, va también a un servidor central.
