@@ -485,6 +485,37 @@ const stateShape = {
         .optional(),
     })
     .optional(),
+  /** Repositorios de restic que ya existen en este equipo (en una carpeta o en un bucket de objetos). */
+  restic: z
+    .strictObject({
+      repos: z
+        .array(
+          z.strictObject({
+            /** Carpeta del repositorio en este equipo (también la que sirve un rest-server). */
+            ruta: z.string().optional(),
+            /** O un bucket del almacenamiento de objetos de este equipo (objetos), con un prefijo. */
+            bucket: z.string().optional(),
+            prefijo: z.string().optional(),
+            clave: z.string(),
+            /** Equipo cuyos archivos guardan las instantáneas (si no, este mismo). */
+            origen: z.string().optional(),
+            instantaneas: z.array(z.strictObject({ dias_atras: z.number(), rutas: z.array(z.string()), etiquetas: z.array(z.string()).default([]), equipo: z.string().optional() })).default([]),
+            /** Paquetes de datos dañados: check --read-data-subset lo encuentra. */
+            dañado: z.boolean().default(false),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+  /** Almacenamiento de objetos compatible con S3 (MinIO) en este equipo. */
+  objetos: z
+    .strictObject({
+      puerto: z.number().int().default(9000),
+      claves: z.array(z.strictObject({ acceso: z.string(), secreto: z.string() })).default([]),
+      /** bloqueo_dias: bloqueo de objetos en modo cumplimiento (nadie borra antes de ese plazo). */
+      buckets: z.array(z.strictObject({ nombre: z.string(), bloqueo_dias: z.number().default(0) })).default([]),
+    })
+    .optional(),
   /** Pools de ZFS ya creados sobre los discos del ejercicio (sdb, sdc...). */
   zfs: z
     .strictObject({
@@ -783,6 +814,10 @@ const singleCheckSchema = z.union([
   z.strictObject({ red_libvirt: z.string(), activa: z.boolean().optional(), autostart: z.boolean().optional() }),
   /** Una VM (pve_vm) o un contenedor (pve_ct) de Proxmox: estado, nombre, plantilla, instantánea y valores de su configuración. */
   z.strictObject({ pve_vm: z.number().int(), existe: z.boolean().optional(), estado: z.enum(['running', 'stopped']).optional(), nombre: z.string().optional(), plantilla: z.boolean().optional(), instantanea: z.string().optional(), config: z.record(z.string(), z.string()).optional(), arranca: z.boolean().optional(), con_red: z.boolean().optional(), nodo: z.string().optional() }),
+  /** Un repositorio de restic (carpeta de este equipo o s3:bucket/prefijo de su almacenamiento de objetos). */
+  z.strictObject({ restic_repo: z.string(), existe: z.boolean().optional(), instantaneas_min: z.number().int().optional(), con_ruta: z.string().optional(), con_archivo: z.string().optional(), etiqueta: z.string().optional(), clave: z.string().optional() }),
+  /** rest-server corriendo en este equipo y sus opciones. */
+  z.strictObject({ rest_server: z.boolean(), solo_agregar: z.boolean().optional(), carpeta: z.string().optional(), con_clave: z.boolean().optional() }),
   /** Un pool de ZFS: salud, tipo, discos, y si terminó un scrub o un resilver. */
   z.strictObject({ zpool: z.string(), existe: z.boolean().optional(), estado: z.enum(['ONLINE', 'DEGRADED', 'UNAVAIL', 'FAULTED']).optional(), tipo: z.enum(['mirror', 'raidz1', 'raidz2', 'raidz3', 'stripe']).optional(), discos: z.array(z.string()).optional(), scrub_hecho: z.boolean().optional(), resilver_hecho: z.boolean().optional() }),
   /** Un dataset o volumen de ZFS: propiedades e instantáneas. */

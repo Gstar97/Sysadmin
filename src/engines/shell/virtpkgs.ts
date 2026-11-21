@@ -21,6 +21,8 @@ export const ROCKY_VIRT: Record<string, PackageInfo> = {
     commands: ['virsh', 'virt-host-validate'],
   },
   'virt-install': { summary: 'Utilities for installing virtual machines', version: '4.1.0-9.el10', commands: ['virt-install', 'virt-clone', 'virt-xml'] },
+  restic: { summary: 'Fast, secure, efficient backup program', version: '0.18.1-1.el10', commands: ['restic'] },
+  'rest-server': { summary: 'Rest Server for restic (binario oficial, empaquetado para el laboratorio)', version: '0.13.0-1', user: { name: 'rest-server', uid: 989, home: '/srv/restic', gecos: 'restic rest-server' }, commands: ['rest-server'] },
   cockpit: { summary: 'Web Console for Linux servers', version: '334-1.el10', services: [{ name: 'cockpit', description: 'Cockpit Web Service', ports: [9090] }], commands: [] },
   'cockpit-machines': { summary: 'Cockpit user interface for virtual machines', version: '330-1.el10', requires: ['cockpit', 'libvirt'], commands: [] },
 }
@@ -42,6 +44,8 @@ export const UBUNTU_VIRT: Record<string, PackageInfo> = {
   },
   virtinst: { summary: 'Programs to create and clone virtual machines', version: '1:4.1.0-3ubuntu0.1', commands: ['virt-install', 'virt-clone', 'virt-xml'] },
   'virt-manager': { summary: 'desktop application for managing virtual machines', version: '1:4.1.0-3ubuntu0.1', requires: ['virtinst', 'libvirt-clients'], commands: ['virt-manager'] },
+  restic: { summary: 'backup program with multiple revisions, encryption and more', version: '0.16.4-1ubuntu0.1', commands: ['restic'] },
+  'rest-server': { summary: 'Rest Server for restic (binario oficial, empaquetado para el laboratorio)', version: '0.13.0-1', user: { name: 'rest-server', uid: 996, home: '/srv/restic', gecos: 'restic rest-server' }, commands: ['rest-server'] },
   'ceph-common': { summary: 'common utilities to mount and interact with a ceph storage cluster', version: '19.2.3-pve1', commands: ['ceph', 'rbd', 'rados'] },
   'zfsutils-linux': { summary: 'command-line tools to manage OpenZFS filesystems', version: '2.3.4-pve1', commands: ['zpool', 'zfs', 'zdb'] },
   'pve-qemu-kvm': { summary: 'Full virtualization on x86 hardware', version: '11.0.0-2', commands: ['qemu-img'] },

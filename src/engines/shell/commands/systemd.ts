@@ -144,7 +144,8 @@ function preflight(ctx: CommandContext, svc: Service): { status: string; lines: 
       return { status: '203/EXEC', lines: [`${unit}: Failed to execute ${path}: Permission denied`, `${unit}: Failed at step EXEC spawning ${path}: Permission denied`] }
     }
     // Un script sin "#!" en la primera línea: el kernel no sabe con qué ejecutarlo.
-    const isVirtualBinary = /^\/usr\/s?bin\//.test(path) && sys.vfs.readFile(path, ROOT_CRED) === ''
+    const content = sys.vfs.readFile(path, ROOT_CRED)
+    const isVirtualBinary = (/^\/usr\/s?bin\//.test(path) && content === '') || content.startsWith('\x7fELF')
     if (!isVirtualBinary && node.type === 'file' && !sys.vfs.readFile(path, ROOT_CRED).startsWith('#!')) {
       return { status: '203/EXEC', lines: [`${unit}: Failed to execute ${path}: Exec format error`, `${unit}: Failed at step EXEC spawning ${path}: Exec format error`] }
     }
