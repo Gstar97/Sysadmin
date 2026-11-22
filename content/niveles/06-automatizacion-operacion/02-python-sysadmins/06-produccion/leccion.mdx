@@ -1,0 +1,180 @@
+---
+id: n6-m2-l6
+titulo: Scripts de producción
+minutos: 120
+objetivos:
+  - Darle a un script opciones con argparse, mensajes con logging y un modo de simulación.
+  - Instalar una herramienta con sus bibliotecas en un entorno virtual, sin tocar el Python del sistema.
+  - Dejarla corriendo con systemd y protegerla con pruebas automáticas.
+glosario: [argparse, logging-python, pip, pytest]
+verificado: 2026-11
+---
+
+import despliegue from './despliegue.svg?raw'
+import despliegueDatos from './despliegue.yaml'
+import ejLimpieza from './ej-limpieza.yaml'
+
+Un script que anda en tu máquina no es una herramienta. Para que otra persona la pueda usar sin leer el código, para que corra sola a las 3 de la mañana y para que dentro de un año alguien la pueda cambiar sin romperla, le faltan algunas cosas: opciones en lugar de valores escritos en el código, mensajes que se guarden, un modo para probar sin hacer daño, sus bibliotecas instaladas de forma prolija y pruebas. Ninguna es difícil, y juntas son la diferencia entre "un script de Ana" y algo que el equipo puede mantener.
+
+<AntesDeEmpezar>
+- Redes y APIs (lección 6.2.5) y el resto del módulo.
+- Unidades propias y timers de systemd (lección 1.3.4).
+- Publicar aplicaciones, donde apareció el entorno virtual (lección 4.1.5).
+</AntesDeEmpezar>
+
+## Opciones con argparse
+
+```python
+import argparse
+
+parser = argparse.ArgumentParser(description="Borra los logs con fecha más viejos que N días")
+parser.add_argument("carpeta", help="carpeta de los logs")                      # obligatorio
+parser.add_argument("--dias", type=int, default=14, help="antigüedad mínima (14)")
+parser.add_argument("--simular", action="store_true", help="mostrar sin borrar")
+parser.add_argument("-v", "--verbose", action="store_true", help="más detalle")
+args = parser.parse_args()
+```
+
+Con eso, gratis: `limpieza.py --help` muestra la ayuda, `--dias diez` da un error claro (con código de salida 2), y un argumento obligatorio que falta también. Es lo mismo que hacías con getopts en Bash, pero sin el trabajo.
+
+## Mensajes con logging
+
+`print` sirve para el resultado del programa; para contar qué va haciendo está **logging**, que agrega niveles (DEBUG, INFO, WARNING, ERROR, CRITICAL) y deja elegir cuáles se muestran:
+
+```python
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG if args.verbose else logging.INFO,
+    format="%(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger("limpieza")
+
+log.info("revisando %s", carpeta)
+log.warning("no se pudo leer %s: %s", ruta, error)
+log.exception("falló el envío")        # dentro de un except: agrega el traceback
+```
+
+Por defecto escribe en stderr, y eso es justo lo que queremos: cuando el script corre como servicio de systemd, cada mensaje termina en el journal con fecha, servicio y nivel, y `journalctl -u limpieza -p warning` muestra solo los problemas. No hace falta un archivo de log propio ni rotarlo. (Si corre con cron, en cambio, sí conviene un archivo, con `logging.handlers.RotatingFileHandler`.)
+
+Dos detalles: pasá los valores como argumentos (`log.info("borrado %s", p)`) en lugar de una f-string, así el texto solo se arma si el mensaje se va a mostrar; y nunca registres un token o una contraseña, aunque sea en DEBUG.
+
+## Simular antes de hacer
+
+Todo script que borra, mueve, reinicia o cambia algo tendría que tener un modo de simulación (`--simular`, `--dry-run` o `--check`, como lo llama Ansible): hace todo el camino, muestra qué haría, y no cambia nada. Es la forma de probar en producción sin riesgo, y la primera corrida en un servidor nuevo siempre va así.
+
+Y lo mismo que en Bash: que se pueda correr dos veces sin efectos raros (si ya está borrado, no falla; si la carpeta ya existe, no falla), que termine con un código de salida que diga si anduvo, y que no deje dos copias corriendo a la vez (con un timer de systemd eso ya está resuelto, porque no lanza el servicio si sigue corriendo).
+
+## Bibliotecas y entornos virtuales
+
+requests, PyYAML o paramiko no vienen con Python. Hay tres formas de tenerlas, y una que no:
+
+1. **El paquete de la distribución** (`apt install python3-requests`, `dnf install python3-requests`): la más simple si la versión que trae alcanza. Lo actualiza el sistema con el resto.
+2. **Un entorno virtual** para la herramienta: una carpeta con su propio Python y sus bibliotecas, en las versiones que vos elegís, sin mezclarse con nada.
+3. **pipx**, para instalar herramientas de línea de comandos escritas en Python (cada una en su propio entorno, automáticamente).
+
+Y lo que **no** se hace: `sudo pip install` en el Python del sistema. Pisa bibliotecas que usan herramientas del sistema (en Rocky, dnf está escrito en Python) y, en una actualización, el gestor de paquetes y pip se pisan entre sí. Por eso Debian, Ubuntu y otras distribuciones lo bloquean con el error **externally-managed-environment**: es un aviso, no un problema que haya que esquivar con `--break-system-packages`.
+
+```bash
+sudo python3 -m venv /opt/limpieza/venv                    # en Debian y Ubuntu hace falta el paquete python3-venv
+sudo /opt/limpieza/venv/bin/pip install -r /opt/limpieza/requirements.txt
+/opt/limpieza/venv/bin/python /opt/limpieza/limpieza.py --simular
+```
+
+No hace falta "activar" el entorno (`source venv/bin/activate` es una comodidad para trabajar en la terminal): usar el python de adentro alcanza para que encuentre sus bibliotecas. Y si la primera línea del script es `#!/opt/limpieza/venv/bin/python`, se puede correr directamente.
+
+**requirements.txt** dice qué bibliotecas hacen falta, con la **versión exacta** (`requests==2.32.5`): así la instalación de hoy y la del año que viene son iguales. `pip freeze > requirements.txt` lo genera a partir de un entorno que funciona. Para actualizar, se cambia la versión, se prueba, y se commitea, como cualquier otro cambio.
+
+Una herramienta que se está volviendo estándar para todo esto es **uv**: crea entornos e instala bibliotecas mucho más rápido que pip (`uv venv`, `uv pip install -r requirements.txt`), y además instala otras versiones de Python sin tocar la del sistema (`uv python install 3.13`), que es la salida cuando un programa necesita una versión más nueva que la que trae la distribución.
+
+## Instalarla y dejarla corriendo
+
+<DiagramaInteractivo datos={despliegueDatos} svg={despliegue} alt="Una herramienta de Python instalada en un servidor. A la izquierda, la carpeta /opt/limpieza con el programa, requirements.txt con las versiones exactas, las pruebas y el entorno virtual con su propio Python y sus bibliotecas; abajo, la configuración en /etc/limpieza/limpieza.ini y los secretos en un archivo con permisos 600, fuera del repositorio. A la derecha, la unidad limpieza.service de tipo oneshot, que corre como el usuario limpieza, carga los secretos con EnvironmentFile y ejecuta el programa con el Python del entorno virtual; el timer que la lanza todos los días a las 3:15; y los mensajes de logging, que van al journal." />
+
+```ini
+# /etc/systemd/system/limpieza.service
+[Unit]
+Description=Limpieza de logs viejos
+
+[Service]
+Type=oneshot
+User=limpieza
+EnvironmentFile=/etc/limpieza/secretos.env
+ExecStart=/opt/limpieza/venv/bin/python /opt/limpieza/limpieza.py /var/log/app --dias 14
+```
+
+```ini
+# /etc/systemd/system/limpieza.timer
+[Timer]
+OnCalendar=*-*-* 03:15
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Con `systemctl enable --now limpieza.timer` queda programada, `systemctl start limpieza.service` la corre en el momento para probar, y `systemctl list-timers` muestra cuándo corre la próxima. Si termina con un código distinto de 0, `systemctl --failed` la muestra, y el monitoreo del módulo 6.4 se puede enterar.
+
+## Pruebas
+
+Una prueba es una función que usa tu código y verifica el resultado con `assert`. **pytest** las encuentra solas (archivos `test_*.py`, funciones `test_*`) y las corre:
+
+```python
+# tests/test_limpieza.py
+from datetime import date
+from limpieza import antiguedad, main
+
+def test_antiguedad():
+    assert antiguedad("app-2026-11-01.log", hoy=date(2026, 11, 22)) == 21
+
+def test_simular_no_borra(tmp_path):            # tmp_path: una carpeta temporal que da pytest
+    viejo = tmp_path / "app-2020-01-01.log"
+    viejo.write_text("x")
+    assert main([str(tmp_path), "--dias", "1", "--simular"]) == 0
+    assert viejo.exists()
+```
+
+```bash
+/opt/limpieza/venv/bin/pip install pytest && /opt/limpieza/venv/bin/pytest -q
+```
+
+Para que el código se pueda probar así, el diseño de todo el módulo: funciones que reciben datos y devuelven resultados, `main(argv)` que recibe los argumentos, y nada que corra al importar. Y para cerrar el círculo con el módulo 6.1: las pruebas y un control de estilo como **ruff** (`ruff check .`) van en el pre-commit y en la integración continua, así ningún cambio que rompa la herramienta llega a main.
+
+## Manos a la obra
+
+<EjercicioPython ejercicio={ejLimpieza} />
+
+<EnSimple>
+Para que un script sea una herramienta: opciones con argparse (con --help y validación gratis), mensajes con logging hacia stderr (que systemd guarda en el journal), un modo de simulación para probar sin cambiar nada, y un código de salida que diga si anduvo. Sus bibliotecas van en un entorno virtual propio, con versiones exactas en requirements.txt, nunca con sudo pip sobre el Python del sistema. Se instala en /opt, con la configuración y los secretos en /etc, y la corre un timer de systemd con un usuario sin privilegios. Y con pruebas de pytest, cualquier cambio futuro se puede hacer sin miedo.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="sudo pip install en el sistema">
+    Pisa bibliotecas de herramientas del sistema y choca con el gestor de paquetes. Entorno virtual, pipx o el paquete de la distribución.
+  </ErrorComun>
+  <ErrorComun titulo="--break-system-packages para sacarse el error de encima">
+    El error externally-managed-environment avisa justo del problema anterior. La salida es un entorno virtual.
+  </ErrorComun>
+  <ErrorComun titulo="requirements.txt sin versiones">
+    La instalación del año que viene trae otras versiones y la herramienta deja de andar sin que nadie haya cambiado nada.
+  </ErrorComun>
+  <ErrorComun titulo="print para todo">
+    No hay niveles ni fecha, y se mezcla con el resultado. logging para lo que pasa, print para el resultado.
+  </ErrorComun>
+  <ErrorComun titulo="Un script que borra sin modo de simulación">
+    La primera corrida en un servidor nuevo es una apuesta. --simular primero, siempre.
+  </ErrorComun>
+  <ErrorComun titulo="Correrlo como root porque es más fácil">
+    Un error de lógica o un dato malicioso tiene todo el poder del sistema. Un usuario propio con los permisos justos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- argparse: opciones con tipo, valores por defecto, interruptores y --help automático.
+- logging con niveles hacia stderr (al journal con systemd); valores como argumentos y nunca secretos.
+- Modo de simulación, se puede correr dos veces, código de salida claro.
+- Bibliotecas en un entorno virtual con requirements.txt de versiones exactas; uv como alternativa rápida y para otras versiones de Python; nunca sudo pip.
+- En /opt con config y secretos en /etc, servicio oneshot con usuario propio, timer, y el Python del venv en ExecStart.
+- Pruebas con pytest sobre funciones y main(argv), y ruff, en el pre-commit y la CI.
+</Resumen>

@@ -1,0 +1,123 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué pasa si corrés sudo pip install requests en el Python de un Ubuntu 26.04?
+  opciones:
+    - { texto: "Falla con externally-managed-environment: el sistema pide usar un entorno virtual o el paquete de la distribución", correcta: true, explicacion: "Protege a las herramientas del sistema." }
+    - { texto: "Se instala sin problemas", explicacion: "Debian y Ubuntu lo bloquean." }
+    - { texto: "Actualiza Python", explicacion: "No." }
+    - { texto: "Instala requests solo para root", explicacion: "No: falla antes." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Para qué sirve un entorno virtual?
+  opciones:
+    - { texto: "Para que una herramienta tenga sus propias bibliotecas, en sus versiones, separadas del sistema y de otras herramientas", correcta: true, explicacion: "Es una carpeta con su Python y sus bibliotecas." }
+    - { texto: "Para correr Python en una máquina virtual", explicacion: "No tiene nada que ver con virtualización." }
+    - { texto: "Para que el script corra más rápido", explicacion: "No." }
+    - { texto: "Para instalar otra versión del sistema operativo", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En la unidad de systemd, ¿cómo hacés que el script use las bibliotecas de su entorno virtual?
+  opciones:
+    - { texto: "ExecStart=/opt/limpieza/venv/bin/python /opt/limpieza/limpieza.py", correcta: true, explicacion: "El python del venv encuentra sus bibliotecas sin activar nada." }
+    - { texto: "ExecStartPre=source /opt/limpieza/venv/bin/activate", explicacion: "source no es un programa y cada línea corre por separado." }
+    - { texto: "ExecStart=python3 /opt/limpieza/limpieza.py", explicacion: "Usa el Python del sistema, sin las bibliotecas." }
+    - { texto: "No se puede", explicacion: "Se puede." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene que requirements.txt diga requests==2.32.5 y no solo requests?
+  opciones:
+    - { texto: "Para que la instalación de hoy y la del año que viene sean iguales", correcta: true, explicacion: "Las actualizaciones se hacen a propósito, probadas." }
+    - { texto: "Porque pip no acepta nombres sin versión", explicacion: "Los acepta." }
+    - { texto: "Para que sea más rápido", explicacion: "No es la razón." }
+    - { texto: "No hay diferencia", explicacion: "Sin versión, cada instalación trae la última." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    $ ./limpieza.py /var/log/app --dias diez
+    usage: limpieza.py [-h] [--dias DIAS] [--simular] carpeta
+    limpieza.py: error: argument --dias: invalid int value: 'diez'
+    $ echo $?
+    2
+  opciones:
+    - { texto: "argparse validó que --dias fuera un entero, mostró el uso y terminó con código 2", correcta: true, explicacion: "type=int convierte y valida." }
+    - { texto: "Python no entiende palabras", explicacion: "El error lo dio argparse, a propósito." }
+    - { texto: "El script borró todo", explicacion: "No llegó a hacer nada." }
+    - { texto: "Falta --simular", explicacion: "No es obligatorio." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que crea un entorno virtual en /opt/limpieza/venv con el Python del sistema.
+  prompt: "$"
+  aceptadas:
+    - "python3 -m venv /opt/limpieza/venv"
+    - "sudo python3 -m venv /opt/limpieza/venv"
+    - "uv venv /opt/limpieza/venv"
+  explicacion: Después, /opt/limpieza/venv/bin/pip install -r requirements.txt.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un script corre con un timer de systemd y usa logging con la configuración por defecto (stderr). ¿Dónde ves sus mensajes?
+  opciones:
+    - { texto: "En el journal: journalctl -u nombre-del-servicio", correcta: true, explicacion: "systemd guarda stdout y stderr del servicio." }
+    - { texto: "En ningún lado", explicacion: "systemd los guarda." }
+    - { texto: "En /var/log/python.log", explicacion: "No existe tal archivo." }
+    - { texto: "Solo si se agrega un FileHandler", explicacion: "No hace falta con systemd." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué tiene que tener un script que borra archivos antes de dejarlo corriendo solo?
+  opciones:
+    - { texto: "Un modo de simulación que muestre qué borraría", correcta: true, explicacion: "La primera corrida, siempre así." }
+    - { texto: "Un código de salida que diga si anduvo", correcta: true, explicacion: "systemd y el monitoreo lo miran." }
+    - { texto: "Mensajes con logging", correcta: true, explicacion: "Para saber qué hizo." }
+    - { texto: "Correr como root", explicacion: "Un usuario propio con los permisos justos." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para instalar la herramienta en un servidor.
+  pasos:
+    - "Copiar el código a /opt/limpieza (desde una etiqueta del repositorio)"
+    - "python3 -m venv /opt/limpieza/venv"
+    - "/opt/limpieza/venv/bin/pip install -r /opt/limpieza/requirements.txt"
+    - "Correrla con --simular y revisar lo que haría"
+    - "Crear el servicio y el timer, y systemctl enable --now limpieza.timer"
+  explicacion: Código, entorno, bibliotecas, una prueba sin riesgo y recién ahí programarla.
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas de esta unidad tienen un problema?
+  lenguaje: ini
+  archivo: |
+    [Service]
+    Type=oneshot
+    User=root
+    Environment=API_TOKEN=inv-7c2f9a41
+    ExecStart=/opt/limpieza/venv/bin/python /opt/limpieza/limpieza.py --dias 14
+  lineas_con_error: [3, 4]
+  explicacion: Corre como root sin necesidad, y el token está escrito en la unidad (que cualquiera puede leer con systemctl cat); va en un EnvironmentFile con permisos 600.
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene que main reciba los argumentos (def main(argv=None)) y los pase a parse_args(argv)?
+  opciones:
+    - { texto: "Para que una prueba pueda correr la herramienta con los argumentos que quiera, sin tocar sys.argv", correcta: true, explicacion: "Con None, argparse lee sys.argv igual." }
+    - { texto: "Porque argparse lo exige", explicacion: "No lo exige." }
+    - { texto: "Para que corra más rápido", explicacion: "No." }
+    - { texto: "Para poder usar --help", explicacion: "--help anda igual." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una herramienta necesita Python 3.13 y el servidor es Rocky Linux 9 (Python 3.9 en el sistema). ¿Qué hacés?
+  opciones:
+    - { texto: "Instalar 3.13 aparte (por ejemplo con uv python install 3.13) y crear el entorno virtual de la herramienta con esa versión", correcta: true, explicacion: "El Python del sistema no se toca." }
+    - { texto: "Reemplazar /usr/bin/python3", explicacion: "Rompe dnf y otras herramientas del sistema." }
+    - { texto: "Instalar con sudo pip", explicacion: "No cambia la versión de Python y ensucia el sistema." }
+    - { texto: "No se puede", explicacion: "Se puede, en paralelo." }

@@ -72,6 +72,12 @@ os.environ['OTRA'] = 'x'`)
     expect(again.result.stdout).toBe('None tok-123\n')
   }, 60_000)
 
+  it('logging empieza de cero en cada corrida', async () => {
+    await run('import logging\nlogging.basicConfig(level=logging.DEBUG, format="A %(message)s")\nlogging.debug("uno")')
+    const { result } = await run('import logging\nlogging.basicConfig(level=logging.INFO, format="B %(levelname)s %(message)s")\nlogging.debug("no")\nlogging.info("dos")')
+    expect(result.stderr).toBe('B INFO dos\n')
+  }, 60_000)
+
   it('simula subprocess.run con las salidas del ejercicio y respeta check y los códigos de salida', async () => {
     const { result } = await run(`
 import subprocess, sys

@@ -198,11 +198,27 @@ def _reset_env():
     except OSError:
         pass
 
+def _reset_logging():
+    lg = sys.modules.get('logging')
+    if lg is None:
+        return
+    root = lg.getLogger()
+    for h in root.handlers[:]:
+        root.removeHandler(h)
+    root.setLevel(lg.WARNING)
+    for other in list(lg.Logger.manager.loggerDict.values()):
+        if isinstance(other, lg.Logger):
+            other.handlers.clear()
+            other.setLevel(lg.NOTSET)
+            other.propagate = True
+            other.disabled = False
+
 def run(src, filename, ns, argv, cwd, fresh=True):
     """Corre src en ns. Devuelve JSON: error (traceback o null) y código de salida."""
     _forget_modules()
     if fresh:
         _reset_env()
+        _reset_logging()
     sys.argv = [filename] + list(argv)
     os.chdir(cwd)
     if sys.path[0] != cwd:

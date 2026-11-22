@@ -1,0 +1,205 @@
+tipo: python
+titulo: La limpieza de logs, lista para producción
+descripcion: >-
+  Retomás la limpieza de logs de la lección 6.2.3 y la convertís en una herramienta que se puede
+  dejar corriendo con un timer: opciones de línea de comandos, mensajes con logging, un modo de
+  simulación para probar sin borrar y una función main que se pueda probar. Esta vez el programa
+  se corre como `limpieza.py --dias 10 --simular`. "Hoy" sigue siendo el 22 de noviembre de 2026.
+archivos:
+  /var/log/app/app.log: "2026-11-22 08:00:01 INFO inicio\n"
+  /var/log/app/app-2026-11-01.log: "2026-11-01 ...\n"
+  /var/log/app/app-2026-11-05.log: "2026-11-05 ...\n"
+  /var/log/app/app-2026-11-07.log: "2026-11-07 ...\n"
+  /var/log/app/app-2026-11-11.log: "2026-11-11 ...\n"
+  /var/log/app/app-2026-11-20.log: "2026-11-20 ...\n"
+argumentos: ["--dias", "10", "--simular"]
+codigo_inicial: |
+  import argparse
+  from datetime import date, datetime
+  from pathlib import Path
+
+  HOY = date(2026, 11, 22)  # en producción: date.today()
+  CARPETA = Path("/var/log/app")
+pasos:
+  - consigna: >-
+      Armá las opciones con argparse: `--dias` (un entero, 14 por defecto) y `--simular` (un
+      interruptor, sin valor). Guardá el resultado en `args` y mostrá `Días: 10, simulación: True`.
+    verificar:
+      - salida_contiene: "Días: 10, simulación: True"
+      - prueba: assert args.dias == 10 and isinstance(args.dias, int) and args.simular is True
+        mensaje: args.dias es el número 10 y args.simular es True
+      - sin_error: true
+    pistas:
+      - "`parser = argparse.ArgumentParser(description=\"Borra logs viejos\")` y `parser.add_argument(\"--dias\", type=int, default=14, help=\"...\")`."
+      - "Para un interruptor: `parser.add_argument(\"--simular\", action=\"store_true\")`. Después, `args = parser.parse_args()`."
+    solucion: |
+      import argparse
+      from datetime import date, datetime
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)  # en producción: date.today()
+      CARPETA = Path("/var/log/app")
+
+      parser = argparse.ArgumentParser(description="Borra los logs con fecha más viejos que N días")
+      parser.add_argument("--dias", type=int, default=14, help="antigüedad mínima para borrar (14)")
+      parser.add_argument("--simular", action="store_true", help="mostrar qué se borraría, sin borrar")
+      args = parser.parse_args()
+
+      print(f"Días: {args.dias}, simulación: {args.simular}")
+    explicacion: >-
+      Con type=int, argparse convierte y valida: `--dias diez` termina con un mensaje de error
+      claro y código 2. Y `limpieza.py --help` muestra la ayuda armada con los help de cada opción,
+      sin escribir nada más.
+  - consigna: >-
+      Configurá logging para mensajes de nivel INFO o más con el formato `%(levelname)s
+      %(message)s`, y por cada log con más de `args.dias` días registrá un INFO como `viejo:
+      app-2026-11-01.log (21 días)`. Al final, un INFO con el total: `4 logs viejos`.
+    verificar:
+      - error_contiene: "INFO viejo: app-2026-11-01.log (21 días)"
+      - error_contiene: "INFO viejo: app-2026-11-11.log (11 días)"
+      - error_contiene: "INFO 4 logs viejos"
+      - usa: logging.basicConfig
+        mensaje: Configura logging con basicConfig
+      - sin_error: true
+    pistas:
+      - "`logging.basicConfig(level=logging.INFO, format=\"%(levelname)s %(message)s\")` y `log = logging.getLogger(\"limpieza\")` (con `import logging`)."
+      - "`log.info(\"viejo: %s (%d días)\", p.name, dias)`: logging arma el texto solo si el mensaje se va a mostrar."
+    solucion: |
+      import argparse
+      import logging
+      from datetime import date, datetime
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)  # en producción: date.today()
+      CARPETA = Path("/var/log/app")
+
+      parser = argparse.ArgumentParser(description="Borra los logs con fecha más viejos que N días")
+      parser.add_argument("--dias", type=int, default=14, help="antigüedad mínima para borrar (14)")
+      parser.add_argument("--simular", action="store_true", help="mostrar qué se borraría, sin borrar")
+      args = parser.parse_args()
+
+      logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+      log = logging.getLogger("limpieza")
+
+      print(f"Días: {args.dias}, simulación: {args.simular}")
+
+      viejos = []
+      for p in sorted(CARPETA.glob("app-*.log")):
+          dias = (HOY - datetime.strptime(p.name[4:14], "%Y-%m-%d").date()).days
+          if dias > args.dias:
+              log.info("viejo: %s (%d días)", p.name, dias)
+              viejos.append(p)
+      log.info("%d logs viejos", len(viejos))
+    explicacion: >-
+      logging escribe en stderr, que es justo lo que systemd guarda en el journal. Con
+      --verbose podrías bajar el nivel a DEBUG para ver más detalle sin cambiar el código.
+  - consigna: >-
+      Ahora sí, borrá los viejos con `unlink()`, salvo con `--simular`: en ese caso, registrá
+      `(simulación) borraría app-2026-11-01.log` y no toques nada. Como el programa se corre con
+      --simular, los archivos tienen que seguir ahí.
+    verificar:
+      - archivo: /var/log/app/app-2026-11-01.log
+      - archivo: /var/log/app/app-2026-11-11.log
+      - error_contiene: (simulación) borraría app-2026-11-05.log
+      - usa: unlink
+        mensaje: El código borra con unlink cuando no es una simulación
+      - sin_error: true
+    pistas:
+      - "`if args.simular: log.info(\"(simulación) borraría %s\", p.name)` y en el `else:` `p.unlink()` y un `log.info(\"borrado: %s\", p.name)`."
+    solucion: |
+      import argparse
+      import logging
+      from datetime import date, datetime
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)  # en producción: date.today()
+      CARPETA = Path("/var/log/app")
+
+      parser = argparse.ArgumentParser(description="Borra los logs con fecha más viejos que N días")
+      parser.add_argument("--dias", type=int, default=14, help="antigüedad mínima para borrar (14)")
+      parser.add_argument("--simular", action="store_true", help="mostrar qué se borraría, sin borrar")
+      args = parser.parse_args()
+
+      logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+      log = logging.getLogger("limpieza")
+
+      print(f"Días: {args.dias}, simulación: {args.simular}")
+
+      viejos = []
+      for p in sorted(CARPETA.glob("app-*.log")):
+          dias = (HOY - datetime.strptime(p.name[4:14], "%Y-%m-%d").date()).days
+          if dias > args.dias:
+              log.info("viejo: %s (%d días)", p.name, dias)
+              viejos.append(p)
+      log.info("%d logs viejos", len(viejos))
+
+      for p in viejos:
+          if args.simular:
+              log.info("(simulación) borraría %s", p.name)
+          else:
+              p.unlink()
+              log.info("borrado: %s", p.name)
+  - consigna: >-
+      Último paso: llevá todo a una función `main(argv=None)` que reciba los argumentos (y se los
+      pase a `parser.parse_args(argv)`), devuelva 0 y se llame con `sys.exit(main())` dentro de
+      `if __name__ == "__main__":`. La verificación va a llamar a `main(["--dias", "16"])`, sin
+      simular, y revisar que borró solo lo que tenía más de 16 días.
+    verificar:
+      - prueba: |
+          from pathlib import Path
+          assert main(["--dias", "16"]) == 0
+          assert not Path("/var/log/app/app-2026-11-01.log").exists()
+          assert not Path("/var/log/app/app-2026-11-05.log").exists()
+          assert Path("/var/log/app/app-2026-11-07.log").exists()
+          assert Path("/var/log/app/app.log").exists()
+        mensaje: main(["--dias", "16"]) borra los del 1 y el 5, y deja el del 7 y app.log
+      - usa: __name__ == "__main__"
+        mensaje: El programa usa if __name__ == "__main__"
+      - codigo_salida: 0
+    pistas:
+      - "Todo lo que estaba suelto (parser, logging, el for) va adentro de `def main(argv=None):`, y la línea del parser queda `args = parser.parse_args(argv)`: con None, argparse lee sys.argv."
+      - "Abajo de todo: `if __name__ == \"__main__\":` y `sys.exit(main())` (con `import sys`)."
+    solucion: |
+      import argparse
+      import logging
+      import sys
+      from datetime import date, datetime
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)  # en producción: date.today()
+      CARPETA = Path("/var/log/app")
+      log = logging.getLogger("limpieza")
+
+
+      def main(argv=None):
+          parser = argparse.ArgumentParser(description="Borra los logs con fecha más viejos que N días")
+          parser.add_argument("--dias", type=int, default=14, help="antigüedad mínima para borrar (14)")
+          parser.add_argument("--simular", action="store_true", help="mostrar qué se borraría, sin borrar")
+          args = parser.parse_args(argv)
+
+          logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+          print(f"Días: {args.dias}, simulación: {args.simular}")
+
+          viejos = []
+          for p in sorted(CARPETA.glob("app-*.log")):
+              dias = (HOY - datetime.strptime(p.name[4:14], "%Y-%m-%d").date()).days
+              if dias > args.dias:
+                  log.info("viejo: %s (%d días)", p.name, dias)
+                  viejos.append(p)
+          log.info("%d logs viejos", len(viejos))
+
+          for p in viejos:
+              if args.simular:
+                  log.info("(simulación) borraría %s", p.name)
+              else:
+                  p.unlink()
+                  log.info("borrado: %s", p.name)
+          return 0
+
+
+      if __name__ == "__main__":
+          sys.exit(main())
+    explicacion: >-
+      Con main(argv) una prueba de pytest puede correr la herramienta con los argumentos que
+      quiera, sobre una carpeta de prueba, sin tocar sys.argv: es exactamente lo que hizo la
+      verificación. Las pruebas son lo que te deja cambiar el código dentro de un año sin miedo.

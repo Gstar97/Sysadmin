@@ -1,0 +1,47 @@
+tipo: diagrama
+titulo: Una herramienta de Python en un servidor
+puntos:
+  - id: codigo
+    titulo: El código
+    area: { x: 4.2, y: 21.7, ancho: 40.5, alto: 21.1 }
+    texto: >-
+      El programa, sus pruebas y requirements.txt, que dice qué bibliotecas necesita y en qué
+      versión exacta. Todo eso vive en un repositorio Git y se instala en el servidor copiándolo
+      (o con git clone de una etiqueta), nunca editándolo ahí.
+  - id: venv
+    titulo: El entorno virtual
+    area: { x: 4.2, y: 45.7, ancho: 40.5, alto: 20 }
+    texto: >-
+      Una carpeta con un Python propio de la herramienta y las bibliotecas que pide
+      requirements.txt, separadas de las del sistema y de las de otras herramientas. Se crea con
+      python3 -m venv y se llena con venv/bin/pip install -r requirements.txt. No se versiona: se
+      vuelve a crear cuando hace falta.
+  - id: config
+    titulo: Configuración y secretos
+    area: { x: 4.2, y: 68.6, ancho: 40.5, alto: 23.4 }
+    texto: >-
+      Lo que cambia entre servidores va en /etc, fuera del código: la configuración en un archivo
+      legible y los secretos en uno con permisos 600, que systemd carga como variables de entorno.
+      Así el mismo código sirve en todos lados y el token no termina en el repositorio.
+  - id: servicio
+    titulo: El servicio
+    area: { x: 53.5, y: 11.4, ancho: 44.2, alto: 40 }
+    texto: >-
+      Una unidad de tipo oneshot (lección 1.3.4) que corre con un usuario propio sin privilegios,
+      carga los secretos y ejecuta el programa con el Python del entorno virtual. Usar
+      venv/bin/python es lo que hace que encuentre sus bibliotecas, sin "activar" nada.
+  - id: timer
+    titulo: El timer
+    area: { x: 53.5, y: 56, ancho: 44.2, alto: 18.3 }
+    texto: >-
+      Lanza el servicio todos los días a las 3:15, con una demora al azar de hasta 10 minutos
+      para no arrancar todas las tareas del mismo momento, y Persistent para correrlo al encender
+      si el servidor estaba apagado. Si el servicio todavía está corriendo, el timer no lanza otra
+      copia.
+  - id: logs
+    titulo: Los mensajes
+    area: { x: 53.5, y: 78.9, ancho: 44.2, alto: 17.1 }
+    texto: >-
+      Con logging hacia stderr, systemd guarda cada mensaje en el journal con la fecha, el
+      servicio y el nivel; no hace falta un archivo de log propio ni rotarlo. journalctl -u
+      limpieza --since today muestra la última corrida.
