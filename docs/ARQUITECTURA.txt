@@ -340,6 +340,51 @@ reordenar carpetas no rompe el progreso guardado de nadie.
   Cada paso se marca como hecho y queda guardado en el navegador, así que un laboratorio
   largo se puede hacer en varias sesiones.
 
+5.4 ter Ejercicio de Python (EjercicioPython)
+
+  tipo: python
+  titulo: Discos llenos en el inventario
+  descripcion: ...
+  archivos:                          # existen antes de correr (ruta absoluta o relativa a
+    /var/log/app/app.log: "..."      # directorio, que por defecto es /home/estudiante)
+  api:                               # respuestas del requests simulado
+    https://web01.lab/salud: { json: { estado: ok } }
+    https://web02.lab/salud: { estado: 503, texto: "Service Unavailable" }
+    https://app01.lab/salud: { json: {}, demora: 12 }        # Timeout si timeout < 12
+    https://api.lab/v1/vms: { json: [...], token: abc }      # 401 sin Bearer abc
+    POST https://alertas.lab/api/v1/alertas: { estado: 201, json: { id: 7 } }
+  comandos:                          # salidas de subprocess.run, por comando exacto
+    df -h /var/log: { salida: "...", error: "", codigo: 0 }
+  entorno: { API_TOKEN: abc }        # variables de entorno (os.environ)
+  argumentos: ["--dias", "10"]       # sys.argv[1:]
+  codigo_inicial: |
+    ...
+  pasos:
+    - consigna: Texto con `código`.
+      verificar:                     # se evalúan después de correr el programa
+        - salida_contiene: "Errores: 2"      # también salida_no_contiene
+        - error_contiene: "WARNING"          # lo que salió por stderr
+        - codigo_salida: 1                   # sys.exit
+        - sin_error: true                    # sin excepción y con código 0
+        - archivo: /srv/reportes/estado.json # existe: false para lo contrario
+          contenido_incluye: '"total": 4'
+        - prueba: assert porcentaje(1, 4) == 25.0   # Python con assert, en el mismo
+          mensaje: porcentaje calcula bien          # espacio de nombres que el programa
+        - usa: "with open"                   # el código contiene ese texto
+          mensaje: Abre el archivo con with
+      pistas: [...]
+      solucion: |                    # el programa completo que resuelve el paso
+        ...
+      explicacion: ...
+
+  Corre Python de verdad (Pyodide, la misma versión 3.14 de Ubuntu 26.04) en un worker,
+  así un bucle infinito no traba la página: a los 10 segundos se corta. Cada corrida
+  empieza de cero (archivos, variables, módulos importados, entorno y logging), sys.exit y
+  los errores se atrapan del lado de Python y el traceback muestra solo el programa del
+  estudiante. npm run validar corre la solución de cada paso y avisa si el código inicial
+  ya pasa el primero. Sin ejercicio, <ConsolaPython codigo="..." titulo="..." /> es una
+  consola libre para probar mientras se lee.
+
 5.5 Componentes que se pueden usar dentro de una lección
 
   Bloques de texto
@@ -392,6 +437,10 @@ reordenar carpetas no rompe el progreso guardado de nadie.
     <ClasificadorIp />               ¿qué tipo de dirección es?
     <DisenadorVlsm red="..." areas={[{ nombre, hosts }]} />   sin props: casos al azar
     <SimuladorNat />                 tabla de traducciones, redirección y CGNAT
+    <EjercicioPython ejercicio={ej} />   Python de verdad con pasos verificados (5.4 ter)
+    <ConsolaPython codigo="..." />   consola de Python libre
+    <SimuladorRamas comandos={[...]} />  grafo de commits de Git que cambia con cada
+                                     comando (commit, branch, switch, merge, reset)
 
   La propiedad que recibe los datos es fija para cada componente: ejercicio, salvo
   escenario (Troubleshooting y SimuladorPaquetes) y datos (DiagramaInteractivo). El
@@ -860,6 +909,28 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       se borra o se cifra su config. Las copias protegidas de Proxmox quedan afuera de la
       retención, qmrestore tiene en cuenta link_down, y time mide comandos sumando lo que
       tardaría el trabajo de verdad.
+    · Git (git.ts, Etapa 9a): repositorios de verdad dentro del sistema de archivos
+      simulado, con commits, índice, ramas, etiquetas, remotos (locales o por ssh) y
+      hooks. config, init (con --bare y -b), clone, status, add, rm, mv, commit (-a, -m,
+      --amend, con pre-commit y commit-msg), log (--oneline, --graph, --all, --stat, -p,
+      -S, -G, --author, --grep, --format), show, diff (--staged, --stat), restore, reset,
+      revert, branch, switch y checkout, merge (avance rápido, --no-ff y conflictos con
+      marcas), stash, tag, remote, fetch, pull (con pull.rebase), push (con rechazos,
+      --force, borrado de ramas y un pre-receive del lado del servidor), rev-parse,
+      ls-files, check-ignore, blame, clean y filter-repo (--path, --invert-paths,
+      --replace-text). gitleaks detecta contraseñas, claves y tokens en archivos e
+      historia. Los repositorios del ejercicio se arman desde el estado (git.repos, con
+      commits, cambios sin guardar y remotos), y la verificación git_repo revisa rama,
+      commits, archivos versionados, último mensaje, remotos sincronizados, conflictos,
+      etiquetas, historia sin un texto, ramas fusionadas o borradas y hooks.
+    · Python (src/engines/python, Etapa 9a): ver 5.4 ter. runner.ts prepara el entorno
+      (archivos, un módulo requests que responde lo que dice el ejercicio, con errores
+      de conexión, timeouts, códigos HTTP y token, y subprocess.run con las salidas de
+      comandos), corre el programa y evalúa las verificaciones; worker.ts y client.ts lo
+      llevan a un worker del navegador, y check.ts lo usa en Node con el paquete pyodide
+      para validar y probar. build/pyodide-plugin.ts sirve los archivos de Pyodide en
+      desarrollo y los copia a dist/pyodide (unos 13 MB, que el navegador guarda después
+      de la primera vez).
     · Otros cambios: ssh ejecuta el comando remoto con el entorno del otro equipo (no con
       las variables exportadas del local) y actualiza su estado antes de cada comando; y
       las unidades propias de systemd aceptan binarios ELF.
@@ -1003,8 +1074,10 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
     planificador de retención (PlanificadorRetencion: qué copias quedan con una política
     como la de restic o PBS, hasta cuándo se puede volver, cuánto ocupan y de qué copia se
     vuelve si el daño fue hace tantos días).
-  - Pendientes, con el nivel que los usa: consolas de Python
-    (Pyodide, en un proceso aparte para no trabar la página) y SQL (sql.js); consolas
+  - Hechos en la Etapa 9a (Nivel 6): simulador de ramas (SimuladorRamas: el grafo de
+    commits con avance rápido, commits de fusión y commits que quedan huérfanos, sobre
+    src/engines/git) y la consola de Python (EjercicioPython y ConsolaPython, ver 5.4 ter).
+  - Pendientes, con el nivel que los usa: consola de SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; calculadoras de disponibilidad, cron y costos.
   - Los componentes pesados se cargan solo cuando una lección los usa.
 

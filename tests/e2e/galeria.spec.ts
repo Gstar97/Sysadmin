@@ -24,3 +24,21 @@ test('consola Cisco: VLAN y guardado', async ({ page }) => {
   }
   await expect(sec.getByText('Paso 2 de 3')).toBeVisible()
 })
+
+test('consola de Python: corre de verdad, verifica el ejercicio y corta un bucle infinito', async ({ page }) => {
+  test.setTimeout(90_000)
+  await page.goto('/galeria#automatizacion')
+  const ej = page.getByRole('region', { name: 'Contar errores en un log' })
+  await ej.getByRole('button', { name: 'Ver solución' }).click()
+  await ej.getByRole('button', { name: 'Cargarla en el editor' }).click()
+  await ej.getByRole('button', { name: 'Ejecutar' }).click()
+  await expect(ej.getByText('Ejercicio completado')).toBeVisible({ timeout: 60_000 })
+  await expect(ej.getByLabel('Salida del programa')).toContainText('Errores: 2')
+
+  const libre = page.getByRole('region', { name: 'Consola libre' })
+  await libre.locator('.cm-content').click()
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.type('while True:\npass')
+  await libre.getByRole('button', { name: 'Ejecutar' }).click()
+  await expect(libre.getByText(/se cortó/)).toBeVisible({ timeout: 20_000 })
+})
