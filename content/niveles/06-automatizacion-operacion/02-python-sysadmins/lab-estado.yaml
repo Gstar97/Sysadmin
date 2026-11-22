@@ -1,0 +1,174 @@
+tipo: pasos
+titulo: El reporte de estado instalado de verdad, con pruebas y un timer
+descripcion: >-
+  Vas a instalar la herramienta de la parte 1 en tu VM de administración (admin01), con su
+  entorno virtual, para que consulte por SSH las VM del laboratorio y por HTTP los servidores web
+  de los niveles anteriores, la vas a cubrir con pruebas de pytest, a dejar corriendo cada hora con
+  un timer y a publicar el HTML con nginx. Hace falta admin01 (cualquier distribución del curso) y
+  al menos dos VM más a las que llegues por SSH con clave. Unas dos horas y media.
+pasos:
+  - titulo: El repositorio de la herramienta
+    detalle: >-
+      En tu repositorio lab-infra (módulo 6.1), una carpeta herramientas/estado con el programa
+      completo de la parte 1 como estado.py, un requirements.txt y una carpeta tests. Cambiá
+      CONFIG para que se pueda pasar con una opción, y SALIDA también: sumá argparse con --config
+      (por defecto /etc/estado/servidores.ini) y --salida (por defecto /srv/reportes), y logging
+      con un WARNING por cada servidor con problemas.
+    comandos:
+      - cd ~/lab-infra && mkdir -p herramientas/estado/tests && cd herramientas/estado
+      - python3 -m venv .venv && .venv/bin/pip install requests pytest
+      - .venv/bin/pip freeze | grep -iE '^(requests|certifi|charset-normalizer|idna|urllib3)==' > requirements.txt
+      - printf '.venv/\n__pycache__/\n' >> ~/lab-infra/.gitignore
+    comprobar: requirements.txt tiene requests y sus dependencias, cada una con == y su versión, y .venv no aparece en git status.
+  - titulo: Pruebas con pytest
+    detalle: >-
+      Las pruebas no tienen que depender de tus servidores: para la API, monkeypatch reemplaza
+      requests.get por una función falsa; para SSH, subprocess.run. Así se prueban justo los casos
+      difíciles (un 503, un timeout, un ssh que falla) sin romper nada.
+    archivo:
+      ruta: herramientas/estado/tests/test_estado.py
+      contenido: |
+        import subprocess
+
+        import requests
+
+        import estado
+
+
+        class Respuesta:
+            def __init__(self, codigo, datos=None):
+                self.status_code = codigo
+                self._datos = datos or {}
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise requests.HTTPError(response=self)
+
+            def json(self):
+                return self._datos
+
+
+        def test_api_ok(monkeypatch):
+            monkeypatch.setattr(estado.requests, "get", lambda *a, **k: Respuesta(200, {"estado": "ok", "disco": 71}))
+            assert estado.consultar_api({"url": "https://x"}) == ("ok", 71)
+
+
+        def test_api_503(monkeypatch):
+            monkeypatch.setattr(estado.requests, "get", lambda *a, **k: Respuesta(503))
+            assert estado.consultar_api({"url": "https://x"}) == ("error 503", None)
+
+
+        def test_api_timeout(monkeypatch):
+            def colgado(*a, **k):
+                raise requests.Timeout()
+            monkeypatch.setattr(estado.requests, "get", colgado)
+            assert estado.consultar_api({"url": "https://x"}) == ("no responde", None)
+
+
+        def test_ssh_falla(monkeypatch):
+            monkeypatch.setattr(estado.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 255, "", "timed out"))
+            assert estado.consultar_ssh({"host": "nas01"}) == ("ssh falló", None)
+
+
+        def test_html_escapa(tmp_path):
+            ruta = tmp_path / "estado.html"
+            estado.guardar_html([{"nombre": "nas01", "descripcion": "<b>", "estado": "ok", "disco": 5}], ruta)
+            assert "&lt;b&gt;" in ruta.read_text()
+    comandos:
+      - .venv/bin/pytest -q
+    comprobar: pytest muestra 5 passed. Si cambiás algo en estado.py (por ejemplo, sacás el html.escape), alguna prueba falla.
+  - titulo: Ruff y pre-commit
+    detalle: >-
+      Sumá ruff (estilo y errores comunes) y las pruebas al .pre-commit-config.yaml del
+      repositorio, como en el laboratorio del módulo 6.1, para que ningún commit rompa la
+      herramienta. Commiteá y subí con un pull request.
+    comandos:
+      - .venv/bin/pip install ruff && .venv/bin/ruff check . && .venv/bin/ruff format --check .
+      - git add -A && git commit -m "Herramienta de estado con pruebas" && git push -u origin estado
+    comprobar: El pull request pasa las validaciones y otra cuenta lo aprueba.
+  - titulo: Instalarla en admin01
+    detalle: >-
+      Un usuario de sistema propio, la herramienta en /opt/estado desde una etiqueta del
+      repositorio, su entorno virtual y la configuración en /etc/estado. El usuario estado necesita
+      su propia clave SSH (sin frase) y un usuario sin privilegios en cada servidor, que solo pueda
+      correr df: en cada servidor, la clave pública en authorized_keys con command="df -P /" adelante
+      limita lo que puede hacer.
+    comandos:
+      - sudo useradd --system --create-home --home-dir /var/lib/estado --shell /usr/sbin/nologin estado
+      - sudo mkdir -p /opt/estado /etc/estado /srv/reportes && sudo chown estado:estado /srv/reportes
+      - sudo cp ~/lab-infra/herramientas/estado/{estado.py,requirements.txt} /opt/estado/
+      - sudo python3 -m venv /opt/estado/venv && sudo /opt/estado/venv/bin/pip install -r /opt/estado/requirements.txt
+      - sudo -u estado mkdir -p -m 700 /var/lib/estado/.ssh && sudo -u estado ssh-keygen -t ed25519 -N '' -f /var/lib/estado/.ssh/id_ed25519
+      - sudo -u estado /opt/estado/venv/bin/python /opt/estado/estado.py
+    archivo:
+      ruta: /etc/estado/servidores.ini
+      contenido: |
+        [web01]
+        tipo = api
+        url = https://web01.lab
+        descripcion = nginx del Nivel 4
+
+        [db01]
+        tipo = ssh
+        host = db01.lab
+        descripcion = PostgreSQL del Nivel 4
+    variantes:
+      - nombre: Sin una ruta /salud
+        detalle: "Los servidores web del curso no tienen /salud. Agregá en nginx un location = /salud que devuelva return 200 '{\"estado\": \"ok\"}' con default_type application/json, o cambiá consultar_api para considerar ok cualquier respuesta 200 de la página principal."
+    comprobar: La primera corrida, a mano, muestra el estado de cada servidor y deja /srv/reportes/estado.json y estado.html.
+    si_falla: >-
+      Un "ssh falló" en todos casi siempre es la clave o el known_hosts: corré una vez a mano sudo
+      -u estado ssh db01.lab df -P / para aceptar la huella y ver el error real.
+  - titulo: Cada hora, con un timer
+    detalle: >-
+      El servicio corre como estado, con el Python del entorno virtual; el timer, cada hora. Fijate
+      que el servicio termina con código 1 cuando algo está mal: systemctl lo marca como fallido, y
+      eso es lo que querés que el monitoreo del módulo 6.4 detecte.
+    archivo:
+      ruta: /etc/systemd/system/estado.service
+      contenido: |
+        [Unit]
+        Description=Reporte de estado de los servidores
+        After=network-online.target
+
+        [Service]
+        Type=oneshot
+        User=estado
+        ExecStart=/opt/estado/venv/bin/python /opt/estado/estado.py
+    comandos:
+      - printf '[Timer]\nOnCalendar=hourly\nRandomizedDelaySec=5min\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n' | sudo tee /etc/systemd/system/estado.timer
+      - sudo systemctl daemon-reload && sudo systemctl enable --now estado.timer
+      - sudo systemctl start estado.service; systemctl list-timers estado.timer
+      - journalctl -u estado --since today
+    comprobar: list-timers muestra la próxima corrida y el journal tiene los WARNING de los servidores con problemas.
+  - titulo: El HTML publicado con nginx
+    detalle: >-
+      Un location en el nginx de admin01 (o del servidor web del Nivel 4) que sirva /srv/reportes,
+      solo para la red de administración.
+    archivo:
+      ruta: /etc/nginx/conf.d/estado.conf
+      contenido: |
+        server {
+            listen 80;
+            server_name admin01.lab;
+
+            location /estado/ {
+                alias /srv/reportes/;
+                allow 10.0.99.0/24;
+                deny all;
+            }
+        }
+    comandos:
+      - sudo nginx -t && sudo systemctl reload nginx
+      - curl -s http://admin01.lab/estado/estado.json | python3 -m json.tool | head
+    comprobar: http://admin01.lab/estado/estado.html muestra la tabla con colores desde tu equipo, y desde otra red da 403.
+    si_falla: Un 403 desde la red de administración suele ser SELinux en Rocky; sudo semanage fcontext -a -t httpd_sys_content_t "/srv/reportes(/.*)?" y sudo restorecon -Rv /srv/reportes.
+  - titulo: Romperlo a propósito
+    detalle: >-
+      Apagá una de las VM y esperá la próxima corrida (o lanzala con systemctl start). Después
+      cambiá un dato de requirements.txt por una versión que no existe y probá reinstalar el
+      entorno: así ves cómo se ve cada falla antes de que te pase de verdad.
+    comandos:
+      - systemctl status estado.service
+      - systemctl --failed
+    comprobar: El reporte marca la VM apagada, el servicio queda en failed con código 1, y al encenderla vuelve a ok en la corrida siguiente.

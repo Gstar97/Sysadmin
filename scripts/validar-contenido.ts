@@ -53,6 +53,7 @@ async function main() {
     } else if (data?.tipo === 'python') {
       const ex = pythonExerciseSchema.safeParse(data)
       if (ex.success) problems = await checkPythonExercise(ex.data)
+      else problems = ex.error.issues.map((i) => ({ level: 'error' as const, message: `${i.path.join('.')}: ${i.message}` }))
     } else if (data?.tipo === 'topologia') {
       const ex = topologyExerciseSchema.safeParse(data)
       if (ex.success) problems = checkTopologyExercise(ex.data)

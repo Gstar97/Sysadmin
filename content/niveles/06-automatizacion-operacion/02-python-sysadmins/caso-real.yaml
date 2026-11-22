@@ -1,0 +1,178 @@
+tipo: troubleshooting
+titulo: El script dejó de funcionar después de actualizar el servidor
+descripcion: >-
+  Incidente simulado. En una empresa de logística, el servidor de monitoreo mon01 corre, entre
+  otras cosas, un script de Python que todas las mañanas a las 7:00 revisa los backups de la noche
+  y le manda un resumen por correo a la gerencia. El fin de semana se actualizó mon01 de Ubuntu
+  24.04 a Ubuntu 26.04 LTS. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 8:10. La gerente de operaciones pregunta por qué no llegó el resumen de backups. Entrás
+      a mon01.
+    evidencia:
+      - titulo: systemctl status reporte-backups.service
+        contenido: |2
+            × reporte-backups.service - Resumen diario de backups
+                 Loaded: loaded (/etc/systemd/system/reporte-backups.service; static)
+                 Active: >-
+                   failed (Result: exit-code) since Mon 2026-11-23 07:00:04 -03
+                Process: 1840 ExecStart=/opt/reporte/venv/bin/python /opt/reporte/reporte.py (code=exited, status=203/EXEC)
+            nov 23 07:00:04 mon01 (python)[1840]: reporte-backups.service: Unable to locate executable '/opt/reporte/venv/bin/python': No such file or directory
+      - titulo: ls -l /opt/reporte/venv/bin/python* y ls /usr/bin/python3*
+        contenido: |2
+            lrwxrwxrwx 1 root root  7 mar  3  2025 /opt/reporte/venv/bin/python -> python3
+            lrwxrwxrwx 1 root root 19 mar  3  2025 /opt/reporte/venv/bin/python3 -> /usr/bin/python3.12
+            /usr/bin/python3  /usr/bin/python3.14
+    opciones:
+      - texto: Recrear el entorno virtual con el Python de ahora e instalar requirements.txt
+        ir_a: n_recrear
+        minutos: 20
+      - texto: Cambiar ExecStart para que use /usr/bin/python3, que sí existe
+        ir_a: n_sistema
+        minutos: 5
+      - texto: Instalar Python 3.12 desde un repositorio externo (un PPA) para que el enlace vuelva a andar
+        ir_a: n_ppa
+        minutos: 40
+  n_sistema:
+    situacion: >-
+      El servicio ya arranca, pero se cae enseguida: las bibliotecas que usa el script estaban
+      instaladas solo dentro del entorno virtual.
+    evidencia:
+      - titulo: journalctl -u reporte-backups -n 5
+        contenido: |2
+            Traceback (most recent call last):
+              File "/opt/reporte/reporte.py", line 6, in <module>
+                import paramiko
+            ModuleNotFoundError: No module named 'paramiko'
+    opciones:
+      - texto: Instalarla en el sistema con sudo pip install paramiko
+        ir_a: n_pip
+        minutos: 5
+      - texto: Volver ExecStart como estaba y recrear el entorno virtual
+        ir_a: n_recrear
+        minutos: 20
+  n_pip:
+    situacion: >-
+      pip se niega a instalar en el Python del sistema.
+    evidencia:
+      - titulo: sudo pip install paramiko
+        contenido: |2
+            error: externally-managed-environment
+
+            × This environment is externally managed
+            ╰─> To install Python packages system-wide, try apt install
+                python3-xyz, where xyz is the package you are trying to
+                install.
+                ...
+            note: If you believe this is a mistake, please contact your Python installation or OS distribution
+            provider. You can override this, at the risk of breaking your Python installation or OS, by passing
+            --break-system-packages.
+    opciones:
+      - texto: Repetir con --break-system-packages
+        ir_a: n_recrear
+        minutos: 35
+        consecuencia: >-
+          paramiko se instala, junto con versiones de cryptography y otras bibliotecas que pisan las
+          que instaló apt y que usan herramientas del sistema. Una hora después, el agente de
+          monitoreo de mon01 (que también es Python) empieza a fallar al conectarse. Tenés que
+          deshacer lo instalado con pip y reinstalar los paquetes afectados con apt. Al final,
+          igual terminás recreando el entorno virtual.
+      - texto: Hacerle caso al aviso y recrear el entorno virtual
+        ir_a: n_recrear
+        minutos: 20
+  n_ppa:
+    situacion: >-
+      Con un PPA que publica versiones de Python que Ubuntu no trae, instalás python3.12 y el
+      enlace del entorno virtual vuelve a apuntar a algo que existe. El script arranca.
+    evidencia:
+      - titulo: Lo que quedó
+        contenido: |2
+            - mon01 depende de un repositorio externo, mantenido por voluntarios, para una
+              herramienta de la que depende la gerencia.
+            - Python 3.12 en 26.04 no recibe las correcciones de seguridad de Ubuntu.
+            - El problema de fondo sigue: el script no anda con el Python del sistema, y el día que
+              se quite el PPA o se actualice de nuevo, vuelve a pasar.
+    opciones:
+      - texto: Sacar el PPA y recrear el entorno virtual con el Python del sistema
+        ir_a: n_recrear
+        minutos: 25
+  n_recrear:
+    situacion: >-
+      Borrás el entorno virtual roto, creás uno nuevo con python3 (3.14) e instalás las
+      bibliotecas. La instalación anda, pero el script ahora falla por otra cosa.
+    evidencia:
+      - titulo: Los comandos
+        contenido: |2
+            $ sudo rm -rf /opt/reporte/venv
+            $ sudo python3 -m venv /opt/reporte/venv
+            $ sudo /opt/reporte/venv/bin/pip install -r /opt/reporte/requirements.txt
+            Successfully installed bcrypt-... cryptography-... jinja2-... paramiko-... pynacl-...
+      - titulo: cat /opt/reporte/requirements.txt
+        contenido: |2
+            paramiko
+            jinja2
+      - titulo: sudo -u reporte /opt/reporte/venv/bin/python /opt/reporte/reporte.py
+        contenido: |2
+            Traceback (most recent call last):
+              File "/opt/reporte/reporte.py", line 4, in <module>
+                from pipes import quote
+            ModuleNotFoundError: No module named 'pipes'
+    opciones:
+      - texto: Cambiar pipes.quote por shlex.quote, que hace lo mismo y está en Python desde hace años
+        ir_a: n_codigo
+        minutos: 15
+      - texto: Instalar el módulo que falta con pip install pipes
+        ir_a: n_recrear
+        minutos: 15
+        consecuencia: >-
+          No existe una biblioteca oficial con ese nombre: pipes era parte de Python y se eliminó.
+          Lo que haya en PyPI con un nombre así lo publicó cualquiera, y es exactamente el tipo de
+          paquete que se usa para colar código malicioso en servidores. Por suerte lo revisaste antes
+          de usarlo: no hacía lo mismo.
+      - texto: Volver a Python 3.12 con un PPA
+        ir_a: n_ppa
+        minutos: 40
+  n_codigo:
+    situacion: >-
+      Con shlex.quote el script anda y el resumen sale a las 10:40, con casi cuatro horas de
+      atraso. Antes de cerrar, buscás por qué pasó, para que no vuelva a pasar en la próxima
+      actualización.
+    evidencia:
+      - titulo: Lo que cambió entre una versión y otra
+        contenido: |2
+            Python 3.13 eliminó 19 módulos viejos de la biblioteca estándar (PEP 594): pipes,
+            telnetlib, crypt, cgi, imghdr y otros. Desde Python 3.11 avisaban al importarlos:
+              DeprecationWarning: 'pipes' is deprecated and slated for removal in Python 3.13
+            Ubuntu 24.04 traía 3.12 (con el aviso); Ubuntu 26.04 trae 3.14 (sin el módulo).
+      - titulo: El estado de la herramienta
+        contenido: |2
+            - requirements.txt sin versiones: cada instalación trae las últimas.
+            - Sin pruebas (pytest muestra los DeprecationWarning al final de cada corrida).
+            - El servicio falló a las 7:00 y nadie se enteró hasta las 8:10, por una pregunta.
+            - La lista de pasos de la actualización no decía nada de los entornos virtuales.
+    opciones:
+      - texto: "Prevenir en capas: versiones exactas con pip freeze en requirements.txt; pruebas con pytest en la integración continua, también con la versión de Python del próximo sistema; revisar los avisos de obsolescencia; recrear y probar los entornos virtuales en la lista de pasos de cada actualización; y un aviso automático cuando el servicio falla (OnFailure= o el monitoreo)"
+        ir_a: n_ok
+        minutos: 60
+      - texto: Dejar anotado que mon01 no se vuelve a actualizar
+        ir_a: n_codigo
+        minutos: 5
+        consecuencia: >-
+          Ubuntu 24.04 deja de tener actualizaciones de seguridad estándar en 2029, y mon01 es un
+          servidor con acceso a todos los demás. El problema no desaparece: se acumula para la
+          próxima vez, con más cambios juntos y menos tiempo.
+  n_ok:
+    final: exito
+    resumen: >-
+      Un entorno virtual apunta al Python con el que se creó: si una actualización del sistema
+      cambia esa versión, el entorno queda roto (el 203/EXEC de systemd) y hay que recrearlo e
+      instalar de nuevo sus bibliotecas, nunca con sudo pip sobre el sistema (el aviso
+      externally-managed-environment está para eso). Recrearlo puede destapar el segundo problema:
+      código que usa algo que la nueva versión de Python ya no tiene, y que venía avisando hacía
+      dos años. La solución es arreglar el código, no instalar paquetes con nombres parecidos ni
+      quedarse en una versión vieja. Para la próxima: versiones exactas en requirements.txt,
+      pruebas que corran con la versión de Python a la que vas a actualizar, prestar atención a
+      los DeprecationWarning, recrear los entornos como un paso más de la actualización, y que un
+      servicio que falla avise solo, en lugar de enterarse por la gerencia.

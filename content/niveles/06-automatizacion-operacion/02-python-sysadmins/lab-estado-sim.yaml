@@ -1,0 +1,459 @@
+tipo: python
+titulo: Reporte de estado de los servidores
+descripcion: Una herramienta que lee la lista de servidores de un archivo de configuración, consulta cada uno por
+  su API o por SSH, y deja un reporte en JSON (para otras herramientas) y en HTML (para las personas). Dos servidores
+  tienen problemas, como pasa siempre.
+archivos:
+  /etc/estado/servidores.ini: |
+    [web01]
+    tipo = api
+    url = https://web01.lab
+    descripcion = Tienda (frontend)
+
+    [web02]
+    tipo = api
+    url = https://web02.lab
+    descripcion = Tienda (frontend)
+
+    [db01]
+    tipo = ssh
+    host = db01
+    descripcion = PostgreSQL de la tienda
+
+    [nas01]
+    tipo = ssh
+    host = nas01
+    descripcion = NAS de backups <a reemplazar en 2027>
+api:
+  https://web01.lab/salud:
+    json:
+      estado: ok
+      disco: 71
+  https://web02.lab/salud:
+    estado: 503
+    texto: <html><body>Service Unavailable</body></html>
+comandos:
+  ssh -o BatchMode=yes -o ConnectTimeout=5 db01 df -P /:
+    salida: |
+      Filesystem          1024-blocks     Used Available Capacity Mounted on
+      /dev/mapper/rl-root    52403200 41922560  10480640      80% /
+  ssh -o BatchMode=yes -o ConnectTimeout=5 nas01 df -P /:
+    error: |
+      ssh: connect to host nas01 port 22: Connection timed out
+    codigo: 255
+codigo_inicial: |
+  import configparser
+
+  CONFIG = "/etc/estado/servidores.ini"
+
+
+  def leer_servidores(ruta=CONFIG):
+      """Devuelve una lista de diccionarios, uno por sección, con la clave nombre."""
+      # completá
+pasos:
+- consigna: 'Completá `leer_servidores` para que lea el INI con configparser y devuelva una lista con un diccionario
+    por servidor: el nombre de la sección en la clave `nombre`, más sus claves (tipo, url o host, descripcion).
+    Guardala en `servidores` y mostrá `4 servidores: web01, web02, db01, nas01`.'
+  verificar:
+  - prueba: |
+      assert servidores[0] == {"nombre": "web01", "tipo": "api", "url": "https://web01.lab", "descripcion": "Tienda (frontend)"}
+      assert servidores[3]["host"] == "nas01"
+    mensaje: Cada servidor es un diccionario con nombre y sus claves
+  - salida_contiene: '4 servidores: web01, web02, db01, nas01'
+  - sin_error: true
+  pistas:
+  - '`cfg = configparser.ConfigParser()`, `cfg.read(ruta)` y `cfg.sections()` da los nombres de las secciones.'
+  - '`{"nombre": nombre, **cfg[nombre]}` arma el diccionario: los dos asteriscos copian las claves de la sección.'
+  solucion: |
+    import configparser
+
+    CONFIG = "/etc/estado/servidores.ini"
+
+
+    def leer_servidores(ruta=CONFIG):
+        cfg = configparser.ConfigParser()
+        cfg.read(ruta)
+        return [{"nombre": nombre, **cfg[nombre]} for nombre in cfg.sections()]
+
+
+    servidores = leer_servidores()
+    print(f"{len(servidores)} servidores: {', '.join(s['nombre'] for s in servidores)}")
+- consigna: 'Ahora la consulta. `consultar_api(srv)` pide `url + "/salud"` con timeout y devuelve `(estado, disco)`:
+    `("ok", 71)`, `("error 503", None)`, `("sin conexión", None)` o `("no responde", None)`. `consultar_ssh(srv)`
+    corre exactamente `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> df -P /` y devuelve `("ok", 80)` con el porcentaje
+    de la quinta columna, o `("ssh falló", None)` si el código de salida no es 0. Y `consultar(srv)` elige según
+    el tipo y devuelve un diccionario con nombre, descripcion, estado y disco. Armá `resultados` y mostrá `nas01:
+    ssh falló`.'
+  verificar:
+  - prueba: |
+      assert [(r["nombre"], r["estado"], r["disco"]) for r in resultados] == [("web01", "ok", 71), ("web02", "error 503", None), ("db01", "ok", 80), ("nas01", "ssh falló", None)]
+    mensaje: resultados tiene el estado y el disco correctos de los cuatro
+  - prueba: 'assert consultar({"nombre": "x", "tipo": "api", "url": "https://web01.lab"})["descripcion"] == ""'
+    mensaje: consultar funciona aunque un servidor no tenga descripción
+  - salida_contiene: 'nas01: ssh falló'
+  - usa: BatchMode=yes
+    mensaje: ssh corre con BatchMode=yes
+  - sin_error: true
+  pistas:
+  - 'Para SSH, el comando como lista: `["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", srv["host"], "df",
+    "-P", "/"]` con `capture_output=True, text=True, timeout=20`.'
+  - De la salida de df, `r.stdout.splitlines()[1].split()[4]` es `"80%"`; `int(uso.rstrip("%"))` lo vuelve número.
+  - 'Para la descripción que puede faltar: `srv.get("descripcion", "")`.'
+  solucion: |
+    import configparser
+    import subprocess
+
+    import requests
+
+    CONFIG = "/etc/estado/servidores.ini"
+
+
+    def leer_servidores(ruta=CONFIG):
+        cfg = configparser.ConfigParser()
+        cfg.read(ruta)
+        return [{"nombre": nombre, **cfg[nombre]} for nombre in cfg.sections()]
+
+
+    def consultar_api(srv):
+        try:
+            r = requests.get(srv["url"] + "/salud", timeout=5)
+            r.raise_for_status()
+        except requests.HTTPError as e:
+            return f"error {e.response.status_code}", None
+        except requests.Timeout:
+            return "no responde", None
+        except requests.ConnectionError:
+            return "sin conexión", None
+        datos = r.json()
+        return ("ok" if datos.get("estado") == "ok" else "con problemas"), datos.get("disco")
+
+
+    def consultar_ssh(srv):
+        cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", srv["host"], "df", "-P", "/"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        except subprocess.TimeoutExpired:
+            return "no responde", None
+        if r.returncode != 0:
+            return "ssh falló", None
+        uso = r.stdout.splitlines()[1].split()[4]
+        return "ok", int(uso.rstrip("%"))
+
+
+    def consultar(srv):
+        if srv["tipo"] == "api":
+            estado, disco = consultar_api(srv)
+        else:
+            estado, disco = consultar_ssh(srv)
+        return {"nombre": srv["nombre"], "descripcion": srv.get("descripcion", ""), "estado": estado, "disco": disco}
+
+
+    servidores = leer_servidores()
+    resultados = [consultar(s) for s in servidores]
+    for r in resultados:
+        print(f"{r['nombre']}: {r['estado']}")
+- consigna: 'Guardá el reporte en /srv/reportes/estado.json (creá la carpeta) con una función `guardar_json(resultados,
+    ruta)`: las claves `generado` (fecha y hora en ISO), `total`, `con_problemas` y `servidores` (la lista de resultados),
+    con sangría 2.'
+  verificar:
+  - archivo: /srv/reportes/estado.json
+    contenido_incluye: '"con_problemas": 2'
+  - prueba: |
+      import json
+      rep = json.load(open("/srv/reportes/estado.json"))
+      assert rep["total"] == 4 and len(rep["servidores"]) == 4
+      assert rep["servidores"][2] == {"nombre": "db01", "descripcion": "PostgreSQL de la tienda", "estado": "ok", "disco": 80}
+      assert rep["generado"][:2] == "20" and "T" in rep["generado"]
+    mensaje: El JSON tiene el total, los cuatro servidores y la fecha en ISO
+  - sin_error: true
+  pistas:
+  - '`datetime.now().isoformat(timespec="seconds")` da algo como `2026-11-22T14:05:00`.'
+  - '`sum(1 for r in resultados if r["estado"] != "ok")` cuenta los que tienen problemas.'
+  solucion: |
+    import configparser
+    import json
+    import subprocess
+    from datetime import datetime
+    from pathlib import Path
+
+    import requests
+
+    CONFIG = "/etc/estado/servidores.ini"
+    SALIDA = Path("/srv/reportes")
+
+
+    def leer_servidores(ruta=CONFIG):
+        cfg = configparser.ConfigParser()
+        cfg.read(ruta)
+        return [{"nombre": nombre, **cfg[nombre]} for nombre in cfg.sections()]
+
+
+    def consultar_api(srv):
+        try:
+            r = requests.get(srv["url"] + "/salud", timeout=5)
+            r.raise_for_status()
+        except requests.HTTPError as e:
+            return f"error {e.response.status_code}", None
+        except requests.Timeout:
+            return "no responde", None
+        except requests.ConnectionError:
+            return "sin conexión", None
+        datos = r.json()
+        return ("ok" if datos.get("estado") == "ok" else "con problemas"), datos.get("disco")
+
+
+    def consultar_ssh(srv):
+        cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", srv["host"], "df", "-P", "/"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        except subprocess.TimeoutExpired:
+            return "no responde", None
+        if r.returncode != 0:
+            return "ssh falló", None
+        uso = r.stdout.splitlines()[1].split()[4]
+        return "ok", int(uso.rstrip("%"))
+
+
+    def consultar(srv):
+        if srv["tipo"] == "api":
+            estado, disco = consultar_api(srv)
+        else:
+            estado, disco = consultar_ssh(srv)
+        return {"nombre": srv["nombre"], "descripcion": srv.get("descripcion", ""), "estado": estado, "disco": disco}
+
+
+    def guardar_json(resultados, ruta):
+        reporte = {
+            "generado": datetime.now().isoformat(timespec="seconds"),
+            "total": len(resultados),
+            "con_problemas": sum(1 for r in resultados if r["estado"] != "ok"),
+            "servidores": resultados,
+        }
+        ruta.write_text(json.dumps(reporte, indent=2, ensure_ascii=False))
+
+
+    servidores = leer_servidores()
+    resultados = [consultar(s) for s in servidores]
+    for r in resultados:
+        print(f"{r['nombre']}: {r['estado']}")
+    SALIDA.mkdir(parents=True, exist_ok=True)
+    guardar_json(resultados, SALIDA / "estado.json")
+- consigna: 'Ahora el HTML, con `guardar_html(resultados, ruta)` en /srv/reportes/estado.html: una tabla con una
+    fila por servidor, `<tr class="ok">` o `<tr class="problema">`, y cuatro celdas `<td>` (nombre, descripción,
+    estado y disco con %, o un guion). Ojo con la descripción de nas01: tiene `<` y `>`, que en HTML hay que escapar
+    con `html.escape`.'
+  verificar:
+  - archivo: /srv/reportes/estado.html
+    contenido_incluye: <tr class="ok"><td>db01</td><td>PostgreSQL de la tienda</td><td>ok</td><td>80%</td></tr>
+  - archivo: /srv/reportes/estado.html
+    contenido_incluye: '&lt;a reemplazar en 2027&gt;'
+  - archivo: /srv/reportes/estado.html
+    contenido_incluye: <tr class="problema"><td>web02</td>
+  - usa: html.escape
+    mensaje: Escapa los valores con html.escape
+  - sin_error: true
+  pistas:
+  - 'Armá cada fila como texto: `f''<tr class="{clase}">''` y, para cada celda, `f"<td>{html.escape(str(valor))}</td>"`.'
+  - Sin escapar, `<a reemplazar en 2027>` el navegador lo toma como una etiqueta y la descripción desaparece de
+    la página (y si el texto viniera de afuera, podría meter código).
+  solucion: |
+    import configparser
+    import html
+    import json
+    import subprocess
+    from datetime import datetime
+    from pathlib import Path
+
+    import requests
+
+    CONFIG = "/etc/estado/servidores.ini"
+    SALIDA = Path("/srv/reportes")
+
+
+    def leer_servidores(ruta=CONFIG):
+        cfg = configparser.ConfigParser()
+        cfg.read(ruta)
+        return [{"nombre": nombre, **cfg[nombre]} for nombre in cfg.sections()]
+
+
+    def consultar_api(srv):
+        try:
+            r = requests.get(srv["url"] + "/salud", timeout=5)
+            r.raise_for_status()
+        except requests.HTTPError as e:
+            return f"error {e.response.status_code}", None
+        except requests.Timeout:
+            return "no responde", None
+        except requests.ConnectionError:
+            return "sin conexión", None
+        datos = r.json()
+        return ("ok" if datos.get("estado") == "ok" else "con problemas"), datos.get("disco")
+
+
+    def consultar_ssh(srv):
+        cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", srv["host"], "df", "-P", "/"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        except subprocess.TimeoutExpired:
+            return "no responde", None
+        if r.returncode != 0:
+            return "ssh falló", None
+        uso = r.stdout.splitlines()[1].split()[4]
+        return "ok", int(uso.rstrip("%"))
+
+
+    def consultar(srv):
+        if srv["tipo"] == "api":
+            estado, disco = consultar_api(srv)
+        else:
+            estado, disco = consultar_ssh(srv)
+        return {"nombre": srv["nombre"], "descripcion": srv.get("descripcion", ""), "estado": estado, "disco": disco}
+
+
+    def guardar_json(resultados, ruta):
+        reporte = {
+            "generado": datetime.now().isoformat(timespec="seconds"),
+            "total": len(resultados),
+            "con_problemas": sum(1 for r in resultados if r["estado"] != "ok"),
+            "servidores": resultados,
+        }
+        ruta.write_text(json.dumps(reporte, indent=2, ensure_ascii=False))
+
+
+    def guardar_html(resultados, ruta):
+        filas = []
+        for r in resultados:
+            clase = "ok" if r["estado"] == "ok" else "problema"
+            disco = f"{r['disco']}%" if r["disco"] is not None else "-"
+            celdas = [r["nombre"], r["descripcion"], r["estado"], disco]
+            filas.append(f'<tr class="{clase}">' + "".join(f"<td>{html.escape(str(c))}</td>" for c in celdas) + "</tr>")
+        pagina = (
+            "<!doctype html>\n<html lang=\"es\"><meta charset=\"utf-8\"><title>Estado de los servidores</title>\n"
+            "<style>.ok{background:#dcf5e4}.problema{background:#fde2e1}td,th{padding:4px 8px}</style>\n"
+            "<table>\n<tr><th>Servidor</th><th>Descripción</th><th>Estado</th><th>Disco</th></tr>\n"
+            + "\n".join(filas)
+            + "\n</table></html>\n"
+        )
+        ruta.write_text(pagina)
+
+
+    servidores = leer_servidores()
+    resultados = [consultar(s) for s in servidores]
+    for r in resultados:
+        print(f"{r['nombre']}: {r['estado']}")
+    SALIDA.mkdir(parents=True, exist_ok=True)
+    guardar_json(resultados, SALIDA / "estado.json")
+    guardar_html(resultados, SALIDA / "estado.html")
+  explicacion: Escapar todo lo que va a un HTML, aunque hoy parezca inofensivo, evita que un dato raro rompa la
+    página o, peor, que alguien inyecte un script en un reporte que abren los administradores.
+- consigna: Para terminar, llevá el trabajo a `main()`, con `if __name__ == "__main__":` y `sys.exit(main())`, y
+    que el programa termine con código 1 si algún servidor no está ok (0 si todos lo están), para que el timer y
+    el monitoreo se enteren.
+  verificar:
+  - codigo_salida: 1
+  - usa: __name__ == "__main__"
+    mensaje: El programa usa if __name__ == "__main__"
+  - prueba: 'assert consultar_ssh({"host": "db01"}) == ("ok", 80) and consultar_api({"url": "https://web02.lab"})
+      == ("error 503", None)'
+    mensaje: Las funciones de consulta siguen andando solas
+  - archivo: /srv/reportes/estado.html
+    contenido_incluye: </table>
+  pistas:
+  - '`return 0 if all(r["estado"] == "ok" for r in resultados) else 1` al final de main.'
+  solucion: |
+    import configparser
+    import html
+    import json
+    import subprocess
+    import sys
+    from datetime import datetime
+    from pathlib import Path
+
+    import requests
+
+    CONFIG = "/etc/estado/servidores.ini"
+    SALIDA = Path("/srv/reportes")
+
+
+    def leer_servidores(ruta=CONFIG):
+        cfg = configparser.ConfigParser()
+        cfg.read(ruta)
+        return [{"nombre": nombre, **cfg[nombre]} for nombre in cfg.sections()]
+
+
+    def consultar_api(srv):
+        try:
+            r = requests.get(srv["url"] + "/salud", timeout=5)
+            r.raise_for_status()
+        except requests.HTTPError as e:
+            return f"error {e.response.status_code}", None
+        except requests.Timeout:
+            return "no responde", None
+        except requests.ConnectionError:
+            return "sin conexión", None
+        datos = r.json()
+        return ("ok" if datos.get("estado") == "ok" else "con problemas"), datos.get("disco")
+
+
+    def consultar_ssh(srv):
+        cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", srv["host"], "df", "-P", "/"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        except subprocess.TimeoutExpired:
+            return "no responde", None
+        if r.returncode != 0:
+            return "ssh falló", None
+        uso = r.stdout.splitlines()[1].split()[4]
+        return "ok", int(uso.rstrip("%"))
+
+
+    def consultar(srv):
+        if srv["tipo"] == "api":
+            estado, disco = consultar_api(srv)
+        else:
+            estado, disco = consultar_ssh(srv)
+        return {"nombre": srv["nombre"], "descripcion": srv.get("descripcion", ""), "estado": estado, "disco": disco}
+
+
+    def guardar_json(resultados, ruta):
+        reporte = {
+            "generado": datetime.now().isoformat(timespec="seconds"),
+            "total": len(resultados),
+            "con_problemas": sum(1 for r in resultados if r["estado"] != "ok"),
+            "servidores": resultados,
+        }
+        ruta.write_text(json.dumps(reporte, indent=2, ensure_ascii=False))
+
+
+    def guardar_html(resultados, ruta):
+        filas = []
+        for r in resultados:
+            clase = "ok" if r["estado"] == "ok" else "problema"
+            disco = f"{r['disco']}%" if r["disco"] is not None else "-"
+            celdas = [r["nombre"], r["descripcion"], r["estado"], disco]
+            filas.append(f'<tr class="{clase}">' + "".join(f"<td>{html.escape(str(c))}</td>" for c in celdas) + "</tr>")
+        pagina = (
+            "<!doctype html>\n<html lang=\"es\"><meta charset=\"utf-8\"><title>Estado de los servidores</title>\n"
+            "<style>.ok{background:#dcf5e4}.problema{background:#fde2e1}td,th{padding:4px 8px}</style>\n"
+            "<table>\n<tr><th>Servidor</th><th>Descripción</th><th>Estado</th><th>Disco</th></tr>\n"
+            + "\n".join(filas)
+            + "\n</table></html>\n"
+        )
+        ruta.write_text(pagina)
+
+
+    def main():
+        servidores = leer_servidores()
+        resultados = [consultar(s) for s in servidores]
+        for r in resultados:
+            print(f"{r['nombre']}: {r['estado']}")
+        SALIDA.mkdir(parents=True, exist_ok=True)
+        guardar_json(resultados, SALIDA / "estado.json")
+        guardar_html(resultados, SALIDA / "estado.html")
+        return 0 if all(r["estado"] == "ok" for r in resultados) else 1
+
+
+    if __name__ == "__main__":
+        sys.exit(main())
+  explicacion: 'Esta es la herramienta completa: en la parte 2 la instalás en tu VM de administración, con un entorno
+    virtual, pruebas de pytest y un timer, y publicás el HTML con nginx.'

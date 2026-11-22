@@ -1,0 +1,36 @@
+---
+titulo: Herramienta en Python que consulta el estado de varios servidores por SSH o API y genera un reporte JSON y HTML, con pruebas
+horas: 4
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - La herramienta está en mi repositorio con requirements.txt de versiones exactas y pasa 5 pruebas de pytest.
+  - Corre cada hora en admin01 con su propio usuario y entorno virtual, y el journal muestra sus mensajes.
+  - El reporte HTML se ve en el navegador, con los valores escapados.
+  - Apagué un servidor y el reporte, el código de salida y systemctl --failed lo reflejaron.
+---
+
+import sim from './lab-estado-sim.yaml'
+import pasos from './lab-estado.yaml'
+
+## Objetivo
+
+Juntar todo el módulo en una herramienta de verdad: lee su configuración, habla con servidores por dos caminos distintos (una API y SSH), sobrevive a los que fallan, deja un resultado para máquinas (JSON) y otro para personas (HTML), tiene pruebas y corre sola. Es el esqueleto de muchas herramientas internas de un equipo de infraestructura, y en el módulo 6.4 el monitoreo va a vigilar que siga corriendo.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: tu VM de administración, dos o más VM a las que llegues por SSH con clave, y el repositorio lab-infra del módulo 6.1.
+
+## Parte 1: en el laboratorio simulado
+
+<EjercicioPython ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Con cien servidores, la consulta de a uno tarda demasiado. ¿Qué cambiarías (pista: lección 6.2.5) y qué cuidarías para no saturar la red ni la API?
+2. La herramienta corre con una clave SSH sin frase. ¿Qué limita el daño si alguien la roba? ¿Qué más se podría restringir en authorized_keys?
+3. ¿Qué pasa con el reporte HTML si la herramienta deja de correr? ¿Cómo se daría cuenta alguien de que la información es vieja?
