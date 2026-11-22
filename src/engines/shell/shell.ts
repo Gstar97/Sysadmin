@@ -82,6 +82,8 @@ export interface EditorRequest {
   content: string
   error?: string
   editor: string
+  /** ansible-vault create/edit: la contraseña con la que se cifra al guardar. */
+  password?: string
 }
 
 const GLOB_CHARS = /[*?[]/
@@ -2153,7 +2155,9 @@ export const BUILTINS: Record<string, Builtin> = {
     io.out((escapes ? unescapeEcho(text) : text) + (newline ? '\n' : ''))
     return 0
   },
-  printf: (_sh, args, io) => {
+  printf: (_sh, rawArgs, io) => {
+    // printf -- formato: el -- solo marca el fin de las opciones (permite formatos que empiezan con -).
+    const args = rawArgs[0] === '--' ? rawArgs.slice(1) : rawArgs
     if (!args.length) {
       io.err('printf: usage: printf [-v var] format [arguments]\n')
       return 2

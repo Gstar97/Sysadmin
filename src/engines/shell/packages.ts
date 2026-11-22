@@ -1045,6 +1045,7 @@ const common: Record<string, PackageInfo> = {
   nano: { summary: 'A small text editor', version: '8.1', commands: ['nano'] },
   git: { summary: 'Fast Version Control System', version: '2.47.1', commands: ['git'] },
   gitleaks: { summary: 'Scan git repos (or files) for secrets', version: '8.18.2', commands: ['gitleaks'] },
+  'ansible-lint': { summary: 'Best practices checker for Ansible', version: '6.17.2', commands: ['ansible-lint'], requires: ['ansible-core'] },
   tree: { summary: 'File system tree viewer', version: '2.1.0', commands: ['tree'] },
   htop: { summary: 'Interactive process viewer', version: '3.3.0', commands: ['htop'] },
   rsync: { summary: 'A program for synchronizing files over a network', version: '3.3.0', commands: ['rsync'] },
@@ -1062,6 +1063,10 @@ const common: Record<string, PackageInfo> = {
 }
 
 export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
+  'ansible-core': { summary: 'SSH-based configuration management, deployment, and task execution system', version: '2.16.14', commands: ['ansible', 'ansible-playbook', 'ansible-inventory', 'ansible-vault', 'ansible-galaxy', 'ansible-doc', 'ansible-config'], files: {
+      '/etc/ansible/ansible.cfg': '# Since Ansible 2.12 (core):\n# To generate an example config file (a "disabled" one with all default settings, commented out):\n#               $ ansible-config init --disabled > ansible.cfg\n#\n# Also you can now have a more complete file by including existing plugins:\n# ansible-config init --disabled -t all > ansible.cfg\n\n# For previous versions of Ansible you can check for examples in the \'stable\' branches of each version\n# Note that this file was always incomplete  and lagging changes to configuration settings\n\n# for example, for 2.9: https://github.com/ansible/ansible/blob/stable-2.9/examples/ansible.cfg\n',
+      '/etc/ansible/hosts': '# This is the default ansible \'hosts\' file.\n#\n# It should live in /etc/ansible/hosts\n#\n#   - Comments begin with the \'#\' character\n#   - Blank lines are ignored\n#   - Groups of hosts are delimited by [header] elements\n#   - You can enter hostnames or ip addresses\n#   - A hostname/ip can be a member of multiple groups\n\n# Ex 1: Ungrouped hosts, specify before any group headers:\n\n## green.example.com\n## blue.example.com\n## 192.168.100.1\n## 192.168.100.10\n\n# Ex 2: A collection of hosts belonging to the \'webservers\' group:\n\n## [webservers]\n## alpha.example.org\n## beta.example.org\n## 192.168.1.100\n## 192.168.1.110\n',
+    } },
   ...common,
   'policycoreutils-python-utils': { summary: 'SELinux policy core python utilities', version: '3.8', commands: ['semanage', 'audit2allow', 'audit2why', 'sepolicy'] },
   'bind-utils': { summary: 'Utilities for querying DNS name servers', version: '9.18.33', commands: ['dig', 'nslookup', 'host'] },
@@ -1229,6 +1234,11 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
 }
 
 export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
+  'ansible-core': { summary: 'Configuration management, deployment, and task execution system', version: '2.16.3-0ubuntu2', commands: ['ansible', 'ansible-playbook', 'ansible-inventory', 'ansible-vault', 'ansible-galaxy', 'ansible-doc', 'ansible-config'], files: {
+      '/etc/ansible/ansible.cfg': '# Since Ansible 2.12 (core):\n# To generate an example config file (a "disabled" one with all default settings, commented out):\n#               $ ansible-config init --disabled > ansible.cfg\n#\n# Also you can now have a more complete file by including existing plugins:\n# ansible-config init --disabled -t all > ansible.cfg\n\n# For previous versions of Ansible you can check for examples in the \'stable\' branches of each version\n# Note that this file was always incomplete  and lagging changes to configuration settings\n\n# for example, for 2.9: https://github.com/ansible/ansible/blob/stable-2.9/examples/ansible.cfg\n',
+      '/etc/ansible/hosts': '# This is the default ansible \'hosts\' file.\n#\n# It should live in /etc/ansible/hosts\n#\n#   - Comments begin with the \'#\' character\n#   - Blank lines are ignored\n#   - Groups of hosts are delimited by [header] elements\n#   - You can enter hostnames or ip addresses\n#   - A hostname/ip can be a member of multiple groups\n\n# Ex 1: Ungrouped hosts, specify before any group headers:\n\n## green.example.com\n## blue.example.com\n## 192.168.100.1\n## 192.168.100.10\n\n# Ex 2: A collection of hosts belonging to the \'webservers\' group:\n\n## [webservers]\n## alpha.example.org\n## beta.example.org\n## 192.168.1.100\n## 192.168.1.110\n',
+    } },
+  ansible: { summary: 'Configuration management, deployment, and task execution system (with collections)', version: '9.2.0+dfsg-0ubuntu5', requires: ['ansible-core'] },
   ...common,
   apparmor: { summary: 'user-space parser utility for AppArmor', version: '4.0.1', commands: ['aa-status', 'apparmor_parser', 'aa-enabled'] },
   'apparmor-utils': { summary: 'utilities for controlling AppArmor', version: '4.0.1', commands: ['aa-complain', 'aa-enforce', 'aa-disable', 'aa-logprof', 'aa-genprof'] },

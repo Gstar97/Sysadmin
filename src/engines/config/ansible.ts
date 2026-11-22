@@ -71,10 +71,32 @@ const MODULES: Record<string, ModuleSpec> = {
   apt_repository: { required: [['repo']] },
   yum_repository: { required: [['name']] },
   dnf5: { required: [['name']], states: ['present', 'absent', 'latest', 'installed', 'removed'] },
+  // Windows (colecciones ansible.windows y community.windows)
+  win_ping: {},
+  win_feature: { required: [['name']], states: ['present', 'absent'], bools: ['include_management_tools', 'include_sub_features'] },
+  win_service: { required: [['name']], states: ['started', 'stopped', 'restarted', 'absent', 'paused'] },
+  win_user: { required: [['name']], states: ['present', 'absent', 'query'], bools: ['password_never_expires', 'account_disabled', 'user_cannot_change_password'] },
+  win_group: { required: [['name']], states: ['present', 'absent'] },
+  win_group_membership: { required: [['name'], ['members']], states: ['present', 'absent', 'pure'] },
+  win_copy: { required: [['dest']], bools: ['force', 'remote_src'] },
+  win_template: { required: [['src'], ['dest']] },
+  win_file: { required: [['path', 'dest', 'name']], states: ['absent', 'directory', 'file', 'touch'] },
+  win_updates: { states: ['installed', 'searched', 'downloaded'], bools: ['reboot'] },
+  win_package: { states: ['present', 'absent'] },
+  win_shell: { freeForm: true },
+  win_command: { freeForm: true },
+  win_regedit: { required: [['path']], states: ['present', 'absent'] },
+  win_reboot: {},
+  win_firewall_rule: { required: [['name']], states: ['present', 'absent'], bools: ['enabled'] },
+  win_domain_user: { required: [['name']], states: ['present', 'absent', 'query'] },
+  win_dns_client: { required: [['adapter_names'], ['dns_servers']] },
+  win_hostname: { required: [['name']] },
+  win_timezone: { required: [['timezone']] },
+  win_chocolatey: { required: [['name']], states: ['present', 'absent', 'latest', 'downgrade', 'reinstalled'] },
 }
 
 function moduleName(key: string): string | undefined {
-  const short = key.replace(/^(ansible\.builtin|ansible\.posix|community\.general|community\.docker|community\.mysql)\./, '')
+  const short = key.replace(/^(ansible\.builtin|ansible\.posix|ansible\.windows|community\.windows|chocolatey\.chocolatey|community\.general|community\.docker|community\.mysql|community\.postgresql)\./, '')
   if (MODULES[short]) return short
   if (key === 'docker_container' || key === 'community.docker.docker_container') return 'docker_container'
   return undefined

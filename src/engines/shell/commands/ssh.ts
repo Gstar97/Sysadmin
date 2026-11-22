@@ -62,7 +62,7 @@ function agentOf(sh: Shell): Map<string, { comment: string; type: KeyType; file:
 // Conexión
 // ---------------------------------------------------------------------------------------
 
-interface ConnectOpts {
+export interface ConnectOpts {
   alias: string
   user?: string
   port?: number
@@ -77,7 +77,7 @@ interface ConnectOpts {
   passwordOnly?: boolean
 }
 
-interface Session {
+export interface Session {
   host: System
   user: string
   alias: string
@@ -88,7 +88,7 @@ interface Session {
 const NOTE_KEY = '[simulador] Respondés "yes" porque este es tu servidor. En uno real, compara la huella con la que te dio quien administra el servidor.\n'
 
 /** Conecta y autentica. Escribe en la terminal lo mismo que ssh; devuelve null si no se pudo. */
-async function connect(ctx: CommandContext, o: ConnectOpts, via: System = ctx.sys): Promise<Session | null> {
+export async function connect(ctx: CommandContext, o: ConnectOpts, via: System = ctx.sys): Promise<Session | null> {
   const client = ctx.sys
   const cred = ctx.sh.cred
   const home = ctx.sh.home

@@ -16,6 +16,7 @@ import { validateWireguard } from './wireguard'
 import { validatePowerShell } from './powershell'
 import { validateExports } from './exports'
 import { validateSmbConf } from './smbconf'
+import { validateInventory } from './inventory'
 import type { Diagnostic, NginxDirective } from './types'
 import { parseYaml } from './yaml-tools'
 
@@ -72,6 +73,8 @@ export function validateConfig(lang: ConfigLanguage, text: string, fileName?: st
       return validateExports(text)
     case 'smbconf':
       return validateSmbConf(text)
+    case 'inventario':
+      return validateInventory(text, fileName)
     case 'texto':
       return { diagnostics: [] }
   }

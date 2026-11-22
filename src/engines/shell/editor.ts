@@ -3,6 +3,7 @@ import { checkSudoers } from './commands/users'
 import { daemonReload } from './units'
 import type { EditorRequest, Shell } from './shell'
 import { FsError, ROOT_CRED } from './vfs'
+import { encrypt as encryptVault } from '../ansible/vault'
 
 export interface SaveResult {
   ok: boolean
@@ -44,6 +45,16 @@ export function saveEditor(sh: Shell, req: EditorRequest, content: string): Save
     const bad = checkSudoers(text)
     if (bad) return { ok: false, message: `>>> ${req.path}: syntax error near line ${bad} <<<\n[simulador] visudo no guarda un sudoers con errores: corregilo o descarta los cambios.` }
     vfs.writeFile(req.path, text, ROOT_CRED, { mode: 0o440 })
+    return { ok: true }
+  }
+  if (req.editor === 'ansible-vault') {
+    // Como ansible-vault: lo que se escribe en el editor se guarda cifrado.
+    try {
+      vfs.writeFile(req.path, encryptVault(text, req.password ?? ''), sh.cred, { mode: 0o600 })
+    } catch (e) {
+      if (e instanceof FsError) return { ok: false, message: `ERROR! [Errno 13] Permission denied: '${req.path}'` }
+      throw e
+    }
     return { ok: true }
   }
   if (req.editor === 'crontab') {

@@ -51,6 +51,7 @@ import { verifyIscsi } from './iscsi'
 import { verifyCeph } from './ceph'
 import { verifyBackup } from './backup'
 import { verifyGit } from './git'
+import './ansible'
 import './diskimage'
 
 export { Shell, COMMANDS } from './shell'

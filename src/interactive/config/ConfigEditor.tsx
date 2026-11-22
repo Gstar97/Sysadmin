@@ -40,6 +40,7 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   powershell: 'C:\\Scripts\\script.ps1',
   exports: '/etc/exports',
   smbconf: '/etc/samba/smb.conf',
+  inventario: 'inventario.ini',
   texto: 'archivo.txt',
 }
 
@@ -69,6 +70,8 @@ function languageFor(lang: ConfigLanguage): Extension {
       return StreamLanguage.define(javascript)
     case 'powershell':
       return StreamLanguage.define(powerShell)
+    case 'inventario':
+      return StreamLanguage.define(properties)
     case 'texto':
       return []
   }
