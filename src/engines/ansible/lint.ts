@@ -37,6 +37,8 @@ const PROFILE: Record<string, string> = {
   'no-handler': 'shared',
   'fqcn[action-core]': 'production',
   'fqcn[action]': 'production',
+  'schema[meta]': 'min',
+  'meta-incorrect': 'shared',
 }
 const TAGS: Record<string, string> = {
   'yaml[truthy]': 'formatting yaml',
@@ -62,6 +64,8 @@ const TAGS: Record<string, string> = {
   'fqcn[action-core]': 'formatting',
   'fqcn[action]': 'formatting',
   'load-failure': 'core unskippable',
+  'schema[meta]': 'core',
+  'meta-incorrect': 'metadata',
 }
 const ORDER = ['min', 'basic', 'moderate', 'safety', 'shared', 'production']
 
@@ -174,7 +178,7 @@ export function lintFiles(files: { name: string; text: string }[]): { output: st
       if (typeof args === 'string' && /\w+=/.test(args) && !['command', 'shell', 'raw', 'meta', 'include_tasks', 'import_tasks'].includes(short)) vs.push({ rule: 'no-free-form', message: `Avoid using free-form when calling module actions. (${mod})`, file: f.name, line, detail: label })
       if (['command', 'shell'].includes(short)) {
         const cmd = typeof args === 'string' ? args : String((args as Record<string, unknown>)?.cmd ?? '')
-        const a = (args && typeof args === 'object' ? args : {}) as Record<string, unknown>
+        const a = { ...(r.args && typeof r.args === 'object' ? r.args : {}), ...(args && typeof args === 'object' ? args : {}) } as Record<string, unknown>
         if (r.changed_when === undefined && !a.creates && !a.removes && !/(^|\s)(creates|removes)=/.test(cmd) && !handler) vs.push({ rule: 'no-changed-when', message: 'Commands should not change things if nothing needs doing.', file: f.name, line, detail: label })
         const first = cmd.trim().split(/\s+/)[0]?.replace(/^.*\//, '')
         if (first && MODULE_FOR[first]) vs.push({ rule: 'command-instead-of-module', message: `${first} used in place of ${MODULE_FOR[first]} module`, file: f.name, line, detail: label })
@@ -205,6 +209,16 @@ export function lintFiles(files: { name: string; text: string }[]): { output: st
         taskWalk(p.handlers, checkTask, true)
       }
     } else if (isTasks) taskWalk(data, checkTask, /(^|\/)handlers\//.test(f.name))
+    else if (/(^|\/)meta\/main\.ya?ml$/.test(f.name) && data && typeof data === 'object' && !Array.isArray(data)) {
+      const gi = (data as Record<string, unknown>).galaxy_info
+      if (gi && typeof gi === 'object') {
+        const g = gi as Record<string, unknown>
+        const at = (k: string) => loaded.lines.findIndex((l) => new RegExp(`^\\s+${k}:`).test(l)) + 1 || where(g)
+        if (g.min_ansible_version !== undefined && typeof g.min_ansible_version !== 'string') vs.push({ rule: 'schema[meta]', message: `$.galaxy_info.min_ansible_version ${String(g.min_ansible_version)} is not of type 'string'. See https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_reuse_roles.html#using-role-dependencies`, file: f.name, line: 1, detail: '' })
+        const defaults: Record<string, string> = { author: 'your name', description: 'your role description', company: 'your company (optional)', license: 'license (GPL-2.0-or-later, MIT, etc)' }
+        for (const [k, v] of Object.entries(defaults)) if (g[k] === v) vs.push({ rule: 'meta-incorrect', message: `Should change default metadata: ${k}`, file: f.name, line: at(k), detail: '' })
+      }
+    }
   }
   vs.sort((a, b) => (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1))
   const n = vs.length

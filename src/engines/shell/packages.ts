@@ -1054,6 +1054,8 @@ const common: Record<string, PackageInfo> = {
   mtr: { summary: 'Network diagnostic tool combining traceroute and ping', version: '0.95', commands: ['mtr'] },
   nmap: { summary: 'Network exploration tool and security scanner', version: '7.92', commands: ['nmap'] },
   python3: { summary: 'Python 3 interpreter', version: '3.12.8', commands: ['python3'] },
+  'python3-psycopg2': { summary: 'A PostgreSQL database adapter for Python 3', version: '2.9.9', requires: ['python3'] },
+  'python3-winrm': { summary: 'Python library for Windows Remote Management', version: '0.4.3', requires: ['python3'] },
   tar: { summary: 'GNU file archiving program', version: '1.35', commands: ['tar'] },
   sysstat: { summary: 'Collection of performance monitoring tools for Linux', version: '12.7.5', commands: ['iostat', 'sar', 'mpstat'] },
   iotop: { summary: 'Top like utility for I/O', version: '0.6', commands: ['iotop'] },

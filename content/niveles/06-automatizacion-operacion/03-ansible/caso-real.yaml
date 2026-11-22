@@ -1,0 +1,230 @@
+tipo: troubleshooting
+titulo: El playbook que reinicia producción todas las noches
+descripcion: >-
+  Incidente simulado. Una tienda en línea configura sus servidores con Ansible: tres servidores web
+  (web01 a web03, con nginx y la API de la tienda) y una base PostgreSQL (db01). Para corregir
+  cambios hechos a mano, la integración continua corre ansible-playbook site.yml contra producción
+  todas las noches a las 02:00. Desde hace dos semanas, cada noche hay errores para los clientes. Cada
+  decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Lunes, 09:30. Atención al cliente reenvía quejas de compradores de otros países (a las 02:00
+      de acá, para ellos es de día): la tienda "se cae un rato" de madrugada. El monitoreo muestra
+      un pico de errores 502 todas las noches entre las 02:00 y las 02:02.
+    evidencia:
+      - titulo: El final del log del job nocturno (cada noche igual)
+        contenido: |2
+            TASK [app : Migraciones de la base] *******************************
+            changed: [web01]
+            changed: [web02]
+            changed: [web03]
+            ...
+            RUNNING HANDLER [app : Reiniciar tienda-api] **********************
+            changed: [web01]
+            changed: [web02]
+            changed: [web03]
+            RUNNING HANDLER [postgresql : Reiniciar postgresql] ***************
+            changed: [db01]
+
+            PLAY RECAP ********************************************************
+            db01   : ok=14  changed=2  unreachable=0  failed=0  skipped=0
+            web01  : ok=23  changed=4  unreachable=0  failed=0  skipped=0
+            web02  : ok=23  changed=4  unreachable=0  failed=0  skipped=0
+            web03  : ok=23  changed=4  unreachable=0  failed=0  skipped=0
+      - titulo: /var/log/nginx/error.log de web02, 02:00
+        contenido: |2
+            2026-11-23 02:00:41 [error] connect() failed (111: Connection refused)
+              while connecting to upstream, upstream: "http://127.0.0.1:8080/api/carrito"
+    opciones:
+      - texto: Desactivar el job nocturno hasta entender qué pasa
+        ir_a: n1
+        minutos: 10
+        consecuencia: >-
+          Esta noche no hay errores, pero tampoco hay nada que corrija los cambios a mano, y el
+          problema sigue en el código: la próxima vez que alguien corra el playbook (por un cambio
+          real) va a reiniciar todo igual. Sirve para ganar tiempo, no para resolverlo.
+      - texto: Correr el playbook en modo de prueba con diferencias contra un servidor, para ver qué cree que tiene que cambiar
+        ir_a: n_check
+        minutos: 15
+      - texto: Agregar serial 1 al play de los web, así reinician de a uno
+        ir_a: n1
+        minutos: 20
+        consecuencia: >-
+          Reduce el golpe (siempre quedan dos servidores atendiendo), pero los reinicios siguen
+          pasando todas las noches sin motivo, y db01 se sigue reiniciando igual. Es una buena idea
+          para cuando haya un cambio de verdad, no la solución a este problema.
+  n_check:
+    situacion: >-
+      Con --check --diff --limit web01,db01, el playbook muestra qué cambiaría sin tocar nada. Los
+      servidores no cambiaron desde anoche, así que una corrida idempotente tendría que dar
+      changed=0. No da.
+    evidencia:
+      - titulo: ansible-playbook site.yml --check --diff --limit web01,db01
+        contenido: |2
+            TASK [web : Reiniciar nginx para tomar la configuración] **********
+            changed: [web01]
+
+            TASK [app : Configuración de la API] ******************************
+            --- before: /etc/tienda/api.conf
+            +++ after: /home/ci/.ansible/tmp/ansible-local-4113/tmpq81x/api.conf.j2
+            @@ -1,3 +1,3 @@
+            -# Generado por Ansible el 2026-11-23T05:00:09Z
+            +# Generado por Ansible el 2026-11-23T12:41:37Z
+             listen = 127.0.0.1:8080
+
+            changed: [web01]
+
+            TASK [app : Migraciones de la base] *******************************
+            skipping: [web01]
+
+            TASK [postgresql : Conexiones máximas] ****************************
+            changed: [db01]
+
+            RUNNING HANDLER [app : Reiniciar tienda-api] **********************
+            changed: [web01]
+            RUNNING HANDLER [postgresql : Reiniciar postgresql] ***************
+            changed: [db01]
+      - titulo: Las tareas, en los roles
+        contenido: |2
+            # roles/web/tasks/main.yml
+            - name: Reiniciar nginx para tomar la configuración
+              ansible.builtin.service:
+                name: nginx
+                state: restarted
+
+            # roles/app/templates/api.conf.j2 (primera línea)
+            # Generado por Ansible el {{ ansible_date_time.iso8601 }}
+
+            # roles/app/tasks/main.yml
+            - name: Migraciones de la base
+              ansible.builtin.command: /opt/tienda/bin/migrar
+
+            # roles/postgresql/tasks/main.yml
+            - name: Conexiones máximas
+              ansible.builtin.shell: echo "max_connections = 200" >> /var/lib/pgsql/data/postgresql.conf
+              notify: Reiniciar postgresql
+    opciones:
+      - texto: "Corregir cada causa: el reinicio de nginx pasa a un handler (con reloaded), la fecha sale de la plantilla, la migración dice cuándo cambió algo con changed_when, y el ajuste de PostgreSQL pasa a lineinfile"
+        ir_a: n_arreglo
+        minutos: 60
+      - texto: "Poner changed_when: false en todas las tareas que dan changed, así el recap queda en cero"
+        ir_a: n_check
+        minutos: 20
+        consecuencia: >-
+          El recap queda prolijo, pero ahora ninguna de esas tareas avisa cuando cambia algo de
+          verdad, y como los handlers solo se disparan con changed, un cambio real en la plantilla
+          de la API nunca reiniciaría el servicio. Se esconde el síntoma y se rompe lo que sí andaba.
+      - texto: Sacar todos los notify, para que no se reinicie nada nunca
+        ir_a: n_check
+        minutos: 15
+        consecuencia: >-
+          Los reinicios de la madrugada se terminan, pero también los necesarios: el próximo cambio
+          de configuración queda escrito en el disco y sin aplicar hasta que alguien reinicie a
+          mano. Los handlers no son el problema; el problema son las tareas que dan changed sin
+          haber cambiado nada.
+      - texto: Instrumentar la migración para saber si tarda, porque el log la muestra antes de los reinicios
+        ir_a: n_check
+        minutos: 30
+        consecuencia: >-
+          La migración da changed porque command no sabe si hizo algo, no porque tarde. En modo de
+          prueba ni siquiera corre (skipping). Es una de las causas del recap engañoso, pero no la
+          que reinicia servicios.
+  n_arreglo:
+    situacion: >-
+      Los cambios van por un pull request y, antes de mergear, el revisor pide ver dos corridas
+      seguidas contra el entorno de pruebas. La primera aplica las correcciones (y reinicia una vez,
+      lo esperable); la segunda da changed=0 en los web. Pero db01 de pruebas tiene algo raro.
+    evidencia:
+      - titulo: Las correcciones
+        contenido: |2
+            # roles/web/tasks/main.yml: la tarea de reinicio se borró;
+            # la plantilla de nginx tiene notify: Recargar nginx (handler con state: reloaded)
+
+            # api.conf.j2: la primera línea ahora es {{ ansible_managed }}, sin fecha
+
+            - name: Migraciones de la base
+              ansible.builtin.command: /opt/tienda/bin/migrar
+              register: migracion
+              changed_when: "'Sin migraciones pendientes' not in migracion.stdout"
+
+            - name: Conexiones máximas
+              ansible.builtin.lineinfile:
+                path: /var/lib/pgsql/data/postgresql.conf
+                regexp: '^max_connections'
+                line: max_connections = 200
+              notify: Reiniciar postgresql
+      - titulo: db01 de pruebas
+        contenido: |2
+            $ grep -c '^max_connections' /var/lib/pgsql/data/postgresql.conf
+            47
+    opciones:
+      - texto: "Antes de aplicarlo, limpiar las líneas repetidas: una tarea con lineinfile state absent y la misma regexp, corrida una sola vez antes del cambio, y después la tarea nueva deja una sola línea"
+        ir_a: n_prod
+        minutos: 30
+      - texto: No importa, PostgreSQL usa la última línea
+        ir_a: n_arreglo
+        minutos: 5
+        consecuencia: >-
+          Es cierto que vale la última, pero lineinfile con regexp solo reemplaza la última
+          coincidencia: las otras 46 quedan, confunden a cualquiera que lea el archivo, y si
+          mañana alguien cambia el valor a mano en la primera línea no pasa nada. Conviene dejar
+          el archivo como si nunca hubiera pasado.
+  n_prod:
+    situacion: >-
+      En pruebas, el archivo quedó con una sola línea y dos corridas seguidas dan changed=0 en
+      todos los equipos. Falta llevarlo a producción, donde la primera corrida va a reiniciar
+      PostgreSQL una vez (para tomar el archivo limpio) y la API (por el cambio en la plantilla).
+    evidencia:
+      - titulo: Lo que va a pasar en la primera corrida de producción
+        contenido: |2
+            web01..web03: reload de nginx (sin cortes), restart de tienda-api
+            db01:         restart de postgresql (corta las conexiones unos segundos)
+    opciones:
+      - texto: "Aplicarlo en la ventana de mantenimiento del martes a las 06:00, con serial 1 en los web y la API detrás del balanceador, y verificar con una segunda corrida"
+        ir_a: n_prevenir
+        minutos: 30
+      - texto: Aplicarlo ahora mismo, total es un arreglo
+        ir_a: n_prevenir
+        minutos: 15
+        consecuencia: >-
+          Son las 13:00 de un lunes: el reinicio de PostgreSQL corta las compras en curso y los
+          tres reinicios de la API juntos dejan la tienda sin servicio un rato. El arreglo estaba
+          bien; el momento y la forma, no.
+  n_prevenir:
+    situacion: >-
+      La segunda corrida en producción da changed=0 en los cuatro equipos y la madrugada siguiente
+      no hay errores. Falta que no vuelva a pasar.
+    evidencia:
+      - titulo: Por qué pasó
+        contenido: |2
+            - Nadie corría el playbook dos veces seguidas para comprobar la idempotencia.
+            - El job nocturno aplicaba directo en producción, sin mirar antes qué iba a cambiar.
+            - ansible-lint no estaba en el pre-commit ni en la integración continua
+              (habría marcado el shell sin changed_when y el command de la migración).
+            - Un reinicio estaba escrito como tarea en lugar de handler.
+    opciones:
+      - texto: "Prevenir en capas: ansible-lint en el pre-commit y en la CI, Molecule con su prueba de idempotencia en los roles, el job nocturno en --check --diff que avisa si algo cambió en lugar de aplicar, y los cambios reales por pull request en la ventana de mantenimiento con serial"
+        ir_a: n_ok
+        minutos: 60
+      - texto: Pedir que cada uno revise mejor sus playbooks
+        ir_a: n_prevenir
+        minutos: 5
+        consecuencia: >-
+          Los cuatro errores pasaron revisiones humanas. Lo que no depende de acordarse (lint,
+          una prueba de idempotencia y un modo de prueba que avisa) es lo que evita que vuelva a
+          pasar.
+  n_ok:
+    final: exito
+    resumen: >-
+      El síntoma era un pico de errores; la causa, un playbook que no era idempotente. Cuando una
+      tarea da changed sin haber cambiado nada, los handlers que dependen de ella reinician
+      servicios en cada corrida: una plantilla con la fecha, un reinicio escrito como tarea, un
+      comando que agrega líneas a un archivo. --check --diff mostró las cuatro causas sin tocar
+      producción. Esconder el changed (changed_when false) o sacar los handlers habría roto los
+      reinicios necesarios; lo correcto era que cada tarea dijera la verdad sobre lo que cambió.
+      El arreglo se probó con dos corridas seguidas, se limpió lo que el error había dejado, y se
+      aplicó en una ventana de mantenimiento de a un servidor. Para la próxima: ansible-lint,
+      Molecule con su prueba de idempotencia, y un job nocturno que mira y avisa en lugar de
+      aplicar a ciegas.

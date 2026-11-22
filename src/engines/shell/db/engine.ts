@@ -562,7 +562,9 @@ export function execute(sess: Session, raw: string): Result {
     }
   }
 
-  let sql = toSqlite(s.kind, stmt, sess)
+  // Catálogos de PostgreSQL que consultan los módulos de Ansible y los scripts: se arman al vuelo.
+  if (s.kind === 'postgres' && /\b(pg_catalog\.)?(pg_database|pg_roles|pg_user)\b/i.test(stmt)) syncPgCatalog(s, db)
+  let sql = toSqlite(s.kind, stmt, sess).replace(/\bpg_catalog\.(pg_\w+)/gi, '$1')
   // ALTER TABLE t ADD INDEX idx (col) → CREATE INDEX
   const addIdx = /^ALTER\s+TABLE\s+[`"]?(\w+)[`"]?\s+ADD\s+(UNIQUE\s+)?(?:INDEX|KEY)\s+[`"]?(\w+)[`"]?\s*\(([^)]*)\)\s*$/i.exec(stmt)
   if (addIdx) sql = `CREATE ${addIdx[2] ? 'UNIQUE ' : ''}INDEX ${addIdx[3]} ON ${addIdx[1]} (${addIdx[4]})`
@@ -911,6 +913,23 @@ function count(s: DbServer, inst: DbInstance, t: string): number {
     return Number(materialize(s, inst)?.exec(`SELECT count(*) FROM ${t}`)[0]?.values[0]?.[0] ?? 0)
   } catch {
     return 0
+  }
+}
+
+/** pg_database, pg_roles y pg_user (las columnas más usadas), como tablas temporales. */
+function syncPgCatalog(s: DbServer, db: SqlDatabase) {
+  db.run('DROP TABLE IF EXISTS temp.pg_database')
+  db.run('DROP TABLE IF EXISTS temp.pg_roles')
+  db.run('DROP TABLE IF EXISTS temp.pg_user')
+  db.run('CREATE TEMP TABLE pg_database (datname TEXT, datdba TEXT, encoding TEXT, datistemplate INTEGER, datallowconn INTEGER)')
+  db.run('CREATE TEMP TABLE pg_roles (rolname TEXT, rolsuper INTEGER, rolcreatedb INTEGER, rolcanlogin INTEGER, rolpassword TEXT)')
+  db.run('CREATE TEMP TABLE pg_user (usename TEXT, usesuper INTEGER, usecreatedb INTEGER, passwd TEXT)')
+  const names = new Set([...s.dbs.keys()])
+  for (const t of ['postgres', 'template0', 'template1']) names.add(t)
+  for (const n of [...names].sort()) db.run('INSERT INTO pg_database VALUES (?,?,?,?,?)', [n, s.dbs.get(n)?.owner ?? 'postgres', 'UTF8', n.startsWith('template') ? 1 : 0, n === 'template0' ? 0 : 1])
+  for (const u of s.users) {
+    db.run('INSERT INTO pg_roles VALUES (?,?,?,?,?)', [u.name, u.superuser ? 1 : 0, u.createdb ? 1 : 0, u.login ? 1 : 0, '********'])
+    if (u.login) db.run('INSERT INTO pg_user VALUES (?,?,?,?)', [u.name, u.superuser ? 1 : 0, u.createdb ? 1 : 0, '********'])
   }
 }
 

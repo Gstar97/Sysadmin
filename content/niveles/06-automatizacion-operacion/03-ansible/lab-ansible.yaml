@@ -1,0 +1,153 @@
+tipo: pasos
+titulo: El proyecto de Ansible contra máquinas de verdad, Linux y Windows, desde el repositorio
+descripcion: >-
+  Vas a correr el proyecto de la parte 1 contra VMs reales: dos Rocky Linux (web01 y db01, 1 vCPU
+  y 2 GB cada una) y un Windows Server 2025 de evaluación (win01, 2 vCPU y 4 GB; la evaluación dura
+  180 días). El nodo de control es tu equipo de administración con Ubuntu, y el repositorio vive en
+  el servidor de Git del módulo 6.1. Calculá unas tres horas y media.
+pasos:
+  - titulo: Ansible en el nodo de control
+    detalle: >-
+      Con pipx instalás el paquete ansible (trae ansible-core y las colecciones más usadas) en su
+      propio entorno, en una versión más nueva que la de la distribución: hace falta 2.18 o más
+      para usar SSH con Windows. pywinrm solo hace falta si vas a usar WinRM.
+    comandos:
+      - sudo apt install -y pipx git && pipx ensurepath
+      - pipx install --include-deps ansible
+      - pipx install ansible-lint
+      - pipx inject ansible pywinrm
+      - ansible --version
+    comprobar: ansible --version muestra ansible-core 2.18 o más nuevo, y ansible-lint --version responde.
+  - titulo: Los servidores Linux
+    detalle: >-
+      Creá web01 (192.168.10.11) y db01 (192.168.10.31) con Rocky Linux 10 mínimo; si tenés la
+      plantilla con cloud-init del Nivel 5, clonala dos veces. En cada uno, tu usuario con tu clave
+      pública y sudo sin contraseña (como en el laboratorio simulado), y los nombres en el /etc/hosts
+      del nodo de control o en el DNS del laboratorio.
+    comandos:
+      - ssh-copy-id ana@web01 && ssh-copy-id ana@db01
+      - "ssh -t ana@web01 \"echo 'ana ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/ana && sudo chmod 440 /etc/sudoers.d/ana\""
+    variantes:
+      - nombre: Con contraseña de sudo
+        detalle: "Si preferís no dar sudo sin contraseña, salteá el sudoers y corré los playbooks con --ask-become-pass (-K)."
+    comprobar: ssh ana@web01 sudo whoami responde root sin pedir contraseña.
+  - titulo: El proyecto en el repositorio
+    detalle: >-
+      En el servidor de Git creá el repositorio infra-ansible, con main protegida como en el módulo
+      6.1. Cloná y armá adentro el mismo proyecto de la parte 1: ansible.cfg, inventario.ini,
+      requirements.yml, site.yml, group_vars/db (vars.yml y vault.yml cifrado) y los roles base, web
+      y postgresql (podés copiar el contenido de las soluciones del laboratorio simulado). La
+      contraseña de Vault va en ~/.vault_pass con permisos 600, nunca en el repositorio.
+    comandos:
+      - git clone git@git01.lab:ana/infra-ansible.git && cd infra-ansible
+      - printf '%s\n' 'una-clave-larga-de-verdad' > ~/.vault_pass && chmod 600 ~/.vault_pass
+      - ansible-galaxy collection install -r requirements.yml
+      - ansible all -m ansible.builtin.ping
+    archivo:
+      ruta: ~/infra-ansible/ansible.cfg
+      contenido: |
+        [defaults]
+        inventory = inventario.ini
+        roles_path = roles
+        interpreter_python = auto_silent
+        vault_password_file = ~/.vault_pass
+    comprobar: El ping responde SUCCESS desde web01 y db01.
+  - titulo: Primero en modo de prueba, después de verdad
+    detalle: >-
+      Contra servidores reales, primero mirá qué haría: --check --diff muestra los cambios sin
+      aplicarlos (algunas tareas, como las de la base, pueden fallar en modo de prueba porque
+      dependen de que el paquete ya esté instalado; es normal la primera vez). Después aplicalo, y
+      corrélo otra vez para confirmar que la segunda corrida no cambia nada.
+    comandos:
+      - ansible-playbook site.yml --check --diff
+      - ansible-playbook site.yml
+      - ansible-playbook site.yml
+      - curl http://web01/
+      - "ssh db01 \"sudo -u postgres psql -c '\\l'\""
+    comprobar: La segunda corrida termina con changed=0 en los dos equipos, curl muestra "Tienda en web01" y la lista de bases incluye tienda, cuyo dueño es tienda.
+    si_falla: >-
+      Si web01 no responde por HTTP, revisá firewalld (sudo firewall-cmd --list-services) y SELinux
+      (sudo ausearch -m avc -ts recent). Si la base falla con un error de psycopg2, falta
+      python3-psycopg2 en db01.
+  - titulo: El servidor Windows
+    detalle: >-
+      Instalá Windows Server 2025 (Standard, con experiencia de escritorio o Core) como win01
+      (192.168.10.50). OpenSSH Server ya viene instalado: habilitalo, hacé que la consola por SSH sea
+      PowerShell y cargá tu clave pública en el archivo de claves de los administradores, con
+      permisos solo para Administradores y SYSTEM (se usan los SID para que funcione igual en un
+      Windows en español). Todo desde una PowerShell como administrador.
+    comandos:
+      - Start-Service sshd; Set-Service -Name sshd -StartupType Automatic
+      - New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force
+      - Set-Content -Path 'C:\ProgramData\ssh\administrators_authorized_keys' -Value 'ssh-ed25519 AAAA... ana@admin01'
+      - icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant '*S-1-5-32-544:F' /grant '*S-1-5-18:F'
+      - Get-NetFirewallRule -Name OpenSSH-Server-In-TCP | Select-Object Name, Enabled, Profile
+    variantes:
+      - nombre: Con WinRM
+        detalle: >-
+          WinRM ya está activo por HTTP (5985). Para el laboratorio podés crear un oyente HTTPS con un
+          certificado autofirmado y conectarte con NTLM, ignorando la validación del certificado
+          (ansible_winrm_server_cert_validation=ignore, solo en un laboratorio). En el inventario:
+          ansible_connection=winrm, ansible_port=5986 y ansible_winrm_transport=ntlm, y la contraseña
+          en Vault.
+        comandos:
+          - $c = New-SelfSignedCertificate -DnsName win01 -CertStoreLocation Cert:\LocalMachine\My
+          - New-Item -Path WSMan:\localhost\Listener -Transport HTTPS -Address * -CertificateThumbPrint $c.Thumbprint -Force
+          - New-NetFirewallRule -Name WinRM-HTTPS -DisplayName 'WinRM HTTPS' -Protocol TCP -LocalPort 5986 -Action Allow
+    comprobar: Desde el nodo de control, ssh Administrador@win01 abre una PowerShell sin pedir contraseña (el usuario se llama Administrator si instalaste Windows en inglés).
+  - titulo: Windows en el inventario y el playbook
+    detalle: >-
+      Sumá el grupo windows al inventario con las variables de conexión por SSH, probá la conexión
+      con win_ping y corré windows.yml (el de la parte 1). Como con Linux, la segunda corrida no
+      tiene que cambiar nada.
+    comandos:
+      - ansible windows -m ansible.windows.win_ping
+      - ansible-playbook windows.yml --check
+      - ansible-playbook windows.yml
+      - ansible-playbook windows.yml
+      - curl http://win01/
+    archivo:
+      ruta: ~/infra-ansible/inventario.ini
+      contenido: |
+        [web]
+        web01
+
+        [db]
+        db01
+
+        [windows]
+        win01 ansible_host=192.168.10.50
+
+        [windows:vars]
+        ansible_connection=ssh
+        ansible_shell_type=powershell
+        ansible_user=Administrador
+    comprobar: win_ping responde pong, la segunda corrida da changed=0 y curl muestra "Tienda en win01".
+    si_falla: >-
+      "Permission denied (publickey)": revisá los permisos de administrators_authorized_keys con
+      icacls (solo Administradores y SYSTEM). Si el módulo falla con un error de PowerShell, revisá
+      que ansible_shell_type sea powershell y que DefaultShell apunte a powershell.exe.
+  - titulo: Todo por pull request, con ansible-lint antes de cada commit
+    detalle: >-
+      Sumá ansible-lint a las validaciones de pre-commit (pre-commit autoupdate lo lleva a la última
+      versión) y subí el grupo windows en una rama propia con un pull request, revisado y aprobado
+      con la segunda cuenta, como en el módulo 6.1. Después de mergear, actualizá main en el nodo de
+      control y volvé a correr todo: lo que se aplica es siempre lo que está en main.
+    comandos:
+      - pipx install pre-commit && pre-commit install
+      - pre-commit autoupdate && pre-commit run --all-files
+      - git switch -c windows && git add . && git commit -m "Servidor Windows con IIS" && git push -u origin windows
+      - git switch main && git pull && ansible-playbook site.yml && ansible-playbook windows.yml
+    archivo:
+      ruta: ~/infra-ansible/.pre-commit-config.yaml
+      contenido: |
+        repos:
+          - repo: https://github.com/ansible/ansible-lint
+            rev: v26.1.1
+            hooks:
+              - id: ansible-lint
+          - repo: https://github.com/gitleaks/gitleaks
+            rev: v8.24.2
+            hooks:
+              - id: gitleaks
+    comprobar: El pull request quedó aprobado y mergeado, un commit con una tarea sin nombre se frena en pre-commit, y desde main los dos playbooks terminan con changed=0.

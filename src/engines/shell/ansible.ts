@@ -10,7 +10,7 @@ import type { System } from './system'
 import { normalizePath } from './vfs'
 import { connect } from './commands/ssh'
 import { sudoRules } from './commands/users'
-import { evaluate, JinjaError, lazyScope, render, templateValue, truthy, Undef, type Scope } from '../ansible/jinja'
+import { compareVersions, evaluate, JinjaError, lazyScope, render, templateValue, truthy, Undef, type Scope } from '../ansible/jinja'
 import { emptyInventory, groupHosts, groupsByDepth, hostGroups, InventoryError, matchPattern, parseInventory, splitKv, type Inventory } from '../ansible/inventory'
 import { decrypt, encrypt, encryptString, isVault, VaultError, VaultString } from '../ansible/vault'
 import { errorContext, loadYaml, Unsafe, YamlLoadError } from '../ansible/yamlload'
@@ -646,15 +646,40 @@ export const FULL_COLLECTIONS: Record<string, string> = {
   'community.docker': '3.7.0',
 }
 
-const GALAXY_VERSIONS: Record<string, string> = {
-  'ansible.posix': '2.1.0',
-  'ansible.windows': '3.2.0',
-  'community.general': '12.0.1',
-  'community.mysql': '3.15.0',
-  'community.postgresql': '4.1.0',
-  'community.windows': '3.0.1',
-  'community.docker': '5.0.0',
-  'ansible.utils': '6.0.0',
+/** Versiones publicadas en Galaxy (la primera es la última), para resolver requirements.yml. */
+const GALAXY_VERSIONS: Record<string, string[]> = {
+  'ansible.posix': ['2.1.0', '2.0.0', '1.6.2', '1.5.4'],
+  'ansible.windows': ['3.2.0', '3.0.0', '2.8.0', '2.5.0'],
+  'community.general': ['12.0.1', '11.4.1', '10.7.4', '9.5.10'],
+  'community.mysql': ['3.15.0', '3.14.0'],
+  'community.postgresql': ['4.1.0', '4.0.0', '3.14.2', '3.4.1'],
+  'community.windows': ['3.0.1', '3.0.0', '2.4.0', '2.2.0'],
+  'community.docker': ['5.0.0', '4.8.1', '3.13.10'],
+  'ansible.utils': ['6.0.0', '5.1.2'],
+  'microsoft.ad': ['1.9.2', '1.8.1'],
+  'chocolatey.chocolatey': ['1.5.3', '1.5.1'],
+}
+
+/** ¿La versión cumple con ">=2.0.0,<3.0.0", "==1.2.0", "1.2.0" o "*"? */
+function versionMatches(v: string, spec: string): boolean {
+  return spec
+    .split(',')
+    .map((x) => x.trim())
+    .filter((x) => x && x !== '*')
+    .every((c) => {
+      const m = /^(>=|<=|==|!=|>|<)?\s*(.+)$/.exec(c)!
+      const r = compareVersions(v, m[2])
+      return { '>=': r >= 0, '<=': r <= 0, '>': r > 0, '<': r < 0, '!=': r !== 0, '==': r === 0, '': r === 0 }[m[1] ?? '']!
+    })
+}
+
+function resolveGalaxyVersion(name: string, spec: string | undefined): string | undefined {
+  const known = GALAXY_VERSIONS[name] ?? ['1.0.0']
+  if (!spec || spec === '*') return known[0]
+  const hit = known.find((v) => versionMatches(v, spec))
+  if (hit) return hit
+  const exact = /^(==)?\s*(\d+\.\d+\.\d+)$/.exec(spec.trim())
+  return exact ? exact[2] : undefined
 }
 
 class Loader {
@@ -2246,10 +2271,12 @@ register('ansible-galaxy', {
         let dest = cfg.collectionsPath[0]
         const names: string[] = []
         let req: string | undefined
+        let force = false
         while (args.length) {
           const a = args.shift()!
           if (a === '-p' || a === '--collections-path') dest = abs(ctx, args.shift() ?? '.')
           else if (a === '-r' || a === '--requirements-file') req = args.shift()
+          else if (a === '-f' || a === '--force') force = true
           else if (!a.startsWith('-')) names.push(a)
         }
         if (req) {
@@ -2269,14 +2296,40 @@ register('ansible-galaxy', {
         if (!ctx.sys.dns.length && !ctx.sys.resolveHost('galaxy.ansible.com')) {
           // sin salida a internet en el simulador se acepta igual
         }
-        ctx.out('Starting galaxy collection install process\nProcess install dependency map\nStarting collection install process\n')
+        const todo: { name: string; version: string }[] = []
+        const skipped: string[] = []
         for (const raw of names) {
-          const [name, wanted] = raw.split(/:|==|>=/)
+          const i = raw.search(/[:=<>!]/)
+          const name = i < 0 ? raw : raw.slice(0, i)
+          const spec = i < 0 ? undefined : raw.slice(i).replace(/^:/, '')
           if (!/^[a-z0-9_]+\.[a-z0-9_]+$/.test(name)) {
             ctx.out(paint('error', `ERROR! Invalid collection name '${name}', name must be in the format <namespace>.<collection>.`) + '\n')
             return 1
           }
-          const version = wanted ?? GALAXY_VERSIONS[name] ?? '1.0.0'
+          const version = resolveGalaxyVersion(name, spec)
+          if (!version) {
+            ctx.out('Starting galaxy collection install process\nProcess install dependency map\n')
+            ctx.out(paint('error', `ERROR! Failed to resolve the requested dependencies map. Could not satisfy the following requirements:\n* ${name}:${spec} (direct request)`) + '\n')
+            return 1
+          }
+          const [ns, coll] = name.split('.')
+          const manifest = readFileSafe(ctx, `${dest}/ansible_collections/${ns}/${coll}/MANIFEST.json`)
+          let have: string | undefined
+          try {
+            have = manifest ? (JSON.parse(manifest).collection_info?.version as string) : undefined
+          } catch {
+            have = undefined
+          }
+          if (have && !force && (!spec || versionMatches(have, spec))) skipped.push(`'${name}:${have}' is already installed, skipping.`)
+          else todo.push({ name, version })
+        }
+        if (!todo.length) {
+          ctx.out('Starting galaxy collection install process\nNothing to do. All requested collections are already installed. If you want to reinstall them, consider using `--force`.\n')
+          return 0
+        }
+        ctx.out('Starting galaxy collection install process\nProcess install dependency map\nStarting collection install process\n')
+        for (const m of skipped) ctx.out(m + '\n')
+        for (const { name, version } of todo) {
           const [ns, coll] = name.split('.')
           const dir = `${dest}/ansible_collections/${ns}/${coll}`
           ctx.out(`Downloading https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/artifacts/${ns}-${coll}-${version}.tar.gz to ${ctx.sh.home}/.ansible/tmp/ansible-local-${ctx.sys.allocPid()}/tmp/${ns}-${coll}-${version}.tar.gz\nInstalling '${name}:${version}' to '${dir}'\n`)

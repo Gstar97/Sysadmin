@@ -50,7 +50,6 @@ function parsePg(args: string[]): PgOpts {
     else if ((m = /^--file=(.*)$/.exec(a))) o.file = m[1]
     else if (a === '-t' || a === '--tuples-only') o.tuplesOnly = true
     else if (a === '-A' || a === '--no-align') o.unaligned = true
-    else if (a === '-At' || a === '-tA') o.tuplesOnly = o.unaligned = true
     else if (a === '-x' || a === '--expanded') o.expanded = true
     else if (a === '-q' || a === '--quiet') o.quiet = true
     else if (a === '-w' || a === '--no-password') o.noPassword = true
@@ -63,7 +62,17 @@ function parsePg(args: string[]): PgOpts {
     else if (a === '-F') o.vals.set('--format', take())
     else if ((m = /^-F(\w)$/.exec(a))) o.vals.set('--format', m[1])
     else if (a === '-t' || a === '--table') o.vals.set('--table', take())
-    else if ((m = /^(--[\w-]+)=(.*)$/s.exec(a))) o.vals.set(m[1], m[2])
+    else if (/^-[tAqxXwW]{2,}$/.test(a)) {
+      // Opciones cortas juntas, como -tAqX (las que usan los scripts y los módulos de Ansible).
+      for (const f of a.slice(1)) {
+        if (f === 't') o.tuplesOnly = true
+        else if (f === 'A') o.unaligned = true
+        else if (f === 'q') o.quiet = true
+        else if (f === 'x') o.expanded = true
+        else if (f === 'w') o.noPassword = true
+        else if (f === 'W') o.forcePassword = true
+      }
+    } else if ((m = /^(--[\w-]+)=(.*)$/s.exec(a))) o.vals.set(m[1], m[2])
     else if (a.startsWith('-')) o.flags.add(a)
     else o.rest.push(a)
   }

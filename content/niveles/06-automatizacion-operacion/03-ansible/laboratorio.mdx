@@ -1,0 +1,36 @@
+---
+titulo: Roles que configuran desde cero servidores web y de base de datos, y un playbook para Windows, todo versionado en Git
+horas: 5
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - Mis roles base, web y postgresql configuran VMs nuevas de Rocky Linux, y la segunda corrida da changed=0.
+  - La contraseña de la base está cifrada con Vault y no aparece en la salida.
+  - Un playbook configura IIS en un Windows Server 2025, conectándose por SSH (o WinRM).
+  - El proyecto está en mi servidor de Git, con ansible-lint en pre-commit y cambios por pull request.
+---
+
+import sim from './lab-ansible-sim.yaml'
+import pasos from './lab-ansible.yaml'
+
+## Objetivo
+
+Armar un proyecto de Ansible como los de una empresa: roles reutilizables que dejan un servidor web y uno de base de datos listos a partir de una instalación limpia, los secretos cifrados, una revisión automática de calidad y un playbook para Windows, todo en el repositorio del módulo 6.1. Al final, si mañana se rompe un servidor, lo volvés a dejar igual en minutos con un comando.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: tu equipo de administración con Ubuntu, dos VMs con Rocky Linux 10 (web01 y db01), una VM con Windows Server 2025 de evaluación (win01) y el servidor de Git del módulo 6.1.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Borrá web01 y creala de nuevo desde la plantilla. ¿Cuánto tardás en dejarla como estaba? ¿Qué cosas no estaban en el repositorio y tuviste que hacer a mano?
+2. Si mañana sumás un segundo servidor web, ¿qué archivos del proyecto cambian? ¿Y si pasás a usar Ubuntu en lugar de Rocky?
+3. Alguien entra a web01 y cambia la configuración de nginx a mano para resolver algo urgente. ¿Qué pasa en la próxima corrida de Ansible? ¿Cómo tendría que haberlo hecho?

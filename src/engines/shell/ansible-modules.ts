@@ -1216,7 +1216,9 @@ const gitModule: ModuleFn = async (m) => {
 // ---------------------------------------------------------------------------------------
 
 async function sql(m: ModuleCtx, engine: 'pg' | 'my', statement: string, db?: string) {
-  const cmd = engine === 'pg' ? `sudo -u postgres psql -tAqX ${db ? `-d ${q(db)} ` : ''}-c ${q(statement)}` : `mysql -N -B ${db ? `${q(db)} ` : ''}-e ${q(statement)}`
+  // Con become_user: postgres (lo habitual) el módulo ya corre como postgres y entra por peer.
+  const asPg = m.t.user === 'postgres' ? '' : 'sudo -u postgres '
+  const cmd = engine === 'pg' ? `${asPg}psql -tAqX ${db ? `-d ${q(db)} ` : ''}-c ${q(statement)}` : `mysql -N -B ${db ? `${q(db)} ` : ''}-e ${q(statement)}`
   return m.t.exec(cmd)
 }
 

@@ -223,6 +223,24 @@ describe('ansible en el simulador', () => {
     expect((await run('ansible-galaxy role init roles/base')).out).toContain('Role roles/base was created successfully')
     expect((await run('ls roles/base')).out).toContain('tasks')
   })
+  it('colecciones con rangos de versión, PostgreSQL con become_user y psql -tAqX', async () => {
+    const inv = '[db]\ndb01\n'
+    const { run } = await session(
+      lab({ 'inventario.ini': inv, 'requirements.yml': 'collections:\n  - name: community.postgresql\n    version: ">=3.0.0,<4.0.0"\n' }, { servidores: [{ ip: '192.168.10.30', hostname: 'db01', usuarios: [{ nombre: 'ana', clave_ssh: true }], archivos: NOPASSWD, paquetes: { instalados: ['postgresql-server', 'python3-psycopg2'] } }] } as Partial<BashStateInput>),
+    )
+    const g = await run('ansible-galaxy collection install -r requirements.yml')
+    expect(g.out).toContain("community.postgresql:3.14.2 was installed successfully")
+    expect((await run('ansible-galaxy collection install -r requirements.yml')).out).toContain('Nothing to do. All requested collections are already installed.')
+    expect((await run('ansible-galaxy collection install "community.postgresql:>=9.0.0"')).out).toContain('Could not satisfy the following requirements')
+    await run('ansible db01 -b -m ansible.builtin.command -a "postgresql-setup --initdb"')
+    await run('ansible db01 -b -m ansible.builtin.service -a "name=postgresql state=started"')
+    const u1 = await run('ansible db01 -b --become-user postgres -m community.postgresql.postgresql_user -a name=tienda')
+    expect(u1.out).toContain('CHANGED')
+    const u2 = await run('ansible db01 -b --become-user postgres -m community.postgresql.postgresql_user -a name=tienda')
+    expect(u2.out).toContain('SUCCESS')
+    const q = await run(`ssh db01 "sudo -u postgres psql -tAqX -c \\"SELECT 1 FROM pg_roles WHERE rolname='tienda'\\""`)
+    expect(q.out.trim()).toBe('1')
+  })
 })
 
 describe('ansible-lint (reglas)', () => {
@@ -230,6 +248,16 @@ describe('ansible-lint (reglas)', () => {
     const r = lintFiles([{ name: 'ok.yml', text: "- name: Web\n  hosts: web\n  tasks:\n    - name: Instalar nginx\n      ansible.builtin.package:\n        name: nginx\n        state: present\n    - name: Página\n      ansible.builtin.copy:\n        content: hola\n        dest: /tmp/a\n        mode: '0644'\n" }])
     expect(r.failures).toBe(0)
     expect(r.output).toContain("Last profile that met the validation criteria was 'production'")
+  })
+  it('command con args creates no es no-changed-when; el meta de ejemplo de galaxy sí falla', () => {
+    const tasks = "- name: Cluster\n  ansible.builtin.command: postgresql-setup --initdb\n  args:\n    creates: /var/lib/pgsql/data/PG_VERSION\n"
+    expect(lintFiles([{ name: 'roles/pg/tasks/main.yml', text: tasks }]).failures).toBe(0)
+    const meta = 'galaxy_info:\n  author: your name\n  description: your role description\n  company: your company (optional)\n  license: license (GPL-2.0-or-later, MIT, etc)\n  min_ansible_version: 2.1\n  galaxy_tags: []\n\ndependencies: []\n'
+    const r = lintFiles([{ name: 'roles/pg/meta/main.yml', text: meta }])
+    expect(r.output).toContain("schema[meta]: $.galaxy_info.min_ansible_version 2.1 is not of type 'string'")
+    expect(r.output).toContain('meta-incorrect: Should change default metadata: author')
+    expect(r.failures).toBe(5)
+    expect(lintFiles([{ name: 'roles/pg/meta/main.yml', text: 'galaxy_info:\n  author: Ana\n  description: Base de datos\n  license: MIT\n  min_ansible_version: "2.16"\ndependencies: []\n' }]).failures).toBe(0)
   })
 })
 

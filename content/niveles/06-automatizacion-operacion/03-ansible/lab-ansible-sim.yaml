@@ -1,0 +1,354 @@
+tipo: terminal
+shell: bash
+titulo: Un proyecto de Ansible que levanta la tienda desde cero
+descripcion: >-
+  En admin01 (Ubuntu, usuario ana) tenés ansible-core, ansible-lint y Git, y en ~/infra un
+  ansible.cfg ya preparado (inventario, carpeta de roles y la contraseña de Vault en ~/.vault_pass).
+  web01 (192.168.10.11) y db01 (192.168.10.31) son dos Rocky Linux recién instalados: entrás por
+  SSH con clave como ana, que tiene sudo sin contraseña. Al final, todo el proyecto tiene que quedar
+  en un repositorio de Git.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [ansible-core, ansible-lint, git] }
+  directorio: /home/ana/infra
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/.gitconfig: { dueno: ana, contenido: "[user]\n\tname = Ana Gómez\n\temail = ana@ejemplo.test\n[init]\n\tdefaultBranch = main\n" }
+    /home/ana/.vault_pass: { dueno: ana, modo: "600", contenido: "clave-del-lab-2026\n" }
+    /home/ana/infra/ansible.cfg: { dueno: ana, contenido: "[defaults]\ninventory = inventario.ini\nroles_path = roles\ninterpreter_python = auto_silent\nvault_password_file = ~/.vault_pass\n" }
+  servidores:
+    - { hostname: web01, ip: 192.168.10.11, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: db01, ip: 192.168.10.31, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+pasos:
+  - consigna: >-
+      Escribí el inventario inventario.ini con el grupo web (web01) y el grupo db (db01), y comprobá
+      que Ansible llega a los dos con el módulo ping.
+    verificar:
+      - { archivo: /home/ana/infra/inventario.ini, contenido_incluye: "[web]" }
+      - { salida_contiene: "web01 | SUCCESS" }
+      - { salida_contiene: "db01 | SUCCESS" }
+    pistas:
+      - "Dos grupos entre corchetes, cada uno con su equipo debajo."
+      - "ansible all -m ansible.builtin.ping"
+    solucion:
+      - printf '[web]\nweb01\n\n[db]\ndb01\n' > inventario.ini
+      - ansible all -m ansible.builtin.ping
+    explicacion: >-
+      Con el inventario y el ansible.cfg en la carpeta del proyecto, cualquier comando de Ansible
+      que corras desde ahí ya sabe a quién apuntar.
+  - consigna: >-
+      Creá el rol base con ansible-galaxy (en roles/base). Tiene que instalar los paquetes de la
+      variable base_paquetes (por defecto chrony y tree), dejar chronyd iniciado y habilitado, y
+      escribir /etc/motd desde la plantilla motd.j2 con el nombre del equipo. Aplicalo a todos con un
+      play en site.yml.
+    verificar:
+      - { en: web01, verificar: { paquete: tree } }
+      - { en: db01, verificar: { paquete: tree } }
+      - { en: web01, verificar: { servicio: chronyd, activo: true, habilitado: true } }
+      - { en: db01, verificar: { archivo: /etc/motd, contenido_incluye: "db01" } }
+    pistas:
+      - "ansible-galaxy role init roles/base crea toda la estructura."
+      - "La lista va en roles/base/defaults/main.yml; las tareas, en roles/base/tasks/main.yml (package, service y template); la plantilla, en roles/base/templates/motd.j2."
+      - "site.yml: un play con hosts: all, become: true y roles: [base]."
+    solucion:
+      - ansible-galaxy role init roles/base
+      - printf 'base_paquetes:\n  - chrony\n  - tree\n' > roles/base/defaults/main.yml
+      - |-
+        cat > roles/base/tasks/main.yml <<'EOF'
+        - name: Paquetes de base
+          ansible.builtin.package:
+            name: "{{ base_paquetes }}"
+            state: present
+        - name: Hora sincronizada
+          ansible.builtin.service:
+            name: chronyd
+            state: started
+            enabled: true
+        - name: Mensaje de bienvenida
+          ansible.builtin.template:
+            src: motd.j2
+            dest: /etc/motd
+            mode: '0644'
+        EOF
+      - >-
+        echo '{{ inventory_hostname }}: configurado con Ansible, no lo cambies a mano.' > roles/base/templates/motd.j2
+      - |-
+        cat > site.yml <<'EOF'
+        - name: Base para todos
+          hosts: all
+          become: true
+          roles:
+            - base
+        EOF
+      - ansible-playbook site.yml
+    explicacion: >-
+      El rol junta todo lo que hace falta para una tarea completa, y lo que puede cambiar
+      (la lista de paquetes) queda en defaults, para pisarlo desde group_vars sin tocar el rol.
+  - consigna: >-
+      Ahora el rol web para el grupo web: nginx instalado, iniciado y habilitado; el sitio en
+      /etc/nginx/conf.d/tienda.conf desde una plantilla con el puerto en la variable web_puerto (80
+      por defecto), con un handler que recargue nginx; la página /usr/share/nginx/html/index.html con
+      el texto "Tienda en" y el nombre del equipo; y el servicio http abierto en firewalld. El módulo
+      de firewalld viene en la colección ansible.posix: anotala en requirements.yml (junto con
+      community.postgresql y ansible.windows, que vas a usar después) e instalalas. Al final,
+      comprobá con curl que web01 responde.
+    verificar:
+      - { en: web01, verificar: { servicio: nginx, activo: true, habilitado: true } }
+      - { en: web01, verificar: { archivo: /etc/nginx/conf.d/tienda.conf, contenido_incluye: "listen 80" } }
+      - { en: web01, verificar: { firewall_permite: 80/tcp } }
+      - { salida_contiene: "Tienda en web01" }
+    pistas:
+      - "requirements.yml: collections: con una lista de name: (y version:). Se instalan con ansible-galaxy collection install -r requirements.yml."
+      - "En roles/web: defaults (web_puerto: 80), tasks (package, template con notify, copy, service, ansible.posix.firewalld con service: http, permanent: true, immediate: true y state: enabled), handlers y templates/tienda.conf.j2."
+      - "Sumá a site.yml un play para hosts: web con roles: [web], y después curl http://web01/"
+    solucion:
+      - |-
+        cat > requirements.yml <<'EOF'
+        collections:
+          - name: ansible.posix
+            version: ">=1.5.0"
+          - name: community.postgresql
+            version: ">=3.0.0"
+          - name: ansible.windows
+            version: ">=2.0.0"
+        EOF
+      - ansible-galaxy collection install -r requirements.yml
+      - ansible-galaxy role init roles/web
+      - "echo 'web_puerto: 80' > roles/web/defaults/main.yml"
+      - |-
+        cat > roles/web/tasks/main.yml <<'EOF'
+        - name: Instalar nginx
+          ansible.builtin.package:
+            name: nginx
+            state: present
+        - name: Sitio de la tienda
+          ansible.builtin.template:
+            src: tienda.conf.j2
+            dest: /etc/nginx/conf.d/tienda.conf
+            mode: '0644'
+          notify: Recargar nginx
+        - name: Página de inicio
+          ansible.builtin.copy:
+            content: "Tienda en {{ inventory_hostname }}\n"
+            dest: /usr/share/nginx/html/index.html
+            mode: '0644'
+        - name: Servicio nginx activo
+          ansible.builtin.service:
+            name: nginx
+            state: started
+            enabled: true
+        - name: HTTP en el firewall
+          ansible.posix.firewalld:
+            service: http
+            permanent: true
+            immediate: true
+            state: enabled
+        EOF
+      - |-
+        cat > roles/web/handlers/main.yml <<'EOF'
+        - name: Recargar nginx
+          ansible.builtin.service:
+            name: nginx
+            state: reloaded
+        EOF
+      - |-
+        cat > roles/web/templates/tienda.conf.j2 <<'EOF'
+        server {
+            listen {{ web_puerto }};
+            server_name {{ inventory_hostname }};
+            root /usr/share/nginx/html;
+        }
+        EOF
+      - |-
+        cat >> site.yml <<'EOF'
+        - name: Servidores web
+          hosts: web
+          become: true
+          roles:
+            - web
+        EOF
+      - ansible-playbook site.yml
+      - curl http://web01/
+    explicacion: >-
+      Las colecciones van en requirements.yml con la versión acotada, así cualquiera que clone el
+      repositorio instala lo mismo. El handler solo recarga nginx cuando la plantilla cambia: en
+      la próxima corrida, si nada cambió, nginx ni se entera.
+  - consigna: >-
+      Falta la base de datos. Guardá la contraseña del usuario de la aplicación ("Tienda#DB-2026") en
+      group_vars/db/vault.yml como vault_postgresql_password, cifrada, y en group_vars/db/vars.yml
+      definí postgresql_password a partir de ella. Después escribí el rol postgresql para el grupo db:
+      instala postgresql-server y python3-psycopg2, crea el cluster con postgresql-setup --initdb
+      solo si no existe, deja el servicio postgresql iniciado y habilitado, y crea el usuario y la base
+      tienda (con become_user postgres, y sin mostrar la contraseña).
+    verificar:
+      - { archivo: /home/ana/infra/group_vars/db/vault.yml, contenido_incluye: "$ANSIBLE_VAULT;1.1;AES256" }
+      - { en: db01, verificar: { servicio: postgresql, activo: true, habilitado: true } }
+      - { en: db01, verificar: { base_datos: tienda, motor: postgresql } }
+      - { salida_no_contiene: "Tienda#DB-2026" }
+    pistas:
+      - "vars.yml tiene postgresql_password con la variable de vault.yml entre llaves dobles; vault.yml se cifra con ansible-vault encrypt (la contraseña de Vault ya está configurada)."
+      - "El cluster: ansible.builtin.command con postgresql-setup --initdb y, en args, creates: /var/lib/pgsql/data/PG_VERSION."
+      - "community.postgresql.postgresql_user (con no_log: true) y community.postgresql.postgresql_db (con owner), las dos con become_user: postgres. Y un play más en site.yml para hosts: db."
+    solucion:
+      - mkdir -p group_vars/db
+      - >-
+        echo 'postgresql_password: "{{ vault_postgresql_password }}"' > group_vars/db/vars.yml
+      - >-
+        echo 'vault_postgresql_password: "Tienda#DB-2026"' > group_vars/db/vault.yml
+      - ansible-vault encrypt group_vars/db/vault.yml
+      - ansible-galaxy role init roles/postgresql
+      - >-
+        printf 'postgresql_base: tienda\npostgresql_usuario: tienda\n' > roles/postgresql/defaults/main.yml
+      - |-
+        cat > roles/postgresql/tasks/main.yml <<'EOF'
+        - name: Paquetes de PostgreSQL
+          ansible.builtin.package:
+            name:
+              - postgresql-server
+              - python3-psycopg2
+            state: present
+        - name: Cluster inicial
+          ansible.builtin.command: postgresql-setup --initdb
+          args:
+            creates: /var/lib/pgsql/data/PG_VERSION
+        - name: PostgreSQL activo
+          ansible.builtin.service:
+            name: postgresql
+            state: started
+            enabled: true
+        - name: Usuario de la aplicación
+          community.postgresql.postgresql_user:
+            name: "{{ postgresql_usuario }}"
+            password: "{{ postgresql_password }}"
+          become: true
+          become_user: postgres
+          no_log: true
+        - name: Base de la aplicación
+          community.postgresql.postgresql_db:
+            name: "{{ postgresql_base }}"
+            owner: "{{ postgresql_usuario }}"
+          become: true
+          become_user: postgres
+        EOF
+      - |-
+        cat >> site.yml <<'EOF'
+        - name: Bases de datos
+          hosts: db
+          become: true
+          roles:
+            - postgresql
+        EOF
+      - ansible-playbook site.yml
+    explicacion: >-
+      creates hace idempotente un comando: si el archivo ya existe, no lo corre. become_user postgres
+      hace que los módulos de la base entren con el usuario dueño del servicio (como sudo -u postgres
+      psql), y no_log evita que la contraseña quede en la salida o en un log.
+  - consigna: >-
+      Comprobá que el proyecto es idempotente: una segunda corrida de site.yml no tiene que cambiar
+      nada en ningún equipo.
+    verificar:
+      - { salida_regex: "web01\\s+: ok=\\d+\\s+changed=0 " }
+      - { salida_regex: "db01\\s+: ok=\\d+\\s+changed=0 " }
+    pistas:
+      - "ansible-playbook site.yml y mirá el PLAY RECAP: changed=0 en los dos."
+    solucion:
+      - ansible-playbook site.yml
+    explicacion: >-
+      Si la segunda corrida da changed, algo no es idempotente (un comando sin creates o
+      changed_when, una plantilla que cambia sola) y en producción reiniciaría servicios sin motivo.
+      Ese es el caso del módulo.
+  - consigna: >-
+      Pasale ansible-lint a todo el proyecto y corregí lo que marque hasta que pase sin fallas. Ojo:
+      también revisa lo que dejó ansible-galaxy role init (los datos de ejemplo de meta/main.yml y el
+      play de tests/test.yml).
+    verificar:
+      - { salida_contiene: "Passed: 0 failure(s)" }
+    pistas:
+      - "ansible-lint, sin argumentos, revisa todo el proyecto y muestra la regla, el archivo y la línea de cada problema."
+      - "En cada meta/main.yml: author, description y license propios, y min_ansible_version entre comillas (\"2.16\"). Las carpetas tests/ se pueden borrar: para probar roles está Molecule."
+    solucion:
+      - ansible-lint
+      - rm -r roles/base/tests roles/web/tests roles/postgresql/tests
+      - >-
+        for r in base web postgresql; do printf 'galaxy_info:\n  author: Ana Gómez\n  description: Rol %s del laboratorio\n  license: MIT\n  min_ansible_version: "2.16"\ndependencies: []\n' "$r" > roles/$r/meta/main.yml; done
+      - ansible-lint
+    explicacion: >-
+      El esqueleto de ansible-galaxy trae valores de ejemplo que hay que completar: meta/main.yml es
+      lo que documenta el rol (quién lo mantiene, para qué es, qué versión de Ansible necesita). Con
+      el proyecto limpio, ansible-lint puede ir al pre-commit y a la integración continua.
+  - consigna: >-
+      Sumá el playbook windows.yml de la lección 6.3.7 (IIS, la página con win_copy, el puerto 80
+      con win_firewall_rule y W3SVC iniciado y automático) para el grupo windows, y revisalo con
+      --syntax-check: los servidores Windows recién los vas a tener en la parte 2.
+    verificar:
+      - { archivo: /home/ana/infra/windows.yml, contenido_incluye: "win_feature" }
+      - { salida_contiene: "playbook: windows.yml" }
+    pistas:
+      - "hosts: windows, sin become, con ansible.windows.win_feature, ansible.windows.win_copy, community.windows.win_firewall_rule y ansible.windows.win_service."
+      - "Si --syntax-check no encuentra community.windows, sumala a requirements.yml e instalala."
+    solucion:
+      - |-
+        cat >> requirements.yml <<'EOF'
+          - name: community.windows
+            version: ">=2.0.0"
+        EOF
+      - ansible-galaxy collection install -r requirements.yml
+      - |-
+        cat > windows.yml <<'EOF'
+        - name: Servidores web Windows
+          hosts: windows
+          tasks:
+            - name: IIS
+              ansible.windows.win_feature:
+                name: Web-Server
+                state: present
+                include_management_tools: true
+            - name: Página de inicio
+              ansible.windows.win_copy:
+                content: "Tienda en {{ inventory_hostname }}"
+                dest: C:\inetpub\wwwroot\index.html
+            - name: Puerto 80 en el firewall
+              community.windows.win_firewall_rule:
+                name: HTTP
+                localport: 80
+                action: allow
+                direction: in
+                protocol: tcp
+                state: present
+                enabled: true
+            - name: IIS activo
+              ansible.windows.win_service:
+                name: W3SVC
+                state: started
+                start_mode: auto
+        EOF
+      - ansible-playbook windows.yml --syntax-check
+    explicacion: >-
+      --syntax-check revisa el YAML y que los módulos existan, sin conectarse a ningún equipo: sirve
+      aunque el grupo windows todavía esté vacío. En la parte 2 lo vas a correr contra una VM de
+      verdad.
+  - consigna: >-
+      Por último, convertí ~/infra en un repositorio de Git y hacé el primer commit con todo el
+      proyecto. Las colecciones instaladas no viven en la carpeta y la contraseña de Vault tampoco:
+      revisá con git status que no se cuele nada que no corresponda.
+    verificar:
+      - { git_repo: /home/ana/infra, commits_min: 1, versionado: roles/web/tasks/main.yml, limpio: true }
+      - { git_repo: /home/ana/infra, versionado: group_vars/db/vault.yml }
+      - { git_repo: /home/ana/infra, versionado: windows.yml }
+    pistas:
+      - "git init, git status para ver qué va a entrar, git add . y git commit -m ..."
+    solucion:
+      - git init
+      - git status
+      - git add .
+      - git commit -m "Proyecto de Ansible del laboratorio"
+    explicacion: >-
+      vault.yml entra cifrado y la contraseña queda en ~/.vault_pass, afuera del repositorio. A
+      partir de acá, cada cambio va por una rama y un pull request, como en el módulo 6.1, y en la
+      parte 2 este repositorio va a tu servidor de Git.
