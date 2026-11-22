@@ -1,0 +1,106 @@
+tipo: pasos
+titulo: Un servidor de Git propio, con ramas protegidas, revisión y validaciones
+descripcion: >-
+  Vas a montar Gitea en una VM del laboratorio (o usar una cuenta gratuita de GitHub, si preferís
+  no instalar nada), subir ahí el repositorio de configuraciones del laboratorio, proteger main
+  para que todo entre por pull request con revisión, y sumar validaciones automáticas con el
+  framework pre-commit. Hace falta una VM chica (git01: 1 vCPU, 1 GB, 20 GB) y unas dos horas
+  y media.
+pasos:
+  - titulo: Gitea en git01
+    detalle: >-
+      Bajá el binario de la última versión estable desde dl.gitea.com (la página de descargas
+      oficial), con un usuario de sistema propio y un servicio de systemd. La configuración inicial
+      se termina desde la web: base de datos SQLite (alcanza para un equipo chico), el dominio
+      git01.lab y la cuenta de administración.
+    comandos:
+      - sudo adduser --system --shell /bin/bash --group --disabled-password --home /home/git git
+      - sudo mkdir -p /var/lib/gitea/{custom,data,log} /etc/gitea && sudo chown -R git:git /var/lib/gitea && sudo chown root:git /etc/gitea && sudo chmod 770 /etc/gitea
+      - sudo install -m 755 gitea /usr/local/bin/gitea
+      - sudo systemctl daemon-reload && sudo systemctl enable --now gitea
+    archivo:
+      ruta: /etc/systemd/system/gitea.service
+      contenido: |
+        [Unit]
+        Description=Gitea
+        After=network.target
+
+        [Service]
+        User=git
+        Group=git
+        WorkingDirectory=/var/lib/gitea/
+        ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini
+        Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
+        Restart=always
+
+        [Install]
+        WantedBy=multi-user.target
+    variantes:
+      - nombre: Con GitHub
+        detalle: "Creá una cuenta gratuita y un repositorio privado llamado lab-infra. Los pasos siguientes son iguales; la protección de rama está en Settings, Branches."
+    comprobar: http://git01.lab:3000 muestra la configuración inicial y, al terminarla, podés entrar con la cuenta de administración.
+  - titulo: Tu clave SSH y el repositorio
+    detalle: >-
+      En tu perfil de Gitea, Settings, SSH / GPG Keys, agregá tu clave pública. Creá el
+      repositorio lab-infra (vacío) y subí el de ~/lab del laboratorio simulado, o armalo con las
+      configuraciones de los niveles anteriores (nginx, DNS, scripts), sin secretos.
+    comandos:
+      - cd ~/lab && git remote set-url origin git@git01.lab:ana/lab-infra.git
+      - git push -u origin main --tags
+    comprobar: En la web de Gitea se ven los archivos, los commits y la etiqueta v1.
+  - titulo: main protegida y una segunda cuenta para revisar
+    detalle: >-
+      Creá un segundo usuario (revisor) y sumalo como colaborador con permiso de escritura. En el
+      repositorio, Settings, Branches, agregá una regla para main: sin push directo, con al menos
+      una aprobación, y que las aprobaciones viejas se descarten si hay commits nuevos.
+    comprobar: Un git push directo a main se rechaza con un mensaje de rama protegida.
+  - titulo: Validaciones con pre-commit
+    detalle: >-
+      El framework pre-commit instala y corre los hooks por vos, con una lista versionada en el
+      repositorio. pre-commit autoupdate pone las versiones más nuevas de cada uno.
+    comandos:
+      - sudo apt install -y pipx && pipx install pre-commit
+      - pre-commit install
+      - pre-commit autoupdate
+      - pre-commit run --all-files
+    archivo:
+      ruta: ~/lab/.pre-commit-config.yaml
+      contenido: |
+        repos:
+          - repo: https://github.com/pre-commit/pre-commit-hooks
+            rev: v5.0.0
+            hooks:
+              - id: trailing-whitespace
+              - id: end-of-file-fixer
+              - id: check-yaml
+              - id: check-added-large-files
+              - id: detect-private-key
+          - repo: https://github.com/shellcheck-py/shellcheck-py
+            rev: v0.10.0.1
+            hooks:
+              - id: shellcheck
+          - repo: https://github.com/gitleaks/gitleaks
+            rev: v8.21.2
+            hooks:
+              - id: gitleaks
+    comprobar: pre-commit run --all-files termina con todos los hooks en Passed (corregí lo que marque y commiteá el archivo .pre-commit-config.yaml).
+    si_falla: Si pre-commit install dice que ya hay un core.hooksPath configurado, sacalo con git config --unset core.hooksPath (el framework reemplaza a la carpeta hooks/).
+  - titulo: Un cambio con pull request
+    detalle: >-
+      Agregá a la zona DNS un registro para git01, en una rama. Subila, abrí el pull request en la
+      web, y entrá como revisor para comentar una línea y aprobar. Fusioná desde la web, con la
+      opción de borrar la rama.
+    comandos:
+      - git switch -c dns-git01
+      - echo 'git01 IN A 192.168.10.40' >> dns/lab.zona
+      - git commit -am "Registro DNS de git01"
+      - git push -u origin dns-git01
+      - git switch main && git pull
+    comprobar: El pull request figura como fusionado con la aprobación del revisor, y tu main local tiene el commit.
+  - titulo: Probar las redes de seguridad
+    detalle: Intentá colar un error y un secreto, y comprobá dónde los frenan.
+    comandos:
+      - echo 'if true; then echo roto' > scripts/roto.sh && git add scripts/roto.sh && git commit -m "prueba"
+      - echo 'token=ghp_abcdefghijklmnopqrstuvwxyz0123456789' > token.txt && git add token.txt && git commit -m "prueba"
+      - git restore --staged . && rm -f scripts/roto.sh token.txt
+    comprobar: shellcheck frena el primer commit y gitleaks el segundo, y git status queda limpio al final.

@@ -1,0 +1,134 @@
+tipo: terminal
+shell: bash
+titulo: El repositorio del laboratorio, de cero a un servidor que lo usa
+descripcion: >-
+  En ~/lab (admin01, usuario ana) juntaste las configuraciones del laboratorio: el sitio de nginx,
+  la zona DNS, un script y los hooks que querés usar. También quedó un .env con una clave. git01
+  (192.168.10.40) va a tener el repositorio central y web01 (192.168.10.11) es el servidor web que
+  va a tomar su configuración de ahí. Entrás por ssh como ana a los dos, y desde web01 también se
+  llega a git01.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [git, gitleaks] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/.gitconfig: { dueno: ana, contenido: "[user]\n\tname = Ana Gómez\n\temail = ana@ejemplo.test\n[init]\n\tdefaultBranch = main\n" }
+    /home/ana/lab/nginx/web.conf: { dueno: ana, contenido: "server {\n    listen 80;\n    server_name web01.lab;\n    root /var/www/html;\n}\n" }
+    /home/ana/lab/dns/lab.zona: { dueno: ana, contenido: "$TTL 3600\n@   IN SOA ns1.lab. admin.lab. (2026112201 3600 900 604800 300)\nweb01 IN A 192.168.10.11\n" }
+    /home/ana/lab/scripts/estado.sh: { dueno: ana, modo: "755", contenido: "#!/bin/bash\nfor s in nginx ssh; do\n  systemctl is-active \"$s\"\ndone\n" }
+    /home/ana/lab/hooks/pre-commit:
+      dueno: ana
+      modo: "755"
+      contenido: |
+        #!/bin/bash
+        fallo=0
+        for f in $(git diff --cached --name-only | grep '\.sh$'); do
+          bash -n "$f" || { echo "Error de sintaxis en $f"; fallo=1; }
+        done
+        gitleaks protect --staged || { echo "Hay algo que parece un secreto"; fallo=1; }
+        exit $fallo
+    /home/ana/lab/.env: { dueno: ana, contenido: "API_TOKEN=ghp_Lab2026abcdefghijklmnopqrstuvwxyz0123\n" }
+  servidores:
+    - { hostname: git01, ip: 192.168.10.40, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: ana, clave_ssh: true }], paquetes: { instalados: [git] } }
+    - { hostname: web01, ip: 192.168.10.11, clave_conocida: si, distro: ubuntu, usuarios: [{ nombre: ana, clave_ssh: true, sudo: true }], paquetes: { instalados: [git] }, archivos: { /home/ana/.gitconfig: { dueno: ana, contenido: "[user]\n\tname = Ana Gómez\n\temail = ana@ejemplo.test\n" } } }
+pasos:
+  - consigna: Creá en git01 el repositorio central vacío /home/ana/lab.git, con main como rama inicial.
+    verificar:
+      - { en: git01, verificar: { git_repo: /home/ana/lab.git } }
+    pistas:
+      - "ssh ana@git01 git init --bare -b main /home/ana/lab.git"
+    solucion:
+      - ssh ana@git01 git init --bare -b main /home/ana/lab.git
+    explicacion: >-
+      Un repositorio bare no tiene archivos sueltos, solo la historia: es lo que se usa para un
+      repositorio central. -b main evita que quede apuntando a master mientras todos usan main (y
+      que los clones salgan vacíos).
+  - consigna: >-
+      Convertí ~/lab en un repositorio que ignore el .env, activá los hooks de la carpeta hooks/,
+      hacé el primer commit y subilo a git01 como origin.
+    verificar:
+      - { git_repo: /home/ana/lab, commits_min: 1, no_versionado: .env, versionado: hooks/pre-commit, hook: pre-commit, sincronizado: true }
+      - { en: git01, verificar: { git_repo: /home/ana/lab.git, commits_min: 1 } }
+    pistas:
+      - "cd ~/lab, git init y echo .env > .gitignore"
+      - "git config core.hooksPath hooks, git add ., git commit -m ..."
+      - "git remote add origin ana@git01:lab.git y git push -u origin main"
+    solucion:
+      - cd ~/lab
+      - git init
+      - echo .env > .gitignore
+      - git config core.hooksPath hooks
+      - git add .
+      - git status
+      - git commit -m "Configuraciones del laboratorio"
+      - git remote add origin ana@git01:lab.git
+      - git push -u origin main
+    explicacion: >-
+      El .gitignore va antes del primer git add: si no, el .env (con un token) entraba en el
+      primer commit. Fijate que el hook ya corrió en ese commit.
+  - consigna: >-
+      En una rama "zona-db", agregá el registro "db01 IN A 192.168.10.12" a la zona, subí el serial a
+      2026112202, y sumá el script scripts/db.sh con estas dos líneas: "#!/bin/bash" y
+      "pg_isready -h db01". Commiteá y subí la rama.
+    verificar:
+      - { en: git01, verificar: { git_repo: /home/ana/lab.git, ramas: [main, zona-db] } }
+      - { git_repo: /home/ana/lab, versionado: scripts/db.sh, rama: zona-db }
+    pistas:
+      - "git switch -c zona-db"
+      - "echo 'db01 IN A 192.168.10.12' >> dns/lab.zona y sed -i 's/2026112201/2026112202/' dns/lab.zona"
+      - "printf '#!/bin/bash\\npg_isready -h db01\\n' > scripts/db.sh, git add, git commit y git push -u origin zona-db"
+    solucion:
+      - git switch -c zona-db
+      - echo 'db01 IN A 192.168.10.12' >> dns/lab.zona
+      - sed -i 's/2026112201/2026112202/' dns/lab.zona
+      - printf '#!/bin/bash\npg_isready -h db01\n' > scripts/db.sh
+      - chmod +x scripts/db.sh
+      - git add dns/lab.zona scripts/db.sh
+      - git commit -m "Registro DNS y chequeo de db01"
+      - git push -u origin zona-db
+    explicacion: >-
+      En el laboratorio real, este es el momento del pull request en Gitea o GitHub. Acá hacemos
+      de revisores nosotros: mirá el cambio con git diff main..zona-db antes de fusionar.
+  - consigna: >-
+      La revisión dio el visto bueno: fusioná zona-db en main, subí main, borrá la rama (local y
+      remota) y marcá el estado con la etiqueta anotada v1 ("Primera versión del laboratorio"),
+      subiéndola también.
+    verificar:
+      - { git_repo: /home/ana/lab, rama: main, versionado: scripts/db.sh, sincronizado: true, etiqueta: v1, sin_rama: zona-db }
+      - { en: git01, verificar: { git_repo: /home/ana/lab.git, etiqueta: v1, sin_rama: zona-db } }
+    pistas:
+      - "git switch main, git merge zona-db y git push"
+      - "git branch -d zona-db y git push origin --delete zona-db"
+      - "git tag -a v1 -m \"Primera versión del laboratorio\" y git push --tags"
+    solucion:
+      - git diff main..zona-db
+      - git switch main
+      - git merge zona-db
+      - git push
+      - git branch -d zona-db
+      - git push origin --delete zona-db
+      - git tag -a v1 -m "Primera versión del laboratorio"
+      - git push --tags
+  - consigna: >-
+      Ahora web01 toma su configuración del repositorio: clonalo en web01 en /home/ana/lab y dejalo
+      en la versión v1.
+    verificar:
+      - { en: web01, verificar: { git_repo: /home/ana/lab, etiqueta: v1 } }
+      - { en: web01, verificar: { archivo: /home/ana/lab/nginx/web.conf } }
+    pistas:
+      - "ssh ana@web01 git clone ana@git01:lab.git /home/ana/lab"
+      - "ssh ana@web01 git -C /home/ana/lab switch --detach v1"
+    solucion:
+      - ssh ana@web01 git clone ana@git01:lab.git /home/ana/lab
+      - ssh ana@web01 git -C /home/ana/lab switch --detach v1
+      - ssh ana@web01 git -C /home/ana/lab log --oneline -1
+    explicacion: >-
+      El servidor queda exactamente en v1, aunque main siga avanzando. Pasar a v2 es un git fetch y
+      un switch. En el módulo 6.3, Ansible hace esto mismo (y aplica la configuración) en todos los
+      servidores a la vez, en lugar de entrar a cada uno.

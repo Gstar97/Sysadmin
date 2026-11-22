@@ -1,0 +1,148 @@
+tipo: troubleshooting
+titulo: La contraseña que llegó a GitHub
+descripcion: >-
+  Incidente simulado. El equipo de infraestructura de una empresa de logística tiene su
+  repositorio de configuraciones en GitHub. Por un error de configuración, el repositorio
+  estuvo público dos días. Un desarrollador había commiteado hace una semana config/erp.ini con la
+  contraseña del usuario de la base de datos del ERP. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Viernes, 16:10. Llega un correo automático de GitHub y, casi al mismo tiempo, un mensaje de
+      alguien de afuera que dice haber encontrado una contraseña en el repositorio. El repositorio
+      ya volvió a ser privado.
+    evidencia:
+      - titulo: El aviso
+        contenido: |2
+            GitHub secret scanning: Possible secret detected
+            Repository: >-
+              logistica/infra   File: config/erp.ini   Commit: 9c41e7a
+            Detected: database password
+      - titulo: git log -S en el repositorio
+        contenido: |2
+            $ git log --oneline -S "ERP-pg-2026"
+            9c41e7a Configuración del ERP para el nuevo servidor
+    opciones:
+      - texto: Cambiar ya la contraseña del usuario de la base de datos y actualizarla donde se usa
+        ir_a: n_rotar
+        minutos: 30
+      - texto: Borrar la línea de config/erp.ini, commitear y subir
+        ir_a: n_borrar
+        minutos: 10
+      - texto: Limpiar la historia con git filter-repo y subir con --force, para que la contraseña desaparezca
+        ir_a: n_limpiar_primero
+        minutos: 45
+  n_borrar:
+    situacion: >-
+      El archivo ya no tiene la contraseña, pero el commit 9c41e7a sigue en la historia, en
+      GitHub y en cada copia que alguien clonó mientras fue público. git show 9c41e7a la muestra
+      igual que antes. Y la contraseña sigue siendo válida.
+    evidencia:
+      - titulo: git show 9c41e7a:config/erp.ini
+        contenido: |2
+            [base]
+            host = db01.logistica.internal
+            usuario = erp
+            password = ERP-pg-2026-Kx!
+    opciones:
+      - texto: Cambiar la contraseña ya mismo
+        ir_a: n_rotar
+        minutos: 30
+  n_limpiar_primero:
+    situacion: >-
+      La historia queda limpia en GitHub, pero pasaron 45 minutos con una contraseña válida en
+      manos de quien la haya copiado mientras el repositorio fue público, y las copias que se
+      clonaron en esos dos días no se limpian con nada. Limpiar la historia sirve, pero lo urgente
+      era otra cosa.
+    evidencia:
+      - titulo: Lo que no cambió
+        contenido: |2
+            La contraseña ERP-pg-2026-Kx! sigue funcionando en db01.
+    opciones:
+      - texto: Cambiar la contraseña ya mismo
+        ir_a: n_rotar
+        minutos: 30
+  n_rotar:
+    situacion: >-
+      Contraseña nueva en PostgreSQL para el usuario erp, y el ERP actualizado (la nueva va en
+      /etc/erp/secretos.env de cada servidor, no en el repositorio); el ERP sigue andando. La
+      vieja ya no sirve. Ahora: ¿alguien la usó mientras estuvo expuesta?
+    evidencia:
+      - titulo: db01, log de PostgreSQL (con log_connections activado)
+        contenido: |2
+            2026-11-20 03:12:44 connection authorized: user=erp database=erp host=185.220.101.47
+            2026-11-20 03:12:51 statement: SELECT * FROM clientes LIMIT 1000
+            (el resto de las conexiones de erp, desde 10.20.0.15, el servidor del ERP)
+      - titulo: pg_hba.conf de db01
+        contenido: |2
+            host  erp  erp  0.0.0.0/0  scram-sha-256
+    opciones:
+      - texto: Tratarlo como un incidente con datos expuestos, avisar, y cerrar el acceso a la base solo para el servidor del ERP
+        ir_a: n_incidente
+        minutos: 60
+      - texto: Como la contraseña ya cambió, alcanza con eso y seguir con la limpieza
+        ir_a: n_rotar
+        minutos: 10
+        consecuencia: >-
+          Alguien de afuera se conectó y leyó mil clientes. Eso es una filtración de datos
+          personales, con obligaciones de aviso, y la base acepta conexiones desde cualquier lugar.
+          Cambiar la contraseña no lo deshace.
+  n_incidente:
+    situacion: >-
+      Aviso a la gerencia y al responsable de datos personales (que evalúa la notificación según la
+      ley), pg_hba.conf restringido a 10.20.0.15, y el firewall de db01 cerrado al resto. Ahora sí,
+      limpiar la historia del repositorio para que la contraseña vieja no siga circulando, aunque
+      ya no sirva.
+    evidencia:
+      - titulo: El plan para el repositorio
+        contenido: |2
+            1. Avisar al equipo: no pushear hasta nuevo aviso.
+            2. Clon nuevo, git filter-repo --replace-text con la contraseña vieja.
+            3. git push --force a GitHub (desactivando un momento la protección de main).
+            4. Todos borran su copia y clonan de nuevo.
+            5. Pedir a GitHub que borre los datos en caché del commit viejo.
+    opciones:
+      - texto: Ejecutar el plan tal cual
+        ir_a: n_limpio
+        minutos: 60
+      - texto: Hacer el filter-repo en la copia de cada uno, sin avisar
+        ir_a: n_incidente
+        minutos: 30
+        consecuencia: >-
+          Cada copia reescrita tiene una historia distinta, y la primera persona que hace push
+          normal con su copia vieja vuelve a subir el commit con la contraseña. La reescritura se hace
+          una vez, coordinada, y todos clonan de nuevo.
+  n_limpio:
+    situacion: >-
+      La historia en GitHub ya no tiene la contraseña (git log -S no encuentra nada), y todos
+      trabajan con copias nuevas. Falta que no vuelva a pasar.
+    evidencia:
+      - titulo: Por qué pasó
+        contenido: |2
+            - No había .gitignore para archivos de configuración con secretos.
+            - No había pre-commit con gitleaks, ni validación en la integración continua.
+            - La protección de push de GitHub (push protection) estaba desactivada.
+            - Cualquiera podía cambiar la visibilidad del repositorio.
+            - La base aceptaba conexiones desde cualquier dirección.
+    opciones:
+      - texto: "Prevenir en capas: secretos fuera del repositorio desde el diseño, pre-commit con gitleaks, la misma búsqueda en la CI, push protection activada, solo administradores cambian la visibilidad, y la base cerrada a lo que la usa"
+        ir_a: n_ok
+        minutos: 60
+      - texto: Pedirle al desarrollador que tenga más cuidado
+        ir_a: n_limpio
+        minutos: 5
+        consecuencia: >-
+          Va a volver a pasar, con esa persona o con otra: todos se equivocan. Las prevenciones
+          que sirven son las que no dependen de acordarse.
+  n_ok:
+    final: exito
+    resumen: >-
+      El orden era lo que importaba: primero cambiar la contraseña (lo único que corta el daño
+      apenas se sabe), después averiguar si alguien la usó (sí, y eso convirtió un descuido en
+      una filtración de datos con aviso obligatorio), después cerrar lo que la dejaba usar desde
+      afuera, y recién ahí limpiar la historia, coordinado con todo el equipo. Borrar la línea en
+      un commit nuevo no saca nada de la historia, y limpiarla no sirve de mucho si la contraseña
+      sigue valiendo. Para la próxima: secretos fuera del repositorio desde el principio, gitleaks
+      en el pre-commit y en la CI, push protection, y una base de datos que solo acepta a quien la
+      usa.
