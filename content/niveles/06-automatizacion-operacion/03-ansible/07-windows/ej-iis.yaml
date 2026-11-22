@@ -1,0 +1,70 @@
+tipo: configuracion
+lenguaje: ansible
+titulo: IIS con Ansible
+nombre_archivo: iis.yml
+consigna: >-
+  Este playbook tendría que instalar IIS en los servidores Windows, dejar una página de inicio,
+  abrir el puerto 80 en el firewall y dejar el servicio de IIS (W3SVC) iniciado y automático. Fue
+  escrito pensando en Linux: corregí lo que marca el editor, usá el módulo de Windows para copiar
+  la página y sacá become, que en Windows no usa sudo y no hace falta para un administrador.
+archivo_inicial: |
+  - name: Servidores web Windows
+    hosts: windows
+    become: true
+    tasks:
+      - name: IIS
+        ansible.windows.win_feature:
+          name: Web-Server
+          state: installed
+          include_management_tools: true
+      - name: Página de inicio
+        ansible.builtin.copy:
+          content: "Hola desde Ansible"
+          dest: C:\inetpub\wwwroot\index.html
+      - name: Puerto 80 en el firewall
+        community.windows.win_firewall_rule:
+          localport: 80
+          action: allow
+          direction: in
+          protocol: tcp
+          state: present
+          enabled: true
+      - name: IIS activo
+        ansible.windows.win_service:
+          name: W3SVC
+          state: running
+          start_mode: auto
+reglas:
+  - { tipo: sin_errores, mensaje: El playbook no tiene errores }
+  - { tipo: no_contiene, regex: "^\\s*become:\\s*(true|yes)", mensaje: "Sin become: en Windows usaría runas, y el usuario ya es administrador" }
+  - { tipo: no_contiene, regex: "ansible\\.builtin\\.copy", mensaje: "copy es para Linux: en Windows se usa ansible.windows.win_copy" }
+  - { tipo: contiene, regex: "win_copy:", mensaje: "La página se copia con ansible.windows.win_copy" }
+  - { tipo: contiene, regex: "win_firewall_rule:(\\n +[a-z_]+:.*)*\\n +name:", mensaje: "La regla del firewall tiene un nombre (name)" }
+  - { tipo: contiene, regex: "state: started", mensaje: "W3SVC queda iniciado" }
+solucion: |
+  - name: Servidores web Windows
+    hosts: windows
+    tasks:
+      - name: IIS
+        ansible.windows.win_feature:
+          name: Web-Server
+          state: present
+          include_management_tools: true
+      - name: Página de inicio
+        ansible.windows.win_copy:
+          content: "Hola desde Ansible"
+          dest: C:\inetpub\wwwroot\index.html
+      - name: Puerto 80 en el firewall
+        community.windows.win_firewall_rule:
+          name: HTTP
+          localport: 80
+          action: allow
+          direction: in
+          protocol: tcp
+          state: present
+          enabled: true
+      - name: IIS activo
+        ansible.windows.win_service:
+          name: W3SVC
+          state: started
+          start_mode: auto

@@ -1,0 +1,112 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué necesita un servidor Windows para que Ansible lo administre?
+  opciones:
+    - { texto: "WinRM o SSH habilitado y un usuario con permisos; no hace falta Python", correcta: true, explicacion: "Los módulos de Windows son de PowerShell." }
+    - { texto: "Python instalado, como en Linux", explicacion: "En Windows no hace falta." }
+    - { texto: "Un agente de Ansible instalado", explicacion: "Ansible no usa agentes." }
+    - { texto: "Estar unido al dominio", explicacion: "Ayuda con Kerberos, pero no es obligatorio." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Qué módulo copia un archivo a un servidor Windows?
+  opciones:
+    - { texto: "ansible.windows.win_copy", correcta: true, explicacion: "Los módulos de Windows llevan win_ adelante." }
+    - { texto: "ansible.builtin.copy", explicacion: "Es de Python: en Windows falla." }
+    - { texto: "ansible.builtin.template", explicacion: "También es para Linux; en Windows, win_template." }
+    - { texto: "community.windows.robocopy", explicacion: "No existe con ese nombre." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué puerto usa WinRM por HTTPS?
+  opciones:
+    - { texto: "5986", correcta: true, explicacion: "5985 es por HTTP." }
+    - { texto: "5985", explicacion: "Ese es HTTP." }
+    - { texto: "22", explicacion: "Ese es SSH." }
+    - { texto: "3389", explicacion: "Ese es el escritorio remoto." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Por qué falla?
+  salida: |
+    $ ansible windows -m ansible.builtin.ping
+    win01 | FAILED! => {
+        "msg": "The module ansible.builtin.ping was not found in configured module paths"
+    }
+  opciones:
+    - { texto: "ping es un módulo de Python; para Windows se usa ansible.windows.win_ping", correcta: true, explicacion: "Ansible busca la versión en PowerShell del módulo y no existe." }
+    - { texto: "El servidor no responde", explicacion: "Sería UNREACHABLE." }
+    - { texto: "Falta instalar ansible-core", explicacion: "No." }
+    - { texto: "El firewall bloquea ICMP", explicacion: "El ping de Ansible no usa ICMP." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Con Kerberos, ¿cómo se escribe el usuario del dominio empresa.local en ansible_user?
+  opciones:
+    - { texto: "ana@EMPRESA.LOCAL", correcta: true, explicacion: "El dominio (el reino de Kerberos), en mayúsculas." }
+    - { texto: "ana@empresa.local", explicacion: "Kerberos distingue mayúsculas en el reino." }
+    - { texto: "EMPRESA\\ana con barra doble", explicacion: "Esa forma es para NTLM." }
+    - { texto: "ana, sin dominio", explicacion: "Kerberos necesita saber el reino." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: Para usar SSH en lugar de WinRM con un Windows Server 2025, ¿qué hace falta?
+  opciones:
+    - { texto: "Habilitar el servicio sshd, que ya viene instalado", correcta: true, explicacion: "Desde el Administrador del servidor o con Start-Service sshd." }
+    - { texto: "ansible_connection=ssh y ansible_shell_type=powershell en el inventario", correcta: true, explicacion: "Le avisa a Ansible qué hay del otro lado." }
+    - { texto: "Un ansible-core 2.18 o más nuevo, para tener soporte oficial", correcta: true, explicacion: "Antes era experimental." }
+    - { texto: "Instalar Python en el servidor", explicacion: "Sigue sin hacer falta." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace win_updates con reboot true?
+  opciones:
+    - { texto: "Instala las actualizaciones y, si alguna lo pide, reinicia y espera a que el equipo vuelva", correcta: true, explicacion: "Después sigue con las tareas siguientes." }
+    - { texto: "Reinicia siempre, haya actualizaciones o no", explicacion: "Solo si hace falta." }
+    - { texto: "Programa el reinicio para la noche", explicacion: "No." }
+    - { texto: "Instala y apaga el equipo", explicacion: "No." }
+- id: p08
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: Este play para servidores Windows viene de un playbook de Linux. ¿Qué líneas fallan?
+  lenguaje: yaml
+  archivo: |
+    - name: Servidor de archivos
+      hosts: windows
+      become: true
+      tasks:
+        - name: Rol de servidor de archivos
+          ansible.windows.win_feature:
+            name: FS-FileServer
+            state: present
+        - name: Carpeta de datos
+          ansible.windows.win_file:
+            path: D:\Datos
+            state: directory
+        - name: Servicio de búsqueda
+          ansible.builtin.service:
+            name: WSearch
+            state: started
+  lineas_con_error: [3, 14]
+  explicacion: become true usaría sudo, que en Windows no existe (y no hace falta), y service es un módulo de Linux; en Windows va ansible.windows.win_service. La ruta D:\Datos sin comillas está bien.
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un ejemplo viejo usa community.windows.win_domain_user y la colección actual no lo tiene. ¿Qué pasó?
+  opciones:
+    - { texto: "Los módulos de Active Directory se mudaron a la colección microsoft.ad (microsoft.ad.user)", correcta: true, explicacion: "Pasó en las versiones 3 de ansible.windows y community.windows." }
+    - { texto: "Ansible dejó de soportar Active Directory", explicacion: "No." }
+    - { texto: "Hay que usar win_user", explicacion: "win_user maneja usuarios locales." }
+    - { texto: "Hay que escribirlo con win_shell", explicacion: "No hace falta." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: En un dominio con GPO, ¿cómo conviene repartir el trabajo con Ansible?
+  opciones:
+    - { texto: "Cada ajuste con un solo dueño: GPO para PC y usuarios, Ansible para servidores y aplicaciones", correcta: true, explicacion: "Si los dos configuran lo mismo, se pisan." }
+    - { texto: "Configurar todo desde los dos, por las dudas", explicacion: "Se pisan en cada aplicación." }
+    - { texto: "Abandonar las GPO", explicacion: "Siguen siendo la mejor forma de configurar PC del dominio." }
+    - { texto: "Ansible no puede convivir con GPO", explicacion: "Sí puede." }

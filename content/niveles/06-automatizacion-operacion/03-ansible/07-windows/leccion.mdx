@@ -1,0 +1,132 @@
+---
+id: n6-m3-l7
+titulo: Ansible para Windows
+minutos: 120
+objetivos:
+  - Preparar servidores Windows para Ansible, por WinRM o por SSH, y agregarlos al inventario.
+  - Usar los módulos de Windows (win_feature, win_service, win_copy, win_updates y otros) y sus colecciones.
+  - Combinar Linux y Windows en el mismo proyecto, sabiendo qué cambia y qué no.
+glosario: [winrm, kerberos, openssh-windows, coleccion-ansible]
+verificado: 2026-11
+---
+
+import win from './windows.svg?raw'
+import winDatos from './windows.yaml'
+import ejInventario from './ej-inventario-windows.yaml'
+import ejIis from './ej-iis.yaml'
+
+En el Nivel 3 administraste Windows Server con PowerShell, remoting y GPO. Muchas empresas tienen las dos cosas: los servidores web y de base en Linux, y el dominio, el servidor de archivos y alguna aplicación en Windows. Tener un proyecto de Ansible para unos y scripts sueltos para los otros es justo el desorden que este módulo vino a resolver. La buena noticia: Ansible maneja Windows con el mismo inventario, los mismos playbooks y el mismo repositorio. Cambian la forma de conectarse y los módulos.
+
+<AntesDeEmpezar>
+- Administración remota con PowerShell y WinRM (lección 3.2.5).
+- Active Directory y Kerberos (lección 3.3.1).
+- Inventarios y playbooks (lecciones 6.3.2 y 6.3.3).
+</AntesDeEmpezar>
+
+## Cómo llega Ansible a Windows
+
+El nodo de control sigue siendo un Linux (o WSL en una PC con Windows: Ansible no funciona como nodo de control en Windows directamente). Del lado de Windows no hace falta Python: los módulos de Windows están escritos en PowerShell y se ejecutan con la PowerShell del equipo. Para llegar hay dos caminos:
+
+**WinRM**, el mismo servicio que usa PowerShell remoting. Es lo más común en empresas con Active Directory:
+
+- En el servidor, WinRM ya viene activo en Windows Server, pero escuchando solo por HTTP (5985). Para producción conviene HTTPS (5986), con un certificado de la CA interna de la empresa.
+- En el nodo de control hace falta la biblioteca de Python **pywinrm** (paquete python3-winrm en Ubuntu, o `pip install pywinrm`).
+- La autenticación es **NTLM** (alcanza con usuario y contraseña) o, con cuentas del dominio, **Kerberos**: el usuario se escribe `ana@EMPRESA.LOCAL` (el dominio en mayúsculas) y el nodo de control necesita el cliente de Kerberos configurado.
+
+**SSH**, como con Linux. Windows Server 2025 ya trae OpenSSH Server instalado (se habilita desde el Administrador del servidor o con `Start-Service sshd` y `Set-Service sshd -StartupType Automatic`), y desde ansible-core 2.18 Ansible lo soporta oficialmente para Windows. Se usan claves como siempre (para los administradores, en `C:\ProgramData\ssh\administrators_authorized_keys`) y se le avisa a Ansible que del otro lado hay PowerShell:
+
+```ini
+[windows:vars]
+ansible_connection=ssh
+ansible_shell_type=powershell
+```
+
+¿Cuál elegir? WinRM funciona en todas las versiones y con Kerberos aprovecha el dominio; SSH es más simple (un puerto, claves, lo mismo que ya sabés) pero pide Windows Server 2019 o más nuevo y un ansible-core 2.18 o posterior (el de Rocky 10 es 2.16; uno más nuevo se instala con pipx). En los dos casos, la contraseña del usuario de Windows (`ansible_password`) va cifrada con Vault, como cualquier secreto.
+
+<DiagramaInteractivo datos={winDatos} svg={win} alt="A la izquierda, el nodo de control Linux con ansible-core, las colecciones ansible.windows, community.windows y microsoft.ad, pywinrm, el inventario con el grupo windows y la contraseña en Vault. Tres flechas salen de él: por SSH al puerto 22 hacia web01, un Rocky Linux donde los módulos son de Python y become usa sudo; y hacia win01, un Windows Server 2025, por WinRM en HTTPS 5986 con NTLM o Kerberos, o por el OpenSSH de Windows en el puerto 22 con ansible_shell_type powershell. En win01 los módulos son de PowerShell: win_feature, win_service, win_copy, win_user, win_updates, win_regedit, win_package y win_firewall_rule. Abajo, lo que no cambia (inventario, playbooks, roles, variables, handlers, check, diff, Vault, ansible-lint y Git) y lo que sí cambia (módulos win_, rutas C:, become con runas, reinicios con win_reboot)." />
+
+Para probar la conexión no sirve el ping de siempre (es un módulo de Python): el de Windows es `ansible windows -m ansible.windows.win_ping`, que responde `pong` igual.
+
+Probá dejar listo el inventario:
+
+<EditorConfig ejercicio={ejInventario} />
+
+## Los módulos de Windows
+
+Cada módulo de Linux tiene su equivalente con `win_` adelante. Casi todos están en la colección **ansible.windows**; win_firewall_rule está en **community.windows**, win_chocolatey en **chocolatey.chocolatey** y los de Active Directory en **microsoft.ad**:
+
+| En Linux | En Windows |
+|---|---|
+| package, dnf, apt | win_package (MSI o EXE), win_chocolatey |
+| (sin equivalente) | win_feature (roles y características) |
+| service | win_service |
+| copy, template, file | win_copy, win_template, win_file |
+| user, group | win_user, win_group, win_group_membership |
+| command, shell | win_command, win_shell, win_powershell |
+| dnf update | win_updates |
+| reboot | win_reboot |
+| (sin equivalente) | win_regedit (el registro) |
+| firewalld | win_firewall_rule |
+| (Active Directory) | microsoft.ad.user, group, ou, membership |
+
+Los módulos de Active Directory estuvieron un tiempo en ansible.windows y community.windows (win_domain, win_domain_user) y en las versiones 3 de esas colecciones se mudaron a **microsoft.ad**: si encontrás un ejemplo viejo con win_domain_user, hoy es `microsoft.ad.user`. Como siempre, las colecciones van en requirements.yml con la versión fijada.
+
+Un ejemplo que en Windows se usa mucho, actualizar y reiniciar solo si hace falta:
+
+```yaml
+- name: Actualizaciones críticas y de seguridad
+  ansible.windows.win_updates:
+    category_names: [CriticalUpdates, SecurityUpdates]
+    reboot: true
+```
+
+`reboot: true` reinicia si alguna actualización lo pide y espera a que el equipo vuelva antes de seguir; para reiniciar en otro momento está win_reboot, que también espera.
+
+Algunas diferencias que conviene tener presentes:
+
+- **Rutas**: `C:\inetpub\wwwroot` funciona tal cual sin comillas o con comillas simples; entre comillas dobles, la barra invertida es un escape y hay que duplicarla (`"C:\\inetpub\\wwwroot"`).
+- **become**: en Windows usa `become_method: runas` (sudo no existe) y casi nunca hace falta, porque el usuario con el que entrás ya es administrador. Sirve para ejecutar algo como otro usuario o para el doble salto (una tarea que necesita llegar a un recurso de red con tus credenciales, como viste con remoting).
+- **Facts**: gather_facts funciona y trae `ansible_os_family: Windows` y la versión, así un mismo play puede separar con `when: ansible_os_family == 'Windows'`.
+- **Idempotencia**: win_shell y win_command cambian siempre, igual que en Linux. Con win_powershell, el script puede avisar si cambió algo con `$Ansible.Changed = $false`.
+
+Ahora corregí un playbook escrito pensando en Linux:
+
+<EditorConfig ejercicio={ejIis} />
+
+## Ansible y las GPO
+
+En un dominio, las GPO ya configuran Windows. No compiten si cada uno tiene lo suyo: las GPO para las PC y los usuarios del dominio (políticas de seguridad, unidades mapeadas, el fondo de pantalla), y Ansible para los servidores y las aplicaciones (roles, características, servicios, configuración de IIS, actualizaciones en una ventana controlada) y para los equipos que no están en el dominio. Lo que no hay que hacer es configurar lo mismo desde los dos lados: uno pisa al otro en cada aplicación y nunca se sabe cuál ganó.
+
+En la simulación no hay servidores Windows a los que Ansible pueda llegar; en el laboratorio del módulo vas a correr el playbook contra una VM de Windows Server de verdad.
+
+<EnSimple>
+Ansible maneja Windows desde el mismo nodo de control Linux y el mismo repositorio. Llega por WinRM (HTTPS 5986, con NTLM o Kerberos en un dominio) o por SSH (Windows Server 2025 ya lo trae, y Ansible lo soporta oficialmente desde la versión 2.18). En Windows no hace falta Python: los módulos son de PowerShell y se llaman win_algo (win_feature, win_service, win_copy, win_updates). Las rutas llevan barra invertida, become casi nunca hace falta, y las GPO y Ansible se reparten el trabajo sin pisarse.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar copy, service o ping con Windows">
+    Son módulos de Python: en Windows fallan. Van win_copy, win_service y win_ping.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar become: true de un playbook de Linux">
+    En Windows no hay sudo, y Ansible se queja de que PowerShell no es compatible con ese método. Sacalo, o usá runas si de verdad hace falta.
+  </ErrorComun>
+  <ErrorComun titulo="Apagar la verificación del certificado de WinRM en producción">
+    Es lo que hace `ansible_winrm_server_cert_validation=ignore`. Sirve en un laboratorio; en la empresa, el certificado de WinRM sale de la CA interna y se valida.
+  </ErrorComun>
+  <ErrorComun titulo="El dominio en minúsculas con Kerberos">
+    El usuario va como ana@EMPRESA.LOCAL: Kerberos distingue mayúsculas en el nombre del dominio. Y los relojes tienen que estar sincronizados.
+  </ErrorComun>
+  <ErrorComun titulo="La misma configuración desde GPO y desde Ansible">
+    Se pisan en cada aplicación. Cada ajuste, de un solo dueño.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Nodo de control Linux (o WSL); en Windows no hace falta Python.
+- WinRM: HTTPS 5986, pywinrm, NTLM o Kerberos (usuario@DOMINIO en mayúsculas).
+- SSH: OpenSSH de Windows (incluido en Windows Server 2025), ansible_shell_type=powershell, ansible-core 2.18 o más nuevo.
+- Módulos win_ en ansible.windows y community.windows; Active Directory en microsoft.ad.
+- win_feature, win_service, win_copy, win_updates (con reboot), win_reboot, win_regedit.
+- Rutas con barra invertida, become con runas (casi nunca), facts con ansible_os_family.
+- GPO para PC y usuarios, Ansible para servidores y aplicaciones: cada ajuste, de un solo dueño.
+</Resumen>

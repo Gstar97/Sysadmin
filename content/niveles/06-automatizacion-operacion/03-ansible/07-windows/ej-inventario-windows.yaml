@@ -1,0 +1,43 @@
+tipo: configuracion
+lenguaje: inventario
+titulo: Los servidores Windows en el inventario
+nombre_archivo: inventario.ini
+consigna: >-
+  La empresa sumó dos servidores Windows (win01 y win02, unidos al dominio EMPRESA.LOCAL) y alguien
+  los agregó al inventario con apuro. Dejá el grupo windows listo para conectarse por WinRM sobre
+  HTTPS (puerto 5986) con Kerberos, sacá win01 del grupo linux y sacá la contraseña del inventario
+  (va a ir cifrada con Vault en group_vars/windows/vault.yml).
+archivo_inicial: |
+  [linux]
+  web01
+  db01
+  win01
+
+  [windows]
+  win01 ansible_host=192.168.10.40 ansible_password=Admin2026!
+  win02 ansible_host=192.168.10.41
+
+  [windows:vars]
+  ansible_user=ana@EMPRESA.LOCAL
+reglas:
+  - { tipo: sin_errores, mensaje: El inventario no tiene errores }
+  - { tipo: yaml_ruta, ruta: grupos.linux, igual: [web01, db01], mensaje: "El grupo linux tiene solo web01 y db01" }
+  - { tipo: yaml_ruta, ruta: grupos.windows, igual: [win01, win02], mensaje: "El grupo windows tiene a win01 y win02" }
+  - { tipo: yaml_ruta, ruta: variables.windows.ansible_connection, igual: winrm, mensaje: "El grupo windows se conecta con ansible_connection=winrm" }
+  - { tipo: yaml_ruta, ruta: variables.windows.ansible_port, igual: 5986, mensaje: "WinRM por HTTPS: ansible_port=5986" }
+  - { tipo: yaml_ruta, ruta: variables.windows.ansible_winrm_transport, igual: kerberos, mensaje: "En un dominio, ansible_winrm_transport=kerberos" }
+  - { tipo: no_contiene, regex: "ansible_password", mensaje: "La contraseña no queda escrita en el inventario" }
+solucion: |
+  [linux]
+  web01
+  db01
+
+  [windows]
+  win01 ansible_host=192.168.10.40
+  win02 ansible_host=192.168.10.41
+
+  [windows:vars]
+  ansible_user=ana@EMPRESA.LOCAL
+  ansible_connection=winrm
+  ansible_port=5986
+  ansible_winrm_transport=kerberos

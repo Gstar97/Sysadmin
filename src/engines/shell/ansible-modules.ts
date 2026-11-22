@@ -1385,6 +1385,10 @@ export const MODULE_COLLECTION: Record<string, string> = {
   win_command: 'ansible.windows',
   win_regedit: 'ansible.windows',
   win_reboot: 'ansible.windows',
+  win_powershell: 'ansible.windows',
+  win_optional_feature: 'ansible.windows',
+  win_get_url: 'ansible.windows',
+  win_stat: 'ansible.windows',
   win_firewall_rule: 'community.windows',
   win_domain_user: 'community.windows',
 }

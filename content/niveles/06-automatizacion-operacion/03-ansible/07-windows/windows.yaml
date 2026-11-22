@@ -1,0 +1,49 @@
+tipo: diagrama
+titulo: Ansible y Windows
+puntos:
+  - id: control
+    titulo: El nodo de control
+    area: { x: 2.3, y: 10.5, ancho: 26.7, alto: 59.5 }
+    texto: >-
+      Sigue siendo un Linux (o WSL en una PC con Windows): Ansible no corre como nodo de control en
+      Windows. Necesita las colecciones con los módulos de Windows y, si usa WinRM, la biblioteca de
+      Python pywinrm. La contraseña del usuario de Windows va en Vault, como cualquier secreto.
+  - id: linux
+    titulo: Un servidor Linux
+    area: { x: 68.6, y: 10.5, ancho: 29.1, alto: 20.5 }
+    texto: >-
+      Para comparar: Ansible entra por SSH, copia el módulo en Python y lo ejecuta con become (sudo).
+  - id: winrm
+    titulo: WinRM
+    area: { x: 29.1, y: 38.9, ancho: 39.5, alto: 7.9 }
+    texto: >-
+      El servicio de administración remota de Windows (el mismo que usa PowerShell remoting). Por
+      HTTPS en el puerto 5986, con NTLM o, en un dominio, Kerberos. Es lo más común en empresas con
+      Active Directory, y viene disponible en Windows Server.
+  - id: ssh
+    titulo: SSH
+    area: { x: 29.1, y: 54.7, ancho: 39.5, alto: 11.6 }
+    texto: >-
+      Windows Server 2025 trae OpenSSH Server instalado (hay que habilitarlo), y desde ansible-core
+      2.18 Ansible lo soporta oficialmente para Windows. Se usa igual que con Linux, con claves, y se
+      le dice a Ansible que del otro lado hay PowerShell con ansible_shell_type.
+  - id: windows
+    titulo: Un servidor Windows
+    area: { x: 68.6, y: 34.7, ancho: 29.1, alto: 35.3 }
+    texto: >-
+      No necesita Python: los módulos de Windows están escritos en PowerShell, y Ansible los ejecuta
+      con la PowerShell del equipo. Cada uno tiene su nombre con win_ adelante y vive en una colección
+      (ansible.windows, community.windows o microsoft.ad para Active Directory).
+  - id: igual
+    titulo: Lo que no cambia
+    area: { x: 2.3, y: 74.2, ancho: 46.5, alto: 22.1 }
+    texto: >-
+      La forma de trabajar es la misma: inventario, roles, variables, handlers, modo de prueba, Vault,
+      ansible-lint y el repositorio en Git. Un solo proyecto puede configurar Linux y Windows.
+  - id: distinto
+    titulo: Lo que sí cambia
+    area: { x: 51.2, y: 74.2, ancho: 46.5, alto: 22.1 }
+    texto: >-
+      Los módulos (win_copy en lugar de copy, win_service en lugar de service), las rutas con barra
+      invertida, become (que en Windows usa runas y casi nunca hace falta si el usuario ya es
+      administrador) y los reinicios, que se hacen con win_reboot y esperan a que el equipo vuelva.

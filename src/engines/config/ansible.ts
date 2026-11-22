@@ -93,6 +93,10 @@ const MODULES: Record<string, ModuleSpec> = {
   win_hostname: { required: [['name']] },
   win_timezone: { required: [['timezone']] },
   win_chocolatey: { required: [['name']], states: ['present', 'absent', 'latest', 'downgrade', 'reinstalled'] },
+  win_powershell: { required: [['script']] },
+  win_optional_feature: { required: [['name']], states: ['present', 'absent'] },
+  win_get_url: { required: [['url'], ['dest']] },
+  win_stat: { required: [['path']] },
 }
 
 function moduleName(key: string): string | undefined {
