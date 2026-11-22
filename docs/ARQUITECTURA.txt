@@ -414,8 +414,9 @@ reordenar carpetas no rompe el progreso guardado de nadie.
     <SimuladorPaquetes escenario={ej} />   pasos con los encabezados de cada capa
     <Ordenar ejercicio={ej} />  <Emparejar ejercicio={ej} />
     <Troubleshooting escenario={ej} />
-    <EditorConfig ejercicio={ej} />  lenguaje (nginx, compose, ansible, yaml, sshd,
-                                     fstab, sudoers, systemd, zona, named, kea, texto),
+    <EditorConfig ejercicio={ej} />  lenguaje (nginx, compose, ansible, inventario, yaml,
+                                     sshd, fstab, sudoers, systemd, zona, named, kea,
+                                     texto),
                                      archivo inicial,
                                      solución y reglas: sin_errores, contiene,
                                      no_contiene, directiva (nginx por contexto, sshd por
@@ -441,6 +442,9 @@ reordenar carpetas no rompe el progreso guardado de nadie.
     <ConsolaPython codigo="..." />   consola de Python libre
     <SimuladorRamas comandos={[...]} />  grafo de commits de Git que cambia con cada
                                      comando (commit, branch, switch, merge, reset)
+    <VistaPlantilla plantilla="..." variables={{...}} esperado="..." destino="..." />
+                                     plantilla de Jinja2 con sus variables editables y
+                                     el archivo que resulta; con esperado, es un desafío
 
   La propiedad que recibe los datos es fija para cada componente: ejercicio, salvo
   escenario (Troubleshooting y SimuladorPaquetes) y datos (DiagramaInteractivo). El
@@ -931,6 +935,29 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
       para validar y probar. build/pyodide-plugin.ts sirve los archivos de Pyodide en
       desarrollo y los copia a dist/pyodide (unos 13 MB, que el navegador guarda después
       de la primera vez).
+    · Jinja2 (src/engines/ansible/jinja.ts, Etapa 9b): el subconjunto que usa Ansible,
+      escrito de cero: expresiones, {% if %}, {% for %} con loop, {% set %}, filtros
+      (default, join, map, select, selectattr, combine, dict2items, regex_*, to_json,
+      to_yaml, password_hash, ternary, flatten y más) y pruebas (defined, is version,
+      match...). Las variables sin definir fallan como en Ansible ("is undefined").
+    · Ansible (src/engines/shell/ansible.ts y ansible-modules.ts, Etapa 9b): ansible,
+      ansible-playbook, ansible-inventory, ansible-vault, ansible-galaxy, ansible-doc,
+      ansible-config y ansible-lint, con la salida de ansible-core 2.16 (colores, recap,
+      errores con línea y columna). Inventarios INI y YAML (src/engines/ansible/
+      inventory.ts) con rangos, grupos hijos, group_vars y host_vars; ansible.cfg
+      (ANSIBLE_CONFIG, la carpeta, el home, /etc/ansible); conexión por el ssh del
+      simulador, become con sudo (y "Missing sudo password"), facts, precedencia de
+      variables, bloques con rescue y always, loops, register, when, changed_when,
+      failed_when, until, handlers, tags, --check, --diff, --limit, -v, no_log, roles con
+      defaults, vars, meta y dependencias, y colecciones que hay que instalar con
+      ansible-galaxy (requirements.yml con rangos de versión). Los módulos trabajan sobre
+      el estado real de cada equipo: paquetes, servicios, archivos y plantillas,
+      lineinfile, blockinfile, usuarios, claves, firewalld, ufw, cron, sysctl, SELinux,
+      uri, get_url, git, PostgreSQL y MySQL. Vault (vault.ts) cifra de verdad con el
+      formato $ANSIBLE_VAULT;1.1;AES256; lint.ts implementa las reglas más comunes de
+      ansible-lint 6.17 con sus perfiles. Los equipos Windows (winrm, psrp) responden
+      UNREACHABLE: se practican con EditorConfig (los módulos win_ están en el
+      validador) y en las VMs del laboratorio.
     · Otros cambios: ssh ejecuta el comando remoto con el entorno del otro equipo (no con
       las variables exportadas del local) y actualiza su estado antes de cada comando; y
       las unidades propias de systemd aceptan binarios ELF.
@@ -1077,6 +1104,10 @@ terminal y un ping en el diagrama dan exactamente el mismo resultado.
   - Hechos en la Etapa 9a (Nivel 6): simulador de ramas (SimuladorRamas: el grafo de
     commits con avance rápido, commits de fusión y commits que quedan huérfanos, sobre
     src/engines/git) y la consola de Python (EjercicioPython y ConsolaPython, ver 5.4 ter).
+  - Hechos en la Etapa 9b (Nivel 6): vista de plantillas (VistaPlantilla: una plantilla
+    de Jinja2 con sus variables editables y el archivo que genera, sobre
+    src/engines/ansible/jinja.ts) y el lenguaje inventario de EditorConfig (INI o YAML,
+    con los grupos, los hijos y las variables disponibles para las reglas yaml_ruta).
   - Pendientes, con el nivel que los usa: consola de SQL (sql.js); consolas
     simplificadas de PromQL, LogQL y KQL sobre datos de ejemplo; calculadoras de disponibilidad, cron y costos.
   - Los componentes pesados se cargan solo cuando una lección los usa.
