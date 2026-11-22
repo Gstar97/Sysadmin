@@ -1,0 +1,91 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué no debe guardarse nunca en un repositorio de infraestructura?
+  opciones:
+    - { texto: "Contraseñas y claves privadas en texto plano", correcta: true, explicacion: "Quedan en la historia para siempre." }
+    - { texto: "Archivos de configuración de nginx", explicacion: "Eso sí." }
+    - { texto: "Scripts", explicacion: "Eso sí." }
+    - { texto: "Documentación", explicacion: "Eso sí." }
+- id: p02
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué no alcanza con un hook pre-commit para validar los cambios?
+  opciones:
+    - { texto: "Porque se puede saltear con --no-verify y depende de que cada copia lo tenga activo; por eso se repite en la integración continua", correcta: true, explicacion: "La CI no se saltea." }
+    - { texto: "Porque es lento", explicacion: "Es rápido." }
+    - { texto: "Porque no puede leer los archivos", explicacion: "Sí puede." }
+    - { texto: "Alcanza", explicacion: "No." }
+- id: p03
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que hace que Git busque los hooks en la carpeta hooks/ del repositorio.
+  prompt: "ana@admin01:~/infra$"
+  aceptadas:
+    - "git config core.hooksPath hooks"
+    - "git config core.hookspath hooks"
+  explicacion: Así el equipo comparte los hooks versionados.
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Hiciste un cambio de urgencia directamente en /etc/nginx de un servidor, sin pasar por el repositorio. ¿Qué pasa la próxima vez que se aplique la configuración desde el repositorio?
+  opciones:
+    - { texto: "El cambio desaparece, porque lo que manda es el repositorio", correcta: true, explicacion: "Por eso los cambios van por el repositorio, también los urgentes." }
+    - { texto: "Git lo detecta y lo agrega solo", explicacion: "No." }
+    - { texto: "Nada", explicacion: "Se pisa." }
+    - { texto: "El servidor deja de funcionar", explicacion: "No necesariamente." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué comando dice quién cambió por última vez cada línea de un archivo?
+  opciones:
+    - { texto: "git blame archivo", correcta: true, explicacion: "Con el commit y el autor." }
+    - { texto: "git log", explicacion: "Muestra commits, no líneas." }
+    - { texto: "git status", explicacion: "No." }
+    - { texto: "git tag", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre una etiqueta y una rama?
+  opciones:
+    - { texto: "La etiqueta queda fija en un commit; la rama avanza con cada commit nuevo", correcta: true, explicacion: "Por eso sirve para marcar versiones." }
+    - { texto: "Son lo mismo", explicacion: "No." }
+    - { texto: "La etiqueta es una copia del repositorio", explicacion: "No." }
+    - { texto: "La rama no se puede borrar", explicacion: "Se puede." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué formas razonables hay de darle una contraseña a un servicio sin ponerla en el repositorio? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Un archivo fuera del repositorio en el servidor, con permisos 600", correcta: true, explicacion: "Lo más simple." }
+    - { texto: "Cifrada con Ansible Vault o SOPS, con la clave afuera", correcta: true, explicacion: "Lección 6.3.6." }
+    - { texto: "Un gestor de secretos como Vault u OpenBao", correcta: true, explicacion: "Lo más completo." }
+    - { texto: "En un commit aparte que después se borra", explicacion: "Queda en la historia." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El hook está en hooks/pre-commit y core.hooksPath está configurado, pero Git dice "The 'hooks/pre-commit' hook was ignored because it's not set as executable". ¿Qué falta?
+  opciones:
+    - { texto: "chmod +x hooks/pre-commit (y commitear el permiso para el resto)", correcta: true, explicacion: "Git ignora los hooks que no son ejecutables." }
+    - { texto: "Copiarlo a /usr/bin", explicacion: "No." }
+    - { texto: "Reiniciar el equipo", explicacion: "No." }
+    - { texto: "Instalar otro Git", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Algo se rompió "desde la semana pasada" en nginx. ¿Qué mirás primero en el repositorio?
+  opciones:
+    - { texto: "git log --since=\"1 week ago\" -- nginx/", correcta: true, explicacion: "Los cambios recientes en esa carpeta." }
+    - { texto: "git init", explicacion: "No." }
+    - { texto: "git branch -D main", explicacion: "No." }
+    - { texto: "git clean -f", explicacion: "No." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Para qué sirve etckeeper?
+  opciones:
+    - { texto: "Para versionar /etc de un servidor con Git automáticamente, incluso en cada instalación de paquetes", correcta: true, explicacion: "Da historia donde no había." }
+    - { texto: "Para cifrar /etc", explicacion: "No." }
+    - { texto: "Para respaldar la base de datos", explicacion: "No." }
+    - { texto: "Para crear usuarios", explicacion: "No." }

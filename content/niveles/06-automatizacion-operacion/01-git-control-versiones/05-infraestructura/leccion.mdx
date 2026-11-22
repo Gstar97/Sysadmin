@@ -1,0 +1,78 @@
+---
+id: n6-m1-l5
+titulo: Git para infraestructura
+minutos: 120
+objetivos:
+  - Organizar un repositorio de infraestructura y decidir qué entra y qué no.
+  - Validar cambios automáticamente con hooks compartidos y con integración continua.
+  - Usar etiquetas, blame y la búsqueda en la historia para operar e investigar.
+glosario: [infraestructura-como-codigo, hook-git, integracion-continua, etiqueta-git]
+verificado: 2026-11
+---
+
+import repoInfra from './repo-infra.svg?raw'
+import repoInfraDatos from './repo-infra.yaml'
+import ejInfra from './ej-infra.yaml'
+
+Ya sabés usar Git. Esta lección es sobre cómo lo usa un equipo de infraestructura: qué guarda, cómo evita que un error llegue a producción y cómo responde preguntas como "¿quién cambió esto y por qué?" sin depender de la memoria de nadie. Es la base del resto del nivel: los playbooks de Ansible, los paneles de monitoreo y las reglas de alertas también van a vivir en un repositorio.
+
+<AntesDeEmpezar>
+- Remotos y pull requests (lección 6.1.4).
+- Scripts en Bash y bash -n (módulo 1.7).
+</AntesDeEmpezar>
+
+## Qué guardar y cómo llega a los servidores
+
+<DiagramaInteractivo datos={repoInfraDatos} svg={repoInfra} alt="A la izquierda, un repositorio infra con LEEME.txt (qué hay y cómo se usa), .gitignore (secretos, logs), hooks (validaciones del equipo), carpetas de configuraciones por servicio como nginx, dns y firewall, scripts (tareas programadas), inventario (qué servidores hay), ansible (módulo 6.3) y docs (procedimientos, planes); sin contraseñas, sin claves privadas y sin archivos generados. A la derecha, el camino de un cambio: 1, commit en una rama; 2, pre-commit en tu equipo, que revisa sintaxis y secretos; 3, pull request, donde otra persona revisa y aprueba; 4, integración continua, las mismas validaciones y más en el servidor, que no se saltean; 5, fusión en main, etiqueta y despliegue: los servidores toman main con git pull o Ansible, y lo que está en el repositorio es lo que está en producción." />
+
+La regla que hace que todo esto funcione: **los servidores no se editan a mano**. Si un cambio no pasó por el repositorio, la próxima vez que se aplique la configuración desaparece, y nadie sabe que existió. Al principio cuesta; después es lo que te deja dormir tranquilo.
+
+## Secretos: el único lugar donde no van
+
+Una contraseña en un repositorio la ve todo el que lo clona, queda en la historia aunque la borres, y si el repositorio termina en GitHub (público o filtrado), la encuentran en minutos: hay programas que recorren GitHub buscando claves. Las opciones, de la más simple a la más completa:
+
+- Un archivo **fuera del repositorio** en cada servidor (permisos 600), como /etc/tienda/secretos.env.
+- **Variables de entorno** del servicio (`EnvironmentFile=` en systemd).
+- **Cifrado dentro del repositorio**: Ansible Vault (lección 6.3.6) o SOPS, con la clave fuera.
+- Un **gestor de secretos**: HashiCorp Vault, OpenBao, o el de la nube.
+
+Y una red de seguridad en tres capas: el pre-commit con gitleaks en cada equipo, la misma búsqueda en la integración continua, y la protección de la plataforma (GitHub, por ejemplo, rechaza el push si detecta una clave conocida).
+
+## Manos a la obra
+
+<Terminal ejercicio={ejInfra} />
+
+## Más herramientas para operar
+
+- **Etiquetas** (`git tag -a v2026.11 -m "..."`): un nombre fijo para un estado; los servidores pueden aplicar una etiqueta en lugar de "lo último de main", y volver a la anterior es cambiar un número.
+- **git blame archivo**: quién tocó cada línea por última vez, y en qué commit.
+- **git log -S "texto"**: en qué commits apareció o desapareció un texto (una IP, un nombre de servidor, una clave).
+- **git log --since="2 weeks ago" -- nginx/**: qué cambió en los últimos días en una carpeta; lo primero que se mira cuando "algo se rompió desde la semana pasada".
+- **etckeeper**: para servidores que todavía no se manejan desde un repositorio, versiona /etc automáticamente con Git (incluso guarda un commit en cada instalación de paquetes). No reemplaza al repositorio central, pero da historia donde no había nada.
+
+<EnSimple>
+En un equipo de infraestructura, todo lo que define los servidores vive en un repositorio: configuraciones, scripts, inventario, playbooks y documentación, pero nunca contraseñas ni claves. Cada cambio pasa por una rama, un hook pre-commit que revisa sintaxis y secretos, un pull request que alguien aprueba y las mismas validaciones automáticas en el servidor; recién ahí llega a main y de main a los servidores, que no se editan a mano. Las etiquetas marcan versiones, y blame y log -S responden quién cambió qué y por qué.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Editar un servidor a mano “solo esta vez”">
+    La próxima vez que se aplique la configuración del repositorio, el cambio desaparece, y nadie sabe que existió.
+  </ErrorComun>
+  <ErrorComun titulo="Confiar solo en el pre-commit">
+    Se saltea con --no-verify o no está activo en todas las copias. Las mismas validaciones van en la integración continua.
+  </ErrorComun>
+  <ErrorComun titulo="Hooks que nadie activó">
+    En .git/hooks no se versionan. Carpeta hooks/ en el repositorio, core.hooksPath y el permiso de ejecución commiteado.
+  </ErrorComun>
+  <ErrorComun titulo="Secretos “temporales” en el repositorio">
+    No existen: quedan en la historia para siempre. Afuera desde el primer día.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Repositorio de infraestructura: configuraciones, scripts, inventario, playbooks, documentación y hooks; sin secretos.
+- Los servidores no se editan a mano: los cambios van por el repositorio.
+- Validaciones en tres lugares: pre-commit (core.hooksPath), pull request y integración continua.
+- Secretos fuera del repositorio, cifrados (Ansible Vault, SOPS) o en un gestor de secretos.
+- git tag -a, git blame, git log -S, git log --since; etckeeper para servidores sin repositorio.
+</Resumen>

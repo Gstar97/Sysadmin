@@ -1,0 +1,129 @@
+tipo: terminal
+shell: bash
+titulo: Un repositorio de infraestructura que se cuida solo
+descripcion: >-
+  En ~/infra (admin01) está el repositorio del equipo, ya clonado. El equipo dejó en la carpeta
+  hooks/ un pre-commit que revisa la sintaxis de los scripts y busca secretos con gitleaks, pero
+  todavía no está activo en tu copia. Hay dos cambios tuyos sin guardar: un script nuevo para
+  rotar logs y la configuración de la aplicación de la tienda.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true }]
+  paquetes: { instalados: [git, gitleaks] }
+  archivos:
+    /home/ana/.gitconfig: { dueno: ana, contenido: "[user]\n\tname = Ana Gómez\n\temail = ana@ejemplo.test\n[init]\n\tdefaultBranch = main\n" }
+    /etc/tienda/.keep: { contenido: "" }
+  git:
+    repos:
+      - ruta: /home/ana/infra
+        usuario: ana
+        commits:
+          - mensaje: Estructura del repositorio
+            archivos:
+              LEEME.txt: "Repositorio de infraestructura de Ejemplo S.A.\nnginx/: sitios. scripts/: tareas. config/: aplicaciones. hooks/: validaciones (git config core.hooksPath hooks).\nLos secretos NO van acá: /etc/tienda/secretos.env en cada servidor.\n"
+              .gitignore: ".env\n*.env\n*.log\n"
+              hooks/pre-commit: "#!/bin/bash\n# Validaciones antes de cada commit.\nfallo=0\nfor f in $(git diff --cached --name-only | grep '\\.sh$'); do\n  bash -n \"$f\" || { echo \"Error de sintaxis en $f\"; fallo=1; }\ndone\ngitleaks protect --staged || { echo \"Hay algo que parece un secreto: sacalo del commit\"; fallo=1; }\nexit $fallo\n"
+          - mensaje: Sitio de la tienda
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    client_max_body_size 20m;\n}\n"
+          - mensaje: Más espacio para los catálogos en PDF
+            autor: Pablo Ruiz
+            correo: pablo@ejemplo.test
+            archivos:
+              nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    client_max_body_size 50m;\n}\n"
+        cambios:
+          scripts/rotar-logs.sh: "#!/bin/bash\nset -euo pipefail\nif [ -d /var/log/tienda ]; then\n  find /var/log/tienda -name '*.log' -mtime +7 -delete\n"
+          config/tienda.ini: "[base]\nhost = db01.ejemplo.test\nusuario = tienda\npassword = Tienda-DB-2026-segura\n"
+pasos:
+  - consigna: >-
+      Activá los hooks del equipo en tu copia (que Git los busque en la carpeta hooks/) y comprobá
+      que el pre-commit pueda ejecutarse.
+    verificar:
+      - { git_repo: /home/ana/infra, hook: pre-commit }
+    pistas:
+      - "git config core.hooksPath hooks"
+      - "ls -l hooks: si no tiene x, chmod +x hooks/pre-commit"
+    solucion:
+      - cd ~/infra
+      - git config core.hooksPath hooks
+      - ls -l hooks
+      - chmod +x hooks/pre-commit
+    explicacion: >-
+      Los hooks de .git/hooks no se versionan; con core.hooksPath, el equipo comparte los suyos en
+      el repositorio. Si el archivo no es ejecutable, Git lo ignora con un aviso: el permiso de
+      ejecución también se versiona, así que conviene commitearlo para el resto (git add
+      hooks/pre-commit).
+  - consigna: >-
+      Guardá el script nuevo scripts/rotar-logs.sh en un commit ("Rotación de logs de la tienda").
+      Si el hook lo rechaza, arreglalo.
+    verificar:
+      - { git_repo: /home/ana/infra, versionado: scripts/rotar-logs.sh, ultimo_mensaje: "Rotación de logs" }
+      - { archivo: /home/ana/infra/scripts/rotar-logs.sh, contenido_incluye: "fi" }
+    pistas:
+      - "git add scripts/rotar-logs.sh hooks/pre-commit y git commit -m ..."
+      - "bash -n dice qué falta: al if le falta su fi. echo fi >> scripts/rotar-logs.sh"
+    solucion:
+      - git add scripts/rotar-logs.sh hooks/pre-commit
+      - git commit -m "Rotación de logs de la tienda"
+      - echo fi >> scripts/rotar-logs.sh
+      - bash -n scripts/rotar-logs.sh
+      - git add scripts/rotar-logs.sh
+      - git commit -m "Rotación de logs de la tienda"
+    explicacion: >-
+      El hook frenó un script que habría fallado en el servidor a las 3 de la mañana. Esa es la
+      idea: que las validaciones automáticas atajen los errores tontos antes de que lleguen a
+      ningún lado. Un pre-commit se puede saltear con --no-verify, por eso las mismas
+      validaciones se repiten en el servidor (en la integración continua del pull request).
+  - consigna: >-
+      Ahora guardá config/tienda.ini. Si el hook encuentra la contraseña, sacala del archivo (va en
+      /etc/tienda/secretos.env de cada servidor, que no se versiona) y guardá el resto con el
+      mensaje "Configuración de la tienda sin secretos".
+    verificar:
+      - { git_repo: /home/ana/infra, versionado: config/tienda.ini, historial_no_contiene: "Tienda-DB-2026-segura" }
+      - { archivo: /etc/tienda/secretos.env, contenido_incluye: "Tienda-DB-2026-segura" }
+    pistas:
+      - "git add config/tienda.ini y git commit: gitleaks lo va a frenar."
+      - "grep password config/tienda.ini | sudo tee /etc/tienda/secretos.env y después sed -i '/^password/d' config/tienda.ini"
+    solucion:
+      - git add config/tienda.ini
+      - git commit -m "Configuración de la tienda"
+      - grep password config/tienda.ini | sudo tee /etc/tienda/secretos.env
+      - sed -i '/^password/d' config/tienda.ini
+      - git add config/tienda.ini
+      - git commit -m "Configuración de la tienda sin secretos"
+    explicacion: >-
+      El secreto nunca llegó a un commit: no hay nada que limpiar. Cómo llega la contraseña al
+      servidor es otro tema: un archivo fuera del repositorio con permisos 600, variables de
+      entorno del servicio, o un gestor de secretos; con Ansible, Ansible Vault (lección 6.3.6).
+  - consigna: >-
+      Marcá este estado como la versión de noviembre con una etiqueta anotada "v2026.11" y el
+      mensaje "Configuración de noviembre".
+    verificar:
+      - { git_repo: /home/ana/infra, etiqueta: v2026.11 }
+    pistas:
+      - "git tag -a v2026.11 -m \"Configuración de noviembre\""
+    solucion:
+      - git tag -a v2026.11 -m "Configuración de noviembre"
+      - git log --oneline --decorate
+    explicacion: >-
+      Una etiqueta es un nombre fijo para un commit (a diferencia de una rama, no se mueve). Sirve
+      para decir "en los servidores está v2026.11" y volver a ese estado exacto cuando haga falta.
+      Las etiquetas se suben aparte: git push --tags.
+  - consigna: >-
+      Alguien pregunta por qué la tienda acepta subidas de 50 MB. Averiguá quién cambió esa línea y
+      con qué mensaje.
+    verificar:
+      - { comando_usado: "git blame" }
+      - { salida_contiene: "Pablo" }
+    pistas:
+      - "git blame nginx/tienda.conf muestra, para cada línea, el commit y el autor."
+      - "git show ID muestra el mensaje y el cambio completo."
+    solucion:
+      - git log --oneline -S "50m"
+      - git blame nginx/tienda.conf
+    explicacion: >-
+      La respuesta está en la historia y no en la memoria de nadie: Pablo, "Más espacio para los
+      catálogos en PDF". git blame dice quién tocó cada línea por última vez y git log -S
+      "texto", en qué commits apareció o desapareció un texto.

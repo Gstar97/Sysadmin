@@ -1,0 +1,45 @@
+tipo: diagrama
+titulo: Infraestructura en Git
+puntos:
+  - id: repo
+    titulo: El repositorio
+    area: { x: 2.3, y: 11.1, ancho: 38.4, alto: 84.7 }
+    texto: >-
+      Un repositorio por equipo o por área suele alcanzar para empezar: las configuraciones por
+      servicio, los scripts, el inventario de servidores, los playbooks de Ansible (módulo 6.3),
+      la documentación y los hooks. El LEEME dice qué hay y cómo se aplica. Lo que no entra:
+      secretos, claves privadas y archivos que se generan solos.
+  - id: commit
+    titulo: 1. Commit en una rama
+    area: { x: 45.3, y: 12.2, ancho: 52.3, alto: 12.2 }
+    texto: >-
+      Como en las lecciones anteriores: una rama corta por cambio, commits chicos con buenos
+      mensajes.
+  - id: precommit
+    titulo: 2. Pre-commit
+    area: { x: 45.3, y: 28.9, ancho: 52.3, alto: 12.2 }
+    texto: >-
+      Un hook que corre en tu equipo antes de cada commit: sintaxis de scripts (bash -n,
+      ShellCheck), de YAML, nginx -t con el archivo, y búsqueda de secretos (gitleaks). Es rápido
+      y ataja los errores tontos, pero se puede saltear (git commit --no-verify) y depende de que
+      cada uno lo tenga activo. El framework pre-commit (pre-commit.com) lo hace más fácil.
+  - id: pr
+    titulo: 3. Pull request
+    area: { x: 45.3, y: 45.6, ancho: 52.3, alto: 12.2 }
+    texto: >-
+      La revisión humana: alguien que no escribió el cambio lo mira con otros ojos.
+  - id: ci
+    titulo: 4. Integración continua
+    area: { x: 45.3, y: 62.2, ancho: 52.3, alto: 12.2 }
+    texto: >-
+      Las mismas validaciones (y otras más lentas) corren en el servidor de Git con cada pull
+      request: GitHub Actions, GitLab CI, Gitea o Forgejo Actions. Como la rama está protegida, si
+      fallan, no se puede fusionar. Es la versión que no se saltea.
+  - id: deploy
+    titulo: 5. Fusión y despliegue
+    area: { x: 45.3, y: 78.9, ancho: 52.3, alto: 15.6 }
+    texto: >-
+      Lo que está en main se aplica en los servidores: con una herramienta como Ansible (que toma
+      el repositorio y configura todo), o con los servidores haciendo git pull de una etiqueta. La
+      meta es que nadie edite los servidores a mano: si hace falta un cambio, va por el
+      repositorio.

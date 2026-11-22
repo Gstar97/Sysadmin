@@ -606,7 +606,10 @@ function copyCommits(from: Repo, to: Repo, tips: string[]): number {
 // ---------------------------------------------------------------------------------------
 
 async function runHook(ctx: CommandContext, root: string, repo: Repo, name: string, args: string[] = []): Promise<number> {
-  const p = `${gitDir(root, repo.bare)}/hooks/${name}`
+  // core.hooksPath: los hooks versionados en una carpeta del repositorio, compartidos por el equipo.
+  const hp = cfg(ctx, repo, 'core.hooksPath')
+  const dir = hp ? (hp.startsWith('/') ? hp : `${root}/${hp}`) : `${gitDir(root, repo.bare)}/hooks`
+  const p = `${dir}/${name}`
   const v = ctx.sys.vfs
   if (!v.exists(p, ROOT_CRED)) return 0
   const st = v.stat(p, ROOT_CRED)
@@ -2377,7 +2380,8 @@ export function verifyGit(sys: System, check: object): { ok: boolean; label: str
     parts.push(`sin "${c.historial_no_contiene}" en ningún commit`)
   }
   if (ok && c.hook) {
-    const p = `${gitDir(root, repo!.bare)}/hooks/${c.hook}`
+    const hp = repo!.config.get('core.hookspath')
+    const p = hp ? `${hp.startsWith('/') ? hp : `${root}/${hp}`}/${c.hook}` : `${gitDir(root, repo!.bare)}/hooks/${c.hook}`
     ok = sys.vfs.exists(p, ROOT_CRED) && !!(sys.vfs.stat(p, ROOT_CRED).mode & 0o111)
     parts.push(`con el hook ${c.hook} activo`)
   }
