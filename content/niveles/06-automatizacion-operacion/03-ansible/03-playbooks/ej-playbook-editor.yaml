@@ -1,0 +1,62 @@
+tipo: configuracion
+lenguaje: ansible
+titulo: Un playbook con errores
+nombre_archivo: web.yml
+consigna: >-
+  Este playbook tendría que instalar nginx en los servidores web, dejar su página de inicio y
+  recargarlo cuando la página cambie, pero Ansible lo rechaza. Corregí los errores (el editor
+  marca dónde) sin sacar ninguna tarea.
+archivo_inicial: |
+  - name: Servidores web
+    hosts: web
+    become: true
+    tasks:
+      - name: Instalar nginx
+        ansible.builtin.package:
+          name: nginx
+          state: installed
+      - name: Página de inicio
+        ansible.builtin.copy:
+        content: "Hola desde Ansible\n"
+        dest: /usr/share/nginx/html/index.html
+        mode: '0644'
+        notify: Recargar Nginx
+      - name: nginx activo
+        ansible.builtin.service:
+          name: nginx
+    handlers:
+      - name: Recargar nginx
+        ansible.builtin.service:
+          name: nginx
+          state: reloaded
+reglas:
+  - { tipo: sin_errores, mensaje: El playbook no tiene errores }
+  - { tipo: no_contiene, regex: "state: installed", mensaje: "El paquete queda con state: present (installed no es válido para package)" }
+  - { tipo: contiene, regex: "^( *)ansible\\.builtin\\.copy:\\n\\1 +content:", mensaje: "Los argumentos de copy van adentro del módulo, con más sangría" }
+  - { tipo: yaml_ruta, ruta: "[0].tasks[1].notify", igual: Recargar nginx, mensaje: notify llama al handler con su nombre exacto }
+  - { tipo: contiene, regex: "state: started", mensaje: nginx queda iniciado }
+solucion: |
+  - name: Servidores web
+    hosts: web
+    become: true
+    tasks:
+      - name: Instalar nginx
+        ansible.builtin.package:
+          name: nginx
+          state: present
+      - name: Página de inicio
+        ansible.builtin.copy:
+          content: "Hola desde Ansible\n"
+          dest: /usr/share/nginx/html/index.html
+          mode: '0644'
+        notify: Recargar nginx
+      - name: nginx activo
+        ansible.builtin.service:
+          name: nginx
+          state: started
+          enabled: true
+    handlers:
+      - name: Recargar nginx
+        ansible.builtin.service:
+          name: nginx
+          state: reloaded

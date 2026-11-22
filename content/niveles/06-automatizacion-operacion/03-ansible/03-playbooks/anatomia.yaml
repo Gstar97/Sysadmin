@@ -1,0 +1,43 @@
+tipo: diagrama
+titulo: Un playbook y su salida
+puntos:
+  - id: play
+    titulo: El play
+    area: { x: 3.5, y: 12.5, ancho: 46.5, alto: 14.5 }
+    texto: >-
+      Un playbook es una lista de plays. Cada uno dice en qué equipos (hosts, con un patrón del
+      inventario) y cómo (become: true usa sudo para todas sus tareas). Un mismo playbook puede
+      tener un play para los web y otro para las bases de datos.
+  - id: tarea
+    titulo: Una tarea
+    area: { x: 3.5, y: 29, ancho: 46.5, alto: 19 }
+    texto: >-
+      name (lo que muestra la salida, en una frase que diga qué tiene que quedar), el módulo con su
+      nombre completo (FQCN: ansible.builtin.package) y, con más sangría, sus argumentos. Las tareas
+      se ejecutan en orden, de a una, en todos los equipos del play.
+  - id: notify
+    titulo: notify
+    area: { x: 3.5, y: 50, ancho: 46.5, alto: 24 }
+    texto: >-
+      Si esta tarea cambia algo (changed), avisa al handler con ese nombre. Si no cambió nada, no
+      avisa. Es la forma de recargar un servicio solo cuando su configuración cambió de verdad.
+  - id: handlers
+    titulo: Los handlers
+    area: { x: 3.5, y: 76, ancho: 46.5, alto: 18.5 }
+    texto: >-
+      Tareas que solo corren si alguna tarea las avisó, y una sola vez, al final del play (aunque
+      las hayan avisado cinco tareas). Si una tarea falla en un equipo, los handlers de ese equipo
+      no corren: por eso a veces se usa --force-handlers o meta: flush_handlers.
+  - id: salida
+    titulo: La salida
+    area: { x: 55.8, y: 10, ancho: 41.9, alto: 58 }
+    texto: >-
+      Un bloque por tarea, con el resultado de cada equipo: ok en verde (ya estaba bien), changed
+      en amarillo (lo cambió), skipping en celeste (no correspondía), failed y unreachable en rojo.
+      Gathering Facts es la tarea automática que junta los facts antes de empezar.
+  - id: recap
+    titulo: PLAY RECAP
+    area: { x: 55.8, y: 63, ancho: 41.9, alto: 33 }
+    texto: >-
+      El resumen por equipo. La prueba de que un playbook es idempotente es correrlo dos veces: la
+      segunda tiene que dar changed=0, y ningún handler.

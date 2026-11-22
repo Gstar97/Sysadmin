@@ -1,0 +1,149 @@
+tipo: terminal
+shell: bash
+titulo: El playbook de la configuración base
+descripcion: >-
+  Toda la flota de la tienda (web01 y web02, los dos Rocky Linux) tiene que tener la misma base:
+  algunos paquetes, un usuario para el equipo de operaciones y SSH sin acceso directo de root. En
+  admin01 ya están ansible-core, ~/ansible con su ansible.cfg y el inventario con el grupo web. En
+  los servidores, ana puede usar sudo sin contraseña.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [ansible-core] }
+  directorio: /home/ana/ansible
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/ansible/ansible.cfg: { dueno: ana, contenido: "[defaults]\ninventory = inventario.ini\ninterpreter_python = auto_silent\n" }
+    /home/ana/ansible/inventario.ini: { dueno: ana, contenido: "[web]\nweb01\nweb02\n" }
+  servidores:
+    - { hostname: web01, ip: 192.168.10.21, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: web02, ip: 192.168.10.22, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+pasos:
+  - consigna: >-
+      Escribí base.yml con un play para el grupo web, con become, y tres tareas: instalar tree y
+      chrony (las dos en una sola tarea, con una lista en name), crear el usuario operador en el
+      grupo wheel (sin sacarlo de otros grupos) y dejar /etc/motd con el texto "Servidor de la
+      tienda. Administrado con Ansible." y permisos 0644. Revisá la sintaxis con --syntax-check y
+      corrélo.
+    verificar:
+      - { en: web02, verificar: { usuario: operador, en_grupos: [wheel] } }
+      - { en: web01, verificar: { archivo: /etc/motd, contenido_incluye: "Administrado con Ansible", modo: "644" } }
+      - { en: web01, verificar: { paquete: tree } }
+      - { salida_regex: "web02\\s+: ok=4\\s+changed=3" }
+    pistas:
+      - "El play: - name, hosts: web, become: true, tasks:. Cada tarea: - name, el módulo (ansible.builtin.package, .user, .copy) y sus argumentos con más sangría."
+      - "Para varios paquetes: name: [tree, chrony]. Para el usuario: groups: wheel y append: true."
+      - "ansible-playbook base.yml --syntax-check y después ansible-playbook base.yml"
+    solucion:
+      - |-
+        cat > base.yml <<'EOF'
+        - name: Configuración base
+          hosts: web
+          become: true
+          tasks:
+            - name: Paquetes básicos
+              ansible.builtin.package:
+                name: [tree, chrony]
+                state: present
+            - name: Usuario de operaciones
+              ansible.builtin.user:
+                name: operador
+                groups: wheel
+                append: true
+            - name: Mensaje del día
+              ansible.builtin.copy:
+                content: "Servidor de la tienda. Administrado con Ansible.\n"
+                dest: /etc/motd
+                mode: '0644'
+        EOF
+      - ansible-playbook base.yml --syntax-check
+      - ansible-playbook base.yml
+    explicacion: >-
+      ok=4 es Gathering Facts más las tres tareas, y changed=3 dice que las tres cambiaron algo
+      (chrony ya estaba, pero tree no, así que la tarea de paquetes cambió). append: true es
+      importante: sin él, Ansible deja al usuario solo en los grupos que le pasás y lo saca de los
+      demás.
+  - consigna: >-
+      Agregá al final de las tareas una que deje "PermitRootLogin no" en /etc/ssh/sshd_config con
+      lineinfile (reemplazando la línea que empieza con PermitRootLogin o con #PermitRootLogin), que
+      valide el archivo con `/usr/sbin/sshd -t -f %s` y que avise a un handler "Reiniciar sshd".
+      Antes de aplicarlo, mirá qué haría con --check --diff, sin cambiar nada.
+    verificar:
+      - { salida_contiene: "+PermitRootLogin no" }
+      - { comando_usado: "--check" }
+      - { en: web01, verificar: { archivo: /etc/ssh/sshd_config, contenido_no_incluye: "\nPermitRootLogin no" } }
+    pistas:
+      - "regexp: '^#?PermitRootLogin' y line: PermitRootLogin no. validate va como otro argumento de lineinfile."
+      - "Al nivel de tasks (no adentro), una sección handlers: con - name: Reiniciar sshd y ansible.builtin.service con name: sshd y state: restarted."
+      - "ansible-playbook base.yml --check --diff"
+    solucion:
+      - |-
+        cat > base.yml <<'EOF'
+        - name: Configuración base
+          hosts: web
+          become: true
+          tasks:
+            - name: Paquetes básicos
+              ansible.builtin.package:
+                name: [tree, chrony]
+                state: present
+            - name: Usuario de operaciones
+              ansible.builtin.user:
+                name: operador
+                groups: wheel
+                append: true
+            - name: Mensaje del día
+              ansible.builtin.copy:
+                content: "Servidor de la tienda. Administrado con Ansible.\n"
+                dest: /etc/motd
+                mode: '0644'
+            - name: Sin acceso de root por SSH
+              ansible.builtin.lineinfile:
+                path: /etc/ssh/sshd_config
+                regexp: '^#?PermitRootLogin'
+                line: PermitRootLogin no
+                validate: /usr/sbin/sshd -t -f %s
+              notify: Reiniciar sshd
+          handlers:
+            - name: Reiniciar sshd
+              ansible.builtin.service:
+                name: sshd
+                state: restarted
+        EOF
+      - ansible-playbook base.yml --check --diff
+    explicacion: >-
+      --check (modo de prueba) recorre todo y dice qué cambiaría, sin cambiarlo; --diff muestra las
+      líneas que se sacan (-) y las que se ponen (+). Es lo primero que se corre antes de aplicar
+      un cambio en producción, y lo que va en la descripción de un pull request.
+  - consigna: Ahora aplicalo de verdad. Fijate cuántas veces se reinicia sshd en cada servidor.
+    verificar:
+      - { en: web02, verificar: { archivo: /etc/ssh/sshd_config, contenido_incluye: "\nPermitRootLogin no" } }
+      - { salida_contiene: "RUNNING HANDLER [Reiniciar sshd]" }
+    pistas:
+      - "ansible-playbook base.yml"
+    solucion:
+      - ansible-playbook base.yml
+    explicacion: >-
+      Las tareas que ya estaban aplicadas dan ok, la de sshd da changed, y el handler corre una
+      vez por servidor al final del play. El validate es una red de seguridad: si la línea dejara
+      el archivo inválido, sshd -t falla y Ansible no lo reemplaza, en vez de dejarte sin poder
+      entrar.
+  - consigna: >-
+      Corré el playbook una vez más. Así se comprueba que es idempotente: no tiene que cambiar nada
+      ni reiniciar nada.
+    verificar:
+      - { salida_regex: "web01\\s+: ok=5\\s+changed=0" }
+      - { salida_no_contiene: "RUNNING HANDLER" }
+    pistas:
+      - "El mismo comando del paso anterior."
+    solucion:
+      - ansible-playbook base.yml
+    explicacion: >-
+      changed=0 en todos los servidores es la señal de que el playbook describe un estado y no una
+      lista de acciones: se puede correr cada noche para detectar (y corregir) lo que alguien haya
+      cambiado a mano.

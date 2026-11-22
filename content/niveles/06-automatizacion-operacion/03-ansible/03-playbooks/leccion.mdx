@@ -1,0 +1,135 @@
+---
+id: n6-m3-l3
+titulo: Playbooks
+minutos: 180
+objetivos:
+  - Escribir playbooks con plays, tareas y los módulos más usados (package, service, copy, template, user, file, lineinfile).
+  - Recargar servicios solo cuando hace falta, con handlers.
+  - Probar con --syntax-check, --check y --diff, leer la salida y los errores, y verificar la idempotencia.
+glosario: [playbook, handler, modo-prueba, fqcn]
+verificado: 2026-11
+---
+
+import anatomia from './anatomia.svg?raw'
+import anatomiaDatos from './anatomia.yaml'
+import ejEditor from './ej-playbook-editor.yaml'
+import ejBase from './ej-base.yaml'
+
+Un comando ad hoc hace una cosa en muchos servidores. Un **playbook** describe todo lo que tiene que tener un tipo de servidor, en orden, en un archivo que se versiona, se revisa en un pull request y se puede volver a correr cuando quieras. Es el corazón de Ansible: casi todo lo que vas a hacer con él de acá en adelante es escribir, probar y mejorar playbooks.
+
+<AntesDeEmpezar>
+- Inventarios y comandos ad hoc (lección 6.3.2).
+- Servicios con systemd y sshd_config (lecciones 1.3.3 y 1.6.2).
+</AntesDeEmpezar>
+
+## Anatomía de un playbook
+
+<DiagramaInteractivo datos={anatomiaDatos} svg={anatomia} alt="A la izquierda, un playbook: un play llamado Servidores web para el grupo web con become true; dos tareas, una que instala nginx con ansible.builtin.package y otra que copia una plantilla con ansible.builtin.template y avisa al handler Recargar nginx; y abajo el handler, que recarga nginx con ansible.builtin.service. A la derecha, la salida al correrlo: PLAY, TASK Gathering Facts ok, cada tarea changed, RUNNING HANDLER Recargar nginx changed, y el PLAY RECAP con ok=4 changed=3. La segunda vez, changed=0 y el handler no corre." />
+
+Algunas reglas de escritura que conviene adoptar desde el principio (y que revisa ansible-lint, en la lección 6.3.6):
+
+- Cada tarea con un **name** que diga cómo tiene que quedar ("nginx instalado", "Sin acceso de root por SSH"), con mayúscula inicial. Es lo que se lee en la salida.
+- Los módulos con su **nombre completo** (FQCN): `ansible.builtin.copy` en lugar de `copy`. Así no hay dudas de qué módulo es, aunque haya colecciones con nombres parecidos.
+- Los argumentos como **mapa**, uno por línea, y no en la forma vieja `name=nginx state=present` en una línea.
+- Booleanos como `true` y `false` (no `yes` y `no`), y los permisos como texto entre comillas: `mode: '0644'`.
+- Si un valor empieza con `{{`, entre comillas: `dest: "{{ ruta }}/app.conf"`. Sin comillas, YAML cree que es un diccionario.
+
+## Los módulos que más se usan
+
+| Módulo | Para qué | Lo esencial |
+|---|---|---|
+| `ansible.builtin.package` | Paquetes (usa dnf o apt según el servidor) | `name` (uno o una lista), `state: present / absent / latest` |
+| `ansible.builtin.service` | Servicios | `name`, `state: started / stopped / restarted / reloaded`, `enabled: true` |
+| `ansible.builtin.copy` | Un archivo con contenido fijo | `src` (de la carpeta files/) o `content`, `dest`, `owner`, `group`, `mode` |
+| `ansible.builtin.template` | Un archivo armado con variables | `src` (un .j2 de templates/), `dest`; lección siguiente |
+| `ansible.builtin.file` | Carpetas, enlaces, permisos, borrar | `path`, `state: directory / absent / link / touch`, `mode` |
+| `ansible.builtin.lineinfile` | Una línea dentro de un archivo | `path`, `regexp`, `line`, `validate` |
+| `ansible.builtin.user` | Usuarios | `name`, `groups` y `append: true`, `shell`, `state` |
+| `ansible.builtin.command` y `shell` | Lo que no tiene módulo | siempre con `changed_when` o `creates` (lección 6.3.6) |
+
+Dos argumentos que salvan problemas: **backup: true** (en copy, template y lineinfile) guarda una copia del archivo anterior con la fecha, y **validate** prueba el archivo nuevo antes de ponerlo en su lugar (`visudo -cf %s` para sudoers, `sshd -t -f %s` para sshd, `nginx -t -c %s` para nginx). Con validate, un error de tipeo no te deja afuera del servidor.
+
+`ansible-doc ansible.builtin.copy` muestra la documentación de un módulo en la terminal, con ejemplos; `ansible-doc -s` solo el esqueleto para copiar.
+
+## Handlers
+
+Un cambio de configuración casi siempre necesita recargar o reiniciar un servicio, pero solo si la configuración cambió. Para eso están los **handlers**: tareas que corren solo si alguna tarea las avisó con **notify** y terminó en changed, una sola vez, al final del play.
+
+```yaml
+  tasks:
+    - name: Sitio de la tienda
+      ansible.builtin.template:
+        src: tienda.conf.j2
+        dest: /etc/nginx/conf.d/tienda.conf
+        mode: '0644'
+        validate: nginx -t -c %s
+      notify: Recargar nginx
+  handlers:
+    - name: Recargar nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+```
+
+El nombre en notify tiene que ser exactamente el del handler (mayúsculas incluidas). Si una tarea posterior falla en un servidor, sus handlers ya avisados **no** corren, y la próxima vez la tarea dará ok (el archivo ya cambió), así que nadie volverá a avisar: el servicio queda con la configuración vieja. Para esos casos están `--force-handlers` y la tarea `ansible.builtin.meta: flush_handlers`, que corre en ese momento los handlers pendientes.
+
+Practicá la estructura en el editor:
+
+<EditorConfig ejercicio={ejEditor} />
+
+## Correrlo con cuidado
+
+| Comando | Qué hace |
+|---|---|
+| `ansible-playbook sitio.yml --syntax-check` | Solo revisa que se pueda leer |
+| `ansible-playbook sitio.yml --list-tasks` | Lista las tareas, sin conectarse |
+| `ansible-playbook sitio.yml --check --diff` | Modo de prueba: dice qué cambiaría y muestra las diferencias, sin cambiar nada |
+| `ansible-playbook sitio.yml -l web01` | Solo en web01 |
+| `ansible-playbook sitio.yml -v` (o -vv, -vvv) | Más detalle: el resultado de cada tarea, la ruta del archivo, la conexión |
+| `ansible-playbook sitio.yml --start-at-task "Sitio"` | Empieza desde esa tarea |
+
+El **modo de prueba** (`--check`) tiene un límite que conviene conocer: no ejecuta los comandos (command y shell se saltean) y no instala nada, así que una tarea que depende de algo que crea una tarea anterior puede fallar solo en la prueba (por ejemplo, copiar un archivo en /etc/nginx cuando nginx todavía no está instalado). Es esperable, no un error del playbook.
+
+### Leer un error
+
+```text
+TASK [Instalar paquetes] *******************************************************
+fatal: [web01]: FAILED! => {"changed": false, "failures": ["No package ngnix available."], "msg": "Failed to install some of the specified packages", "rc": 1, "results": []}
+```
+
+`fatal: [equipo]: FAILED!` y después el resultado del módulo en JSON: el campo **msg** casi siempre dice qué pasó (acá, un nombre de paquete mal escrito). Ese servidor deja de recibir tareas, los demás siguen, y al final el PLAY RECAP lo cuenta como failed. Los errores que aparecen **antes** de empezar ("ERROR! ... The error appears to be in 'sitio.yml': line 12, column 7") son de escritura: YAML mal sangrado, un módulo que no existe, un argumento en el lugar equivocado; Ansible muestra la línea y marca la columna con ^.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejBase} />
+
+<EnSimple>
+Un playbook es un archivo YAML con uno o varios plays: cada play dice en qué servidores (hosts), si usa sudo (become) y qué tareas hace, en orden. Cada tarea usa un módulo con su nombre completo y sus argumentos. Los handlers son tareas que corren solo si otra tarea las avisó con notify porque cambió algo, una vez, al final. Antes de aplicar se prueba con --syntax-check y con --check --diff, que muestra qué cambiaría sin tocar nada. Y un playbook bien hecho, corrido dos veces, la segunda da changed=0.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Los argumentos del módulo con la misma sangría que el módulo">
+    Ansible los toma como atributos de la tarea y da "is not a valid attribute" o "conflicting action statements". Van con dos espacios más.
+  </ErrorComun>
+  <ErrorComun titulo="notify con un nombre que no coincide">
+    "The requested handler was not found": el nombre tiene que ser idéntico, mayúsculas incluidas.
+  </ErrorComun>
+  <ErrorComun titulo="Reiniciar el servicio como una tarea más">
+    Se reinicia en cada corrida aunque nada haya cambiado. Va en un handler.
+  </ErrorComun>
+  <ErrorComun titulo="Un valor que empieza con {{ sin comillas">
+    YAML lo lee como un diccionario y falla. `"{{ variable }}"`, entre comillas.
+  </ErrorComun>
+  <ErrorComun titulo="Aplicar sin --check --diff primero">
+    En producción, siempre primero el modo de prueba, y recién después el cambio real.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Playbook: lista de plays (hosts, become, vars, tasks, handlers); cada tarea con name, el módulo en FQCN y sus argumentos.
+- Módulos clave: package, service, copy, template, file, lineinfile, user; backup y validate para archivos sensibles.
+- Handlers: corren solo si una tarea avisó y cambió, una vez, al final del play; flush_handlers y --force-handlers para casos especiales.
+- --syntax-check, --list-tasks, --check --diff, -l, -v; check mode no ejecuta comandos ni instala.
+- Errores: fatal y el msg del módulo en la corrida; "ERROR! ... line X, column Y" al leer el archivo.
+- Idempotencia: la segunda corrida tiene que dar changed=0.
+</Resumen>

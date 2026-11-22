@@ -1,0 +1,133 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cuándo corre un handler?
+  opciones:
+    - { texto: "Solo si una tarea lo avisó con notify y esa tarea cambió algo; una vez, al final del play", correcta: true, explicacion: "Por eso sirve para recargar servicios solo cuando hace falta." }
+    - { texto: "Siempre, al final del playbook", explicacion: "Solo si lo avisaron." }
+    - { texto: "Antes de las tareas", explicacion: "Al final." }
+    - { texto: "Cada vez que una tarea lo nombra, aunque no cambie nada", explicacion: "Solo si la tarea dio changed." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Qué hace ansible-playbook sitio.yml --check --diff?
+  opciones:
+    - { texto: "Muestra qué cambiaría y las diferencias en los archivos, sin cambiar nada", correcta: true, explicacion: "Es el modo de prueba." }
+    - { texto: "Aplica los cambios y después los muestra", explicacion: "--check no cambia nada." }
+    - { texto: "Solo revisa la sintaxis", explicacion: "Eso es --syntax-check." }
+    - { texto: "Compara dos playbooks", explicacion: "No." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Corrés el playbook por segunda vez. ¿Qué indica el resultado?
+  salida: |
+    PLAY RECAP *********************************************************************
+    web01                      : ok=5    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+  opciones:
+    - { texto: "Una tarea cambia algo en cada corrida: no es idempotente y hay que revisarla", correcta: true, explicacion: "Suele ser un command o shell sin changed_when, o un reinicio como tarea." }
+    - { texto: "Todo está perfecto", explicacion: "La segunda vez debería dar changed=0." }
+    - { texto: "Falló una tarea", explicacion: "failed=0." }
+    - { texto: "web01 no respondió", explicacion: "unreachable=0." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué hay que corregir?
+  salida: |
+    ERROR! conflicting action statements: ansible.builtin.copy, dest
+
+    The error appears to be in '/home/ana/ansible/web.yml': line 9, column 7, but may
+    be elsewhere in the file depending on the exact syntax problem.
+
+    The offending line appears to be:
+
+        - name: Página de inicio
+          ^ here
+  opciones:
+    - { texto: "Los argumentos de copy (como dest) tienen la misma sangría que el módulo: van con más sangría, adentro", correcta: true, explicacion: "Ansible cree que dest es otro módulo." }
+    - { texto: "No se puede usar copy y dest juntos", explicacion: "dest es un argumento de copy." }
+    - { texto: "Falta instalar copy", explicacion: "Viene con ansible-core." }
+    - { texto: "La línea 9 sobra", explicacion: "El problema es la sangría de lo que sigue." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene escribir ansible.builtin.package en lugar de package?
+  opciones:
+    - { texto: "Es el nombre completo (FQCN): no hay dudas de qué módulo es aunque haya colecciones con nombres parecidos", correcta: true, explicacion: "ansible-lint lo pide." }
+    - { texto: "Porque package solo no funciona", explicacion: "Funciona, pero es ambiguo." }
+    - { texto: "Porque es más rápido", explicacion: "No." }
+    - { texto: "Porque instala más paquetes", explicacion: "No." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Completá el comando que revisa que sitio.yml se pueda leer, sin ejecutarlo.
+  prompt: "ana@admin01:~/ansible$"
+  aceptadas:
+    - "ansible-playbook sitio.yml --syntax-check"
+    - "ansible-playbook --syntax-check sitio.yml"
+  explicacion: Detecta errores de YAML, módulos que no existen y argumentos fuera de lugar.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: En --check, la tarea que copia /etc/nginx/conf.d/tienda.conf falla con "Destination directory /etc/nginx/conf.d does not exist", pero corriendo de verdad anda. ¿Por qué?
+  opciones:
+    - { texto: "En modo de prueba la tarea anterior no instaló nginx, así que la carpeta todavía no existe", correcta: true, explicacion: "Es una limitación esperable de --check." }
+    - { texto: "El playbook está mal", explicacion: "Corriendo de verdad anda." }
+    - { texto: "--check no puede copiar archivos", explicacion: "Puede simularlo, si la carpeta existe." }
+    - { texto: "Falta become", explicacion: "No es un problema de permisos." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué argumentos ayudan a no romper un archivo de configuración importante?
+  opciones:
+    - { texto: "validate (prueba el archivo nuevo antes de ponerlo)", correcta: true, explicacion: "Por ejemplo, sshd -t -f %s." }
+    - { texto: "backup: true (guarda el anterior)", correcta: true, explicacion: "Con fecha en el nombre." }
+    - { texto: "ignore_errors: true", explicacion: "Esconde los problemas." }
+    - { texto: "--diff para revisarlo antes", correcta: true, explicacion: "Junto con --check." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená cómo aplicar un playbook nuevo en producción.
+  pasos:
+    - "ansible-playbook sitio.yml --syntax-check"
+    - "ansible-playbook sitio.yml --check --diff"
+    - "ansible-playbook sitio.yml -l web01 (un servidor primero)"
+    - "ansible-playbook sitio.yml (todos)"
+    - "Correrlo otra vez y confirmar changed=0"
+  explicacion: Sintaxis, prueba sin cambios, un servidor, todos, y la comprobación de idempotencia.
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas tienen un problema?
+  lenguaje: yaml
+  archivo: |
+    - name: Web
+      hosts: web
+      become: true
+      tasks:
+        - name: Sitio
+          ansible.builtin.template:
+            src: tienda.conf.j2
+            dest: {{ ruta_sitios }}/tienda.conf
+          notify: recargar nginx
+        - name: Reiniciar nginx
+          ansible.builtin.service:
+            name: nginx
+            state: restarted
+      handlers:
+        - name: Recargar nginx
+          ansible.builtin.service:
+            name: nginx
+            state: reloaded
+  lineas_con_error: [8, 9, 10]
+  explicacion: La línea 8 empieza con {{ sin comillas; la 9 avisa a "recargar nginx" con minúscula y no coincide con el handler; y la tarea de la 10 reinicia nginx en cada corrida, cuando eso es trabajo del handler.
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Una tarea cambia la configuración de nginx y avisa al handler, pero la tarea siguiente falla en ese servidor. ¿Qué pasa con el handler?
+  opciones:
+    - { texto: "No corre en ese servidor, y la próxima corrida tampoco lo avisará porque el archivo ya cambió; por eso existen --force-handlers y flush_handlers", correcta: true, explicacion: "El servicio quedaría con la configuración vieja cargada." }
+    - { texto: "Corre igual al final", explicacion: "No, en ese servidor no." }
+    - { texto: "Corre inmediatamente", explicacion: "Los handlers corren al final del play." }
+    - { texto: "Ansible lo corre en la próxima ejecución", explicacion: "No se acuerda de los avisos de una corrida a otra." }
