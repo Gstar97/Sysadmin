@@ -853,6 +853,7 @@ const singleCheckSchema = z.union([
     historial_no_contiene: z.string().optional(),
     fusionada: z.string().optional(),
     hook: z.string().optional(),
+    sin_rama: z.string().optional(),
   }),
   /** Un repositorio de restic (carpeta de este equipo o s3:bucket/prefijo de su almacenamiento de objetos). */
   z.strictObject({ restic_repo: z.string(), existe: z.boolean().optional(), instantaneas_min: z.number().int().optional(), con_ruta: z.string().optional(), con_archivo: z.string().optional(), etiqueta: z.string().optional(), clave: z.string().optional() }),

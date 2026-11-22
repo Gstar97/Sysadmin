@@ -1,0 +1,77 @@
+---
+id: n6-m1-l4
+titulo: Repositorios remotos y colaboración
+minutos: 120
+objetivos:
+  - Trabajar con un repositorio central: clonar, traer y subir cambios.
+  - Entender por qué se rechaza un push y cómo integrar el trabajo de otros.
+  - Colaborar con ramas, pull requests, revisión y ramas protegidas.
+glosario: [remoto-git, pull-request, rama-protegida]
+verificado: 2026-11
+---
+
+import remotos from './remotos.svg?raw'
+import remotosDatos from './remotos.yaml'
+import ejRemotos from './ej-remotos.yaml'
+
+Un repositorio en tu equipo resuelve la historia, pero no el trabajo en equipo: tus compañeros necesitan tus cambios, vos los de ellos, y los servidores tienen que tomar la configuración de algún lado. Para eso hay un **repositorio central** con el que todos se sincronizan. Git no obliga a que exista (es distribuido), pero en la práctica siempre hay uno.
+
+<AntesDeEmpezar>
+- Ramas y fusiones (lección 6.1.3).
+- Claves SSH (lección 1.6.3): con ellas se entra al repositorio central.
+</AntesDeEmpezar>
+
+## Cómo se arma
+
+<DiagramaInteractivo datos={remotosDatos} svg={remotos} alt="Arriba, tres repositorios: tu copia en admin01, con la historia completa, tus ramas locales y origin/main con lo último que trajiste; el repositorio central (git01, GitHub, GitLab o Gitea), llamado origin por las copias y sin archivos sueltos (bare); y la copia de Pablo. Las copias hacen push hacia el central y pull desde él; clone crea una copia. Abajo, el camino de un cambio con pull request: 1, git pull y una rama nueva; 2, commits en la rama; 3, git push -u de la rama al central; 4, el pull request, donde alguien revisa, comenta y aprueba; 5, la fusión en main desde la web, borrando la rama; 6, git pull de todos para traer el main nuevo. main está protegida: nadie sube directo, se fusiona solo con un pull request aprobado y con las pruebas automáticas en verde." />
+
+Los comandos:
+
+- `git clone dirección [carpeta]`: copia un repositorio, con toda su historia, y lo anota como `origin`.
+- `git remote -v`: los remotos configurados; `git remote add nombre dirección` agrega uno.
+- `git fetch`: trae los commits nuevos del remoto **sin tocar tus ramas** (actualiza `origin/main`).
+- `git pull`: `fetch` y después `merge` de la rama que seguís. Es lo primero que se hace al sentarse a trabajar.
+- `git push`: sube tus commits. La primera vez de una rama, `git push -u origin rama`.
+
+Las direcciones pueden ser por **ssh** (`git@github.com:empresa/infra.git` o `ana@git01:/srv/git/infra.git`, con tu clave) o por **https** (con un token de acceso, nunca con tu contraseña). Para un servidor que solo tiene que leer (por ejemplo, para tomar la configuración), se usa una **clave de despliegue** de solo lectura.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejRemotos} />
+
+## Pull requests y revisión
+
+En una plataforma como GitHub, GitLab, Gitea o Forgejo, el flujo de la segunda parte del diagrama se vuelve el estándar del equipo:
+
+- **main protegida**: nadie puede hacer push directo ni push --force; solo se fusiona con un pull request aprobado.
+- **Revisión**: otra persona mira los cambios, comenta línea por línea y aprueba. En infraestructura detecta cosas como una regla de firewall demasiado abierta o una contraseña que se coló.
+- **Pruebas automáticas** (CI): cada pull request corre verificaciones (la sintaxis de los archivos, un linter, que no haya secretos) y solo se puede fusionar si pasan. Lo vas a ver en la próxima lección y en el módulo 6.3.
+
+Para tener tu propio servidor, **Gitea** o **Forgejo** son livianos (un binario y una base de datos) y dan pull requests, permisos y ramas protegidas en la red de la empresa.
+
+<EnSimple>
+Además de tu copia, hay un repositorio central del que todos toman y al que todos suben: un servidor propio por ssh o una plataforma como GitHub o Gitea. git clone trae una copia, git pull trae lo nuevo y lo fusiona con lo tuyo, y git push sube tus commits. Si alguien subió algo antes, tu push se rechaza hasta que hagas git pull. En equipo, cada cambio va en una rama que se sube y se fusiona en main con un pull request que otra persona revisa; main queda protegida para que nadie suba directo.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="git push --force porque el push se rechazó">
+    Pisa los commits de los demás en el central. Lo correcto es git pull, fusionar y volver a subir.
+  </ErrorComun>
+  <ErrorComun titulo="Empezar a trabajar sin git pull">
+    Trabajás sobre una versión vieja y al final hay conflictos que se podían evitar.
+  </ErrorComun>
+  <ErrorComun titulo="Usar la contraseña de la cuenta para https">
+    Las plataformas ya no la aceptan, y con razón. Clave SSH o un token con los permisos justos.
+  </ErrorComun>
+  <ErrorComun titulo="main sin proteger">
+    Cualquier push llega directo a lo que se aplica en producción. Protegerla y fusionar solo con revisión.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Repositorio central: servidor propio (git init --bare, por ssh) o plataforma (GitHub, GitLab, Gitea, Forgejo).
+- git clone, git remote -v, git fetch, git pull (fetch + merge), git push (-u la primera vez).
+- Push rechazado: git pull, resolver si hace falta, y push; nunca --force sobre lo compartido.
+- Pull request: rama, push, revisión y aprobación, fusión en main y borrar la rama.
+- main protegida, revisión obligatoria y pruebas automáticas antes de fusionar.
+</Resumen>

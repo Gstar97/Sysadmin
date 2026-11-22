@@ -1,0 +1,101 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hace git pull?
+  opciones:
+    - { texto: "Trae los commits nuevos del remoto y los fusiona con tu rama", correcta: true, explicacion: "Es fetch más merge." }
+    - { texto: "Sube tus commits", explicacion: "Eso es git push." }
+    - { texto: "Crea un repositorio", explicacion: "No." }
+    - { texto: "Borra lo local y deja lo del remoto", explicacion: "No borra nada." }
+- id: p02
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó y qué hacés?
+  salida: |
+    ana@admin01:~/infra$ git push
+    To ana@git01:/srv/git/infra.git
+     ! [rejected]        main -> main (fetch first)
+    error: failed to push some refs to 'ana@git01:/srv/git/infra.git'
+    hint: Updates were rejected because the remote contains work that you do not
+    hint: have locally.
+  opciones:
+    - { texto: "Alguien subió commits que no tenés: git pull, resolver si hace falta, y git push", correcta: true, explicacion: "Git no pisa trabajo ajeno." }
+    - { texto: "git push --force", explicacion: "Borraría los commits del otro." }
+    - { texto: "Borrar la copia y clonar de nuevo", explicacion: "Perdés tus commits." }
+    - { texto: "Es un problema de permisos", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre git fetch y git pull?
+  opciones:
+    - { texto: "fetch trae los commits sin tocar tus ramas; pull además los fusiona", correcta: true, explicacion: "Con fetch podés mirar antes de fusionar." }
+    - { texto: "Son iguales", explicacion: "No." }
+    - { texto: "fetch sube y pull baja", explicacion: "No." }
+    - { texto: "fetch borra las ramas viejas", explicacion: "No." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que sube la rama nueva-regla a origin por primera vez y la deja siguiendo a la del remoto.
+  prompt: "ana@admin01:~/infra$"
+  aceptadas:
+    - "git push -u origin nueva-regla"
+    - "git push --set-upstream origin nueva-regla"
+  explicacion: Después alcanza con git push.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es un pull request?
+  opciones:
+    - { texto: "Un pedido de fusionar una rama en main, con los cambios a la vista para que alguien los revise", correcta: true, explicacion: "En GitLab se llama merge request." }
+    - { texto: "Un git pull automático", explicacion: "No." }
+    - { texto: "Un tipo de rama", explicacion: "No." }
+    - { texto: "Una copia de seguridad", explicacion: "No." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene configurar para main en el repositorio central del equipo? (Elegí todas las correctas.)
+  opciones:
+    - { texto: "Que no se pueda hacer push directo", correcta: true, explicacion: "Solo con pull request." }
+    - { texto: "Que haga falta al menos una aprobación", correcta: true, explicacion: "Revisión obligatoria." }
+    - { texto: "Que las pruebas automáticas pasen antes de fusionar", correcta: true, explicacion: "Sintaxis, secretos, linter." }
+    - { texto: "Que se permita push --force a todos", explicacion: "Al contrario." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor tiene que clonar el repositorio de configuraciones para aplicarlas. ¿Qué acceso le das?
+  opciones:
+    - { texto: "Una clave de despliegue de solo lectura para ese repositorio", correcta: true, explicacion: "Lo justo y necesario." }
+    - { texto: "Tu clave personal", explicacion: "Si roban el servidor, roban tu acceso a todo." }
+    - { texto: "La contraseña de tu cuenta", explicacion: "Nunca." }
+    - { texto: "Un usuario administrador de la plataforma", explicacion: "Demasiados permisos." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué es "origin"?
+  opciones:
+    - { texto: "El nombre que se le da por costumbre al remoto del que clonaste", correcta: true, explicacion: "Se puede cambiar o tener varios." }
+    - { texto: "La primera rama", explicacion: "No." }
+    - { texto: "El primer commit", explicacion: "No." }
+    - { texto: "Un comando", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés un servidor propio con pull requests y ramas protegidas en la red de la empresa. ¿Qué usás?
+  opciones:
+    - { texto: "Gitea o Forgejo (o GitLab, si hay recursos)", correcta: true, explicacion: "Gitea y Forgejo son livianos." }
+    - { texto: "Una carpeta compartida por Samba", explicacion: "No es un servidor de Git." }
+    - { texto: "git init --bare solo", explicacion: "Sirve como central, pero sin pull requests." }
+    - { texto: "No se puede sin GitHub", explicacion: "Se puede." }
+- id: p10
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená el camino de un cambio con pull request.
+  pasos:
+    - "git pull en main y crear una rama"
+    - "Hacer los commits en la rama"
+    - "git push -u origin rama"
+    - "Abrir el pull request y esperar la revisión"
+    - "Fusionar en main y borrar la rama"
+    - "git pull en main en todas las copias"
+  explicacion: Con main protegida, es la única forma de que un cambio entre.

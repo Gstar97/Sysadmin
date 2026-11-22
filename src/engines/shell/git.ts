@@ -1845,6 +1845,7 @@ register('git', {
         const setUp = flag('-u', '--set-upstream')
         const forced = flag('-f', '--force', '--force-with-lease')
         const tags = flag('--tags')
+        const delRemote = flag('--delete', '-d')
         flag('--all')
         const name = pos()[0] ?? 'origin'
         const br = pos()[1] ?? branchName(repo)
@@ -1864,6 +1865,19 @@ register('git', {
         }
         const dst = remote.repo
         let out = `To ${url}\n`
+        if (delRemote || br.startsWith(':')) {
+          const b = br.replace(/^:/, '')
+          if (!dst.refs.has(`refs/heads/${b}`)) {
+            ctx.err(`error: unable to delete '${b}': remote ref does not exist\nerror: failed to push some refs to '${url}'\n`)
+            return 1
+          }
+          dst.refs.delete(`refs/heads/${b}`)
+          repo.refs.delete(`refs/remotes/${name}/${b}`)
+          syncRefFiles(remote.sys, remote.path, dst)
+          save()
+          ctx.err(`${out} - [deleted]         ${b}\n`)
+          return 0
+        }
         if (tags) {
           for (const [r, id] of repo.refs) if (r.startsWith('refs/tags/') && !dst.refs.has(r)) {
             copyCommits(repo, dst, [id])
@@ -2293,6 +2307,7 @@ export function verifyGit(sys: System, check: object): { ok: boolean; label: str
     historial_no_contiene?: string
     fusionada?: string
     hook?: string
+    sin_rama?: string
   }
   const found = repos(sys).get(normalizePath(c.git_repo))
   const repo = found && sys.vfs.exists(`${gitDir(normalizePath(c.git_repo), found.bare)}/HEAD`, ROOT_CRED) ? found : undefined
@@ -2308,6 +2323,10 @@ export function verifyGit(sys: System, check: object): { ok: boolean; label: str
   if (ok && c.ramas) {
     ok = c.ramas.every((b) => repo!.refs.has(`refs/heads/${b}`))
     parts.push(`con las ramas ${c.ramas.join(', ')}`)
+  }
+  if (ok && c.sin_rama) {
+    ok = !repo!.refs.has(`refs/heads/${c.sin_rama}`)
+    parts.push(`sin la rama ${c.sin_rama}`)
   }
   if (ok && c.commits_min !== undefined) {
     ok = !!head && history(repo!, [head.id]).length >= c.commits_min

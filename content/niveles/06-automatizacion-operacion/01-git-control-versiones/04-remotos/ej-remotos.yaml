@@ -1,0 +1,138 @@
+tipo: terminal
+shell: bash
+titulo: El repositorio central y un compañero que también trabaja
+descripcion: >-
+  El repositorio de infraestructura de la empresa vive en git01 (192.168.10.40), en
+  /srv/git/infra.git. Vos trabajás desde admin01 (usuario ana) y Pablo, desde admin02 (.6), con su
+  propia copia. Los dos entran a git01 por ssh con su clave. El equipo acordó: nadie commitea
+  directo en main; cada cambio va en una rama que otro revisa antes de fusionar.
+estado_inicial:
+  distro: ubuntu
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [git] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/.gitconfig: { dueno: ana, contenido: "[user]\n\tname = Ana Gómez\n\temail = ana@ejemplo.test\n[init]\n\tdefaultBranch = main\n" }
+    /home/ana/simular-pablo.sh:
+      dueno: ana
+      modo: "755"
+      contenido: |
+        #!/bin/bash
+        # Pablo, desde admin02, agrega un script de limpieza y lo sube a main (ya revisado).
+        ssh pablo@admin02 'cd ~/infra && printf "#!/bin/bash\nfind /var/log/tienda -mtime +30 -delete\n" > scripts/limpieza.sh && git add scripts/limpieza.sh && git commit -qm "Limpieza de logs de más de 30 días" && git push -q'
+        echo "Pablo subió un commit a main."
+  servidores:
+    - hostname: git01
+      ip: 192.168.10.40
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: ana, clave_ssh: true }, { nombre: pablo, clave_ssh: true }]
+      paquetes: { instalados: [git] }
+      git:
+        repos:
+          - ruta: /srv/git/infra.git
+            bare: true
+            commits:
+              - mensaje: Primera versión de la tienda y del respaldo
+                archivos:
+                  nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    client_max_body_size 20m;\n}\n"
+                  scripts/respaldo.sh: "#!/bin/bash\nset -euo pipefail\nrestic backup /srv/datos --tag diario\n"
+              - mensaje: HTTPS con la CA interna
+                archivos:
+                  nginx/tienda.conf: "server {\n    listen 443 ssl;\n    server_name tienda.ejemplo.test;\n    ssl_certificate /etc/ssl/tienda.crt;\n    client_max_body_size 20m;\n}\n"
+              - mensaje: Ignorar secretos y logs
+                archivos:
+                  .gitignore: ".env\n*.log\n"
+    - hostname: admin02
+      ip: 192.168.10.6
+      clave_conocida: si
+      distro: ubuntu
+      usuarios: [{ nombre: pablo, clave_ssh: true }]
+      paquetes: { instalados: [git] }
+      archivos:
+        /home/pablo/.gitconfig: { dueno: pablo, contenido: "[user]\n\tname = Pablo Ruiz\n\temail = pablo@ejemplo.test\n" }
+      git:
+        repos:
+          - { ruta: /home/pablo/infra, usuario: pablo, remotos: { origin: "pablo@git01:/srv/git/infra.git" } }
+pasos:
+  - consigna: Traé una copia del repositorio central a ~/infra y mirá su historia y su remoto.
+    verificar:
+      - { git_repo: /home/ana/infra, remoto: origin, commits_min: 3, rama: main }
+    pistas:
+      - "git clone ana@git01:/srv/git/infra.git ~/infra"
+      - "git log --oneline y git remote -v"
+    solucion:
+      - git clone ana@git01:/srv/git/infra.git ~/infra
+      - cd ~/infra
+      - git log --oneline
+      - git remote -v
+      - git status
+    explicacion: >-
+      git clone copia el repositorio entero, con toda su historia, y deja anotado el original con
+      el nombre "origin". main queda "siguiendo" a origin/main: por eso git status dice "up to
+      date with 'origin/main'". La dirección ana@git01:/srv/git/infra.git es ssh: entra con tu
+      clave, como en la lección 1.6.3.
+  - consigna: >-
+      Hay que subir el límite de la tienda a 50 MB. Hacelo en una rama "limite-50m" y subila a git01
+      para que Pablo la revise.
+    verificar:
+      - { en: git01, verificar: { git_repo: /srv/git/infra.git, ramas: [main, limite-50m] } }
+      - { git_repo: /home/ana/infra, rama: limite-50m, sincronizado: true }
+    pistas:
+      - "git switch -c limite-50m, sed y git commit -am"
+      - "git push -u origin limite-50m (-u deja la rama siguiendo a la de git01)."
+    solucion:
+      - git switch -c limite-50m
+      - sed -i 's/client_max_body_size 20m;/client_max_body_size 50m;/' nginx/tienda.conf
+      - git commit -am "Límite de subida a 50 MB"
+      - git push -u origin limite-50m
+    explicacion: >-
+      git push manda tus commits al remoto. La primera vez, -u (--set-upstream) anota a qué rama
+      del remoto corresponde la tuya; después alcanza con git push. En GitHub, GitLab o Gitea, este
+      es el momento de abrir un pull request (o merge request): la página que muestra los cambios
+      para que otro los revise y comente antes de fusionar.
+  - consigna: >-
+      Pablo aprobó tu cambio, pero antes subió uno suyo a main: ejecutá ~/simular-pablo.sh. Después
+      fusioná tu rama en main y subí main a git01, resolviendo lo que haga falta.
+    verificar:
+      - { git_repo: /home/ana/infra, rama: main, fusionada: limite-50m, sincronizado: true }
+      - { en: git01, verificar: { git_repo: /srv/git/infra.git, commits_min: 6 } }
+      - { archivo: /home/ana/infra/scripts/limpieza.sh, contenido_incluye: mtime }
+    pistas:
+      - "git switch main y git merge limite-50m; después git push."
+      - "El push se rechaza: git01 tiene un commit que vos no. git pull lo trae (si pregunta cómo, git config pull.rebase false)."
+      - "Después del pull, git push."
+    solucion:
+      - ~/simular-pablo.sh
+      - git switch main
+      - git merge limite-50m
+      - git push
+      - git config pull.rebase false
+      - git pull
+      - git push
+      - git log --oneline --graph
+    explicacion: >-
+      El push se rechazó porque main en git01 tenía un commit de Pablo que vos no tenías: Git nunca
+      pisa trabajo ajeno sin que lo pidas. git pull hace fetch (traer los commits nuevos) y merge
+      (fusionarlos con los tuyos); como tocaron archivos distintos, se fusionó solo. Por eso, antes
+      de empezar algo, conviene git pull: menos sorpresas al final.
+  - consigna: >-
+      La rama ya está fusionada: borrala en tu copia y en git01.
+    verificar:
+      - { git_repo: /home/ana/infra, sin_rama: limite-50m }
+      - { en: git01, verificar: { git_repo: /srv/git/infra.git, sin_rama: limite-50m } }
+    pistas:
+      - "git branch -d limite-50m"
+      - "git push origin --delete limite-50m"
+    solucion:
+      - git branch -d limite-50m
+      - git push origin --delete limite-50m
+      - git branch -a
+    explicacion: >-
+      En GitHub y compañía, la rama del remoto se borra sola al fusionar el pull request (si se
+      configura así). Las ramas viejas que nadie borra se acumulan y confunden.
