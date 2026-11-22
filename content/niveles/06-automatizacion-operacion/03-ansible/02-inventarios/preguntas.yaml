@@ -1,0 +1,116 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es el inventario de Ansible?
+  opciones:
+    - { texto: "La lista de servidores que administra, cómo conectarse y cómo se agrupan", correcta: true, explicacion: "En INI o YAML." }
+    - { texto: "La lista de paquetes instalados", explicacion: "Eso son facts." }
+    - { texto: "El registro de lo que hizo Ansible", explicacion: "No." }
+    - { texto: "Los playbooks", explicacion: "Los playbooks dicen qué hacer; el inventario, dónde." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: "En el inventario dice web02 ansible_host = 10.0.0.5 y Ansible no se conecta a esa IP. ¿Por qué?"
+  opciones:
+    - { texto: "En INI la variable va sin espacios alrededor del =: ansible_host=10.0.0.5", correcta: true, explicacion: "Con espacios no se toma como variable." }
+    - { texto: "Falta poner la IP entre comillas", explicacion: "No hace falta." }
+    - { texto: "ansible_host solo funciona en YAML", explicacion: "Funciona en los dos." }
+    - { texto: "La IP tiene que ir en el DNS", explicacion: "Justamente ansible_host lo evita." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué equipos elige el patrón produccion:!db01?
+  opciones:
+    - { texto: "Todos los de produccion menos db01", correcta: true, explicacion: "! excluye." }
+    - { texto: "Solo db01", explicacion: "Es al revés." }
+    - { texto: "Los de produccion y db01", explicacion: "Eso sería produccion:db01." }
+    - { texto: "Ninguno", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La variable puerto está en group_vars/all.yml (80), en group_vars/web.yml (8080) y en host_vars/web01.yml (9000). ¿Con qué valor queda web01, que está en el grupo web?
+  opciones:
+    - { texto: "9000: gana la más específica, la del equipo", correcta: true, explicacion: "Equipo, después grupo, después all." }
+    - { texto: "80", explicacion: "all es la menos específica." }
+    - { texto: "8080", explicacion: "La del equipo le gana a la del grupo." }
+    - { texto: "Da error por estar repetida", explicacion: "No: se pisan en orden." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    $ ansible web -a "ps aux | grep nginx"
+    web01 | FAILED | rc=1 >>
+    error: garbage option
+    non-zero return code
+  opciones:
+    - { texto: "El módulo command no usa una shell: el | y grep llegaron como argumentos a ps", correcta: true, explicacion: "Con -m shell funciona." }
+    - { texto: "nginx no está instalado", explicacion: "El problema es el comando." }
+    - { texto: "Falta -b", explicacion: "ps no necesita root." }
+    - { texto: "El grupo web no existe", explicacion: "Si no existiera, avisaría que no coincide." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando ad hoc que instala nginx en el grupo web, con sudo.
+  prompt: "ana@admin01:~/ansible$"
+  aceptadas:
+    - "ansible web -b -m package -a \"name=nginx state=present\""
+    - "ansible web -b -m package -a \"name=nginx\""
+    - "ansible web -m package -a \"name=nginx state=present\" -b"
+    - "ansible web --become -m package -a \"name=nginx state=present\""
+    - "ansible web -b -m ansible.builtin.package -a \"name=nginx state=present\""
+  explicacion: -m elige el módulo, -a sus argumentos y -b usa sudo.
+- id: p07
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Corrés dos veces el mismo comando. ¿Qué indica la segunda respuesta?
+  salida: |
+    $ ansible web01 -b -m package -a "name=tree state=present"
+    web01 | SUCCESS => {
+        "changed": false,
+        "msg": "Nothing to do",
+        "rc": 0,
+        "results": []
+    }
+  opciones:
+    - { texto: "El paquete ya estaba instalado: no hizo nada (idempotencia)", correcta: true, explicacion: "La primera vez fue CHANGED." }
+    - { texto: "Falló la instalación", explicacion: "Sería FAILED." }
+    - { texto: "No se pudo conectar", explicacion: "Sería UNREACHABLE." }
+    - { texto: "Lo desinstaló", explicacion: "No." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirven los comandos ad hoc?
+  opciones:
+    - { texto: "Consultar algo en muchos servidores a la vez", correcta: true, explicacion: "Por ejemplo, versiones o espacio en disco." }
+    - { texto: "Un cambio urgente de una vez", correcta: true, explicacion: "Y después pasarlo a un playbook." }
+    - { texto: "Configuraciones permanentes que otro tiene que revisar", explicacion: "Para eso, un playbook en el repositorio." }
+    - { texto: "Probar la conexión con ping", correcta: true, explicacion: "Es el primer comando de todo proyecto." }
+- id: p09
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas de este inventario tienen un problema?
+  lenguaje: ini
+  archivo: |
+    [web]
+    web01
+    web02 ansible_host = 192.168.10.22
+
+    [base de datos]
+    db01
+
+    [produccion:children]
+    web
+  lineas_con_error: [3, 5]
+  explicacion: En la línea 3 la variable lleva espacios alrededor del = (no se toma), y en la 5 el nombre del grupo tiene espacios.
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El playbook dice hosts all, pero querés probarlo solo en web01. ¿Qué hacés?
+  opciones:
+    - { texto: "ansible-playbook sitio.yml --limit web01", correcta: true, explicacion: "Achica la selección sin tocar el playbook." }
+    - { texto: "Editar el playbook y cambiar hosts", explicacion: "Funciona, pero es fácil olvidarse de volverlo atrás." }
+    - { texto: "Apagar los otros servidores", explicacion: "No." }
+    - { texto: "No se puede", explicacion: "Se puede, con --limit." }

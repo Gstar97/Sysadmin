@@ -1,0 +1,104 @@
+tipo: terminal
+shell: bash
+titulo: Inventario en YAML y comandos ad hoc
+descripcion: >-
+  En admin01 ya está ansible-core y la carpeta ~/ansible con su ansible.cfg. Hay que armar el
+  inventario de la tienda y usar comandos ad hoc para revisar y cambiar algo en todos los
+  servidores a la vez. El segundo servidor web todavía no está en el DNS: se llama tienda-web-2 en
+  el inventario, pero hay que conectarse a 192.168.10.22. En los servidores, ana puede usar sudo
+  sin contraseña.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [ansible-core] }
+  directorio: /home/ana/ansible
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/ansible/ansible.cfg: { dueno: ana, contenido: "[defaults]\ninventory = inventario.yml\ninterpreter_python = auto_silent\n" }
+  servidores:
+    - { hostname: web01, ip: 192.168.10.21, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: web02, ip: 192.168.10.22, distro: ubuntu, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: db01, ip: 192.168.10.31, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+pasos:
+  - consigna: >-
+      Escribí inventario.yml en formato YAML: un grupo web con web01 y tienda-web-2 (con
+      ansible_host 192.168.10.22), un grupo db con db01, y un grupo produccion que tenga a web y db
+      como hijos. Mostralo como árbol con ansible-inventory.
+    verificar:
+      - { salida_contiene: "|--@produccion:" }
+      - { salida_contiene: "|  |  |--tienda-web-2" }
+      - { archivo: /home/ana/ansible/inventario.yml, contenido_incluye: "ansible_host: 192.168.10.22" }
+    pistas:
+      - "La estructura: all → children → produccion → children → web → hosts → web01 y tienda-web-2. Cada nivel, dos espacios más."
+      - "Con un heredoc: cat > inventario.yml <<'EOF' ... EOF"
+      - "ansible-inventory --graph"
+    solucion:
+      - |-
+        cat > inventario.yml <<'EOF'
+        all:
+          children:
+            produccion:
+              children:
+                web:
+                  hosts:
+                    web01:
+                    tienda-web-2:
+                      ansible_host: 192.168.10.22
+                db:
+                  hosts:
+                    db01:
+        EOF
+      - ansible-inventory --graph
+    explicacion: >-
+      En YAML, un equipo sin variables se escribe "web01:" (con los dos puntos y nada después). El
+      árbol muestra la jerarquía: produccion contiene a web y a db, y los dos cuelgan de all.
+  - consigna: >-
+      Con un comando ad hoc (el módulo command, que es el que usa ansible si no le decís otro),
+      mirá cuánto hace que está encendido cada servidor de produccion, en una línea por servidor.
+    verificar:
+      - { salida_contiene: "tienda-web-2 | CHANGED | rc=0 | (stdout)" }
+      - { salida_contiene: "db01 | CHANGED" }
+    pistas:
+      - "ansible produccion -a uptime -o"
+    solucion:
+      - ansible produccion -a uptime -o
+    explicacion: >-
+      command aparece como CHANGED porque Ansible no puede saber si un comando cambió algo: siempre
+      supone que sí. -o pone el resultado de cada servidor en una línea.
+  - consigna: >-
+      Instalá tree en todos los servidores de produccion con el módulo package, usando sudo (-b).
+      Después, corré exactamente el mismo comando otra vez y fijate qué cambia en la respuesta.
+    verificar:
+      - { en: web02, verificar: { paquete: tree } }
+      - { en: db01, verificar: { paquete: tree } }
+      - { salida_contiene: "db01 | SUCCESS" }
+    pistas:
+      - "ansible produccion -b -m package -a \"name=tree state=present\""
+      - "La segunda vez tiene que decir SUCCESS en lugar de CHANGED."
+    solucion:
+      - ansible produccion -b -m package -a "name=tree state=present"
+      - ansible produccion -b -m package -a "name=tree state=present"
+    explicacion: >-
+      package usa dnf en Rocky y apt en Ubuntu, sin que tengas que pensar en eso. La segunda vez
+      contesta SUCCESS y "changed": false: el paquete ya estaba, no hizo nada. Eso es la
+      idempotencia en acción.
+  - consigna: >-
+      Por último, dejá el mismo mensaje del día en /etc/motd de los dos servidores web con el
+      módulo copy: "Servidor administrado con Ansible. Cambios: por el repositorio." y permisos 0644.
+    verificar:
+      - { en: web02, verificar: { archivo: /etc/motd, contenido_incluye: "administrado con Ansible", modo: "644" } }
+      - { en: web01, verificar: { archivo: /etc/motd, contenido_incluye: "Cambios: por el repositorio" } }
+    pistas:
+      - "Con -a, el contenido va entre comillas simples dentro de las dobles: -a \"content='...' dest=/etc/motd mode=0644\""
+    solucion:
+      - >-
+        ansible web -b -m copy -a "content='Servidor administrado con Ansible. Cambios: por el repositorio.\n' dest=/etc/motd mode=0644"
+    explicacion: >-
+      Los comandos ad hoc sirven para consultas rápidas y cambios de una vez. Para lo que tiene que
+      quedar así siempre (y que otro pueda revisar), lo correcto es un playbook en el repositorio:
+      es lo de la lección siguiente.

@@ -1,0 +1,44 @@
+tipo: diagrama
+titulo: Un inventario de Ansible
+puntos:
+  - id: grupos
+    titulo: Grupos y equipos
+    area: { x: 2.3, y: 21.2, ancho: 44.2, alto: 10.6 }
+    texto: >-
+      Cada sección entre corchetes es un grupo, y abajo van sus equipos, uno por línea. Un equipo
+      puede estar en varios grupos (web01 podría estar en web y en monitoreo). El nombre del equipo
+      es como lo vas a llamar en Ansible: si no se resuelve por DNS, ansible_host dice a qué IP
+      conectarse.
+  - id: variables-equipo
+    titulo: Variables de conexión
+    area: { x: 2.3, y: 32.9, ancho: 44.2, alto: 17.1 }
+    texto: >-
+      En la misma línea del equipo, clave=valor sin espacios alrededor del =. Las más usadas:
+      ansible_host (la IP o el nombre real), ansible_user (el usuario de SSH), ansible_port (si SSH no
+      está en el 22), ansible_become (usar sudo) y ansible_python_interpreter (otro Python).
+  - id: children
+    titulo: Grupos de grupos
+    area: { x: 2.3, y: 51.8, ancho: 44.2, alto: 15.3 }
+    texto: >-
+      [produccion:children] arma un grupo con otros grupos adentro. Sirve para separar entornos
+      (produccion y pruebas) o regiones, y apuntar a todos de una vez.
+  - id: vars
+    titulo: Variables de grupo
+    area: { x: 2.3, y: 68.8, ancho: 44.2, alto: 11.2 }
+    texto: >-
+      [web:vars] da variables a todos los equipos del grupo. Funciona, pero en proyectos reales
+      conviene ponerlas en archivos aparte: group_vars/web.yml y host_vars/web01.yml, al lado del
+      inventario. Quedan más ordenadas y se pueden cifrar con Vault (lección 6.3.6).
+  - id: arbol
+    titulo: El árbol
+    area: { x: 53.5, y: 11.8, ancho: 44.2, alto: 60.6 }
+    texto: >-
+      Así lo ve Ansible, y así lo muestra ansible-inventory --graph. Siempre hay dos grupos
+      implícitos: all (todos) y ungrouped (los que no están en ningún grupo).
+  - id: precedencia
+    titulo: Quién gana
+    area: { x: 53.5, y: 77.1, ancho: 44.2, alto: 18.8 }
+    texto: >-
+      Si la misma variable está en varios lugares, gana la más específica: la del equipo le gana a
+      la del grupo, la del grupo hijo a la del padre, y la del padre a la de all. Por encima de
+      todo, -e en la línea de comandos. ansible-inventory --host web01 muestra con qué valores quedó.

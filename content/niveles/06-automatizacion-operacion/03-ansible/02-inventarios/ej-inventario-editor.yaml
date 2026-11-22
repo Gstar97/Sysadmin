@@ -1,0 +1,43 @@
+tipo: configuracion
+lenguaje: inventario
+titulo: El inventario de la empresa
+nombre_archivo: inventario.ini
+consigna: >-
+  La empresa tiene dos servidores web (web01 y web02, que en el DNS todavía no existe y está en
+  192.168.10.22), una base de datos (db01, a la que se entra con el usuario admin) y un servidor de
+  pruebas (test01). Completá el inventario para que haya un grupo produccion con los web y la base
+  (pero no test01), y que todos los web tengan la variable http_port=80. Corregí también los
+  errores que ya tiene.
+archivo_inicial: |
+  [web]
+  web01
+  web02
+
+  [base de datos]
+  db01 ansible_user = admin
+
+  [pruebas]
+  test01
+reglas:
+  - { tipo: sin_errores, mensaje: El inventario no tiene errores }
+  - { tipo: yaml_ruta, ruta: grupos.produccion, igual: [web01, web02, db01], mensaje: "produccion tiene web01, web02 y db01 (y no test01)" }
+  - { tipo: yaml_ruta, ruta: equipos.web02.ansible_host, igual: 192.168.10.22, mensaje: web02 se conecta a 192.168.10.22 }
+  - { tipo: yaml_ruta, ruta: equipos.db01.ansible_user, igual: admin, mensaje: db01 usa el usuario admin }
+  - { tipo: yaml_ruta, ruta: variables.web.http_port, igual: 80, mensaje: Los web tienen http_port=80 }
+solucion: |
+  [web]
+  web01
+  web02 ansible_host=192.168.10.22
+
+  [db]
+  db01 ansible_user=admin
+
+  [pruebas]
+  test01
+
+  [produccion:children]
+  web
+  db
+
+  [web:vars]
+  http_port=80

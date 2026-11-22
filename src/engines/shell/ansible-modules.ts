@@ -381,7 +381,12 @@ async function packageModule(m: ModuleCtx, mgr: 'dnf' | 'apt' | 'auto'): Promise
   if (m.check) return { changed: true, msg: `Check mode: No changes made, but would have if not in check mode`, results: todo.map((n) => `${want === 'present' ? 'Installed' : 'Removed'}: ${n}`) }
   const cmd = real === 'apt' ? `apt-get -y ${want === 'present' ? 'install' : 'remove'} ${todo.map(q).join(' ')}` : `dnf -y ${want === 'present' ? 'install' : 'remove'} ${todo.map(q).join(' ')}`
   const r = await m.t.exec(cmd)
-  if (r.rc !== 0) return { failed: true, changed: false, msg: r.stderr.trim() || r.stdout.trim(), rc: r.rc, results: [] }
+  if (r.rc !== 0) {
+    const missing = todo.filter((n) => new RegExp(`(No match for argument|Unable to locate package):? ${n.replace(/[.+]/g, '\\$&')}`).test(r.stdout + r.stderr))
+    if (real === 'dnf' && missing.length) return { failed: true, changed: false, failures: missing.map((n) => `No package ${n} available.`), msg: 'Failed to install some of the specified packages', rc: 1, results: [] }
+    if (real === 'apt' && missing.length) return { failed: true, changed: false, msg: `No package matching '${missing[0]}' is available` }
+    return { failed: true, changed: false, msg: r.stderr.trim() || r.stdout.trim(), rc: r.rc, results: [] }
+  }
   if (real === 'apt') return { changed: true, cache_updated: false, stdout: r.stdout, stderr: r.stderr }
   return { changed: true, msg: '', rc: 0, results: todo.map((n) => `${want === 'present' ? 'Installed' : 'Removed'}: ${n}-${sys.catalog[n]?.version ?? ''}`) }
 }

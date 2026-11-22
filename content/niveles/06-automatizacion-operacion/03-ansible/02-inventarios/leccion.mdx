@@ -1,0 +1,155 @@
+---
+id: n6-m3-l2
+titulo: Inventarios y comandos ad hoc
+minutos: 120
+objetivos:
+  - Escribir inventarios en INI y YAML con grupos, grupos de grupos y variables.
+  - Elegir equipos con patrones y revisar el inventario con ansible-inventory.
+  - Ejecutar módulos ad hoc (ping, command, shell, package, copy, service) con y sin sudo.
+glosario: [inventario-ansible, comando-adhoc, group-vars, modulo-ansible]
+verificado: 2026-11
+---
+
+import inventario from './inventario.svg?raw'
+import inventarioDatos from './inventario.yaml'
+import ejEditor from './ej-inventario-editor.yaml'
+import ejAdhoc from './ej-adhoc.yaml'
+
+Antes de decirle a Ansible qué hacer, hay que decirle dónde: qué servidores existen, cómo se llaman, cómo conectarse y cómo se agrupan. Eso es el inventario. Con él armado, ya podés hacer algo útil sin escribir ningún playbook: los comandos ad hoc, que ejecutan un módulo en muchos servidores a la vez, para preguntar algo o hacer un cambio rápido.
+
+<AntesDeEmpezar>
+- Gestión de configuración y Ansible (lección 6.3.1).
+- Formato YAML (lección 6.2.4).
+</AntesDeEmpezar>
+
+## El inventario
+
+<DiagramaInteractivo datos={inventarioDatos} svg={inventario} alt="A la izquierda, un inventario INI: el grupo web con web01 y web02 (con ansible_host 192.168.10.22), el grupo db con db01 (con ansible_user admin), un grupo produccion que tiene como hijos a web y db, y variables para el grupo web (http_port=80). A la derecha, el árbol que forma: all, produccion, y debajo web y db con sus equipos. Abajo, el orden en que se pisan las variables: all, el grupo padre, el grupo hijo, el equipo y -e en la línea de comandos." />
+
+El mismo inventario en **YAML**, el formato que conviene para proyectos que crecen:
+
+```yaml
+all:
+  children:
+    produccion:
+      children:
+        web:
+          hosts:
+            web01:
+            web02:
+              ansible_host: 192.168.10.22
+          vars:
+            http_port: 80
+        db:
+          hosts:
+            db01:
+              ansible_user: admin
+```
+
+Tres detalles que causan la mayoría de los problemas: en INI, las variables de un equipo van como `clave=valor` **sin espacios** alrededor del `=`; en YAML, un equipo sin variables se escribe con los dos puntos y nada más (`web01:`); y los nombres de grupo no llevan espacios ni guiones (usá guion bajo).
+
+Los rangos ahorran líneas: `web[01:20]` son veinte equipos, de web01 a web20, y `db-[a:c]` son db-a, db-b y db-c.
+
+### Variables en archivos aparte
+
+Para más de dos o tres variables, en lugar de ponerlas en el inventario conviene usar carpetas al lado:
+
+```text
+inventario.yml
+group_vars/
+  all.yml          valen para todos (por ejemplo, el servidor NTP)
+  web.yml          solo para el grupo web
+  db/
+    main.yml       un grupo también puede tener una carpeta con varios archivos
+    vault.yml      (por ejemplo, los secretos cifrados, en la lección 6.3.6)
+host_vars/
+  web01.yml        solo para web01
+```
+
+Ansible los lee solo. Cuando la misma variable aparece en varios lugares gana la más específica: el equipo sobre el grupo, el grupo hijo sobre el padre, el padre sobre all, y por encima de todo `-e variable=valor` en la línea de comandos.
+
+### Revisarlo
+
+```bash
+ansible-inventory --graph              # el árbol de grupos y equipos
+ansible-inventory --host web02         # las variables con las que quedó un equipo
+ansible-inventory --list               # todo, en JSON
+ansible web --list-hosts               # qué equipos elige un patrón
+```
+
+Practicalo en el editor, que avisa de los errores mientras escribís:
+
+<EditorConfig ejercicio={ejEditor} />
+
+## Patrones
+
+En cada comando y en cada playbook se elige a qué equipos apuntar con un **patrón**:
+
+| Patrón | Qué elige |
+|---|---|
+| `all` o `*` | Todos |
+| `web` | El grupo web (con los de sus grupos hijos) |
+| `web01` | Un equipo |
+| `web:db` | Los de web y los de db |
+| `produccion:&web` | Los que están en produccion y también en web |
+| `produccion:!db01` | Los de produccion menos db01 |
+| `web0*` | Los que empiezan con web0 |
+
+Y `--limit` (o `-l`) achica cualquier selección: `ansible-playbook sitio.yml -l web01` corre el playbook solo en web01, aunque diga `hosts: all`. Es la forma segura de probar un cambio en un servidor antes que en todos.
+
+## Comandos ad hoc
+
+Un comando ad hoc ejecuta **un módulo** en los equipos de un patrón:
+
+```bash
+ansible PATRÓN -m MÓDULO -a "ARGUMENTOS" [-b] [-K] [-o]
+```
+
+| Para | Comando |
+|---|---|
+| ¿Me puedo conectar? | `ansible all -m ping` |
+| Un comando (sin tuberías) | `ansible web -a "df -h /"` |
+| Con tuberías o redirecciones | `ansible web -m shell -a "ps aux \| grep -c nginx"` |
+| Instalar un paquete | `ansible web -b -m package -a "name=tree state=present"` |
+| Reiniciar un servicio | `ansible web -b -m service -a "name=nginx state=restarted"` |
+| Copiar un archivo | `ansible all -b -m copy -a "src=motd dest=/etc/motd mode=0644"` |
+| Ver facts | `ansible web -m setup -a "filter=ansible_mem*"` |
+
+`-m command` es el módulo por defecto: por eso `ansible web -a uptime` funciona sin `-m`. **command** no pasa por una shell, así que las tuberías y las redirecciones no funcionan (llegan como argumentos al programa, como viste con subprocess en la lección 6.2.3); para eso está **shell**. `-b` (become) usa sudo en el servidor, y `-K` pide la contraseña de sudo si hace falta. `-o` pone el resultado de cada servidor en una línea.
+
+Los comandos ad hoc son ideales para preguntar ("¿qué versión de OpenSSL tienen todos?") y para cambios urgentes de una vez. Lo que tiene que quedar así para siempre va en un playbook versionado: un comando ad hoc no deja registro de qué se hizo ni se puede revisar en un pull request.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejAdhoc} />
+
+<EnSimple>
+El inventario dice qué servidores hay, cómo conectarse (ansible_host, ansible_user) y cómo se agrupan; se escribe en INI o en YAML, con grupos que pueden contener otros grupos, y las variables conviene ponerlas en group_vars y host_vars. ansible-inventory muestra cómo quedó todo. Los patrones (web, web:db, produccion:!db01) eligen a qué equipos apuntar, y --limit achica la selección. Un comando ad hoc ejecuta un módulo en esos equipos de una vez: sirve para consultar y para cambios rápidos; lo permanente va en un playbook.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Espacios alrededor del = en el INI">
+    web02 ansible_host = 10.0.0.5 no define la variable. Va ansible_host=10.0.0.5, todo junto.
+  </ErrorComun>
+  <ErrorComun titulo="Tuberías con el módulo command">
+    command no usa una shell: el | llega como argumento y el comando falla. Para eso está shell.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar -b para tareas de root">
+    Instalar un paquete o editar /etc sin become falla por permisos. Y si sudo pide contraseña, también hace falta -K.
+  </ErrorComun>
+  <ErrorComun titulo="Un patrón mal escrito">
+    Ansible avisa "Could not match supplied host pattern" y no hace nada en ese grupo. Revisá con --list-hosts antes.
+  </ErrorComun>
+  <ErrorComun titulo="Hacer cambios permanentes con comandos ad hoc">
+    No quedan registrados ni revisados, y el próximo servidor nuevo no los tiene. Van en un playbook.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Inventario en INI (clave=valor sin espacios) o YAML; grupos, :children y variables de grupo y de equipo.
+- ansible_host, ansible_user y ansible_port dicen cómo conectarse a cada equipo.
+- group_vars/ y host_vars/ al lado del inventario; gana la variable más específica, y -e por encima de todo.
+- ansible-inventory --graph, --host y --list para revisarlo; --list-hosts para probar un patrón.
+- Patrones: all, grupo, a:b, a:&b, a:!b, comodines; --limit achica cualquier selección.
+- Ad hoc: ansible PATRÓN -m módulo -a "args" -b -K -o; command sin shell, shell con tuberías.
+</Resumen>
