@@ -1,0 +1,125 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué ruta da Path("/var/log") / "nginx" / "access.log"?
+  opciones:
+    - { texto: "/var/log/nginx/access.log", correcta: true, explicacion: "El / de pathlib une partes de una ruta." }
+    - { texto: "Un error, porque no se pueden dividir textos", explicacion: "Con Path, el / une rutas." }
+    - { texto: "/var/lognginxaccess.log", explicacion: "Eso pasaría sumando textos." }
+    - { texto: "access.log", explicacion: "Es la ruta completa." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Por qué subprocess.run(["du", "-sh", nombre]) es más seguro que subprocess.run(f"du -sh {nombre}", shell=True)?
+  opciones:
+    - { texto: "Porque con la lista no hay una shell que interprete ; o $( ) dentro del nombre", correcta: true, explicacion: "Es la forma de evitar la inyección de comandos." }
+    - { texto: "Porque es más rápido", explicacion: "Puede serlo, pero no es la razón importante." }
+    - { texto: "Porque shell=True no existe", explicacion: "Existe." }
+    - { texto: "No hay diferencia", explicacion: "La hay: con la lista, un nombre raro es solo un nombre." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace check=True en subprocess.run?
+  opciones:
+    - { texto: "Si el comando termina con un código distinto de 0, lanza CalledProcessError", correcta: true, explicacion: "Así un fallo no pasa desapercibido." }
+    - { texto: "Verifica que el comando exista antes de correrlo", explicacion: "Si no existe, igual da FileNotFoundError." }
+    - { texto: "Muestra la salida", explicacion: "Eso depende de capture_output." }
+    - { texto: "Corta el comando si tarda mucho", explicacion: "Eso es timeout." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    Traceback (most recent call last):
+      File "/opt/infra/reiniciar.py", line 8, in <module>
+        subprocess.run(["systemctl", "restart", "nginx"], check=True, capture_output=True, text=True)
+    subprocess.CalledProcessError: Command '['systemctl', 'restart', 'nginx']' returned non-zero exit status 1.
+  opciones:
+    - { texto: "systemctl terminó con código 1 (el reinicio falló) y check=True lo convirtió en un error", correcta: true, explicacion: "En e.stderr está el motivo; conviene atraparlo y mostrarlo." }
+    - { texto: "systemctl no está instalado", explicacion: "Eso sería FileNotFoundError." }
+    - { texto: "Python no puede correr comandos", explicacion: "Sí puede: el comando falló." }
+    - { texto: "El comando tardó demasiado", explicacion: "Eso sería TimeoutExpired." }
+- id: p05
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá la línea que crea /srv/backup/hoy con todas las carpetas intermedias, sin fallar si ya existe.
+  prompt: ">>>"
+  aceptadas:
+    - "Path(\"/srv/backup/hoy\").mkdir(parents=True, exist_ok=True)"
+    - "Path('/srv/backup/hoy').mkdir(parents=True, exist_ok=True)"
+    - "Path(\"/srv/backup/hoy\").mkdir(exist_ok=True, parents=True)"
+    - "os.makedirs(\"/srv/backup/hoy\", exist_ok=True)"
+    - "os.makedirs('/srv/backup/hoy', exist_ok=True)"
+  explicacion: parents=True es como mkdir -p, y exist_ok=True permite correr el script dos veces.
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tenés que contar las líneas con " 500 " de un access.log de 8 GB. ¿Cómo lo leés?
+  opciones:
+    - { texto: "Con with open() y un for que recorre línea por línea", correcta: true, explicacion: "Lee de a poco, sin cargar todo en memoria." }
+    - { texto: "Con Path(...).read_text() y después split", explicacion: "Carga 8 GB en memoria." }
+    - { texto: "Copiándolo primero a /tmp", explicacion: "No hace falta y ocupa otros 8 GB." }
+    - { texto: "No se puede con Python", explicacion: "Sí se puede." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un script reescribe /var/lib/app/estado.json que otro programa lee cada segundo. ¿Cómo evitás que lo lea a medio escribir?
+  opciones:
+    - { texto: "Escribir un archivo temporal en la misma carpeta y reemplazar el original con os.replace", correcta: true, explicacion: "El cambio de nombre es instantáneo." }
+    - { texto: "Escribir más rápido", explicacion: "Siempre hay un momento intermedio." }
+    - { texto: "Borrar el original y escribir uno nuevo", explicacion: "Por un momento no existe." }
+    - { texto: "Abrirlo con \"a\"", explicacion: "Agrega al final, no reemplaza." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas tareas conviene hacer con Python directamente, sin correr un comando?
+  opciones:
+    - { texto: "Ver el espacio libre de /var (shutil.disk_usage)", correcta: true, explicacion: "No depende del formato ni del idioma de df." }
+    - { texto: "Buscar los .conf de /etc (Path.rglob)", correcta: true, explicacion: "Es lo que hace find." }
+    - { texto: "Copiar un archivo con sus permisos (shutil.copy2)", correcta: true, explicacion: "Es cp -p." }
+    - { texto: "Reiniciar un servicio de systemd", explicacion: "Para eso se corre systemctl." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Dónde conviene que un script tome la contraseña de la base de datos?
+  opciones:
+    - { texto: "De una variable de entorno, cargada por systemd desde un archivo con permisos 600", correcta: true, explicacion: "Fuera del código y del repositorio." }
+    - { texto: "Escrita en el código, en una constante", explicacion: "Termina en el repositorio, como en el caso del módulo 6.1." }
+    - { texto: "Como argumento en la línea de comandos", explicacion: "Cualquier usuario la ve con ps." }
+    - { texto: "En un comentario", explicacion: "Sigue estando en el código." }
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas tienen un problema?
+  lenguaje: python
+  archivo: |
+    import subprocess
+    from pathlib import Path
+
+    usuario = input("Usuario a revisar: ")
+    subprocess.run(f"id {usuario}", shell=True)
+    ruta = "/home/" + usuario + "datos"
+    r = subprocess.run(["systemctl", "is-active", "sshd"], capture_output=True, text=True)
+    print(r.stdout)
+  lineas_con_error: [5, 6]
+  explicacion: La línea 5 arma un comando con un dato que escribe el usuario y shell=True (inyección de comandos); la 6 arma una ruta sumando texto y le falta una barra (Path("/home") / usuario / "datos").
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué hace shutil.rmtree("/tmp/compilacion")?
+  opciones:
+    - { texto: "Borra la carpeta y todo lo que tiene adentro, sin papelera", correcta: true, explicacion: "Como rm -rf." }
+    - { texto: "Mueve la carpeta a la papelera", explicacion: "No hay papelera." }
+    - { texto: "Borra solo si está vacía", explicacion: "Eso es rmdir." }
+    - { texto: "Muestra el árbol de la carpeta", explicacion: "No." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un script parsea la columna "Use%" de df y en un servidor nuevo falla. ¿Una causa probable?
+  opciones:
+    - { texto: "El sistema está en castellano y df muestra \"Uso%\"; conviene usar shutil.disk_usage", correcta: true, explicacion: "La salida de los comandos cambia con el idioma y la versión." }
+    - { texto: "df no existe en ese servidor", explicacion: "Sería FileNotFoundError, y df está en todos." }
+    - { texto: "Python no puede leer la salida de df", explicacion: "Puede." }
+    - { texto: "Falta shell=True", explicacion: "No tiene que ver." }

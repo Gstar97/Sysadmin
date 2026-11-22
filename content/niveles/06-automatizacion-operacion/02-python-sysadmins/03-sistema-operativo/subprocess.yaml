@@ -1,0 +1,42 @@
+tipo: diagrama
+titulo: subprocess.run
+puntos:
+  - id: args
+    titulo: Lo que le pasás
+    area: { x: 2.3, y: 13.3, ancho: 34.9, alto: 39.4 }
+    texto: >-
+      El comando como lista: el programa y cada argumento por separado. capture_output=True guarda
+      la salida en vez de mostrarla, text=True la convierte en texto (si no, son bytes),
+      check=True convierte un código de salida distinto de 0 en un error, y timeout corta un
+      comando colgado. Para un comando que escribís a mano, shlex.split("df -h /var/log") arma la
+      lista.
+  - id: proceso
+    titulo: El proceso
+    area: { x: 44.2, y: 13.3, ancho: 18.6, alto: 39.4 }
+    texto: >-
+      Con una lista, Python ejecuta el programa directamente, sin una shell en el medio: no hay
+      comodines, ni tuberías, ni variables de la shell. Es más seguro y más predecible. Si
+      necesitás una tubería, la hacés en Python (leyendo r.stdout) o, si no queda otra, con
+      shell=True y datos que escribiste vos.
+  - id: resultado
+    titulo: Lo que te devuelve
+    area: { x: 69.8, y: 13.3, ancho: 27.9, alto: 39.4 }
+    texto: >-
+      Un CompletedProcess con el código de salida (returncode) y lo que el comando escribió en la
+      salida normal (stdout) y en la de errores (stderr). r.stdout.splitlines() lo parte en líneas
+      para procesarlo.
+  - id: shell
+    titulo: El peligro de shell=True
+    area: { x: 2.3, y: 60.6, ancho: 46.5, alto: 33.9 }
+    texto: >-
+      Con shell=True y un texto armado con datos de afuera (un nombre de archivo, algo que vino de
+      una API o de un formulario), alguien puede meter un ; o un $( ) y ejecutar lo que quiera
+      con los permisos de tu script. Es la inyección de comandos, el mismo problema que la
+      inyección SQL. Con la lista de argumentos no existe.
+  - id: fallas
+    titulo: Cuando falla
+    area: { x: 51.2, y: 60.6, ancho: 46.5, alto: 33.9 }
+    texto: >-
+      Los tres errores que hay que esperar al correr comandos. Con check=True, un código distinto
+      de 0 se convierte en CalledProcessError, que trae returncode, stdout y stderr para
+      mostrarlos. Sin check, el programa sigue y sos vos quien tiene que mirar r.returncode.

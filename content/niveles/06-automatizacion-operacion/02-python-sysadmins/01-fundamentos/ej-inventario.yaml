@@ -1,0 +1,109 @@
+tipo: python
+titulo: Discos llenos en el inventario
+descripcion: >-
+  El inventario de servidores ya está cargado en el programa como una lista de diccionarios.
+  Vas a recorrerlo, filtrar los que tienen problemas y armar un resumen por rol, que es la base
+  de casi cualquier reporte.
+codigo_inicial: |
+  servidores = [
+      {"nombre": "web01", "rol": "web", "disco": 72, "activo": True},
+      {"nombre": "web02", "rol": "web", "disco": 85, "activo": True},
+      {"nombre": "db01", "rol": "base", "disco": 91, "activo": True},
+      {"nombre": "db02", "rol": "base", "disco": 88, "activo": False},
+      {"nombre": "bkp01", "rol": "backup", "disco": 40, "activo": True},
+  ]
+
+  # Paso 1: mostrá cada servidor en una línea, por ejemplo "web01 (web): 72%"
+pasos:
+  - consigna: >-
+      Recorré la lista con for y mostrá cada servidor en una línea con el formato
+      `web01 (web): 72%`, usando una f-string.
+    verificar:
+      - salida_contiene: "web01 (web): 72%"
+      - salida_contiene: "bkp01 (backup): 40%"
+      - sin_error: true
+    pistas:
+      - "`for s in servidores:` y adentro, con cuatro espacios de sangría, el print."
+      - "`print(f\"{s['nombre']} ({s['rol']}): {s['disco']}%\")`: adentro de una f-string con comillas dobles, las claves van con comillas simples."
+    solucion: |
+      servidores = [
+          {"nombre": "web01", "rol": "web", "disco": 72, "activo": True},
+          {"nombre": "web02", "rol": "web", "disco": 85, "activo": True},
+          {"nombre": "db01", "rol": "base", "disco": 91, "activo": True},
+          {"nombre": "db02", "rol": "base", "disco": 88, "activo": False},
+          {"nombre": "bkp01", "rol": "backup", "disco": 40, "activo": True},
+      ]
+
+      for s in servidores:
+          print(f"{s['nombre']} ({s['rol']}): {s['disco']}%")
+    explicacion: >-
+      La sangría es parte del lenguaje: todo lo que está corrido cuatro espacios debajo del for se
+      repite para cada servidor.
+  - consigna: >-
+      Ahora, en lugar de mostrar todos, armá una lista `alertas` con los nombres de los servidores
+      **activos** con el disco por encima de 80, y al final mostrá `Alertas: web02, db01`. db02
+      está apagado y no tiene que aparecer.
+    verificar:
+      - salida_contiene: "Alertas: web02, db01"
+      - prueba: assert alertas == ["web02", "db01"]
+        mensaje: La lista alertas tiene web02 y db01, en ese orden
+      - sin_error: true
+    pistas:
+      - "Empezá con `alertas = []` antes del for, y adentro `if s[\"activo\"] and s[\"disco\"] > 80:` seguido de `alertas.append(s[\"nombre\"])`."
+      - "`\", \".join(alertas)` une los nombres con coma y espacio."
+    solucion: |
+      servidores = [
+          {"nombre": "web01", "rol": "web", "disco": 72, "activo": True},
+          {"nombre": "web02", "rol": "web", "disco": 85, "activo": True},
+          {"nombre": "db01", "rol": "base", "disco": 91, "activo": True},
+          {"nombre": "db02", "rol": "base", "disco": 88, "activo": False},
+          {"nombre": "bkp01", "rol": "backup", "disco": 40, "activo": True},
+      ]
+
+      alertas = []
+      for s in servidores:
+          if s["activo"] and s["disco"] > 80:
+              alertas.append(s["nombre"])
+
+      print(f"Alertas: {', '.join(alertas)}")
+    explicacion: >-
+      Acumular en una lista y mostrar al final es el patrón de casi todos los reportes. La misma
+      lista se puede escribir en una línea con una comprensión:
+      `[s["nombre"] for s in servidores if s["activo"] and s["disco"] > 80]`.
+  - consigna: >-
+      Por último, un resumen por rol: un diccionario `por_rol` que diga cuántos servidores hay de
+      cada rol (`{"web": 2, "base": 2, "backup": 1}`), y mostrá una línea por rol, por ejemplo
+      `base: 2`.
+    verificar:
+      - prueba: >-
+          assert por_rol == {"web": 2, "base": 2, "backup": 1}
+        mensaje: por_rol cuenta 2 web, 2 base y 1 backup
+      - salida_contiene: "base: 2"
+      - salida_contiene: "backup: 1"
+      - sin_error: true
+    pistas:
+      - "`por_rol = {}` y, para cada servidor, `por_rol[rol] = por_rol.get(rol, 0) + 1`: get devuelve 0 la primera vez."
+      - "Para recorrer un diccionario con clave y valor: `for rol, cantidad in por_rol.items():`."
+    solucion: |
+      servidores = [
+          {"nombre": "web01", "rol": "web", "disco": 72, "activo": True},
+          {"nombre": "web02", "rol": "web", "disco": 85, "activo": True},
+          {"nombre": "db01", "rol": "base", "disco": 91, "activo": True},
+          {"nombre": "db02", "rol": "base", "disco": 88, "activo": False},
+          {"nombre": "bkp01", "rol": "backup", "disco": 40, "activo": True},
+      ]
+
+      alertas = []
+      por_rol = {}
+      for s in servidores:
+          if s["activo"] and s["disco"] > 80:
+              alertas.append(s["nombre"])
+          rol = s["rol"]
+          por_rol[rol] = por_rol.get(rol, 0) + 1
+
+      print(f"Alertas: {', '.join(alertas)}")
+      for rol, cantidad in por_rol.items():
+          print(f"{rol}: {cantidad}")
+    explicacion: >-
+      Contar por categoría con un diccionario es tan común que la biblioteca estándar lo trae
+      hecho: `collections.Counter(s["rol"] for s in servidores)` da lo mismo.

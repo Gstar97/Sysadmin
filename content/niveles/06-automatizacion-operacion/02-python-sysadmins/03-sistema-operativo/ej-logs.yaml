@@ -1,0 +1,168 @@
+tipo: python
+titulo: Limpieza de logs viejos
+descripcion: >-
+  En /var/log/app se acumulan los logs diarios de una aplicación, con la fecha en el nombre (así
+  los deja logrotate con dateext). El disco de /var/log está casi lleno. Vas a listar los logs,
+  encontrar los de más de 14 días, moverlos a una carpeta de archivo y confirmar el uso del disco
+  con df. Para que el resultado no dependa del día en que lo hagas, "hoy" es el 22 de noviembre de
+  2026.
+archivos:
+  /var/log/app/app.log: "2026-11-22 08:00:01 INFO inicio\n"
+  /var/log/app/app-2026-11-01.log: "2026-11-01 ...\n2026-11-01 ...\n2026-11-01 ...\n"
+  /var/log/app/app-2026-11-05.log: "2026-11-05 ...\n2026-11-05 ...\n"
+  /var/log/app/app-2026-11-07.log: "2026-11-07 ...\n2026-11-07 ...\n2026-11-07 ...\n2026-11-07 ...\n"
+  /var/log/app/app-2026-11-12.log: "2026-11-12 ...\n"
+  /var/log/app/app-2026-11-20.log: "2026-11-20 ...\n2026-11-20 ...\n"
+  /var/log/app/app-2026-11-21.log: "2026-11-21 ...\n"
+comandos:
+  df -h /var/log:
+    salida: |
+      Filesystem      Size  Used Avail Use% Mounted on
+      /dev/sdb1        20G   18G  2.6G  87% /var/log
+codigo_inicial: |
+  from datetime import date
+  from pathlib import Path
+
+  HOY = date(2026, 11, 22)
+  CARPETA = Path("/var/log/app")
+pasos:
+  - consigna: >-
+      Listá los logs con fecha (los que se llaman `app-` seguido de la fecha y `.log`), ordenados
+      por nombre, mostrando el nombre y el tamaño en bytes, por ejemplo `app-2026-11-01.log 45`.
+      Dejalos en una lista `logs`.
+    verificar:
+      - prueba: assert [p.name for p in logs] == ["app-2026-11-01.log", "app-2026-11-05.log", "app-2026-11-07.log", "app-2026-11-12.log", "app-2026-11-20.log", "app-2026-11-21.log"]
+        mensaje: logs tiene los seis archivos con fecha, en orden, y no app.log
+      - salida_contiene: "app-2026-11-01.log 45"
+      - sin_error: true
+    pistas:
+      - "`CARPETA.glob(\"app-*.log\")` encuentra los archivos que coinciden con el patrón; `sorted(...)` los ordena."
+      - "`p.stat().st_size` es el tamaño en bytes y `p.name`, el nombre sin la carpeta."
+    solucion: |
+      from datetime import date
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)
+      CARPETA = Path("/var/log/app")
+
+      logs = sorted(CARPETA.glob("app-*.log"))
+      for p in logs:
+          print(p.name, p.stat().st_size)
+  - consigna: >-
+      Para cada log, sacá la fecha del nombre (los caracteres de la posición 4 a la 14, con
+      `datetime.strptime`) y calculá cuántos días tiene. Armá una lista `viejos` con los que
+      tienen **más de 14 días** y mostrá cuántos son: `Viejos: 3`.
+    verificar:
+      - prueba: assert [p.name for p in viejos] == ["app-2026-11-01.log", "app-2026-11-05.log", "app-2026-11-07.log"]
+        mensaje: viejos tiene los del 1, el 5 y el 7 (el del 12 tiene solo 10 días)
+      - salida_contiene: "Viejos: 3"
+      - sin_error: true
+    pistas:
+      - "`p.name[4:14]` da `\"2026-11-01\"`; `datetime.strptime(texto, \"%Y-%m-%d\").date()` lo convierte en fecha (hace falta `from datetime import datetime`)."
+      - "Restar dos fechas da un timedelta: `(HOY - fecha).days` son los días."
+    solucion: |
+      from datetime import date, datetime
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)
+      CARPETA = Path("/var/log/app")
+
+      logs = sorted(CARPETA.glob("app-*.log"))
+      viejos = []
+      for p in logs:
+          fecha = datetime.strptime(p.name[4:14], "%Y-%m-%d").date()
+          dias = (HOY - fecha).days
+          print(p.name, p.stat().st_size, f"{dias} días")
+          if dias > 14:
+              viejos.append(p)
+
+      print(f"Viejos: {len(viejos)}")
+  - consigna: >-
+      Mové los viejos a /var/log/app/archivo (creá la carpeta si no existe, sin error si ya
+      existe) con `shutil.move`, mostrando `movido: app-2026-11-01.log` por cada uno.
+    verificar:
+      - archivo: /var/log/app/archivo/app-2026-11-01.log
+      - archivo: /var/log/app/archivo/app-2026-11-07.log
+      - archivo: /var/log/app/app-2026-11-05.log
+        existe: false
+      - archivo: /var/log/app/app-2026-11-12.log
+      - salida_contiene: "movido: app-2026-11-05.log"
+      - sin_error: true
+    pistas:
+      - "`destino = CARPETA / \"archivo\"` arma la ruta y `destino.mkdir(parents=True, exist_ok=True)` la crea."
+      - "`shutil.move(p, destino / p.name)` (con `import shutil`)."
+    solucion: |
+      import shutil
+      from datetime import date, datetime
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)
+      CARPETA = Path("/var/log/app")
+
+      logs = sorted(CARPETA.glob("app-*.log"))
+      viejos = []
+      for p in logs:
+          fecha = datetime.strptime(p.name[4:14], "%Y-%m-%d").date()
+          dias = (HOY - fecha).days
+          print(p.name, p.stat().st_size, f"{dias} días")
+          if dias > 14:
+              viejos.append(p)
+
+      print(f"Viejos: {len(viejos)}")
+
+      destino = CARPETA / "archivo"
+      destino.mkdir(parents=True, exist_ok=True)
+      for p in viejos:
+          shutil.move(p, destino / p.name)
+          print(f"movido: {p.name}")
+    explicacion: >-
+      El operador / de pathlib une partes de una ruta sin preocuparse por las barras, y
+      exist_ok=True hace que el programa se pueda correr dos veces sin fallar: cada paso de un
+      script de mantenimiento tendría que ser así.
+  - consigna: >-
+      Por último, corré `df -h /var/log` con `subprocess.run` (como lista, capturando la salida
+      como texto y con check=True), sacá el porcentaje de uso de la segunda línea y mostrá
+      `Uso de /var/log: 87%`.
+    verificar:
+      - salida_contiene: "Uso de /var/log: 87%"
+      - usa: capture_output=True
+        mensaje: Captura la salida con capture_output=True
+      - usa: '["df", "-h", "/var/log"]'
+        mensaje: Pasa el comando como lista
+      - sin_error: true
+    pistas:
+      - "`r = subprocess.run([\"df\", \"-h\", \"/var/log\"], capture_output=True, text=True, check=True)` (con `import subprocess`)."
+      - "`r.stdout.splitlines()[1].split()[4]` es la quinta columna de la segunda línea."
+    solucion: |
+      import shutil
+      import subprocess
+      from datetime import date, datetime
+      from pathlib import Path
+
+      HOY = date(2026, 11, 22)
+      CARPETA = Path("/var/log/app")
+
+      logs = sorted(CARPETA.glob("app-*.log"))
+      viejos = []
+      for p in logs:
+          fecha = datetime.strptime(p.name[4:14], "%Y-%m-%d").date()
+          dias = (HOY - fecha).days
+          print(p.name, p.stat().st_size, f"{dias} días")
+          if dias > 14:
+              viejos.append(p)
+
+      print(f"Viejos: {len(viejos)}")
+
+      destino = CARPETA / "archivo"
+      destino.mkdir(parents=True, exist_ok=True)
+      for p in viejos:
+          shutil.move(p, destino / p.name)
+          print(f"movido: {p.name}")
+
+      r = subprocess.run(["df", "-h", "/var/log"], capture_output=True, text=True, check=True)
+      uso = r.stdout.splitlines()[1].split()[4]
+      print(f"Uso de /var/log: {uso}")
+    explicacion: >-
+      En un servidor real, shutil.disk_usage("/var/log") da el mismo dato sin correr un comando
+      (total, usado y libre en bytes). Correr df sirve cuando querés exactamente lo que vería
+      alguien en la terminal; para todo lo demás, si Python lo trae, usalo directamente.

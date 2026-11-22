@@ -1,0 +1,160 @@
+---
+id: n6-m2-l3
+titulo: Python y el sistema operativo
+minutos: 150
+objetivos:
+  - Recorrer, leer, escribir, mover y borrar archivos y carpetas con pathlib y shutil.
+  - Correr comandos del sistema con subprocess de forma segura y procesar su salida.
+  - Usar variables de entorno, fechas y permisos en scripts de mantenimiento.
+glosario: [pathlib, subprocess, inyeccion-comandos]
+verificado: 2026-11
+---
+
+import subproc from './subprocess.svg?raw'
+import subprocDatos from './subprocess.yaml'
+import ejLogs from './ej-logs.yaml'
+
+La mitad del trabajo de un script de sysadmin es tocar el sistema: buscar archivos viejos, mover logs, leer una configuración, revisar el espacio libre, correr un comando y fijarse qué devolvió. En Bash eso son find, mv, df y un if sobre `$?`. En Python hay módulos que hacen lo mismo con menos sorpresas: sin problemas con espacios en los nombres, sin comillas que se escapan mal y con errores que se pueden atrapar.
+
+<AntesDeEmpezar>
+- Funciones, módulos y errores (lección 6.2.2).
+- Rutas, permisos y find (lecciones 1.1.3, 1.2.2 y 1.1.6).
+</AntesDeEmpezar>
+
+## Rutas con pathlib
+
+`pathlib.Path` representa una ruta, y tiene métodos para casi todo lo que hacés con un archivo o una carpeta:
+
+```python
+from pathlib import Path
+
+logs = Path("/var/log/app")
+actual = logs / "app.log"              # el / une partes de una ruta: /var/log/app/app.log
+
+actual.exists()                        # ¿existe?
+actual.is_file(), logs.is_dir()
+actual.name, actual.stem, actual.suffix, actual.parent   # "app.log", "app", ".log", /var/log/app
+actual.stat().st_size                  # tamaño en bytes
+actual.stat().st_mtime                 # última modificación (segundos desde 1970)
+
+texto = actual.read_text()             # todo el contenido
+Path("/tmp/estado.txt").write_text("ok\n")
+Path("/srv/backup/hoy").mkdir(parents=True, exist_ok=True)   # como mkdir -p
+
+for p in logs.iterdir():               # lo que hay en la carpeta (como ls)
+    print(p)
+sorted(logs.glob("*.log"))             # los .log de la carpeta
+list(Path("/etc").rglob("*.conf"))     # los .conf en toda la carpeta y sus subcarpetas (como find)
+```
+
+Para archivos grandes no conviene `read_text()`, que carga todo en memoria: se recorren línea por línea con `with open(...)`, que además cierra el archivo solo al terminar, aunque haya un error:
+
+```python
+with open("/var/log/nginx/access.log") as f:
+    for linea in f:
+        if " 500 " in linea:
+            errores += 1
+```
+
+Y para escribir, `open(ruta, "w")` reemplaza el contenido y `open(ruta, "a")` agrega al final.
+
+## Copiar, mover, borrar
+
+```python
+import shutil, os
+
+shutil.copy2("nginx.conf", "nginx.conf.bak")    # copia con fechas y permisos (como cp -p)
+shutil.copytree("/etc/nginx", "/srv/backup/nginx")
+shutil.move("app-2026-11-01.log", "archivo/")
+Path("viejo.log").unlink()                      # borra un archivo (missing_ok=True si puede no estar)
+shutil.rmtree("/tmp/compilacion")               # borra una carpeta con todo adentro: como rm -rf
+
+total, usado, libre = shutil.disk_usage("/var/log")
+os.chmod("/usr/local/bin/respaldo.py", 0o750)   # permisos en octal, con 0o adelante
+shutil.chown("/srv/datos", user="app", group="app")
+```
+
+Con `shutil.rmtree` y `unlink` vale lo mismo que con rm: no hay papelera. Antes de borrar en un script, mostrá qué se va a borrar, y si podés, ofrecé una opción para probar sin borrar (en la lección 6.2.6 la vas a armar con argparse).
+
+Un detalle de los scripts serios: si vas a reemplazar un archivo que otro programa lee (una configuración, un estado), escribí primero uno temporal en la misma carpeta y después renombralo con `os.replace(temporal, final)`. El cambio de nombre es instantáneo, así que el otro programa ve el archivo viejo o el nuevo, nunca uno a medio escribir.
+
+## Variables de entorno y fechas
+
+```python
+import os
+from datetime import datetime, timedelta
+
+os.environ.get("BACKUP_DESTINO", "/srv/backup")   # una variable de entorno, con valor por defecto
+os.environ["HOME"]                                  # KeyError si no existe
+
+ahora = datetime.now()
+ahora.strftime("%Y-%m-%d %H:%M")                    # "2026-11-22 14:05"
+datetime.strptime("2026-11-01", "%Y-%m-%d")         # de texto a fecha
+hace_7_dias = ahora - timedelta(days=7)
+datetime.fromtimestamp(Path("app.log").stat().st_mtime)   # cuándo se modificó un archivo
+```
+
+Las variables de entorno son la forma habitual de pasarle a un script lo que cambia entre servidores, y sobre todo los secretos: una contraseña va en el entorno (cargado por systemd desde un archivo con permisos 600, como viste en el módulo 6.1), nunca escrita en el código.
+
+## Correr comandos con subprocess
+
+Para lo que Python no trae hecho (systemctl, el comando de un fabricante, df con su formato exacto), está `subprocess.run`:
+
+<DiagramaInteractivo datos={subprocDatos} svg={subproc} alt="subprocess.run en tres partes. Lo que le pasás: el comando como lista, con capture_output, text, check y timeout. El proceso, que corre solo, sin una shell en el medio. Lo que te devuelve: un CompletedProcess con returncode, stdout y stderr. Abajo a la izquierda, el peligro de shell=True: si el texto incluye datos de afuera, un punto y coma ejecuta un segundo comando. Abajo a la derecha, los errores posibles: CalledProcessError con check, TimeoutExpired si tarda más del límite y FileNotFoundError si el programa no existe." />
+
+```python
+import subprocess
+
+r = subprocess.run(["systemctl", "is-active", "nginx"], capture_output=True, text=True)
+if r.returncode != 0:
+    print(f"nginx no está activo: {r.stdout.strip()}")
+
+try:
+    subprocess.run(["systemctl", "restart", "nginx"], check=True, capture_output=True, text=True, timeout=60)
+except subprocess.CalledProcessError as e:
+    print(f"Falló el reinicio (código {e.returncode}): {e.stderr}")
+except subprocess.TimeoutExpired:
+    print("El reinicio tardó más de un minuto")
+```
+
+Tres reglas que te ahorran problemas:
+
+1. **El comando como lista**, no como un texto con `shell=True`. Con la lista no hay inyección de comandos, y los nombres con espacios no se rompen.
+2. **check=True** (o revisar `returncode`): un comando que falló no tiene que pasar desapercibido.
+3. **timeout** para cualquier cosa que hable con la red o con un disco que puede estar trabado.
+
+Y antes de correr un comando, preguntate si Python ya lo hace: para copiar está shutil, para el espacio en disco shutil.disk_usage, para buscar archivos pathlib, para leer un JSON el módulo json. Lo que se hace en Python no depende de la versión de un comando ni del idioma del sistema (df en castellano dice "Uso%", no "Use%").
+
+## Manos a la obra
+
+<EjercicioPython ejercicio={ejLogs} />
+
+<EnSimple>
+pathlib maneja rutas: armar una con /, saber si existe, leerla, escribirla, listar una carpeta o buscar archivos con un patrón. shutil copia, mueve y borra (sin papelera), y os da las variables de entorno y los permisos. datetime trabaja con fechas, para saber cuántos días tiene un archivo. Y subprocess.run corre un comando del sistema y te devuelve su código de salida y lo que mostró, siempre con el comando como lista para que nadie pueda colarle otro comando, con check para enterarte si falló y con timeout para que no se cuelgue.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="shell=True con datos de afuera">
+    Un nombre de archivo con ; o $( ) ejecuta lo que quiera con los permisos del script. Pasá el comando como lista.
+  </ErrorComun>
+  <ErrorComun titulo="No mirar si el comando falló">
+    Sin check=True ni returncode, un systemctl restart que falló se ve igual que uno que anduvo.
+  </ErrorComun>
+  <ErrorComun titulo="Armar rutas sumando texto">
+    "/var/log" + "app.log" da /var/logapp.log. Con Path("/var/log") / "app.log" no pasa.
+  </ErrorComun>
+  <ErrorComun titulo="Leer un log enorme con read_text">
+    Carga todo en memoria. Recorrelo línea por línea con with open().
+  </ErrorComun>
+  <ErrorComun titulo="Parsear la salida de un comando que Python ya resuelve">
+    La salida cambia con la versión y el idioma del sistema. Si existe una función (disk_usage, glob, stat), usala.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Path para rutas: / para unir, exists, stat, read_text, write_text, mkdir(parents=True, exist_ok=True), glob y rglob.
+- with open() para recorrer archivos grandes línea por línea; "w" reemplaza y "a" agrega.
+- shutil para copiar, mover, borrar carpetas y ver el espacio; os.replace para reemplazar archivos sin estados intermedios.
+- os.environ.get para la configuración y los secretos; datetime y timedelta para fechas.
+- subprocess.run con lista, capture_output, text, check y timeout; nunca shell=True con datos de afuera.
+</Resumen>

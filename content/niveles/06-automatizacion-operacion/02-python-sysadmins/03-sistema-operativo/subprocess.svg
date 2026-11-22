@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 330" font-family="system-ui, sans-serif" font-size="12">
+  <defs>
+    <marker id="py-sp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+  </defs>
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">subprocess.run: correr un comando y quedarse con el resultado</text>
+  <g stroke="currentColor" stroke-width="1.1">
+    <rect x="20" y="44" width="300" height="130" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="380" y="44" width="160" height="130" rx="8" fill="var(--surface-2, #f1f3f6)"/>
+    <rect x="600" y="44" width="240" height="130" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="20" y="200" width="400" height="112" rx="8" fill="var(--bad-soft, #fde2e1)"/>
+    <rect x="440" y="200" width="400" height="112" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+  </g>
+  <g fill="currentColor">
+    <text x="170" y="66" text-anchor="middle" font-weight="700">lo que le pasás</text>
+    <g font-family="ui-monospace, monospace" font-size="10.5">
+      <text x="34" y="90">r = subprocess.run(</text>
+      <text x="48" y="108">["df", "-h", "/var/log"],</text>
+      <text x="48" y="126">capture_output=True,</text>
+      <text x="48" y="144">text=True, check=True,</text>
+      <text x="48" y="162">timeout=30)</text>
+    </g>
+    <text x="460" y="66" text-anchor="middle" font-weight="700">el proceso</text>
+    <g font-size="11" text-anchor="middle"><text x="460" y="96">df corre solo,</text><text x="460" y="114">sin una shell</text><text x="460" y="132">en el medio</text><text x="460" y="156" font-family="ui-monospace, monospace">código 0</text></g>
+    <text x="720" y="66" text-anchor="middle" font-weight="700">lo que te devuelve</text>
+    <g font-family="ui-monospace, monospace" font-size="10.5">
+      <text x="614" y="94">r.returncode  → 0</text>
+      <text x="614" y="114">r.stdout  → "Filesystem ..."</text>
+      <text x="614" y="134">r.stderr  → ""</text>
+      <text x="614" y="158">(CompletedProcess)</text>
+    </g>
+    <text x="220" y="222" text-anchor="middle" font-weight="700">nunca: shell=True con datos de afuera</text>
+    <g font-family="ui-monospace, monospace" font-size="10.5">
+      <text x="34" y="246">nombre = "x; rm -rf /srv"</text>
+      <text x="34" y="264">subprocess.run(f"du -sh {nombre}", shell=True)</text>
+    </g>
+    <g font-size="11"><text x="34" y="290">La shell interpreta el ; y corre un segundo comando.</text><text x="34" y="305">Con una lista, "x; rm -rf /srv" es solo un nombre raro.</text></g>
+    <text x="640" y="222" text-anchor="middle" font-weight="700">cuando falla</text>
+    <g font-size="11">
+      <text x="454" y="246">check=True y código distinto de 0: CalledProcessError</text>
+      <text x="454" y="266">tarda más que timeout: TimeoutExpired (y se mata)</text>
+      <text x="454" y="286">el programa no existe: FileNotFoundError</text>
+      <text x="454" y="305">sin check, revisá r.returncode vos</text>
+    </g>
+  </g>
+  <g stroke="currentColor" stroke-width="1.6" fill="none">
+    <path d="M320 110 L378 110" marker-end="url(#py-sp)"/>
+    <path d="M540 110 L598 110" marker-end="url(#py-sp)"/>
+  </g>
+</svg>

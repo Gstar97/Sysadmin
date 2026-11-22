@@ -1,0 +1,126 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué devuelve una función de Python que no tiene return?
+  opciones:
+    - { texto: "None", correcta: true, explicacion: "Sin return, el resultado es None." }
+    - { texto: "0", explicacion: "No: 0 es un número." }
+    - { texto: "Lo último que imprimió", explicacion: "print muestra, no devuelve." }
+    - { texto: "Un error", explicacion: "Es válido; devuelve None." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: Un traceback termina con FileNotFoundError, No such file or directory, '/etc/app/umbrales.conf'. ¿Por dónde empezás?
+  opciones:
+    - { texto: "Por esa última línea: el programa buscó un archivo que no existe en esa ruta", correcta: true, explicacion: "La última línea dice qué pasó." }
+    - { texto: "Por la primera línea del traceback", explicacion: "Arriba solo está el encabezado." }
+    - { texto: "Reinstalando Python", explicacion: "Python funciona bien: falta un archivo." }
+    - { texto: "Agregando un except: general", explicacion: "Lo esconde, no lo arregla." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve if __name__ == "__main__":?
+  opciones:
+    - { texto: "Para que el código principal corra al ejecutar el archivo, pero no cuando otro programa lo importa", correcta: true, explicacion: "Así las funciones se pueden importar y probar." }
+    - { texto: "Para que el programa corra como root", explicacion: "No tiene nada que ver." }
+    - { texto: "Es obligatorio en todo archivo", explicacion: "No, pero es la costumbre." }
+    - { texto: "Para definir la función main", explicacion: "main se define con def; el if decide si se llama." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "¿Qué problema tiene este manejo de errores?\n\n```python\ntry:\n    procesar(servidores)\nexcept:\n    pass\n```"
+  opciones:
+    - { texto: "Esconde cualquier error, incluso uno de programación, y el programa sigue como si nada", correcta: true, explicacion: "Atrapá solo errores con nombre que sepas manejar." }
+    - { texto: "Ninguno, es la forma recomendada", explicacion: "Es justamente lo que hay que evitar." }
+    - { texto: "pass no existe en Python", explicacion: "Existe: es una instrucción que no hace nada." }
+    - { texto: "Falta un finally", explicacion: "finally es opcional." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué error hay?
+  salida: |
+    Traceback (most recent call last):
+      File "/opt/infra/reporte.py", line 30, in <module>
+        main()
+        ~~~~^^
+      File "/opt/infra/reporte.py", line 24, in main
+        print(servidor["ip"])
+              ~~~~~~~~^^^^^^
+    KeyError: 'ip'
+  opciones:
+    - { texto: "En la línea 24, el diccionario servidor no tiene la clave ip", correcta: true, explicacion: "Con servidor.get(\"ip\") se evita si puede faltar." }
+    - { texto: "En la línea 30 falta definir main", explicacion: "main existe: el error está adentro, en la línea 24." }
+    - { texto: "No se puede imprimir un diccionario", explicacion: "Sí se puede." }
+    - { texto: "La variable servidor no existe", explicacion: "Eso sería NameError." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá la línea que termina el programa con código de salida 2.
+  prompt: ">>>"
+  aceptadas:
+    - "sys.exit(2)"
+    - "raise SystemExit(2)"
+  explicacion: Con import sys antes. 0 es éxito; cualquier otro número, un problema.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "¿Qué muestra este código?\n\ndef clasificar(pct, alerta=80, critico=90): ...\n\nclasificar(85, critico=85)"
+  opciones:
+    - { texto: "Llama con pct=85, alerta=80 (por defecto) y critico=85", correcta: true, explicacion: "Los argumentos con nombre cambian solo ese parámetro." }
+    - { texto: "Da error porque falta alerta", explicacion: "alerta tiene valor por defecto." }
+    - { texto: "Pone 85 en alerta", explicacion: "critico=85 va a critico." }
+    - { texto: "Ignora critico", explicacion: "No." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué módulos de la biblioteca estándar usarías para correr un comando y leer las opciones de línea de comandos?
+  opciones:
+    - { texto: "subprocess", correcta: true, explicacion: "Para correr comandos." }
+    - { texto: "argparse", correcta: true, explicacion: "Para las opciones." }
+    - { texto: "requests", explicacion: "No viene con Python y es para HTTP." }
+    - { texto: "json", explicacion: "Es para JSON." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená las partes de un manejo de errores completo.
+  pasos:
+    - "try: (lo que puede fallar)"
+    - "except FileNotFoundError: (si falló de esta forma)"
+    - "else: (si no falló)"
+    - "finally: (siempre, al final)"
+  explicacion: try primero, los except con nombre, else si salió bien y finally siempre.
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas tienen un problema?
+  lenguaje: python
+  archivo: |
+    def agregar(servidor, lista=[]):
+        lista.append(servidor)
+        return lista
+
+    def total(valores):
+        suma = sum(valores)
+        print(suma)
+  lineas_con_error: [1, 7]
+  explicacion: La lista por defecto se comparte entre llamadas (usá lista=None), y total imprime en vez de devolver el valor con return.
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un programa propio se llama logging.py y hace import logging. ¿Qué pasa?
+  opciones:
+    - { texto: "Se importa a sí mismo en lugar del módulo de la biblioteca estándar, y falla de formas raras", correcta: true, explicacion: "No uses nombres de módulos estándar para tus archivos." }
+    - { texto: "Nada: Python siempre prefiere la biblioteca estándar", explicacion: "La carpeta del programa va primero." }
+    - { texto: "No se puede llamar a un archivo así", explicacion: "Se puede, y ese es el problema." }
+    - { texto: "Se importan los dos", explicacion: "No." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace sys.exit("No encontré el inventario")?
+  opciones:
+    - { texto: "Muestra el mensaje por la salida de errores y termina con código 1", correcta: true, explicacion: "Con un texto, el código es 1." }
+    - { texto: "Termina con código 0", explicacion: "Con un texto es 1." }
+    - { texto: "Muestra un traceback", explicacion: "No: sale limpio con el mensaje." }
+    - { texto: "Escribe el mensaje en un archivo", explicacion: "No." }

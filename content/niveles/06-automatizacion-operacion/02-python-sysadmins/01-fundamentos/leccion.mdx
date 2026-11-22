@@ -1,0 +1,177 @@
+---
+id: n6-m2-l1
+titulo: Fundamentos de Python
+minutos: 180
+objetivos:
+  - Saber cuándo conviene pasar de Bash a Python y correr Python en un servidor.
+  - Usar los tipos básicos, las listas y los diccionarios para describir datos de verdad.
+  - Recorrer y filtrar datos con for, if y while, y mostrar resultados con f-strings.
+glosario: [lista-python, diccionario-python, f-string, tipo-dato]
+verificado: 2026-11
+---
+
+import estructuras from './estructuras.svg?raw'
+import estructurasDatos from './estructuras.yaml'
+import ejInventario from './ej-inventario.yaml'
+
+Con Bash resolviste mucho en el Nivel 1: un respaldo, un control de disco, un reporte con grep y awk. Pero hay un punto en que un script de Bash se vuelve difícil de leer y fácil de romper: cuando hay que guardar datos con varias partes (un servidor con su nombre, su rol y su disco), leer un JSON, hablar con una API o manejar errores con cuidado. Ahí aparece Python, que está instalado en casi todos los Linux y es el idioma de herramientas que vas a usar todos los días, como Ansible.
+
+<AntesDeEmpezar>
+- Variables, condicionales y bucles en Bash (lecciones 1.7.1 a 1.7.4).
+- Códigos de salida (lección 1.7.2).
+</AntesDeEmpezar>
+
+## ¿Bash o Python?
+
+No compiten: cada uno es mejor para algo.
+
+| Conviene Bash | Conviene Python |
+|---|---|
+| Encadenar comandos que ya existen (tar, rsync, systemctl) | Datos con estructura: listas de servidores, JSON, YAML, CSV |
+| Scripts cortos, de menos de unas 50 líneas | Programas que crecen y que otros van a mantener |
+| Algo que tiene que andar en cualquier sistema, incluso uno mínimo | Hablar con APIs (Proxmox, la nube, un sistema de tickets) |
+| | Manejar errores con cuidado y probar el código |
+
+Una regla práctica: si el script de Bash empieza a necesitar arreglos asociativos, `jq` en cada línea o tres niveles de comillas escapadas, es hora de pasarlo a Python.
+
+## Python en el servidor
+
+El comando es `python3` (en muchos sistemas, `python` a secas no existe o es otra cosa). Cada distribución trae su versión y la mantiene durante toda su vida útil:
+
+| Sistema | Python 3 del sistema |
+|---|---|
+| Ubuntu 26.04 LTS | 3.14 |
+| Ubuntu 24.04 LTS | 3.12 |
+| Debian 13 | 3.13 |
+| Rocky Linux y RHEL 10 | 3.12 |
+| Rocky Linux y RHEL 9 | 3.9 (y 3.11 o 3.12 como paquetes aparte) |
+
+La versión más nueva de Python es la 3.15, de octubre de 2026, y cada versión tiene arreglos de seguridad durante cinco años: la 3.10 dejó de tenerlos en octubre de 2026. Para lo que vas a ver en este módulo alcanza cualquier versión desde la 3.9; en la lección 6.2.6 vas a ver qué hacer cuando un programa necesita otra.
+
+Hay dos formas de usarlo:
+
+```bash
+python3                      # modo interactivo: escribís una línea y ves el resultado (Ctrl+D para salir)
+python3 informe.py           # corre un programa guardado en un archivo
+```
+
+Y un programa se puede correr como cualquier comando con la primera línea de siempre y permiso de ejecución:
+
+```python
+#!/usr/bin/env python3
+print("Hola desde", "Python")
+```
+
+```bash
+chmod +x informe.py && ./informe.py
+```
+
+En esta plataforma, Python corre de verdad dentro del navegador (la misma versión 3.14 que trae Ubuntu 26.04). Probá acá lo que vayas leyendo:
+
+<ConsolaPython titulo="Para probar mientras leés" codigo={'nombre = "web01"\ndisco = 91\nprint(f"{nombre}: disco al {disco}%")\nprint(type(disco), type(nombre))\nprint("72" + "1", int("72") + 1)'} />
+
+## Valores y variables
+
+Una variable se crea al asignarle un valor, sin `$` ni declaraciones, y **sin espacios prohibidos** como en Bash: `disco = 91` está bien.
+
+```python
+nombre = "web01"        # str: texto, entre comillas simples o dobles
+disco = 91              # int: entero
+carga = 1.75            # float: con decimales
+activo = True           # bool: True o False, con mayúscula
+ultimo_backup = None    # None: "no hay valor"
+```
+
+Lo que más cambia respecto de Bash: en Python **los tipos importan**. `"72" + 1` es un error (no se puede sumar texto con un número) y hay que convertir: `int("72")`, `float("1.75")`, `str(91)`. Cuando leas un archivo o la salida de un comando, todo llega como texto, igual que en Bash.
+
+El texto tiene métodos para casi todo lo que hacías con sed, cut y tr:
+
+```python
+linea = "  db01   91%  /var  \n"
+linea.strip()                  # "db01   91%  /var"  (saca espacios y saltos de línea de los bordes)
+linea.split()                  # ["db01", "91%", "/var"]  (corta por espacios, como awk)
+"91%".rstrip("%")              # "91"
+"web01".startswith("web")      # True
+"ERROR en db".lower()          # "error en db"
+"a,b,c".split(",")             # ["a", "b", "c"]
+"web01" in "web01.lab"         # True
+```
+
+Y la forma de armar texto con valores es la **f-string**: una f antes de las comillas, y lo que va entre llaves se reemplaza por su valor. Hasta acepta formato: `f"{carga:.1f}"` muestra un decimal y `f"{nombre:<10}"` rellena hasta 10 caracteres, para alinear columnas.
+
+## Listas y diccionarios
+
+Son las dos estructuras que vas a usar todo el tiempo. Una **lista** es una secuencia ordenada; un **diccionario**, pares clave y valor. Juntas describen casi cualquier cosa: un inventario es una lista de diccionarios, y un JSON de una API, también.
+
+<DiagramaInteractivo datos={estructurasDatos} svg={estructuras} alt="Un inventario escrito en Python: una lista entre corchetes con tres diccionarios entre llaves, uno por servidor, con las claves nombre, rol, disco y activo. A la derecha, cómo se accede a un valor: servidores[1][“disco”] da 91, y len(servidores) da 3. Debajo, los tipos de los valores: texto, enteros, decimales, booleanos y None. Abajo, un for que recorre la lista y con un if muestra los servidores activos con el disco por encima de 80." />
+
+```python
+nombres = ["web01", "web02"]
+nombres.append("db01")          # agrega al final
+nombres[0]                      # "web01"; nombres[-1] es el último
+len(nombres)                    # 3
+"db01" in nombres               # True
+
+puertos = {"ssh": 22, "http": 80}
+puertos["https"] = 443          # agrega o cambia una clave
+puertos.get("smtp", 25)         # 25: valor por defecto si la clave no está
+for servicio, puerto in puertos.items():
+    print(servicio, puerto)
+```
+
+## Decisiones y repeticiones
+
+```python
+if disco >= 90:
+    print("crítico")
+elif disco >= 80:
+    print("alto")
+else:
+    print("bien")
+
+for i in range(1, 4):           # 1, 2, 3
+    print(f"web0{i}")
+
+intentos = 0
+while intentos < 3:
+    intentos += 1
+```
+
+La **sangría** (cuatro espacios) es parte del lenguaje: marca qué está adentro del if o del for, donde Bash usa `then`, `do`, `fi` y `done`. Mezclar espacios y tabulaciones, o correr una línea un espacio de más, da `IndentationError`. Cualquier editor configurado para Python lo hace solo.
+
+Para combinar condiciones: `and`, `or` y `not`, en palabras. Y `break` sale del bucle, y `continue` pasa a la vuelta siguiente, igual que en Bash.
+
+## Manos a la obra
+
+<EjercicioPython ejercicio={ejInventario} />
+
+<EnSimple>
+Python sirve cuando un script trabaja con datos que tienen partes (un servidor con nombre, rol y disco), con JSON o con APIs; Bash sigue siendo mejor para encadenar comandos. Los valores tienen tipo (texto, entero, decimal, verdadero o falso, None) y hay que convertir entre ellos. Una lista guarda cosas en orden y un diccionario, pares clave y valor; juntas describen casi todo. if, for y while funcionan como en Bash, pero lo que está adentro se marca con la sangría, y las f-strings arman texto con valores.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Sumar texto con números">
+    Lo que viene de un archivo, de input() o de un comando es texto: "91" > 80 da error. Convertí primero con int() o float().
+  </ErrorComun>
+  <ErrorComun titulo="Sangría mezclada">
+    Un tabulador en un lado y espacios en otro da IndentationError, o peor, un código que hace otra cosa. Siempre cuatro espacios.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidar los dos puntos">
+    if, for, while, def y else terminan en dos puntos. Sin ellos, SyntaxError.
+  </ErrorComun>
+  <ErrorComun titulo="Usar = para comparar">
+    = asigna y == compara. if disco = 90: es un error de sintaxis.
+  </ErrorComun>
+  <ErrorComun titulo="Acceder a una clave que no está">
+    s["disco"] da KeyError si el diccionario no la tiene. Si puede faltar, s.get("disco") o s.get("disco", 0).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Bash para encadenar comandos; Python para datos con estructura, JSON, APIs y programas que crecen.
+- python3, con #!/usr/bin/env python3 en la primera línea; cada distribución trae su versión.
+- Tipos: str, int, float, bool y None; lo que llega de afuera es texto y se convierte.
+- Listas `[ ]` en orden y diccionarios `{ }` con clave y valor; get para claves que pueden faltar.
+- if, elif, else, for, while; la sangría de cuatro espacios marca los bloques.
+- f-strings para armar texto: `f"{nombre}: {disco}%"`.
+</Resumen>

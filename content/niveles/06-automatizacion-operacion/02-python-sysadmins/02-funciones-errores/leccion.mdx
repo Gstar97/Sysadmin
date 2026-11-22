@@ -1,0 +1,175 @@
+---
+id: n6-m2-l2
+titulo: Funciones, módulos y errores
+minutos: 150
+objetivos:
+  - Escribir funciones que reciben datos y devuelven resultados, con valores por defecto.
+  - Usar la biblioteca estándar y organizar un programa en módulos propios.
+  - Leer un traceback y manejar los errores esperables con try y except, sin esconder los demás.
+glosario: [funcion-python, modulo-python, excepcion, traceback]
+verificado: 2026-11
+---
+
+import traceback from './traceback.svg?raw'
+import tracebackDatos from './traceback.yaml'
+import ejDiscos from './ej-discos.yaml'
+
+Un programa de 30 líneas se entiende de arriba abajo. Uno de 300, no: hay que partirlo en piezas con nombre, que hagan una sola cosa y que se puedan probar por separado. Esas piezas son las funciones, y los archivos que las agrupan, los módulos. Y como un programa que habla con servidores reales siempre se encuentra con algo raro (un archivo que no está, un dato mal escrito, un servidor que no responde), en esta lección también vas a ver cómo leer un error y cómo manejar los que se esperan.
+
+<AntesDeEmpezar>
+- Fundamentos de Python (lección 6.2.1).
+- Funciones y códigos de salida en Bash (lecciones 1.7.5 y 1.7.2).
+</AntesDeEmpezar>
+
+## Funciones
+
+```python
+def porcentaje(usado, total):
+    """Devuelve el porcentaje de uso con un decimal."""
+    return round(usado * 100 / total, 1)
+
+pct = porcentaje(91500, 100000)    # 91.5
+```
+
+`def`, el nombre, los parámetros entre paréntesis, dos puntos y el cuerpo con sangría. El texto entre comillas triples de la primera línea (docstring) explica qué hace; lo muestran los editores y `help(porcentaje)`.
+
+La gran diferencia con las funciones de Bash: una función de Python **devuelve un valor** con `return`, de cualquier tipo (un número, una lista, un diccionario). Si no tiene return, devuelve None. Por eso conviene que las funciones calculen y devuelvan, y que el print quede afuera: así se pueden reusar y probar.
+
+Los parámetros pueden tener **valores por defecto**, y al llamar se pueden nombrar:
+
+```python
+def clasificar(pct, alerta=80, critico=90):
+    if pct >= critico:
+        return "crítico"
+    if pct >= alerta:
+        return "alto"
+    return "bien"
+
+clasificar(85)                          # "alto"
+clasificar(85, critico=85)              # "crítico"
+```
+
+Las variables que se crean dentro de una función son **locales**: no existen afuera ni pisan las de afuera. Para pasarle datos a una función, parámetros; para sacarle datos, return. Usar variables globales para eso es la forma más rápida de tener un programa imposible de seguir.
+
+Un cuidado especial con los valores por defecto: nunca uses una lista o un diccionario vacíos (`def agregar(x, lista=[])`), porque se crean una sola vez y se comparten entre llamadas. Lo correcto es `lista=None` y adentro `if lista is None: lista = []`.
+
+## Módulos
+
+Un módulo es un archivo .py, y `import` lo trae. Python viene con una **biblioteca estándar** enorme ("baterías incluidas"), y para un sysadmin estas son las que más se usan:
+
+| Módulo | Para qué |
+|---|---|
+| `sys` | Argumentos (sys.argv), salida de errores (sys.stderr) y código de salida (sys.exit) |
+| `os` y `pathlib` | Archivos, carpetas, variables de entorno |
+| `subprocess` | Correr comandos del sistema |
+| `shutil` | Copiar, mover, espacio en disco |
+| `datetime` | Fechas y horas |
+| `json`, `csv`, `configparser` | Formatos de datos y configuración |
+| `logging` | Mensajes de registro con niveles |
+| `argparse` | Opciones de línea de comandos |
+| `re` | Expresiones regulares |
+
+```python
+import sys
+from pathlib import Path
+from datetime import datetime, timedelta
+
+hace_una_semana = datetime.now() - timedelta(days=7)
+```
+
+`import sys` trae el módulo entero (se usa como `sys.argv`); `from pathlib import Path` trae solo un nombre.
+
+Y un archivo tuyo también es un módulo. Si tenés `discos.py` con las funciones de arriba, otro programa en la misma carpeta puede hacer `from discos import porcentaje`. Para que eso no ejecute también el reporte que tiene discos.py, el código "principal" va dentro de un bloque especial:
+
+```python
+def main():
+    ...  # el trabajo del programa
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`__name__` vale `"__main__"` solo cuando corrés el archivo directamente; cuando otro lo importa, vale `"discos"` y el bloque no se ejecuta. Es la forma estándar de todo programa de Python, y la que vas a usar en el resto del módulo.
+
+Para bibliotecas que no vienen con Python (requests, PyYAML, paramiko) está `pip`, pero no se instalan en el Python del sistema: en la lección 6.2.6 vas a ver cómo, con entornos virtuales.
+
+## Leer un error
+
+Cuando algo falla y nadie lo maneja, Python corta el programa y muestra un **traceback**: el camino que llevó hasta el error. Asusta al principio, pero tiene un orden fijo.
+
+<DiagramaInteractivo datos={tracebackDatos} svg={traceback} alt="Un traceback de ejemplo con tres partes señaladas. Arriba, el encabezado Traceback, most recent call last: la llamada más reciente va al final. En el medio, el camino de llamadas: discos.py llamó a main en la línea 22, y main falló en la línea 15 en int(usado), con marcas debajo que señalan esa parte. Abajo, la última línea: ValueError, invalid literal for int() with base 10, 'x'. El traceback se lee de abajo hacia arriba." />
+
+## Manejar los errores esperables
+
+`try` y `except` dicen: "intentá esto, y si pasa tal error, hacé esto otro".
+
+```python
+try:
+    with open("/etc/app/umbrales.conf") as f:
+        texto = f.read()
+except FileNotFoundError:
+    print("No hay archivo de umbrales: uso los valores por defecto", file=sys.stderr)
+    texto = ""
+except PermissionError as e:
+    sys.exit(f"Sin permiso para leer la configuración: {e}")
+else:
+    print("Configuración leída")       # solo si no hubo error
+finally:
+    print("Esto se ejecuta siempre")    # haya o no error
+```
+
+La regla de oro: **atrapá solo los errores que sabés manejar**, y con su nombre. Un `except:` a secas (o `except Exception:` que no hace nada) esconde todo, incluidos los errores de programación: el script "anda", pero hace otra cosa y nadie se entera. Si no sabés qué hacer con un error, dejalo subir: un traceback en el log es mucho mejor que un dato equivocado en silencio.
+
+Y vos también podés avisar que algo está mal con `raise`:
+
+```python
+def porcentaje(usado, total):
+    if total <= 0:
+        raise ValueError(f"total inválido: {total}")
+    return round(usado * 100 / total, 1)
+```
+
+Probá cómo se ve cada error y qué pasa si lo atrapás:
+
+<ConsolaPython titulo="Probar errores" codigo={'datos = {"web01": 72}\n\ntry:\n    print(datos["db01"])\nexcept KeyError as e:\n    print("No está la clave", e)\n\nprint(int("x"))  # este no está atrapado: mirá el traceback'} />
+
+## Códigos de salida
+
+Igual que en Bash, el código de salida es cómo un programa le cuenta al que lo llamó si salió bien: 0 es éxito y cualquier otro número, un problema. `sys.exit(0)` o `sys.exit(1)` terminan con ese código, y `sys.exit("mensaje")` muestra el mensaje por la salida de errores y termina con 1. Un traceback sin manejar también termina con 1.
+
+Un timer de systemd, cron, Ansible o un sistema de monitoreo como los del módulo 6.4 se fijan en ese número, así que vale la pena definirlo bien: por ejemplo, 0 si todo está bien, 1 si hay algo crítico y 2 si el programa no pudo ni siquiera revisar.
+
+## Manos a la obra
+
+<EjercicioPython ejercicio={ejDiscos} />
+
+<EnSimple>
+Una función es un pedazo de programa con nombre que recibe datos y devuelve un resultado con return; así se puede reusar y probar sola. Un módulo es un archivo .py que se trae con import: Python trae muchos hechos (sys, pathlib, subprocess, json, logging) y tus archivos también lo son, con el trabajo principal dentro de if __name__ == "__main__". Cuando algo falla, el traceback se lee de abajo hacia arriba: la última línea dice qué pasó y las de arriba, dónde. Con try y except se manejan los errores que se esperan, con nombre; los demás conviene dejarlos ver. Y sys.exit dice con qué código termina el programa.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="except: a secas">
+    Esconde todos los errores, incluso un nombre mal escrito. El script parece andar y hace otra cosa. Atrapá errores con nombre.
+  </ErrorComun>
+  <ErrorComun titulo="Funciones que imprimen en vez de devolver">
+    No se pueden reusar ni probar. Que la función devuelva el valor y que el print esté afuera.
+  </ErrorComun>
+  <ErrorComun titulo="Leer el traceback de arriba hacia abajo">
+    La causa está en la última línea, y el lugar, en el último bloque File que es de tu código.
+  </ErrorComun>
+  <ErrorComun titulo="Llamar a un archivo igual que un módulo de Python">
+    Un json.py o un logging.py propio tapa al de la biblioteca estándar y los import fallan de formas raras.
+  </ErrorComun>
+  <ErrorComun titulo="Terminar siempre con código 0">
+    Si el programa encontró un problema, el monitoreo y systemd solo se enteran por el código de salida.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- def nombre(parámetros): con return; valores por defecto y argumentos con nombre.
+- Variables locales dentro de cada función; datos que entran por parámetros y salen por return.
+- import para la biblioteca estándar y para tus propios archivos; el trabajo principal, en main() con if __name__ == "__main__".
+- El traceback se lee de abajo hacia arriba: tipo de error y mensaje al final.
+- try y except con errores con nombre; else si no hubo error, finally siempre; raise para avisar.
+- sys.exit(código): 0 bien, distinto de 0 problema.
+</Resumen>

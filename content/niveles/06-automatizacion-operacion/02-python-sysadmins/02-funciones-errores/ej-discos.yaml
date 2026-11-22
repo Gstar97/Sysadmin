@@ -1,0 +1,174 @@
+tipo: python
+titulo: Uso de disco con funciones y errores bien manejados
+descripcion: >-
+  El archivo /datos/discos.txt tiene una línea por servidor con el espacio usado y el total, en
+  megabytes. Algunas líneas vienen mal, como pasa siempre con los datos reales. Vas a armar un
+  programa con funciones que se puedan probar por separado, que no se caiga por una línea fea y
+  que termine con un código de salida que sirva para un sistema de monitoreo.
+archivos:
+  /datos/discos.txt: |
+    web01 72000 100000
+    db01 91500 100000
+    bkp01 x 200000
+    web02 85000 100000
+    nas01 0 0
+codigo_inicial: |
+  def porcentaje(usado, total):
+      """Devuelve el porcentaje de uso con un decimal."""
+      # completá
+pasos:
+  - consigna: >-
+      Completá la función `porcentaje(usado, total)` para que devuelva (con `return`, no con
+      print) el porcentaje redondeado a un decimal: `porcentaje(1, 4)` tiene que dar `25.0`.
+    verificar:
+      - prueba: assert porcentaje(1, 4) == 25.0
+        mensaje: porcentaje(1, 4) devuelve 25.0
+      - prueba: assert porcentaje(91500, 100000) == 91.5
+        mensaje: porcentaje(91500, 100000) devuelve 91.5
+      - prueba: assert porcentaje(1, 3) == 33.3
+        mensaje: porcentaje(1, 3) redondea a 33.3
+    pistas:
+      - "`round(valor, 1)` redondea a un decimal."
+      - "`return round(usado * 100 / total, 1)`"
+    solucion: |
+      def porcentaje(usado, total):
+          """Devuelve el porcentaje de uso con un decimal."""
+          return round(usado * 100 / total, 1)
+    explicacion: >-
+      Una función que devuelve un valor se puede usar en cualquier lado y probar sola. Una que
+      solo hace print, no.
+  - consigna: >-
+      Sumá `clasificar(pct, alerta=80, critico=90)`, que devuelva `"bien"`, `"alto"` (desde
+      alerta) o `"crítico"` (desde critico). Los valores por defecto permiten llamarla con un solo
+      argumento.
+    verificar:
+      - prueba: assert clasificar(72.0) == "bien" and clasificar(85) == "alto" and clasificar(91.5) == "crítico"
+        mensaje: Con los umbrales por defecto clasifica bien 72, 85 y 91.5
+      - prueba: assert clasificar(80) == "alto" and clasificar(90) == "crítico"
+        mensaje: Los límites (80 y 90) cuentan como alto y crítico
+      - prueba: assert clasificar(85, alerta=70, critico=85) == "crítico"
+        mensaje: Respeta otros umbrales si se los pasan
+    pistas:
+      - "`if pct >= critico: return \"crítico\"` primero; después `elif pct >= alerta:`."
+    solucion: |
+      def porcentaje(usado, total):
+          """Devuelve el porcentaje de uso con un decimal."""
+          return round(usado * 100 / total, 1)
+
+
+      def clasificar(pct, alerta=80, critico=90):
+          """bien, alto o crítico según los umbrales."""
+          if pct >= critico:
+              return "crítico"
+          if pct >= alerta:
+              return "alto"
+          return "bien"
+  - consigna: >-
+      Ahora leé /datos/discos.txt y mostrá cada servidor como `db01: 91.5% crítico`. Las líneas que
+      no se pueden procesar no tienen que cortar el programa: atrapá **solo** los errores
+      esperables (`ValueError` si un número no es número, `ZeroDivisionError` si el total es 0) y
+      avisalos por la salida de errores con `print(..., file=sys.stderr)`, mencionando el
+      servidor.
+    verificar:
+      - salida_contiene: "db01: 91.5% crítico"
+      - salida_contiene: "web01: 72.0% bien"
+      - salida_contiene: "web02: 85.0% alto"
+      - error_contiene: bkp01
+      - error_contiene: nas01
+      - sin_error: true
+    pistas:
+      - "`for linea in open(\"/datos/discos.txt\"):` y adentro `nombre, usado, total = linea.split()`."
+      - "Dentro de `try:` van las conversiones y el cálculo; después, `except ValueError:` y `except ZeroDivisionError:`, cada uno con su aviso."
+      - "Para la salida de errores hace falta `import sys` arriba de todo."
+    solucion: |
+      import sys
+
+
+      def porcentaje(usado, total):
+          """Devuelve el porcentaje de uso con un decimal."""
+          return round(usado * 100 / total, 1)
+
+
+      def clasificar(pct, alerta=80, critico=90):
+          """bien, alto o crítico según los umbrales."""
+          if pct >= critico:
+              return "crítico"
+          if pct >= alerta:
+              return "alto"
+          return "bien"
+
+
+      with open("/datos/discos.txt") as f:
+          for linea in f:
+              nombre, usado, total = linea.split()
+              try:
+                  pct = porcentaje(int(usado), int(total))
+              except ValueError:
+                  print(f"{nombre}: datos inválidos ({usado} de {total})", file=sys.stderr)
+                  continue
+              except ZeroDivisionError:
+                  print(f"{nombre}: el total es 0", file=sys.stderr)
+                  continue
+              print(f"{nombre}: {pct}% {clasificar(pct)}")
+    explicacion: >-
+      Un except por cada error que sabés manejar, y nada más: si aparece otro (por ejemplo, una
+      línea con dos columnas, que da otro ValueError al desarmarla), es mejor enterarse que
+      esconderlo. Los avisos van a stderr para que no se mezclen con el reporte.
+  - consigna: >-
+      Por último, ordená el programa como uno de producción: todo el trabajo dentro de una función
+      `main()` que se llame solo con `if __name__ == "__main__":`, y que el programa termine con
+      código de salida 1 si algún servidor está crítico (y 0 si no), con `sys.exit`.
+    verificar:
+      - codigo_salida: 1
+      - usa: __name__ == "__main__"
+        mensaje: El programa usa if __name__ == "__main__"
+      - prueba: assert porcentaje(1, 4) == 25.0 and clasificar(95) == "crítico"
+        mensaje: Las funciones siguen andando solas
+      - salida_contiene: "db01: 91.5% crítico"
+    pistas:
+      - "En main, una variable `hay_critico = False` que pase a True cuando clasificar devuelva \"crítico\", y al final `return 1 if hay_critico else 0`."
+      - "Abajo de todo: `if __name__ == \"__main__\":` y adentro `sys.exit(main())`."
+    solucion: |
+      import sys
+
+
+      def porcentaje(usado, total):
+          """Devuelve el porcentaje de uso con un decimal."""
+          return round(usado * 100 / total, 1)
+
+
+      def clasificar(pct, alerta=80, critico=90):
+          """bien, alto o crítico según los umbrales."""
+          if pct >= critico:
+              return "crítico"
+          if pct >= alerta:
+              return "alto"
+          return "bien"
+
+
+      def main():
+          hay_critico = False
+          with open("/datos/discos.txt") as f:
+              for linea in f:
+                  nombre, usado, total = linea.split()
+                  try:
+                      pct = porcentaje(int(usado), int(total))
+                  except ValueError:
+                      print(f"{nombre}: datos inválidos ({usado} de {total})", file=sys.stderr)
+                      continue
+                  except ZeroDivisionError:
+                      print(f"{nombre}: el total es 0", file=sys.stderr)
+                      continue
+                  estado = clasificar(pct)
+                  if estado == "crítico":
+                      hay_critico = True
+                  print(f"{nombre}: {pct}% {estado}")
+          return 1 if hay_critico else 0
+
+
+      if __name__ == "__main__":
+          sys.exit(main())
+    explicacion: >-
+      Con este formato, otro programa puede hacer `import discos` y usar porcentaje y clasificar sin
+      que se ejecute el reporte (las pruebas automáticas hacen exactamente eso), y el código de
+      salida le dice al monitoreo o a un timer de systemd si algo anda mal, como en Bash.

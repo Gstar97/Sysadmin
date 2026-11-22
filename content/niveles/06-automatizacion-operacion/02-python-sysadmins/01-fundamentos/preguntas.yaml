@@ -1,0 +1,129 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿En cuál de estos casos conviene más Python que Bash?
+  opciones:
+    - { texto: "Leer el JSON de una API y armar un reporte por servidor", correcta: true, explicacion: "Datos con estructura: es el terreno de Python." }
+    - { texto: "Correr tar y después rsync", explicacion: "Encadenar comandos es lo que mejor hace Bash." }
+    - { texto: "Reiniciar un servicio con systemctl", explicacion: "Una línea de Bash alcanza." }
+    - { texto: "Cambiar los permisos de una carpeta", explicacion: "chmod alcanza." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué muestra print(int("72") + 1)?
+  opciones:
+    - { texto: "73", correcta: true, explicacion: "int convierte el texto en número antes de sumar." }
+    - { texto: "721", explicacion: "Eso pasaría si los dos fueran texto: \"72\" + \"1\"." }
+    - { texto: "Un error", explicacion: "El error sería \"72\" + 1, sin convertir." }
+    - { texto: "72 1", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "Con servidores = [{\"nombre\": \"web01\", \"disco\": 72}, {\"nombre\": \"db01\", \"disco\": 91}], ¿qué da servidores[1][\"disco\"]?"
+  opciones:
+    - { texto: "91", correcta: true, explicacion: "La posición 1 es el segundo elemento: se cuenta desde 0." }
+    - { texto: "72", explicacion: "Ese es servidores[0][\"disco\"]." }
+    - { texto: "\"db01\"", explicacion: "Ese es servidores[1][\"nombre\"]." }
+    - { texto: "Un KeyError", explicacion: "La clave existe." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El diccionario config puede no tener la clave "puerto". ¿Cuál es la forma segura de leerla con 22 por defecto?
+  opciones:
+    - { texto: "config.get(\"puerto\", 22)", correcta: true, explicacion: "get devuelve el valor por defecto si la clave no está." }
+    - { texto: "config[\"puerto\"] or 22", explicacion: "Si la clave no está, da KeyError antes de llegar al or." }
+    - { texto: "config.puerto", explicacion: "Así no se accede a un diccionario." }
+    - { texto: "config[\"puerto\", 22]", explicacion: "Eso busca una clave que es una tupla." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    $ python3 informe.py
+      File "/home/ana/informe.py", line 4
+        print(s)
+    IndentationError: unexpected indent
+  opciones:
+    - { texto: "La línea 4 tiene más sangría de la que corresponde (o mezcla tabulador y espacios)", correcta: true, explicacion: "La sangría es parte del lenguaje." }
+    - { texto: "Falta instalar print", explicacion: "print viene con Python." }
+    - { texto: "La variable s no existe", explicacion: "Eso sería NameError." }
+    - { texto: "El archivo no tiene permiso de ejecución", explicacion: "Con python3 informe.py no hace falta." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: El disco viene de una línea de df. ¿Qué falta?
+  salida: |
+    Traceback (most recent call last):
+      File "/home/ana/disco.py", line 3, in <module>
+        if uso > 80:
+           ^^^^^^^^
+    TypeError: '>' not supported between instances of 'str' and 'int'
+  opciones:
+    - { texto: "Convertir uso a número con int() antes de comparar", correcta: true, explicacion: "Todo lo que llega de un comando es texto." }
+    - { texto: "Poner 80 entre comillas", explicacion: "Compararía texto con texto: \"9\" > \"80\" da True." }
+    - { texto: "Usar >= en lugar de >", explicacion: "El problema es el tipo, no el operador." }
+    - { texto: "Instalar otra versión de Python", explicacion: "Pasa igual en todas." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Completá la primera línea de un programa de Python para que se pueda correr con ./informe.py, usando el python3 que esté en el PATH.
+  prompt: "informe.py, línea 1:"
+  aceptadas:
+    - "#!/usr/bin/env python3"
+    - "#! /usr/bin/env python3"
+  explicacion: Con permiso de ejecución (chmod +x), el sistema usa esa línea para saber con qué correrlo.
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas líneas son correctas en Python?
+  opciones:
+    - { texto: "if disco >= 90 and activo:", correcta: true, explicacion: "and en palabras y dos puntos al final." }
+    - { texto: "for s in servidores:", correcta: true, explicacion: "Correcto." }
+    - { texto: "if [ $disco -gt 90 ]; then", explicacion: "Eso es Bash." }
+    - { texto: "while intentos < 3", explicacion: "Faltan los dos puntos." }
+    - { texto: "nombre = \"web01\"", correcta: true, explicacion: "Con espacios alrededor del = está bien en Python." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená las líneas para mostrar los servidores con el disco por encima de 80.
+  pasos:
+    - "servidores = [{\"nombre\": \"db01\", \"disco\": 91}]"
+    - "for s in servidores:"
+    - "    if s[\"disco\"] > 80:"
+    - "        print(s[\"nombre\"])"
+  explicacion: Primero los datos, después el for que los recorre, adentro el if que filtra y, más adentro, lo que se hace con cada uno.
+- id: p10
+  tipo: encontrar_error
+  dificultad: 2
+  enunciado: ¿Qué líneas tienen un error?
+  lenguaje: python
+  archivo: |
+    puertos = {"ssh": 22, "http": 80}
+    puertos["https"] = 443
+    if puertos["ssh"] = 22:
+        print("ssh en el puerto de siempre")
+    for nombre, numero in puertos.items()
+        print(nombre, numero)
+  lineas_con_error: [3, 5]
+  explicacion: La línea 3 usa = (asignar) en lugar de == (comparar), y a la línea 5 le faltan los dos puntos.
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Un servidor Rocky Linux 9 tiene python3 versión 3.9 y un programa usa algo que apareció en Python 3.11. ¿Qué es lo correcto?
+  opciones:
+    - { texto: "Instalar Python 3.11 o 3.12 como paquete aparte (python3.11) y correr el programa con ese, sin tocar el python3 del sistema", correcta: true, explicacion: "Lo vas a ver en la lección 6.2.6." }
+    - { texto: "Reemplazar /usr/bin/python3 por un enlace a la versión nueva", explicacion: "Rompe herramientas del sistema que dependen del Python original, como dnf." }
+    - { texto: "Compilar Python y pisar el del sistema", explicacion: "Mismo problema." }
+    - { texto: "No se puede", explicacion: "Sí se puede, en paralelo." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: >-
+    ¿Qué muestra print(f"{nombre}: {disco}%") si nombre vale "db01" y disco, 91?
+  opciones:
+    - { texto: "db01: 91%", correcta: true, explicacion: "Las llaves se reemplazan por el valor." }
+    - { texto: "{nombre}: {disco}%", explicacion: "Eso pasaría sin la f adelante." }
+    - { texto: "nombre: disco%", explicacion: "No." }
+    - { texto: "Un error", explicacion: "Es correcto." }
