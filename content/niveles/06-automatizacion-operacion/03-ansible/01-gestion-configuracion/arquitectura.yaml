@@ -1,0 +1,58 @@
+tipo: diagrama
+titulo: La arquitectura de Ansible
+puntos:
+  - id: control
+    titulo: El nodo de control
+    area: { x: 2.3, y: 12.2, ancho: 34.9, alto: 82.2 }
+    texto: >-
+      La máquina desde la que corrés Ansible: tu equipo de administración (Linux, macOS o WSL en
+      Windows; el nodo de control no puede ser Windows). Ahí está instalado ansible-core y ahí
+      viven la configuración, el inventario y los playbooks, idealmente en un repositorio Git
+      (módulo 6.1).
+  - id: cfg
+    titulo: ansible.cfg
+    area: { x: 4.2, y: 23.3, ancho: 31.2, alto: 15 }
+    texto: >-
+      La configuración: dónde está el inventario, con qué usuario conectarse, si usar sudo. Ansible
+      busca el primero que encuentre en este orden: la variable ANSIBLE_CONFIG, ./ansible.cfg (la
+      carpeta donde estás), ~/.ansible.cfg y /etc/ansible/ansible.cfg. Por eso conviene tener uno en
+      la carpeta del proyecto.
+  - id: inventario
+    titulo: El inventario
+    area: { x: 4.2, y: 41.1, ancho: 31.2, alto: 15 }
+    texto: >-
+      La lista de servidores y sus grupos (web, db, producción). Puede ser un archivo INI o YAML;
+      lo vas a ver a fondo en la lección siguiente.
+  - id: playbooks
+    titulo: Playbooks y roles
+    area: { x: 4.2, y: 58.9, ancho: 31.2, alto: 15 }
+    texto: >-
+      Archivos YAML que describen cómo tiene que quedar cada servidor: qué paquetes, qué archivos,
+      qué servicios. No dicen "ejecutá este comando" sino "esto tiene que estar así".
+  - id: core
+    titulo: ansible-core
+    area: { x: 4.2, y: 76.7, ancho: 31.2, alto: 13.9 }
+    texto: >-
+      El programa (escrito en Python) con los comandos ansible, ansible-playbook, ansible-vault y
+      compañía, y los módulos básicos (ansible.builtin). El paquete "ansible", más grande, suma
+      unas cien colecciones de módulos de la comunidad.
+  - id: nodo
+    titulo: Un nodo administrado
+    area: { x: 65.1, y: 12.2, ancho: 32.6, alto: 38.9 }
+    texto: >-
+      No necesita nada especial: un servidor SSH y Python 3. Ansible copia el módulo de cada tarea
+      por SSH, lo ejecuta con python3, el módulo mira cómo está el sistema, cambia solo lo que
+      falta, devuelve el resultado en JSON y se borra. Por eso se dice que Ansible es "sin agente".
+  - id: ssh
+    titulo: La conexión
+    area: { x: 37.2, y: 19.4, ancho: 27.9, alto: 10 }
+    texto: >-
+      SSH, con las mismas claves de la lección 1.6.3. Para lo que requiere root, Ansible usa sudo
+      (become). Si sudo pide contraseña, hay que pasarla con -K, o configurar sudo sin contraseña
+      para el usuario de Ansible.
+  - id: resultado
+    titulo: El resultado
+    area: { x: 37.2, y: 77.8, ancho: 27.9, alto: 10 }
+    texto: >-
+      Cada tarea vuelve con uno de estos estados: ok (ya estaba bien), changed (lo cambió), failed
+      (falló) o unreachable (no pudo conectarse). Al final, el PLAY RECAP los suma por servidor.

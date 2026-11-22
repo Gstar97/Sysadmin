@@ -1,0 +1,104 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué quiere decir que una tarea de Ansible es idempotente?
+  opciones:
+    - { texto: "Que correrla una vez o muchas deja el sistema igual, y solo cambia lo que falta", correcta: true, explicacion: "Por eso se puede correr siempre." }
+    - { texto: "Que se ejecuta en todos los servidores a la vez", explicacion: "Eso es paralelismo." }
+    - { texto: "Que no necesita SSH", explicacion: "No tiene que ver." }
+    - { texto: "Que no se puede deshacer", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué hay que instalar en los servidores que administra Ansible?
+  opciones:
+    - { texto: "Nada especial: alcanza con SSH y Python 3, que ya traen", correcta: true, explicacion: "Por eso se dice que no tiene agente." }
+    - { texto: "El agente de Ansible", explicacion: "Ansible no usa agente." }
+    - { texto: "ansible-core", explicacion: "Va solo en el nodo de control." }
+    - { texto: "Un servidor web", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre los paquetes ansible-core y ansible?
+  opciones:
+    - { texto: "ansible-core es el motor con los módulos básicos; ansible suma unas cien colecciones de la comunidad", correcta: true, explicacion: "Las colecciones traen módulos para firewalld, bases de datos, Windows y más." }
+    - { texto: "Son lo mismo con otro nombre", explicacion: "No." }
+    - { texto: "ansible es la versión vieja", explicacion: "No: incluye a ansible-core." }
+    - { texto: "ansible-core es para Windows", explicacion: "No." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "Este script se corre todas las noches. ¿Qué problema tiene?\n\n```bash\necho \"server_tokens off;\" >> /etc/nginx/nginx.conf\nsystemctl restart nginx\n```"
+  opciones:
+    - { texto: "echo >> agrega la línea otra vez en cada corrida: no es idempotente", correcta: true, explicacion: "En Ansible, lineinfile solo la agrega si falta." }
+    - { texto: "Ninguno", explicacion: "El archivo crece cada noche." }
+    - { texto: "echo no puede escribir en /etc", explicacion: "Como root, sí." }
+    - { texto: "Falta un reinicio", explicacion: "No es el problema." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Corrés ansible --version y dice config file = /etc/ansible/ansible.cfg, pero tenías uno en ~/ansible. ¿Qué pasa?
+  opciones:
+    - { texto: "Lo corriste desde otra carpeta: Ansible toma ./ansible.cfg de la carpeta actual", correcta: true, explicacion: "Entrá a ~/ansible primero." }
+    - { texto: "ansible.cfg solo funciona en /etc", explicacion: "No." }
+    - { texto: "El archivo está mal escrito", explicacion: "Puede ser, pero el síntoma apunta a la carpeta." }
+    - { texto: "Hay que reinstalar Ansible", explicacion: "No." }
+- id: p06
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué dice esta salida?
+  salida: |
+    $ ansible all -m ping
+    web01 | SUCCESS => {
+        "changed": false,
+        "ping": "pong"
+    }
+    db01 | UNREACHABLE! => {
+        "changed": false,
+        "msg": "Failed to connect to the host via ssh: ssh: connect to host db01 port 22: Connection timed out",
+        "unreachable": true
+    }
+  opciones:
+    - { texto: "web01 responde; con db01 no se pudo ni abrir la conexión SSH (apagado, firewall o red)", correcta: true, explicacion: "Unreachable es un problema de conexión, no de Ansible." }
+    - { texto: "db01 no tiene Python", explicacion: "Sería un error de módulo, no de conexión." }
+    - { texto: "db01 no responde al ping de red", explicacion: "El ping de Ansible usa SSH." }
+    - { texto: "La clave de db01 es incorrecta", explicacion: "Sería Permission denied." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 1
+  enunciado: Completá el comando que prueba la conexión de Ansible con todos los servidores del inventario.
+  prompt: "ana@admin01:~/ansible$"
+  aceptadas:
+    - "ansible all -m ping"
+    - "ansible all -m ansible.builtin.ping"
+    - "ansible '*' -m ping"
+  explicacion: all es el grupo que incluye a todos los equipos del inventario.
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estas afirmaciones sobre Ansible son ciertas?
+  opciones:
+    - { texto: "Se conecta a Linux por SSH", correcta: true, explicacion: "Y a Windows por WinRM o SSH." }
+    - { texto: "El nodo de control puede ser Linux o macOS", correcta: true, explicacion: "En Windows, dentro de WSL." }
+    - { texto: "Copia el módulo al servidor, lo ejecuta y lo borra", correcta: true, explicacion: "Por eso no deja nada instalado." }
+    - { texto: "Cada servidor consulta a un servidor central cada media hora", explicacion: "Eso es Puppet con su agente." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Tenés que crear diez VM en Proxmox y después configurarlas. ¿Qué combinación es la habitual?
+  opciones:
+    - { texto: "Terraform u OpenTofu para crearlas y Ansible para configurarlas", correcta: true, explicacion: "Aprovisionamiento y configuración son dos trabajos distintos." }
+    - { texto: "Solo Ansible", explicacion: "Puede, pero no es su fuerte." }
+    - { texto: "Solo Terraform", explicacion: "Terraform no está pensado para configurar el sistema adentro." }
+    - { texto: "Puppet para crearlas", explicacion: "Puppet configura, no crea máquinas." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Por qué no conviene dejar host_key_checking = False en producción?
+  opciones:
+    - { texto: "Porque Ansible no verifica la huella del servidor y alguien podría hacerse pasar por él", correcta: true, explicacion: "Mejor cargar las huellas verificadas en known_hosts." }
+    - { texto: "Porque hace más lento a Ansible", explicacion: "No." }
+    - { texto: "Porque desactiva las claves SSH", explicacion: "No: solo la verificación del servidor." }
+    - { texto: "No hay ningún problema", explicacion: "Sí lo hay." }

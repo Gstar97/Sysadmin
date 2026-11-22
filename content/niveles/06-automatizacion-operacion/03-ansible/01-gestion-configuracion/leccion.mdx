@@ -1,0 +1,157 @@
+---
+id: n6-m3-l1
+titulo: Gestión de configuración y Ansible
+minutos: 120
+objetivos:
+  - Explicar qué resuelve la gestión de configuración, la idempotencia y la configuración declarativa.
+  - Entender el modelo de Ansible sin agentes, con un nodo de control y SSH.
+  - Instalar Ansible (diferenciando ansible-core del paquete ansible) y preparar un proyecto.
+glosario: [gestion-configuracion, idempotencia, deriva-configuracion, ansible, nodo-control]
+verificado: 2026-11
+---
+
+import arquitectura from './arquitectura.svg?raw'
+import arquitecturaDatos from './arquitectura.yaml'
+import ejPrimeros from './ej-primeros-pasos.yaml'
+
+Con un servidor, entrar por SSH y configurarlo a mano anda. Con diez, ya cuesta acordarse de qué se hizo en cada uno; con cincuenta, es imposible, y empiezan las sorpresas: el servidor que "es igual a los otros" pero tiene una versión distinta de un paquete, un parámetro que alguien cambió un viernes a la noche, una regla de firewall que nadie sabe por qué está. Los scripts del Nivel 1 y del módulo 6.2 ayudan, pero tienen un problema de fondo: dicen qué hacer, no cómo tiene que quedar. Las herramientas de gestión de configuración dan vuelta esa idea, y Ansible es la más usada para hacerlo.
+
+<AntesDeEmpezar>
+- SSH y claves (lecciones 1.6.2 y 1.6.3) y sudo (lección 1.2.5).
+- Git (módulo 6.1) y YAML (lección 6.2.4).
+</AntesDeEmpezar>
+
+## Qué hacer o cómo tiene que quedar
+
+Un script dice **qué hacer**, paso por paso (configuración **imperativa**):
+
+```bash
+dnf install -y nginx
+echo "server_tokens off;" >> /etc/nginx/nginx.conf
+systemctl restart nginx
+```
+
+Correrlo una vez está bien. Correrlo dos veces agrega la línea otra vez y reinicia nginx sin necesidad. Correrlo en un servidor que ya estaba bien, también. Para que sea seguro habría que llenarlo de "si ya está, no lo hagas".
+
+Ansible describe **cómo tiene que quedar** (configuración **declarativa**):
+
+```yaml
+- name: nginx instalado
+  ansible.builtin.package:
+    name: nginx
+    state: present
+
+- name: Sin la versión en las respuestas
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: '^\s*server_tokens'
+    line: '    server_tokens off;'
+    insertafter: '^http {'
+```
+
+Cada módulo mira primero cómo está el servidor y cambia solo lo que falta. Correrlo una vez o cien da el mismo resultado: eso es la **idempotencia**, la propiedad más importante de una automatización. Y como no cambia lo que ya está bien, el mismo playbook sirve para instalar un servidor nuevo y para revisar que los viejos sigan como deben (si alguien tocó algo a mano, la próxima corrida lo detecta y lo corrige: es la **deriva de configuración**).
+
+## Las herramientas
+
+| Herramienta | Cómo trabaja | Lenguaje |
+|---|---|---|
+| Ansible | Sin agente: se conecta por SSH (o WinRM a Windows) cuando lo corrés | YAML |
+| Puppet | Con agente: cada servidor consulta a un servidor central cada media hora | Lenguaje propio |
+| Chef | Con agente, parecido a Puppet | Ruby |
+| Salt | Con agente o por SSH, con un bus de mensajes | YAML |
+
+Ansible ganó terreno por lo simple de empezar: no hay que instalar nada en los servidores, alcanza con SSH y Python, que ya están. Red Hat lo compró en 2015 y hoy es la base de su automatización; también lo vas a ver en herramientas de terceros (por ejemplo, para preparar los nodos de Kubernetes). Ojo con una confusión común: **Terraform** y **OpenTofu** no son de gestión de configuración, sino de *aprovisionamiento*: crean las máquinas, redes y discos en una nube o en Proxmox. Lo habitual es usarlos juntos: Terraform crea la VM y Ansible la configura.
+
+## Cómo trabaja Ansible
+
+<DiagramaInteractivo datos={arquitecturaDatos} svg={arquitectura} alt="A la izquierda, el nodo de control admin01 con ansible.cfg, el inventario, los playbooks y roles, y ansible-core. Por SSH se conecta a los nodos administrados web01 (Rocky) y web02 (Ubuntu), que solo necesitan sshd y python3: el módulo llega a ~/.ansible/tmp, python3 lo ejecuta, compara y cambia lo necesario, devuelve JSON y se borra. El resultado vuelve como ok, changed, failed o unreachable." />
+
+Lo que necesita cada servidor administrado: SSH, Python 3 (todas las distribuciones del curso lo traen) y un usuario que pueda usar sudo. Lo que necesita el **nodo de control**: Ansible instalado, y tu clave SSH para entrar a los servidores. El nodo de control tiene que ser Linux o macOS (en Windows, dentro de WSL).
+
+## Instalar Ansible
+
+Hay dos paquetes con nombres parecidos:
+
+- **ansible-core**: el motor, los comandos (ansible, ansible-playbook, ansible-vault, ansible-galaxy...) y los módulos básicos de la colección ansible.builtin.
+- **ansible**: ansible-core más unas cien **colecciones** de la comunidad (para firewalld, PostgreSQL, Windows, Docker, VMware y mucho más). Es mucho más grande.
+
+Con ansible-core y solo las colecciones que usás (lo vas a ver en la lección 6.3.5) se tiene un entorno más chico y controlado.
+
+<Distros>
+<Distro nombre="Rocky / RHEL 10">
+
+```bash
+sudo dnf install -y ansible-core      # 2.16, mantenida por Red Hat
+```
+
+</Distro>
+<Distro nombre="Ubuntu 24.04">
+
+```bash
+sudo apt install -y ansible           # ansible-core 2.16 y las colecciones
+```
+
+</Distro>
+<Distro nombre="Versión más nueva">
+
+```bash
+sudo dnf install -y pipx              # o apt install pipx
+pipx install --include-deps ansible   # o pipx install ansible-core
+```
+
+</Distro>
+</Distros>
+
+Las versiones de las distribuciones son viejas pero mantenidas: reciben correcciones de seguridad durante años. Con pipx tenés la más nueva (en noviembre de 2026, ansible-core 2.21 o 2.22), aparte del sistema, como viste en la lección 6.2.6. Para lo que vas a ver en este módulo, cualquiera de las dos sirve.
+
+## El proyecto: ansible.cfg
+
+Cada proyecto de Ansible vive en su carpeta (y en su repositorio de Git), con un **ansible.cfg** propio. Ansible usa el primero que encuentra: la variable de entorno ANSIBLE_CONFIG, ./ansible.cfg (la carpeta donde estás), ~/.ansible.cfg y, por último, /etc/ansible/ansible.cfg.
+
+```ini
+[defaults]
+inventory = inventario.ini
+remote_user = ana
+# Los avisos de "intérprete descubierto" no aportan nada en un laboratorio:
+interpreter_python = auto_silent
+
+[privilege_escalation]
+become = false
+```
+
+`ansible-config dump --only-changed` muestra qué opciones cambiaste respecto de los valores por defecto. Y una opción que vas a ver mucho en tutoriales: `host_key_checking = False`. Hace que Ansible no verifique la huella de los servidores, como si contestaras "yes" a ciegas. Es cómodo en un laboratorio, pero en producción es mejor cargar las huellas en known_hosts (con ssh-keyscan, verificándolas), por la misma razón que viste en la lección 1.6.2.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejPrimeros} />
+
+<EnSimple>
+La gestión de configuración describe cómo tiene que quedar cada servidor en vez de qué comandos correr; la herramienta mira cómo está, cambia solo lo que falta y se puede correr cuantas veces haga falta sin romper nada (idempotencia). Ansible lo hace sin instalar nada en los servidores: desde un nodo de control entra por SSH, ejecuta sus módulos con el Python del servidor y devuelve el resultado. Se instala ansible-core (el motor) o ansible (el motor más colecciones), y cada proyecto tiene su ansible.cfg y su inventario en una carpeta versionada en Git.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Usar command o shell para todo">
+    Se pierde la idempotencia: el comando corre siempre. Si existe un módulo para eso (package, service, lineinfile), usalo.
+  </ErrorComun>
+  <ErrorComun titulo="Confundir el ping de Ansible con el de red">
+    ansible -m ping prueba SSH y Python, no ICMP. Un servidor puede responder al ping de red y fallar en el de Ansible, y al revés.
+  </ErrorComun>
+  <ErrorComun titulo="host_key_checking = False en producción">
+    Desactiva la protección contra alguien que se hace pasar por tu servidor. Cargá las huellas verificadas en known_hosts.
+  </ErrorComun>
+  <ErrorComun titulo="Un ansible.cfg que no se usa">
+    Si corrés Ansible desde otra carpeta, toma otro archivo. ansible --version muestra cuál está usando.
+  </ErrorComun>
+  <ErrorComun titulo="Esperar que el nodo de control sea Windows">
+    Ansible administra Windows, pero corre desde Linux o macOS (en Windows, dentro de WSL).
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Imperativo dice qué hacer; declarativo, cómo tiene que quedar. La idempotencia permite correrlo siempre.
+- La deriva de configuración (cambios a mano) se detecta y corrige volviendo a correr la automatización.
+- Ansible es sin agente: nodo de control, SSH, Python en los servidores, módulos que se copian, ejecutan y borran.
+- ansible-core es el motor; ansible suma colecciones. Las distribuciones traen 2.16; pipx, la más nueva.
+- ansible.cfg del proyecto (gana el de la carpeta actual); ansible --version dice cuál se usa.
+- Terraform y OpenTofu crean la infraestructura; Ansible la configura.
+</Resumen>

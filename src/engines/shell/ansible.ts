@@ -1028,6 +1028,13 @@ class Executor {
   }
 }
 
+/** setup -a "filter=ansible_distribution*": solo los facts que coinciden (acepta varios separados por coma). */
+function filterFacts(f: Record<string, unknown>, filter: unknown): Record<string, unknown> {
+  if (filter === undefined || filter === null || filter === '') return f
+  const pats = (Array.isArray(filter) ? filter : String(filter).split(',')).map((p) => new RegExp(`^${String(p).trim().replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`))
+  return Object.fromEntries(Object.entries(f).filter(([k]) => pats.some((re) => re.test(k))))
+}
+
 function prefixFacts(f: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(f)) out[k.startsWith('ansible_') ? k : `ansible_${k}`] = v
@@ -1596,7 +1603,7 @@ async function runPlaybook(run: Run, path: string): Promise<number> {
           result = { changed: false, ansible_facts: { services: sv } }
         } else {
           st.facts = gatherFacts(c.sys, c.user)
-          result = { changed: false, ansible_facts: prefixFacts(st.facts) }
+          result = { changed: false, ansible_facts: filterFacts(prefixFacts(st.facts), args.filter) }
         }
       } else if (short === 'reboot') {
         result = check ? { changed: true, elapsed: 0, rebooted: true } : { changed: true, elapsed: 42, rebooted: true }
@@ -1916,7 +1923,7 @@ register('ansible', {
           }
           user = o.becomeUser ?? run.cfg.becomeUser
         }
-        if (res.short === 'setup') result = { changed: false, ansible_facts: prefixFacts(gatherFacts(c.sys, c.user)) }
+        if (res.short === 'setup') result = { changed: false, ansible_facts: filterFacts(prefixFacts(gatherFacts(c.sys, c.user)), args.filter) }
         else if (res.short === 'debug') result = { changed: false, msg: (args.msg as string | undefined) ?? 'Hello world!' }
         else if (!(res.short in REMOTE_MODULES)) result = { failed: true, changed: false, msg: `${moduleName} no se puede usar en un comando ad hoc del simulador` }
         else if (!c.local && !c.sys.installed.has('python3') && res.short !== 'raw') {

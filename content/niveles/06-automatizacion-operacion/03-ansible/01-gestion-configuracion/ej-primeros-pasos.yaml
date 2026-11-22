@@ -1,0 +1,86 @@
+tipo: terminal
+shell: bash
+titulo: Ansible en el nodo de control y la primera conexión
+descripcion: >-
+  admin01 (Rocky Linux 10) va a ser el nodo de control. Hay tres servidores para administrar:
+  web01 (Rocky), web02 (Ubuntu) y db01 (Rocky). Tu usuario ana ya entra a los tres con su clave
+  SSH (lección 1.6.3) y las huellas de los servidores ya están en tu known_hosts. Falta instalar
+  Ansible, armar la carpeta del proyecto y probar que llega a todos.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  servidores:
+    - { hostname: web01, ip: 192.168.10.21, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }] }
+    - { hostname: web02, ip: 192.168.10.22, distro: ubuntu, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }] }
+    - { hostname: db01, ip: 192.168.10.31, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }] }
+pasos:
+  - consigna: Instalá ansible-core con dnf y mirá qué versión quedó y qué archivo de configuración usa.
+    verificar:
+      - { paquete: ansible-core }
+      - { salida_contiene: "ansible [core" }
+    pistas:
+      - "sudo dnf install -y ansible-core"
+      - "ansible --version muestra la versión, el archivo de configuración (config file) y el Python que usa."
+    solucion:
+      - sudo dnf install -y ansible-core
+      - ansible --version
+    explicacion: >-
+      Rocky trae ansible-core en sus repositorios: la versión 2.16, que Red Hat mantiene durante
+      toda la vida de la distribución. "config file = /etc/ansible/ansible.cfg" quiere decir que
+      todavía no hay uno propio. Si necesitás una versión más nueva (2.21 o 2.22), se instala con
+      pipx install ansible-core, sin tocar la del sistema (lección 6.2.6).
+  - consigna: >-
+      Armá la carpeta ~/ansible con un ansible.cfg que diga que el inventario es inventario.ini, y
+      ese inventario con un grupo web (web01 y web02) y un grupo db (db01). Después, desde esa
+      carpeta, confirmá que Ansible lo toma con `ansible --version`.
+    verificar:
+      - { archivo: /home/ana/ansible/ansible.cfg, contenido_incluye: "inventory" }
+      - { archivo: /home/ana/ansible/inventario.ini, contenido_incluye: "[db]" }
+      - { salida_contiene: "config file = /home/ana/ansible/ansible.cfg" }
+    pistas:
+      - "mkdir ~/ansible && cd ~/ansible"
+      - "El ansible.cfg: una sección [defaults] con inventory = inventario.ini. El inventario: [web] con web01 y web02 en líneas separadas, y [db] con db01."
+      - "Con printf o con un editor (nano). Por ejemplo: printf '[defaults]\\ninventory = inventario.ini\\n' > ansible.cfg"
+    solucion:
+      - mkdir -p ~/ansible && cd ~/ansible
+      - printf '[defaults]\ninventory = inventario.ini\n' > ansible.cfg
+      - printf '[web]\nweb01\nweb02\n\n[db]\ndb01\n' > inventario.ini
+      - ansible --version
+    explicacion: >-
+      Ansible usa el primer ansible.cfg que encuentra: el de la carpeta donde estás gana al de tu
+      usuario y al del sistema. Por eso cada proyecto tiene el suyo, versionado en Git junto con
+      el inventario y los playbooks.
+  - consigna: Probá la conexión con los tres servidores con el módulo ping.
+    verificar:
+      - { salida_contiene: "db01 | SUCCESS" }
+      - { salida_contiene: "\"ping\": \"pong\"" }
+    pistas:
+      - "ansible all -m ping (all es el grupo que incluye a todos)."
+    solucion:
+      - cd ~/ansible
+      - ansible all -m ping
+    explicacion: >-
+      El ping de Ansible no es el ping de red: entra por SSH, ejecuta un módulo de Python y
+      contesta "pong". Si funciona, Ansible puede administrar ese servidor. "discovered_interpreter_python"
+      es el Python que encontró en cada uno.
+  - consigna: >-
+      Pedile a los servidores web sus facts de distribución, filtrando con
+      `filter=ansible_distribution*`, para ver que uno es Rocky y el otro Ubuntu.
+    verificar:
+      - { salida_contiene: "\"ansible_distribution\": \"Ubuntu\"" }
+      - { comando_usado: "setup" }
+    pistas:
+      - "ansible web -m setup -a \"filter=ansible_distribution*\""
+    solucion:
+      - cd ~/ansible
+      - ansible web -m setup -a "filter=ansible_distribution*"
+    explicacion: >-
+      Los facts son lo que Ansible averigua de cada servidor antes de trabajar: distribución,
+      versión, IP, memoria, CPU. En los playbooks se usan para decidir, por ejemplo, si instalar
+      con dnf o con apt.
