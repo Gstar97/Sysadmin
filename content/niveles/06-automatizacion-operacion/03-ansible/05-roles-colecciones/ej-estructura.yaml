@@ -1,0 +1,14 @@
+tipo: emparejar
+consigna: ¿En qué parte del rol nginx va cada cosa?
+pares:
+  - { a: "Las tareas: instalar nginx, aplicar el sitio, dejarlo activo", b: tasks/main.yml }
+  - { a: "Recargar nginx cuando cambia la configuración", b: handlers/main.yml }
+  - { a: "nginx_puerto: 80, que cada proyecto puede cambiar", b: defaults/main.yml }
+  - { a: "La ruta del binario, que no se debería cambiar", b: vars/main.yml }
+  - { a: "sitio.conf.j2, con variables adentro", b: templates/ }
+  - { a: "El logo de la página, tal cual", b: files/ }
+  - { a: "Depende del rol base y funciona en Rocky y Ubuntu", b: meta/main.yml }
+explicacion: >-
+  defaults tiene la prioridad más baja (cualquiera lo pisa) y vars una de las más altas: lo que
+  tiene que ser configurable va en defaults. templates/ es para archivos con variables (módulo
+  template) y files/ para los que se copian tal cual (módulo copy).

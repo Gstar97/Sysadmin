@@ -1,0 +1,96 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué es un rol de Ansible?
+  opciones:
+    - { texto: "Una carpeta con estructura fija (tareas, handlers, plantillas, defaults...) que hace una cosa completa y se puede reusar", correcta: true, explicacion: "Se usa con una línea en el play." }
+    - { texto: "Un usuario con permisos", explicacion: "No en Ansible." }
+    - { texto: "Un grupo del inventario", explicacion: "No." }
+    - { texto: "Un tipo de servidor", explicacion: "Se suele hacer un rol por tipo, pero el rol es el código." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Dónde van las variables de un rol que el que lo usa tiene que poder cambiar?
+  opciones:
+    - { texto: "En defaults/main.yml", correcta: true, explicacion: "Tienen la prioridad más baja: cualquier otro lugar las pisa." }
+    - { texto: "En vars/main.yml", explicacion: "vars le gana a group_vars: no se podrían cambiar desde el inventario." }
+    - { texto: "En tasks/main.yml", explicacion: "Ahí van las tareas." }
+    - { texto: "En meta/main.yml", explicacion: "Ahí van la descripción y las dependencias." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué hay que hacer?
+  salida: |
+    ERROR! couldn't resolve module/action 'community.postgresql.postgresql_db'. This often indicates a misspelling, missing collection, or incorrect module path.
+  opciones:
+    - { texto: "Instalar la colección community.postgresql (y anotarla en requirements.yml)", correcta: true, explicacion: "ansible-galaxy collection install community.postgresql." }
+    - { texto: "Instalar PostgreSQL en el nodo de control", explicacion: "El problema es el módulo de Ansible." }
+    - { texto: "Escribir postgresql_db sin el nombre de la colección", explicacion: "Sin la colección instalada tampoco existe." }
+    - { texto: "Actualizar Python", explicacion: "No." }
+- id: p04
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que instala las colecciones anotadas en requirements.yml.
+  prompt: "ana@admin01:~/ansible$"
+  aceptadas:
+    - "ansible-galaxy collection install -r requirements.yml"
+    - "ansible-galaxy install -r requirements.yml"
+  explicacion: Cualquiera que clone el repositorio las instala con ese comando.
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El rol web y el rol db usan los dos una variable llamada puerto. ¿Qué problema puede haber?
+  opciones:
+    - { texto: "Se pisan entre sí si se usan en el mismo play; conviene prefijarlas: web_puerto y db_puerto", correcta: true, explicacion: "Las variables son globales para el equipo." }
+    - { texto: "Ninguno: cada rol tiene sus variables aisladas", explicacion: "No están aisladas." }
+    - { texto: "Ansible no permite repetir nombres", explicacion: "Lo permite, y por eso se pisan." }
+    - { texto: "Solo funciona el primer rol", explicacion: "No." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿En qué orden corren los roles y las tareas de un play que tiene roles y tasks?
+  opciones:
+    - { texto: "Primero los roles, en el orden en que están, después las tasks", correcta: true, explicacion: "Para intercalarlos, import_role o include_role." }
+    - { texto: "Primero las tasks", explicacion: "Es al revés." }
+    - { texto: "Todo mezclado", explicacion: "No." }
+    - { texto: "Depende de los nombres", explicacion: "No." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué conviene versionar en el repositorio de Ansible?
+  opciones:
+    - { texto: "Los roles propios y los playbooks", correcta: true, explicacion: "Es el código." }
+    - { texto: "Los inventarios con sus group_vars (los secretos, cifrados)", correcta: true, explicacion: "Con Vault, lección 6.3.6." }
+    - { texto: "requirements.yml", correcta: true, explicacion: "Qué colecciones y versiones usa." }
+    - { texto: "Las colecciones instaladas en ~/.ansible/collections", explicacion: "Se instalan con requirements.yml, como un venv." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Cómo se usa el mismo proyecto para pruebas y producción sin duplicar código?
+  opciones:
+    - { texto: "Un inventario por entorno (con sus group_vars) y los mismos playbooks y roles, eligiendo con -i", correcta: true, explicacion: "Lo que se prueba es lo que llega a producción." }
+    - { texto: "Una copia del repositorio por entorno", explicacion: "Las copias se separan con el tiempo." }
+    - { texto: "Un rol por entorno", explicacion: "Los roles son los mismos." }
+    - { texto: "Un when con el nombre del entorno en cada tarea", explicacion: "Lo que cambia son valores: van en el inventario." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre los módulos template y copy dentro de un rol?
+  opciones:
+    - { texto: "template toma un .j2 de templates/ y reemplaza variables; copy copia un archivo de files/ tal cual", correcta: true, explicacion: "Cada uno busca en su carpeta." }
+    - { texto: "Son lo mismo", explicacion: "copy no procesa variables." }
+    - { texto: "copy solo sirve fuera de los roles", explicacion: "Sirve en los dos." }
+    - { texto: "template no se puede usar en roles", explicacion: "Se usa todo el tiempo." }
+- id: p10
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená los pasos para convertir un playbook largo en un rol.
+  pasos:
+    - "ansible-galaxy role init roles/web"
+    - "Pasar las tareas a tasks/main.yml y los handlers a handlers/main.yml"
+    - "Pasar los valores que cambian a defaults/main.yml, con prefijo"
+    - "Mover las plantillas a templates/"
+    - "Reemplazar el playbook por un play con roles: [web] y correrlo con --check --diff"
+  explicacion: Primero el esqueleto, después las tareas, las variables y los archivos, y al final probar que hace lo mismo que antes.

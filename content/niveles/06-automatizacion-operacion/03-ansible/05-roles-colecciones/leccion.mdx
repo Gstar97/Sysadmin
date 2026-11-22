@@ -1,0 +1,136 @@
+---
+id: n6-m3-l5
+titulo: Roles y colecciones
+minutos: 150
+objetivos:
+  - Organizar el código en roles reutilizables, con defaults, handlers, plantillas y dependencias.
+  - Instalar y usar colecciones de Ansible Galaxy, con versiones fijadas en requirements.yml.
+  - Estructurar un repositorio de Ansible para varios entornos.
+glosario: [rol-ansible, coleccion-ansible, ansible-galaxy]
+verificado: 2026-11
+---
+
+import repositorio from './repositorio.svg?raw'
+import repositorioDatos from './repositorio.yaml'
+import ejEstructura from './ej-estructura.yaml'
+import ejRol from './ej-rol.yaml'
+
+Un playbook de doscientas líneas que instala nginx, PostgreSQL, usuarios y el firewall funciona, pero nadie más lo puede reusar y cuesta encontrar algo en él. Con funciones, en el módulo 6.2 partiste un programa en piezas con nombre; en Ansible, esas piezas son los **roles**: cada uno sabe hacer una cosa completa y recibe por variables lo que cambia. Y lo que no escribís vos (módulos para firewalld, bases de datos, Windows, la nube) viene en **colecciones**.
+
+<AntesDeEmpezar>
+- Variables, defaults y plantillas (lección 6.3.4).
+- Funciones y módulos en Python, como idea (lección 6.2.2).
+</AntesDeEmpezar>
+
+## Roles
+
+Un rol es una carpeta con una estructura fija. `ansible-galaxy role init roles/web` la crea:
+
+```text
+roles/web/
+  defaults/main.yml    valores por defecto (los que el que usa el rol puede cambiar)
+  vars/main.yml        valores internos (prioridad alta, casi no se pisan)
+  tasks/main.yml       las tareas
+  handlers/main.yml    los handlers
+  templates/           plantillas .j2 (módulo template)
+  files/               archivos que se copian tal cual (módulo copy)
+  meta/main.yml        descripción, plataformas y dependencias
+  README.md            qué hace y qué variables acepta
+```
+
+Ansible encuentra cada cosa sola: un `template` con `src: sitio.conf.j2` busca en `templates/` del rol, un `copy` con `src: logo.png` en `files/`, y un `notify` encuentra los handlers del rol. Practicá dónde va cada cosa:
+
+<Emparejar ejercicio={ejEstructura} />
+
+Usar un rol es una línea en el play:
+
+```yaml
+- name: Servidores web
+  hosts: web
+  become: true
+  roles:
+    - base
+    - role: web
+      vars:
+        web_dominio: tienda.lab
+```
+
+Los roles corren antes que las `tasks:` del play, en el orden en que están. Si hace falta usarlo en medio de otras tareas, están `ansible.builtin.import_role` (se resuelve al leer el playbook) e `include_role` (se resuelve al correr, y se puede poner con when o en un loop).
+
+Tres reglas para que un rol sea reutilizable:
+
+- **Todo lo que cambia, por variables, y con valor en defaults.** Con un prefijo con el nombre del rol (`web_puerto`, no `puerto`), para que no choquen con las de otros roles.
+- **Hace una sola cosa, completa.** "web" instala, configura, abre el firewall y deja el servicio andando; no crea los usuarios de la empresa (eso es otro rol).
+- **Las dependencias, en meta/main.yml.** Si el rol web necesita que antes corra el rol base: `dependencies: [base]`.
+
+## Colecciones
+
+Una colección es un paquete con módulos, roles y plugins, con un nombre de dos partes: `namespace.coleccion`. `ansible.builtin` viene con ansible-core; el resto se instala:
+
+| Colección | Para qué |
+|---|---|
+| `ansible.posix` | firewalld, authorized_key, sysctl, mount, SELinux |
+| `community.general` | cientos de módulos: ufw, timezone, nmcli, LVM... |
+| `community.postgresql` y `community.mysql` | Bases, usuarios y permisos |
+| `ansible.windows` y `community.windows` | Windows (lección 6.3.7) |
+| `community.docker` | Contenedores (Nivel 7) |
+
+Se instalan con **ansible-galaxy** desde Ansible Galaxy (galaxy.ansible.com), y lo prolijo es anotarlas en un **requirements.yml** del proyecto, con la versión:
+
+```yaml
+collections:
+  - name: ansible.posix
+    version: ">=2.0.0,<3.0.0"
+  - name: community.postgresql
+    version: 4.1.0
+```
+
+```bash
+ansible-galaxy collection install -r requirements.yml
+ansible-galaxy collection list
+```
+
+Por defecto quedan en `~/.ansible/collections/`. Fijar versiones tiene el mismo motivo que el requirements.txt de Python (lección 6.2.6): que el proyecto funcione igual hoy y dentro de un año. Si usás el paquete "ansible" completo en vez de ansible-core, ya trae muchas colecciones, pero en la versión que eligió la distribución.
+
+Galaxy también tiene **roles** hechos por otros (por ejemplo, `geerlingguy.postgresql`, muy usado). Antes de usar uno, leé su código como leerías un script bajado de internet: va a correr con sudo en tus servidores.
+
+## Un repositorio para varios entornos
+
+<DiagramaInteractivo datos={repositorioDatos} svg={repositorio} alt="La estructura de un repositorio de Ansible. En la raíz, ansible.cfg, requirements.yml y los playbooks (site.yml importa web.yml y db.yml). La carpeta inventarios tiene una subcarpeta por entorno, produccion y pruebas, cada una con su hosts.yml y su group_vars con los mismos nombres y otros valores; se elige con -i. La carpeta roles tiene base, postgresql y web, y adentro de web sus carpetas defaults, vars, tasks, handlers, templates, files, meta y el README. Las colecciones de requirements.yml se instalan con ansible-galaxy y no se versionan." />
+
+La idea central: **los playbooks y los roles son los mismos para todos los entornos**; lo único que cambia es el inventario. Lo que probaste con `-i inventarios/pruebas` es exactamente lo que va a correr con `-i inventarios/produccion`, con otros valores. Y todo va en Git, con el flujo del módulo 6.1: rama, pull request, revisión (y en la integración continua, ansible-lint y una corrida en --check).
+
+## Manos a la obra
+
+<Terminal ejercicio={ejRol} />
+
+<EnSimple>
+Un rol es una carpeta con una estructura fija (tasks, handlers, templates, files, defaults, vars, meta) que hace una cosa completa y se puede usar en cualquier playbook con una línea; lo que cambia entra por variables, con valores en defaults que cualquiera puede pisar. Las colecciones son paquetes de módulos (firewalld, PostgreSQL, Windows) que se instalan con ansible-galaxy y se anotan, con versión, en requirements.yml. Un buen repositorio tiene los mismos playbooks y roles para todos los entornos, y un inventario por entorno.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Poner en vars lo que debería ser configurable">
+    vars del rol le gana a group_vars: el que usa el rol no puede cambiarlo. Va en defaults.
+  </ErrorComun>
+  <ErrorComun titulo="Variables sin prefijo en un rol">
+    puerto en el rol web y puerto en el rol db se pisan. Mejor web_puerto y db_puerto.
+  </ErrorComun>
+  <ErrorComun titulo="Usar un módulo de una colección que no está instalada">
+    "couldn't resolve module/action 'ansible.posix.firewalld'". Instalala con ansible-galaxy y anotala en requirements.yml.
+  </ErrorComun>
+  <ErrorComun titulo="Copiar el rol para cada entorno">
+    Dos copias que se separan con el tiempo. Un rol, un inventario por entorno.
+  </ErrorComun>
+  <ErrorComun titulo="Usar un rol de Galaxy sin leerlo">
+    Corre con sudo en todos tus servidores. Leelo, fijá su versión y preferí los muy usados y mantenidos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Rol: defaults, vars, tasks, handlers, templates, files, meta y README; ansible-galaxy role init lo crea.
+- roles: en el play (antes de tasks), o import_role / include_role en el medio.
+- Lo configurable, en defaults y con prefijo; dependencias en meta/main.yml.
+- Colecciones namespace.coleccion; ansible.builtin viene incluida, las demás con ansible-galaxy collection install.
+- requirements.yml con versiones; ansible-galaxy collection install -r requirements.yml.
+- Mismos playbooks y roles para todos los entornos, un inventario por entorno, todo en Git.
+</Resumen>

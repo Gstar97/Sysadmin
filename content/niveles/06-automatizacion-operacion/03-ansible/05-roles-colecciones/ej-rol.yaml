@@ -1,0 +1,148 @@
+tipo: terminal
+shell: bash
+titulo: Del playbook a un rol, y una colección
+descripcion: >-
+  El playbook de nginx de la tienda creció y otros equipos lo quieren usar para sus sitios. Vas a
+  convertirlo en un rol reutilizable, con valores por defecto que cada uno pueda cambiar, y a
+  sumarle la apertura del puerto en firewalld, que necesita la colección ansible.posix (no viene
+  con ansible-core). web01 y web02 son Rocky Linux; en admin01 ya están ansible-core y ~/ansible con
+  su ansible.cfg y el inventario con el grupo web.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [ansible-core] }
+  directorio: /home/ana/ansible
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/ansible/ansible.cfg: { dueno: ana, contenido: "[defaults]\ninventory = inventario.ini\ninterpreter_python = auto_silent\n" }
+    /home/ana/ansible/inventario.ini: { dueno: ana, contenido: "[web]\nweb01\nweb02\n" }
+  servidores:
+    - { hostname: web01, ip: 192.168.10.21, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: web02, ip: 192.168.10.22, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+pasos:
+  - consigna: Creá el esqueleto de un rol llamado web en la carpeta roles, con ansible-galaxy, y mirá qué carpetas armó.
+    verificar:
+      - { archivo: /home/ana/ansible/roles/web/defaults/main.yml }
+      - { archivo: /home/ana/ansible/roles/web/handlers/main.yml }
+    pistas:
+      - "ansible-galaxy role init roles/web"
+      - "ls roles/web o tree roles/web"
+    solucion:
+      - ansible-galaxy role init roles/web
+      - ls roles/web
+    explicacion: >-
+      Cada carpeta tiene un lugar fijo: tasks y handlers con su main.yml, templates y files para lo
+      que se copia, defaults para los valores que se pueden cambiar, vars para los que no, y meta para
+      la descripción y las dependencias del rol. Ansible las encuentra solo, sin rutas.
+  - consigna: >-
+      Completá el rol: en defaults/main.yml, web_puerto 80 y web_dominio tienda.lab; una plantilla
+      templates/sitio.conf.j2 con un server de nginx que escuche en web_puerto y atienda web_dominio
+      (root /usr/share/nginx/html); en tasks/main.yml, instalar nginx, aplicar la plantilla en
+      /etc/nginx/conf.d/ con el nombre del dominio y .conf (avisando al handler) y dejar nginx
+      activo y habilitado; en handlers/main.yml, "Recargar nginx". Por último, site.yml con un play
+      para web que use el rol, con become. Corrélo.
+    verificar:
+      - { en: web02, verificar: { archivo: /etc/nginx/conf.d/tienda.lab.conf, contenido_incluye: "listen 80;" } }
+      - { en: web01, verificar: { servicio: nginx, activo: true, habilitado: true } }
+      - { salida_contiene: "TASK [web : " }
+    pistas:
+      - "En el rol, las tareas van sueltas (una lista), sin hosts ni tasks: arriba."
+      - "La plantilla: server { listen {{ web_puerto }}; server_name {{ web_dominio }}; root /usr/share/nginx/html; } (en varias líneas)."
+      - "site.yml: - name: Servidores web, hosts: web, become: true, roles: [web]."
+    solucion:
+      - >-
+        printf -- 'web_puerto: 80\nweb_dominio: tienda.lab\n' > roles/web/defaults/main.yml
+      - |-
+        cat > roles/web/templates/sitio.conf.j2 <<'EOF'
+        # {{ ansible_managed }}
+        server {
+            listen {{ web_puerto }};
+            server_name {{ web_dominio }};
+            root /usr/share/nginx/html;
+        }
+        EOF
+      - |-
+        cat > roles/web/tasks/main.yml <<'EOF'
+        - name: nginx instalado
+          ansible.builtin.package:
+            name: nginx
+            state: present
+        - name: Sitio
+          ansible.builtin.template:
+            src: sitio.conf.j2
+            dest: "/etc/nginx/conf.d/{{ web_dominio }}.conf"
+            mode: '0644'
+          notify: Recargar nginx
+        - name: nginx activo
+          ansible.builtin.service:
+            name: nginx
+            state: started
+            enabled: true
+        EOF
+      - |-
+        cat > roles/web/handlers/main.yml <<'EOF'
+        - name: Recargar nginx
+          ansible.builtin.service:
+            name: nginx
+            state: reloaded
+        EOF
+      - |-
+        cat > site.yml <<'EOF'
+        - name: Servidores web
+          hosts: web
+          become: true
+          roles:
+            - web
+        EOF
+      - ansible-playbook site.yml
+    explicacion: >-
+      La salida muestra cada tarea como "web : nombre": de qué rol viene. El playbook quedó en cuatro
+      líneas, y cualquier otro proyecto puede usar el mismo rol con sus propios valores.
+  - consigna: >-
+      Los servidores de la tienda tienen que atender en el puerto 8080. Sin tocar el rol, cambiá
+      web_puerto para el grupo web con group_vars, y volvé a correr site.yml.
+    verificar:
+      - { en: web01, verificar: { archivo: /etc/nginx/conf.d/tienda.lab.conf, contenido_incluye: "listen 8080;" } }
+      - { salida_contiene: "RUNNING HANDLER [web : Recargar nginx]" }
+    pistas:
+      - "mkdir -p group_vars y en group_vars/web.yml: web_puerto: 8080"
+    solucion:
+      - mkdir -p group_vars
+      - "printf 'web_puerto: 8080\\n' > group_vars/web.yml"
+      - ansible-playbook site.yml
+    explicacion: >-
+      Los defaults de un rol tienen la prioridad más baja: cualquier group_vars, host_vars o -e los
+      pisa. Por eso lo que el que usa el rol tiene que poder cambiar va en defaults, y no en vars.
+  - consigna: >-
+      Ahora el firewall. Escribí requirements.yml con la colección ansible.posix e instalala con
+      ansible-galaxy. Después agregá al final de las tareas del rol una que abra web_puerto/tcp con
+      ansible.posix.firewalld (permanente y de inmediato), y corré site.yml.
+    verificar:
+      - { archivo: /home/ana/.ansible/collections/ansible_collections/ansible/posix/MANIFEST.json }
+      - { en: web02, verificar: { firewall_permite: 8080/tcp } }
+    pistas:
+      - "requirements.yml: collections: y debajo - name: ansible.posix"
+      - "ansible-galaxy collection install -r requirements.yml"
+      - "La tarea: ansible.posix.firewalld con port: \"{{ web_puerto }}/tcp\", permanent: true, immediate: true y state: enabled. Se puede agregar con cat >> roles/web/tasks/main.yml."
+    solucion:
+      - "printf 'collections:\\n  - name: ansible.posix\\n' > requirements.yml"
+      - ansible-galaxy collection install -r requirements.yml
+      - |-
+        cat >> roles/web/tasks/main.yml <<'EOF'
+        - name: Puerto del sitio abierto
+          ansible.posix.firewalld:
+            port: "{{ web_puerto }}/tcp"
+            permanent: true
+            immediate: true
+            state: enabled
+        EOF
+      - ansible-playbook site.yml
+    explicacion: >-
+      requirements.yml deja anotadas las colecciones que necesita el proyecto (con su versión, si
+      querés fijarla), así cualquiera que clone el repositorio las instala con un solo comando. Sin
+      la colección, Ansible ni siquiera arranca: "couldn't resolve module/action".
