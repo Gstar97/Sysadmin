@@ -17,6 +17,7 @@ import {
   SimuladorRamas,
   ConsolaPython,
   EjercicioPython,
+  VistaPlantilla,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
@@ -182,10 +183,11 @@ export default function GalleryPage() {
         <PlanificadorRetencion />
       </Section>
 
-      <Section id="automatizacion" titulo="Automatización" descripcion="Simulador de ramas de Git: se escriben comandos (commit, branch, switch, merge, reset) y se ve cómo cambia el grafo de commits, con avance rápido, commits de fusión y commits que quedan huérfanos. Consola de Python: Python 3 de verdad (Pyodide) corriendo en el navegador, con editor, archivos de ejemplo, una API y comandos simulados, y ejercicios con pasos que se verifican solos.">
+      <Section id="automatizacion" titulo="Automatización" descripcion="Simulador de ramas de Git: se escriben comandos (commit, branch, switch, merge, reset) y se ve cómo cambia el grafo de commits, con avance rápido, commits de fusión y commits que quedan huérfanos. Consola de Python: Python 3 de verdad (Pyodide) corriendo en el navegador, con editor, archivos de ejemplo, una API y comandos simulados, y ejercicios con pasos que se verifican solos. Vista previa de plantillas de Ansible (Jinja2) con los errores como los da Ansible.">
         <SimuladorRamas />
         <EjercicioPython ejercicio={python} />
         <ConsolaPython titulo="Consola libre" codigo={'import platform\nprint("Hola desde Python", platform.python_version())'} />
+        <VistaPlantilla destino="/etc/nginx/conf.d/tienda.conf" variables={'dominio: tienda.lab\npuerto: 80\nbackends:\n  - 10.0.10.21\n  - 10.0.10.22\n'} plantilla={'# {{ ansible_managed }}\nupstream app {\n{% for b in backends %}\n    server {{ b }}:8080;\n{% endfor %}\n}\n\nserver {\n    listen {{ puerto }};\n    server_name {{ dominio }};\n}\n'} />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">

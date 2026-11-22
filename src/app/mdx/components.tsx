@@ -59,6 +59,7 @@ const RaidSimulatorView = lazy(() => import('@/interactive/hardware/RaidSimulato
 const UpsCalculatorView = lazy(() => import('@/interactive/hardware/UpsCalculator').then((m) => ({ default: m.UpsCalculator })))
 const RackBuilderView = lazy(() => import('@/interactive/hardware/RackBuilder').then((m) => ({ default: m.RackBuilder })))
 const ResourceSimulatorView = lazy(() => import('@/interactive/virtualizacion/ResourceSimulator').then((m) => ({ default: m.ResourceSimulator })))
+const TemplatePreviewView = lazy(() => import('@/interactive/ansible/TemplatePreview').then((m) => ({ default: m.TemplatePreview })))
 const PythonConsoleView = lazy(() => import('@/interactive/python/PythonConsole').then((m) => ({ default: m.PythonConsole })))
 const BranchSimulatorView = lazy(() => import('@/interactive/git/BranchSimulator').then((m) => ({ default: m.BranchSimulator })))
 const RetentionPlannerView = lazy(() => import('@/interactive/virtualizacion/RetentionPlanner').then((m) => ({ default: m.RetentionPlanner })))
@@ -400,6 +401,15 @@ export function SimuladorRamas(props: { comandos?: string[] }) {
   return (
     <Island>
       <BranchSimulatorView {...props} />
+    </Island>
+  )
+}
+
+/** Vista previa de plantillas de Ansible (Jinja2): variables, plantilla y resultado en vivo. */
+export function VistaPlantilla(props: { plantilla: string; variables: string; esperado?: string; destino?: string }) {
+  return (
+    <Island>
+      <TemplatePreviewView {...props} />
     </Island>
   )
 }
@@ -756,6 +766,7 @@ export const mdxComponents = {
   SimuladorRamas,
   ConsolaPython,
   EjercicioPython,
+  VistaPlantilla,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,

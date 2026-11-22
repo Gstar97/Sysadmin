@@ -49,6 +49,7 @@ export const INTERACTIVE_COMPONENTS = [
   'SimuladorRamas',
   'ConsolaPython',
   'EjercicioPython',
+  'VistaPlantilla',
 ] as const
 
 export const REQUIRED_BLOCKS = [
