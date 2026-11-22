@@ -59,6 +59,7 @@ const RaidSimulatorView = lazy(() => import('@/interactive/hardware/RaidSimulato
 const UpsCalculatorView = lazy(() => import('@/interactive/hardware/UpsCalculator').then((m) => ({ default: m.UpsCalculator })))
 const RackBuilderView = lazy(() => import('@/interactive/hardware/RackBuilder').then((m) => ({ default: m.RackBuilder })))
 const ResourceSimulatorView = lazy(() => import('@/interactive/virtualizacion/ResourceSimulator').then((m) => ({ default: m.ResourceSimulator })))
+const PythonConsoleView = lazy(() => import('@/interactive/python/PythonConsole').then((m) => ({ default: m.PythonConsole })))
 const BranchSimulatorView = lazy(() => import('@/interactive/git/BranchSimulator').then((m) => ({ default: m.BranchSimulator })))
 const RetentionPlannerView = lazy(() => import('@/interactive/virtualizacion/RetentionPlanner').then((m) => ({ default: m.RetentionPlanner })))
 const CapacityCalculatorView = lazy(() => import('@/interactive/virtualizacion/CapacityCalculator').then((m) => ({ default: m.CapacityCalculator })))
@@ -403,6 +404,26 @@ export function SimuladorRamas(props: { comandos?: string[] }) {
   )
 }
 
+/** Consola de Python libre, para probar código durante la lección. */
+export function ConsolaPython({ codigo, titulo }: { codigo?: string; titulo?: string }) {
+  return (
+    <Island>
+      <PythonConsoleView codigo={codigo} titulo={titulo} />
+    </Island>
+  )
+}
+
+/** Ejercicio de Python con pasos que se verifican solos. */
+export function EjercicioPython({ ejercicio }: { ejercicio: unknown }) {
+  const { value, error } = useExercise('python', ejercicio)
+  if (error) return <ExerciseError error={error} />
+  return (
+    <Island>
+      <PythonConsoleView exercise={value!} />
+    </Island>
+  )
+}
+
 export function PlanificadorRetencion() {
   return (
     <Island>
@@ -733,6 +754,8 @@ export const mdxComponents = {
   CalculadoraCapacidad,
   PlanificadorRetencion,
   SimuladorRamas,
+  ConsolaPython,
+  EjercicioPython,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,

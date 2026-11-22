@@ -15,6 +15,8 @@ import {
   CalculadoraCapacidad,
   PlanificadorRetencion,
   SimuladorRamas,
+  ConsolaPython,
+  EjercicioPython,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
@@ -69,6 +71,7 @@ import preguntas from './demos/preguntas.yaml'
 import terminalBash from './demos/terminal-bash.yaml'
 import terminalIos from './demos/terminal-ios.yaml'
 import terminalPs from './demos/terminal-ps.yaml'
+import python from './demos/python.yaml'
 import topologia from './demos/topologia.yaml'
 import troubleshooting from './demos/troubleshooting.yaml'
 
@@ -179,8 +182,10 @@ export default function GalleryPage() {
         <PlanificadorRetencion />
       </Section>
 
-      <Section id="automatizacion" titulo="Automatización" descripcion="Simulador de ramas de Git: se escriben comandos (commit, branch, switch, merge, reset) y se ve cómo cambia el grafo de commits, con avance rápido, commits de fusión y commits que quedan huérfanos.">
+      <Section id="automatizacion" titulo="Automatización" descripcion="Simulador de ramas de Git: se escriben comandos (commit, branch, switch, merge, reset) y se ve cómo cambia el grafo de commits, con avance rápido, commits de fusión y commits que quedan huérfanos. Consola de Python: Python 3 de verdad (Pyodide) corriendo en el navegador, con editor, archivos de ejemplo, una API y comandos simulados, y ejercicios con pasos que se verifican solos.">
         <SimuladorRamas />
+        <EjercicioPython ejercicio={python} />
+        <ConsolaPython titulo="Consola libre" codigo={'import platform\nprint("Hola desde Python", platform.python_version())'} />
       </Section>
 
       <Section id="cisco" titulo="Consola Cisco IOS" descripcion="Modos de usuario, privilegiado y configuración; abreviaturas (conf t, sh ip int br), ayuda con ?, autocompletado con Tab, running-config y startup-config. Está conectada al motor de red: un ping desde acá usa las mismas VLAN y rutas que el armador de topologías.">

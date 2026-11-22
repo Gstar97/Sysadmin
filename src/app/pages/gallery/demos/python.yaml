@@ -1,0 +1,30 @@
+tipo: python
+titulo: Contar errores en un log
+descripcion: Un ejercicio corto con un archivo de ejemplo, para ver cómo funciona la consola de Python.
+archivos:
+  /var/log/app.log: |
+    2026-11-20 10:01:12 INFO inicio del servicio
+    2026-11-20 10:05:40 ERROR no se pudo conectar a la base
+    2026-11-20 10:05:41 WARNING reintentando
+    2026-11-20 10:06:02 ERROR no se pudo conectar a la base
+    2026-11-20 10:07:15 INFO conexión restablecida
+codigo_inicial: |
+  # Leé /var/log/app.log y contá cuántas líneas dicen ERROR
+  ruta = "/var/log/app.log"
+pasos:
+  - consigna: "Abrí el archivo, contá las líneas que tienen `ERROR` y mostrá `Errores: 2`."
+    verificar:
+      - salida_contiene: "Errores: 2"
+      - sin_error: true
+    pistas:
+      - Con `with open(ruta) as f:` y un `for linea in f:` recorrés el archivo línea por línea.
+      - '`if "ERROR" in linea:` dice si la línea contiene ese texto.'
+    solucion: |
+      ruta = "/var/log/app.log"
+      errores = 0
+      with open(ruta) as f:
+          for linea in f:
+              if "ERROR" in linea:
+                  errores += 1
+      print(f"Errores: {errores}")
+    explicacion: "`with open(...)` cierra el archivo solo al terminar, aunque haya un error en el medio."

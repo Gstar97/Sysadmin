@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { exerciseSchemas } from '@/content/exercise-schemas'
 import { checkConfigExercise, checkTerminalExercise, checkTopologyExercise } from '@/engines/exercise-check'
+import { checkPythonExercise } from '@/engines/python/check'
 import { optimalPath } from '@/interactive/troubleshooting/Troubleshooting'
 
 const dir = 'src/app/pages/gallery/demos'
@@ -26,6 +27,10 @@ describe('ejercicios de la galería', () => {
   it.each(demos.filter((d) => d.data.tipo === 'configuracion'))('$file: la solución cumple las reglas y el original no', ({ data }) => {
     expect(checkConfigExercise(exerciseSchemas.configuracion.parse(data))).toEqual([])
   })
+
+  it.each(demos.filter((d) => d.data.tipo === 'python'))('$file: la solución de Python pasa sus verificaciones', async ({ data }) => {
+    expect(await checkPythonExercise(exerciseSchemas.python.parse(data))).toEqual([])
+  }, 60_000)
 
   it('la topología no tiene referencias rotas', () => {
     const d = demos.find((x) => x.data.tipo === 'topologia')!

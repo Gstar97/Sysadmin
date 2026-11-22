@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 import { defineConfig } from 'vite'
 import { contentPlugin } from './build/content-plugin.ts'
+import { pyodidePlugin } from './build/pyodide-plugin.ts'
 import { yamlPlugin } from './build/yaml-plugin.ts'
 
 // CONTENT_DIR permite usar otra carpeta de contenido (por ejemplo, la de pruebas).
@@ -24,6 +25,7 @@ export default defineConfig({
     },
     react({ include: /\.(mdx|jsx|tsx|ts|js)$/ }),
     tailwindcss(),
+    pyodidePlugin(),
   ],
   resolve: {
     alias: {
@@ -37,4 +39,5 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1500,
   },
+  worker: { format: 'es' },
 })

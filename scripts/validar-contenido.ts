@@ -7,9 +7,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse } from 'yaml'
 import { scanContent } from '../build/content-scan'
-import { capturaExerciseSchema, configExerciseSchema, terminalExerciseSchema, vimExerciseSchema } from '../src/content/exercise-schemas'
+import { capturaExerciseSchema, configExerciseSchema, pythonExerciseSchema, terminalExerciseSchema, vimExerciseSchema } from '../src/content/exercise-schemas'
 import { checkCapturaExercise, checkConfigExercise, checkTerminalExercise, checkTopologyExercise, checkVimExercise, type ExerciseProblem } from '../src/engines/exercise-check'
 import { topologyExerciseSchema } from '../src/engines/network/schema'
+import { checkPythonExercise } from '../src/engines/python/check'
 
 const contentDir = path.resolve(process.env.CONTENT_DIR ?? 'content')
 const color = process.stdout.isTTY ? (c: number, t: string) => `\x1b[${c}m${t}\x1b[0m` : (_: number, t: string) => t
@@ -49,6 +50,9 @@ async function main() {
     } else if (data?.tipo === 'captura') {
       const ex = capturaExerciseSchema.safeParse(data)
       if (ex.success) problems = checkCapturaExercise(ex.data)
+    } else if (data?.tipo === 'python') {
+      const ex = pythonExerciseSchema.safeParse(data)
+      if (ex.success) problems = await checkPythonExercise(ex.data)
     } else if (data?.tipo === 'topologia') {
       const ex = topologyExerciseSchema.safeParse(data)
       if (ex.success) problems = checkTopologyExercise(ex.data)

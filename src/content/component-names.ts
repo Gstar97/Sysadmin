@@ -47,6 +47,8 @@ export const INTERACTIVE_COMPONENTS = [
   'CalculadoraCapacidad',
   'PlanificadorRetencion',
   'SimuladorRamas',
+  'ConsolaPython',
+  'EjercicioPython',
 ] as const
 
 export const REQUIRED_BLOCKS = [
@@ -65,4 +67,5 @@ export const DATA_PROPS: Record<string, string> = {
   Troubleshooting: 'escenario',
   EditorConfig: 'ejercicio',
   PasosGuiados: 'ejercicio',
+  EjercicioPython: 'ejercicio',
 }

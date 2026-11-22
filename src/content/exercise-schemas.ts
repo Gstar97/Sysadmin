@@ -303,6 +303,50 @@ export const vimExerciseSchema = z.strictObject({
 })
 
 /** Esquema de cada tipo de archivo de ejercicio, según su campo "tipo". */
+/** Verificaciones de un ejercicio de Python: se corren después del código del estudiante, en el mismo espacio de nombres. */
+export const pythonCheckSchema = z.union([
+  z.strictObject({ salida_contiene: z.string() }),
+  z.strictObject({ salida_no_contiene: z.string() }),
+  z.strictObject({ error_contiene: z.string() }),
+  z.strictObject({ codigo_salida: z.number().int() }),
+  /** Código Python con assert; si falla, se muestra el mensaje. */
+  z.strictObject({ prueba: z.string(), mensaje: z.string() }),
+  z.strictObject({ archivo: z.string(), existe: z.boolean().default(true), contenido_incluye: z.string().optional() }),
+  z.strictObject({ sin_error: z.literal(true) }),
+  /** El código usa algo (por ejemplo "with open" o "argparse"). */
+  z.strictObject({ usa: z.string(), mensaje: z.string().optional() }),
+])
+
+/** Un ejercicio de Python (Pyodide): archivos, una API y comandos simulados, y pasos con verificaciones. */
+export const pythonExerciseSchema = z.strictObject({
+  tipo: z.literal('python'),
+  titulo: z.string().min(1),
+  descripcion: z.string().optional(),
+  /** Archivos que existen antes de correr el código (ruta absoluta: contenido). */
+  archivos: z.record(z.string(), z.string()).default({}),
+  /** Respuestas del requests simulado: "GET https://..." o la URL sola; con estado, json o texto. */
+  api: z.record(z.string(), z.strictObject({ estado: z.number().int().default(200), json: z.unknown().optional(), texto: z.string().optional(), demora: z.number().optional() })).default({}),
+  /** Salidas de subprocess.run simulado, por comando exacto. */
+  comandos: z.record(z.string(), z.strictObject({ salida: z.string().default(''), error: z.string().default(''), codigo: z.number().int().default(0) })).default({}),
+  /** Argumentos de línea de comandos (sys.argv[1:]) al correr el programa. */
+  argumentos: z.array(z.string()).default([]),
+  /** Carpeta de trabajo; las rutas relativas de archivos y verificaciones salen de acá. */
+  directorio: z.string().default('/home/estudiante'),
+  codigo_inicial: z.string().default(''),
+  pasos: z
+    .array(
+      z.strictObject({
+        consigna: z.string().min(1),
+        verificar: z.array(pythonCheckSchema).min(1),
+        pistas: z.array(z.string()).default([]),
+        /** El programa completo que resuelve el paso. */
+        solucion: z.string().min(1),
+        explicacion: z.string().optional(),
+      }),
+    )
+    .min(1),
+})
+
 export const exerciseSchemas = {
   terminal: terminalExerciseSchema,
   topologia: topologyExerciseSchema,
@@ -315,6 +359,7 @@ export const exerciseSchemas = {
   pasos: guidedStepsSchema,
   vim: vimExerciseSchema,
   captura: capturaExerciseSchema,
+  python: pythonExerciseSchema,
 } as const
 
 export type ExerciseKind = keyof typeof exerciseSchemas
@@ -333,4 +378,6 @@ export type ConfigRule = z.infer<typeof configRuleSchema>
 export type GuidedSteps = z.infer<typeof guidedStepsSchema>
 export type CapturaExercise = z.infer<typeof capturaExerciseSchema>
 export type CapturaTask = z.infer<typeof capturaTaskSchema>
+export type PythonExercise = z.infer<typeof pythonExerciseSchema>
+export type PythonCheck = z.infer<typeof pythonCheckSchema>
 export type ConfigLanguage = (typeof configLanguages)[number]
