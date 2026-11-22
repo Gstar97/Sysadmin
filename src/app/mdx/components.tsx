@@ -60,6 +60,7 @@ const UpsCalculatorView = lazy(() => import('@/interactive/hardware/UpsCalculato
 const RackBuilderView = lazy(() => import('@/interactive/hardware/RackBuilder').then((m) => ({ default: m.RackBuilder })))
 const ResourceSimulatorView = lazy(() => import('@/interactive/virtualizacion/ResourceSimulator').then((m) => ({ default: m.ResourceSimulator })))
 const TemplatePreviewView = lazy(() => import('@/interactive/ansible/TemplatePreview').then((m) => ({ default: m.TemplatePreview })))
+const PromqlConsoleView = lazy(() => import('@/interactive/query/PromqlConsole').then((m) => ({ default: m.PromqlConsole })))
 const PythonConsoleView = lazy(() => import('@/interactive/python/PythonConsole').then((m) => ({ default: m.PythonConsole })))
 const BranchSimulatorView = lazy(() => import('@/interactive/git/BranchSimulator').then((m) => ({ default: m.BranchSimulator })))
 const RetentionPlannerView = lazy(() => import('@/interactive/virtualizacion/RetentionPlanner').then((m) => ({ default: m.RetentionPlanner })))
@@ -434,6 +435,17 @@ export function EjercicioPython({ ejercicio }: { ejercicio: unknown }) {
   )
 }
 
+/** Consola de PromQL sobre métricas de ejemplo; con pasos, es un ejercicio que se verifica solo. */
+export function ConsolaPromQL({ ejercicio }: { ejercicio: unknown }) {
+  const { value, error } = useExercise('promql', ejercicio)
+  if (error) return <ExerciseError error={error} />
+  return (
+    <Island>
+      <PromqlConsoleView exercise={value!} />
+    </Island>
+  )
+}
+
 export function PlanificadorRetencion() {
   return (
     <Island>
@@ -767,6 +779,7 @@ export const mdxComponents = {
   ConsolaPython,
   EjercicioPython,
   VistaPlantilla,
+  ConsolaPromQL,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,

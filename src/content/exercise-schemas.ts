@@ -349,6 +349,129 @@ export const pythonExerciseSchema = z.strictObject({
     .min(1),
 })
 
+// ---------------------------------------------------------------------------------------
+// Consultas de métricas (PromQL) y de logs (LogQL)
+// ---------------------------------------------------------------------------------------
+
+const labelsSchema = z.record(z.string(), z.string())
+
+const shapeSchema = z.union([
+  z.number(),
+  z.strictObject({ constante: z.number() }),
+  z.strictObject({ lineal: z.strictObject({ desde: z.number(), hasta: z.number() }) }),
+  z.strictObject({ onda: z.strictObject({ media: z.number(), amplitud: z.number(), periodo: z.string().optional(), fase: z.number().optional() }) }),
+])
+
+/** Series de tiempo sintéticas (src/engines/metrics/tsdb.ts): nodos con node_exporter, apps web y series a medida. */
+export const metricsScenarioSchema = z.strictObject({
+  /** Instante "ahora" (ISO, por defecto 2026-11-23T14:00:00Z). */
+  ahora: z.string().optional(),
+  ventana: z.string().optional(),
+  paso: z.string().optional(),
+  semilla: z.number().optional(),
+  nodos: z
+    .array(
+      z.strictObject({
+        instancia: z.string(),
+        job: z.string().optional(),
+        cpus: z.number().optional(),
+        memoria_gb: z.number().optional(),
+        carga: z.number().optional(),
+        memoria_usada: z.number().optional(),
+        disco_gb: z.number().optional(),
+        disco_usado: z.number().optional(),
+        disco_crece_gb_hora: z.number().optional(),
+        red_mbps: z.number().optional(),
+        etiquetas: labelsSchema.optional(),
+        eventos: z
+          .array(z.strictObject({ desde: z.string().optional(), hasta: z.string().optional(), carga: z.number().optional(), memoria_usada: z.number().optional(), disco_crece_gb_hora: z.number().optional(), caido: z.boolean().optional() }))
+          .optional(),
+      }),
+    )
+    .optional(),
+  http: z
+    .array(
+      z.strictObject({
+        instancia: z.string(),
+        job: z.string().optional(),
+        rps: z.number().optional(),
+        errores: z.number().optional(),
+        latencia_ms: z.number().optional(),
+        handlers: z.array(z.string()).optional(),
+        eventos: z
+          .array(z.strictObject({ desde: z.string().optional(), hasta: z.string().optional(), rps: z.number().optional(), errores: z.number().optional(), latencia_ms: z.number().optional(), caido: z.boolean().optional() }))
+          .optional(),
+      }),
+    )
+    .optional(),
+  series: z
+    .array(
+      z.strictObject({
+        nombre: z.string(),
+        etiquetas: z.record(z.string(), z.union([z.string(), z.array(z.string())])).optional(),
+        tipo: z.enum(['gauge', 'contador']).optional(),
+        valor: shapeSchema.optional(),
+        inicial: z.number().optional(),
+        ruido: z.number().optional(),
+        entero: z.boolean().optional(),
+        eventos: z
+          .array(z.strictObject({ desde: z.string().optional(), hasta: z.string().optional(), valor: z.number().optional(), multiplicar: z.number().optional(), sumar: z.number().optional(), si: labelsSchema.optional() }))
+          .optional(),
+        reinicios: z.array(z.string()).optional(),
+        sin_datos: z.array(z.strictObject({ desde: z.string().optional(), hasta: z.string().optional(), si: labelsSchema.optional() })).optional(),
+      }),
+    )
+    .optional(),
+})
+
+/** Verificaciones sobre el resultado de una consulta (PromQL o LogQL). */
+export const queryCheckSchema = z.union([
+  z.strictObject({ sin_error: z.literal(true) }),
+  /** Cantidad exacta de series (o de streams) en el resultado. */
+  z.strictObject({ series: z.number().int() }),
+  z.strictObject({ series_min: z.number().int() }),
+  /** Alguna serie del resultado tiene estas etiquetas. */
+  z.strictObject({ contiene: labelsSchema }),
+  z.strictObject({ no_contiene: labelsSchema }),
+  /** Ninguna serie tiene esta etiqueta (por ejemplo, porque se agregó con sum). */
+  z.strictObject({ sin_etiqueta: z.string() }),
+  /** Todas las series tienen esta etiqueta. */
+  z.strictObject({ con_etiqueta: z.string() }),
+  /** Los valores (de las series que coinciden con si) están en el rango. */
+  z.strictObject({ valor: z.strictObject({ min: z.number().optional(), max: z.number().optional() }), si: labelsSchema.optional() }),
+  /** La consulta usa una función, un operador o una palabra (rate, by, offset, json...). */
+  z.strictObject({ usa: z.string(), mensaje: z.string().optional() }),
+  z.strictObject({ tipo: z.enum(['vector', 'escalar', 'lineas']) }),
+  /** Consultas de logs: cantidad de líneas y su contenido. */
+  z.strictObject({ lineas: z.number().int() }),
+  z.strictObject({ lineas_min: z.number().int() }),
+  z.strictObject({ lineas_contienen: z.string() }),
+  z.strictObject({ lineas_no_contienen: z.string() }),
+])
+
+const queryStepsSchema = z
+  .array(
+    z.strictObject({
+      consigna: z.string().min(1),
+      verificar: z.array(queryCheckSchema).min(1),
+      pistas: z.array(z.string()).default([]),
+      /** La consulta que resuelve el paso. */
+      solucion: z.string().min(1),
+      explicacion: z.string().optional(),
+    }),
+  )
+  .default([])
+
+/** Una consola de PromQL sobre métricas de ejemplo; sin pasos, es una consola libre. */
+export const promqlExerciseSchema = z.strictObject({
+  tipo: z.literal('promql'),
+  titulo: z.string().min(1),
+  descripcion: z.string().optional(),
+  metricas: metricsScenarioSchema,
+  consulta_inicial: z.string().default(''),
+  pasos: queryStepsSchema,
+})
+
 export const exerciseSchemas = {
   terminal: terminalExerciseSchema,
   topologia: topologyExerciseSchema,
@@ -362,6 +485,7 @@ export const exerciseSchemas = {
   vim: vimExerciseSchema,
   captura: capturaExerciseSchema,
   python: pythonExerciseSchema,
+  promql: promqlExerciseSchema,
 } as const
 
 export type ExerciseKind = keyof typeof exerciseSchemas
@@ -382,4 +506,7 @@ export type CapturaExercise = z.infer<typeof capturaExerciseSchema>
 export type CapturaTask = z.infer<typeof capturaTaskSchema>
 export type PythonExercise = z.infer<typeof pythonExerciseSchema>
 export type PythonCheck = z.infer<typeof pythonCheckSchema>
+export type PromqlExercise = z.infer<typeof promqlExerciseSchema>
+export type QueryCheck = z.infer<typeof queryCheckSchema>
+export type MetricsScenario = z.infer<typeof metricsScenarioSchema>
 export type ConfigLanguage = (typeof configLanguages)[number]

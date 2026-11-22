@@ -1,0 +1,49 @@
+tipo: promql
+titulo: Primeros pasos con PromQL
+descripcion: >-
+  Prometheus junta métricas de tres servidores web (node_exporter en el puerto 9100) y de la API de
+  la tienda. web03 se cayó hace un rato y el disco de web01 se está llenando.
+metricas:
+  nodos:
+    - { instancia: "web01:9100", carga: 0.35, disco_usado: 0.72, disco_crece_gb_hora: 1.5 }
+    - { instancia: "web02:9100", carga: 0.2 }
+    - { instancia: "web03:9100", carga: 0.25, eventos: [{ desde: "-25m", caido: true }] }
+  http:
+    - { instancia: "web01:8080", rps: 40, errores: 0.004, latencia_ms: 90 }
+pasos:
+  - consigna: ¿Qué equipos no responden? Mostrá solo los objetivos que están caídos (up vale 0).
+    verificar:
+      - { series: 1 }
+      - { contiene: { instance: "web03:9100" } }
+    pistas:
+      - up vale 1 cuando Prometheus pudo leer las métricas y 0 cuando no.
+      - Una comparación con un número filtra las series que la cumplen.
+    solucion: up == 0
+    explicacion: Sin bool, una comparación filtra; con up == 0 te quedan solo las que fallaron.
+  - consigna: >-
+      Calculá el porcentaje de CPU en uso de cada servidor en los últimos 5 minutos: 100 menos el
+      porcentaje del tiempo en modo idle, promediado por instancia.
+    verificar:
+      - { series: 2 }
+      - { sin_etiqueta: cpu }
+      - { usa: rate }
+      - { valor: { min: 5, max: 60 } }
+    pistas:
+      - "node_cpu_seconds_total es un contador: con rate(...[5m]) obtenés cuántos segundos por segundo pasa cada CPU en cada modo."
+      - avg by (instance) junta las CPU de cada equipo.
+    solucion: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])))
+    explicacion: >-
+      rate convierte el contador en una velocidad (de 0 a 1 por CPU), y avg by deja una serie por
+      equipo. web03 no aparece porque hace 25 minutos que no tiene datos.
+  - consigna: >-
+      ¿Algún disco se va a llenar en las próximas 4 horas si sigue al ritmo de la última hora? Mostrá
+      solo los que darían menos de cero bytes libres.
+    verificar:
+      - { series: 1 }
+      - { contiene: { instance: "web01:9100", mountpoint: "/" } }
+      - { usa: predict_linear }
+    pistas:
+      - predict_linear(serie[1h], segundos) proyecta el valor de una serie en el futuro.
+      - Son 4 * 3600 segundos.
+    solucion: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[1h], 4 * 3600) < 0
+    explicacion: Esto es una alerta de tendencia, la que habría avisado antes de que el disco se llene y no cuando ya está lleno.

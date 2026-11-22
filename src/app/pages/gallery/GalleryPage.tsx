@@ -18,6 +18,7 @@ import {
   ConsolaPython,
   EjercicioPython,
   VistaPlantilla,
+  ConsolaPromQL,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,
@@ -73,6 +74,7 @@ import terminalBash from './demos/terminal-bash.yaml'
 import terminalIos from './demos/terminal-ios.yaml'
 import terminalPs from './demos/terminal-ps.yaml'
 import python from './demos/python.yaml'
+import promql from './demos/promql.yaml'
 import topologia from './demos/topologia.yaml'
 import troubleshooting from './demos/troubleshooting.yaml'
 
@@ -183,10 +185,11 @@ export default function GalleryPage() {
         <PlanificadorRetencion />
       </Section>
 
-      <Section id="automatizacion" titulo="Automatización" descripcion="Simulador de ramas de Git: se escriben comandos (commit, branch, switch, merge, reset) y se ve cómo cambia el grafo de commits, con avance rápido, commits de fusión y commits que quedan huérfanos. Consola de Python: Python 3 de verdad (Pyodide) corriendo en el navegador, con editor, archivos de ejemplo, una API y comandos simulados, y ejercicios con pasos que se verifican solos. Vista previa de plantillas de Ansible (Jinja2) con los errores como los da Ansible.">
+      <Section id="automatizacion" titulo="Automatización" descripcion="Simulador de ramas de Git: se escriben comandos (commit, branch, switch, merge, reset) y se ve cómo cambia el grafo de commits, con avance rápido, commits de fusión y commits que quedan huérfanos. Consola de Python: Python 3 de verdad (Pyodide) corriendo en el navegador, con editor, archivos de ejemplo, una API y comandos simulados, y ejercicios con pasos que se verifican solos. Vista previa de plantillas de Ansible (Jinja2) con los errores como los da Ansible. Consola de PromQL sobre métricas de ejemplo (node_exporter y una API), con tabla, gráfico y pasos que se verifican solos.">
         <SimuladorRamas />
         <EjercicioPython ejercicio={python} />
         <ConsolaPython titulo="Consola libre" codigo={'import platform\nprint("Hola desde Python", platform.python_version())'} />
+        <ConsolaPromQL ejercicio={promql} />
         <VistaPlantilla destino="/etc/nginx/conf.d/tienda.conf" variables={'dominio: tienda.lab\npuerto: 80\nbackends:\n  - 10.0.10.21\n  - 10.0.10.22\n'} plantilla={'# {{ ansible_managed }}\nupstream app {\n{% for b in backends %}\n    server {{ b }}:8080;\n{% endfor %}\n}\n\nserver {\n    listen {{ puerto }};\n    server_name {{ dominio }};\n}\n'} />
       </Section>
 
