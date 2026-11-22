@@ -1,0 +1,154 @@
+---
+id: n6-m3-l4
+titulo: Variables, facts, condicionales y plantillas
+minutos: 180
+objetivos:
+  - Definir variables en el lugar adecuado y saber cuál gana cuando hay varias con el mismo nombre.
+  - Usar facts, register, when y loop para que un playbook se adapte a cada servidor.
+  - Generar archivos de configuración con plantillas Jinja2 (variables, if, for y filtros).
+glosario: [variable-ansible, fact, plantilla-jinja2, register]
+verificado: 2026-11
+---
+
+import precedencia from './precedencia.svg?raw'
+import precedenciaDatos from './precedencia.yaml'
+import ejNtp from './ej-ntp.yaml'
+
+Un playbook que dice "nginx escucha en el puerto 80 y atiende tienda.lab" sirve para un servidor. Uno que dice "nginx escucha en `{{ puerto }}` y atiende `{{ dominio }}`" sirve para todos: el de pruebas, el de producción y el que todavía no existe. Las variables separan **qué** se hace (el playbook) de **con qué valores** (el inventario), y los facts, las condiciones y las plantillas permiten que el mismo playbook se adapte a servidores distintos.
+
+<AntesDeEmpezar>
+- Playbooks (lección 6.3.3) e inventarios con group_vars (lección 6.3.2).
+- Listas y diccionarios (lección 6.2.1).
+</AntesDeEmpezar>
+
+## Variables
+
+Se usan entre llaves dobles, `{{ nombre }}`, en cualquier argumento de una tarea. Los nombres, en minúscula y con guion bajo (`puerto_http`, nunca `puerto-http`), y si el valor empieza con las llaves, entre comillas:
+
+```yaml
+- name: Sitio
+  ansible.builtin.template:
+    src: sitio.conf.j2
+    dest: "{{ ruta_sitios }}/{{ dominio }}.conf"
+```
+
+Una variable puede ser texto, número, lista o diccionario, y se accede a sus partes con punto o corchetes: `{{ servidor.ip }}`, `{{ backends[0] }}`, `{{ chrony['RedHat'] }}`.
+
+Dónde ponerlas depende de qué son:
+
+| Qué | Dónde |
+|---|---|
+| Lo que cambia entre entornos o servidores (IP, dominio, tamaño de caché) | group_vars/ y host_vars/ |
+| Valores por defecto de un rol | roles/x/defaults/main.yml (lección 6.3.5) |
+| Lo propio de un playbook | vars: o vars_files: del play |
+| Un valor para una sola corrida | -e en la línea de comandos |
+| Secretos | group_vars cifrado con Vault (lección 6.3.6) |
+
+Ansible tiene más de veinte niveles de prioridad para cuando la misma variable aparece en varios lugares; en la práctica alcanza con conocer estos:
+
+<DiagramaInteractivo datos={precedenciaDatos} svg={precedencia} alt="Una escalera de prioridades, de abajo hacia arriba: defaults del rol, group_vars/all, group_vars del grupo (los padres antes que los hijos), host_vars del equipo, los facts, vars y vars_files del play, vars del rol, vars de bloque y tarea con set_fact y register, y arriba de todo -e en la línea de comandos, que gana siempre." />
+
+Y una herramienta para cuando una variable no tiene el valor que esperabas: `ansible-inventory --host web01` (lo que viene del inventario) y una tarea `ansible.builtin.debug: var=nombre` (lo que vale de verdad en ese punto del playbook).
+
+## Facts
+
+Antes de la primera tarea, Gathering Facts junta datos de cada servidor, y quedan en `ansible_facts`:
+
+```yaml
+- name: Información del servidor
+  ansible.builtin.debug:
+    msg: >-
+      {{ ansible_facts['hostname'] }}: {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}, {{ ansible_facts['memtotal_mb'] }} MB,
+      IP {{ ansible_facts['default_ipv4']['address'] }}
+```
+
+Los que más se usan: `os_family` (RedHat, Debian), `distribution` y `distribution_major_version`, `default_ipv4.address`, `memtotal_mb`, `processor_vcpus` y `hostname`. También están como variables sueltas con el prefijo ansible_ (`ansible_os_family`), pero la forma `ansible_facts['os_family']` es la recomendada. Si un playbook no los necesita, `gather_facts: false` lo hace más rápido.
+
+Además de los facts hay **variables mágicas** que Ansible define siempre: `inventory_hostname` (el nombre del equipo en el inventario), `group_names` (sus grupos), `groups` (todos los grupos con sus equipos, por ejemplo `groups['web']`) y `hostvars` (las variables de otro equipo: `hostvars['db01']['ansible_facts']['default_ipv4']['address']` es la IP de la base, útil para configurar la aplicación que se conecta a ella).
+
+## register, when y loop
+
+**register** guarda el resultado de una tarea en una variable, y **when** decide si una tarea corre:
+
+```yaml
+- name: ¿Existe la configuración vieja?
+  ansible.builtin.stat:
+    path: /etc/app/viejo.conf
+  register: viejo
+
+- name: Migrarla
+  ansible.builtin.command: /usr/local/bin/migrar-config
+  when: viejo.stat.exists
+
+- name: Solo en la familia Red Hat
+  ansible.builtin.dnf:
+    name: dnf-automatic
+  when: ansible_facts['os_family'] == 'RedHat'
+```
+
+when va **sin** llaves (ya es una expresión) y acepta `and`, `or`, `not`, `in`, `is defined` y una lista de condiciones que tienen que cumplirse todas. Un registro guarda lo que devolvió el módulo: `rc`, `stdout`, `stdout_lines`, `changed`, `failed`, y lo propio de cada módulo (como `stat.exists`).
+
+**loop** repite una tarea con cada elemento de una lista, que queda en `item`:
+
+```yaml
+- name: Usuarios del equipo
+  ansible.builtin.user:
+    name: "{{ item.nombre }}"
+    groups: "{{ item.grupos }}"
+    append: true
+  loop: "{{ usuarios }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+```
+
+when se evalúa para cada elemento. Para recorrer un diccionario se lo convierte en lista con el filtro `dict2items` (cada elemento queda con `item.key` e `item.value`). En playbooks viejos vas a ver `with_items:`, que es lo mismo con otra sintaxis.
+
+## Plantillas Jinja2
+
+El módulo **template** toma un archivo .j2 de la carpeta templates/, reemplaza las variables y lo copia al servidor. Además de `{{ variable }}`, Jinja2 tiene:
+
+- **Condiciones**: `{% if ssl %} ... {% endif %}`, con `elif` y `else`.
+- **Repeticiones**: `{% for b in backends %} ... {% endfor %}`, con `loop.index` y `loop.last` adentro.
+- **Filtros**, que transforman un valor con `|`: `{{ nombre | upper }}`, `{{ puertos | join(', ') }}`, `{{ cache_mb | default(256) }}`, `{{ lista | length }}`, `{{ config | to_nice_yaml }}`.
+- **Comentarios**: `{# esto no aparece en el archivo #}`.
+
+Y una costumbre que conviene tener: la primera línea con `{{ ansible_managed }}` en un comentario, que avisa a quien abra el archivo en el servidor que no lo edite a mano (lo va a pisar la próxima corrida).
+
+Probá: completá la plantilla para que dé exactamente el archivo pedido (los dos backends con un for y el listen 443 solo si ssl es verdadero). Si escribís una variable que no existe, vas a ver el mismo error que da Ansible.
+
+<VistaPlantilla destino="/etc/nginx/conf.d/tienda.conf" variables={'dominio: tienda.lab\npuerto: 80\nssl: true\nbackends:\n  - 10.0.10.21\n  - 10.0.10.22\n'} plantilla={'# {{ ansible_managed }}\nupstream tienda {\n    server 10.0.10.21:8080;\n}\n\nserver {\n    listen {{ puerto }};\n    server_name {{ dominio }};\n}\n'} esperado={'# Ansible managed\nupstream tienda {\n    server 10.0.10.21:8080;\n    server 10.0.10.22:8080;\n}\n\nserver {\n    listen 80;\n    listen 443 ssl;\n    server_name tienda.lab;\n}\n'} />
+
+## Manos a la obra
+
+<Terminal ejercicio={ejNtp} />
+
+<EnSimple>
+Las variables separan lo que hace el playbook de los valores que usa; van en group_vars y host_vars si cambian entre servidores, y si están en varios lados gana la más específica (y -e por encima de todo). Los facts son lo que Ansible sabe de cada servidor (distribución, IP, memoria) y permiten que un mismo playbook sirva para Rocky y Ubuntu. register guarda el resultado de una tarea, when decide si otra corre y loop la repite con cada elemento de una lista. Las plantillas Jinja2 arman archivos de configuración con variables, if, for y filtros.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Llaves dentro de when">
+    `when: "{{ x }}" == 1` da un aviso y puede fallar. when ya es una expresión: `when: x == 1`.
+  </ErrorComun>
+  <ErrorComun titulo="Un valor que empieza con llaves sin comillas">
+    dest: con las llaves al principio y sin comillas hace que YAML falle. Siempre entre comillas.
+  </ErrorComun>
+  <ErrorComun titulo="Guiones en los nombres de variables">
+    puerto-http se lee como puerto menos http. Guion bajo: puerto_http.
+  </ErrorComun>
+  <ErrorComun titulo="AnsibleUndefinedVariable">
+    La variable no está definida para ese servidor (otro grupo, un error de tipeo). Revisá con ansible-inventory --host o usá el filtro default.
+  </ErrorComun>
+  <ErrorComun titulo="Editar a mano un archivo que genera una plantilla">
+    La próxima corrida lo pisa. Por eso la línea de ansible_managed arriba de todo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Variables entre llaves dobles; nombres con guion bajo; entre comillas si el valor empieza con llaves.
+- group_vars y host_vars para lo que cambia entre servidores; gana lo más específico; -e por encima de todo.
+- Facts en ansible_facts (os_family, distribution, default_ipv4...); variables mágicas: inventory_hostname, groups, hostvars.
+- register guarda el resultado; when (sin llaves) decide; loop repite con item y loop_control.label.
+- Plantillas .j2 en templates/: variables, if, for, filtros (default, join, upper, length) y ansible_managed.
+</Resumen>

@@ -1,0 +1,42 @@
+tipo: diagrama
+titulo: La precedencia de las variables
+puntos:
+  - id: extra
+    titulo: -e
+    area: { x: 14, y: 9.5, ancho: 65.1, alto: 8.1 }
+    texto: >-
+      Las variables extra de la línea de comandos (-e version=2.1 o -e @archivo.yml) le ganan a
+      todo. Sirven para un valor puntual de una corrida, por ejemplo qué versión desplegar; no para
+      la configuración de todos los días.
+  - id: corrida
+    titulo: Lo que se define durante la corrida
+    area: { x: 14, y: 19.0, ancho: 65.1, alto: 8.1 }
+    texto: >-
+      vars de una tarea o de un bloque, y las variables que crean set_fact y register mientras corre
+      el playbook. Pisan casi todo lo anterior.
+  - id: rol
+    titulo: vars del rol y del play
+    area: { x: 14, y: 28.6, ancho: 65.1, alto: 17.6 }
+    texto: >-
+      Las vars de un rol (roles/x/vars/main.yml) son "constantes" del rol, difíciles de pisar a
+      propósito. Las vars y vars_files del play quedan por debajo. Por eso lo que el usuario del rol
+      tiene que poder cambiar no va en vars sino en defaults.
+  - id: facts
+    titulo: Los facts
+    area: { x: 14, y: 47.6, ancho: 65.1, alto: 8.1 }
+    texto: >-
+      Lo que Ansible averigua de cada servidor. Le ganan al inventario: no conviene llamar a una
+      variable propia igual que un fact (por ejemplo, ansible_hostname).
+  - id: inventario
+    titulo: El inventario
+    area: { x: 14, y: 57.1, ancho: 65.1, alto: 27.1 }
+    texto: >-
+      group_vars y host_vars (y las variables escritas en el inventario mismo). Dentro de ellos, de
+      lo general a lo particular: all, después los grupos padre, los hijos y, por último, el equipo.
+      Es el lugar natural para lo que cambia entre entornos y servidores.
+  - id: defaults
+    titulo: defaults del rol
+    area: { x: 14, y: 85.7, ancho: 65.1, alto: 8.1 }
+    texto: >-
+      El valor por defecto de un rol: lo que usa si nadie dice otra cosa. Cualquier otro lugar lo
+      pisa, y por eso es donde van las opciones que el que usa el rol puede cambiar (lección 6.3.5).

@@ -1,0 +1,105 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Dónde conviene definir el dominio de cada entorno (pruebas y producción)?
+  opciones:
+    - { texto: "En group_vars del grupo de cada entorno", correcta: true, explicacion: "Lo que cambia entre servidores va en el inventario." }
+    - { texto: "Escrito en las tareas del playbook", explicacion: "Habría un playbook por entorno." }
+    - { texto: "En -e cada vez", explicacion: "Es fácil equivocarse." }
+    - { texto: "En la plantilla", explicacion: "La plantilla lo usa, no lo define." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: La variable puerto vale 80 en group_vars/web.yml, y corrés ansible-playbook sitio.yml -e puerto=8080. ¿Qué valor usa?
+  opciones:
+    - { texto: "8080: -e gana siempre", correcta: true, explicacion: "Es el nivel más alto." }
+    - { texto: "80", explicacion: "-e le gana a group_vars." }
+    - { texto: "Da error por estar repetida", explicacion: "No." }
+    - { texto: "Depende del orden de las tareas", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es la forma correcta de esta condición?
+  opciones:
+    - { texto: "when: ansible_facts['os_family'] == 'Debian'", correcta: true, explicacion: "when ya es una expresión: sin llaves." }
+    - { texto: "when: \"{{ ansible_facts['os_family'] }}\" == 'Debian'", explicacion: "Las llaves en when dan un aviso y pueden fallar." }
+    - { texto: "if: ansible_facts['os_family'] == 'Debian'", explicacion: "La palabra es when." }
+    - { texto: "when: os_family = Debian", explicacion: "= asigna; la comparación es ==, y el valor va entre comillas." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    TASK [Sitio] *******************************************************************
+    fatal: [web02]: FAILED! => {"changed": false, "msg": "AnsibleUndefinedVariable: 'dominio' is undefined"}
+  opciones:
+    - { texto: "La plantilla usa dominio, que no está definida para web02 (por ejemplo, solo está en el group_vars de otro grupo)", correcta: true, explicacion: "Revisá con ansible-inventory --host web02." }
+    - { texto: "No existe la plantilla", explicacion: "Sería Could not find or access." }
+    - { texto: "web02 no responde", explicacion: "Sería UNREACHABLE." }
+    - { texto: "Falta become", explicacion: "No es un problema de permisos." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué guarda register en una tarea con ansible.builtin.command?
+  opciones:
+    - { texto: "El resultado del módulo: rc, stdout, stdout_lines, stderr, changed y failed", correcta: true, explicacion: "Después se usa en when o debug." }
+    - { texto: "El comando en un archivo", explicacion: "No." }
+    - { texto: "Solo si falló", explicacion: "Siempre." }
+    - { texto: "La hora de la tarea", explicacion: "También, pero no es lo principal." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá la línea de la plantilla que muestra los puertos de la lista puertos separados por coma y espacio.
+  prompt: "plantilla.j2:"
+  aceptadas:
+    - "{{ puertos | join(', ') }}"
+    - "{{ puertos|join(', ') }}"
+  explicacion: join une los elementos de una lista con el separador que le pases.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: El servicio de chrony se llama chronyd en Rocky y chrony en Ubuntu. ¿Cuál es la forma más prolija de manejarlo en un solo playbook?
+  opciones:
+    - { texto: "Un diccionario con el nombre por familia y elegir con ansible_facts['os_family']", correcta: true, explicacion: "Una sola tarea, sin condiciones repetidas." }
+    - { texto: "Dos playbooks distintos", explicacion: "Hay que mantener los dos." }
+    - { texto: "Dos tareas con when cada una, para todo lo que cambia", explicacion: "Funciona, pero se duplica todo." }
+    - { texto: "Reinstalar chrony con el mismo nombre", explicacion: "No se puede." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué se puede usar dentro de una plantilla Jinja2?
+  opciones:
+    - { texto: "{% if %} y {% for %}", correcta: true, explicacion: "Condiciones y repeticiones." }
+    - { texto: "Filtros como default y join", correcta: true, explicacion: "Transforman valores." }
+    - { texto: "Variables, facts y hostvars", correcta: true, explicacion: "Todo lo que ve el playbook." }
+    - { texto: "Módulos de Ansible como copy", explicacion: "Los módulos van en las tareas, no en la plantilla." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "¿Qué muestra {{ cache_mb | default(256) }} si cache_mb no está definida?"
+  opciones:
+    - { texto: "256", correcta: true, explicacion: "default da un valor si la variable no existe." }
+    - { texto: "Un error", explicacion: "Sin default, sí." }
+    - { texto: "Nada", explicacion: "No." }
+    - { texto: "cache_mb", explicacion: "No." }
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas tienen un problema?
+  lenguaje: yaml
+  archivo: |
+    - name: Usuarios
+      hosts: web
+      become: true
+      vars:
+        usuarios-activos: [ana, pablo]
+      tasks:
+        - name: Crear
+          ansible.builtin.user:
+            name: "{{ item }}"
+          loop: "{{ usuarios }}"
+          when: "{{ item }}" != 'root'
+  lineas_con_error: [5, 10, 11]
+  explicacion: La variable tiene un guion en el nombre (5), el loop usa otro nombre que no existe (10) y when lleva llaves cuando ya es una expresión (11).

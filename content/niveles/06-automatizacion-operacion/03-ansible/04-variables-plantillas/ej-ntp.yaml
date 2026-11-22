@@ -1,0 +1,133 @@
+tipo: terminal
+shell: bash
+titulo: Un playbook para dos distribuciones
+descripcion: >-
+  Los servidores web de la tienda tienen que sincronizar la hora con los servidores NTP de
+  Argentina (ar.pool.ntp.org). web01 es Rocky Linux y web02 es Ubuntu: chrony está en los dos,
+  pero el servicio se llama distinto (chronyd y chrony) y la configuración está en otro lugar
+  (/etc/chrony.conf y /etc/chrony/chrony.conf). Un solo playbook tiene que resolver los dos casos.
+  En admin01 ya están ansible-core, ~/ansible con su ansible.cfg y el inventario con el grupo web.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [ansible-core] }
+  directorio: /home/ana/ansible
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/ansible/ansible.cfg: { dueno: ana, contenido: "[defaults]\ninventory = inventario.ini\ninterpreter_python = auto_silent\n" }
+    /home/ana/ansible/inventario.ini: { dueno: ana, contenido: "[web]\nweb01\nweb02\n" }
+  servidores:
+    - { hostname: web01, ip: 192.168.10.21, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: web02, ip: 192.168.10.22, distro: ubuntu, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+pasos:
+  - consigna: >-
+      Dejá en group_vars/all.yml la lista ntp_servidores con 0.ar.pool.ntp.org y 1.ar.pool.ntp.org,
+      y comprobá con ansible-inventory que web02 la recibe.
+    verificar:
+      - { archivo: /home/ana/ansible/group_vars/all.yml, contenido_incluye: "1.ar.pool.ntp.org" }
+      - { salida_contiene: "\"0.ar.pool.ntp.org\"" }
+    pistas:
+      - "mkdir group_vars y en all.yml: ntp_servidores: seguido de los dos servidores, cada uno en su línea con - adelante."
+      - "ansible-inventory --host web02"
+    solucion:
+      - mkdir -p group_vars
+      - printf 'ntp_servidores:\n  - 0.ar.pool.ntp.org\n  - 1.ar.pool.ntp.org\n' > group_vars/all.yml
+      - ansible-inventory --host web02
+    explicacion: >-
+      group_vars/all.yml vale para todos los equipos del inventario, sin tocar el inventario ni los
+      playbooks. Si mañana cambia el servidor NTP, se cambia en un solo lugar.
+  - consigna: >-
+      Escribí la plantilla templates/chrony.conf.j2 (una línea "server ... iburst" por cada servidor
+      de la lista, con un for, más driftfile /var/lib/chrony/drift, makestep 1.0 3 y rtcsync) y el
+      playbook ntp.yml: con un diccionario chrony en vars que tenga, para RedHat y para Debian, el
+      nombre del servicio y la ruta del archivo, una tarea que aplique la plantilla en la ruta que
+      corresponde según ansible_facts['os_family'], y un handler "Reiniciar chrony" que reinicie el
+      servicio que corresponde. Corrélo.
+    verificar:
+      - { en: web02, verificar: { archivo: /etc/chrony/chrony.conf, contenido_incluye: "server 1.ar.pool.ntp.org iburst" } }
+      - { en: web01, verificar: { archivo: /etc/chrony.conf, contenido_incluye: "server 0.ar.pool.ntp.org iburst" } }
+      - { salida_contiene: "RUNNING HANDLER [Reiniciar chrony]" }
+    pistas:
+      - "En la plantilla: {% for s in ntp_servidores %}, una línea server {{ s }} iburst, y {% endfor %}."
+      - "vars: chrony: con RedHat: {servicio: chronyd, archivo: /etc/chrony.conf} y Debian: {servicio: chrony, archivo: /etc/chrony/chrony.conf}."
+      - "dest: \"{{ chrony[ansible_facts['os_family']].archivo }}\" y en el handler name: \"{{ chrony[ansible_facts['os_family']].servicio }}\"."
+    solucion:
+      - mkdir -p templates
+      - |-
+        cat > templates/chrony.conf.j2 <<'EOF'
+        # {{ ansible_managed }}
+        {% for s in ntp_servidores %}
+        server {{ s }} iburst
+        {% endfor %}
+        driftfile /var/lib/chrony/drift
+        makestep 1.0 3
+        rtcsync
+        EOF
+      - |-
+        cat > ntp.yml <<'EOF'
+        - name: Hora sincronizada
+          hosts: web
+          become: true
+          vars:
+            chrony:
+              RedHat: { servicio: chronyd, archivo: /etc/chrony.conf }
+              Debian: { servicio: chrony, archivo: /etc/chrony/chrony.conf }
+          tasks:
+            - name: Configuración de chrony
+              ansible.builtin.template:
+                src: chrony.conf.j2
+                dest: "{{ chrony[ansible_facts['os_family']].archivo }}"
+                mode: '0644'
+              notify: Reiniciar chrony
+          handlers:
+            - name: Reiniciar chrony
+              ansible.builtin.service:
+                name: "{{ chrony[ansible_facts['os_family']].servicio }}"
+                state: restarted
+        EOF
+      - ansible-playbook ntp.yml
+    explicacion: >-
+      Los facts (acá, os_family) permiten que el mismo playbook se adapte a cada servidor sin
+      condicionales repetidos: el diccionario guarda las diferencias y la tarea elige la que
+      corresponde. Es la forma más prolija de escribir automatizaciones para varias distribuciones.
+  - consigna: >-
+      Ahora usuarios.yml: con una lista usuarios en vars (lucia activa, martin no activo y sofia
+      activa, cada uno con nombre y activo), una tarea que cree solo los activos, con loop, when y
+      una etiqueta (loop_control label) que muestre solo el nombre.
+    verificar:
+      - { en: web02, verificar: { usuario: sofia } }
+      - { en: web01, verificar: { usuario: martin, existe: false } }
+      - { salida_contiene: "skipping: [web01] => (item=martin)" }
+    pistas:
+      - "usuarios: - { nombre: lucia, activo: true } y así con los otros dos."
+      - "En la tarea: ansible.builtin.user con name: \"{{ item.nombre }}\", y al mismo nivel que el módulo loop: \"{{ usuarios }}\", when: item.activo y loop_control: label: \"{{ item.nombre }}\"."
+    solucion:
+      - |-
+        cat > usuarios.yml <<'EOF'
+        - name: Usuarios del equipo
+          hosts: web
+          become: true
+          vars:
+            usuarios:
+              - { nombre: lucia, activo: true }
+              - { nombre: martin, activo: false }
+              - { nombre: sofia, activo: true }
+          tasks:
+            - name: Usuarios activos
+              ansible.builtin.user:
+                name: "{{ item.nombre }}"
+                state: present
+              loop: "{{ usuarios }}"
+              when: item.activo
+              loop_control:
+                label: "{{ item.nombre }}"
+        EOF
+      - ansible-playbook usuarios.yml
+    explicacion: >-
+      when se evalúa para cada elemento del loop, así que martin se saltea y los otros se crean. Sin
+      label, Ansible muestra el diccionario entero de cada elemento; con label, solo lo que importa.

@@ -76,10 +76,10 @@ export function TemplatePreview({ plantilla, variables, esperado, destino = '/et
         </div>
       </div>
       {esperado !== undefined && (
-        <p className={cn('mt-3 rounded-lg border p-2 text-sm', ok ? 'border-ok bg-ok-soft' : 'border-line bg-surface')}>
+        <div className={cn('mt-3 rounded-lg border p-2 text-sm', ok ? 'border-ok bg-ok-soft' : 'border-line bg-surface')} aria-live="polite">
           {ok ? '¡El resultado coincide con el archivo pedido!' : 'Desafío: cambiá la plantilla (no las variables) hasta que el resultado sea igual al archivo pedido:'}
           {!ok && <pre className="mt-2 overflow-x-auto rounded-md bg-bg p-2 font-mono text-xs">{esperado}</pre>}
-        </p>
+        </div>
       )}
     </Frame>
   )
