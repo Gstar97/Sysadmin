@@ -11,7 +11,9 @@ const base = pythonExerciseSchema.parse({
     'POST https://api.ejemplo/alertas': { estado: 201, json: { id: 7 } },
     'https://api.ejemplo/roto': { estado: 503, texto: 'mantenimiento' },
     'https://api.ejemplo/lento': { json: {}, demora: 5 },
+    'https://api.ejemplo/privado': { json: { secreto: 1 }, token: 'tok-123' },
   },
+  entorno: { API_TOKEN: 'tok-123' },
   comandos: { 'df -h /': { salida: 'Filesystem Size Use%\n/dev/sda1 20G 91%\n' }, 'systemctl is-active nginx': { salida: 'failed\n', codigo: 3 } },
   argumentos: ['--umbral', '80'],
   pasos: [{ consigna: 'c', solucion: 'pass', verificar: [{ sin_error: true }] }],
@@ -52,6 +54,22 @@ except requests.Timeout:
 print(requests.get('https://api.ejemplo/lento', timeout=10).status_code)`)
     expect(result.error).toBeUndefined()
     expect(result.stdout).toBe('200 2.1 True\n201\nHTTP 503\nsin conexión\ntimeout\n200\n')
+  }, 60_000)
+
+  it('pasa variables de entorno y la API exige el token', async () => {
+    const { result } = await run(`
+import os, requests
+url = 'https://api.ejemplo/privado'
+print(requests.get(url).status_code)
+h = {'Authorization': f"Bearer {os.environ['API_TOKEN']}"}
+print(requests.get(url, headers=h).json())
+s = requests.Session(); s.headers['Authorization'] = h['Authorization']
+print(s.get(url).status_code)
+os.environ['OTRA'] = 'x'`)
+    expect(result.error).toBeUndefined()
+    expect(result.stdout).toBe("401\n{'secreto': 1}\n200\n")
+    const again = await run("import os\nprint(os.environ.get('OTRA'), os.environ['API_TOKEN'])")
+    expect(again.result.stdout).toBe('None tok-123\n')
   }, 60_000)
 
   it('simula subprocess.run con las salidas del ejercicio y respeta check y los códigos de salida', async () => {

@@ -28,7 +28,7 @@ export interface PyLike {
   }
 }
 
-export type Setup = Pick<PythonExercise, 'archivos' | 'api' | 'comandos' | 'argumentos' | 'directorio'>
+export type Setup = Pick<PythonExercise, 'archivos' | 'api' | 'comandos' | 'argumentos' | 'directorio' | 'entorno'>
 
 const SIM_DIR = '/opt/sim'
 
@@ -100,6 +100,10 @@ def request(method, url, params=None, json=None, data=None, headers=None, timeou
     if spec is None:
         host = _split(url).hostname or url
         raise ConnectionError(f"HTTPSConnectionPool(host='{host}', port=443): Max retries exceeded with url: {_split(url).path or '/'} (Caused by NameResolutionError: Failed to resolve '{host}')")
+    if spec.get('token'):
+        dado = {k.lower(): v for k, v in (headers or {}).items()}.get('authorization', '')
+        if dado != f"Bearer {spec['token']}":
+            return Response(full, 401, _json.dumps({'error': 'token inválido o ausente'}), {'Content-Type': 'application/json'})
     if spec.get('demora') and timeout is not None and timeout < spec['demora']:
         host = _split(url).hostname or url
         raise Timeout(f"HTTPSConnectionPool(host='{host}', port=443): Read timed out. (read timeout={timeout})")
@@ -181,9 +185,24 @@ def _forget_modules():
             if name != __name__:
                 del sys.modules[name]
 
-def run(src, filename, ns, argv, cwd):
+if not hasattr(sys, '_sim_env_base'):
+    sys._sim_env_base = dict(os.environ)
+_ENV_BASE = sys._sim_env_base
+
+def _reset_env():
+    os.environ.clear()
+    os.environ.update(_ENV_BASE)
+    try:
+        with open('${SIM_DIR}/entorno.json') as f:
+            os.environ.update(json.load(f))
+    except OSError:
+        pass
+
+def run(src, filename, ns, argv, cwd, fresh=True):
     """Corre src en ns. Devuelve JSON: error (traceback o null) y código de salida."""
     _forget_modules()
+    if fresh:
+        _reset_env()
     sys.argv = [filename] + list(argv)
     os.chdir(cwd)
     if sys.path[0] != cwd:
@@ -248,6 +267,7 @@ export function prepare(py: PyLike, setup: Setup) {
   py.FS.writeFile(`${SIM_DIR}/_simrun.py`, SIMRUN_PY)
   py.FS.writeFile(`${SIM_DIR}/api.json`, JSON.stringify(setup.api))
   py.FS.writeFile(`${SIM_DIR}/comandos.json`, JSON.stringify(setup.comandos))
+  py.FS.writeFile(`${SIM_DIR}/entorno.json`, JSON.stringify(setup.entorno ?? {}))
 }
 
 export interface RunResult {
@@ -266,7 +286,7 @@ interface PyDict {
 }
 
 /** Corre código en un espacio de nombres a través del ayudante (atrapa sys.exit y los errores). */
-async function execIn(py: PyLike, setup: Setup, ns: PyDict, code: string, filename: string): Promise<{ error?: string; codigo: number }> {
+async function execIn(py: PyLike, setup: Setup, ns: PyDict, code: string, filename: string, fresh = true): Promise<{ error?: string; codigo: number }> {
   const dict = py.globals.get('dict') as () => PyDict
   const h = dict()
   h.set('src', code)
@@ -274,7 +294,8 @@ async function execIn(py: PyLike, setup: Setup, ns: PyDict, code: string, filena
   h.set('fn', filename)
   h.set('argv', JSON.stringify(setup.argumentos))
   h.set('cwd', setup.directorio)
-  await py.runPythonAsync(`import sys, json\nif '${SIM_DIR}' not in sys.path: sys.path.insert(0, '${SIM_DIR}')\nimport _simrun\nres = _simrun.run(src, fn, ns, json.loads(argv), cwd)`, { globals: h })
+  h.set('fresh', fresh)
+  await py.runPythonAsync(`import sys, json\nif '${SIM_DIR}' not in sys.path: sys.path.insert(0, '${SIM_DIR}')\nimport _simrun\nres = _simrun.run(src, fn, ns, json.loads(argv), cwd, fresh)`, { globals: h })
   const res = JSON.parse(String(h.get('res'))) as { error: string | null; codigo: number }
   h.destroy?.()
   return { error: res.error ?? undefined, codigo: res.codigo }
@@ -354,7 +375,7 @@ export async function runChecks(py: PyLike, setup: Setup, ns: unknown, result: R
       if (ok) {
         py.setStdout({ batched: () => {} })
         py.setStderr({ batched: () => {} })
-        const r = await execIn(py, setup, ns as PyDict, c.prueba, 'prueba.py')
+        const r = await execIn(py, setup, ns as PyDict, c.prueba, 'prueba.py', false)
         if (r.error || r.codigo) {
           ok = false
           const l = last(r.error) ?? ''

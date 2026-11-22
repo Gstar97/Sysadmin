@@ -1,0 +1,177 @@
+---
+id: n6-m2-l5
+titulo: Redes y APIs
+minutos: 150
+objetivos:
+  - Consumir una API REST con requests, con autenticación, paginación, timeouts y manejo de errores.
+  - Reintentar con esperas crecientes lo que vale la pena reintentar, y nada más.
+  - Revisar puertos, direcciones y muchos servidores a la vez, y conectarse por SSH desde Python.
+glosario: [api-rest, token-api, reintento-exponencial]
+verificado: 2026-11
+---
+
+import api from './api.svg?raw'
+import apiDatos from './api.yaml'
+import ejSalud from './ej-salud.yaml'
+
+Casi todo lo que administrás tiene una API: Proxmox, el servidor de Git, el sistema de tickets, el DNS de la nube, el monitoreo. Una API es una puerta para que un programa haga lo mismo que vos hacés en la interfaz web, pero sin clics: listar las máquinas virtuales, crear un usuario, abrir una alerta. Con Python y unas pocas líneas, las tareas que hacías a mano en cinco pantallas se vuelven un script que corre solo.
+
+<AntesDeEmpezar>
+- HTTP por dentro: métodos, códigos de estado y encabezados (lección 4.1.1).
+- Formatos de datos, sobre todo JSON (lección 6.2.4).
+- Claves SSH (lección 1.6.3).
+</AntesDeEmpezar>
+
+## requests
+
+La biblioteca estándar trae `urllib.request`, que alcanza para un pedido simple, pero la forma habitual de hablar HTTP desde Python es **requests**: no viene con Python, así que se instala (`python3-requests` en Debian, Ubuntu y Rocky, o `pip install requests` en un entorno virtual, como vas a ver en la lección 6.2.6). Una alternativa más nueva, con la misma forma de uso, es httpx.
+
+<DiagramaInteractivo datos={apiDatos} svg={api} alt="Una llamada a una API. A la izquierda, el pedido: requests.get con la URL, params con el número de página, el encabezado Authorization con un token y timeout de 5 segundos. A la derecha, la respuesta: status_code 200, el tipo de contenido, r.json() con la lista de servidores y el número de la página siguiente, y raise_for_status que da error con 4xx y 5xx. Abajo, cuatro cosas que pueden salir mal: no hay conexión (ConnectionError, incluido un certificado inválido), no contesta a tiempo (Timeout, para reintentar con esperas crecientes), contesta con un error HTTP (4xx el pedido está mal, 5xx falla del servidor) y contesta otra cosa (JSONDecodeError)." />
+
+```python
+import os
+import requests
+
+TOKEN = os.environ["INVENTARIO_TOKEN"]
+s = requests.Session()                                   # reusa la conexión y los encabezados
+s.headers["Authorization"] = f"Bearer {TOKEN}"
+
+r = s.get("https://inventario.lab/api/v1/servidores", params={"rol": "web"}, timeout=5)
+r.raise_for_status()
+for srv in r.json()["servidores"]:
+    print(srv["nombre"])
+
+r = s.post("https://inventario.lab/api/v1/servidores", json={"nombre": "web03", "rol": "web"}, timeout=5)
+print(r.status_code, r.json())                          # 201 y lo que se creó
+```
+
+Lo que nunca falta en un script que habla con una API:
+
+- **timeout** en cada pedido. requests no tiene uno por defecto: sin él, un servidor que no contesta deja tu script colgado para siempre (y un timer de systemd que lo lanza cada 5 minutos termina con decenas de copias esperando).
+- **raise_for_status()** (o mirar `status_code`) antes de usar la respuesta.
+- **El token fuera del código**: en una variable de entorno o en un archivo con permisos 600 que el script lee.
+- **Verificación del certificado activada**. Si la API usa un certificado de una CA interna, se le indica cuál es con `verify="/etc/pki/tls/certs/ca-interna.pem"`. `verify=False` apaga justo la protección contra que alguien se haga pasar por el servidor y se quede con tu token.
+
+Cada API autentica a su manera, y está en su documentación. La de Proxmox VE, por ejemplo, acepta un token de API creado en Datacenter, Permissions, API Tokens, con un encabezado propio:
+
+```python
+cabeceras = {"Authorization": f"PVEAPIToken={os.environ['PVE_TOKEN_ID']}={os.environ['PVE_TOKEN_SECRETO']}"}
+r = requests.get("https://pve01.lab:8006/api2/json/cluster/resources", params={"type": "vm"},
+                 headers=cabeceras, verify="/etc/pki/tls/certs/pve-ca.pem", timeout=10)
+for vm in r.json()["data"]:
+    print(vm["name"], vm["status"], vm["node"])
+```
+
+## Páginas, límites y reintentos
+
+Las APIs no devuelven diez mil resultados de una vez: los dan **de a páginas**, con un número de página, un "cursor" o un enlace a la siguiente, y hay que pedir hasta que no haya más. También ponen **límites de uso**: si pedís demasiado rápido, contestan 429 (Too Many Requests), muchas veces con un encabezado Retry-After que dice cuántos segundos esperar.
+
+Y algunos errores vale la pena reintentarlos: un Timeout, un 502 o un 503 suelen ser pasajeros. La forma correcta es **esperar cada vez más** (1, 2, 4, 8 segundos) y rendirse después de unos pocos intentos, para no ahogar a un servidor que ya está en problemas:
+
+```python
+import time
+
+REINTENTABLES = {429, 502, 503, 504}
+
+def pedir_con_reintentos(url, intentos=4, **kw):
+    for n in range(intentos):
+        ultimo = n == intentos - 1
+        try:
+            r = requests.get(url, timeout=5, **kw)
+        except (requests.Timeout, requests.ConnectionError):
+            if ultimo:
+                raise
+            time.sleep(2 ** n)                       # 1, 2, 4 segundos...
+            continue
+        if r.status_code in REINTENTABLES and not ultimo:
+            time.sleep(int(r.headers.get("Retry-After", 2 ** n)))
+            continue
+        r.raise_for_status()                         # un 4xx, o el último 5xx, es un error
+        return r
+```
+
+Lo que **no** se reintenta: un 400, 401, 403 o 404. Si el pedido está mal o no tenés permiso, va a seguir estando mal. requests también puede reintentar solo, configurando un `HTTPAdapter` con `urllib3.util.Retry`, que hace lo mismo con menos código.
+
+## Puertos, direcciones y muchos servidores a la vez
+
+Para lo que no es HTTP, la biblioteca estándar tiene `socket` y `ipaddress`:
+
+```python
+import socket, ipaddress
+
+def puerto_abierto(host, puerto, timeout=3):
+    try:
+        with socket.create_connection((host, puerto), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+red = ipaddress.ip_network("10.0.20.0/24")
+ipaddress.ip_address("10.0.20.21") in red        # True
+list(red.hosts())[:3]                            # 10.0.20.1, 10.0.20.2, 10.0.20.3
+```
+
+`ipaddress` hace todo el subnetting del módulo 2.2 por vos; probalo:
+
+<ConsolaPython titulo="ipaddress" codigo={'import ipaddress\n\nred = ipaddress.ip_network("10.0.20.0/24")\nprint(red.num_addresses, red.netmask, red.broadcast_address)\nfor sub in red.subnets(new_prefix=26):\n    print(sub, "hosts:", sub.num_addresses - 2)\nprint(ipaddress.ip_address("10.0.20.130") in ipaddress.ip_network("10.0.20.128/26"))'} />
+
+Revisar cincuenta servidores de a uno, con 3 segundos de timeout cada uno, puede tardar dos minutos y medio si varios no contestan. Como el programa pasa casi todo el tiempo esperando la red, se puede revisar varios a la vez con hilos:
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor(max_workers=10) as ex:
+    resultados = dict(zip(nombres, ex.map(revisar, urls)))
+```
+
+Diez a la vez está bien para la mayoría de los casos; no lances cientos contra la misma API, que los límites de uso están para eso.
+
+## SSH desde Python
+
+Para correr comandos en otros servidores hay dos caminos:
+
+1. **subprocess con el ssh del sistema**, que usa tus claves y tu `~/.ssh/config` (lección 1.6.4). Con `BatchMode=yes`, si hace falta una contraseña falla en lugar de quedarse esperando:
+
+   ```python
+   r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "web01", "uptime"],
+                      capture_output=True, text=True, timeout=20)
+   ```
+
+2. **Bibliotecas como paramiko** (o fabric, que se apoya en ella), cuando necesitás algo más fino: transferir archivos, mantener una sesión abierta o manejar muchas conexiones.
+
+Antes de escribir mucho código de SSH en Python, pensalo dos veces: para "correr esto en todos los servidores y dejarlos iguales" existe Ansible, que vas a ver en el módulo 6.3 (y que está escrito en Python).
+
+## Manos a la obra
+
+<EjercicioPython ejercicio={ejSalud} />
+
+<EnSimple>
+Una API es una puerta para que un programa haga lo que vos hacés en una interfaz web. Con requests se pide (get, post), se manda el token en un encabezado (sacado de una variable de entorno, nunca escrito en el código) y se lee la respuesta con .json(). Todo pedido lleva timeout, se revisa si contestó con error y se manejan los casos en que no hay conexión o no contesta. Lo pasajero (un timeout, un 503) se reintenta esperando cada vez más; lo que está mal (un 401, un 404), no. socket e ipaddress resuelven puertos y redes, varios hilos revisan muchos servidores a la vez, y para SSH se usa el ssh del sistema o paramiko.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Pedidos sin timeout">
+    requests no tiene uno por defecto: un servidor que no contesta cuelga el script para siempre.
+  </ErrorComun>
+  <ErrorComun titulo="verify=False para sacarse de encima un error de certificado">
+    Apaga la protección contra alguien que se hace pasar por el servidor y se lleva tu token. Indicale la CA con verify.
+  </ErrorComun>
+  <ErrorComun titulo="El token escrito en el código">
+    Termina en el repositorio. Va en una variable de entorno o en un archivo con permisos 600.
+  </ErrorComun>
+  <ErrorComun titulo="Leer solo la primera página">
+    El script anda con 20 servidores y con 120 "pierde" 100. Seguí pidiendo mientras haya página siguiente.
+  </ErrorComun>
+  <ErrorComun titulo="Reintentar todo, sin esperar">
+    Un 401 no se arregla reintentando, y reintentar al instante un 503 ahoga más al servidor. Esperas crecientes y solo para lo pasajero.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- requests.get/post con params, headers, json= y siempre timeout; raise_for_status antes de usar la respuesta.
+- Token en una variable de entorno; Session para reusar la conexión y los encabezados.
+- Verificación del certificado siempre activa; verify="ruta" para una CA interna.
+- Paginación hasta que no haya siguiente; 429 y Retry-After; reintentos con esperas crecientes solo para Timeout y 5xx.
+- socket.create_connection para puertos, ipaddress para redes, ThreadPoolExecutor para muchos servidores.
+- SSH con subprocess y BatchMode=yes, o con paramiko; para configurar muchos servidores, Ansible.
+</Resumen>

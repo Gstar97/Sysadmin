@@ -324,10 +324,12 @@ export const pythonExerciseSchema = z.strictObject({
   descripcion: z.string().optional(),
   /** Archivos que existen antes de correr el código (ruta absoluta: contenido). */
   archivos: z.record(z.string(), z.string()).default({}),
-  /** Respuestas del requests simulado: "GET https://..." o la URL sola; con estado, json o texto. */
-  api: z.record(z.string(), z.strictObject({ estado: z.number().int().default(200), json: z.unknown().optional(), texto: z.string().optional(), demora: z.number().optional() })).default({}),
+  /** Respuestas del requests simulado: "GET https://..." o la URL sola; con estado, json o texto, una demora en segundos y un token (Bearer) que exige. */
+  api: z.record(z.string(), z.strictObject({ estado: z.number().int().default(200), json: z.unknown().optional(), texto: z.string().optional(), demora: z.number().optional(), token: z.string().optional() })).default({}),
   /** Salidas de subprocess.run simulado, por comando exacto. */
   comandos: z.record(z.string(), z.strictObject({ salida: z.string().default(''), error: z.string().default(''), codigo: z.number().int().default(0) })).default({}),
+  /** Variables de entorno que ve el programa (os.environ), por ejemplo un token de una API. */
+  entorno: z.record(z.string(), z.string()).default({}),
   /** Argumentos de línea de comandos (sys.argv[1:]) al correr el programa. */
   argumentos: z.array(z.string()).default([]),
   /** Carpeta de trabajo; las rutas relativas de archivos y verificaciones salen de acá. */

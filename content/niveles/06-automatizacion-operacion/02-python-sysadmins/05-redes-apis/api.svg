@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 350" font-family="system-ui, sans-serif" font-size="12">
+  <defs>
+    <marker id="py-api" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+  </defs>
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">Una llamada a una API y todo lo que puede salir mal</text>
+  <g stroke="currentColor" stroke-width="1.1">
+    <rect x="20" y="40" width="380" height="140" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="460" y="40" width="380" height="140" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="20" y="200" width="200" height="134" rx="8" fill="var(--bad-soft, #fde2e1)"/>
+    <rect x="232" y="200" width="196" height="134" rx="8" fill="var(--bad-soft, #fde2e1)"/>
+    <rect x="440" y="200" width="196" height="134" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+    <rect x="648" y="200" width="192" height="134" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+  </g>
+  <g fill="currentColor">
+    <text x="210" y="60" text-anchor="middle" font-weight="700">el pedido</text>
+    <g font-family="ui-monospace, monospace" font-size="10.5">
+      <text x="34" y="84">r = requests.get(</text>
+      <text x="48" y="102">"https://inventario.lab/api/v1/servidores",</text>
+      <text x="48" y="120">params={"pagina": 2},</text>
+      <text x="48" y="138">headers={"Authorization": f"Bearer {token}"},</text>
+      <text x="48" y="156">timeout=5)</text>
+    </g>
+    <text x="650" y="60" text-anchor="middle" font-weight="700">la respuesta</text>
+    <g font-family="ui-monospace, monospace" font-size="10.5">
+      <text x="474" y="84">r.status_code      → 200</text>
+      <text x="474" y="102">r.headers["Content-Type"] → "application/json"</text>
+      <text x="474" y="120">r.json()           → {"servidores": [...],</text>
+      <text x="613" y="138">"siguiente": 3}</text>
+      <text x="474" y="156">r.raise_for_status()  (error si 4xx o 5xx)</text>
+    </g>
+    <g text-anchor="middle">
+      <text x="120" y="222" font-weight="700">no hay conexión</text>
+      <g font-size="10.5"><text x="120" y="244">ConnectionError</text><text x="120" y="264">nombre que no resuelve,</text><text x="120" y="280">puerto cerrado, firewall,</text><text x="120" y="296">certificado inválido</text><text x="120" y="318">(SSLError)</text></g>
+      <text x="330" y="222" font-weight="700">no contesta a tiempo</text>
+      <g font-size="10.5"><text x="330" y="244">Timeout</text><text x="330" y="264">sin timeout, el script</text><text x="330" y="280">espera para siempre</text><text x="330" y="300">reintentar, con</text><text x="330" y="316">esperas crecientes</text></g>
+      <text x="538" y="222" font-weight="700">contesta con error</text>
+      <g font-size="10.5"><text x="538" y="244">4xx: el pedido está mal</text><text x="538" y="260">401 sin token, 403 sin</text><text x="538" y="276">permiso, 404 no existe,</text><text x="538" y="292">429 demasiados pedidos</text><text x="538" y="312">5xx: falla del servidor</text></g>
+      <text x="744" y="222" font-weight="700">contesta otra cosa</text>
+      <g font-size="10.5"><text x="744" y="244">JSONDecodeError</text><text x="744" y="264">una página HTML de error</text><text x="744" y="280">de un proxy, o un JSON</text><text x="744" y="296">con otra forma: usá .get</text><text x="744" y="312">para lo que puede faltar</text></g>
+    </g>
+  </g>
+  <g stroke="currentColor" stroke-width="1.6" fill="none">
+    <path d="M400 110 L458 110" marker-end="url(#py-api)"/>
+  </g>
+</svg>

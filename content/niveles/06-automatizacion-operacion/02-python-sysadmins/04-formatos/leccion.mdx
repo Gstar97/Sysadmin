@@ -1,0 +1,158 @@
+---
+id: n6-m2-l4
+titulo: Formatos de datos
+minutos: 150
+objetivos:
+  - Leer y escribir JSON, CSV, YAML, INI y TOML con los módulos adecuados.
+  - Convertir datos de un formato a otro respetando los tipos.
+  - Sacar datos de logs y salidas de comandos con expresiones regulares.
+glosario: [json, yaml, csv, expresion-regular]
+verificado: 2026-11
+---
+
+import formatos from './formatos.svg?raw'
+import formatosDatos from './formatos.yaml'
+import ejInventario from './ej-inventario.yaml'
+
+Buena parte de automatizar es traducir: una planilla de compras a la lista que usa el monitoreo, la respuesta de una API a un reporte, un log de nginx a un número que alguien pueda mirar. Cada herramienta habla su formato, y Python tiene un módulo para leer y escribir cada uno sin que tengas que partir líneas a mano.
+
+<AntesDeEmpezar>
+- Python y el sistema operativo (lección 6.2.3).
+- Expresiones regulares con grep y sed (lección 1.7.6).
+</AntesDeEmpezar>
+
+## Cuatro formatos, los mismos datos
+
+<DiagramaInteractivo datos={formatosDatos} svg={formatos} alt="Los mismos dos servidores, web01 y db01, con su IP, sus puertos y si están activos, escritos en cuatro formatos. JSON, con llaves, corchetes y comillas dobles, para APIs. YAML, con guiones y sangría, para Ansible y Compose. CSV, una tabla con columnas separadas por comas, sin listas ni anidamiento. INI, con secciones entre corchetes y clave igual valor, para configuraciones." />
+
+La regla para elegir: **JSON** para intercambiar datos entre programas, **YAML** para lo que escriben personas (configuraciones, playbooks), **CSV** para tablas que van o vienen de una planilla, e **INI** o **TOML** para configuraciones simples.
+
+## JSON
+
+```python
+import json
+
+with open("/etc/app/estado.json") as f:
+    estado = json.load(f)                 # archivo → diccionarios y listas
+
+texto = '{"nombre": "web01", "activo": true, "ultimo_backup": null}'
+datos = json.loads(texto)                 # texto → datos (la s es de "string")
+datos["activo"]                           # True  (true, false y null se convierten)
+
+with open("/srv/reportes/hoy.json", "w") as f:
+    json.dump(estado, f, indent=2, ensure_ascii=False)   # legible y con acentos tal cual
+json.dumps(datos)                         # datos → texto
+```
+
+JSON no tiene fechas: se guardan como texto, idealmente en formato ISO (`datetime.now().isoformat()`), que se ordena bien y se lee igual en cualquier idioma. Si intentás guardar una fecha o un Path directamente, `json.dump` da `TypeError: Object of type datetime is not JSON serializable`: convertilos a texto antes.
+
+Y cuando un JSON viene mal (un archivo cortado, una API que devolvió una página de error en HTML), json.load da `json.JSONDecodeError` con la línea y la columna donde se perdió.
+
+## CSV
+
+```python
+import csv
+
+with open("inventario.csv", newline="") as f:
+    for fila in csv.DictReader(f):          # cada fila es un diccionario con los títulos de la primera línea
+        print(fila["nombre"], int(fila["ram_gb"]))
+
+with open("reporte.csv", "w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=["nombre", "estado"])
+    w.writeheader()
+    w.writerow({"nombre": "web01", "estado": "ok"})
+```
+
+No partas un CSV con `split(",")`: un campo como `"Rack B, abajo"` lleva una coma adentro, entre comillas, y el módulo csv lo entiende. Si el archivo viene de una planilla configurada en castellano, el separador suele ser punto y coma: `csv.DictReader(f, delimiter=";")`. Y si los acentos se ven raros, probablemente lo guardaron en otra codificación: `open(ruta, encoding="latin-1")` o `encoding="utf-8-sig"` (UTF-8 con una marca al principio, típica de Excel).
+
+## YAML
+
+YAML no viene con Python: lo trae la biblioteca **PyYAML** (en Debian y Ubuntu, el paquete python3-yaml; en un entorno virtual, `pip install pyyaml`).
+
+```python
+import yaml
+
+with open("inventario.yml") as f:
+    inventario = yaml.safe_load(f)       # siempre safe_load
+
+with open("salida.yml", "w") as f:
+    yaml.safe_dump(inventario, f, allow_unicode=True, sort_keys=False)
+```
+
+**Siempre `safe_load`**. `yaml.load` con el cargador completo puede construir objetos de Python a partir del archivo, y un YAML preparado puede terminar ejecutando código. Y cuidado con algunos valores que YAML interpreta solo: `no` y `yes` pueden volverse False y True en algunos cargadores, `010` puede leerse como un número en octal y `22:22` como un número en base 60. Ante la duda, el valor entre comillas.
+
+## INI y TOML
+
+```python
+import configparser
+
+cfg = configparser.ConfigParser()
+cfg.read("/etc/monitor/monitor.ini")
+umbral = cfg.getint("umbrales", "disco", fallback=85)
+alertas = cfg.getboolean("general", "alertas")          # yes, on, true o 1 → True
+```
+
+TOML es el formato de configuración más moderno de Python (lo usan pyproject.toml y muchas herramientas nuevas) y desde Python 3.11 se lee con la biblioteca estándar:
+
+```python
+import tomllib
+
+with open("config.toml", "rb") as f:          # "rb": tomllib lee en binario
+    config = tomllib.load(f)
+```
+
+## Expresiones regulares
+
+Para lo que no tiene un formato con nombre (un log de nginx, la salida de un comando), están las expresiones regulares del módulo `re`, las mismas que usaste con grep -E y sed:
+
+```python
+import re
+
+linea = '10.0.1.51 - - [22/Nov/2026:10:01:03 -0300] "GET /api/pedidos HTTP/1.1" 500 87'
+m = re.search(r'"(\w+) (\S+) [^"]*" (\d{3})', linea)
+if m:
+    metodo, ruta, codigo = m.groups()          # "GET", "/api/pedidos", "500"
+
+re.findall(r"\d+\.\d+\.\d+\.\d+", texto)       # todas las IP del texto
+re.sub(r"password=\S+", "password=***", linea) # tapar secretos antes de guardar un log
+
+patron = re.compile(r"ERROR (\w+)")            # para usarla en muchas líneas
+```
+
+Tres consejos: escribí la expresión como **raw string** (`r"..."`), para que Python no interprete las barras invertidas; usá **grupos con nombre** cuando sean varios (`(?P<codigo>\d{3})` y después `m["codigo"]`); y probala con un par de líneas de verdad antes de correrla sobre un log entero:
+
+<ConsolaPython titulo="Probar expresiones" codigo={'import re\n\nlineas = [\n    "Nov 22 10:01:03 web01 sshd[812]: Failed password for root from 185.220.101.47 port 51022 ssh2",\n    "Nov 22 10:01:09 web01 sshd[815]: Accepted publickey for ana from 10.0.1.50 port 50110 ssh2",\n]\npatron = re.compile(r"(?P<resultado>Failed|Accepted) \\S+ for (?P<usuario>\\S+) from (?P<ip>[\\d.]+)")\nfor l in lineas:\n    m = patron.search(l)\n    if m:\n        print(m["resultado"], m["usuario"], m["ip"])'} />
+
+## Manos a la obra
+
+<EjercicioPython ejercicio={ejInventario} />
+
+<EnSimple>
+Cada herramienta guarda sus datos en un formato, y Python tiene un módulo para cada uno: json para lo que intercambian los programas, csv para las tablas de una planilla, PyYAML para lo que escriben las personas (siempre con safe_load), y configparser y tomllib para las configuraciones. Lo que se lee de un CSV o un INI llega como texto y hay que convertirlo; lo que se escribe en un JSON tiene que ser texto, números, listas o diccionarios. Para lo que no tiene formato, como un log, están las expresiones regulares.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Partir un CSV con split(“,”)">
+    Una coma dentro de un campo entre comillas parte la fila mal. El módulo csv lo resuelve.
+  </ErrorComun>
+  <ErrorComun titulo="yaml.load con un archivo que no escribiste vos">
+    Puede construir objetos y ejecutar código. Siempre yaml.safe_load.
+  </ErrorComun>
+  <ErrorComun titulo="Guardar todo como texto en el JSON">
+    "32" no es 32: la otra herramienta no va a poder sumar ni comparar. Convertí al leer.
+  </ErrorComun>
+  <ErrorComun titulo="Querer guardar una fecha en un JSON">
+    Da TypeError. Guardala como texto ISO con isoformat().
+  </ErrorComun>
+  <ErrorComun titulo="Expresiones regulares sin r adelante">
+    "\d" funciona de casualidad, pero "\b" es un carácter de retroceso. Siempre r"...".
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- JSON para intercambiar (json.load, loads, dump, dumps); true, false y null son True, False y None.
+- CSV con csv.DictReader y DictWriter, con newline=""; delimiter=";" para planillas en castellano.
+- YAML con PyYAML y siempre safe_load; INI con configparser (getint, getboolean); TOML con tomllib.
+- Lo que llega como texto se convierte; las fechas van como texto ISO.
+- re.search, findall, sub y compile, con raw strings y grupos con nombre.
+</Resumen>

@@ -1,0 +1,119 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué pasa con requests.get(url) sin timeout si el servidor acepta la conexión pero nunca contesta?
+  opciones:
+    - { texto: "El script queda esperando para siempre", correcta: true, explicacion: "requests no tiene timeout por defecto." }
+    - { texto: "Espera 30 segundos y da error", explicacion: "No hay tiempo por defecto." }
+    - { texto: "Devuelve None", explicacion: "No." }
+    - { texto: "Reintenta solo", explicacion: "No." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Dónde conviene que un script tome el token de una API?
+  opciones:
+    - { texto: "De una variable de entorno o un archivo con permisos 600", correcta: true, explicacion: "Fuera del código y del repositorio." }
+    - { texto: "De una constante en el código", explicacion: "Termina en el repositorio." }
+    - { texto: "De un argumento de línea de comandos", explicacion: "Cualquiera lo ve con ps." }
+    - { texto: "Del nombre del archivo", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Una API interna usa un certificado de la CA de la empresa y requests da SSLError. ¿Qué hacés?
+  opciones:
+    - { texto: "Indicar la CA con verify=\"/etc/pki/tls/certs/ca-interna.pem\"", correcta: true, explicacion: "Así se sigue verificando el servidor." }
+    - { texto: "verify=False", explicacion: "Apaga la verificación: cualquiera puede hacerse pasar por el servidor." }
+    - { texto: "Pasar a http://", explicacion: "El token viajaría sin cifrar." }
+    - { texto: "Atrapar el error y seguir", explicacion: "No resuelve nada." }
+- id: p04
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué respuestas tiene sentido reintentar, esperando antes?
+  opciones:
+    - { texto: "503 Service Unavailable", correcta: true, explicacion: "Suele ser pasajero." }
+    - { texto: "429 Too Many Requests", correcta: true, explicacion: "Esperando lo que diga Retry-After." }
+    - { texto: "Un Timeout", correcta: true, explicacion: "Puede ser pasajero." }
+    - { texto: "401 Unauthorized", explicacion: "El token está mal: va a seguir mal." }
+    - { texto: "404 Not Found", explicacion: "No existe: no va a aparecer." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://inventario.lab/api/v1/servidores?pagina=1
+  opciones:
+    - { texto: "La API rechazó el pedido por falta de un token válido", correcta: true, explicacion: "Revisá el encabezado Authorization y la variable de entorno." }
+    - { texto: "El servidor está caído", explicacion: "Contestó: si estuviera caído sería ConnectionError." }
+    - { texto: "La URL no existe", explicacion: "Eso sería 404." }
+    - { texto: "Falta timeout", explicacion: "No tiene que ver." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un script lista las VM de una API y en un clúster grande "faltan" muchas. ¿Una causa probable?
+  opciones:
+    - { texto: "Lee solo la primera página de resultados", correcta: true, explicacion: "Hay que pedir mientras haya página siguiente." }
+    - { texto: "El timeout es muy largo", explicacion: "No cambia la cantidad." }
+    - { texto: "requests tiene un límite de resultados", explicacion: "El límite lo pone la API, por página." }
+    - { texto: "Falta raise_for_status", explicacion: "No explicaría resultados faltantes." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá la línea que manda el diccionario alerta como JSON por POST a la URL ALERTAS, con 5 segundos de timeout.
+  prompt: ">>> r ="
+  aceptadas:
+    - "requests.post(ALERTAS, json=alerta, timeout=5)"
+    - "requests.post(ALERTAS, timeout=5, json=alerta)"
+  explicacion: json= convierte el diccionario y pone el encabezado Content-Type correcto.
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué hay que esperar cada vez más entre reintentos (1, 2, 4, 8 segundos)?
+  opciones:
+    - { texto: "Para no ahogar a un servidor que ya está con problemas y darle tiempo a recuperarse", correcta: true, explicacion: "Es el reintento exponencial." }
+    - { texto: "Porque requests lo exige", explicacion: "No." }
+    - { texto: "Para que el script tarde más", explicacion: "No es el objetivo." }
+    - { texto: "Da lo mismo reintentar al instante", explicacion: "Muchos clientes reintentando al instante empeoran la caída." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué devuelve ipaddress.ip_address("10.0.20.130") in ipaddress.ip_network("10.0.20.128/26")?
+  opciones:
+    - { texto: "True", correcta: true, explicacion: "La red va de .128 a .191." }
+    - { texto: "False", explicacion: "Está dentro." }
+    - { texto: "Un error", explicacion: "Es válido." }
+    - { texto: "\"10.0.20.128\"", explicacion: "Devuelve True o False." }
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas tienen un problema?
+  lenguaje: python
+  archivo: |
+    import requests
+    TOKEN = "pve-9f2c41aa-secreto"
+    r = requests.get("https://pve01.lab:8006/api2/json/nodes",
+                     headers={"Authorization": f"PVEAPIToken={TOKEN}"},
+                     verify=False, timeout=10)
+    r.raise_for_status()
+    print(r.json()["data"])
+  lineas_con_error: [2, 5]
+  explicacion: El token está escrito en el código (línea 2) y la verificación del certificado está apagada (línea 5).
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Para correr un comando por SSH desde un script, ¿qué opción evita que se quede esperando una contraseña?
+  opciones:
+    - { texto: "-o BatchMode=yes", correcta: true, explicacion: "Si hace falta una contraseña, falla en lugar de esperar." }
+    - { texto: "-v", explicacion: "Muestra más detalle." }
+    - { texto: "-t", explicacion: "Pide una terminal." }
+    - { texto: "-N", explicacion: "No ejecuta comandos." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: Tenés que revisar 60 servidores con un timeout de 3 segundos y varios suelen no contestar. ¿Qué conviene?
+  opciones:
+    - { texto: "Revisarlos en paralelo con ThreadPoolExecutor (por ejemplo, 10 a la vez)", correcta: true, explicacion: "El programa casi solo espera la red." }
+    - { texto: "Sacar el timeout", explicacion: "Uno colgado frenaría todo." }
+    - { texto: "Lanzar 60 scripts a mano", explicacion: "No." }
+    - { texto: "Bajar el timeout a 0,1 segundos", explicacion: "Daría falsos errores." }

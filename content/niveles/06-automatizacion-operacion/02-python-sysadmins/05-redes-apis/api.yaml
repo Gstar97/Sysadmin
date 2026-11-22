@@ -1,0 +1,49 @@
+tipo: diagrama
+titulo: Una llamada a una API
+puntos:
+  - id: pedido
+    titulo: El pedido
+    area: { x: 2.3, y: 11.4, ancho: 44.2, alto: 40 }
+    texto: >-
+      El método (get, post, put, delete) y la URL. params arma la parte de después del ? sin
+      preocuparte por los caracteres especiales; headers lleva la autenticación (casi siempre un
+      token, que se lee de una variable de entorno), y json= manda un cuerpo en JSON en un POST.
+      timeout no es opcional en un script: sin él, si el servidor no contesta, el script espera
+      para siempre.
+  - id: respuesta
+    titulo: La respuesta
+    area: { x: 53.5, y: 11.4, ancho: 44.2, alto: 40 }
+    texto: >-
+      status_code es el código HTTP (lección 4.1.1); r.json() convierte el cuerpo en diccionarios
+      y listas; r.text es el cuerpo como texto. raise_for_status() convierte un 4xx o un 5xx en
+      un error HTTPError, para no seguir trabajando con una respuesta de error como si fuera
+      buena. Muchas APIs devuelven los resultados de a páginas, con un campo que dice cuál es la
+      siguiente.
+  - id: conexion
+    titulo: No hay conexión
+    area: { x: 2.3, y: 57.1, ancho: 23.3, alto: 38.3 }
+    texto: >-
+      requests.ConnectionError: el nombre no resuelve, nadie escucha en el puerto, un firewall
+      corta, o el certificado no es válido (SSLError, que es un caso particular). Para un
+      certificado de una CA interna, verify="/etc/pki/ca-interna.pem"; nunca verify=False.
+  - id: timeout
+    titulo: No contesta a tiempo
+    area: { x: 27, y: 57.1, ancho: 22.8, alto: 38.3 }
+    texto: >-
+      requests.Timeout: el servidor aceptó la conexión pero no contestó en el tiempo que diste. Es
+      el caso típico para reintentar, esperando cada vez un poco más (1, 2, 4 segundos), para no
+      empeorar a un servidor que ya está sobrecargado.
+  - id: http
+    titulo: Contesta con un error
+    area: { x: 51.2, y: 57.1, ancho: 22.8, alto: 38.3 }
+    texto: >-
+      Los 4xx dicen que el pedido está mal y reintentar no sirve (salvo 429, que pide esperar lo
+      que diga el encabezado Retry-After). Los 5xx son una falla del otro lado, y un reintento
+      puede andar.
+  - id: otra
+    titulo: Contesta otra cosa
+    area: { x: 75.3, y: 57.1, ancho: 22.3, alto: 38.3 }
+    texto: >-
+      r.json() falla con JSONDecodeError si el cuerpo no es JSON, por ejemplo una página de error
+      de un proxy. Y aunque sea JSON, puede no tener la forma que esperás: con .get y valores por
+      defecto el programa no se cae por un campo que falta.

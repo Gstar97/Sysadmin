@@ -1,0 +1,153 @@
+tipo: python
+titulo: Del inventario en planilla a un JSON y un resumen del log
+descripcion: >-
+  El área de compras mantiene el inventario de servidores en una planilla que exporta como CSV.
+  Vas a convertirlo en un JSON agrupado por rol (el formato que espera la herramienta de
+  monitoreo) y, de paso, a sacar un resumen de los códigos de respuesta del log de nginx con una
+  expresión regular.
+archivos:
+  /datos/inventario.csv: |
+    nombre,ip,rol,ram_gb,ubicacion
+    web01,10.0.10.11,web,8,Rack A
+    web02,10.0.10.12,web,8,Rack A
+    db01,10.0.20.21,base,32,"Rack B, abajo"
+    db02,10.0.20.22,base,32,"Rack B, arriba"
+    bkp01,10.0.30.31,backup,16,Sala 2
+  /var/log/nginx/access.log: |
+    10.0.1.50 - - [22/Nov/2026:10:01:02 -0300] "GET / HTTP/1.1" 200 5120 "-" "Mozilla/5.0"
+    10.0.1.51 - - [22/Nov/2026:10:01:03 -0300] "GET /api/pedidos HTTP/1.1" 500 87 "-" "curl/8.5"
+    10.0.1.50 - - [22/Nov/2026:10:01:05 -0300] "GET /img/logo.png HTTP/1.1" 200 20480 "-" "Mozilla/5.0"
+    10.0.1.52 - - [22/Nov/2026:10:01:09 -0300] "POST /api/login HTTP/1.1" 401 64 "-" "Mozilla/5.0"
+    10.0.1.51 - - [22/Nov/2026:10:01:11 -0300] "GET /api/pedidos HTTP/1.1" 500 87 "-" "curl/8.5"
+    10.0.1.53 - - [22/Nov/2026:10:01:12 -0300] "GET /no-existe HTTP/1.1" 404 153 "-" "Mozilla/5.0"
+    10.0.1.50 - - [22/Nov/2026:10:01:15 -0300] "GET / HTTP/1.1" 200 5120 "-" "Mozilla/5.0"
+codigo_inicial: |
+  import csv
+
+  # Leé /datos/inventario.csv en una lista de diccionarios llamada servidores
+pasos:
+  - consigna: >-
+      Leé el CSV con `csv.DictReader` en una lista `servidores`, convirtiendo `ram_gb` a entero, y
+      mostrá `5 servidores, 96 GB de RAM en total`. Fijate en la ubicación de db01: tiene una coma
+      adentro.
+    verificar:
+      - prueba: assert len(servidores) == 5 and servidores[2]["ubicacion"] == "Rack B, abajo"
+        mensaje: servidores tiene las 5 filas y la ubicación con coma quedó entera
+      - prueba: assert all(isinstance(s["ram_gb"], int) for s in servidores)
+        mensaje: ram_gb es un número entero en todas las filas
+      - salida_contiene: 5 servidores, 96 GB de RAM en total
+      - sin_error: true
+    pistas:
+      - "`with open(\"/datos/inventario.csv\", newline=\"\") as f:` y adentro `for fila in csv.DictReader(f):`."
+      - "Antes de agregar la fila a la lista: `fila[\"ram_gb\"] = int(fila[\"ram_gb\"])`. Para el total, `sum(s[\"ram_gb\"] for s in servidores)`."
+    solucion: |
+      import csv
+
+      servidores = []
+      with open("/datos/inventario.csv", newline="") as f:
+          for fila in csv.DictReader(f):
+              fila["ram_gb"] = int(fila["ram_gb"])
+              servidores.append(fila)
+
+      total = sum(s["ram_gb"] for s in servidores)
+      print(f"{len(servidores)} servidores, {total} GB de RAM en total")
+    explicacion: >-
+      Partir cada línea con split(",") habría cortado "Rack B, abajo" en dos. El módulo csv entiende
+      las comillas, y newline="" es lo que recomienda la documentación al abrir un CSV.
+  - consigna: >-
+      Agrupá los servidores por rol en un diccionario `por_rol` (cada rol con la lista de sus
+      servidores, con nombre, ip y ram_gb) y guardalo en /datos/inventario.json con sangría de 2
+      espacios y `ensure_ascii=False`.
+    verificar:
+      - archivo: /datos/inventario.json
+        contenido_incluye: '"base": ['
+      - prueba: |
+          import json
+          datos = json.load(open("/datos/inventario.json"))
+          assert sorted(datos) == ["backup", "base", "web"]
+          assert datos["base"][1] == {"nombre": "db02", "ip": "10.0.20.22", "ram_gb": 32}
+        mensaje: El JSON tiene los tres roles y cada servidor con nombre, ip y ram_gb (como número)
+      - sin_error: true
+    pistas:
+      - "`por_rol.setdefault(s[\"rol\"], []).append({...})` crea la lista la primera vez y agrega."
+      - "`json.dump(por_rol, f, indent=2, ensure_ascii=False)` con el archivo abierto en modo \"w\"."
+    solucion: |
+      import csv
+      import json
+
+      servidores = []
+      with open("/datos/inventario.csv", newline="") as f:
+          for fila in csv.DictReader(f):
+              fila["ram_gb"] = int(fila["ram_gb"])
+              servidores.append(fila)
+
+      total = sum(s["ram_gb"] for s in servidores)
+      print(f"{len(servidores)} servidores, {total} GB de RAM en total")
+
+      por_rol = {}
+      for s in servidores:
+          por_rol.setdefault(s["rol"], []).append({"nombre": s["nombre"], "ip": s["ip"], "ram_gb": s["ram_gb"]})
+
+      with open("/datos/inventario.json", "w") as f:
+          json.dump(por_rol, f, indent=2, ensure_ascii=False)
+    explicacion: >-
+      ram_gb quedó como número en el JSON (32, no "32") porque lo convertiste al leer. Es la
+      diferencia entre un JSON que la otra herramienta puede usar para sumar y uno que no.
+  - consigna: >-
+      Ahora el log de nginx. Con una expresión regular sacá de cada línea el método, la ruta y el
+      código de respuesta, contá cuántas veces aparece cada código y mostrá las rutas que dieron
+      error del servidor (5xx), por ejemplo `500: /api/pedidos (2 veces)`. Dejá el conteo en
+      `codigos` (un diccionario o un Counter).
+    verificar:
+      - prueba: >-
+          assert dict(codigos) == {"200": 3, "500": 2, "401": 1, "404": 1}
+        mensaje: codigos cuenta 3 respuestas 200, 2 de 500, una de 401 y una de 404
+      - salida_contiene: "500: /api/pedidos (2 veces)"
+      - usa: import re
+        mensaje: Usa el módulo re
+      - sin_error: true
+    pistas:
+      - "`patron = re.compile(r'\"(\\w+) (\\S+) [^\"]*\" (\\d{3})')` captura el método, la ruta y el código; `m = patron.search(linea)` y después `m.group(1)`, `m.group(2)` y `m.group(3)`."
+      - "`from collections import Counter`: `codigos[codigo] += 1` y lo mismo con un Counter de (código, ruta) para los errores."
+    solucion: |
+      import csv
+      import json
+      import re
+      from collections import Counter
+
+      servidores = []
+      with open("/datos/inventario.csv", newline="") as f:
+          for fila in csv.DictReader(f):
+              fila["ram_gb"] = int(fila["ram_gb"])
+              servidores.append(fila)
+
+      total = sum(s["ram_gb"] for s in servidores)
+      print(f"{len(servidores)} servidores, {total} GB de RAM en total")
+
+      por_rol = {}
+      for s in servidores:
+          por_rol.setdefault(s["rol"], []).append({"nombre": s["nombre"], "ip": s["ip"], "ram_gb": s["ram_gb"]})
+
+      with open("/datos/inventario.json", "w") as f:
+          json.dump(por_rol, f, indent=2, ensure_ascii=False)
+
+      patron = re.compile(r'"(\w+) (\S+) [^"]*" (\d{3})')
+      codigos = Counter()
+      errores = Counter()
+      with open("/var/log/nginx/access.log") as f:
+          for linea in f:
+              m = patron.search(linea)
+              if not m:
+                  continue
+              metodo, ruta, codigo = m.groups()
+              codigos[codigo] += 1
+              if codigo.startswith("5"):
+                  errores[(codigo, ruta)] += 1
+
+      print(dict(codigos))
+      for (codigo, ruta), veces in errores.most_common():
+          print(f"{codigo}: {ruta} ({veces} veces)")
+    explicacion: >-
+      La r antes de las comillas (raw string) evita que Python interprete las barras invertidas, y
+      re.compile prepara la expresión una sola vez para todas las líneas. Para logs grandes, este
+      mismo programa recorre millones de líneas sin cargar el archivo en memoria.

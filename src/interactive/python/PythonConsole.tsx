@@ -39,9 +39,20 @@ const theme = EditorView.theme({
   '&.cm-focused': { outline: '2px solid var(--accent)', outlineOffset: '-2px' },
 })
 
-const LIBRE = { archivos: {}, api: {}, comandos: {}, argumentos: [], directorio: '/home/estudiante' }
+const LIBRE = { archivos: {}, api: {}, comandos: {}, entorno: {}, argumentos: [], directorio: '/home/estudiante' }
 
 type Chunk = { stream: 'out' | 'err' | 'error' | 'info'; text: string }
+
+/** Agrega salida juntando lo consecutivo del mismo tipo (así no queda un bloque por línea). */
+function agregar(prev: Chunk[], nuevos: Chunk[]): Chunk[] {
+  const out = [...prev]
+  for (const c of nuevos) {
+    const last = out[out.length - 1]
+    if (last && last.stream === c.stream && (c.stream === 'out' || c.stream === 'err')) out[out.length - 1] = { ...last, text: last.text + c.text }
+    else out.push(c)
+  }
+  return out
+}
 
 /**
  * Consola de Python: Python 3 de verdad (Pyodide) corriendo en el navegador, con un editor,
@@ -85,7 +96,7 @@ export function PythonConsole({ exercise, codigo, titulo }: Props) {
     setSalida([])
     setChecks(undefined)
     void loadPython().then(setVersion, () => {})
-    const r = await runPython(exercise ?? LIBRE, code, current?.verificar ?? [], (stream, text) => setSalida((s) => [...s, { stream, text }]))
+    const r = await runPython(exercise ?? LIBRE, code, current?.verificar ?? [], (stream, text) => setSalida((s) => agregar(s, [{ stream, text }])))
     if (r.tipo === 'timeout') {
       setSalida((s) => [...s, { stream: 'error', text: `El programa tardó más de ${r.segundos} segundos y se cortó. ¿Hay un bucle que nunca termina, o una espera (input, sleep) que no hace falta?` }])
       setEstado('sin-cargar')
@@ -97,7 +108,7 @@ export function PythonConsole({ exercise, codigo, titulo }: Props) {
       return
     }
     const { result } = r
-    setSalida((s) => [...s, ...(result.error ? [{ stream: 'error' as const, text: result.error }] : []), ...(result.codigo && !result.error ? [{ stream: 'info' as const, text: `El programa terminó con código de salida ${result.codigo}.` }] : [])])
+    setSalida((s) => agregar(s, [...(result.error ? [{ stream: 'error' as const, text: result.error }] : []), ...(result.codigo && !result.error ? [{ stream: 'info' as const, text: `El programa terminó con código de salida ${result.codigo}.` }] : [])]))
     setEstado('listo')
     if (current) {
       setChecks(r.checks)
@@ -295,8 +306,8 @@ export function PythonConsole({ exercise, codigo, titulo }: Props) {
         {estado === 'error' && salida.length === 0 && <p className="text-bad">No se pudo cargar Python en este navegador. Probá recargar la página.</p>}
         {salida.length === 0 && estado !== 'error' && <p className="opacity-60">{estado === 'corriendo' ? 'Corriendo…' : 'La salida del programa aparece acá.'}</p>}
         {salida.map((c, i) => (
-          <pre key={i} className={cn('whitespace-pre-wrap [overflow-wrap:anywhere]', c.stream === 'err' && 'text-warn', c.stream === 'error' && 'text-bad', c.stream === 'info' && 'opacity-70')}>
-            {c.text}
+          <pre key={i} className={cn('whitespace-pre-wrap [overflow-wrap:anywhere]', i > 0 && 'mt-1', c.stream === 'err' && 'text-warn', c.stream === 'error' && 'text-bad', c.stream === 'info' && 'opacity-70')}>
+            {c.text.replace(/\n$/, '')}
           </pre>
         ))}
       </div>

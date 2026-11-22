@@ -1,0 +1,126 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué formato conviene para la respuesta de una API?
+  opciones:
+    - { texto: "JSON", correcta: true, explicacion: "Es el idioma de las APIs." }
+    - { texto: "CSV", explicacion: "No admite datos anidados." }
+    - { texto: "INI", explicacion: "Es para configuraciones." }
+    - { texto: "Un log de texto", explicacion: "No tiene estructura." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Por qué no conviene leer un CSV con linea.split(",")?
+  opciones:
+    - { texto: "Porque un campo entre comillas puede tener comas adentro y la fila se parte mal", correcta: true, explicacion: "El módulo csv entiende las comillas." }
+    - { texto: "Porque split no existe", explicacion: "Existe." }
+    - { texto: "Porque es más lento", explicacion: "No es el problema." }
+    - { texto: "No hay ningún problema", explicacion: "Lo hay con campos como \"Rack B, abajo\"." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué hay que usar yaml.safe_load y no yaml.load?
+  opciones:
+    - { texto: "Porque un YAML preparado puede construir objetos y ejecutar código con el cargador completo", correcta: true, explicacion: "safe_load solo arma datos simples." }
+    - { texto: "Porque safe_load es más rápido", explicacion: "No es la razón." }
+    - { texto: "Porque yaml.load no lee listas", explicacion: "Las lee." }
+    - { texto: "Da lo mismo", explicacion: "No con archivos que no escribiste vos." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    Traceback (most recent call last):
+      File "/opt/infra/reporte.py", line 18, in <module>
+        json.dump(reporte, f, indent=2)
+      ...
+    TypeError: Object of type datetime is not JSON serializable
+  opciones:
+    - { texto: "El reporte tiene una fecha (datetime) y JSON no tiene fechas: hay que pasarla a texto con isoformat()", correcta: true, explicacion: "Las fechas van como texto ISO." }
+    - { texto: "El archivo no se pudo abrir", explicacion: "Sería un OSError." }
+    - { texto: "Falta ensure_ascii=False", explicacion: "Eso es para los acentos." }
+    - { texto: "indent=2 no es válido", explicacion: "Es válido." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Un script lee la respuesta de una API con json.loads(texto) y falla. ¿Qué es lo más probable?
+  salida: |
+    json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+  opciones:
+    - { texto: "La respuesta no era JSON (por ejemplo, una página de error en HTML o un texto vacío)", correcta: true, explicacion: "Falló en el primer carácter: conviene mirar el código de estado y el texto antes de decodificar." }
+    - { texto: "El JSON tiene acentos", explicacion: "JSON admite acentos." }
+    - { texto: "Falta import json", explicacion: "Sería NameError." }
+    - { texto: "El JSON es demasiado grande", explicacion: "No da este error." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá la línea que guarda el diccionario reporte en el archivo abierto f, con sangría de 2 espacios.
+  prompt: ">>>"
+  aceptadas:
+    - "json.dump(reporte, f, indent=2)"
+    - "json.dump(reporte, f, indent=2, ensure_ascii=False)"
+    - "json.dump(reporte, f, ensure_ascii=False, indent=2)"
+  explicacion: dump escribe en un archivo y dumps devuelve un texto.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: "En un INI dice alertas = yes. ¿Cómo lo leés como True o False?"
+  opciones:
+    - { texto: "cfg.getboolean(\"general\", \"alertas\")", correcta: true, explicacion: "Entiende yes, on, true y 1." }
+    - { texto: "cfg[\"general\"][\"alertas\"] == True", explicacion: "El valor es el texto \"yes\", nunca igual a True." }
+    - { texto: "bool(cfg[\"general\"][\"alertas\"])", explicacion: "bool(\"no\") también da True: cualquier texto no vacío es verdadero." }
+    - { texto: "int(cfg[\"general\"][\"alertas\"])", explicacion: "\"yes\" no es un número." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles de estos módulos vienen con Python, sin instalar nada?
+  opciones:
+    - { texto: "json", correcta: true, explicacion: "Biblioteca estándar." }
+    - { texto: "csv", correcta: true, explicacion: "Biblioteca estándar." }
+    - { texto: "tomllib (desde Python 3.11)", correcta: true, explicacion: "Solo lectura de TOML." }
+    - { texto: "yaml", explicacion: "Es PyYAML, aparte." }
+    - { texto: "configparser", correcta: true, explicacion: "Biblioteca estándar." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué devuelve re.findall(r"\d+\.\d+\.\d+\.\d+", "de 10.0.1.5 a 10.0.2.9")?
+  opciones:
+    - { texto: "[\"10.0.1.5\", \"10.0.2.9\"]", correcta: true, explicacion: "Todas las coincidencias, en una lista." }
+    - { texto: "\"10.0.1.5\"", explicacion: "Esa sería la primera, con search." }
+    - { texto: "True", explicacion: "findall devuelve las coincidencias." }
+    - { texto: "2", explicacion: "Devuelve las coincidencias, no la cantidad." }
+- id: p10
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas tienen un problema?
+  lenguaje: python
+  archivo: |
+    import csv, json, yaml
+    with open("inventario.yml") as f:
+        inv = yaml.load(f, Loader=yaml.FullLoader)
+    with open("compras.csv", newline="") as f:
+        filas = list(csv.DictReader(f))
+    total = sum(fila["ram_gb"] for fila in filas)
+    print(json.dumps({"total": total}))
+  lineas_con_error: [3, 6]
+  explicacion: La línea 3 usa el cargador completo en lugar de yaml.safe_load, y la 6 suma valores que llegan como texto del CSV (hace falta int()).
+- id: p11
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un CSV exportado de una planilla en castellano trae todo en una sola columna. ¿Qué pasa?
+  opciones:
+    - { texto: "Usa punto y coma como separador: csv.DictReader(f, delimiter=\";\")", correcta: true, explicacion: "Las planillas en castellano usan ; porque la coma es el separador decimal." }
+    - { texto: "El archivo está roto", explicacion: "Probablemente solo cambia el separador." }
+    - { texto: "Hay que abrirlo en modo binario", explicacion: "No." }
+    - { texto: "Falta newline=\"\"", explicacion: "No cambiaría las columnas." }
+- id: p12
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿En qué se convierte el null de un JSON al leerlo con Python?
+  opciones:
+    - { texto: "None", correcta: true, explicacion: "Y true y false, en True y False." }
+    - { texto: "0", explicacion: "No." }
+    - { texto: "\"null\"", explicacion: "No, se convierte." }
+    - { texto: "Da error", explicacion: "Es válido." }

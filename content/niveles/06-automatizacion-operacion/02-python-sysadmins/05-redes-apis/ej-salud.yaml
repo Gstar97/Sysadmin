@@ -1,0 +1,201 @@
+tipo: python
+titulo: Salud de los servidores a través de APIs
+descripcion: >-
+  El inventario de la empresa tiene una API que devuelve los servidores de a páginas, y exige un
+  token que está en la variable de entorno INVENTARIO_TOKEN. Cada servidor tiene una ruta /salud
+  que contesta si está bien. Vas a juntar la lista completa, revisar cada servidor sin que el
+  script se caiga cuando alguno no responde, y crear una alerta en el sistema de alertas por cada
+  problema.
+entorno:
+  INVENTARIO_TOKEN: inv-7c2f9a41
+api:
+  https://inventario.lab/api/v1/servidores?pagina=1:
+    token: inv-7c2f9a41
+    json:
+      servidores:
+        - { nombre: web01, url: "https://web01.lab" }
+        - { nombre: web02, url: "https://web02.lab" }
+        - { nombre: db01, url: "https://db01.lab:8443" }
+      siguiente: 2
+  https://inventario.lab/api/v1/servidores?pagina=2:
+    token: inv-7c2f9a41
+    json:
+      servidores:
+        - { nombre: bkp01, url: "https://bkp01.lab" }
+        - { nombre: app01, url: "https://app01.lab" }
+      siguiente: null
+  https://web01.lab/salud: { json: { estado: ok, version: "2.4.1" } }
+  https://web02.lab/salud: { estado: 503, texto: "Service Unavailable" }
+  https://db01.lab:8443/salud: { json: { estado: ok } }
+  https://app01.lab/salud: { json: { estado: ok }, demora: 12 }
+  POST https://alertas.lab/api/v1/alertas: { estado: 201, json: { id: 4821 } }
+codigo_inicial: |
+  import os
+
+  import requests
+
+  API = "https://inventario.lab/api/v1"
+  TOKEN = os.environ["INVENTARIO_TOKEN"]
+pasos:
+  - consigna: >-
+      Pedí `API + "/servidores"` con `params={"pagina": n}`, el token en el encabezado
+      `Authorization: Bearer <token>` y `timeout=5`, y seguí pidiendo páginas mientras
+      `siguiente` no sea None. Juntá todo en una lista `servidores` y mostrá `5 servidores`.
+    verificar:
+      - prueba: assert [s["nombre"] for s in servidores] == ["web01", "web02", "db01", "bkp01", "app01"]
+        mensaje: servidores tiene los cinco, de las dos páginas
+      - salida_contiene: 5 servidores
+      - usa: timeout=
+        mensaje: Todos los pedidos tienen timeout
+      - sin_error: true
+    pistas:
+      - "`cabeceras = {\"Authorization\": f\"Bearer {TOKEN}\"}` y `r = requests.get(API + \"/servidores\", params={\"pagina\": pagina}, headers=cabeceras, timeout=5)`."
+      - "Un `while pagina is not None:` que al final de cada vuelta haga `pagina = datos[\"siguiente\"]`. Antes de `r.json()`, `r.raise_for_status()`."
+    solucion: |
+      import os
+
+      import requests
+
+      API = "https://inventario.lab/api/v1"
+      TOKEN = os.environ["INVENTARIO_TOKEN"]
+      cabeceras = {"Authorization": f"Bearer {TOKEN}"}
+
+      servidores = []
+      pagina = 1
+      while pagina is not None:
+          r = requests.get(API + "/servidores", params={"pagina": pagina}, headers=cabeceras, timeout=5)
+          r.raise_for_status()
+          datos = r.json()
+          servidores.extend(datos["servidores"])
+          pagina = datos["siguiente"]
+
+      print(f"{len(servidores)} servidores")
+    explicacion: >-
+      Sin el encabezado, la API contesta 401 y raise_for_status lo convierte en un error claro, en
+      vez de un KeyError más adelante. El token sale del entorno: el código se puede compartir sin
+      compartir el secreto.
+  - consigna: >-
+      Ahora escribí una función `revisar(url)` que pida `url + "/salud"` con `timeout=3` y
+      devuelva `"ok"` si contesta bien con estado ok, `"error 503"` (con el código que sea) si
+      contesta con un error HTTP, `"sin conexión"` si no se puede conectar y `"no responde"` si
+      se pasa del tiempo. Armá un diccionario `estados` con el resultado de cada servidor y
+      mostralo como `web02: error 503`.
+    verificar:
+      - prueba: 'assert estados == {"web01": "ok", "web02": "error 503", "db01": "ok", "bkp01": "sin conexión", "app01": "no responde"}'
+        mensaje: estados tiene el resultado correcto de los cinco
+      - prueba: assert revisar("https://web01.lab") == "ok"
+        mensaje: revisar devuelve el resultado en vez de imprimirlo
+      - salida_contiene: "bkp01: sin conexión"
+      - sin_error: true
+    pistas:
+      - "Dentro de `try:` el get y `r.raise_for_status()`; después `except requests.HTTPError as e:` (con `e.response.status_code`), `except requests.Timeout:` y `except requests.ConnectionError:`."
+      - "Cuidado con el orden: un timeout al conectar también es un ConnectionError, así que el `except requests.Timeout` va antes."
+    solucion: |
+      import os
+
+      import requests
+
+      API = "https://inventario.lab/api/v1"
+      TOKEN = os.environ["INVENTARIO_TOKEN"]
+      cabeceras = {"Authorization": f"Bearer {TOKEN}"}
+
+
+      def revisar(url):
+          try:
+              r = requests.get(url + "/salud", timeout=3)
+              r.raise_for_status()
+          except requests.HTTPError as e:
+              return f"error {e.response.status_code}"
+          except requests.Timeout:
+              return "no responde"
+          except requests.ConnectionError:
+              return "sin conexión"
+          return "ok" if r.json().get("estado") == "ok" else "con problemas"
+
+
+      servidores = []
+      pagina = 1
+      while pagina is not None:
+          r = requests.get(API + "/servidores", params={"pagina": pagina}, headers=cabeceras, timeout=5)
+          r.raise_for_status()
+          datos = r.json()
+          servidores.extend(datos["servidores"])
+          pagina = datos["siguiente"]
+
+      print(f"{len(servidores)} servidores")
+
+      estados = {}
+      for s in servidores:
+          estados[s["nombre"]] = revisar(s["url"])
+          print(f"{s['nombre']}: {estados[s['nombre']]}")
+    explicacion: >-
+      Cada servidor que falla queda registrado con su motivo y el programa sigue con el
+      siguiente. Distinguir "no responde" de "sin conexión" ayuda a quien lea el reporte: el
+      primero suele ser un servidor sobrecargado, y el segundo, uno apagado o un firewall.
+  - consigna: >-
+      Por último, por cada servidor que no está ok, creá una alerta con un POST a
+      `https://alertas.lab/api/v1/alertas` mandando `{"servidor": nombre, "estado": estado}` como
+      JSON (con `json=`) y timeout. Si la API contesta 201, mostrá `alerta 4821 creada para
+      web02`, con el id que devuelve.
+    verificar:
+      - salida_contiene: alerta 4821 creada para web02
+      - salida_contiene: alerta 4821 creada para app01
+      - salida_no_contiene: creada para web01
+      - usa: json=
+        mensaje: Manda el cuerpo con json=
+      - sin_error: true
+    pistas:
+      - "`r = requests.post(\"https://alertas.lab/api/v1/alertas\", json={\"servidor\": nombre, \"estado\": estado}, timeout=5)`."
+      - "`if r.status_code == 201:` y el id en `r.json()[\"id\"]`."
+    solucion: |
+      import os
+
+      import requests
+
+      API = "https://inventario.lab/api/v1"
+      ALERTAS = "https://alertas.lab/api/v1/alertas"
+      TOKEN = os.environ["INVENTARIO_TOKEN"]
+      cabeceras = {"Authorization": f"Bearer {TOKEN}"}
+
+
+      def revisar(url):
+          try:
+              r = requests.get(url + "/salud", timeout=3)
+              r.raise_for_status()
+          except requests.HTTPError as e:
+              return f"error {e.response.status_code}"
+          except requests.Timeout:
+              return "no responde"
+          except requests.ConnectionError:
+              return "sin conexión"
+          return "ok" if r.json().get("estado") == "ok" else "con problemas"
+
+
+      servidores = []
+      pagina = 1
+      while pagina is not None:
+          r = requests.get(API + "/servidores", params={"pagina": pagina}, headers=cabeceras, timeout=5)
+          r.raise_for_status()
+          datos = r.json()
+          servidores.extend(datos["servidores"])
+          pagina = datos["siguiente"]
+
+      print(f"{len(servidores)} servidores")
+
+      estados = {}
+      for s in servidores:
+          estados[s["nombre"]] = revisar(s["url"])
+          print(f"{s['nombre']}: {estados[s['nombre']]}")
+
+      for nombre, estado in estados.items():
+          if estado == "ok":
+              continue
+          r = requests.post(ALERTAS, json={"servidor": nombre, "estado": estado}, timeout=5)
+          if r.status_code == 201:
+              print(f"alerta {r.json()['id']} creada para {nombre}")
+          else:
+              print(f"no se pudo crear la alerta de {nombre}: {r.status_code}")
+    explicacion: >-
+      Con json= requests convierte el diccionario a JSON y pone el encabezado Content-Type
+      correcto. En la vida real, revisar cinco servidores uno por uno está bien; con cincuenta,
+      conviene hacerlo en paralelo (lo vas a ver abajo, con ThreadPoolExecutor).
