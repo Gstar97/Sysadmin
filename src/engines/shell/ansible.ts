@@ -1413,7 +1413,7 @@ async function runPlaybook(run: Run, path: string): Promise<number> {
       for (let i = 0; i < items.length; i++) {
         const item = items[i]
         const extra: Record<string, unknown> = { [loopVar]: item, ansible_loop_var: loopVar, ...(lc.index_var ? { [String(lc.index_var)]: i } : {}), ansible_loop: { index: i + 1, index0: i, first: i === 0, last: i === items.length - 1, length: items.length } }
-        const label = lc.label !== undefined ? pyLabel(safeTemplate(lc.label, ex.scope(h, play, t, extra, hosts))) : pyLabel(item)
+        const label = isNoLog(t, h) ? 'None' : lc.label !== undefined ? pyLabel(safeTemplate(lc.label, ex.scope(h, play, t, extra, hosts))) : pyLabel(item)
         const w = evalWhen(t, h, extra)
         if (w.error) {
           fail(h, { failed: true, msg: w.error })
@@ -1426,8 +1426,9 @@ async function runPlaybook(run: Run, path: string): Promise<number> {
         }
         allSkipped = false
         const r = await execOnce(t, h, extra)
-        const res = { ...r.result, [loopVar]: item, ansible_loop_var: loopVar }
-        results.push(res)
+        const res0 = { ...r.result, [loopVar]: item, ansible_loop_var: loopVar }
+        results.push(res0)
+        const res: Result = isNoLog(t, h) ? { censored: CENSORED, changed: !!res0.changed } : res0
         if (r.status === 'unreachable') return finish(t, h, r)
         const diff = o.diff && res.changed && res.diff ? (Array.isArray(res.diff) ? res.diff : [res.diff]).map(renderDiff).join('') : ''
         if (diff) run.out(diff)
@@ -1485,10 +1486,14 @@ async function runPlaybook(run: Run, path: string): Promise<number> {
       }
     }
 
-    const finish = (t: Task, h: string, r: Outcome): Outcome => {
+    const CENSORED = "the output has been hidden due to the fact that 'no_log: true' was specified for this result"
+    const isNoLog = (t: Task, h: string) => truthy(templateMaybe(t.raw.no_log ?? t.inherited.no_log ?? play.raw.no_log, h, t))
+    const finish = (t: Task, h: string, r0: Outcome): Outcome => {
       const st = ex.state(h)
+      const noLog = isNoLog(t, h)
+      if (t.raw.register) st.runVars[String(t.raw.register)] = shownForRegister(r0.result)
+      const r: Outcome = noLog ? { ...r0, result: { censored: CENSORED, changed: !!r0.result.changed, ...(r0.result.failed ? { failed: true } : {}), ...(r0.result.skipped ? { skipped: true } : {}) } } : r0
       const res = r.result
-      if (t.raw.register) st.runVars[String(t.raw.register)] = shownForRegister(res)
       if (r.status === 'unreachable') {
         st.unreachable ??= String(res.msg)
         st.stats.unreachable++

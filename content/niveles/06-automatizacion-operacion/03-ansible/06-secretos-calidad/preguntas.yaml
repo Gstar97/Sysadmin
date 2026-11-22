@@ -1,0 +1,113 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Para qué sirve ansible-vault?
+  opciones:
+    - { texto: "Para cifrar archivos o valores con secretos, que Ansible descifra al usarlos", correcta: true, explicacion: "Así se pueden versionar sin que se lean." }
+    - { texto: "Para guardar copias de seguridad de los servidores", explicacion: "No." }
+    - { texto: "Para instalar colecciones", explicacion: "Eso es ansible-galaxy." }
+    - { texto: "Para revisar el estilo de los playbooks", explicacion: "Eso es ansible-lint." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Dónde tiene que estar la contraseña de Vault?
+  opciones:
+    - { texto: "Afuera del repositorio, en un archivo con permisos 600 o en un gestor de contraseñas", correcta: true, explicacion: "Junto a los archivos cifrados, el cifrado no sirve." }
+    - { texto: "En ansible.cfg, escrita", explicacion: "ansible.cfg va en el repositorio." }
+    - { texto: "En un group_vars sin cifrar", explicacion: "Cualquiera podría descifrar todo." }
+    - { texto: "En el README", explicacion: "No." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasó?
+  salida: |
+    $ ansible-playbook db.yml
+    ERROR! Attempting to decrypt but no vault secrets found
+  opciones:
+    - { texto: "Hay archivos cifrados y Ansible no recibió la contraseña de Vault", correcta: true, explicacion: "--ask-vault-pass, --vault-password-file o vault_password_file en ansible.cfg." }
+    - { texto: "La contraseña es incorrecta", explicacion: "Sería Decryption failed." }
+    - { texto: "El archivo está dañado", explicacion: "No." }
+    - { texto: "Falta instalar ansible-vault", explicacion: "Viene con ansible-core." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace no_log true en una tarea?
+  opciones:
+    - { texto: "Oculta su resultado (y sus diferencias) en la salida, para que no se vean secretos", correcta: true, explicacion: "Muestra censored." }
+    - { texto: "No guarda nada en el servidor", explicacion: "La tarea hace su trabajo igual." }
+    - { texto: "Desactiva los logs del sistema", explicacion: "No." }
+    - { texto: "Cifra la variable", explicacion: "Eso es Vault." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué se separan los secretos en vars.yml (legible, con db_password apuntando a vault_db_password) y vault.yml (cifrado)?
+  opciones:
+    - { texto: "Para poder buscar dónde se usa cada variable y revisar cambios sin descifrar nada", correcta: true, explicacion: "Es una convención muy usada." }
+    - { texto: "Porque Ansible no puede leer variables cifradas directamente", explicacion: "Sí puede." }
+    - { texto: "Para que el playbook sea más rápido", explicacion: "No." }
+    - { texto: "Porque vault.yml solo puede tener una variable", explicacion: "Puede tener todas." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Completá el comando que cifra el archivo group_vars/db/vault.yml.
+  prompt: "ana@admin01:~/ansible$"
+  aceptadas:
+    - "ansible-vault encrypt group_vars/db/vault.yml"
+    - "ansible-vault encrypt --vault-password-file ~/.vault_pass group_vars/db/vault.yml"
+    - "ansible-vault encrypt group_vars/db/vault.yml --vault-password-file ~/.vault_pass"
+  explicacion: Si no hay vault_password_file configurado, la pide dos veces.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué prueba el paso idempotence de Molecule?
+  opciones:
+    - { texto: "Que aplicar el rol por segunda vez no cambie nada", correcta: true, explicacion: "Falla si alguna tarea da changed." }
+    - { texto: "Que el rol tenga nombre", explicacion: "Eso lo revisa ansible-lint." }
+    - { texto: "Que el servidor arranque", explicacion: "No." }
+    - { texto: "Que el rol esté cifrado", explicacion: "No." }
+- id: p08
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué marcaría ansible-lint?
+  opciones:
+    - { texto: "Una tarea sin name", correcta: true, explicacion: "name[missing]." }
+    - { texto: "copy sin mode", correcta: true, explicacion: "risky-file-permissions." }
+    - { texto: "shell sin changed_when", correcta: true, explicacion: "no-changed-when." }
+    - { texto: "Una tarea con no_log: true", explicacion: "Es una buena práctica." }
+- id: p09
+  tipo: encontrar_error
+  dificultad: 3
+  enunciado: ¿Qué líneas marcaría ansible-lint en este playbook?
+  lenguaje: yaml
+  archivo: |
+    - name: Aplicación
+      hosts: app
+      become: true
+      tasks:
+        - name: Paquetes
+          ansible.builtin.dnf:
+            name: python3
+            state: latest
+        - name: Archivo de entorno
+          ansible.builtin.copy:
+            content: "TOKEN={{ api_token }}\n"
+            dest: /etc/app/app.env
+            mode: '0600'
+          no_log: true
+        - name: Migrar la base
+          ansible.builtin.shell: /opt/app/migrar.sh
+  lineas_con_error: [8, 15]
+  explicacion: state latest instala algo distinto cada vez que sale una versión nueva (package-latest), y el shell de la línea 15 no dice cuándo cambia algo (no-changed-when; además, sin tuberías alcanzaba con command).
+- id: p10
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená el camino de un cambio en un proyecto de Ansible serio.
+  pasos:
+    - "pre-commit en tu equipo (ansible-lint, gitleaks)"
+    - "pull request con la salida de --check --diff"
+    - "integración continua (ansible-lint, Molecule)"
+    - "aplicar en pruebas"
+    - "aplicar el mismo commit en producción"
+  explicacion: Cada paso frena problemas antes de que lleguen a los servidores de verdad.

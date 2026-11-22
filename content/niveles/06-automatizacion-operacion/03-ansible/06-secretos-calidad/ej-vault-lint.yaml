@@ -1,0 +1,136 @@
+tipo: terminal
+shell: bash
+titulo: La contraseña de la base, cifrada, y un playbook que pasa ansible-lint
+descripcion: >-
+  La aplicación de la tienda necesita la contraseña de la base en /etc/tienda/db.env de db01. La
+  contraseña no puede quedar legible en el repositorio ni en la salida de Ansible. En ~/ansible ya
+  están el ansible.cfg, el inventario (grupo db con db01), group_vars/db/vars.yml (que usa la
+  variable vault_db_password) y un playbook db.yml escrito con apuro. ansible-lint está instalado.
+estado_inicial:
+  distro: rocky
+  hostname: admin01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [ansible-core, ansible-lint] }
+  directorio: /home/ana/ansible
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.5/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /home/ana/ansible/ansible.cfg: { dueno: ana, contenido: "[defaults]\ninventory = inventario.ini\ninterpreter_python = auto_silent\n" }
+    /home/ana/ansible/inventario.ini: { dueno: ana, contenido: "[db]\ndb01\n" }
+    /home/ana/ansible/group_vars/db/vars.yml: { dueno: ana, contenido: "db_usuario: tienda\ndb_password: \"{{ vault_db_password }}\"\n" }
+    /home/ana/ansible/db.yml:
+      dueno: ana
+      contenido: |
+        - hosts: db
+          become: yes
+          tasks:
+            - file:
+                path: /etc/tienda
+                state: directory
+            - copy:
+                content: "DB_USER={{ db_usuario }}\nDB_PASSWORD={{ db_password }}\n"
+                dest: /etc/tienda/db.env
+            - shell: systemctl restart chronyd
+  servidores:
+    - { hostname: db01, ip: 192.168.10.31, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+pasos:
+  - consigna: >-
+      Guardá la contraseña de Vault "otra-clave-larga-2026" en ~/.vault_pass (afuera del proyecto,
+      con permisos 600) y configurá ansible.cfg para que la use con vault_password_file. Después
+      escribí group_vars/db/vault.yml con vault_db_password "Tienda#DB-2026" y cifralo.
+    verificar:
+      - { archivo: /home/ana/.vault_pass, modo: "600" }
+      - { archivo: /home/ana/ansible/ansible.cfg, contenido_incluye: "vault_password_file" }
+      - { archivo: /home/ana/ansible/group_vars/db/vault.yml, contenido_incluye: "$ANSIBLE_VAULT;1.1;AES256" }
+      - { archivo: /home/ana/ansible/group_vars/db/vault.yml, contenido_no_incluye: "Tienda#DB-2026" }
+    pistas:
+      - "echo 'otra-clave-larga-2026' > ~/.vault_pass y chmod 600 ~/.vault_pass"
+      - "En ansible.cfg, debajo de [defaults]: vault_password_file = ~/.vault_pass (se puede agregar con echo ... >> ansible.cfg)."
+      - "ansible-vault encrypt group_vars/db/vault.yml"
+    solucion:
+      - echo 'otra-clave-larga-2026' > ~/.vault_pass
+      - chmod 600 ~/.vault_pass
+      - echo 'vault_password_file = ~/.vault_pass' >> ansible.cfg
+      - >-
+        echo 'vault_db_password: "Tienda#DB-2026"' > group_vars/db/vault.yml
+      - ansible-vault encrypt group_vars/db/vault.yml
+      - cat group_vars/db/vault.yml
+    explicacion: >-
+      El archivo cifrado se puede commitear sin problema; la contraseña de Vault, nunca (por eso
+      vive afuera del proyecto). La convención de dos archivos (vars.yml legible con db_password
+      apuntando a vault_db_password, y vault.yml cifrado) permite buscar dónde se usa una variable
+      sin descifrar nada.
+  - consigna: >-
+      Agregale no_log: true a la tarea que escribe db.env (y permisos 0600 para que solo root la
+      lea), y corré el playbook. La contraseña tiene que quedar en el servidor pero no aparecer en
+      la salida, ni siquiera con --diff.
+    verificar:
+      - { en: db01, verificar: { archivo: /etc/tienda/db.env, contenido_incluye: "DB_PASSWORD=Tienda#DB-2026", modo: "600" } }
+      - { salida_no_contiene: "Tienda#DB-2026" }
+      - { salida_contiene: "changed: [db01]" }
+    pistas:
+      - "En la tarea de copy: mode: '0600' adentro del módulo y no_log: true al nivel de la tarea."
+      - "ansible-playbook db.yml --diff"
+    solucion:
+      - |-
+        cat > db.yml <<'EOF'
+        - hosts: db
+          become: yes
+          tasks:
+            - file:
+                path: /etc/tienda
+                state: directory
+            - copy:
+                content: "DB_USER={{ db_usuario }}\nDB_PASSWORD={{ db_password }}\n"
+                dest: /etc/tienda/db.env
+                mode: '0600'
+              no_log: true
+            - shell: systemctl restart chronyd
+        EOF
+      - ansible-playbook db.yml --diff
+    explicacion: >-
+      Con no_log, Ansible muestra "censored" en lugar del resultado y no imprime la diferencia: si
+      no, un --diff o un -v en un log de la integración continua habrían mostrado la contraseña. Va
+      en toda tarea que toque un secreto.
+  - consigna: >-
+      Ahora pasale ansible-lint a db.yml y corregí todo lo que marque: nombre al play y a cada tarea,
+      módulos con FQCN, true en lugar de yes, permisos para la carpeta, y en vez de reiniciar chronyd
+      con shell en cada corrida, usá el módulo service con state started. Repetí hasta que pase.
+    verificar:
+      - { salida_contiene: "Passed: 0 failure(s)" }
+      - { comando_usado: ansible-lint }
+    pistas:
+      - "ansible-lint db.yml muestra cada regla con el archivo y la línea."
+      - "Las tareas quedan: ansible.builtin.file (con mode: '0750'), ansible.builtin.copy (con mode y no_log) y ansible.builtin.service con name: chronyd y state: started."
+    solucion:
+      - ansible-lint db.yml
+      - |-
+        cat > db.yml <<'EOF'
+        - name: Configuración de la base
+          hosts: db
+          become: true
+          tasks:
+            - name: Carpeta de la tienda
+              ansible.builtin.file:
+                path: /etc/tienda
+                state: directory
+                mode: '0750'
+            - name: Credenciales de la base
+              ansible.builtin.copy:
+                content: "DB_USER={{ db_usuario }}\nDB_PASSWORD={{ db_password }}\n"
+                dest: /etc/tienda/db.env
+                mode: '0600'
+              no_log: true
+            - name: Hora sincronizada
+              ansible.builtin.service:
+                name: chronyd
+                state: started
+        EOF
+      - ansible-lint db.yml
+    explicacion: >-
+      ansible-lint encuentra lo que un revisor cansado se saltea: tareas sin nombre, módulos ambiguos,
+      archivos sin permisos explícitos y comandos que cambian algo en cada corrida. En el repositorio,
+      va en el pre-commit y en la integración continua, así ningún cambio que no pase llega a main.

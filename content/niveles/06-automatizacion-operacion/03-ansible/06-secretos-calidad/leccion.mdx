@@ -1,0 +1,133 @@
+---
+id: n6-m3-l6
+titulo: Secretos y calidad
+minutos: 120
+objetivos:
+  - Proteger contraseñas y claves con Ansible Vault sin perder la posibilidad de versionarlas.
+  - Evitar que los secretos aparezcan en la salida con no_log.
+  - Revisar playbooks con ansible-lint y conocer cómo se prueban los roles con Molecule.
+glosario: [ansible-vault, no-log, ansible-lint, molecule]
+verificado: 2026-11
+---
+
+import sc from './secretos-calidad.svg?raw'
+import scDatos from './secretos-calidad.yaml'
+import ejVault from './ej-vault-lint.yaml'
+
+En el caso del módulo 6.1, una contraseña commiteada en un repositorio público obligó a cambiarla de apuro, revisar accesos y reescribir la historia. Un proyecto de Ansible está lleno de secretos: la contraseña de la base, el token de la API, la clave del certificado. Tienen que estar en el repositorio (si no, nadie puede reconstruir el entorno), pero nadie tiene que poder leerlos ahí. Y como cada cambio en ese repositorio termina en todos los servidores, también tiene que pasar por controles automáticos antes de llegar.
+
+<AntesDeEmpezar>
+- Roles, group_vars y el repositorio de Ansible (lecciones 6.3.2 y 6.3.5).
+- Hooks, pre-commit e integración continua (lección 6.1.5).
+</AntesDeEmpezar>
+
+## Ansible Vault
+
+**ansible-vault** cifra archivos completos o valores sueltos con una contraseña, y Ansible los descifra solo al usarlos:
+
+```bash
+ansible-vault create group_vars/db/vault.yml      # crea uno nuevo y abre el editor
+ansible-vault encrypt group_vars/db/vault.yml     # cifra uno que ya existe
+ansible-vault view group_vars/db/vault.yml        # lo muestra sin descifrarlo en el disco
+ansible-vault edit group_vars/db/vault.yml        # lo abre descifrado y lo vuelve a cifrar al guardar
+ansible-vault rekey group_vars/db/vault.yml       # le cambia la contraseña
+ansible-vault encrypt_string 'S3cr3to' --name api_token   # un solo valor, para pegar en un YAML
+```
+
+Para correr un playbook que usa archivos cifrados, Ansible necesita la contraseña de Vault: con `--ask-vault-pass` (la pide), con `--vault-password-file ~/.vault_pass`, o dejándola configurada en ansible.cfg (`vault_password_file = ~/.vault_pass`). Ese archivo vive **afuera** del repositorio, con permisos 600; mejor todavía, puede ser un script que la saca de un gestor de contraseñas. Si no la encuentra: "Attempting to decrypt but no vault secrets found"; si es la equivocada: "Decryption failed".
+
+La convención que conviene seguir es separar cada secreto en dos archivos:
+
+```yaml
+# group_vars/db/vars.yml (legible)
+db_usuario: tienda
+db_password: "{{ vault_db_password }}"
+
+# group_vars/db/vault.yml (cifrado con ansible-vault)
+vault_db_password: "Tienda#DB-2026"
+```
+
+Así, buscando `db_password` en el repositorio se ve dónde se usa y de dónde sale, sin descifrar nada, y en un pull request se nota cuándo alguien cambió un secreto (aunque no se vea cuál es el valor nuevo).
+
+<DiagramaInteractivo datos={scDatos} svg={sc} alt="A la izquierda, dónde vive cada parte de un secreto: en el repositorio, vars.yml legible con db_password apuntando a vault_db_password, y vault.yml cifrado; afuera del repositorio, la contraseña de Vault en un archivo con permisos 600 o un script que la pide a un gestor; en el servidor, el archivo final con permisos 0600; y en la salida de Ansible, no_log reemplaza el resultado por censored. A la derecha, el camino de un cambio: pre-commit con ansible-lint, yamllint y gitleaks; el pull request con la salida de --check --diff; la integración continua con ansible-lint, syntax-check, Molecule y --check contra pruebas; y por último el mismo commit en pruebas y después en producción." />
+
+## no_log
+
+Cifrar el archivo no alcanza: una tarea que usa el secreto lo puede mostrar en la salida (en el resultado con -v, en las diferencias de --diff, en el mensaje de un error), y esa salida suele quedar guardada en los logs de la integración continua o de AWX. **no_log: true** hace que Ansible reemplace el resultado de la tarea por "censored":
+
+```yaml
+- name: Credenciales de la base
+  ansible.builtin.template:
+    src: db.env.j2
+    dest: /etc/tienda/db.env
+    owner: tienda
+    mode: '0600'
+  no_log: true
+```
+
+Va en toda tarea que toque un secreto. La contra es que si la tarea falla, el error tampoco se ve; para depurar, se saca un momento en una copia de prueba, nunca en producción.
+
+## ansible-lint
+
+**ansible-lint** revisa playbooks y roles con decenas de reglas: tareas sin nombre, módulos sin FQCN, comandos que cambian algo en cada corrida, archivos sin permisos explícitos, `yes` y `no` en lugar de `true` y `false`, paquetes con `state: latest`, llaves en `when` y muchas más. Cada regla pertenece a un **perfil** (min, basic, moderate, safety, shared y production), y al final dice cuál fue el último perfil que el código cumplió.
+
+```bash
+pipx install ansible-lint      # o dnf install / apt install ansible-lint
+ansible-lint                   # revisa todo el proyecto
+ansible-lint sitio.yml         # un archivo
+```
+
+Si una regla no tiene sentido en tu proyecto, se desactiva en un archivo `.ansible-lint` en la raíz (con `skip_list`), o en una línea puntual con un comentario `# noqa: nombre-de-la-regla`; siempre con un motivo, porque la mayoría de las reglas están por algo.
+
+Probá encontrar lo que marcaría:
+
+<Pregunta id="p09" />
+
+## Probar los roles: Molecule
+
+ansible-lint revisa cómo está escrito el código; **Molecule** prueba si hace lo que tiene que hacer. Para cada rol arma un escenario que:
+
+1. **create**: levanta un servidor descartable (un contenedor de Podman o Docker, o una VM).
+2. **converge**: le aplica el rol.
+3. **idempotence**: se lo aplica de nuevo y falla si algo da changed.
+4. **verify**: corre verificaciones (un playbook con assert, o pruebas con testinfra): ¿nginx responde?, ¿el puerto está abierto?
+5. **destroy**: lo borra.
+
+`molecule test` hace todo el ciclo; en la integración continua corre con cada pull request. Configurarlo pide algo de tiempo (y contenedores, que vas a ver en el Nivel 7), pero para un rol que usan muchos servidores es lo que separa "anduvo en mi máquina" de "funciona".
+
+Con todo esto, el camino de un cambio queda así: pre-commit con ansible-lint, yamllint y gitleaks en tu equipo; un pull request con la salida de `--check --diff` para que otro revise; la integración continua con ansible-lint, Molecule y una corrida de prueba; y recién ahí, el mismo commit en pruebas y después en producción.
+
+## Manos a la obra
+
+<Terminal ejercicio={ejVault} />
+
+<EnSimple>
+Los secretos van en el repositorio, pero cifrados con ansible-vault: un archivo legible con db_password que apunta a vault_db_password, y otro cifrado con el valor real. La contraseña de Vault queda afuera del repositorio, en un archivo con permisos 600 o en un gestor. Las tareas que usan un secreto llevan no_log: true para que no aparezca en la salida. ansible-lint revisa el código con reglas y perfiles, y Molecule prueba un rol aplicándolo dos veces en un servidor descartable. Todo eso corre antes de que un cambio llegue a producción.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="La contraseña de Vault dentro del repositorio">
+    Cifrar con una clave que está al lado es como no cifrar. Afuera, con permisos 600, en .gitignore por las dudas.
+  </ErrorComun>
+  <ErrorComun titulo="Un secreto sin no_log">
+    Aparece con -v, con --diff o en un error, y queda en los logs de la integración continua.
+  </ErrorComun>
+  <ErrorComun titulo="Secretos en vars.yml sin cifrar &quot;por ahora&quot;">
+    Una vez commiteado, queda en la historia (caso del módulo 6.1). Cifrado desde el primer commit, y gitleaks en el pre-commit.
+  </ErrorComun>
+  <ErrorComun titulo="Desactivar reglas de ansible-lint para que pase">
+    La mayoría marca un problema real. Corregí, y si una no aplica, desactivala con un motivo escrito.
+  </ErrorComun>
+  <ErrorComun titulo="Probar los roles solo en producción">
+    Un servidor descartable (Molecule o una VM de pruebas) es donde se descubren los errores sin costo.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- ansible-vault: create, encrypt, view, edit, rekey, encrypt_string; --ask-vault-pass o vault_password_file.
+- Dos archivos por grupo: vars.yml legible (db_password: vault_db_password) y vault.yml cifrado.
+- La contraseña de Vault, afuera del repositorio (archivo 600 o un gestor de contraseñas).
+- no_log: true en toda tarea que toque un secreto.
+- ansible-lint con reglas y perfiles; .ansible-lint y noqa con motivo.
+- Molecule: create, converge, idempotence, verify, destroy; todo en el pre-commit y la integración continua.
+</Resumen>

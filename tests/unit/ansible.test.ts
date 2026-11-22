@@ -135,6 +135,17 @@ describe('ansible en el simulador', () => {
     expect(verifyBash(sh, bashCheckSchema.parse({ en: 'web01', verificar: { archivo: '/etc/motd', contenido_incluye: 'Bienvenido' } })).ok).toBe(true)
   })
 
+  it('no_log oculta el resultado, las diferencias y los elementos del loop', async () => {
+    const pb = "- name: P\n  hosts: web01\n  become: true\n  gather_facts: false\n  vars:\n    clave: Secreta-123\n  tasks:\n    - name: Credenciales\n      ansible.builtin.copy:\n        content: \"CLAVE={{ clave }}\\n\"\n        dest: /etc/app.env\n        mode: '0600'\n      no_log: true\n      register: r\n    - name: Usuarios\n      ansible.builtin.debug:\n        msg: \"{{ item }}\"\n      loop: [Secreta-123]\n      no_log: true\n"
+    const { sh, run } = await session(lab({ 'p.yml': pb }))
+    const c = await run('ansible-playbook p.yml --diff -v')
+    expect(c.code).toBe(0)
+    expect(c.out).not.toContain('Secreta-123')
+    expect(c.out).toContain('censored')
+    expect(c.out).toContain('changed: [web01]')
+    expect(verifyBash(sh, bashCheckSchema.parse({ en: 'web01', verificar: { archivo: '/etc/app.env', contenido_incluye: 'CLAVE=Secreta-123' } })).ok).toBe(true)
+  })
+
   it('loops, register, when, failed_when, ignore_errors y bloques con rescue', async () => {
     const pb = `- name: Lógica
   hosts: web
