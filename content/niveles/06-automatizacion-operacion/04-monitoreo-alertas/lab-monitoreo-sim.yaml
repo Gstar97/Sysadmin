@@ -1,0 +1,239 @@
+tipo: terminal
+shell: bash
+titulo: El monitoreo completo del laboratorio, de cero a la primera alerta
+descripcion: >-
+  mon01 (192.168.10.30, Rocky Linux 10) va a ser el servidor de monitoreo: tiene instalados
+  Prometheus, Alertmanager, Postfix (entrega el correo local; ana lo lee con mail), jq y
+  zabbix_get, y ya están agregados los repositorios de Grafana y de Zabbix. Hay que monitorear
+  web01 (192.168.10.11, Ubuntu) y db01 (192.168.10.21, Rocky Linux), que tienen node_exporter
+  instalado pero sin arrancar. Entrás a los dos por SSH con clave, con sudo. Ojo: el disco de db01
+  viene creciendo desde hace horas.
+estado_inicial:
+  distro: rocky
+  hostname: mon01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [prometheus, alertmanager, postfix, s-nail, jq, zabbix-get] }
+  servicios: { postfix: { activo: true, habilitado: true } }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.30/24, estado: UP }
+  archivos:
+    /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+    /etc/hosts: { contenido: "127.0.0.1 localhost\n192.168.10.11 web01\n192.168.10.21 db01\n" }
+    /etc/yum.repos.d/grafana.repo: { contenido: "[grafana]\nname=grafana\nbaseurl=https://rpm.grafana.com\nrepo_gpgcheck=1\nenabled=1\ngpgcheck=1\ngpgkey=https://rpm.grafana.com/gpg.key\n" }
+    /etc/yum.repos.d/zabbix.repo: { contenido: "[zabbix]\nname=Zabbix Official Repository - $basearch\nbaseurl=https://repo.zabbix.com/zabbix/8.0/release/rocky/10/$basearch/\nenabled=1\ngpgcheck=1\n" }
+  servidores:
+    - { hostname: web01, ip: 192.168.10.11, distro: ubuntu, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], paquetes: { instalados: [node_exporter] }, archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - hostname: db01
+      ip: 192.168.10.21
+      clave_conocida: si
+      usuarios: [{ nombre: ana, clave_ssh: true }]
+      paquetes: { instalados: [node_exporter] }
+      archivos:
+        /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+        /etc/yum.repos.d/zabbix.repo: { contenido: "[zabbix]\nname=Zabbix Official Repository - $basearch\nbaseurl=https://repo.zabbix.com/zabbix/8.0/release/rocky/10/$basearch/\nenabled=1\ngpgcheck=1\n" }
+  metricas:
+    nodos:
+      - { instancia: "db01:9100", disco_gb: 50, disco_usado: 0.6, disco_crece_gb_hora: 3.5 }
+pasos:
+  - consigna: >-
+      Arrancá y habilitá node_exporter en web01 y en db01. db01 es Rocky: abrí el 9100 en su
+      firewalld de forma permanente. Comprobá desde mon01 que los dos entregan métricas.
+    verificar:
+      - { en: web01, verificar: { servicio: node_exporter, activo: true, habilitado: true } }
+      - { en: db01, verificar: { servicio: node_exporter, activo: true, habilitado: true } }
+      - { salida_contiene: node_filesystem_avail_bytes }
+    pistas:
+      - "ssh web01 \"sudo systemctl enable --now node_exporter\" (y lo mismo en db01)."
+      - "ssh db01 \"sudo firewall-cmd --permanent --add-port=9100/tcp && sudo firewall-cmd --reload\""
+      - "curl -s db01:9100/metrics | grep node_filesystem_avail_bytes"
+    solucion:
+      - ssh web01 "sudo systemctl enable --now node_exporter"
+      - ssh db01 "sudo systemctl enable --now node_exporter"
+      - ssh db01 "sudo firewall-cmd --permanent --add-port=9100/tcp && sudo firewall-cmd --reload"
+      - curl -s db01:9100/metrics | grep node_filesystem_avail_bytes
+    explicacion: >-
+      En producción conviene abrir el 9100 solo para mon01 (una regla rica de firewalld con
+      source address=192.168.10.30), no para toda la red: las métricas dicen mucho de un servidor.
+  - consigna: >-
+      Configurá Prometheus: un job node con web01:9100 y db01:9100, las alertas mandadas a
+      localhost:9093, y el archivo de reglas /etc/prometheus/rules/nodos.yml con NodoCaido (up del
+      job node en 0 durante 2 minutos, severity critical) y DiscoSeLlena (predict_linear del disco
+      raíz sobre 1 hora a 4 horas, menor que 0, durante 10 minutos, severity warning). Revisá con
+      promtool y arrancá Prometheus habilitado.
+    verificar:
+      - { servicio: prometheus, activo: true, habilitado: true }
+      - { prometheus_objetivo: "web01:9100", estado: up }
+      - { prometheus_objetivo: "db01:9100", estado: up }
+      - { prometheus_alerta: NodoCaido, estado: inactive }
+      - { prometheus_alerta: DiscoSeLlena, estado: firing }
+    pistas:
+      - "Podés reescribir todo /etc/prometheus/prometheus.yml con sudo tee: global, alerting (targets localhost:9093), rule_files (\"rules/*.yml\") y scrape_configs."
+      - "Las reglas, como en la lección 6.4.5: groups, name, rules, y cada una con alert, expr, for, labels y annotations."
+      - "promtool check config /etc/prometheus/prometheus.yml revisa también las reglas."
+    solucion:
+      - |-
+        sudo tee /etc/prometheus/prometheus.yml >/dev/null <<'EOF'
+        global:
+          scrape_interval: 15s
+          evaluation_interval: 15s
+
+        alerting:
+          alertmanagers:
+            - static_configs:
+                - targets: ["localhost:9093"]
+
+        rule_files:
+          - "rules/*.yml"
+
+        scrape_configs:
+          - job_name: "prometheus"
+            static_configs:
+              - targets: ["localhost:9090"]
+
+          - job_name: "node"
+            static_configs:
+              - targets: ["web01:9100", "db01:9100"]
+        EOF
+      - sudo mkdir -p /etc/prometheus/rules
+      - |-
+        sudo tee /etc/prometheus/rules/nodos.yml >/dev/null <<'EOF'
+        groups:
+          - name: nodos
+            rules:
+              - alert: NodoCaido
+                expr: up{job="node"} == 0
+                for: 2m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "{{ $labels.instance }} no responde"
+              - alert: DiscoSeLlena
+                expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[1h], 4 * 3600) < 0
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "El disco raíz de {{ $labels.instance }} se llena en menos de 4 horas"
+        EOF
+      - promtool check config /etc/prometheus/prometheus.yml
+      - sudo systemctl enable --now prometheus
+      - "curl -s localhost:9090/api/v1/alerts | jq -r '.data.alerts[] | [.labels.alertname, .labels.instance, .state] | @tsv'"
+    explicacion: >-
+      DiscoSeLlena ya está firing: al ritmo de la última hora, a db01 le quedan menos de 4 horas de
+      disco. Con un umbral fijo de 90 % recién avisaría cuando faltara poco más de una hora.
+  - consigna: >-
+      Configurá Alertmanager para que mande todo a ana@localhost por correo (smtp_smarthost
+      localhost:25, smtp_from alertas@mon01.lab, sin TLS), agrupado por alertname e instance y con
+      aviso cuando se resuelve. Arrancalo habilitado y comprobá que llegó el correo de
+      DiscoSeLlena.
+    verificar:
+      - { servicio: alertmanager, activo: true, habilitado: true }
+      - { alertmanager_alerta: DiscoSeLlena }
+      - { salida_contiene: "DiscoSeLlena db01:9100" }
+    pistas:
+      - "global (smtp_smarthost, smtp_from, smtp_require_tls: false), route (receiver, group_by) y receivers con email_configs (to, send_resolved: true)."
+      - "amtool check-config antes de arrancar; después, sleep 30 (el group_wait) y mail -H."
+    solucion:
+      - |-
+        sudo tee /etc/alertmanager/alertmanager.yml >/dev/null <<'EOF'
+        global:
+          smtp_smarthost: "localhost:25"
+          smtp_from: "alertas@mon01.lab"
+          smtp_require_tls: false
+
+        route:
+          receiver: "correo"
+          group_by: ["alertname", "instance"]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+        receivers:
+          - name: "correo"
+            email_configs:
+              - to: "ana@localhost"
+                send_resolved: true
+        EOF
+      - amtool check-config /etc/alertmanager/alertmanager.yml
+      - sudo systemctl enable --now alertmanager
+      - sleep 30
+      - mail -H
+    explicacion: >-
+      En la parte 2 vas a sumar un segundo receptor de chat (Telegram, Slack o Teams) para lo
+      crítico. El correo queda para lo que puede esperar.
+  - consigna: >-
+      Instalá Grafana (el repositorio ya está), con Prometheus como origen de datos predeterminado
+      definido en /etc/grafana/provisioning/datasources/lab.yaml (uid prometheus). Arrancalo
+      habilitado, abrí el 3000 en firewalld y comprobá por la API que el origen funciona.
+    verificar:
+      - { servicio: grafana-server, activo: true, habilitado: true }
+      - { grafana_datasource: Prometheus, tipo: prometheus, funciona: true }
+      - { firewall_permite: 3000/tcp }
+    pistas:
+      - "sudo dnf install -y grafana"
+      - "apiVersion: 1 y datasources con name, type, uid, url e isDefault."
+      - "curl -s -u admin:admin localhost:3000/api/datasources/uid/prometheus/health"
+    solucion:
+      - sudo dnf install -y grafana
+      - |-
+        sudo tee /etc/grafana/provisioning/datasources/lab.yaml >/dev/null <<'EOF'
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            uid: prometheus
+            url: http://localhost:9090
+            isDefault: true
+        EOF
+      - sudo systemctl enable --now grafana-server
+      - sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --reload
+      - curl -s -u admin:admin localhost:3000/api/datasources/uid/prometheus/health
+    explicacion: >-
+      En la parte 2 vas a cambiar la contraseña de admin, importar Node Exporter Full (1860) y armar
+      un tablero propio con las consultas de la lección 6.4.4.
+  - consigna: >-
+      Sumá db01 a Zabbix: instalá zabbix-agent2 con Server y ServerActive en 192.168.10.30 y
+      Hostname db01, arrancalo habilitado, abrí el 10050 en su firewalld y pedile desde mon01 el
+      porcentaje de memoria disponible.
+    verificar:
+      - { en: db01, verificar: { servicio: zabbix-agent2, activo: true, habilitado: true } }
+      - { en: db01, verificar: { archivo: /etc/zabbix/zabbix_agent2.conf, contenido_incluye: "Server=192.168.10.30" } }
+      - { salida_regex: "^\\d+(\\.\\d+)?\\s*$" }
+      - { comando_usado: "vm.memory.size" }
+    pistas:
+      - "ssh db01 \"sudo dnf install -y zabbix-agent2\" y después sed -i sobre las líneas Server=, ServerActive= y Hostname=."
+      - "zabbix_get -s db01 -k \"vm.memory.size[pavailable]\""
+    solucion:
+      - ssh db01 "sudo dnf install -y zabbix-agent2"
+      - >-
+        ssh db01 "sudo sed -i -e 's/^Server=.*/Server=192.168.10.30/' -e 's/^ServerActive=.*/ServerActive=192.168.10.30/' -e 's/^Hostname=.*/Hostname=db01/' /etc/zabbix/zabbix_agent2.conf"
+      - ssh db01 "sudo systemctl enable --now zabbix-agent2"
+      - ssh db01 "sudo firewall-cmd --permanent --add-port=10050/tcp && sudo firewall-cmd --reload"
+      - zabbix_get -s db01 -k "vm.memory.size[pavailable]"
+    explicacion: >-
+      Muchas empresas tienen los dos: Zabbix para los equipos (servidores, Windows, red por SNMP) y
+      Prometheus para las aplicaciones. Lo importante es que cada servidor esté en alguno y que las
+      alertas lleguen al mismo lugar.
+  - consigna: >-
+      Probá la alerta crítica: pará node_exporter en web01, esperá lo que haga falta para que
+      NodoCaido pase a firing y comprobá que llegó el correo. Después volvé a arrancarlo.
+    verificar:
+      - { comando_usado: "stop node_exporter" }
+      - { salida_contiene: "NodoCaido web01:9100" }
+      - { en: web01, verificar: { servicio: node_exporter, activo: true } }
+    pistas:
+      - "ssh web01 \"sudo systemctl stop node_exporter\""
+      - "El for es de 2 minutos: sleep 150, y otro sleep 30 para el group_wait de Alertmanager."
+      - "Volvé a arrancarlo con ssh web01 \"sudo systemctl start node_exporter\" y mirá los asuntos con mail -H: el correo de la caída queda aunque la alerta ya se haya resuelto."
+    solucion:
+      - ssh web01 "sudo systemctl stop node_exporter"
+      - sleep 150
+      - "curl -s localhost:9090/api/v1/alerts | jq -r '.data.alerts[] | [.labels.alertname, .labels.instance, .state] | @tsv'"
+      - sleep 30
+      - ssh web01 "sudo systemctl start node_exporter"
+      - mail -H
+    explicacion: >-
+      Una alerta que nunca se probó es una alerta que no sabés si funciona. Probarla de punta a
+      punta (la regla, el for, Alertmanager, el correo) es parte de crearla.

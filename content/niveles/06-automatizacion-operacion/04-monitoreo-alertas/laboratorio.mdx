@@ -1,0 +1,36 @@
+---
+titulo: Zabbix monitoreando Linux y Windows, y Prometheus con node_exporter y Grafana con alertas por correo o chat
+horas: 4
+verificacion:
+  - Resolví el laboratorio simulado completo.
+  - Zabbix monitorea web01, db01 y win01 con sus plantillas, y vi un problema en Windows abrirse y cerrarse.
+  - Prometheus lee node_exporter de web01 y db01, con reglas NodoCaido y DiscoSeLlena revisadas con promtool.
+  - Alertmanager manda lo warning por correo y lo critical también al chat, y probé las dos de punta a punta.
+  - Grafana muestra un tablero propio con variable instance, y la configuración está en Git.
+---
+
+import sim from './lab-monitoreo-sim.yaml'
+import pasos from './lab-monitoreo.yaml'
+
+## Objetivo
+
+Que nada importante de tu laboratorio pueda romperse sin que te enteres. Vas a tener los dos estilos de monitoreo que más vas a encontrar en las empresas: Zabbix, con agentes y plantillas, para los servidores Linux y Windows; y Prometheus con node_exporter, Grafana para mirar y Alertmanager para avisar, por correo lo que puede esperar y al chat lo urgente. Al final, cada alerta está probada y toda la configuración está en Git.
+
+## Qué necesitás
+
+- La plataforma para la parte 1.
+- Para la parte 2: una VM nueva con Rocky Linux 10 (mon01, 2 vCPU, 4 GB, 40 GB), las VMs web01 y db01 del módulo 6.3, una VM con Windows Server 2025 de evaluación (win01), el relay de correo del módulo 4.4 y, si querés avisos al chat, una cuenta de Telegram, Slack o Teams.
+
+## Parte 1: en el laboratorio simulado
+
+<Terminal ejercicio={sim} />
+
+## Parte 2: en tus máquinas virtuales
+
+<PasosGuiados ejercicio={pasos} />
+
+## Para pensar
+
+1. Mirá las alertas que dejaste configuradas. ¿Cuál te despertaría a las 3 de la mañana? ¿Vale la pena? ¿Qué harías al recibirla (escribilo: ese es el runbook)?
+2. Si se cae mon01, ¿quién te avisa? Pensá cómo vigilar al que vigila (otro equipo, un servicio externo, un chequeo desde el celular).
+3. Zabbix y Prometheus monitorean lo mismo en web01 y db01. Si tuvieras que quedarte con uno solo para este laboratorio, ¿cuál elegirías y por qué?

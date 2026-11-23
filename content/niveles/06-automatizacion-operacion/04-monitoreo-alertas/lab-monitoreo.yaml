@@ -1,0 +1,147 @@
+tipo: pasos
+titulo: Zabbix y Prometheus de verdad, con Linux, Windows, Grafana y alertas al chat
+descripcion: >-
+  Vas a armar el monitoreo de tu laboratorio en máquinas virtuales: mon01 (Rocky Linux 10, 2 vCPU,
+  4 GB y 40 GB de disco) con Zabbix, Prometheus, Alertmanager y Grafana; web01 y db01 (las Rocky
+  del módulo 6.3) y win01 (Windows Server 2025 de evaluación). Todas en la misma red, con los
+  nombres en el DNS del laboratorio o en /etc/hosts. Calculá unas tres horas.
+pasos:
+  - titulo: El servidor de Zabbix
+    detalle: >-
+      En zabbix.com/download elegí Zabbix 8.0 LTS, Rocky Linux 10, Server, Frontend y Agent 2, con
+      PostgreSQL y Nginx, y seguí los comandos que te da (cambian poco entre versiones; los de
+      abajo son el resumen). Si tenés EPEL, agregá excludepkgs=zabbix* en su sección de
+      /etc/yum.repos.d/epel.repo para que no se mezclen paquetes. La contraseña de la base va en
+      DBPassword de /etc/zabbix/zabbix_server.conf.
+    comandos:
+      - sudo rpm -Uvh https://repo.zabbix.com/zabbix/8.0/release/rocky/10/noarch/zabbix-release-latest-8.0.el10.noarch.rpm
+      - sudo dnf install -y zabbix-server-pgsql zabbix-web-pgsql zabbix-nginx-conf zabbix-sql-scripts zabbix-selinux-policy zabbix-agent2 postgresql-server
+      - sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql
+      - sudo -u postgres createuser --pwprompt zabbix && sudo -u postgres createdb -O zabbix zabbix
+      - zcat /usr/share/zabbix/sql-scripts/postgresql/server.sql.gz | sudo -u zabbix psql zabbix
+      - sudo systemctl enable --now zabbix-server zabbix-agent2 nginx php-fpm
+      - sudo firewall-cmd --permanent --add-port={8080,10051}/tcp && sudo firewall-cmd --reload
+    comprobar: >-
+      http://mon01:8080 muestra el asistente de Zabbix; al terminarlo entrás con Admin / zabbix y
+      cambiás esa contraseña en el acto (User settings, Profile).
+  - titulo: Linux en Zabbix
+    detalle: >-
+      En web01 y db01: el repositorio de Zabbix (el mismo rpm), zabbix-agent2 con Server y
+      ServerActive apuntando a mon01 y Hostname igual al nombre del equipo, y el 10050 abierto solo
+      para mon01. En la web, Data collection, Hosts, Create host: nombre igual al Hostname, grupo
+      Linux servers, la plantilla Linux by Zabbix agent y la interfaz de agente con la IP del
+      equipo. Si ya tenés el proyecto de Ansible del módulo 6.3, hacelo con un rol.
+    comandos:
+      - sudo rpm -Uvh https://repo.zabbix.com/zabbix/8.0/release/rocky/10/noarch/zabbix-release-latest-8.0.el10.noarch.rpm
+      - sudo dnf install -y zabbix-agent2
+      - sudo sed -i -e 's/^Server=.*/Server=mon01/' -e 's/^ServerActive=.*/ServerActive=mon01/' -e "s/^Hostname=.*/Hostname=$(hostname -s)/" /etc/zabbix/zabbix_agent2.conf
+      - sudo systemctl enable --now zabbix-agent2
+      - sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="192.168.10.30" port port="10050" protocol="tcp" accept' && sudo firewall-cmd --reload
+    comprobar: >-
+      En Monitoring, Hosts, la columna Availability muestra ZBX en verde para los dos, y Latest
+      data tiene valores de CPU, memoria y discos.
+  - titulo: Windows en Zabbix
+    detalle: >-
+      En win01, bajá el instalador MSI de Zabbix Agent 2 (8.0, Windows, amd64, OpenSSL) desde
+      zabbix.com/download_agents y corrélo: te pide el nombre del equipo, el servidor (mon01) y el
+      servidor para chequeos activos. El instalador crea el servicio; la regla de firewall la
+      agregás vos. En la web, el host con la plantilla Windows by Zabbix agent.
+    comandos:
+      - msiexec /i zabbix_agent2-8.0.0-windows-amd64-openssl.msi /qn SERVER=mon01 SERVERACTIVE=mon01 HOSTNAME=win01
+      - New-NetFirewallRule -DisplayName "Zabbix agent" -Direction Inbound -Protocol TCP -LocalPort 10050 -RemoteAddress 192.168.10.30 -Action Allow
+      - Get-Service "Zabbix Agent 2"
+    comprobar: >-
+      win01 aparece con ZBX en verde y en Latest data hay datos de CPU, memoria, discos y de los
+      servicios de Windows con inicio automático.
+  - titulo: Prometheus y node_exporter
+    detalle: >-
+      En mon01, Prometheus 3.13 LTS desde los binarios de GitHub, como en la lección 6.4.3, con su
+      usuario y su unidad de systemd. En web01 y db01, node_exporter igual, con el 9100 abierto solo
+      para mon01. La configuración (prometheus.yml y rules/nodos.yml) es la de la parte 1.
+    comandos:
+      - curl -LO https://github.com/prometheus/prometheus/releases/download/v3.13.5/prometheus-3.13.5.linux-amd64.tar.gz
+      - curl -LO https://github.com/prometheus/node_exporter/releases/download/v1.12.1/node_exporter-1.12.1.linux-amd64.tar.gz
+      - sha256sum --check --ignore-missing sha256sums.txt
+      - promtool check config /etc/prometheus/prometheus.yml
+      - sudo systemctl enable --now prometheus
+    comprobar: >-
+      En http://mon01:9090, Status, Target health, los tres objetivos (prometheus, web01 y db01)
+      están UP, y Alerts muestra NodoCaido y DiscoSeLlena en verde (inactive).
+  - titulo: Alertmanager con correo y chat
+    detalle: >-
+      Alertmanager 0.32 desde GitHub, igual que Prometheus. Las alertas warning van por correo,
+      usando como smarthost el Postfix relay del módulo 4.4 (o tu servidor de correo); las critical,
+      además, a un chat. Con Telegram: creá un bot hablándole a @BotFather (te da el token), mandale
+      un mensaje y sacá tu chat_id de https://api.telegram.org/botTOKEN/getUpdates. Para Slack o
+      Teams, un webhook entrante del canal y slack_configs o msteamsv2_configs. El token no va al
+      repositorio: guardalo en un archivo aparte con bot_token_file.
+    archivo:
+      ruta: /etc/alertmanager/alertmanager.yml
+      contenido: |
+        global:
+          smtp_smarthost: "relay.lab:25"
+          smtp_from: "alertas@lab.local"
+          smtp_require_tls: false
+
+        route:
+          receiver: "correo"
+          group_by: ["alertname", "instance"]
+          routes:
+            - matchers: ['severity="critical"']
+              receiver: "guardia"
+
+        receivers:
+          - name: "correo"
+            email_configs:
+              - to: "infra@lab.local"
+                send_resolved: true
+          - name: "guardia"
+            email_configs:
+              - to: "infra@lab.local"
+            telegram_configs:
+              - bot_token_file: /etc/alertmanager/telegram.token
+                chat_id: 123456789
+                send_resolved: true
+    comandos:
+      - amtool check-config /etc/alertmanager/alertmanager.yml
+      - sudo systemctl enable --now alertmanager
+      - amtool config routes test --config.file=/etc/alertmanager/alertmanager.yml severity=critical
+    comprobar: amtool config routes test con severity=critical responde guardia, y con severity=warning responde correo.
+  - titulo: Grafana
+    detalle: >-
+      Instalá Grafana desde su repositorio, con Prometheus provisionado (lab.yaml de la parte 1).
+      Cambiá la contraseña de admin, creá un usuario Viewer para mirar, importá Node Exporter Full
+      (1860) y armá un tablero propio con cuatro paneles (CPU, disco, memoria y carga, como en la
+      lección 6.4.4) y una variable instance. Exportalo a JSON. Para ver Zabbix en Grafana, el
+      plugin Zabbix (alexanderzobnin-zabbix-app) agrega Zabbix como origen de datos.
+    comandos:
+      - sudo dnf install -y grafana
+      - sudo systemctl enable --now grafana-server
+      - sudo grafana cli admin reset-admin-password 'una-clave-larga'
+      - sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --reload
+    comprobar: http://mon01:3000 muestra tu tablero con los dos servidores y el menú de instance cambia todos los paneles.
+  - titulo: Probar las alertas de punta a punta
+    detalle: >-
+      Una alerta que no se probó no se sabe si anda. Probá las tres: la crítica de Prometheus, la
+      de tendencia y una de Zabbix en Windows. Para la de tendencia, llená de a poco el disco de
+      db01 (un archivo nuevo cada 10 minutos durante una hora) o, para no esperar, una regla de
+      prueba con [10m] y 3600 en lugar de [1h] y 4 * 3600. Al terminar, borrá los archivos.
+    comandos:
+      - ssh web01 "sudo systemctl stop node_exporter"
+      - "for i in 1 2 3 4 5 6; do ssh db01 \"sudo fallocate -l 3G /var/tmp/relleno-$i\"; sleep 600; done"
+      - Stop-Service Spooler
+      - ssh db01 "sudo rm -f /var/tmp/relleno-*"
+    comprobar: >-
+      Llegaron al chat el aviso de NodoCaido y su resolución, por correo el de DiscoSeLlena, y en
+      Zabbix (Monitoring, Problems) apareció el problema del servicio Spooler de win01 y se cerró al
+      volver a arrancarlo.
+  - titulo: Todo al repositorio
+    detalle: >-
+      Creá en tu servidor de Git el repositorio infra-monitoreo (o una carpeta en infra-ansible) con
+      prometheus.yml, las reglas, alertmanager.yml (sin el token), el lab.yaml de Grafana, el JSON
+      del tablero y un README.txt con qué hay en cada equipo, los puertos y cómo se agrega un
+      servidor nuevo. Si te animás, un rol de Ansible que reparte todo a mon01.
+    comandos:
+      - promtool check rules rules/*.yml
+      - git add . && git commit -m "Monitoreo del laboratorio" && git push
+    comprobar: Desde otro equipo, con el repositorio clonado, se entiende qué se monitorea, qué alertas hay y a quién avisan.

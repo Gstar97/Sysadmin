@@ -1,0 +1,190 @@
+tipo: troubleshooting
+titulo: Nadie se enteró de que el disco se llenó
+descripcion: >-
+  Incidente simulado. Una distribuidora tiene su sistema de gestión (pedidos, stock, facturación)
+  sobre PostgreSQL en db02 (Rocky Linux 10, disco de 100 GB con LVM). Todo se monitorea con
+  Zabbix desde hace dos años, con las plantillas de fábrica. Cada decisión suma minutos.
+inicio: n1
+nodos:
+  n1:
+    situacion: >-
+      Martes, 07:40. Los depósitos empiezan a cargar pedidos y el sistema no responde. Llaman los
+      gerentes. Entrás a db02: PostgreSQL está caído desde las 03:12 y no vuelve a arrancar.
+    evidencia:
+      - titulo: journalctl -u postgresql --since 03:00
+        contenido: |2
+            03:12:07 db02 postgres[1822]: PANIC:  could not write to file "pg_wal/xlogtemp.1822": No space left on device
+            03:12:07 db02 postgres[1801]: LOG:  WAL writer process (PID 1822) was terminated by signal 6: Aborted
+            03:12:08 db02 postgres[1801]: LOG:  database system is shut down
+            03:12:08 db02 systemd[1]: postgresql.service: Failed with result 'exit-code'.
+            07:41:30 db02 postgres[9310]: FATAL:  could not write lock file "postmaster.pid": No space left on device
+      - titulo: df -h /
+        contenido: |2
+            Filesystem               Size  Used Avail Use% Mounted on
+            /dev/mapper/rl-root       98G   98G   20K 100% /
+      - titulo: vgs
+        contenido: |2
+            VG #PV #LV #SN Attr   VSize    VFree
+            rl   1   2   0 wz--n- <119.00g  20.00g
+    opciones:
+      - texto: Ver con du qué creció, antes de tocar nada
+        ir_a: n_que
+        minutos: 10
+      - texto: Borrar los archivos más viejos de /var/lib/pgsql/data/pg_wal, que son logs de PostgreSQL
+        ir_a: n1
+        minutos: 30
+        consecuencia: >-
+          No son logs para leer: es el registro de transacciones que la base necesita para
+          arrancar de forma consistente. Borrar archivos de pg_wal a mano puede dejar la base
+          imposible de recuperar sin un backup. Por suerte, antes de borrar el primero, la DBA te
+          frena. Perdiste media hora discutiendo.
+      - texto: Reiniciar el servidor, a ver si se libera algo
+        ir_a: n1
+        minutos: 15
+        consecuencia: >-
+          El servidor vuelve en 4 minutos, el disco sigue al 100 % y PostgreSQL sigue sin arrancar.
+          Un disco lleno no se arregla reiniciando: algo lo llenó y sigue ahí.
+  n_que:
+    situacion: >-
+      La base de datos en sí ocupa lo esperable. Lo que creció es pg_wal: los archivos del
+      registro de transacciones que PostgreSQL normalmente recicla solo. Algo le pide que los
+      guarde.
+    evidencia:
+      - titulo: sudo du -xh --max-depth=2 /var/lib/pgsql | sort -h | tail -3
+        contenido: |2
+            24G   /var/lib/pgsql/data/base
+            69G   /var/lib/pgsql/data/pg_wal
+            93G   /var/lib/pgsql/data
+      - titulo: Las notas del equipo (wiki), hace 10 días
+        contenido: |2
+            Réplica de reportes (rep01): se apaga, el área de BI pasa al nuevo
+            data warehouse. Pendiente: dar de baja la VM.
+      - titulo: postgresql.conf (lo relevante)
+        contenido: |2
+            wal_level = replica
+            max_wal_size = 2GB
+            # max_slot_wal_keep_size = -1    (valor por defecto: sin límite)
+    opciones:
+      - texto: "Agrandar el volumen lógico 10 GB con el espacio libre del VG para que la base arranque, y con la base andando revisar pg_replication_slots"
+        ir_a: n_slot
+        minutos: 20
+      - texto: Restaurar el backup de anoche en otro servidor y apuntar el sistema ahí
+        ir_a: n_que
+        minutos: 60
+        consecuencia: >-
+          El backup de anoche es de las 23:00: se perderían los pedidos entre las 23:00 y las
+          03:12, y la restauración tarda horas. Es el plan si la base estuviera dañada; acá solo
+          falta espacio, y el VG tiene 20 GB libres.
+      - texto: Mover pg_wal a otro disco con un enlace simbólico
+        ir_a: n_que
+        minutos: 45
+        consecuencia: >-
+          Se puede hacer, pero con la base caída, sin probar y apurado es arriesgado, y no resuelve
+          nada: algo sigue reteniendo WAL y el otro disco también se va a llenar.
+  n_slot:
+    situacion: >-
+      lvextend -r -L +10G /dev/rl/root agranda el volumen y el sistema de archivos en un paso
+      (lección 1.4.5). PostgreSQL arranca a las 08:05 y el sistema vuelve a responder. Ahora, la
+      causa.
+    evidencia:
+      - titulo: SELECT slot_name, active, wal_status, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS retenido FROM pg_replication_slots;
+        contenido: |2
+             slot_name | active | wal_status | retenido
+            -----------+--------+------------+----------
+             reportes  | f      | extended   | 68 GB
+            (1 row)
+    opciones:
+      - texto: "Confirmar con el equipo de BI que rep01 está retirada y borrar el slot con SELECT pg_drop_replication_slot('reportes'); en el próximo checkpoint PostgreSQL recicla el WAL"
+        ir_a: n_por_que
+        minutos: 15
+      - texto: Volver a prender rep01 para que consuma el WAL atrasado
+        ir_a: n_slot
+        minutos: 30
+        consecuencia: >-
+          rep01 está retirada y su disco ya se reutilizó; aunque estuviera, ponerse al día con 68 GB
+          de WAL tarda horas y mientras tanto db02 sigue al borde. Lo que sobra es el slot.
+      - texto: Dejarlo así, ahora hay 10 GB libres
+        ir_a: n_slot
+        minutos: 5
+        consecuencia: >-
+          El slot sigue reteniendo todo el WAL nuevo, unos 7 GB por día: los 10 GB se van en un día y
+          medio. Mismo incidente, mañana a la noche.
+  n_por_que:
+    situacion: >-
+      Después del checkpoint, pg_wal baja a 1,8 GB y el disco queda al 27 %. El servicio está bien.
+      Falta lo más incómodo: Zabbix monitoreaba db02 y nadie recibió nada en diez días.
+    evidencia:
+      - titulo: El uso del disco raíz de db02 en Zabbix (Latest data, gráfico de 14 días)
+        contenido: |2
+            100 % |                                              ████
+             90 % |                                         █████
+             80 % |                                   ██████
+             70 % |                            ███████
+             60 % |                     ███████
+             50 % |              ███████
+             40 % |       ███████
+             30 % |███████
+                  +--------------------------------------------------
+                    13/11    15/11    17/11    19/11    21/11    23/11
+      - titulo: Problemas en Zabbix para db02
+        contenido: |2
+            Hora        Severidad  Estado    Problema
+            21/11 18:40 Warning    PROBLEM   /: Disk space is low (used > 80%)
+            23/11 01:05 Average    PROBLEM   /: Disk space is critically low (used > 90%)
+            (y 37 problemas más de otros equipos, abiertos desde hace semanas)
+      - titulo: La única acción configurada
+        contenido: |2
+            Nombre:      Avisar a infra
+            Condición:   Trigger severity >= High
+            Operación:   mandar mensaje a Infra por Email
+    opciones:
+      - texto: "Agregar alertas de tendencia que avisen con días de anticipación (timeleft en Zabbix, predict_linear si se usa Prometheus), con una severidad que sí notifique, y limpiar los problemas viejos para que una alerta nueva se note"
+        ir_a: n_prevenir
+        minutos: 45
+      - texto: Bajar el umbral de las plantillas al 70 % y que notifique desde Warning
+        ir_a: n_por_que
+        minutos: 20
+        consecuencia: >-
+          Al día siguiente llegan 60 correos de discos grandes y tranquilos que viven en 72 %. En
+          una semana nadie los abre. Un umbral más bajo no avisa mejor: avisa más.
+      - texto: Mandar todos los problemas de Zabbix por correo a todo el equipo
+        ir_a: n_por_que
+        minutos: 15
+        consecuencia: >-
+          Ya había 37 problemas abiertos que nadie miraba; ahora además llegan a la bandeja de
+          entrada. Es la receta de la fatiga de alertas.
+  n_prevenir:
+    situacion: >-
+      Hay un trigger nuevo en la plantilla de Linux, timeleft(/host/vfs.fs.size[/,pused],1d,100)<7d
+      con severidad High: al ritmo de estos días (unos 7 GB por día) habría avisado el 16/11, con el
+      disco al 51 %.
+      Los 37 problemas viejos se revisaron: unos se arreglaron y otros eran plantillas que no
+      aplicaban. Queda cerrar la causa de fondo.
+    evidencia:
+      - titulo: Lo que dejó pasar el incidente
+        contenido: |2
+            - Un slot de replicación abandonado puede retener WAL sin límite (el valor por defecto).
+            - Al apagar rep01 nadie borró su slot: no estaba en ningún procedimiento.
+            - Nada miraba los slots: el disco era el único síntoma visible.
+    opciones:
+      - texto: "Poner max_slot_wal_keep_size (por ejemplo 20GB) para que un slot abandonado no pueda llenar el disco, monitorear los slots inactivos (pg_replication_slots, o postgres_exporter en Prometheus), y sumar 'borrar el slot' al procedimiento de baja de una réplica, con su runbook"
+        ir_a: n_ok
+        minutos: 40
+      - texto: Pedir a todos que avisen cuando apaguen una réplica
+        ir_a: n_prevenir
+        minutos: 5
+        consecuencia: >-
+          Ya estaba anotado en la wiki que se apagaba rep01 y nadie conectó una cosa con la otra.
+          Lo que no depende de acordarse (un límite y una alerta) es lo que evita que se repita.
+  n_ok:
+    final: exito
+    resumen: >-
+      La base se cayó porque el disco se llenó, y el disco se llenó porque un slot de replicación
+      de una réplica apagada retenía todo el WAL. Se recuperó sin perder datos: primero entender
+      qué ocupaba el espacio (en lugar de borrar pg_wal a mano o reiniciar), después dar lugar con
+      LVM para arrancar y recién entonces borrar el slot. Pero el monitoreo era la otra mitad del
+      problema: el disco tardó diez días en llenarse a un ritmo constante, y las alertas de umbral
+      fijo saltaron tarde, con una severidad que no avisaba a nadie, en medio de decenas de
+      problemas que nadie miraba. Una alerta de tendencia (timeleft o predict_linear) habría
+      avisado con días de margen. Lo que queda: tendencias con severidad que notifica, problemas
+      viejos limpios, un límite (max_slot_wal_keep_size) y una alerta específica para los slots.
