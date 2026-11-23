@@ -112,7 +112,11 @@ export interface UnitDef {
 }
 
 /** Texto de la unidad que trae el paquete de un servicio (no existe como archivo en el simulador). */
+/** Unidades de paquetes con un texto propio (el ExecStart real del paquete). */
+export const VENDOR_UNITS: Record<string, string> = {}
+
 export function vendorUnitText(svc: Pick<Service, 'name' | 'description'>): string {
+  if (VENDOR_UNITS[svc.name]) return VENDOR_UNITS[svc.name]
   return `[Unit]\nDescription=${svc.description}\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=notify\nExecStart=/usr/sbin/${svc.name}\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n`
 }
 

@@ -45,6 +45,7 @@ function ownerOf(sys: System, path: string): { name: string; version: string } |
 /** Repositorio de donde viene cada paquete en Rocky. */
 function repoOf(n: string): string {
   if (EPEL_ONLY.has(n)) return 'epel'
+  if (REPO_GATES[n]) return REPO_GATES[n].repo
   if (n === 'epel-release') return 'extras'
   if (['kernel', 'bash', 'coreutils', 'sudo', 'systemd', 'openssh-server', 'chrony', 'cronie', 'firewalld', 'rsyslog', 'tar', 'lsof', 'rsync'].includes(n)) return 'baseos'
   return 'appstream'
@@ -78,6 +79,13 @@ function aptHistory(sys: System, cmd: string, action: string, items: string[]) {
   }
 }
 
+/**
+ * Paquetes que vienen de un repositorio de terceros (Grafana, Zabbix...): solo aparecen si el
+ * repositorio está agregado. ok dice si está; repo es el nombre que muestra dnf.
+ */
+export const REPO_GATES: Record<string, { repo: string; ok: (sys: System) => boolean }> = {}
+const gated = (sys: System, n: string) => !!REPO_GATES[n] && !REPO_GATES[n].ok(sys)
+
 /** Paquetes que en la familia Red Hat vienen del repositorio EPEL. */
 const EPEL_ONLY = new Set(['htop', 'ncdu', 'nethogs', 'certbot', 'python3-certbot-nginx', 'python3-certbot-apache', 'testssl'])
 
@@ -88,7 +96,7 @@ function stamp(ms: number) {
 
 function dnfInstall(ctx: CommandContext, names: string[], yes: boolean): number {
   const sys = ctx.sys
-  const missing = names.filter((n) => !sys.catalog[n] || (EPEL_ONLY.has(n) && !sys.installed.has('epel-release')))
+  const missing = names.filter((n) => !sys.catalog[n] || (EPEL_ONLY.has(n) && !sys.installed.has('epel-release')) || gated(sys, n))
   ctx.out(`Last metadata expiration check: 0:14:08 ago on ${stamp(Date.now() - 848_000)}.\n`)
   if (missing.length) {
     for (const m of missing) ctx.err(`No match for argument: ${m}\n`)
@@ -186,7 +194,7 @@ register(['dnf', 'yum'], {
       }
       case 'search': {
         const term = (names[0] ?? '').toLowerCase()
-        const hits = Object.entries(sys.catalog).filter(([n, i]) => (n.includes(term) || i.summary.toLowerCase().includes(term)) && (!EPEL_ONLY.has(n) || sys.installed.has('epel-release')))
+        const hits = Object.entries(sys.catalog).filter(([n, i]) => (n.includes(term) || i.summary.toLowerCase().includes(term)) && (!EPEL_ONLY.has(n) || sys.installed.has('epel-release')) && !gated(sys, n))
         ctx.out(`Last metadata expiration check: 0:14:08 ago.\n`)
         if (!hits.length) {
           ctx.out(`No matches found.\n`)
@@ -309,7 +317,7 @@ register(['apt', 'apt-get'], {
       case 'install': {
         if (lockError()) return 100
         ctx.out('Reading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\n')
-        const missing = names.filter((n) => !sys.catalog[n])
+        const missing = names.filter((n) => !sys.catalog[n] || gated(sys, n))
         if (missing.length) {
           ctx.err(`E: Unable to locate package ${missing[0]}\n`)
           return 100
@@ -382,14 +390,14 @@ register(['apt', 'apt-get'], {
       case 'search': {
         const term = (names[0] ?? '').toLowerCase()
         ctx.out('Sorting... Done\nFull Text Search... Done\n')
-        for (const [n, i] of Object.entries(sys.catalog).filter(([n, i]) => n.includes(term) || i.summary.toLowerCase().includes(term))) {
+        for (const [n, i] of Object.entries(sys.catalog).filter(([n, i]) => (n.includes(term) || i.summary.toLowerCase().includes(term)) && !gated(sys, n))) {
           ctx.out(`${n}/noble ${i.version} amd64${sys.installed.has(n) ? ' [installed]' : ''}\n  ${i.summary}\n\n`)
         }
         return 0
       }
       case 'show': {
         const info = sys.catalog[names[0] ?? '']
-        if (!info) {
+        if (!info || gated(sys, names[0])) {
           ctx.err(`N: Unable to locate package ${names[0]}\nE: No packages found\n`)
           return 100
         }

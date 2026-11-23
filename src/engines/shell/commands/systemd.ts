@@ -78,6 +78,12 @@ function reloadWarning(ctx: CommandContext, unit: string) {
   if (needsReload(ctx.sys, unit)) ctx.err(`Warning: The unit file, source configuration file or drop-ins of ${unit} changed on disk. Run 'systemctl daemon-reload' to reload units.\n`)
 }
 
+/**
+ * Chequeos de arranque de programas lanzados desde unidades propias, por nombre del ejecutable:
+ * devuelven el error (código y líneas para el journal) si el programa no arrancaría.
+ */
+export const EXEC_CHECKS: Record<string, (ctx: CommandContext, cmd: string) => { status: string; lines: string[] } | undefined> = {}
+
 function journal(sys: System, unit: string, message: string, priority = 6, ident = 'systemd', pid = 1) {
   sys.journal.push({ time: Date.now(), unit, priority, message, ident, pid })
 }
@@ -280,6 +286,14 @@ async function startService(ctx: CommandContext, svc: Service, verb = 'start'): 
   }
   // simple, exec, notify, forking: el proceso queda corriendo.
   const { cmd } = execParts(def.execStart[0])
+  // Programas que revisan su configuración al arrancar (Prometheus, Alertmanager...).
+  const exeName = cmd.split(/\s+/)[0].split('/').pop() ?? ''
+  const startError = EXEC_CHECKS[exeName]?.(ctx, cmd)
+  if (startError) {
+    fail(ctx, svc, startError.status, startError.lines)
+    jobFailed(false)
+    return false
+  }
   const proc = sys.spawn(def.user ?? 'root', cmd, 0, 0.4, 1, Date.now(), cmd.split(/\s+/)[0].split('/').pop())
   svc.active = true
   svc.failed = false

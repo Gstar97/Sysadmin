@@ -1,3 +1,4 @@
+import './commands/jq'
 import './commands/files'
 import './commands/text'
 import './commands/users'
@@ -50,6 +51,7 @@ import { verifyZfs } from './zfs'
 import { verifyIscsi } from './iscsi'
 import { verifyCeph } from './ceph'
 import { verifyBackup } from './backup'
+import { verifyObservability } from './observability'
 import { verifyGit } from './git'
 import './ansible'
 import './diskimage'
@@ -206,6 +208,8 @@ function verifyOn(sys: System, sh: Shell, check: Exclude<BashCheck, { en: string
   if (lvResult) return lvResult
   const gitResult = verifyGit(sys, check)
   if (gitResult) return gitResult
+  const obsResult = verifyObservability(sys, check)
+  if (obsResult) return obsResult
   const backupResult = verifyBackup(sys, check)
   if (backupResult) return backupResult
   const cephResult = verifyCeph(sys, check)

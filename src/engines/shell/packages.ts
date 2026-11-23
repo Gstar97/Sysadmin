@@ -2,6 +2,7 @@
 import { ROCKY_DB, UBUNTU_DB } from './dbpkgs'
 import { ROCKY_WEB, UBUNTU_WEB } from './webpkgs'
 import { ROCKY_VIRT, UBUNTU_VIRT } from './virtpkgs'
+import { ROCKY_MON, UBUNTU_MON } from './monpkgs'
 
 export interface PackageService {
   name: string
@@ -1047,6 +1048,7 @@ const common: Record<string, PackageInfo> = {
   gitleaks: { summary: 'Scan git repos (or files) for secrets', version: '8.18.2', commands: ['gitleaks'] },
   'ansible-lint': { summary: 'Best practices checker for Ansible', version: '6.17.2', commands: ['ansible-lint'], requires: ['ansible-core'] },
   tree: { summary: 'File system tree viewer', version: '2.1.0', commands: ['tree'] },
+  jq: { summary: 'Command-line JSON processor', version: '1.7.1', commands: ['jq'] },
   htop: { summary: 'Interactive process viewer', version: '3.3.0', commands: ['htop'] },
   rsync: { summary: 'A program for synchronizing files over a network', version: '3.3.0', commands: ['rsync'] },
   lsof: { summary: 'A utility which lists open files on a Linux/UNIX system', version: '4.98.0', commands: ['lsof'] },
@@ -1233,6 +1235,7 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
   ...ROCKY_WEB,
   ...ROCKY_DB,
   ...ROCKY_VIRT,
+  ...ROCKY_MON,
 }
 
 export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
@@ -1412,6 +1415,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   ...UBUNTU_WEB,
   ...UBUNTU_DB,
   ...UBUNTU_VIRT,
+  ...UBUNTU_MON,
 }
 
 export const BASE_INSTALLED = {

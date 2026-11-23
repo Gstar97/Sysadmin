@@ -136,6 +136,9 @@ export function commOf(p: Proc): string {
   return p.comm ?? (p.cmd.split(/\s+/)[0].split('/').pop() ?? '').replace(/:$/, '')
 }
 
+/** Procesos de servicios que registran otros módulos (monitoreo, logs...). */
+export const SERVICE_PROCS: Record<string, { cmd: string; user?: string; comm: string }> = {}
+
 /** Proceso principal de cada servicio: línea de comandos, usuario y nombre corto, como en un servidor real. */
 function serviceProcess(distro: 'rocky' | 'ubuntu', name: string): { cmd: string; user: string; comm: string } {
   const rocky = distro === 'rocky'
@@ -158,7 +161,7 @@ function serviceProcess(distro: 'rocky' | 'ubuntu', name: string): { cmd: string
     smbd: { cmd: '/usr/sbin/smbd --foreground --no-process-group', comm: 'smbd' },
     'nfs-server': { cmd: '[nfsd]', comm: 'nfsd' },
   }
-  const t = table[name] ?? { cmd: `/usr/sbin/${name}`, comm: name }
+  const t = SERVICE_PROCS[name] ?? table[name] ?? { cmd: `/usr/sbin/${name}`, comm: name }
   return { cmd: t.cmd, user: t.user ?? 'root', comm: t.comm }
 }
 

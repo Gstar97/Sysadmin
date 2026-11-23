@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { logsScenarioSchema, metricsScenarioSchema } from '../../content/scenario-schemas.ts'
 
 const fileSpecSchema = z.union([
   z.string(),
@@ -507,6 +508,13 @@ const stateShape = {
     })
     .optional(),
   /** Repositorios de restic que ya existen en este equipo (en una carpeta o en un bucket de objetos). */
+  /**
+   * Prometheus de este equipo: historia de las métricas (para las tendencias, un disco que se llena,
+   * picos). Los nodos con la misma instancia que un objetivo real cambian sus valores.
+   */
+  metricas: metricsScenarioSchema.optional(),
+  /** Loki de este equipo: logs que ya tenía antes del ejercicio (además de los que manda Alloy). */
+  logs_historicos: logsScenarioSchema.optional(),
   restic: z
     .strictObject({
       repos: z
@@ -855,6 +863,16 @@ const singleCheckSchema = z.union([
     hook: z.string().optional(),
     sin_rama: z.string().optional(),
   }),
+  /** Prometheus de este equipo: un objetivo (host:puerto) en la configuración cargada y su estado. */
+  z.strictObject({ prometheus_objetivo: z.string(), estado: z.enum(['up', 'down']).optional(), job: z.string().optional() }),
+  /** Prometheus de este equipo: una regla de alerta cargada y su estado. */
+  z.strictObject({ prometheus_alerta: z.string(), estado: z.enum(['inactive', 'pending', 'firing']).optional() }),
+  /** Alertmanager de este equipo: una alerta recibida (activa o silenciada). */
+  z.strictObject({ alertmanager_alerta: z.string(), silenciada: z.boolean().optional() }),
+  /** Loki de este equipo: líneas que devuelve una consulta de LogQL (en las últimas 6 horas). */
+  z.strictObject({ loki_lineas: z.string(), min: z.number().int().default(1) }),
+  /** Grafana de este equipo: un origen de datos cargado y si responde. */
+  z.strictObject({ grafana_datasource: z.string(), tipo: z.string().optional(), funciona: z.boolean().optional() }),
   /** Un repositorio de restic (carpeta de este equipo o s3:bucket/prefijo de su almacenamiento de objetos). */
   z.strictObject({ restic_repo: z.string(), existe: z.boolean().optional(), instantaneas_min: z.number().int().optional(), con_ruta: z.string().optional(), con_archivo: z.string().optional(), etiqueta: z.string().optional(), clave: z.string().optional() }),
   /** rest-server corriendo en este equipo y sus opciones. */
