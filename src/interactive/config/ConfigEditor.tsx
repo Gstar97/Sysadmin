@@ -41,6 +41,7 @@ const FILE_NAMES: Record<ConfigLanguage, string> = {
   exports: '/etc/exports',
   smbconf: '/etc/samba/smb.conf',
   inventario: 'inventario.ini',
+  rsyslog: '/etc/rsyslog.d/50-remoto.conf',
   texto: 'archivo.txt',
 }
 
@@ -62,6 +63,7 @@ function languageFor(lang: ConfigLanguage): Extension {
     case 'named':
     case 'frr':
     case 'nftables':
+    case 'rsyslog':
       return StreamLanguage.define(shell)
     case 'wireguard':
     case 'smbconf':

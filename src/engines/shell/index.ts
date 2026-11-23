@@ -55,6 +55,7 @@ import { verifyObservability } from './observability'
 import { verifyGit } from './git'
 import './ansible'
 import './diskimage'
+import './rsyslog'
 
 export { Shell, COMMANDS } from './shell'
 export { System } from './system'

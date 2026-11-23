@@ -30,6 +30,180 @@ export interface PackageInfo {
   requires?: string[]
 }
 
+const RSYSLOG_CONF_ROCKY = `# rsyslog configuration file
+
+# For more information see /usr/share/doc/rsyslog-*/rsyslog_conf.html
+# or latest version online at https://www.rsyslog.com/doc/rsyslog_conf.html
+# If you experience problems, see https://www.rsyslog.com/doc/troubleshoot.html
+
+#### GLOBAL DIRECTIVES ####
+
+# Where to place auxiliary files
+global(workDirectory="/var/lib/rsyslog")
+
+# Use default timestamp format
+module(load="builtin:omfile" Template="RSYSLOG_TraditionalFileFormat")
+
+#### MODULES ####
+
+module(load="imuxsock"    # provides support for local system logging (e.g. via logger command)
+       SysSock.Use="off") # Turn off message reception via local log socket;
+                          # local messages are retrieved through imjournal now.
+module(load="imjournal"             # provides access to the systemd journal
+       UsePid="system" # PID nummber is retrieved as the ID of the process the journal entry originates from
+       FileCreateMode="0644" # Set the access permissions for the state file
+       StateFile="imjournal.state") # File to store the position in the journal
+#module(load="imklog") # reads kernel messages (the same are read from journald)
+#module(load="immark") # provides --MARK-- message capability
+
+# Include all config files in /etc/rsyslog.d/
+include(file="/etc/rsyslog.d/*.conf" mode="optional")
+
+# Provides UDP syslog reception
+# for parameters see https://www.rsyslog.com/doc/imudp.html
+#module(load="imudp") # needs to be done just once
+#input(type="imudp" port="514")
+
+# Provides TCP syslog reception
+# for parameters see https://www.rsyslog.com/doc/imtcp.html
+#module(load="imtcp") # needs to be done just once
+#input(type="imtcp" port="514")
+
+#### RULES ####
+
+# Log all kernel messages to the console.
+# Logging much else clutters up the screen.
+#kern.*                                                 /dev/console
+
+# Log anything (except mail) of level info or higher.
+# Don't log private authentication messages!
+*.info;mail.none;authpriv.none;cron.none                /var/log/messages
+
+# The authpriv file has restricted access.
+authpriv.*                                              /var/log/secure
+
+# Log all the mail messages in one place.
+mail.*                                                  -/var/log/maillog
+
+
+# Log cron stuff
+cron.*                                                  /var/log/cron
+
+# Everybody gets emergency messages
+*.emerg                                                 :omusrmsg:*
+
+# Save news errors of level crit and higher in a special file.
+uucp,news.crit                                          /var/log/spooler
+
+# Save boot messages also to boot.log
+local7.*                                                /var/log/boot.log
+
+
+# ### sample forwarding rule ###
+#action(type="omfwd"
+# # An on-disk queue is created for this action. If the remote host is
+# # down, messages are spooled to disk and sent when it is up again.
+#queue.filename="fwdRule1"       # unique name prefix for spool files
+#queue.maxdiskspace="1g"         # 1gb space limit (use as much as possible)
+#queue.saveonshutdown="on"       # save messages to disk on shutdown
+#queue.type="LinkedList"         # run asynchronously
+#action.resumeRetryCount="-1"    # infinite retries if host is down
+# # Remote Logging (we use TCP for reliable delivery)
+# # remote_host is: name/ip, e.g. 192.168.0.1, port optional e.g. 10514
+#Target="remote_host" Port="XXX" Protocol="tcp")
+`
+
+const RSYSLOG_CONF_UBUNTU = `# /etc/rsyslog.conf configuration file for rsyslog
+#
+# For more information install rsyslog-doc and see
+# /usr/share/doc/rsyslog-doc/html/configuration/index.html
+#
+# Default logging rules can be found in /etc/rsyslog.d/50-default.conf
+
+
+#################
+#### MODULES ####
+#################
+
+module(load="imuxsock") # provides support for local system logging
+#module(load="immark")  # provides --MARK-- message capability
+
+# provides UDP syslog reception
+#module(load="imudp")
+#input(type="imudp" port="514")
+
+# provides TCP syslog reception
+#module(load="imtcp")
+#input(type="imtcp" port="514")
+
+# provides kernel logging support and enable non-kernel klog messages
+module(load="imklog" permitnonkernelfacility="on")
+
+###########################
+#### GLOBAL DIRECTIVES ####
+###########################
+
+#
+# Use traditional timestamp format.
+# To enable high precision timestamps, comment out the following line.
+#
+$ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
+
+# Filter duplicated messages
+$RepeatedMsgReduction on
+
+#
+# Set the default permissions for all log files.
+#
+$FileOwner syslog
+$FileGroup adm
+$FileCreateMode 0640
+$DirCreateMode 0755
+$Umask 0022
+$PrivDropToUser syslog
+$PrivDropToGroup syslog
+
+#
+# Where to place spool and state files
+#
+$WorkDirectory /var/spool/rsyslog
+
+#
+# Include all config files in /etc/rsyslog.d/
+#
+$IncludeConfig /etc/rsyslog.d/*.conf
+`
+
+const RSYSLOG_DEFAULT_UBUNTU = `#  Default rules for rsyslog.
+#
+#			For more information see rsyslog.conf(5) and /etc/rsyslog.conf
+
+#
+# First some standard log files.  Log by facility.
+#
+auth,authpriv.*			/var/log/auth.log
+*.*;auth,authpriv.none		-/var/log/syslog
+#cron.*				/var/log/cron.log
+#daemon.*			-/var/log/daemon.log
+kern.*				-/var/log/kern.log
+#lpr.*				-/var/log/lpr.log
+mail.*				-/var/log/mail.log
+#user.*				-/var/log/user.log
+
+#
+# Logging for the mail system.  Split it up so that
+# it is easy to write scripts to parse these files.
+#
+#mail.info			-/var/log/mail.info
+#mail.warn			-/var/log/mail.warn
+mail.err			/var/log/mail.err
+
+#
+# Emergencies are sent to everybody logged in.
+#
+*.emerg				:omusrmsg:*
+`
+
 const SMB_CONF_ROCKY = `# See smb.conf.example for a more detailed config file or
 # read the smb.conf manpage.
 # Run 'testparm' to verify the config is correct after
@@ -1072,6 +1246,13 @@ export const ROCKY_PACKAGES: Record<string, PackageInfo> = {
       '/etc/ansible/hosts': '# This is the default ansible \'hosts\' file.\n#\n# It should live in /etc/ansible/hosts\n#\n#   - Comments begin with the \'#\' character\n#   - Blank lines are ignored\n#   - Groups of hosts are delimited by [header] elements\n#   - You can enter hostnames or ip addresses\n#   - A hostname/ip can be a member of multiple groups\n\n# Ex 1: Ungrouped hosts, specify before any group headers:\n\n## green.example.com\n## blue.example.com\n## 192.168.100.1\n## 192.168.100.10\n\n# Ex 2: A collection of hosts belonging to the \'webservers\' group:\n\n## [webservers]\n## alpha.example.org\n## beta.example.org\n## 192.168.1.100\n## 192.168.1.110\n',
     } },
   ...common,
+  rsyslog: {
+    summary: 'Enhanced system logging and kernel message trapping daemon',
+    version: '8.2412.0',
+    services: [{ name: 'rsyslog', description: 'System Logging Service', ports: [], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/rsyslog.conf': RSYSLOG_CONF_ROCKY, '/etc/rsyslog.d/': '', '/var/lib/rsyslog/imjournal.state': '' },
+    commands: ['rsyslogd'],
+  },
   'policycoreutils-python-utils': { summary: 'SELinux policy core python utilities', version: '3.8', commands: ['semanage', 'audit2allow', 'audit2why', 'sepolicy'] },
   'bind-utils': { summary: 'Utilities for querying DNS name servers', version: '9.18.33', commands: ['dig', 'nslookup', 'host'] },
   bind: {
@@ -1322,6 +1503,8 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
     summary: 'reliable system and kernel logging daemon',
     version: '8.2406.0',
     services: [{ name: 'rsyslog', description: 'System Logging Service', ports: [], enabledByDefault: true, activeAfterInstall: true }],
+    files: { '/etc/rsyslog.conf': RSYSLOG_CONF_UBUNTU, '/etc/rsyslog.d/50-default.conf': RSYSLOG_DEFAULT_UBUNTU, '/var/spool/rsyslog/': '' },
+    commands: ['rsyslogd'],
   },
   vim: { summary: 'Vi IMproved - enhanced vi editor', version: '9.1.0016', commands: ['vim'] },
   'net-tools': { summary: 'NET-3 networking toolkit (obsolete: use iproute2)', version: '2.10', commands: ['ifconfig', 'netstat', 'route'] },
@@ -1419,7 +1602,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
 }
 
 export const BASE_INSTALLED = {
-  rocky: ['bash', 'coreutils', 'sudo', 'curl', 'nano', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'firewalld', 'cronie', 'lsof', 'ipcalc', 'iputils', 'ethtool'],
+  rocky: ['bash', 'coreutils', 'sudo', 'curl', 'nano', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'firewalld', 'cronie', 'rsyslog', 'lsof', 'ipcalc', 'iputils', 'ethtool'],
   ubuntu: ['bash', 'coreutils', 'sudo', 'curl', 'wget', 'nano', 'vim', 'xxd', 'tar', 'rsync', 'python3', 'chrony', 'openssh-server', 'ufw', 'cron', 'rsyslog', 'lsof', 'apparmor', 'dnsutils', 'ethtool'],
 }
 

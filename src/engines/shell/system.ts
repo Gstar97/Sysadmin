@@ -150,7 +150,7 @@ function serviceProcess(distro: 'rocky' | 'ubuntu', name: string): { cmd: string
     chronyd: { cmd: '/usr/sbin/chronyd -F 2', user: 'chrony', comm: 'chronyd' },
     chrony: { cmd: '/usr/sbin/chronyd -F 1', user: '_chrony', comm: 'chronyd' },
     firewalld: { cmd: '/usr/bin/python3 -s /usr/sbin/firewalld --nofork --nopid', comm: 'firewalld' },
-    rsyslog: { cmd: '/usr/sbin/rsyslogd -n -iNONE', user: 'syslog', comm: 'rsyslogd' },
+    rsyslog: rocky ? { cmd: '/usr/sbin/rsyslogd -n', comm: 'rsyslogd' } : { cmd: '/usr/sbin/rsyslogd -n -iNONE', user: 'syslog', comm: 'rsyslogd' },
     nginx: { cmd: 'nginx: master process /usr/sbin/nginx', comm: 'nginx' },
     httpd: { cmd: '/usr/sbin/httpd -DFOREGROUND', comm: 'httpd' },
     apache2: { cmd: '/usr/sbin/apache2 -k start', comm: 'apache2' },
@@ -618,6 +618,11 @@ export class System {
 
   /** Lo que avanza con el tiempo entre comando y comando (una reconstrucción de RAID, la UPS). */
   static refreshHooks: ((sys: System) => void)[] = []
+  /**
+   * Un mensaje de syslog generado en este equipo (logger, sshd). Si rsyslog está andando lo procesa
+   * con sus reglas y devuelve true; si no, el que llama escribe el archivo de siempre.
+   */
+  static syslogHook?: (sys: System, m: { facility: string; severity: string; tag: string; pid?: number; msg: string; time?: number }) => boolean
 
   // ---------------------------------------------------------------------------
   // Cuentas
@@ -749,6 +754,11 @@ export class System {
     for (const r of info.requires ?? []) if (!this.installed.has(r)) this.installPackage(r, silent)
     if (info.user && !this.users.has(info.user.name)) this.addSystemUser(info.user.name, info.user.uid, info.user.home, info.user.gecos)
     for (const [path, content] of Object.entries(info.files ?? {})) {
+      // Una ruta que termina en / es una carpeta vacía del paquete (/etc/rsyslog.d/, por ejemplo).
+      if (path.endsWith('/')) {
+        this.vfs.mkdirp(path.slice(0, -1), ROOT_CRED)
+        continue
+      }
       this.vfs.mkdirp(path.slice(0, path.lastIndexOf('/')) || '/', ROOT_CRED)
       if (!this.vfs.exists(path)) this.vfs.writeFile(path, content, ROOT_CRED)
     }

@@ -468,7 +468,7 @@ register('rpm', {
         return 1
       }
       for (const c of info.commands ?? []) ctx.out(`${binDir(c)}/${c}\n`)
-      for (const f of Object.keys(info.files ?? {})) ctx.out(f + '\n')
+      for (const f of Object.keys(info.files ?? {})) ctx.out(f.replace(/\/$/, '') + '\n')
       return 0
     }
     ctx.err('rpm: no arguments given for query\n')
@@ -497,7 +497,7 @@ register('dpkg', {
         return 1
       }
       for (const c of info.commands ?? []) ctx.out(`${binDir(c)}/${c}\n`)
-      for (const f of Object.keys(info.files ?? {})) ctx.out(f + '\n')
+      for (const f of Object.keys(info.files ?? {})) ctx.out(f.replace(/\/$/, '') + '\n')
       return 0
     }
     if (opt === '-S') {

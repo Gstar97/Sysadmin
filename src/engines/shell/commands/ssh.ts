@@ -3,7 +3,7 @@
  * ssh-copy-id, ssh-agent y ssh-add, scp, rsync y sshd -t.
  */
 import { register, type CommandContext, type Shell } from '../shell'
-import type { System } from '../system'
+import { System } from '../system'
 import { FsError, ROOT_CRED, type Cred } from '../vfs'
 import { SERVICE_CHECKS, strftime } from './sysinfo'
 import {
@@ -38,6 +38,8 @@ import {
 function sshLog(sys: System, pid: number, message: string, priority = 6) {
   const unit = sys.distro === 'rocky' ? 'sshd.service' : 'ssh.service'
   sys.journal.push({ time: Date.now(), unit, priority, message, ident: 'sshd', pid })
+  const sev = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug'][priority] ?? 'info'
+  if (System.syslogHook?.(sys, { facility: sys.distro === 'rocky' ? 'authpriv' : 'auth', severity: sev, tag: 'sshd', pid, msg: message })) return
   const file = sys.distro === 'rocky' ? '/var/log/secure' : '/var/log/auth.log'
   try {
     sys.vfs.writeFile(file, `${strftime('%b %e %T', new Date())} ${sys.hostname} sshd[${pid}]: ${message}\n`, ROOT_CRED, { append: true })

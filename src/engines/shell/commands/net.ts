@@ -507,10 +507,18 @@ register(['ping', 'ping6'], {
   },
 })
 
+/** Servicios que escuchan donde dice su configuración (rsyslog con imtcp/imudp, por ejemplo). */
+export const SERVICE_LISTEN: Record<string, (sys: System) => { proto: string; local: string; port: number; proc: string }[]> = {}
+
 function listeningSockets(ctx: CommandContext) {
   const out: { proto: string; local: string; port: number; proc: string; pid: number }[] = []
   for (const s of ctx.sys.services.values()) {
     if (!s.active) continue
+    const hook = SERVICE_LISTEN[s.name]
+    if (hook) {
+      for (const x of hook(ctx.sys)) out.push({ ...x, pid: s.pid ?? 1 })
+      continue
+    }
     // Los DNS y Kea escuchan en direcciones concretas: se ven en ss tal como están configurados.
     const addrs = s.name === 'named' ? namedListen(ctx.sys) : s.name === 'unbound' ? unboundListen(ctx.sys) : s.name.startsWith('kea-dhcp4') ? keaListen(ctx.sys) : undefined
     if (addrs) {

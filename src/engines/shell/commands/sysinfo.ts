@@ -186,9 +186,12 @@ register('logger', {
   run(ctx) {
     const a = parseArgs(ctx.args, { values: { t: ['t', 'tag'], p: ['p', 'priority'] } })
     const msg = a.rest.join(' ') || ctx.stdin.readAll().trim()
-    const prio = a.values.get('p')?.split('.').pop() ?? 'notice'
+    const pv = a.values.get('p') ?? 'user.notice'
+    const [facility, prio] = pv.includes('.') ? pv.split('.') : ['user', pv]
     const ident = a.values.get('t') ?? ctx.sh.user
     ctx.sys.journal.push({ time: Date.now(), unit: 'user', priority: priorityNumber(prio), message: msg, ident })
+    const severity = ({ panic: 'emerg', error: 'err', warn: 'warning' } as Record<string, string>)[prio] ?? prio
+    if (System.syslogHook?.(ctx.sys, { facility: facility.toLowerCase(), severity, tag: ident, msg })) return 0
     const file = ctx.sys.distro === 'rocky' ? '/var/log/messages' : '/var/log/syslog'
     ctx.sys.vfs.writeFile(file, `${journalTime(Date.now())} ${ctx.sys.hostname} ${ident}: ${msg}\n`, ROOT_CRED, { append: true })
     return 0
