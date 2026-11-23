@@ -1,0 +1,111 @@
+tipo: terminal
+shell: bash
+titulo: Logs centralizados con la hora mal
+descripcion: >-
+  logs01 (192.168.10.40, Rocky Linux 10) ya recibe los logs de web01 (Ubuntu) y db01 (Rocky) por
+  rsyslog y los guarda en /var/log/remote/EQUIPO/PROGRAMA.log. Entrás a los dos por SSH con clave,
+  con sudo. El servidor de hora de la red es el router, 192.168.10.1.
+estado_inicial:
+  distro: rocky
+  hostname: logs01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.40/24, estado: UP }
+    puerta_enlace: 192.168.10.1
+  archivos:
+    /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+    /etc/hosts: { contenido: "127.0.0.1 localhost\n192.168.10.11 web01\n192.168.10.21 db01\n192.168.10.40 logs01\n" }
+    /etc/rsyslog.d/10-remotos.conf:
+      contenido: |
+        module(load="imtcp")
+        input(type="imtcp" port="514" ruleset="remotos")
+        template(name="PorEquipo" type="string" string="/var/log/remote/%HOSTNAME%/%PROGRAMNAME%.log")
+        ruleset(name="remotos") {
+          action(type="omfile" dynaFile="PorEquipo")
+        }
+  servicios_firewall: [ssh]
+  servidores:
+    - hostname: web01
+      ip: 192.168.10.11
+      distro: ubuntu
+      clave_conocida: si
+      usuarios: [{ nombre: ana, clave_ssh: true }]
+      red: { interfaces: [{ nombre: enp1s0, ip: 192.168.10.11/24, estado: UP }], puerta_enlace: 192.168.10.1, internet: false }
+      hora: { zona: America/Argentina/Buenos_Aires, servidor_ntp: 192.168.10.1 }
+      archivos:
+        /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+        /etc/hosts: { contenido: "127.0.0.1 localhost\n192.168.10.40 logs01\n" }
+        /etc/rsyslog.d/90-central.conf: { contenido: "*.* @@logs01:514\n" }
+    - hostname: db01
+      ip: 192.168.10.21
+      clave_conocida: si
+      usuarios: [{ nombre: ana, clave_ssh: true }]
+      red: { interfaces: [{ nombre: enp1s0, ip: 192.168.10.21/24, estado: UP }], puerta_enlace: 192.168.10.1, internet: false }
+      hora: { zona: America/Argentina/Buenos_Aires, desfase_segundos: -420, servidor_ntp: ntp.viejo.lab }
+      archivos:
+        /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+        /etc/hosts: { contenido: "127.0.0.1 localhost\n192.168.10.40 logs01\n" }
+        /etc/rsyslog.d/90-central.conf: { contenido: "*.* @@logs01:514\n" }
+pasos:
+  - consigna: >-
+      El firewall de logs01 todavía no deja entrar los logs. Abrí el 514/tcp de forma permanente y
+      después mandá una línea de prueba desde cada servidor, uno atrás del otro (logger -t prueba
+      con un texto), y mirá en logs01 los dos archivos prueba.log.
+    verificar:
+      - { firewall_permite: 514/tcp }
+      - { archivo: /var/log/remote/web01/prueba.log, existe: true }
+      - { archivo: /var/log/remote/db01/prueba.log, existe: true }
+    pistas:
+      - "sudo firewall-cmd --permanent --add-port=514/tcp && sudo firewall-cmd --reload"
+      - "ssh web01 \"logger -t prueba hola desde web01\" y lo mismo en db01."
+      - "sudo cat /var/log/remote/*/prueba.log"
+    solucion:
+      - sudo firewall-cmd --permanent --add-port=514/tcp && sudo firewall-cmd --reload
+      - ssh web01 "logger -t prueba hola desde web01"
+      - ssh db01 "logger -t prueba hola desde db01"
+      - sudo cat /var/log/remote/web01/prueba.log /var/log/remote/db01/prueba.log
+    explicacion: >-
+      Las dos líneas se mandaron con segundos de diferencia, pero la de db01 dice siete minutos
+      menos. Cada servidor pone la hora de SU reloj: en el servidor central quedan ordenadas mal y
+      cualquier búsqueda por horario ("¿qué pasó entre las 14:02 y las 14:05?") da un resultado
+      engañoso.
+  - consigna: >-
+      Averiguá con chronyc cuál de los dos servidores tiene la hora mal y por qué no se corrige
+      sola.
+    verificar:
+      - { comando_usado: chronyc }
+      - { salida_contiene: "ntp.viejo.lab" }
+    pistas:
+      - "ssh db01 chronyc tracking muestra cuánto está corrido el reloj (seconds slow o fast) y si está sincronizado."
+      - "ssh db01 chronyc sources muestra contra qué servidores intenta sincronizar; ^? es que no responde."
+    solucion:
+      - ssh web01 chronyc tracking
+      - ssh db01 chronyc tracking
+      - ssh db01 chronyc sources
+    explicacion: >-
+      db01 está "420 seconds slow" y "Not synchronised": su chrony apunta a ntp.viejo.lab, un
+      servidor que ya no existe. Nadie se dio cuenta porque el servidor anda igual; el problema
+      aparece recién cuando hay que comparar sus logs con los de otro equipo.
+  - consigna: >-
+      Corregí db01: que chrony use 192.168.10.1 (en lugar de ntp.viejo.lab), reiniciá chronyd y
+      comprobá que quedó sincronizado. Mandá otra línea de prueba desde cada servidor y compará.
+    verificar:
+      - { en: db01, verificar: { archivo: /etc/chrony.conf, contenido_incluye: "server 192.168.10.1" } }
+      - { en: db01, verificar: { archivo: /etc/chrony.conf, contenido_no_incluye: "ntp.viejo.lab" } }
+      - { archivo: /var/log/remote/db01/prueba.log, contenido_incluye: "otra vez desde db01" }
+    pistas:
+      - "ssh db01 \"sudo sed -i 's/^server ntp.viejo.lab/server 192.168.10.1/' /etc/chrony.conf\""
+      - "ssh db01 \"sudo systemctl restart chronyd && chronyc tracking\": makestep 1.0 3 en chrony.conf deja corregir el salto de golpe al arrancar."
+    solucion:
+      - ssh db01 "sudo sed -i 's/^server ntp.viejo.lab/server 192.168.10.1/' /etc/chrony.conf"
+      - ssh db01 "sudo systemctl restart chronyd && chronyc tracking"
+      - ssh web01 "logger -t prueba otra vez desde web01"
+      - ssh db01 "logger -t prueba otra vez desde db01"
+      - sudo tail -n1 /var/log/remote/web01/prueba.log /var/log/remote/db01/prueba.log
+    explicacion: >-
+      Ahora las dos líneas tienen la misma hora. Las viejas quedan mal para siempre: por eso la
+      hora sincronizada se controla antes de que haga falta (el monitoreo de la lección 6.4 puede
+      alertar si chrony no está sincronizado). Y fijate que las líneas no dicen ni el año ni la zona
+      horaria: con el formato RFC 5424 o JSON, la hora va completa.

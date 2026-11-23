@@ -141,8 +141,9 @@ export interface LocalMessage {
 }
 
 /**
- * Un mensaje generado en este equipo. Devuelve false si rsyslog no está andando (el que llama lo
- * escribe directamente, como hacía journald solo).
+ * Un mensaje generado en este equipo, con la hora de SU reloj (si está desfasado, el servidor
+ * central recibe la hora mal). Devuelve false si rsyslog no está andando (el que llama lo escribe
+ * directamente, como hacía journald solo).
  */
 export function emitSyslog(sys: System, m: LocalMessage): boolean {
   const rt = runtime(sys)
@@ -150,7 +151,7 @@ export function emitSyslog(sys: System, m: LocalMessage): boolean {
   // Sin imjournal ni imuxsock, rsyslog no recibe los mensajes locales.
   if (!rt.cfg.modules.has('imjournal') && !rt.cfg.modules.has('imuxsock')) return true
   flushQueues(sys)
-  const msg: RsMessage = { facility: m.facility, severity: m.severity, hostname: sys.hostname, fromhost: sys.hostname, fromhostIp: '127.0.0.1', programname: m.tag, pid: m.pid, msg: m.msg, time: m.time ?? Date.now(), inputname: rt.cfg.modules.has('imjournal') ? 'imjournal' : 'imuxsock' }
+  const msg: RsMessage = { facility: m.facility, severity: m.severity, hostname: sys.hostname, fromhost: sys.hostname, fromhostIp: '127.0.0.1', programname: m.tag, pid: m.pid, msg: m.msg, time: m.time ?? Date.now() + sys.clock.offset * 1000, inputname: rt.cfg.modules.has('imjournal') ? 'imjournal' : 'imuxsock' }
   process(sys, rt, msg, MAIN_RULESET, 0)
   return true
 }

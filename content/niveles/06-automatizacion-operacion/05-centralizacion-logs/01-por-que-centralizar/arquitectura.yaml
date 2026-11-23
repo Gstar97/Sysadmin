@@ -1,0 +1,32 @@
+tipo: diagrama
+titulo: Arquitectura de logs centralizados
+puntos:
+  - id: origenes
+    titulo: De dónde salen
+    area: { x: 2.3, y: 10, ancho: 23.3, alto: 57.5 }
+    texto: >-
+      Cada equipo genera sus logs: journald y los archivos de /var/log en Linux, el Visor de eventos
+      en Windows, syslog en los equipos de red y archivos propios en las aplicaciones. Para poder
+      compararlos tienen que tener la misma hora: todos sincronizados por NTP.
+  - id: envio
+    titulo: Quién los manda
+    area: { x: 30.2, y: 10, ancho: 19.8, alto: 57.5 }
+    texto: >-
+      Un agente en cada equipo lee los logs y los manda al servidor central: rsyslog (que ya viene en
+      Linux), Grafana Alloy (archivos y journal hacia Loki) o Windows Event Forwarding para los
+      eventos de Windows. Con una cola, si el central no está, los mensajes esperan en lugar de
+      perderse.
+  - id: central
+    titulo: La plataforma central
+    area: { x: 54.7, y: 10, ancho: 43, alto: 57.5 }
+    texto: >-
+      Guarda todo con una retención definida, permite buscar en todos los equipos a la vez y ver qué
+      pasó antes y después de un problema, dispara alertas por patrones y conserva una copia que un
+      atacante no puede borrar desde el equipo que comprometió.
+  - id: formato
+    titulo: El formato
+    area: { x: 2.3, y: 72, ancho: 95.3, alto: 25 }
+    texto: >-
+      El formato syslog clásico (RFC 3164) no tiene año ni zona horaria. RFC 5424 agrega la hora
+      completa, el programa, el PID y datos estructurados; JSON va más allá: cada dato es un campo
+      con nombre, que la plataforma puede filtrar sin tener que adivinar con expresiones regulares.
