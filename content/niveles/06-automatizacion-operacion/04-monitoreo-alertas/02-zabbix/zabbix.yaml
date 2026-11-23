@@ -1,0 +1,55 @@
+tipo: diagrama
+titulo: Arquitectura de Zabbix
+puntos:
+  - id: servidor
+    titulo: El servidor
+    area: { x: 34.9, y: 10.5, ancho: 30.2, alto: 39.5 }
+    texto: >-
+      zabbix_server junta los datos, evalúa los triggers y ejecuta las acciones. Todo lo que se
+      configura (hosts, plantillas, items, triggers, macros, reglas de descubrimiento) vive en su
+      base de datos y se administra desde la interfaz web.
+  - id: base
+    titulo: Base de datos e interfaz web
+    area: { x: 34.9, y: 55.3, ancho: 30.2, alto: 18.4 }
+    texto: >-
+      La base (PostgreSQL o MySQL) guarda la configuración y la historia de los valores: es lo que
+      hay que respaldar. La interfaz web es PHP detrás de nginx o Apache; desde ahí se configura todo
+      y se ven los problemas, los gráficos y los tableros.
+  - id: pasivo
+    titulo: Chequeo pasivo
+    area: { x: 2.3, y: 10.5, ancho: 26.7, alto: 18.4 }
+    texto: >-
+      El servidor se conecta al agente (puerto 10050) y le pide un dato. El agente solo responde a
+      los equipos que figuran en Server=; a cualquier otro le corta la conexión.
+  - id: activo
+    titulo: Chequeo activo
+    area: { x: 2.3, y: 32.9, ancho: 26.7, alto: 18.4 }
+    texto: >-
+      El agente le pide al servidor la lista de lo que tiene que medir y le manda los valores solo
+      (al 10051 de ServerActive). Sirve cuando el servidor no puede llegar al equipo (NAT, firewall)
+      y escala mejor. Hostname tiene que coincidir con el nombre del host en Zabbix.
+  - id: sin-agente
+    titulo: Sin agente
+    area: { x: 2.3, y: 55.3, ancho: 26.7, alto: 18.4 }
+    texto: >-
+      Switches, UPS e impresoras no llevan agente: se monitorean por SNMP. También hay chequeos
+      simples: ping, un puerto abierto, una página web, el vencimiento de un certificado.
+  - id: acciones
+    titulo: Acciones
+    area: { x: 70.9, y: 10.5, ancho: 26.7, alto: 28.9 }
+    texto: >-
+      Cuando un trigger pasa a PROBLEM, una acción avisa por un medio (correo, Telegram, Slack,
+      Teams o un script) a quien corresponda, y vuelve a avisar cuando se resuelve.
+  - id: proxy
+    titulo: Proxy
+    area: { x: 70.9, y: 43.4, ancho: 26.7, alto: 30.3 }
+    texto: >-
+      Para una sede remota: el proxy junta los datos de los equipos de esa red y se los pasa al
+      servidor. Si se corta el enlace, los guarda y los manda después.
+  - id: trigger
+    titulo: Triggers
+    area: { x: 2.3, y: 77.9, ancho: 95.3, alto: 18.9 }
+    texto: >-
+      Un trigger es una expresión sobre los datos que, si da verdadero, es un problema. last() mira
+      el último valor; min() y avg() un período; nodata() avisa si dejaron de llegar datos; y
+      timeleft() estima cuánto falta para llegar a un valor al ritmo actual: ideal para discos.

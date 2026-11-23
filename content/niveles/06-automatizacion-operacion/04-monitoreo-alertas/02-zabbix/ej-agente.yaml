@@ -1,0 +1,86 @@
+tipo: terminal
+shell: bash
+titulo: El agente de Zabbix en un servidor nuevo
+descripcion: >-
+  mon01 (192.168.10.30) es el servidor de Zabbix del laboratorio. Hay que sumar web01
+  (192.168.10.11, Rocky Linux 10) con el agente 2. El repositorio de Zabbix 8.0 ya está agregado
+  en los dos equipos (/etc/yum.repos.d/zabbix.repo) y entrás a web01 por SSH con clave, con sudo.
+estado_inicial:
+  distro: rocky
+  hostname: mon01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.30/24, estado: UP }
+  archivos:
+    /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+    /etc/yum.repos.d/zabbix.repo: { contenido: "[zabbix]\nname=Zabbix Official Repository - $basearch\nbaseurl=https://repo.zabbix.com/zabbix/8.0/release/rocky/10/$basearch/\nenabled=1\ngpgcheck=1\n" }
+    /etc/hosts: { contenido: "127.0.0.1 localhost\n192.168.10.11 web01\n" }
+  servidores:
+    - hostname: web01
+      ip: 192.168.10.11
+      clave_conocida: si
+      usuarios: [{ nombre: ana, clave_ssh: true }]
+      archivos:
+        /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+        /etc/yum.repos.d/zabbix.repo: { contenido: "[zabbix]\nname=Zabbix Official Repository - $basearch\nbaseurl=https://repo.zabbix.com/zabbix/8.0/release/rocky/10/$basearch/\nenabled=1\ngpgcheck=1\n" }
+pasos:
+  - consigna: >-
+      En web01, instalá el paquete zabbix-agent2 y configuralo para que el servidor de Zabbix
+      (192.168.10.30) pueda consultarlo (Server) y para que mande sus chequeos activos al mismo
+      servidor (ServerActive), con el nombre web01 (Hostname). Dejalo arrancado y habilitado.
+    verificar:
+      - { en: web01, verificar: { paquete: zabbix-agent2 } }
+      - { en: web01, verificar: { archivo: /etc/zabbix/zabbix_agent2.conf, contenido_incluye: "Server=192.168.10.30" } }
+      - { en: web01, verificar: { archivo: /etc/zabbix/zabbix_agent2.conf, contenido_incluye: "Hostname=web01" } }
+      - { en: web01, verificar: { servicio: zabbix-agent2, activo: true, habilitado: true } }
+    pistas:
+      - "ssh web01 y después sudo dnf install -y zabbix-agent2"
+      - "Los parámetros están en /etc/zabbix/zabbix_agent2.conf: cambiá las líneas Server=, ServerActive= y Hostname= (con sed -i o con un editor)."
+      - "sudo systemctl enable --now zabbix-agent2"
+    solucion:
+      - ssh web01 "sudo dnf install -y zabbix-agent2"
+      - >-
+        ssh web01 "sudo sed -i -e 's/^Server=.*/Server=192.168.10.30/' -e 's/^ServerActive=.*/ServerActive=192.168.10.30/' -e 's/^Hostname=.*/Hostname=web01/' /etc/zabbix/zabbix_agent2.conf"
+      - ssh web01 "sudo systemctl enable --now zabbix-agent2"
+    explicacion: >-
+      Server es la lista de equipos que pueden pedirle datos al agente (chequeos pasivos, al puerto
+      10050). ServerActive es adónde manda el agente los chequeos activos (al 10051 del servidor).
+      Hostname tiene que coincidir exactamente con el nombre del equipo dado de alta en Zabbix, o
+      los chequeos activos se rechazan.
+  - consigna: >-
+      Desde mon01, instalá zabbix-get y pedile a web01 el dato agent.ping. Si no responde, fijate
+      qué lo bloquea y arreglalo.
+    verificar:
+      - { paquete: zabbix-get }
+      - { salida_regex: "^1\\s*$" }
+      - { comando_usado: zabbix_get }
+    pistas:
+      - "zabbix_get -s web01 -k agent.ping"
+      - "web01 es Rocky: firewalld no deja pasar el 10050 hasta que lo abras (con --permanent y recargando, o agregándolo también sin --permanent)."
+    solucion:
+      - sudo dnf install -y zabbix-get
+      - zabbix_get -s web01 -k agent.ping
+      - ssh web01 "sudo firewall-cmd --permanent --add-port=10050/tcp && sudo firewall-cmd --reload"
+      - zabbix_get -s web01 -k agent.ping
+    explicacion: >-
+      "Cannot establish TCP connection ... No route to host" es firewalld rechazando la conexión:
+      el agente funciona, pero no llega nada. zabbix_get es la herramienta para probar un agente sin
+      pasar por la interfaz web: si zabbix_get no anda, Zabbix tampoco va a poder.
+  - consigna: >-
+      Pedile a web01 el porcentaje libre del disco raíz y la carga del último minuto, que son dos de
+      los datos que usa la plantilla "Linux by Zabbix agent".
+    verificar:
+      - { salida_regex: "^\\d+(\\.\\d+)?\\s*$" }
+      - { comando_usado: "system.cpu.load" }
+    pistas:
+      - "Las claves llevan parámetros entre corchetes: vfs.fs.size[/,pfree] y system.cpu.load[all,avg1]. Poné la clave entre comillas para que la terminal no interprete los corchetes."
+    solucion:
+      - zabbix_get -s web01 -k "vfs.fs.size[/,pfree]"
+      - zabbix_get -s web01 -k "system.cpu.load[all,avg1]"
+    explicacion: >-
+      Cada dato que junta Zabbix es un item con una clave como estas. Las plantillas traen cientos
+      ya armadas (y descubren solas los discos y las placas de red), así que casi nunca hay que
+      escribirlas a mano; zabbix_get sirve para ver qué devuelve una clave cuando un gráfico da algo
+      raro.

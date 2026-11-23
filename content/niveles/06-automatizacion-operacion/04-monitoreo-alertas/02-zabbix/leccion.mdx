@@ -1,0 +1,117 @@
+---
+id: n6-m4-l2
+titulo: Zabbix
+minutos: 210
+objetivos:
+  - Entender la arquitectura de Zabbix (servidor, base, interfaz web, agentes y proxies) y los chequeos pasivos y activos.
+  - Sumar equipos Linux y Windows con el agente 2 y las plantillas oficiales.
+  - Escribir triggers con umbrales y tendencias, y avisar con acciones y medios.
+glosario: [zabbix, chequeo-pasivo-activo, plantilla-zabbix, trigger-zabbix]
+verificado: 2026-11
+---
+
+import zbx from './zabbix.svg?raw'
+import zbxDatos from './zabbix.yaml'
+import ejConceptos from './ej-conceptos.yaml'
+import ejAgente from './ej-agente.yaml'
+
+Zabbix es el sistema de monitoreo "clásico" de muchas empresas: un servidor central, un agente en cada equipo, una interfaz web donde se configura todo y plantillas listas para Linux, Windows, bases de datos, switches y UPS. Su punto fuerte es lo que viene hecho: le asignás la plantilla de Linux a un servidor y en minutos tenés CPU, memoria, discos, red, servicios y alertas razonables, sin escribir nada. La versión actual es **Zabbix 8.0 LTS** (noviembre de 2026, con soporte completo hasta 2029); la 7.0 LTS sigue con soporte y funciona casi igual.
+
+<AntesDeEmpezar>
+- Qué monitorear: síntomas, causas, RED y USE (lección 6.4.1).
+- Repositorios de paquetes (lección 1.3.1) y firewalld (lección 1.6.5).
+- PostgreSQL (módulo 4.3) y nginx con PHP-FPM (módulo 4.1), que usan el servidor y la interfaz web.
+</AntesDeEmpezar>
+
+## Cómo está armado
+
+<DiagramaInteractivo datos={zbxDatos} svg={zbx} alt="En el centro, zabbix_server en mon01: pide datos a los agentes, recibe los que mandan, evalúa los triggers y ejecuta las acciones; debajo, la base de datos (PostgreSQL o MySQL) y la interfaz web (PHP con nginx). A la izquierda, el chequeo pasivo (el servidor le pregunta al agente en el 10050), el activo (el agente manda solo al 10051) y los chequeos sin agente (SNMP, ping, HTTP, certificados). A la derecha, las acciones y medios que avisan cuando un trigger pasa a PROBLEM, y el proxy opcional para otra sede. Abajo, dos ejemplos de trigger: el último porcentaje usado de la raíz mayor a 90, y timeleft para saber si se llena en menos de un día." />
+
+- **Pasivo**: el servidor se conecta al agente en el puerto 10050 y le pide un dato. El agente solo responde a los equipos de su línea `Server=`.
+- **Activo**: el agente le pide al servidor (en el 10051) la lista de lo que tiene que medir y se lo manda solo. Sirve si el servidor no llega al equipo (NAT, firewall) y aguanta más equipos. El `Hostname=` del agente tiene que ser igual al nombre del host en Zabbix.
+
+## Instalación del servidor
+
+Se hace una vez, en un equipo propio (en el laboratorio, mon01). En resumen, siguiendo la página de descargas de zabbix.com (eligiendo 8.0 LTS, el sistema, PostgreSQL y nginx):
+
+```bash
+# 1. El repositorio oficial: el paquete zabbix-release que indica la página de descargas
+#    (en Ubuntu 24.04: zabbix-release_latest+ubuntu24.04_all.deb, con dpkg -i)
+sudo dnf install -y zabbix-server-pgsql zabbix-web-pgsql zabbix-nginx-conf zabbix-sql-scripts zabbix-agent2
+
+# 2. La base: un usuario y una base para Zabbix, y el esquema inicial
+sudo -u postgres createuser --pwprompt zabbix
+sudo -u postgres createdb -O zabbix zabbix
+zcat /usr/share/zabbix/sql-scripts/postgresql/server.sql.gz | sudo -u zabbix psql zabbix
+
+# 3. DBPassword= en /etc/zabbix/zabbix_server.conf; listen y server_name en /etc/nginx/conf.d/zabbix.conf
+sudo systemctl enable --now zabbix-server zabbix-agent2 nginx php-fpm
+sudo firewall-cmd --permanent --add-service=http --add-port=10051/tcp && sudo firewall-cmd --reload
+```
+
+Después se termina el asistente en `http://mon01/` y se entra con **Admin / zabbix**: lo primero es cambiar esa contraseña. En Rocky 10 con SELinux, los paquetes de política se llaman `zabbix-selinux-policy-main`. El Nivel 7 muestra cómo levantar lo mismo con contenedores.
+
+## Hosts, plantillas, items y triggers
+
+<Emparejar ejercicio={ejConceptos} />
+
+Lo habitual al sumar un servidor:
+
+1. Instalar el agente 2 y apuntarlo al servidor (`Server=`, `ServerActive=`, `Hostname=`), y abrir el 10050 en su firewall.
+2. En la interfaz web, crear el **host** con su IP o nombre, ponerlo en un grupo ("Servidores web") y asignarle la plantilla **Linux by Zabbix agent** (o **Windows by Zabbix agent**).
+3. Ajustar los umbrales que no te sirvan con **macros** en el host, sin tocar la plantilla: por ejemplo `{$VFS.FS.PUSED.MAX.WARN}` para el porcentaje de disco que dispara un aviso.
+
+Para Windows, el agente 2 viene en un instalador MSI con los mismos parámetros (Server, ServerActive, Hostname), y la plantilla de Windows mide servicios, eventos, discos y memoria. Lo podés instalar con la misma GPO de software del Nivel 3 o con el playbook de Ansible del módulo anterior.
+
+Manos a la obra con el agente:
+
+<Terminal ejercicio={ejAgente} />
+
+## Triggers que avisan bien
+
+Un trigger es una expresión sobre los datos; mientras da verdadero, hay un problema:
+
+```text
+last(/web01/vfs.fs.size[/,pused])>90                  el último valor pasa de 90 %
+min(/web01/system.cpu.util,15m)>95                   la CPU estuvo arriba de 95 % los últimos 15 minutos entera
+nodata(/web01/agent.ping,5m)=1                       hace 5 minutos que no llegan datos
+timeleft(/web01/vfs.fs.size[/,pused],1h,100)<1d     al ritmo de la última hora, se llena en menos de un día
+```
+
+Algunas ideas que evitan alertas inútiles:
+
+- **Mirar un período**, no un solo valor: `min(...,15m)>95` en vez de `last(...)>95` evita avisos por un pico de un segundo.
+- **Tendencias** para lo que se va llenando: `timeleft` avisa con tiempo, aunque el disco esté al 60 %.
+- **Severidades** (información, advertencia, media, alta, desastre) y acciones distintas para cada una: lo de severidad alta va al celular de la guardia, lo demás al correo del equipo.
+- **Dependencias**: si se cae el switch de una sede, que no lleguen cincuenta avisos de los equipos que están detrás.
+
+<EnSimple>
+Zabbix tiene un servidor central que guarda todo en una base de datos, una interfaz web para configurarlo y un agente en cada equipo. El servidor le pregunta datos al agente (pasivo) o el agente se los manda (activo). A cada equipo se le asigna una plantilla lista, que trae los datos (items) y las reglas que detectan problemas (triggers); los umbrales se ajustan con macros. Cuando un trigger detecta un problema, una acción avisa por correo, Telegram o lo que se configure.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Hostname distinto del nombre en Zabbix">
+    Los chequeos activos se rechazan y el log del servidor dice que el host no se encontró. Tienen que ser idénticos, con mayúsculas y todo.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse del firewall">
+    El agente funciona pero zabbix_get da "No route to host": falta abrir el 10050 en el equipo (y el 10051 en el servidor para los activos).
+  </ErrorComun>
+  <ErrorComun titulo="Editar la plantilla oficial">
+    En la próxima actualización se pisa. Para cambiar umbrales usá macros en el host o en una plantilla propia que herede de la oficial.
+  </ErrorComun>
+  <ErrorComun titulo="Dejar Admin / zabbix">
+    Es lo primero que prueba cualquiera que llegue a la interfaz. Cambiá la contraseña y creá usuarios propios.
+  </ErrorComun>
+  <ErrorComun titulo="Triggers con last() para todo">
+    Un pico de un segundo dispara un aviso. Para CPU y similares, mirá un período con min() o avg().
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Servidor + base de datos + interfaz web + agente 2 en cada equipo (y proxies para otras sedes).
+- Pasivo: el servidor pregunta al 10050 (Server=). Activo: el agente manda al 10051 (ServerActive=, Hostname=).
+- Host, item, trigger, acción, plantilla, macro y descubrimiento (LLD).
+- Plantillas oficiales Linux y Windows by Zabbix agent; umbrales con macros.
+- Triggers con períodos (min, avg), nodata y tendencias (timeleft).
+- zabbix_get prueba un agente sin pasar por la web.
+</Resumen>

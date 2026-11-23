@@ -1,0 +1,97 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Dónde guarda Zabbix la configuración y la historia de los datos?
+  opciones:
+    - { texto: "En una base de datos (PostgreSQL o MySQL)", correcta: true, explicacion: "Es lo que hay que respaldar." }
+    - { texto: "En archivos de texto en cada agente", explicacion: "No." }
+    - { texto: "En la interfaz web", explicacion: "La web solo la muestra." }
+    - { texto: "En el proxy", explicacion: "El proxy solo junta datos de su red." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: ¿Qué diferencia hay entre un chequeo pasivo y uno activo?
+  opciones:
+    - { texto: "En el pasivo el servidor le pide el dato al agente; en el activo el agente lo manda solo", correcta: true, explicacion: "Pasivo al 10050 del agente, activo al 10051 del servidor." }
+    - { texto: "El pasivo no usa agente", explicacion: "Los dos usan agente." }
+    - { texto: "El activo es más lento", explicacion: "No." }
+    - { texto: "El pasivo solo sirve para Windows", explicacion: "No." }
+- id: p03
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Qué pasa?
+  salida: |
+    $ zabbix_get -s web01 -k agent.ping
+    zabbix_get [4211]: Get value error: ZBX_TCP_READ() failed: [104] Connection reset by peer
+    zabbix_get [4211]: Check access restrictions in Zabbix agent configuration
+  opciones:
+    - { texto: "El agente funciona pero no tiene a este equipo en Server=", correcta: true, explicacion: "Corta la conexión a quien no está autorizado." }
+    - { texto: "El firewall de web01 bloquea el 10050", explicacion: "Sería No route to host o un timeout." }
+    - { texto: "El agente no está instalado", explicacion: "Sería Connection refused." }
+    - { texto: "La clave agent.ping no existe", explicacion: "Existe en todos los agentes." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace este trigger? min(/db01/system.cpu.util,15m)>95
+  opciones:
+    - { texto: "Avisa si la CPU estuvo por encima de 95 % durante los 15 minutos enteros", correcta: true, explicacion: "El mínimo del período tiene que superar 95." }
+    - { texto: "Avisa si la CPU pasó 95 % alguna vez en 15 minutos", explicacion: "Eso sería max()." }
+    - { texto: "Avisa cada 15 minutos", explicacion: "No." }
+    - { texto: "Avisa si la CPU bajó de 95 %", explicacion: "Al revés." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Querés que el aviso de disco de un servidor de backups salte al 95 % en lugar del 80 % de la plantilla. ¿Qué hacés?
+  opciones:
+    - { texto: "Defino la macro del umbral en ese host", correcta: true, explicacion: "La plantilla queda igual para el resto." }
+    - { texto: "Edito la plantilla oficial", explicacion: "Cambia para todos y se pisa al actualizar." }
+    - { texto: "Borro el trigger", explicacion: "Te quedás sin aviso." }
+    - { texto: "Creo un host nuevo", explicacion: "No hace falta." }
+- id: p06
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve un proxy de Zabbix?
+  opciones:
+    - { texto: "Para juntar los datos de una sede u otra red y pasárselos al servidor, guardándolos si se corta el enlace", correcta: true, explicacion: "También reduce conexiones al servidor." }
+    - { texto: "Para acelerar la interfaz web", explicacion: "No." }
+    - { texto: "Para salir a internet", explicacion: "No es ese tipo de proxy." }
+    - { texto: "Para reemplazar la base de datos", explicacion: "No." }
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: Un host con chequeos activos no recibe datos. ¿Qué revisarías?
+  opciones:
+    - { texto: "Que Hostname= sea idéntico al nombre del host en Zabbix", correcta: true, explicacion: "Si no, el servidor lo rechaza." }
+    - { texto: "Que ServerActive= apunte al servidor", correcta: true, explicacion: "Es adónde manda los datos." }
+    - { texto: "Que el 10051 del servidor esté abierto", correcta: true, explicacion: "Es el puerto de los activos." }
+    - { texto: "Que el agente tenga Python", explicacion: "El agente 2 está escrito en Go." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace timeleft(/web01/vfs.fs.size[/,pused],1h,100)<1d?
+  opciones:
+    - { texto: "Avisa si, al ritmo de la última hora, el disco llega a 100 % en menos de un día", correcta: true, explicacion: "Una alerta de tendencia." }
+    - { texto: "Avisa si el disco estuvo lleno una hora", explicacion: "No." }
+    - { texto: "Mide cuánto tardó en llenarse", explicacion: "Proyecta hacia adelante." }
+    - { texto: "Borra archivos viejos", explicacion: "No hace nada en el equipo." }
+- id: p09
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Desde el servidor de Zabbix, pedile a web01 el porcentaje libre de la raíz.
+  prompt: "ana@mon01:~$"
+  aceptadas:
+    - "zabbix_get -s web01 -k vfs.fs.size[/,pfree]"
+    - "zabbix_get -s web01 -k \"vfs.fs.size[/,pfree]\""
+    - "zabbix_get -s web01 -k 'vfs.fs.size[/,pfree]'"
+  explicacion: Con comillas, la terminal no intenta interpretar los corchetes.
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es lo primero que hay que hacer al terminar de instalar Zabbix?
+  opciones:
+    - { texto: "Cambiar la contraseña de Admin (zabbix de fábrica)", correcta: true, explicacion: "Es pública." }
+    - { texto: "Borrar las plantillas", explicacion: "Son lo más útil." }
+    - { texto: "Desactivar el agente del servidor", explicacion: "Conviene monitorear al propio servidor." }
+    - { texto: "Abrir el 5432 a internet", explicacion: "Nunca." }
