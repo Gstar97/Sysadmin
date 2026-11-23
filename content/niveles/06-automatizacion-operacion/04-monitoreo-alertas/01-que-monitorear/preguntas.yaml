@@ -1,0 +1,92 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué conviene que despierte a alguien a las 3 de la mañana?
+  opciones:
+    - { texto: "Que el 4 % de los pedidos a la tienda den error desde hace 10 minutos", correcta: true, explicacion: "Es un síntoma: afecta a clientes." }
+    - { texto: "Que la CPU de un servidor esté al 85 %", explicacion: "Es una causa; si no afecta a nadie, puede esperar." }
+    - { texto: "Que haya un proceso nuevo", explicacion: "No dice nada por sí solo." }
+    - { texto: "Que el log tenga una línea de warning", explicacion: "No necesariamente es un problema." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué significan las letras de RED?
+  opciones:
+    - { texto: "Rate, Errors, Duration: tasa, errores y duración de los pedidos", correcta: true, explicacion: "Para servicios." }
+    - { texto: "Recursos, Eventos, Discos", explicacion: "No." }
+    - { texto: "Utilization, Saturation, Errors", explicacion: "Eso es USE." }
+    - { texto: "Ram, Ethernet, Disco", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un servidor de 4 CPU tiene una carga (load average) de 14. ¿Qué señal de USE es?
+  opciones:
+    - { texto: "Saturación: hay más trabajo esperando que CPU para atenderlo", correcta: true, explicacion: "La carga cuenta procesos corriendo y esperando." }
+    - { texto: "Utilización", explicacion: "La utilización sería el % de CPU ocupada." }
+    - { texto: "Errores", explicacion: "No." }
+    - { texto: "Duración", explicacion: "Eso es de RED." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: La latencia promedio de la API es 180 ms, pero los clientes se quejan de que a veces tarda muchísimo. ¿Qué conviene mirar?
+  opciones:
+    - { texto: "Los percentiles altos (p95, p99)", correcta: true, explicacion: "El promedio esconde la cola lenta." }
+    - { texto: "El promedio con más decimales", explicacion: "Sigue escondiendo lo mismo." }
+    - { texto: "La CPU", explicacion: "Puede ser una causa, pero primero hay que medir bien el síntoma." }
+    - { texto: "La cantidad de pedidos", explicacion: "No dice cuánto tardan." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: El SLO de la tienda es 99,9 % de pedidos sin error en 30 días. ¿Cuánto es el presupuesto de error, en minutos de caída total?
+  opciones:
+    - { texto: "Unos 43 minutos", correcta: true, explicacion: "0,1 % de 43.200 minutos = 43,2." }
+    - { texto: "Unos 4 minutos", explicacion: "Eso sería 99,99 %." }
+    - { texto: "Unas 7 horas", explicacion: "Eso sería alrededor de 99 %." }
+    - { texto: "Cero", explicacion: "Solo con un SLO de 100 %, que no existe." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué detecta un chequeo desde afuera (caja negra) que uno desde adentro no ve?
+  opciones:
+    - { texto: "Un firewall o una regla de red que bloquea a los clientes", correcta: true, explicacion: "Adentro todo funciona." }
+    - { texto: "Un problema con el DNS público", correcta: true, explicacion: "El servidor no lo nota." }
+    - { texto: "Un certificado por vencer, visto como lo ve el navegador", correcta: true, explicacion: "Incluida la cadena." }
+    - { texto: "Que un proceso use mucha memoria", explicacion: "Eso se ve mejor desde adentro." }
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál de estas etiquetas para la métrica de pedidos de la tienda es una mala idea?
+  opciones:
+    - { texto: "El número de pedido", correcta: true, explicacion: "Tiene infinitos valores: una serie por pedido (cardinalidad)." }
+    - { texto: "El código de respuesta (200, 404, 500)", explicacion: "Pocos valores: está bien." }
+    - { texto: "El método (GET, POST)", explicacion: "Pocos valores." }
+    - { texto: "La página (/carrito, /pagar)", explicacion: "Si son pocas, está bien." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Para qué sirven mejor las métricas que los logs?
+  opciones:
+    - { texto: "Para alertas y tendencias: son números livianos que se guardan mucho tiempo", correcta: true, explicacion: "Los logs son para el detalle." }
+    - { texto: "Para saber exactamente qué usuario falló el login", explicacion: "Eso está en los logs." }
+    - { texto: "Para seguir un pedido entre microservicios", explicacion: "Eso son trazas." }
+    - { texto: "Para reemplazar los backups", explicacion: "No." }
+- id: p09
+  tipo: ordenar_pasos
+  dificultad: 2
+  enunciado: Ordená de lo más importante a lo menos importante para alertar a la guardia.
+  pasos:
+    - "La tienda devuelve error a muchos clientes"
+    - "El disco de la base se llena en 4 horas al ritmo actual"
+    - "La CPU de un servidor web está alta pero los tiempos de respuesta son normales"
+  explicacion: Primero el síntoma, después la causa que va a terminar en síntoma, y la causa sin efecto puede esperar a mañana.
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué el SLO interno suele ser más exigente que el SLA firmado con un cliente?
+  opciones:
+    - { texto: "Para enterarse y reaccionar antes de incumplir el compromiso", correcta: true, explicacion: "El SLO da margen." }
+    - { texto: "Porque el SLA no se mide", explicacion: "Sí se mide." }
+    - { texto: "Porque es obligatorio por ley", explicacion: "No." }
+    - { texto: "Porque el SLO es para los servidores y el SLA para la red", explicacion: "No." }

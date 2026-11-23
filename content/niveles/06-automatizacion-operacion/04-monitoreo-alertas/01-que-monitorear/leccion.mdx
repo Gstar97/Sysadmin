@@ -1,0 +1,112 @@
+---
+id: n6-m4-l1
+titulo: Qué monitorear
+minutos: 120
+objetivos:
+  - Distinguir síntomas (lo que nota quien usa el servicio) de causas (lo que pasa en los recursos).
+  - Usar los métodos USE y RED, y las cuatro señales doradas, para elegir qué medir.
+  - Entender SLI, SLO y presupuesto de error, y la diferencia entre métricas, logs y trazas.
+glosario: [monitoreo, metrica-monitoreo, metodo-use, metodo-red, sli-slo, presupuesto-error]
+verificado: 2026-11
+---
+
+import senales from './senales.svg?raw'
+import senalesDatos from './senales.yaml'
+import ejUseRed from './ej-use-red.yaml'
+
+En el Nivel 1 aprendiste a mirar un servidor con top, df y journalctl, y en el 5 viste que la alta disponibilidad depende de enterarse rápido de lo que falla. Mirar a mano sirve cuando ya sabés que hay un problema; el monitoreo es lo que te avisa **antes**, o al menos antes de que te llame alguien. El error más común no es monitorear poco sino monitorear sin criterio: cientos de gráficos que nadie mira y alertas que suenan tanto que se ignoran. Esta lección es sobre qué conviene mirar.
+
+<AntesDeEmpezar>
+- Procesos, carga y memoria (lección 1.5.2).
+- Discos y espacio (módulo 1.4).
+- Puertos y servicios de red (lección 2.3.3).
+</AntesDeEmpezar>
+
+## Síntomas y causas
+
+Un **síntoma** es lo que nota quien usa el servicio: la tienda no carga, tarda veinte segundos, da error al pagar. Una **causa** es lo que pasa por dentro: la CPU al 100 %, un disco lleno, un proceso que se cayó. La diferencia importa para decidir qué avisa a quién:
+
+- Los síntomas siempre son un problema. Si la tienda da error al 5 % de los clientes, hay que actuar aunque todos los gráficos de los servidores estén verdes.
+- Las causas no siempre lo son. Una CPU al 95 % durante una tarea programada puede no afectar a nadie. Avisar por cada causa termina en alertas que se ignoran.
+
+Por eso la regla práctica: **alertar por síntomas, diagnosticar con causas**. La excepción son las causas que, si siguen así, van a terminar en síntoma: un disco que se llena a un ritmo que en seis horas lo deja sin espacio, o un certificado que vence en diez días.
+
+## RED para los servicios, USE para los recursos
+
+Dos recetas cortas ordenan casi todo lo que hay que mirar.
+
+**RED** (de Tom Wilkie), para cada servicio que alguien usa (una web, una API, el DNS, la base de datos vista desde la aplicación):
+
+- **Rate**: cuántos pedidos por segundo recibe.
+- **Errors**: cuántos fallan (respuestas 5xx, consultas con error).
+- **Duration**: cuánto tardan. Mejor en **percentiles** que en promedio: el p95 es el tiempo por debajo del cual termina el 95 % de los pedidos. Un promedio de 200 ms puede esconder un 5 % de clientes esperando 8 segundos.
+
+**USE** (de Brendan Gregg), para cada recurso de un equipo (CPU, memoria, disco, red):
+
+- **Utilization**: qué parte está ocupada (CPU al 70 %, disco al 85 %).
+- **Saturation**: cuánto trabajo queda esperando porque el recurso no da abasto (la carga del sistema por encima de la cantidad de CPU, el swap en uso, la cola del disco).
+- **Errors**: errores del recurso (sectores dañados, errores de la placa de red, procesos que mató el OOM killer).
+
+Google las junta en las **cuatro señales doradas**: latencia, tráfico, errores y saturación. Si para cada servicio importante tenés esas cuatro, ya tenés lo esencial.
+
+Probá clasificar estos datos:
+
+<Emparejar ejercicio={ejUseRed} />
+
+## Desde adentro y desde afuera
+
+Lo anterior se mide **desde adentro** (caja blanca): un agente en el servidor o el propio programa exponiendo sus números. Conviene sumarle chequeos **desde afuera** (caja negra), como los haría un cliente: ¿responde la web por HTTPS?, ¿el certificado vence pronto?, ¿el DNS público resuelve bien? Detectan lo que adentro no se ve: un firewall mal configurado, un problema de la red del proveedor, un registro DNS borrado.
+
+<DiagramaInteractivo datos={senalesDatos} svg={senales} alt="A la izquierda, arriba, lo que ve la persona usuaria: la tienda no carga, tarda o da error al pagar; es el síntoma, lo que importa avisar a cualquier hora. Debajo, los chequeos desde afuera (caja negra): si responde la web, el puerto 443, el vencimiento del certificado y el DNS. Una flecha lleva al centro: el servicio con el método RED (tasa, errores y duración en percentiles), que con la saturación son las cuatro señales doradas, más SLI, SLO y presupuesto de error. Otra flecha lleva a la derecha: los recursos con el método USE (utilización, saturación y errores), que son las causas y sirven para diagnosticar. Abajo, los tres tipos de datos: métricas, logs y trazas." />
+
+## SLI, SLO y presupuesto de error
+
+Para saber si un servicio "anda bien" hace falta ponerle números:
+
+- **SLI** (indicador): lo que se mide. Por ejemplo, el porcentaje de pedidos a la tienda que responden sin error en menos de 500 ms.
+- **SLO** (objetivo): cuánto tiene que dar ese indicador. Por ejemplo, 99,5 % en los últimos 30 días.
+- **SLA** (el que ya viste en el Nivel 5): un compromiso con un cliente, con consecuencias si no se cumple. El SLO interno conviene que sea más exigente que el SLA.
+
+El **presupuesto de error** es lo que se puede fallar sin incumplir el SLO. Con 99,5 % en 30 días, son 0,5 % de 43.200 minutos: unos 216 minutos al mes. Ese número ordena las decisiones: si ya se gastó casi todo, mejor no hacer cambios riesgosos este mes; si sobra, hay margen para actualizar.
+
+<Pregunta id="p05" />
+
+## Métricas, logs y trazas
+
+- **Métricas**: números a lo largo del tiempo (la CPU cada 15 segundos, los pedidos por segundo). Ocupan poco, se guardan meses y son la base de las alertas y las tendencias. Las vas a juntar con Zabbix y con Prometheus en las próximas lecciones.
+- **Logs**: el detalle de qué pasó ("Failed password for root from 203.0.113.17"). Sirven para investigar; centralizarlos es el módulo 6.5.
+- **Trazas**: el recorrido de un pedido por varios servicios, con cuánto tardó cada uno. Se usan con muchos microservicios; no son tema de este nivel.
+
+Una advertencia sobre las métricas: cada combinación de etiquetas es una serie distinta (la **cardinalidad**). Medir los pedidos por página está bien; medirlos por usuario o por número de pedido crea millones de series y tumba al servidor de monitoreo.
+
+<EnSimple>
+Monitorear es enterarse de los problemas antes que los usuarios. Para los servicios se mira tasa, errores y duración (RED); para los recursos de los servidores, utilización, saturación y errores (USE). Las alertas importantes son las de síntomas, lo que nota quien usa el servicio; las causas sirven para encontrar el problema y para avisar con tiempo cuando la tendencia es mala. El SLO dice cuánto tiene que andar bien un servicio y el presupuesto de error, cuánto puede fallar.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Alertar por cada causa">
+    CPU alta, memoria alta, carga alta: si no afectan a nadie, son ruido. Avisá por síntomas y por tendencias que van a terminar en síntoma.
+  </ErrorComun>
+  <ErrorComun titulo="Mirar el promedio de la latencia">
+    Un promedio bueno puede esconder a un 5 % de clientes esperando muchísimo. Usá percentiles (p95, p99).
+  </ErrorComun>
+  <ErrorComun titulo="Monitorear solo desde adentro">
+    El servidor puede estar perfecto y la web inaccesible por el firewall o el DNS. Sumá chequeos desde afuera.
+  </ErrorComun>
+  <ErrorComun titulo="Etiquetas con valores infinitos">
+    El usuario, el ID de pedido o la URL completa como etiqueta crean millones de series. Las etiquetas son para valores con pocas opciones.
+  </ErrorComun>
+  <ErrorComun titulo="Un SLO de 100 %">
+    No existe: no deja margen para ningún cambio ni para lo que no depende de vos. Elegí un número que tus usuarios noten si no se cumple.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Síntoma: lo que nota quien usa el servicio. Causa: lo que pasa por dentro. Alertar por síntomas.
+- RED para servicios: tasa, errores, duración (en percentiles).
+- USE para recursos: utilización, saturación, errores.
+- Cuatro señales doradas: latencia, tráfico, errores, saturación.
+- Caja negra (desde afuera) además de caja blanca (desde adentro).
+- SLI se mide, SLO es el objetivo, presupuesto de error es lo que se puede fallar.
+- Métricas para alertas y tendencias, logs para el detalle, trazas para recorridos entre servicios.
+</Resumen>
