@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createBashSession, loadSql, stripAnsi, verifyBash } from '@/engines/shell'
 import type { BashStateInput } from '@/engines/shell/schema'
 
@@ -56,7 +56,12 @@ describe('MariaDB', () => {
     expect(verifyBash(sh, { consulta_bd: 'SELECT count(*) FROM clientes', motor: 'mariadb', base: 'tienda', resultado: '3' }).ok).toBe(true)
   })
 
-  it('recuperación a un punto en el tiempo: respaldo de las 3:00 más el binlog hasta antes del DROP', async () => {
+  // Las horas sin fecha del escenario son del mismo día, sea la hora que sea cuando se hace el ejercicio.
+  it.each(['2026-11-23T02:45:00', '2026-11-23T15:00:00'])('recuperación a un punto en el tiempo: respaldo de las 3:00 más el binlog hasta antes del DROP (reloj a las %s)', async (ahora) => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(ahora) })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const { sh, run } = await session({
       ...maria,
       paquetes: { instalados: ['mariadb-server', 'gzip'] },

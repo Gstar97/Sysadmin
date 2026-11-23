@@ -81,14 +81,29 @@ function whenReady(sys: System, f: () => void) {
   void loadSql().then(() => runPendingInits(sys))
 }
 
-function parseHora(h: string, sys: System): number {
-  const m = /^(?:(\d{4})-(\d{2})-(\d{2})[ T])?(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(h.trim())
+const HORA = /^(?:(\d{4})-(\d{2})-(\d{2})[ T])?(\d{1,2}):(\d{2})(?::(\d{2}))?$/
+
+/**
+ * Las horas sin fecha de un escenario son todas del mismo día: hoy si ya pasaron todas, si no
+ * ayer. Así la historia mantiene su orden (el respaldo de las 03:00 antes del DROP de las 11:42)
+ * a cualquier hora en que se haga el ejercicio.
+ */
+function dayFor(horas: string[], sys: System): Date {
   const now = new Date(Date.now() + sys.clock.offset * 1000)
-  if (!m) return now.getTime()
-  const d = m[1] ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const latest = Math.max(
+    0,
+    ...horas.map((h) => HORA.exec(h.trim())).filter((m): m is RegExpExecArray => !!m && !m[1]).map((m) => (Number(m[4]) * 3600 + Number(m[5]) * 60 + Number(m[6] ?? 0)) * 1000),
+  )
+  if (day.getTime() + latest > now.getTime()) day.setDate(day.getDate() - 1)
+  return day
+}
+
+function parseHora(h: string, sys: System, day: Date): number {
+  const m = HORA.exec(h.trim())
+  if (!m) return Date.now() + sys.clock.offset * 1000
+  const d = m[1] ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(day)
   d.setHours(Number(m[4]), Number(m[5]), Number(m[6] ?? 0), 0)
-  // Sin fecha, es la última vez que fue esa hora: si hoy todavía no llegó, fue ayer.
-  if (!m[1] && d.getTime() > now.getTime()) d.setDate(d.getDate() - 1)
   return d.getTime()
 }
 
@@ -132,9 +147,10 @@ System.initHooks.push((sys: System, state: BashState) => {
         const root = s.users.find((u) => u.name === 'root')!
         for (const inst of s.dbs.values()) materialize(s, inst)
         type Item = { t: number; kind: 'sql'; base: string; sql: string } | { t: number; kind: 'dump'; archivo: string; bases: string[]; gz: boolean }
+        const day = dayFor([...my.historia.map((h) => h.hora), ...my.respaldos.map((r) => r.hora)], sys)
         const items: Item[] = [
-          ...my.historia.map((h) => ({ t: parseHora(h.hora, sys), kind: 'sql' as const, base: h.base, sql: h.sql })),
-          ...my.respaldos.map((r) => ({ t: parseHora(r.hora, sys), kind: 'dump' as const, archivo: r.archivo, bases: r.bases, gz: r.comprimido })),
+          ...my.historia.map((h) => ({ t: parseHora(h.hora, sys, day), kind: 'sql' as const, base: h.base, sql: h.sql })),
+          ...my.respaldos.map((r) => ({ t: parseHora(r.hora, sys, day), kind: 'dump' as const, archivo: r.archivo, bases: r.bases, gz: r.comprimido })),
         ].sort((a, b) => a.t - b.t)
         for (const it of items) {
           if (it.kind === 'sql') {
