@@ -60,6 +60,7 @@ const UpsCalculatorView = lazy(() => import('@/interactive/hardware/UpsCalculato
 const RackBuilderView = lazy(() => import('@/interactive/hardware/RackBuilder').then((m) => ({ default: m.RackBuilder })))
 const ResourceSimulatorView = lazy(() => import('@/interactive/virtualizacion/ResourceSimulator').then((m) => ({ default: m.ResourceSimulator })))
 const TemplatePreviewView = lazy(() => import('@/interactive/ansible/TemplatePreview').then((m) => ({ default: m.TemplatePreview })))
+const LogqlConsoleView = lazy(() => import('@/interactive/query/LogqlConsole').then((m) => ({ default: m.LogqlConsole })))
 const PromqlConsoleView = lazy(() => import('@/interactive/query/PromqlConsole').then((m) => ({ default: m.PromqlConsole })))
 const PythonConsoleView = lazy(() => import('@/interactive/python/PythonConsole').then((m) => ({ default: m.PythonConsole })))
 const BranchSimulatorView = lazy(() => import('@/interactive/git/BranchSimulator').then((m) => ({ default: m.BranchSimulator })))
@@ -446,6 +447,17 @@ export function ConsolaPromQL({ ejercicio }: { ejercicio: unknown }) {
   )
 }
 
+/** Consola de LogQL sobre logs de ejemplo; con pasos, es un ejercicio que se verifica solo. */
+export function ConsolaLogQL({ ejercicio }: { ejercicio: unknown }) {
+  const { value, error } = useExercise('logql', ejercicio)
+  if (error) return <ExerciseError error={error} />
+  return (
+    <Island>
+      <LogqlConsoleView exercise={value!} />
+    </Island>
+  )
+}
+
 export function PlanificadorRetencion() {
   return (
     <Island>
@@ -780,6 +792,7 @@ export const mdxComponents = {
   EjercicioPython,
   VistaPlantilla,
   ConsolaPromQL,
+  ConsolaLogQL,
   ComparadorPlataformas,
   SimuladorGPO,
   SimuladorPermisos,

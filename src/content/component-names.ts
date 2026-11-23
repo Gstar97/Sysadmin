@@ -51,6 +51,7 @@ export const INTERACTIVE_COMPONENTS = [
   'EjercicioPython',
   'VistaPlantilla',
   'ConsolaPromQL',
+  'ConsolaLogQL',
 ] as const
 
 export const REQUIRED_BLOCKS = [
@@ -71,4 +72,5 @@ export const DATA_PROPS: Record<string, string> = {
   PasosGuiados: 'ejercicio',
   EjercicioPython: 'ejercicio',
   ConsolaPromQL: 'ejercicio',
+  ConsolaLogQL: 'ejercicio',
 }

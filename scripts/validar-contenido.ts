@@ -7,8 +7,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parse } from 'yaml'
 import { scanContent } from '../build/content-scan'
-import { capturaExerciseSchema, configExerciseSchema, promqlExerciseSchema, pythonExerciseSchema, terminalExerciseSchema, vimExerciseSchema } from '../src/content/exercise-schemas'
+import { capturaExerciseSchema, configExerciseSchema, logqlExerciseSchema, promqlExerciseSchema, pythonExerciseSchema, terminalExerciseSchema, vimExerciseSchema } from '../src/content/exercise-schemas'
 import { checkPromqlExercise } from '../src/engines/metrics/exercise'
+import { checkLogqlExercise } from '../src/engines/logs/exercise'
 import { checkCapturaExercise, checkConfigExercise, checkTerminalExercise, checkTopologyExercise, checkVimExercise, type ExerciseProblem } from '../src/engines/exercise-check'
 import { topologyExerciseSchema } from '../src/engines/network/schema'
 import { checkPythonExercise } from '../src/engines/python/check'
@@ -58,6 +59,10 @@ async function main() {
     } else if (data?.tipo === 'promql') {
       const ex = promqlExerciseSchema.safeParse(data)
       if (ex.success) problems = checkPromqlExercise(ex.data)
+      else problems = ex.error.issues.map((i) => ({ level: 'error' as const, message: `${i.path.join('.')}: ${i.message}` }))
+    } else if (data?.tipo === 'logql') {
+      const ex = logqlExerciseSchema.safeParse(data)
+      if (ex.success) problems = checkLogqlExercise(ex.data)
       else problems = ex.error.issues.map((i) => ({ level: 'error' as const, message: `${i.path.join('.')}: ${i.message}` }))
     } else if (data?.tipo === 'topologia') {
       const ex = topologyExerciseSchema.safeParse(data)

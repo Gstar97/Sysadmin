@@ -1,0 +1,60 @@
+tipo: logql
+titulo: Buscar en los logs con LogQL
+descripcion: >-
+  Alloy manda a Loki los logs de SSH de web01 y db01, el access log de nginx de web01 y los logs en
+  JSON de la API de la tienda. Hace un rato alguien intentó entrar por fuerza bruta y la API empezó a
+  fallar.
+logs:
+  ventana: 3h
+  ssh:
+    - host: web01
+      ataques:
+        - { desde: "-50m", hasta: "-35m", ip: 45.155.205.11, por_minuto: 25 }
+    - { host: db01, distro: rocky }
+  nginx:
+    - { host: web01, rps: 0.5 }
+  app:
+    - host: web01
+      eventos:
+        - { desde: "-20m", errores: 0.35, mensaje_error: "payment gateway timeout" }
+pasos:
+  - consigna: Mostrá las líneas de SSH de web01 con intentos de contraseña fallidos.
+    verificar:
+      - { lineas_min: 100 }
+      - { lineas_contienen: "Failed password" }
+      - { contiene: { host: web01 } }
+      - { no_contiene: { host: db01 } }
+    pistas:
+      - "Primero el selector con las etiquetas: {job=\"system\", host=\"web01\"}."
+      - "Después un filtro de línea: |= \"Failed password\"."
+    solucion: '{job="system", host="web01"} |= "Failed password"'
+    explicacion: >-
+      El selector elige los streams por sus etiquetas (eso Loki lo tiene indexado y es rápido); el
+      filtro de línea busca texto adentro, solo en esos streams.
+  - consigna: >-
+      ¿Desde qué IP vinieron los intentos? Sacá la IP con regexp y contá los intentos por IP en la
+      última hora; dejá solo las que pasan de 100.
+    verificar:
+      - { series: 1 }
+      - { contiene: { ip: 45.155.205.11 } }
+      - { usa: count_over_time }
+      - { usa: regexp }
+    pistas:
+      - "regexp con un grupo con nombre: | regexp \"from (?P<ip>\\\\S+) port\""
+      - "sum by (ip) (count_over_time(... [1h])) > 100"
+    solucion: 'sum by (ip) (count_over_time({job="system"} |= "Failed password" | regexp "from (?P<ip>\\S+) port" [1h])) > 100'
+    explicacion: Con un parser, lo que estaba adentro del texto pasa a ser una etiqueta, y con count_over_time las líneas se vuelven una métrica que se puede agrupar y comparar.
+  - consigna: >-
+      La API escribe JSON. Mostrá solo los errores (level error) y que cada línea diga nada más que
+      el path y el mensaje.
+    verificar:
+      - { lineas_min: 10 }
+      - { lineas_contienen: "/api/" }
+      - { lineas_no_contienen: "{" }
+      - { usa: json }
+      - { usa: line_format }
+    pistas:
+      - "| json convierte cada campo en una etiqueta."
+      - "Después | level=\"error\" y | line_format \"{{.path}} {{.msg}}\""
+    solucion: '{job="tienda-api"} | json | level="error" | line_format "{{.path}} {{.msg}}"'
+    explicacion: Con logs estructurados (JSON o logfmt) no hace falta escribir expresiones regulares para cada formato.

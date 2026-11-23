@@ -472,6 +472,78 @@ export const promqlExerciseSchema = z.strictObject({
   pasos: queryStepsSchema,
 })
 
+const relRange = { desde: z.string().optional(), hasta: z.string().optional() }
+
+/** Logs de ejemplo (src/engines/logs/logdb.ts): SSH, nginx, una app con JSON y streams a medida. */
+export const logsScenarioSchema = z.strictObject({
+  ahora: z.string().optional(),
+  ventana: z.string().optional(),
+  semilla: z.number().optional(),
+  ssh: z
+    .array(
+      z.strictObject({
+        host: z.string(),
+        distro: z.enum(['ubuntu', 'rocky']).optional(),
+        usuarios: z.array(z.string()).optional(),
+        accesos_hora: z.number().optional(),
+        fallidos_minuto: z.number().optional(),
+        ataques: z.array(z.strictObject({ ...relRange, ip: z.string(), por_minuto: z.number(), usuarios: z.array(z.string()).optional() })).optional(),
+      }),
+    )
+    .optional(),
+  nginx: z
+    .array(
+      z.strictObject({
+        host: z.string(),
+        rps: z.number().optional(),
+        errores: z.number().optional(),
+        paths: z.array(z.string()).optional(),
+        eventos: z.array(z.strictObject({ ...relRange, rps: z.number().optional(), errores: z.number().optional(), lento_ms: z.number().optional() })).optional(),
+      }),
+    )
+    .optional(),
+  app: z
+    .array(
+      z.strictObject({
+        host: z.string(),
+        app: z.string().optional(),
+        por_minuto: z.number().optional(),
+        errores: z.number().optional(),
+        eventos: z.array(z.strictObject({ ...relRange, errores: z.number().optional(), mensaje_error: z.string().optional(), latencia_ms: z.number().optional() })).optional(),
+      }),
+    )
+    .optional(),
+  streams: z
+    .array(
+      z.strictObject({
+        etiquetas: labelsSchema,
+        lineas: z
+          .array(
+            z.strictObject({
+              plantilla: z.string(),
+              cada: z.string().optional(),
+              por_minuto: z.number().optional(),
+              ...relRange,
+              valores: z.record(z.string(), z.union([z.array(z.string()), z.strictObject({ min: z.number(), max: z.number(), decimales: z.number().optional() })])).optional(),
+            }),
+          )
+          .optional(),
+        fijas: z.array(z.strictObject({ en: z.string(), linea: z.string() })).optional(),
+      }),
+    )
+    .optional(),
+})
+
+/** Una consola de LogQL sobre logs de ejemplo; sin pasos, es una consola libre. */
+export const logqlExerciseSchema = z.strictObject({
+  tipo: z.literal('logql'),
+  titulo: z.string().min(1),
+  descripcion: z.string().optional(),
+  logs: logsScenarioSchema,
+  consulta_inicial: z.string().default(''),
+  pasos: queryStepsSchema,
+})
+
 export const exerciseSchemas = {
   terminal: terminalExerciseSchema,
   topologia: topologyExerciseSchema,
@@ -486,6 +558,7 @@ export const exerciseSchemas = {
   captura: capturaExerciseSchema,
   python: pythonExerciseSchema,
   promql: promqlExerciseSchema,
+  logql: logqlExerciseSchema,
 } as const
 
 export type ExerciseKind = keyof typeof exerciseSchemas
@@ -507,6 +580,7 @@ export type CapturaTask = z.infer<typeof capturaTaskSchema>
 export type PythonExercise = z.infer<typeof pythonExerciseSchema>
 export type PythonCheck = z.infer<typeof pythonCheckSchema>
 export type PromqlExercise = z.infer<typeof promqlExerciseSchema>
+export type LogqlExercise = z.infer<typeof logqlExerciseSchema>
 export type QueryCheck = z.infer<typeof queryCheckSchema>
 export type MetricsScenario = z.infer<typeof metricsScenarioSchema>
 export type ConfigLanguage = (typeof configLanguages)[number]

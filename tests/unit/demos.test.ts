@@ -6,6 +6,7 @@ import { exerciseSchemas } from '@/content/exercise-schemas'
 import { checkConfigExercise, checkTerminalExercise, checkTopologyExercise } from '@/engines/exercise-check'
 import { checkPythonExercise } from '@/engines/python/check'
 import { checkPromqlExercise } from '@/engines/metrics/exercise'
+import { checkLogqlExercise } from '@/engines/logs/exercise'
 import { optimalPath } from '@/interactive/troubleshooting/Troubleshooting'
 
 const dir = 'src/app/pages/gallery/demos'
@@ -27,6 +28,10 @@ describe('ejercicios de la galería', () => {
 
   it.each(demos.filter((d) => d.data.tipo === 'promql'))('$file: cada solución de PromQL cumple su paso', ({ data }) => {
     expect(checkPromqlExercise(exerciseSchemas.promql.parse(data))).toEqual([])
+  })
+
+  it.each(demos.filter((d) => d.data.tipo === 'logql'))('$file: cada solución de LogQL cumple su paso', ({ data }) => {
+    expect(checkLogqlExercise(exerciseSchemas.logql.parse(data))).toEqual([])
   })
 
   it.each(demos.filter((d) => d.data.tipo === 'configuracion'))('$file: la solución cumple las reglas y el original no', ({ data }) => {
