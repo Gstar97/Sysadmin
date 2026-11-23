@@ -1,0 +1,145 @@
+---
+id: n6-m4-l5
+titulo: Alertas que sirven
+minutos: 120
+objetivos:
+  - Escribir reglas de alerta en Prometheus con for, etiquetas y anotaciones, y probar sus condiciones antes.
+  - Configurar Alertmanager para agrupar, enrutar por severidad, inhibir y silenciar, con avisos por correo o chat.
+  - Diseñar alertas accionables, con runbook y basadas en síntomas y tendencias, y evitar la fatiga de alertas.
+glosario: [alertmanager, silencio-alerta, fatiga-alertas, cuaderno-tecnico]
+verificado: 2026-11
+---
+
+import al from './alertas.svg?raw'
+import alDatos from './alertas.yaml'
+import ejCondiciones from './ej-condiciones.yaml'
+import ejAlertas from './ej-alertas.yaml'
+
+Tener métricas y tableros no sirve de mucho si alguien tiene que estar mirándolos para enterarse de que algo anda mal. Las **alertas** avisan solas. Pero una mala alerta es peor que ninguna: si el teléfono suena diez veces por noche por cosas que no importan, a la tercera semana nadie lo mira, y el día que se cae la base de datos el aviso se pierde entre el ruido. Esta lección es sobre las dos cosas: cómo se arman y cómo lograr que sirvan.
+
+<AntesDeEmpezar>
+- Qué monitorear, el método USE y el RED (lección 6.4.1).
+- Prometheus y PromQL (lección 6.4.3).
+- Postfix y el correo local (lección 4.4.3).
+</AntesDeEmpezar>
+
+## El recorrido de una alerta
+
+<DiagramaInteractivo datos={alDatos} svg={al} alt="Tres cajas de izquierda a derecha. Reglas en Prometheus: alert DiscoSeLlena, expr predict_linear menor que 0, for 10m, label severity warning y anotaciones summary y runbook_url; cada evaluation_interval la alerta pasa de inactive a pending y a firing; pending quiere decir que se cumple pero todavía no pasó el for. Alertmanager en el 9093: agrupa por alertname e instance para mandar un mensaje y no veinte, enruta severity critical a la guardia y warning a un correo o ticket, inhibe los avisos de los servicios de un servidor caído, silencia por mantenimiento con amtool silence add con comentario y vencimiento, repite cada repeat_interval de 4 horas y avisa cuando se resuelve. Receptores: correo, Slack, Teams, Telegram, PagerDuty, Opsgenie o un webhook; el mensaje lleva el resumen, las etiquetas y el enlace al runbook. Abajo, una alerta que sirve: alguien tiene que hacer algo ahora, avisa del síntoma antes que de la causa, avisa con tiempo usando tendencias, y tiene runbook y dueño." />
+
+El trabajo está repartido: **Prometheus** evalúa las reglas y decide qué está mal; **Alertmanager** decide a quién avisarle, cómo y cuántas veces. Zabbix hace las dos cosas en el mismo servidor (triggers y acciones, lección 6.4.2), pero las ideas de esta lección son las mismas.
+
+## Probar la condición primero
+
+Toda regla empieza como una consulta que devuelve "lo que está mal". Antes de escribirla en un archivo, se prueba en la consola:
+
+<ConsolaPromQL ejercicio={ejCondiciones} />
+
+## Reglas de alerta
+
+Van en archivos aparte, que `prometheus.yml` nombra en `rule_files`:
+
+```yaml
+# /etc/prometheus/rules/nodos.yml
+groups:
+  - name: nodos
+    rules:
+      - alert: DiscoSeLlena
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[1h], 4 * 3600) < 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "El disco raíz de {{ $labels.instance }} se llena en menos de 4 horas"
+          runbook_url: "https://wiki.lab/runbooks/disco-lleno"
+```
+
+- **expr**: la condición. Cada serie que devuelve es una alerta distinta (una por servidor).
+- **for**: cuánto tiempo se tiene que cumplir seguido antes de avisar. Mientras tanto la alerta está *pending*. Evita avisos por un pico de un minuto o un reinicio rápido.
+- **labels**: se suman a las de la serie; `severity` es la que se usa para decidir a quién avisar.
+- **annotations**: el texto del aviso. `{{ $labels.instance }}` y `{{ $value }}` se reemplazan por los datos de cada alerta.
+
+`promtool check rules` revisa el archivo; `promtool check config` revisa prometheus.yml y todas las reglas que nombra. En la interfaz web, **Alerts** muestra cada regla con su estado, y la API lo da en `/api/v1/alerts`.
+
+## Alertmanager
+
+```yaml
+# /etc/alertmanager/alertmanager.yml
+global:
+  smtp_smarthost: "smtp.empresa.lab:587"
+  smtp_from: "alertas@empresa.lab"
+
+route:                                  # el árbol de rutas
+  receiver: "equipo"                    # por defecto: correo al equipo
+  group_by: ["alertname", "instance"]
+  group_wait: 30s                       # espera a que lleguen las compañeras del grupo
+  group_interval: 5m                    # cada cuánto manda novedades de un grupo
+  repeat_interval: 4h                   # cada cuánto recuerda lo que sigue mal
+  routes:
+    - matchers: ['severity="critical"']
+      receiver: "guardia"               # lo crítico, al chat de guardia
+
+receivers:
+  - name: "equipo"
+    email_configs:
+      - to: "infra@empresa.lab"
+        send_resolved: true
+  - name: "guardia"
+    webhook_configs:                    # o slack_configs, msteamsv2_configs, telegram_configs
+      - url: "http://chatops.lab:8080/guardia"
+
+inhibit_rules:
+  - source_matchers: ['alertname="NodoCaido"']
+    target_matchers: ['severity="warning"']
+    equal: ["instance"]                 # si el servidor está caído, no avises de sus warnings
+```
+
+- **Agrupar** evita la avalancha: si se cae un switch y veinte servidores dejan de responder, llega un mensaje con veinte alertas.
+- **Enrutar** manda cada cosa a quien corresponde: lo que despierta a alguien solo para lo crítico; el resto, a un correo o a un ticket que se mira en horario de trabajo.
+- **Inhibir** calla las consecuencias cuando ya se avisó la causa.
+- **Silenciar** apaga los avisos durante un mantenimiento: `amtool silence add alertname=DiscoSeLlena instance=db01:9100 --comment="..." --duration=12h`. La alerta sigue existiendo, pero no notifica.
+
+`amtool check-config` revisa el archivo, y `amtool config routes test severity=critical` dice a qué receptor iría una alerta con esas etiquetas. Para chat existen integraciones directas con Slack, Microsoft Teams y Telegram; para cualquier otra cosa, un webhook.
+
+<Terminal ejercicio={ejAlertas} />
+
+## Que sirvan
+
+Lo técnico es la parte fácil. Lo difícil es tener pocas alertas y buenas:
+
+- **Accionable**: si cuando suena la respuesta es "ah, eso pasa siempre", no es una alerta. Que vaya a un tablero o se borre.
+- **Síntomas antes que causas**: avisá de lo que sienten los usuarios (errores, lentitud, el sitio caído). La CPU al 95 % no es un problema si la gente es atendida bien; los errores al 8 % sí, aunque la CPU esté tranquila.
+- **Con tiempo**: `predict_linear` avisa que el disco se llena en 4 horas, cuando todavía hay tiempo; el 95 % usado avisa cuando ya es tarde (o nunca, en un disco de 10 TB).
+- **Con runbook**: cada alerta enlaza una página corta que dice qué significa, qué mirar primero y cómo se arregla lo habitual. A las 3 de la mañana nadie piensa bien.
+- **Con dueño y revisión**: una vez al mes, mirar qué sonó, qué se atendió y qué no. La que suena seguido y nadie atiende se arregla (umbral, for) o se borra.
+- **Que no falte la ausencia**: `absent()` para los objetivos que desaparecen, y monitorear también a Prometheus y Alertmanager (desde otro lado: si se cae el que avisa, nadie avisa).
+
+<EnSimple>
+Prometheus evalúa reglas (una consulta, un for, etiquetas y un texto) y manda las alertas a Alertmanager, que las agrupa, las enruta según la severidad, calla las que son consecuencia de otra, respeta los silencios de mantenimiento y avisa por correo o chat. Una buena alerta pide una acción, avisa de lo que sienten los usuarios y con tiempo, y tiene un runbook. Las alertas que nadie atiende enseñan a ignorarlas todas.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Alertar todo lo que se puede medir">
+    CPU, memoria, swap, cada servicio, cada disco al 80 %... A la semana hay 200 avisos por día y nadie los lee. Pocas alertas, accionables, y el resto en tableros.
+  </ErrorComun>
+  <ErrorComun titulo="Reglas sin for">
+    Un pico de un minuto o un reinicio dispara un aviso que se resuelve solo. Con for: 5m (o lo que tenga sentido) se avisa solo lo que se sostiene.
+  </ErrorComun>
+  <ErrorComun titulo="Silencios sin comentario ni vencimiento">
+    Alguien silenció "por un rato" hace tres meses y la alerta nunca más avisó. Siempre con comentario (quién y por qué) y una duración razonable.
+  </ErrorComun>
+  <ErrorComun titulo="Que Alertmanager avise por el mismo camino que se cae">
+    Si el correo sale por el servidor de correo que estás monitoreando, el día que se cae no te enterás. Un segundo canal para lo crítico.
+  </ErrorComun>
+  <ErrorComun titulo="No monitorear al monitoreo">
+    Prometheus caído no dispara ninguna alerta. Otro equipo (o un servicio externo) tiene que vigilar que Prometheus y Alertmanager estén vivos.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Reglas en Prometheus: expr (lo que está mal), for (cuánto tiempo), labels (severity) y annotations (summary, runbook_url).
+- Estados: inactive, pending (se cumple, todavía sin el for) y firing.
+- Alertmanager: agrupa (group_by), enruta por etiquetas, inhibe consecuencias, silencia mantenimientos y repite lo que sigue mal.
+- Receptores: correo, Slack, Teams, Telegram, PagerDuty o webhook; promtool y amtool revisan las configuraciones.
+- Alertas que sirven: accionables, de síntomas, con tendencias, con runbook y dueño, revisadas seguido; absent() para lo que desaparece.
+</Resumen>

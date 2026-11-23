@@ -1,0 +1,86 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cómo se reparten el trabajo Prometheus y Alertmanager?
+  opciones:
+    - { texto: "Prometheus evalúa las reglas y decide qué está mal; Alertmanager decide a quién avisar, cómo y cuántas veces", correcta: true, explicacion: "Agrupar, enrutar, inhibir y silenciar son de Alertmanager." }
+    - { texto: "Alertmanager evalúa las reglas y Prometheus manda los correos", explicacion: "Es al revés." }
+    - { texto: "Hacen lo mismo; uno es respaldo del otro", explicacion: "No." }
+    - { texto: "Alertmanager guarda las métricas de las alertas", explicacion: "No guarda métricas." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 2
+  enunciado: Una regla tiene for 10m. La condición se cumple desde hace 4 minutos. ¿En qué estado está la alerta?
+  opciones:
+    - { texto: "pending: todavía no se manda a Alertmanager", correcta: true, explicacion: "Pasa a firing a los 10 minutos si se sigue cumpliendo." }
+    - { texto: "firing", explicacion: "Falta que pase el for." }
+    - { texto: "inactive", explicacion: "La condición ya se cumple." }
+    - { texto: "silenced", explicacion: "Los silencios son de Alertmanager." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué alerta es más útil para un disco?
+  opciones:
+    - { texto: "predict_linear(node_filesystem_avail_bytes[1h], 4 * 3600) < 0", correcta: true, explicacion: "Avisa cuando hay tiempo de hacer algo, y no avisa de un disco grande que está quieto." }
+    - { texto: "Uso mayor que 80 %", explicacion: "Avisa de más en discos grandes y quietos, y tarde en los que se llenan rápido." }
+    - { texto: "Uso mayor que 99 %", explicacion: "Ya es tarde." }
+    - { texto: "Ninguna: los discos se miran en el tablero", explicacion: "Un disco lleno tira servicios: merece aviso." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Se cae un switch y 20 servidores dejan de responder al mismo tiempo. ¿Qué evita recibir 20 correos?
+  opciones:
+    - { texto: "group_by en la ruta de Alertmanager", correcta: true, explicacion: "Junta las alertas del grupo en un solo mensaje." }
+    - { texto: "El for de la regla", explicacion: "Retrasa el aviso pero no lo junta." }
+    - { texto: "repeat_interval", explicacion: "Controla cada cuánto se repite." }
+    - { texto: "send_resolved", explicacion: "Avisa cuando se resuelve." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Si un servidor está caído, ¿qué evita que además lleguen avisos de cada uno de sus servicios?
+  opciones:
+    - { texto: "Una regla de inhibición (inhibit_rules) con equal instance", correcta: true, explicacion: "La alerta de origen calla a las de destino del mismo equipo." }
+    - { texto: "Un silencio", explicacion: "Habría que crearlo a mano cada vez." }
+    - { texto: "group_wait", explicacion: "No." }
+    - { texto: "Borrar las reglas de los servicios", explicacion: "Perderías los avisos cuando el servidor está bien y el servicio no." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Silenciá por 2 horas la alerta NodoCaido de web02:9100, por un reinicio planificado.
+  prompt: "ana@mon01:~$"
+  aceptadas:
+    - "amtool silence add alertname=NodoCaido instance=web02:9100 --comment=\"Reinicio planificado\" --duration=2h --alertmanager.url=http://localhost:9093"
+    - "amtool silence add alertname=NodoCaido instance=web02:9100 --duration=2h --comment=\"Reinicio planificado\" --alertmanager.url=http://localhost:9093"
+  explicacion: Con comentario (quién y por qué) y duración. Si amtool tiene la URL en ~/.config/amtool/config.yml, no hace falta --alertmanager.url.
+- id: p07
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Cuáles son buenas prácticas para que las alertas sirvan? Marcá todas las que correspondan.
+  opciones:
+    - { texto: "Que cada alerta pida una acción concreta", correcta: true, explicacion: "Si no, va a un tablero." }
+    - { texto: "Enlazar un runbook en las anotaciones", correcta: true, explicacion: "Qué mirar y qué hacer primero." }
+    - { texto: "Revisar seguido las que suenan y nadie atiende", correcta: true, explicacion: "Se ajustan o se borran." }
+    - { texto: "Alertar la CPU de todos los servidores por encima de 70 %", explicacion: "Es una causa, no un síntoma, y suele sonar sin que pase nada." }
+- id: p08
+  tipo: interpretar_salida
+  dificultad: 3
+  enunciado: Las alertas están firing en Prometheus pero no llega ningún correo. ¿Qué pasa?
+  salida: |
+    $ sudo journalctl -u alertmanager --no-pager | tail -1
+    nov 23 14:02:11 mon01 alertmanager[2211]: time=2026-11-23T14:02:11.412Z level=ERROR source=dispatch.go:360 msg="Notify for alerts failed" component=dispatcher num_alerts=2 err="correo/email[0]: notify retry canceled after 3 attempts: establish connection to server: dial tcp 192.168.10.40:25: connect: connection refused"
+  opciones:
+    - { texto: "El servidor de correo configurado en smtp_smarthost no acepta conexiones en el 25", correcta: true, explicacion: "connection refused: no hay nada escuchando (Postfix caído) o lo rechaza." }
+    - { texto: "Prometheus no le manda las alertas a Alertmanager", explicacion: "Alertmanager las tiene: está intentando notificar 2." }
+    - { texto: "Hay un silencio activo", explicacion: "Con un silencio no intentaría mandar." }
+    - { texto: "La regla no tiene for", explicacion: "No tiene que ver." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve absent(up{job="backup"}) en una regla?
+  opciones:
+    - { texto: "Para avisar si desaparecen las series de ese job (alguien lo sacó de la configuración o dejó de existir)", correcta: true, explicacion: "up == 0 no se cumple si no hay serie." }
+    - { texto: "Para avisar si el backup tarda mucho", explicacion: "No." }
+    - { texto: "Para ignorar el job backup", explicacion: "No." }
+    - { texto: "Para borrar las series viejas", explicacion: "No." }

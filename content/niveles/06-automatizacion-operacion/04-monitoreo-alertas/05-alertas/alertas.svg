@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 400" font-family="system-ui, sans-serif" font-size="12">
+  <defs>
+    <marker id="an-al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+  </defs>
+  <text x="430" y="22" text-anchor="middle" font-weight="700" font-size="12.5" fill="currentColor">De la regla al aviso: Prometheus decide qué está mal, Alertmanager a quién avisarle</text>
+  <g stroke="currentColor" stroke-width="1.1">
+    <rect x="20" y="40" width="240" height="220" rx="8" fill="var(--info-soft, #e0e9fd)"/>
+    <rect x="30" y="176" width="66" height="26" rx="13" fill="var(--surface, #fff)"/>
+    <rect x="106" y="176" width="66" height="26" rx="13" fill="var(--warn-soft, #fbf0d0)"/>
+    <rect x="182" y="176" width="68" height="26" rx="13" fill="var(--err-soft, #fde2e2)"/>
+    <rect x="300" y="40" width="330" height="220" rx="8" fill="var(--warn-soft, #fbf0d0)"/>
+    <rect x="666" y="40" width="174" height="220" rx="8" fill="var(--ok-soft, #dcf5e4)"/>
+    <rect x="20" y="278" width="820" height="110" rx="8" fill="var(--surface-2, #f1f3f6)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#an-al)">
+    <path d="M262 150 L298 150"/>
+    <path d="M632 150 L664 150"/>
+    <path d="M96 189 L104 189"/>
+    <path d="M172 189 L180 189"/>
+  </g>
+  <g fill="currentColor">
+    <text x="34" y="62" font-weight="700">reglas en Prometheus</text>
+    <g font-size="11">
+      <text x="34" y="84">alert: DiscoSeLlena</text>
+      <text x="34" y="100">expr: predict_linear(...) &lt; 0</text>
+      <text x="34" y="116">for: 10m</text>
+      <text x="34" y="132">labels: severity: warning</text>
+      <text x="34" y="148">annotations: summary, runbook_url</text>
+      <text x="34" y="168">cada evaluation_interval:</text>
+      <text x="63" y="193" text-anchor="middle">inactive</text>
+      <text x="139" y="193" text-anchor="middle">pending</text>
+      <text x="216" y="193" text-anchor="middle">firing</text>
+      <text x="34" y="222">pending: se cumple, pero todavía</text>
+      <text x="34" y="238">no pasó el for (no avisa)</text>
+    </g>
+    <text x="314" y="62" font-weight="700">Alertmanager (9093)</text>
+    <g font-size="11">
+      <text x="314" y="84" font-weight="700">agrupa</text>
+      <text x="370" y="84">por alertname e instance: un mensaje, no 20</text>
+      <text x="314" y="104" font-weight="700">enruta</text>
+      <text x="370" y="104">severity=critical → guardia (teléfono, chat)</text>
+      <text x="370" y="120">severity=warning → correo o ticket del equipo</text>
+      <text x="314" y="140" font-weight="700">inhibe</text>
+      <text x="370" y="140">si el servidor está caído, no avisa también</text>
+      <text x="370" y="156">de sus servicios</text>
+      <text x="314" y="176" font-weight="700">silencia</text>
+      <text x="370" y="176">mantenimiento: amtool silence add, con</text>
+      <text x="370" y="192">comentario y vencimiento</text>
+      <text x="314" y="212" font-weight="700">repite</text>
+      <text x="370" y="212">cada repeat_interval (4h) lo que sigue mal</text>
+      <text x="314" y="232">y avisa cuando se resuelve (send_resolved)</text>
+    </g>
+    <text x="678" y="62" font-weight="700">receptores</text>
+    <g font-size="11">
+      <text x="678" y="86">correo (email_configs)</text>
+      <text x="678" y="106">Slack, Teams, Telegram</text>
+      <text x="678" y="126">PagerDuty, Opsgenie</text>
+      <text x="678" y="146">webhook a lo que sea</text>
+      <text x="678" y="176">el mensaje lleva el resumen,</text>
+      <text x="678" y="192">las etiquetas y el enlace</text>
+      <text x="678" y="208">al runbook: qué mirar y qué</text>
+      <text x="678" y="224">hacer primero</text>
+    </g>
+    <text x="34" y="300" font-weight="700">una alerta que sirve</text>
+    <g font-size="11">
+      <text x="34" y="322">• alguien tiene que hacer algo ahora (si no, va a un tablero)</text>
+      <text x="34" y="340">• avisa del síntoma que sienten los usuarios (errores, lentitud) antes que de la causa (CPU)</text>
+      <text x="34" y="358">• avisa con tiempo: tendencias (predict_linear) en lugar de umbrales que llegan tarde</text>
+      <text x="34" y="376">• tiene runbook y dueño, y se revisa: la que suena siempre y nadie atiende se arregla o se borra</text>
+    </g>
+  </g>
+</svg>

@@ -1104,7 +1104,12 @@ function dispatch(sys: System) {
     const rec = rt.cfg.receivers.find((r) => r.name === g.receiver)
     if (!rec) continue
     const common = Object.fromEntries(Object.entries(g.alerts[0].labels).filter(([k, v]) => g.alerts.every((a) => a.labels[k] === v)))
-    const subject = `[FIRING:${g.alerts.length}] ${common.alertname ?? ''} (${Object.entries(common).filter(([k]) => k !== 'alertname').map(([, v]) => v).join(' ')})`
+    // Como la plantilla __subject de Alertmanager: las etiquetas del grupo y, entre paréntesis, el
+    // resto de las comunes (las dos ordenadas por nombre de etiqueta).
+    const groupKeys = g.groupBy.includes('...') ? Object.keys(g.alerts[0].labels) : g.groupBy.filter((k) => g.alerts[0].labels[k] !== undefined)
+    const groupVals = [...groupKeys].sort().map((k) => g.alerts[0].labels[k])
+    const rest = Object.keys(common).filter((k) => !groupKeys.includes(k)).sort().map((k) => common[k])
+    const subject = `[FIRING:${g.alerts.length}] ${groupVals.join(' ')}${rest.length ? ` (${rest.join(' ')})` : ''}`
     const body = g.alerts.map((a) => `Labels:\n${Object.entries(a.labels).map(([k, v]) => ` - ${k} = ${v}`).join('\n')}\nAnnotations:\n${Object.entries(a.annotations).map(([k, v]) => ` - ${k} = ${v}`).join('\n')}\nSource: ${a.generator}\n`).join('\n')
     rec.email.forEach((e, i) => {
       const [host, port] = (e.smarthost ?? '').split(':')

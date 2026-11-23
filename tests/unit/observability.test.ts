@@ -98,7 +98,8 @@ describe('Prometheus, Alertmanager y node_exporter en el simulador', () => {
     expect((await run('curl -s "localhost:9090/api/v1/query?query=up%7Bjob%3D%22node%22%7D%20%3D%3D%200"')).out).toContain('"instance":"web02:9100"')
     expect(check({ prometheus_alerta: 'NodoCaido', estado: 'firing' })).toBe(true)
     expect((await run('amtool alert query --alertmanager.url=http://localhost:9093')).out).toMatch(/NodoCaido .* web02:9100 no responde +active/)
-    expect((await run('mail -H')).out).toContain('[FIRING:1] NodoCaido')
+    // Sin group_by el grupo no tiene etiquetas: el asunto lleva todas las comunes entre paréntesis.
+    expect((await run('mail -H')).out).toContain('[FIRING:1]  (NodoCaido web02:9100 node critical)')
     // Silencio: deja de aparecer como activa.
     expect((await run('amtool silence add alertname=NodoCaido --comment="mantenimiento" --duration=1h --alertmanager.url=http://localhost:9093')).out).toMatch(/^[0-9a-f-]{36}$/m)
     expect(check({ alertmanager_alerta: 'NodoCaido', silenciada: true })).toBe(true)

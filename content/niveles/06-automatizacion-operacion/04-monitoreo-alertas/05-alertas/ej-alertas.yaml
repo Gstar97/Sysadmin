@@ -1,0 +1,161 @@
+tipo: terminal
+shell: bash
+titulo: Reglas de alerta, correo y un silencio
+descripcion: >-
+  En mon01 Prometheus ya junta las métricas de web01 y db01 (job node). El disco de db01 viene
+  creciendo unos 3 GB por hora desde hace un rato y nadie se enteró. Están instalados
+  Alertmanager (sin configurar ni arrancar) y Postfix, que entrega el correo local: ana lee el suyo
+  con mail.
+estado_inicial:
+  distro: rocky
+  hostname: mon01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [prometheus, alertmanager, postfix, s-nail, jq] }
+  servicios: { prometheus: { activo: true, habilitado: true }, postfix: { activo: true, habilitado: true } }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.30/24, estado: UP }
+  archivos:
+    /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+    /etc/hosts: { contenido: "127.0.0.1 localhost\n192.168.10.11 web01\n192.168.10.21 db01\n" }
+    /etc/prometheus/prometheus.yml:
+      contenido: |
+        global:
+          scrape_interval: 15s
+          evaluation_interval: 15s
+
+        alerting:
+          alertmanagers:
+            - static_configs:
+                - targets: []
+
+        rule_files: []
+
+        scrape_configs:
+          - job_name: "prometheus"
+            static_configs:
+              - targets: ["localhost:9090"]
+
+          - job_name: "node"
+            static_configs:
+              - targets: ["web01:9100", "db01:9100"]
+  servidores:
+    - { hostname: web01, ip: 192.168.10.11, distro: ubuntu, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], paquetes: { instalados: [node_exporter] }, servicios: { node_exporter: { activo: true, habilitado: true } }, archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: db01, ip: 192.168.10.21, distro: ubuntu, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], paquetes: { instalados: [node_exporter] }, servicios: { node_exporter: { activo: true, habilitado: true } }, archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+  metricas:
+    nodos:
+      - { instancia: "db01:9100", disco_gb: 50, disco_usado: 0.62, disco_crece_gb_hora: 3 }
+pasos:
+  - consigna: >-
+      Creá /etc/prometheus/rules/nodos.yml con un grupo nodos y dos alertas: NodoCaido (up del job
+      node igual a 0 durante 2 minutos, severity critical) y DiscoSeLlena (predict_linear de
+      node_filesystem_avail_bytes de la raíz sobre 1 hora, proyectado a 4 horas, menor que 0,
+      durante 10 minutos, severity warning). Sumá el archivo a rule_files, revisá con promtool y
+      reiniciá Prometheus.
+    verificar:
+      - { archivo: /etc/prometheus/rules/nodos.yml, contenido_incluye: predict_linear }
+      - { comando_usado: promtool }
+      - { prometheus_alerta: NodoCaido, estado: inactive }
+      - { prometheus_alerta: DiscoSeLlena, estado: firing }
+    pistas:
+      - "Un archivo de reglas empieza con groups:, cada grupo tiene name y rules, y cada regla alert, expr, for, labels y annotations."
+      - "La expresión: predict_linear(node_filesystem_avail_bytes{mountpoint=\"/\"}[1h], 4 * 3600) < 0"
+      - "En prometheus.yml: rule_files: [\"rules/*.yml\"] (la ruta es relativa a /etc/prometheus). Después promtool check config /etc/prometheus/prometheus.yml."
+    solucion:
+      - sudo mkdir -p /etc/prometheus/rules
+      - |-
+        sudo tee /etc/prometheus/rules/nodos.yml >/dev/null <<'EOF'
+        groups:
+          - name: nodos
+            rules:
+              - alert: NodoCaido
+                expr: up{job="node"} == 0
+                for: 2m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "{{ $labels.instance }} no responde"
+                  runbook_url: "https://wiki.lab/runbooks/nodo-caido"
+              - alert: DiscoSeLlena
+                expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[1h], 4 * 3600) < 0
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "El disco raíz de {{ $labels.instance }} se llena en menos de 4 horas"
+                  runbook_url: "https://wiki.lab/runbooks/disco-lleno"
+        EOF
+      - "sudo sed -i 's|^rule_files: \\[\\]|rule_files:\\n  - \"rules/*.yml\"|' /etc/prometheus/prometheus.yml"
+      - promtool check config /etc/prometheus/prometheus.yml
+      - sudo systemctl restart prometheus
+      - "curl -s localhost:9090/api/v1/alerts | jq -r '.data.alerts[] | [.labels.alertname, .labels.instance, .state] | @tsv'"
+    explicacion: >-
+      Prometheus evalúa las reglas cada evaluation_interval. Mientras la condición se cumple pero
+      todavía no pasó el for, la alerta está pending; después pasa a firing. DiscoSeLlena ya está
+      firing porque db01 viene llenándose desde antes de que existiera la regla: la condición se
+      cumple hace más de 10 minutos en los datos guardados.
+  - consigna: >-
+      Configurá Alertmanager para que mande todo por correo a ana@localhost (smtp_smarthost
+      localhost:25, smtp_from alertas@mon01.lab, smtp_require_tls en false), agrupando por
+      alertname e instance. Revisá con amtool, arrancalo, apuntá Prometheus a localhost:9093 y
+      comprobá que te llegó el correo.
+    verificar:
+      - { servicio: alertmanager, activo: true, habilitado: true }
+      - { alertmanager_alerta: DiscoSeLlena }
+      - { salida_contiene: "DiscoSeLlena" }
+      - { comando_usado: mail }
+    pistas:
+      - "global: con smtp_smarthost, smtp_from y smtp_require_tls; route: con receiver y group_by; receivers: con un receptor que tenga email_configs con to."
+      - "amtool check-config /etc/alertmanager/alertmanager.yml antes de arrancar."
+      - "En prometheus.yml, la sección alerting: targets: [\"localhost:9093\"]. Después, restart de prometheus."
+      - "El correo no sale en el acto: Alertmanager espera group_wait (30 segundos) por si llegan más alertas del mismo grupo. sleep 30 y después mail -H."
+    solucion:
+      - |-
+        sudo tee /etc/alertmanager/alertmanager.yml >/dev/null <<'EOF'
+        global:
+          smtp_smarthost: "localhost:25"
+          smtp_from: "alertas@mon01.lab"
+          smtp_require_tls: false
+
+        route:
+          receiver: "correo"
+          group_by: ["alertname", "instance"]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+        receivers:
+          - name: "correo"
+            email_configs:
+              - to: "ana@localhost"
+                send_resolved: true
+        EOF
+      - amtool check-config /etc/alertmanager/alertmanager.yml
+      - sudo systemctl enable --now alertmanager
+      - "sudo sed -i 's|targets: \\[\\]|targets: [\"localhost:9093\"]|' /etc/prometheus/prometheus.yml"
+      - sudo systemctl restart prometheus
+      - sleep 30
+      - mail -H
+    explicacion: >-
+      Prometheus decide qué está mal; Alertmanager decide a quién avisarle y cómo. group_by junta
+      en un solo mensaje las alertas iguales (si se caen 20 servidores, un correo con 20, no 20
+      correos), group_wait espera un poco a que lleguen las compañeras y repeat_interval recuerda
+      cada 4 horas lo que sigue mal. send_resolved avisa también cuando se arregla.
+  - consigna: >-
+      Mañana a la mañana se limpia db01 en una ventana de mantenimiento ya acordada. Para que la
+      alerta no siga molestando hasta entonces, creá con amtool un silencio de 12 horas solo para
+      DiscoSeLlena en db01:9100, con un comentario que diga por qué.
+    verificar:
+      - { alertmanager_alerta: DiscoSeLlena, silenciada: true }
+      - { comando_usado: "silence add" }
+    pistas:
+      - "amtool silence add alertname=DiscoSeLlena instance=db01:9100 --comment=\"...\" --duration=12h --alertmanager.url=http://localhost:9093"
+      - "amtool silence query --alertmanager.url=http://localhost:9093 los lista."
+    solucion:
+      - "amtool silence add alertname=DiscoSeLlena instance=db01:9100 --comment=\"Limpieza de db01 mañana 8:00 (ana)\" --duration=12h --alertmanager.url=http://localhost:9093"
+      - amtool silence query --alertmanager.url=http://localhost:9093
+    explicacion: >-
+      Un silencio no apaga la regla: la alerta sigue firing en Prometheus, pero Alertmanager no
+      notifica mientras dure. Siempre con comentario (quién y por qué) y con vencimiento: un
+      silencio sin fecha de fin es una alerta borrada que nadie recuerda haber borrado.

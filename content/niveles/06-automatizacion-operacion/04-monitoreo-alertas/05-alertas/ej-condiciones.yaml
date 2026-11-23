@@ -1,0 +1,76 @@
+tipo: promql
+titulo: Las condiciones de las alertas
+descripcion: >-
+  Antes de escribir una regla, la expresión se prueba en la consola. Prometheus junta las
+  métricas de web01, web02 y db01 (node_exporter) y de la API de la tienda (api01). Hay de todo:
+  un servidor caído, un disco que se llena y una API con errores.
+metricas:
+  nodos:
+    - { instancia: "web01:9100", carga: 0.93, memoria_usada: 0.5, disco_usado: 0.4 }
+    - { instancia: "web02:9100", carga: 0.3, memoria_usada: 0.45, disco_gb: 50, disco_usado: 0.68, disco_crece_gb_hora: 4 }
+    - instancia: "db01:9100"
+      carga: 0.5
+      eventos:
+        - { desde: "-12m", caido: true }
+  http:
+    - instancia: "api01:8080"
+      rps: 50
+      errores: 0.003
+      eventos:
+        - { desde: "-25m", errores: 0.08 }
+pasos:
+  - consigna: >-
+      La alerta más básica: los objetivos del job node que Prometheus no puede leer.
+    verificar:
+      - { series: 1 }
+      - { contiene: { instance: "db01:9100" } }
+    pistas:
+      - "up vale 1 si Prometheus pudo leer el objetivo y 0 si no."
+      - "Una comparación como == 0 filtra: deja solo las series que la cumplen."
+    solucion: up{job="node"} == 0
+    explicacion: >-
+      En la regla esta expresión va con for: 2m o más, para no avisar por un solo intento fallido
+      (un reinicio rápido, un paquete perdido).
+  - consigna: >-
+      Los discos raíz que, al ritmo de la última hora, se quedarían sin espacio en las próximas 4
+      horas.
+    verificar:
+      - { usa: predict_linear }
+      - { series: 1 }
+      - { contiene: { instance: "web02:9100" } }
+    pistas:
+      - "predict_linear(rango, segundos) proyecta el valor dentro de esos segundos según la tendencia del rango."
+      - "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/\"}[1h], 4 * 3600) < 0"
+    solucion: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[1h], 4 * 3600) < 0
+    explicacion: >-
+      Un umbral fijo (más del 90 % usado) avisa tarde si el disco se llena rápido y avisa de más en un
+      disco grande que está quieto en 91 %. La tendencia avisa cuando hay tiempo de hacer algo.
+  - consigna: >-
+      web01 tiene la CPU al 93 % y la API anda lento con errores. ¿Qué conviene alertar? Escribí el
+      porcentaje de respuestas 5xx de la API, solo si pasa del 5 %.
+    verificar:
+      - { series: 1 }
+      - { usa: "=~" }
+      - { valor: { min: 5, max: 15 } }
+    pistas:
+      - "100 * sum(rate(http_requests_total{code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))"
+      - "Y al final > 5."
+    solucion: 100 * sum(rate(http_requests_total{code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 5
+    explicacion: >-
+      La CPU alta de web01 no es un problema mientras los clientes estén bien atendidos: puede ir a
+      un tablero, no a un aviso que despierta a alguien. Los errores, en cambio, los sienten los
+      clientes: eso es lo que se alerta.
+  - consigna: >-
+      Alguien sacó por error backup01:9100 de prometheus.yml y nadie se enteró: si no hay serie, una
+      regla como up == 0 nunca se cumple. Escribí una expresión que devuelva algo cuando no existe
+      ninguna serie up de ese objetivo.
+    verificar:
+      - { usa: absent }
+      - { series: 1 }
+      - { contiene: { instance: "backup01:9100" } }
+    pistas:
+      - "absent(selector) devuelve 1 cuando el selector no encuentra ninguna serie, y nada cuando sí."
+    solucion: absent(up{instance="backup01:9100"})
+    explicacion: >-
+      Monitorear la ausencia de datos es tan importante como monitorear los valores: un exporter que
+      dejó de existir no dispara ninguna alerta de umbral.
