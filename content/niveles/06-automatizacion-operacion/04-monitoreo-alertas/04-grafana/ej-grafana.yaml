@@ -1,0 +1,89 @@
+tipo: terminal
+shell: bash
+titulo: Grafana con sus orígenes de datos en un archivo
+descripcion: >-
+  En mon01 (Rocky Linux 10) ya andan Prometheus (en el 9090) y Loki (en el 3100). Falta Grafana,
+  con Prometheus y Loki como orígenes de datos definidos en archivos (así quedan en el repositorio
+  de Git y no hay que cargarlos a mano en la web).
+estado_inicial:
+  distro: rocky
+  hostname: mon01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true }]
+  paquetes: { instalados: [prometheus, loki, jq] }
+  servicios: { prometheus: { activo: true }, loki: { activo: true } }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.30/24, estado: UP }
+  archivos:
+    /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+pasos:
+  - consigna: >-
+      Agregá el repositorio de Grafana en /etc/yum.repos.d/grafana.repo (sección [grafana], con
+      baseurl=https://rpm.grafana.com, gpgcheck=1 y gpgkey=https://rpm.grafana.com/gpg.key) e
+      instalá el paquete grafana.
+    verificar:
+      - { archivo: /etc/yum.repos.d/grafana.repo, contenido_incluye: "rpm.grafana.com" }
+      - { paquete: grafana }
+    pistas:
+      - "Sin el repositorio, dnf install grafana dice No match for argument."
+      - "printf '[grafana]\\nname=grafana\\nbaseurl=https://rpm.grafana.com\\nrepo_gpgcheck=1\\nenabled=1\\ngpgcheck=1\\ngpgkey=https://rpm.grafana.com/gpg.key\\n' | sudo tee /etc/yum.repos.d/grafana.repo"
+    solucion:
+      - "printf '[grafana]\\nname=grafana\\nbaseurl=https://rpm.grafana.com\\nrepo_gpgcheck=1\\nenabled=1\\ngpgcheck=1\\ngpgkey=https://rpm.grafana.com/gpg.key\\nsslverify=1\\nsslcacert=/etc/pki/tls/certs/ca-bundle.crt\\n' | sudo tee /etc/yum.repos.d/grafana.repo"
+      - sudo dnf install -y grafana
+    explicacion: >-
+      Es el repositorio oficial de Grafana Labs: además de grafana trae loki, alloy y logcli, que
+      vas a usar en el módulo 6.5. En Ubuntu es una línea en /etc/apt/sources.list.d/ con
+      apt.grafana.com y la clave en /etc/apt/keyrings/.
+  - consigna: >-
+      Creá /etc/grafana/provisioning/datasources/lab.yaml con dos orígenes de datos: Prometheus (tipo
+      prometheus, http://localhost:9090, el predeterminado) y Loki (tipo loki, http://localhost:3100).
+      Arrancá y habilitá grafana-server y comprobá por la API que los dos responden.
+    verificar:
+      - { servicio: grafana-server, activo: true, habilitado: true }
+      - { grafana_datasource: Prometheus, tipo: prometheus, funciona: true }
+      - { grafana_datasource: Loki, tipo: loki, funciona: true }
+    pistas:
+      - "El archivo empieza con apiVersion: 1 y una lista datasources:, cada uno con name, type, url (y isDefault: true en uno solo)."
+      - "curl -s -u admin:admin localhost:3000/api/datasources | jq '.[].name' y, para probar uno, /api/datasources/uid/UID/health (el uid es el nombre en minúsculas si no le pusiste uno)."
+    solucion:
+      - |-
+        sudo tee /etc/grafana/provisioning/datasources/lab.yaml >/dev/null <<'EOF'
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            uid: prometheus
+            url: http://localhost:9090
+            isDefault: true
+          - name: Loki
+            type: loki
+            uid: loki
+            url: http://localhost:3100
+        EOF
+      - sudo systemctl enable --now grafana-server
+      - curl -s -u admin:admin localhost:3000/api/datasources/uid/prometheus/health
+      - curl -s -u admin:admin localhost:3000/api/datasources/uid/loki/health
+    explicacion: >-
+      Los orígenes de datos provisionados se cargan cada vez que arranca Grafana y quedan de solo
+      lectura en la web: lo que manda es el archivo, que va al repositorio con el resto de la
+      configuración. Si el YAML tiene un error, Grafana no arranca y journalctl -u grafana-server
+      dice por qué.
+  - consigna: >-
+      La cuenta admin sigue con la contraseña de fábrica (admin). Cambiala por Graf-Lab-2026 desde
+      la terminal y comprobá que la API ya no acepta la vieja.
+    verificar:
+      - { salida_contiene: "Invalid username or password" }
+      - { comando_usado: reset-admin-password }
+    pistas:
+      - "sudo grafana cli admin reset-admin-password Graf-Lab-2026"
+      - "curl -s -u admin:admin localhost:3000/api/datasources tiene que dar error."
+    solucion:
+      - sudo grafana cli admin reset-admin-password Graf-Lab-2026
+      - "curl -s -u admin:Graf-Lab-2026 localhost:3000/api/datasources | jq -r '.[].name'"
+      - curl -s -u admin:admin localhost:3000/api/datasources
+    explicacion: >-
+      En el primer ingreso por la web Grafana obliga a cambiarla, pero si nadie entró todavía, admin
+      / admin funciona para cualquiera que llegue al puerto 3000. Para producción: usuarios propios
+      (o el login con el Active Directory), roles Viewer, Editor y Admin, y el 3000 detrás de nginx
+      con HTTPS.

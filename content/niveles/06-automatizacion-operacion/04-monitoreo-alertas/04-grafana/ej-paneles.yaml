@@ -1,0 +1,63 @@
+tipo: promql
+titulo: Las consultas de un tablero de servidores
+descripcion: >-
+  Vas a armar las consultas de un tablero para los tres servidores del laboratorio: web01, web02
+  y db01, todos con node_exporter. Cada paso es un panel distinto.
+metricas:
+  nodos:
+    - { instancia: "web01:9100", carga: 0.4, memoria_usada: 0.55, disco_usado: 0.45 }
+    - { instancia: "web02:9100", carga: 0.25, memoria_usada: 0.35, disco_usado: 0.5 }
+    - { instancia: "db01:9100", carga: 0.6, memoria_usada: 0.8, disco_usado: 0.86 }
+pasos:
+  - consigna: >-
+      Panel "CPU en uso" (serie de tiempo): el porcentaje de CPU ocupada de cada servidor, una línea
+      por instancia.
+    verificar:
+      - { series: 3 }
+      - { con_etiqueta: instance }
+      - { sin_etiqueta: cpu }
+      - { valor: { min: 10, max: 80 } }
+    pistas:
+      - "100 * (1 - el promedio por instancia de la velocidad del modo idle)."
+    solucion: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])))
+    explicacion: >-
+      En Grafana, la leyenda {{instance}} usa la etiqueta para nombrar cada línea, y la unidad
+      "Percent (0-100)" del panel le agrega el % a los ejes.
+  - consigna: >-
+      Panel "Disco usado" (indicador): el porcentaje usado del sistema de archivos raíz de cada
+      servidor. db01 tiene que aparecer por encima de 80.
+    verificar:
+      - { series: 3 }
+      - { valor: { min: 80, max: 100 }, si: { instance: "db01:9100" } }
+    pistas:
+      - "node_filesystem_avail_bytes y node_filesystem_size_bytes, los dos con mountpoint=\"/\"."
+    solucion: 100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})
+    explicacion: >-
+      Los umbrales del panel (verde, amarillo desde 80, rojo desde 90) pintan el indicador sin
+      necesidad de una alerta: es lo que se ve de un vistazo en una pantalla de guardia.
+  - consigna: >-
+      Panel "Más memoria usada" (tabla): solo los dos servidores con más porcentaje de memoria en
+      uso.
+    verificar:
+      - { series: 2 }
+      - { usa: topk }
+      - { contiene: { instance: "db01:9100" } }
+    pistas:
+      - "topk(2, expresión) se queda con las dos series de valor más alto."
+    solucion: topk(2, 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))
+    explicacion: topk y bottomk sirven para tablas y rankings ("los 5 discos más llenos").
+  - consigna: >-
+      Los tableros usan variables: un menú arriba con los servidores, y las consultas filtran con
+      instance=~"$instance". Escribí la carga del último minuto solo de los servidores web, como
+      quedaría si en el menú se eligen web01 y web02.
+    verificar:
+      - { series: 2 }
+      - { no_contiene: { instance: "db01:9100" } }
+      - { usa: "=~" }
+    pistas:
+      - "Una variable con varios valores se reemplaza por web01:9100|web02:9100, o se puede filtrar con web.*"
+    solucion: node_load1{instance=~"web.*"}
+    explicacion: >-
+      Con =~ la misma consulta sirve para uno, varios o todos los servidores. La variable se define
+      con la consulta label_values(up, instance), así el menú se actualiza solo cuando sumás un
+      equipo.

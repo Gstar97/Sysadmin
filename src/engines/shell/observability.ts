@@ -19,7 +19,7 @@ import { REPO_GATES } from './commands/pkg'
 import { EXEC_CHECKS } from './commands/systemd'
 import { VENDOR_UNITS } from './units'
 import { submit } from './mail'
-import { ALERTMANAGER_VERSION, ALLOY_VERSION, GRAFANA_PKGS, GRAFANA_VERSION, LOKI_VERSION, NODE_EXPORTER_VERSION, PROMETHEUS_VERSION, ZABBIX_PKGS, ZABBIX_VERSION } from './monpkgs'
+import { ALERTMANAGER_EXEC, ALERTMANAGER_VERSION, ALLOY_VERSION, GRAFANA_PKGS, GRAFANA_VERSION, LOKI_VERSION, NODE_EXPORTER_VERSION, PROMETHEUS_EXEC, PROMETHEUS_VERSION, ZABBIX_PKGS, ZABBIX_VERSION } from './monpkgs'
 import { buildTsdb, formatDuration, parseDuration, type HttpSpec, type Labels, type NodeSpec, type Scenario, type SeriesSpec, type Tsdb } from '../metrics/tsdb'
 import { Engine, fmt, fmtLabels, formatInstant, instantQuery, parse as parsePromQL, PromQLError, rangeQuery, type Node as PromNode, type VSample } from '../metrics/promql'
 import { buildLogDb, type LogDb, type LogScenario, type LogStream } from '../logs/logdb'
@@ -226,6 +226,9 @@ const zabbixRepo = (sys: System) => (sys.distro === 'rocky' ? anyFileMatches(sys
 for (const p of GRAFANA_PKGS) REPO_GATES[p] = { repo: 'grafana', ok: grafanaRepo }
 for (const p of ZABBIX_PKGS) REPO_GATES[p] = { repo: 'zabbix', ok: zabbixRepo }
 
+SERVICE_PROCS['prometheus'] = { cmd: PROMETHEUS_EXEC, user: 'prometheus', comm: 'prometheus' }
+SERVICE_PROCS['node_exporter'] = { cmd: '/usr/local/bin/node_exporter', user: 'node_exporter', comm: 'node_exporter' }
+SERVICE_PROCS['alertmanager'] = { cmd: ALERTMANAGER_EXEC, user: 'alertmanager', comm: 'alertmanager' }
 SERVICE_PROCS['grafana-server'] = { cmd: '/usr/share/grafana/bin/grafana server --config=/etc/grafana/grafana.ini --pidfile=/run/grafana/grafana-server.pid cfg:default.paths.logs=/var/log/grafana cfg:default.paths.data=/var/lib/grafana cfg:default.paths.provisioning=/etc/grafana/provisioning', user: 'grafana', comm: 'grafana' }
 SERVICE_PROCS['loki'] = { cmd: '/usr/bin/loki -config.file /etc/loki/config.yml', user: 'loki', comm: 'loki' }
 SERVICE_PROCS['alloy'] = { cmd: '/usr/bin/alloy run --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy', user: 'alloy', comm: 'alloy' }

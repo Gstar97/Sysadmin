@@ -1,0 +1,129 @@
+---
+id: n6-m4-l4
+titulo: Grafana
+minutos: 120
+objetivos:
+  - Entender cómo arma Grafana sus tableros a partir de orígenes de datos, paneles y variables.
+  - Instalar Grafana y definir sus orígenes de datos en archivos, para tenerlos en Git.
+  - Escribir las consultas de un tablero de servidores y elegir la visualización, la unidad y los umbrales de cada panel.
+glosario: [grafana, tablero, provisioning]
+verificado: 2026-11
+---
+
+import graf from './grafana.svg?raw'
+import grafDatos from './grafana.yaml'
+import ejGrafana from './ej-grafana.yaml'
+import ejPaneles from './ej-paneles.yaml'
+
+Prometheus guarda las métricas y las consulta, pero su interfaz web es para probar consultas, no para mirar el estado de diez servidores de un vistazo. Para eso está **Grafana**: tableros con gráficos, indicadores y tablas que le preguntan a Prometheus, a Loki, a Zabbix o a una base de datos. Es software libre de Grafana Labs (licencia AGPL) y la versión actual es la **13**.
+
+<AntesDeEmpezar>
+- Prometheus y PromQL (lección 6.4.3).
+- YAML (lección 6.2.4) y Git para infraestructura (lección 6.1.5).
+</AntesDeEmpezar>
+
+## Cómo está armado
+
+<DiagramaInteractivo datos={grafDatos} svg={graf} alt="A la izquierda, los orígenes de datos: Prometheus con PromQL, Loki con LogQL, Zabbix con su plugin, PostgreSQL y MySQL con SQL, Elasticsearch y la nube; Grafana no guarda datos, pregunta cada vez que se abre o refresca un panel. En el centro, un tablero Servidores con una variable instance (web01, web02) y el rango de las últimas 6 horas, y cuatro paneles: CPU en uso como serie de tiempo en porcentaje con una línea por instancia, Disco usado como indicador con umbrales en 80 y 90, Más memoria como tabla con topk, y Errores de login con logs de Loki. A la derecha, quién lo usa: Viewer solo mira, Editor arma tableros, Admin maneja usuarios y orígenes; login local, LDAP o Active Directory; pantalla de guardia en modo kiosco. Abajo, tableros como código: los archivos YAML de provisioning para orígenes de datos y tableros en JSON, todo en Git y repartido con Ansible." />
+
+- Un **origen de datos** (data source) es la conexión a algo que tiene datos: la URL de Prometheus, de Loki, una base PostgreSQL. Grafana no copia nada: cada vez que abrís un tablero, cada panel manda su consulta y dibuja la respuesta.
+- Un **panel** es una consulta más una forma de mostrarla: serie de tiempo, indicador (gauge), número grande (stat), tabla, barras, mapa de calor o logs.
+- Un **tablero** (dashboard) junta paneles, con un rango de tiempo común ("últimas 6 horas") y **variables**: menús arriba que cambian todas las consultas a la vez.
+
+## Instalación
+
+Grafana tiene repositorio propio para Rocky y Ubuntu (el mismo que trae Loki y Alloy, que vas a usar en el módulo 6.5). Escucha en el **3000**; la primera vez entrás con admin / admin y te pide cambiar la contraseña.
+
+```bash
+sudo dnf install -y grafana                 # con /etc/yum.repos.d/grafana.repo agregado
+sudo systemctl enable --now grafana-server
+sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --reload
+```
+
+La configuración está en `/etc/grafana/grafana.ini` (lo que no figura usa el valor de fábrica) y los datos (usuarios, tableros hechos en la web) en una base SQLite en `/var/lib/grafana`. En producción conviene ponerlo detrás de nginx con HTTPS (lecciones 4.1.4 y 4.2.4) y conectar el login con el Active Directory por LDAP, para que cada uno entre con su cuenta.
+
+## Orígenes de datos en archivos
+
+Se pueden cargar en la web (Connections, Data sources), pero lo prolijo es **provisioning**: archivos YAML que Grafana lee al arrancar.
+
+```yaml
+# /etc/grafana/provisioning/datasources/lab.yaml
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus            # identificador fijo: los tableros lo usan para encontrarlo
+    url: http://localhost:9090
+    isDefault: true
+  - name: Loki
+    type: loki
+    uid: loki
+    url: http://localhost:3100
+```
+
+Así la configuración vive en Git con todo lo demás, Ansible la reparte, y si el servidor se pierde, uno nuevo queda igual. Lo provisionado aparece de solo lectura en la web: lo que manda es el archivo. Las contraseñas de los orígenes (una base de datos, por ejemplo) no van escritas en el YAML: se usan variables de entorno (`password: $DB_PASSWORD`) o el vault de Ansible (lección 6.3.6).
+
+<Terminal ejercicio={ejGrafana} />
+
+## Paneles que se entienden
+
+La consulta es la mitad del panel; la otra mitad es que se lea de un vistazo:
+
+- **Unidad**: elegila en el panel (percent, bytes, seconds, requests/sec). Grafana se encarga de mostrar "3,2 GiB" en lugar de 3435973836.
+- **Umbrales**: verde, amarillo desde 80, rojo desde 90. El color dice el estado antes de leer el número.
+- **Leyenda**: `{{instance}}` en lugar de la serie completa con todas sus etiquetas.
+- **La visualización justa**: serie de tiempo para ver cómo cambió algo; indicador o número para el valor de ahora; tabla para comparar muchos equipos; logs al lado de las métricas para entender un pico.
+- **Variables**: una variable `instance` cargada con `label_values(up{job="node"}, instance)` arma el menú de servidores solo; las consultas filtran con `instance=~"$instance"`. Un tablero sirve para todos los equipos en lugar de copiar uno por servidor.
+
+Probá las consultas de un tablero para web01, web02 y db01:
+
+<ConsolaPromQL ejercicio={ejPaneles} />
+
+## Tableros como código y tableros de la comunidad
+
+Un tablero es un **JSON** (en la web: Export, Export as JSON). Para provisionarlo se agrega un proveedor que le dice a Grafana de qué carpeta leerlos:
+
+```yaml
+# /etc/grafana/provisioning/dashboards/lab.yaml
+apiVersion: 1
+providers:
+  - name: lab
+    folder: Servidores
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards     # los .json que reparte Ansible desde Git
+```
+
+No hace falta empezar de cero: en grafana.com/grafana/dashboards hay miles de tableros de la comunidad. El más usado para Linux es **Node Exporter Full** (ID 1860): Dashboards, New, Import, ponés el número y elegís el origen Prometheus. Sirve para arrancar; con el tiempo conviene uno propio con lo que tu equipo mira de verdad.
+
+Grafana también puede **alertar** (Alerting, en el menú). Si ya usás Prometheus, lo habitual es dejar las reglas en Prometheus y las notificaciones en Alertmanager, como se ve en la próxima lección, y usar Grafana para mirar. Las alertas de Grafana tienen sentido cuando el dato viene de algo que no es Prometheus (una base SQL, por ejemplo).
+
+<EnSimple>
+Grafana es la pantalla: no guarda datos, le pregunta a Prometheus, Loki o una base cada vez que mostrás un panel. Un tablero junta paneles (consulta más visualización, con unidad, umbrales y leyenda) y variables para elegir el servidor. Los orígenes de datos y los tableros se definen en archivos (provisioning) que van a Git, y para empezar se puede importar un tablero de la comunidad como Node Exporter Full.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Dejar admin / admin">
+    Si nadie entró todavía, cualquiera que llegue al 3000 entra como administrador. Cambiala en el primer arranque (grafana cli admin reset-admin-password) y no publiques el 3000 sin HTTPS.
+  </ErrorComun>
+  <ErrorComun titulo="Tableros hechos a mano en un solo servidor">
+    Se pierde el servidor y se pierden los tableros. Exportalos a JSON, guardalos en Git y provisionalos.
+  </ErrorComun>
+  <ErrorComun titulo="Paneles sin unidad ni umbrales">
+    Un gráfico que dice 0.87 no dice nada. Con unidad (percent) y umbrales, dice "87 %, amarillo".
+  </ErrorComun>
+  <ErrorComun titulo="El tablero de 60 paneles">
+    Nadie lo mira. Un tablero de resumen con lo importante arriba (lo que está mal, en rojo) y tableros de detalle para investigar.
+  </ErrorComun>
+  <ErrorComun titulo="Origen de datos con localhost en otro equipo">
+    Si Grafana y Prometheus no están en el mismo servidor, http://localhost:9090 apunta a la nada. La URL es como la ve el servidor de Grafana.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Grafana no guarda datos: consulta orígenes de datos (Prometheus, Loki, Zabbix, SQL) cada vez que muestra un panel.
+- Panel: consulta más visualización, con unidad, umbrales y leyenda. Tablero: paneles, rango de tiempo y variables.
+- Puerto 3000; cambiar la contraseña de admin; detrás de nginx con HTTPS; login con el Active Directory.
+- Provisioning: /etc/grafana/provisioning/datasources y dashboards, en YAML y JSON, versionado en Git.
+- Tableros de la comunidad para empezar (Node Exporter Full, 1860); las alertas, mejor en Prometheus y Alertmanager.
+</Resumen>

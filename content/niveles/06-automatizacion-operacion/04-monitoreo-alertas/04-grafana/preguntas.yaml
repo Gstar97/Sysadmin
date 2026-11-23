@@ -1,0 +1,93 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Dónde guarda Grafana las métricas que muestra?
+  opciones:
+    - { texto: "En ningún lado: le pregunta al origen de datos cada vez que muestra un panel", correcta: true, explicacion: "Las métricas están en Prometheus, Loki o la base que sea." }
+    - { texto: "En su base SQLite", explicacion: "Ahí guarda usuarios y tableros, no las métricas." }
+    - { texto: "En memoria, las últimas 24 horas", explicacion: "No." }
+    - { texto: "En /var/log/grafana", explicacion: "Esos son sus propios logs." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿En qué puerto escucha Grafana por defecto?
+  opciones:
+    - { texto: "3000", correcta: true, explicacion: "Se cambia con http_port en grafana.ini." }
+    - { texto: "9090", explicacion: "Ese es Prometheus." }
+    - { texto: "3100", explicacion: "Ese es Loki." }
+    - { texto: "9093", explicacion: "Ese es Alertmanager." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Por qué conviene definir los orígenes de datos en /etc/grafana/provisioning en lugar de cargarlos en la web?
+  opciones:
+    - { texto: "Porque quedan en archivos que van a Git y Ansible, y un servidor nuevo queda igual", correcta: true, explicacion: "Es configuración como código." }
+    - { texto: "Porque la web no permite cargarlos", explicacion: "Sí permite." }
+    - { texto: "Porque así las consultas son más rápidas", explicacion: "No cambia la velocidad." }
+    - { texto: "Porque así no hace falta Prometheus", explicacion: "No." }
+- id: p04
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: Grafana está en mon02 y Prometheus en mon01. ¿Qué pasa?
+  salida: |
+    $ cat /etc/grafana/provisioning/datasources/lab.yaml
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://localhost:9090
+    $ curl -s -u admin:Graf-Lab-2026 localhost:3000/api/datasources/uid/prometheus/health | jq -r .message
+    Post "http://localhost:9090/api/v1/query": dial tcp [::1]:9090: connect: connection refused
+  opciones:
+    - { texto: "La URL apunta a localhost, que para Grafana es mon02: tiene que decir http://mon01:9090", correcta: true, explicacion: "La URL es como la ve el servidor de Grafana." }
+    - { texto: "Prometheus está caído en mon01", explicacion: "Grafana ni siquiera está preguntándole a mon01." }
+    - { texto: "La contraseña de admin es incorrecta", explicacion: "La API respondió." }
+    - { texto: "Falta isDefault: true", explicacion: "Eso solo elige el origen predeterminado." }
+- id: p05
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Un tablero tiene una variable instance con los servidores. ¿Cómo la usa la consulta de un panel?
+  opciones:
+    - { texto: "node_load1{instance=~\"$instance\"}", correcta: true, explicacion: "=~ porque la variable puede tener varios valores elegidos." }
+    - { texto: "node_load1 + $instance", explicacion: "No." }
+    - { texto: "instance(node_load1)", explicacion: "No existe." }
+    - { texto: "No se puede: hay que copiar el panel por servidor", explicacion: "Para eso están las variables." }
+- id: p06
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué hace que un panel se entienda de un vistazo? Marcá las que correspondan.
+  opciones:
+    - { texto: "Elegir la unidad (percent, bytes, seconds)", correcta: true, explicacion: "Grafana formatea el número." }
+    - { texto: "Umbrales de colores (amarillo, rojo)", correcta: true, explicacion: "El color dice el estado." }
+    - { texto: "Leyenda con {{instance}}", correcta: true, explicacion: "En lugar de todas las etiquetas." }
+    - { texto: "Poner todas las métricas del servidor en el mismo panel", explicacion: "Lo vuelve ilegible." }
+- id: p07
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Cambiá desde la terminal la contraseña de admin de Grafana a Graf-Lab-2026.
+  prompt: "ana@mon01:~$"
+  aceptadas:
+    - "sudo grafana cli admin reset-admin-password Graf-Lab-2026"
+    - "sudo grafana-cli admin reset-admin-password Graf-Lab-2026"
+  explicacion: grafana-cli es el nombre viejo; los dos funcionan.
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: Usás Prometheus y Alertmanager. ¿Dónde conviene dejar las reglas de alerta de los servidores?
+  opciones:
+    - { texto: "En Prometheus, con las notificaciones en Alertmanager; Grafana para mirar", correcta: true, explicacion: "Las reglas quedan junto a los datos, en archivos que van a Git." }
+    - { texto: "En Grafana, porque Prometheus no alerta", explicacion: "Prometheus evalúa reglas de alerta." }
+    - { texto: "En los dos, duplicadas, por las dudas", explicacion: "Duplicar alertas multiplica los avisos y el trabajo." }
+    - { texto: "En el tablero de la comunidad", explicacion: "No." }
+- id: p09
+  tipo: opcion_multiple
+  dificultad: 1
+  enunciado: ¿Qué es Node Exporter Full (ID 1860)?
+  opciones:
+    - { texto: "Un tablero de la comunidad para servidores Linux con node_exporter, que se importa por número", correcta: true, explicacion: "Un buen punto de partida." }
+    - { texto: "Una versión de node_exporter con más métricas", explicacion: "Es un tablero de Grafana." }
+    - { texto: "Un plugin de Grafana para Zabbix", explicacion: "No." }
+    - { texto: "Un origen de datos", explicacion: "No." }
