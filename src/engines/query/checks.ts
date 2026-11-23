@@ -52,8 +52,10 @@ export function evaluateQueryChecks(o: QueryOutcome, checks: QueryCheck[]): Chec
   return checks.map((c): CheckResult => {
     if ('usa' in c) {
       const word = c.usa
-      const re = new RegExp(`(^|[^\\w])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\w]|$)`)
-      return { ok: o.uses.has(word) || re.test(o.query.replace(/"(?:[^"\\]|\\.)*"|`[^`]*`/g, '""')) }
+      const bare = o.query.replace(/"(?:[^"\\]|\\.)*"|`[^`]*`/g, '""')
+      // Palabras (rate, by, json) como palabra entera; operadores (=~, |=, !~) tal cual.
+      const re = /\w/.test(word) ? new RegExp(`(^|[^\\w])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\w]|$)`) : undefined
+      return { ok: o.uses.has(word) || (re ? re.test(bare) : bare.includes(word)) }
     }
     if (o.error) return { ok: false, detalle: o.error }
     if ('sin_error' in c) return { ok: true }

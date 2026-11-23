@@ -1,0 +1,136 @@
+---
+id: n6-m4-l3
+titulo: Prometheus
+minutos: 180
+objetivos:
+  - Entender el modelo de Prometheus (pull, exporters, series con etiquetas) y su configuración.
+  - Instalar Prometheus y node_exporter, sumar objetivos y diagnosticar los que no responden.
+  - Escribir consultas PromQL con selectores, rate, agregaciones, operaciones entre series, percentiles y tendencias.
+glosario: [prometheus, exporter, promql, contador-gauge]
+verificado: 2026-11
+---
+
+import prom from './prometheus.svg?raw'
+import promDatos from './prometheus.yaml'
+import ejPrometheus from './ej-prometheus.yaml'
+import ejPromql from './ej-promql.yaml'
+
+Zabbix nació para monitorear servidores y equipos de red; **Prometheus** nació para monitorear servicios que cambian todo el tiempo (contenedores, aplicaciones que se crean y se borran). En lugar de agentes que mandan datos a un servidor, cada programa publica sus métricas por HTTP y Prometheus pasa a buscarlas. Es hoy el estándar para aplicaciones y contenedores (el Nivel 7 lo va a usar con Kubernetes), y combina muy bien con Grafana. La versión de soporte largo es la **3.13 LTS** (julio de 2026); la más nueva, la 3.16.
+
+<AntesDeEmpezar>
+- Qué monitorear y el método RED (lección 6.4.1).
+- YAML (lección 6.2.4) y unidades de systemd propias (lección 1.3.4).
+- curl y las APIs HTTP (lección 6.2.5).
+</AntesDeEmpezar>
+
+## El modelo
+
+<DiagramaInteractivo datos={promDatos} svg={prom} alt="A la izquierda, lo que publica métricas: node_exporter en el 9100 con CPU, memoria, discos y red; la propia aplicación en /metrics; y otros exporters (blackbox, windows, postgres, snmp). En el centro, prometheus en mon01, puerto 9090: cada 15 segundos pide /metrics a cada objetivo según prometheus.yml, guarda las series en su base 15 días por defecto, evalúa reglas, y up vale 1 si pudo leer el objetivo. A la derecha, quienes usan sus datos: Alertmanager en el 9093, Grafana en el 3000 y la API HTTP. Abajo, ejemplos de series con nombre y etiquetas, y los tipos counter, gauge e histogram." />
+
+Tres ideas para quedarse:
+
+- **Pull**: Prometheus va a buscar las métricas a cada **objetivo** (target) cada `scrape_interval`. Si no puede, la serie `up` de ese objetivo vale 0: así te enterás de que algo se cayó.
+- **Exporters**: programas que publican métricas en texto por HTTP. `node_exporter` para Linux (puerto 9100), `windows_exporter` para Windows, `blackbox_exporter` para probar desde afuera, y uno por cada base o servicio. Muchas aplicaciones ya traen su propio `/metrics`.
+- **Series con etiquetas**: `http_requests_total{code="500", handler="/api/pagar"}` es una serie; cada combinación distinta de etiquetas es otra. Las etiquetas son lo que permite filtrar y agrupar (y lo que, mal usadas, crean millones de series).
+
+Hay tres tipos de métricas que vas a ver todo el tiempo:
+
+- **Counter** (contador): solo sube (pedidos atendidos, bytes enviados); termina en `_total` y se mira con `rate()`.
+- **Gauge**: sube y baja (memoria disponible, temperatura, conexiones abiertas); se mira tal cual.
+- **Histogram**: cuenta cuántos valores cayeron en cada cubeta (`le="0.1"`, `le="0.5"`...); sirve para calcular percentiles de latencia.
+
+## Instalación
+
+Prometheus y sus exporters son un solo binario sin dependencias. Los paquetes de las distribuciones suelen estar atrasados (Ubuntu 24.04 trae la 2.45), así que lo habitual es bajarlo de GitHub y ponerlo como servicio:
+
+```bash
+sudo useradd --system --no-create-home --shell /sbin/nologin prometheus
+curl -LO https://github.com/prometheus/prometheus/releases/download/v3.13.5/prometheus-3.13.5.linux-amd64.tar.gz
+curl -LO https://github.com/prometheus/prometheus/releases/download/v3.13.5/sha256sums.txt
+sha256sum --check --ignore-missing sha256sums.txt
+tar xzf prometheus-3.13.5.linux-amd64.tar.gz
+sudo install -m 755 prometheus-3.13.5.linux-amd64/{prometheus,promtool} /usr/local/bin/
+sudo mkdir -p /etc/prometheus /var/lib/prometheus && sudo chown prometheus: /var/lib/prometheus
+```
+
+y una unidad en `/etc/systemd/system/prometheus.service` con `User=prometheus` y `ExecStart=/usr/local/bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/var/lib/prometheus`. node_exporter se instala igual, con su propio usuario. Para varios servidores, la colección de Ansible **prometheus.prometheus** trae roles que hacen todo esto (el módulo anterior).
+
+Opciones de arranque que conviene conocer: `--storage.tsdb.retention.time=30d` (cuánto guarda; 15 días por defecto) y `--web.enable-lifecycle`, que permite recargar la configuración con `curl -X POST localhost:9090/-/reload` sin reiniciar.
+
+## La configuración
+
+```yaml
+global:
+  scrape_interval: 15s          # cada cuánto va a buscar las métricas
+  evaluation_interval: 15s      # cada cuánto evalúa las reglas
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "node"
+    static_configs:
+      - targets: ["web01:9100", "web02:9100"]
+        labels:
+          entorno: produccion
+```
+
+Cada objetivo queda con las etiquetas `job` (el nombre del job) e `instance` (host:puerto), más las que agregues. Antes de reiniciar, `promtool check config /etc/prometheus/prometheus.yml` revisa la sintaxis: un error de YAML hace que Prometheus no arranque. En **Status, Target health** de la interfaz web (o en la API, `/api/v1/targets`) se ve cada objetivo, si responde y, si no, por qué.
+
+<Terminal ejercicio={ejPrometheus} />
+
+## PromQL
+
+PromQL es el lenguaje de consultas. Lo esencial:
+
+```text
+up                                         todas las series up (un vector instantáneo)
+up{job="node"} == 0                        las que valen 0: objetivos caídos (filtra)
+node_filesystem_avail_bytes{mountpoint="/", instance=~"web.*"}    =~ es expresión regular
+rate(http_requests_total[5m])              pedidos por segundo en los últimos 5 minutos
+sum by (code) (rate(http_requests_total[5m]))       sumado por código
+node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes   operación entre series iguales
+histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))   p95
+predict_linear(node_filesystem_avail_bytes[1h], 4 * 3600) < 0   ¿se llena en 4 horas?
+```
+
+- Un **selector** elige series por nombre y etiquetas: `=`, `!=`, `=~` (expresión regular), `!~`.
+- `[5m]` convierte el selector en un **rango**: todas las muestras de los últimos 5 minutos. Las funciones como `rate`, `increase`, `avg_over_time` o `predict_linear` trabajan sobre rangos.
+- `sum`, `avg`, `max`, `count`, `topk` **agrupan**; `by (etiquetas)` dice qué dejar separado.
+- `rate` va siempre antes que `sum`: primero la velocidad de cada contador, después la suma (al revés, los reinicios de los contadores dan resultados absurdos).
+
+Practicá con datos de una API que empezó a fallar:
+
+<ConsolaPromQL ejercicio={ejPromql} />
+
+<EnSimple>
+Prometheus va a buscar cada 15 segundos las métricas que publican los exporters (node_exporter en cada Linux) y las aplicaciones, y las guarda como series con etiquetas. Si no puede leer a alguien, up vale 0. Se configura en prometheus.yml con jobs y objetivos, se revisa con promtool y se consulta con PromQL: selectores con etiquetas, rate para los contadores, sum by para agrupar, histogram_quantile para los percentiles y predict_linear para las tendencias.
+</EnSimple>
+
+<ErroresComunes>
+  <ErrorComun titulo="Mirar el valor crudo de un contador">
+    http_requests_total vale 14 millones: no dice nada. La velocidad (rate) es lo que importa.
+  </ErrorComun>
+  <ErrorComun titulo="sum antes de rate">
+    rate(sum(...)) no se puede escribir y sumar contadores antes de derivarlos rompe con los reinicios. Siempre sum(rate(...)).
+  </ErrorComun>
+  <ErrorComun titulo="Editar prometheus.yml sin promtool">
+    Un error de sangría y Prometheus no vuelve a arrancar. promtool check config antes de reiniciar o recargar.
+  </ErrorComun>
+  <ErrorComun titulo="Olvidarse del firewall del exporter">
+    El exporter anda pero el objetivo figura caído con "no route to host": falta abrir el 9100 (solo para el servidor de Prometheus, idealmente).
+  </ErrorComun>
+  <ErrorComun titulo="Un rango más corto que el intervalo">
+    rate(x[15s]) con un scrape_interval de 15s casi nunca tiene dos muestras. El rango tiene que cubrir varias: 4 veces el intervalo es una buena regla.
+  </ErrorComun>
+</ErroresComunes>
+
+<Resumen>
+- Pull: Prometheus va a buscar /metrics de cada objetivo; up vale 0 si no puede.
+- Exporters: node_exporter (9100), windows_exporter, blackbox_exporter, y el /metrics de cada aplicación.
+- Series con nombre y etiquetas; job e instance las agrega Prometheus.
+- counter (rate), gauge (tal cual), histogram (histogram_quantile).
+- prometheus.yml con scrape_configs; promtool check config; /api/v1/targets para diagnosticar.
+- PromQL: selectores (=, =~), rangos [5m], rate, sum by, operaciones entre series, predict_linear.
+</Resumen>

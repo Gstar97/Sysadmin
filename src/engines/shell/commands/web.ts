@@ -31,12 +31,14 @@ interface CurlOpts {
   remoteName: boolean
   maxRedirs: number
   error?: string
+  /** -G: los datos van en la URL (?a=b) con GET. */
+  get: boolean
 }
 
 const TLS_FLAG: Record<string, string> = { '--tlsv1.2': 'TLSv1.2', '--tlsv1.3': 'TLSv1.3', '--tlsv1.1': 'TLSv1.1', '--tlsv1': 'TLSv1' }
 
 function parseCurl(args: string[]): CurlOpts {
-  const o: CurlOpts = { headers: {}, head: false, include: false, silent: false, showError: false, verbose: false, location: false, insecure: false, fail: false, resolve: {}, http1: false, remoteName: false, maxRedirs: 50 }
+  const o: CurlOpts = { headers: {}, head: false, include: false, silent: false, showError: false, verbose: false, location: false, insecure: false, fail: false, resolve: {}, http1: false, remoteName: false, maxRedirs: 50, get: false }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     const val = () => {
@@ -51,7 +53,7 @@ function parseCurl(args: string[]): CurlOpts {
       continue
     }
     // Opciones cortas combinadas sin valor: -sSL, -kv, -sI
-    if (/^-[sSLkvIifO]{2,}$/.test(a)) {
+    if (/^-[sSLkvIifOG]{2,}$/.test(a)) {
       for (const ch of a.slice(1)) args.splice(i + 1, 0, `-${ch}`)
       continue
     }
@@ -74,6 +76,18 @@ function parseCurl(args: string[]): CurlOpts {
       case '--json':
         o.data = (o.data ? o.data + '&' : '') + (val() ?? '')
         if (name === '--json') o.headers['content-type'] = 'application/json'
+        break
+      case '--data-urlencode': {
+        // nombre=contenido: se codifica solo el contenido (como curl).
+        const raw = val() ?? ''
+        const eq = raw.indexOf('=')
+        const enc = eq >= 0 ? `${raw.slice(0, eq)}=${encodeURIComponent(raw.slice(eq + 1))}` : encodeURIComponent(raw)
+        o.data = (o.data ? o.data + '&' : '') + enc
+        break
+      }
+      case '-G':
+      case '--get':
+        o.get = true
         break
       case '-I':
       case '--head':
@@ -158,6 +172,11 @@ function parseCurl(args: string[]): CurlOpts {
         if (TLS_FLAG[name]) o.tlsMin = TLS_FLAG[name]
         else o.error ??= a
     }
+  }
+  if (o.get && o.data !== undefined && o.url) {
+    o.url += (o.url.includes('?') ? '&' : '?') + o.data
+    o.data = undefined
+    o.method ??= 'GET'
   }
   return o
 }
@@ -335,7 +354,7 @@ function inNet(ip: string, cidr: string): boolean {
 }
 
 function parseWget(args: string[]): CurlOpts {
-  const o: CurlOpts = { headers: {}, head: false, include: false, silent: false, showError: false, verbose: false, location: true, insecure: false, fail: false, resolve: {}, http1: true, remoteName: true, maxRedirs: 20 }
+  const o: CurlOpts = { headers: {}, head: false, include: false, silent: false, showError: false, verbose: false, location: true, insecure: false, fail: false, resolve: {}, http1: true, remoteName: true, maxRedirs: 20, get: false }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a === '-O') o.output = args[++i]

@@ -1,0 +1,38 @@
+tipo: diagrama
+titulo: Arquitectura de Prometheus
+puntos:
+  - id: exporters
+    titulo: Exporters
+    area: { x: 2.3, y: 10.5, ancho: 26.7, alto: 55.8 }
+    texto: >-
+      Programas que publican métricas en texto por HTTP: node_exporter para los servidores Linux,
+      windows_exporter para Windows, blackbox_exporter para probar desde afuera (HTTP, DNS, TLS,
+      ping) y uno por cada base o servicio. Muchas aplicaciones (Grafana, Loki, la API de la tienda)
+      ya exponen su propio /metrics.
+  - id: servidor
+    titulo: El servidor de Prometheus
+    area: { x: 36, y: 10.5, ancho: 29.1, alto: 55.8 }
+    texto: >-
+      Cada scrape_interval va a buscar las métricas de cada objetivo (pull), les agrega las
+      etiquetas job e instance y las guarda en su base de series de tiempo. Si no puede leer un
+      objetivo, la serie up de ese objetivo vale 0: es la forma de saber que algo se cayó. También
+      evalúa las reglas de grabación y de alerta.
+  - id: alertmanager
+    titulo: Alertmanager
+    area: { x: 72.1, y: 10.5, ancho: 25.6, alto: 16.8 }
+    texto: >-
+      Prometheus decide cuándo hay una alerta; Alertmanager decide a quién avisar, agrupa las
+      parecidas, respeta los silencios y manda el correo o el mensaje.
+  - id: grafana
+    titulo: Grafana y la API
+    area: { x: 72.1, y: 30, ancho: 25.6, alto: 36.3 }
+    texto: >-
+      Todo lo que se ve (en la interfaz de Prometheus, en Grafana o en un script) sale de la API
+      HTTP con una consulta PromQL.
+  - id: series
+    titulo: Series y tipos
+    area: { x: 2.3, y: 70.5, ancho: 95.3, alto: 26.3 }
+    texto: >-
+      Cada combinación de nombre y etiquetas es una serie. Los contadores solo suben (terminan en
+      _total) y se miran con rate(); los gauges suben y bajan y se miran tal cual; los histogramas
+      tienen una serie por cubeta para calcular percentiles.

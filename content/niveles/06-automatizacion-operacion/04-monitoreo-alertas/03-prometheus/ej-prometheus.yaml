@@ -1,0 +1,87 @@
+tipo: terminal
+shell: bash
+titulo: Prometheus juntando las métricas de dos servidores
+descripcion: >-
+  En mon01 (192.168.10.30) están instalados Prometheus y jq; en web01 (Ubuntu) y web02 (Rocky)
+  está node_exporter, pero sin arrancar. En el laboratorio los binarios oficiales vienen
+  empaquetados con su usuario y su unidad de systemd (en la vida real se bajan de GitHub; ver la
+  lección). Entrás a los dos servidores por SSH con clave, con sudo.
+estado_inicial:
+  distro: rocky
+  hostname: mon01
+  usuario: ana
+  usuarios: [{ nombre: ana, sudo: true, clave_ssh: true }]
+  paquetes: { instalados: [prometheus, jq] }
+  red:
+    interfaces:
+      - { nombre: enp1s0, ip: 192.168.10.30/24, estado: UP }
+  archivos:
+    /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" }
+    /etc/hosts: { contenido: "127.0.0.1 localhost\n192.168.10.11 web01\n192.168.10.12 web02\n" }
+  servidores:
+    - { hostname: web01, ip: 192.168.10.11, distro: ubuntu, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], paquetes: { instalados: [node_exporter] }, archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+    - { hostname: web02, ip: 192.168.10.12, clave_conocida: si, usuarios: [{ nombre: ana, clave_ssh: true }], paquetes: { instalados: [node_exporter] }, archivos: { /etc/sudoers.d/ana: { contenido: "ana ALL=(ALL) NOPASSWD: ALL\n" } } }
+pasos:
+  - consigna: >-
+      Arrancá y habilitá node_exporter en web01 y web02, y comprobá desde mon01 que web01 entrega
+      sus métricas en http://web01:9100/metrics (por ejemplo, la de memoria disponible).
+    verificar:
+      - { en: web01, verificar: { servicio: node_exporter, activo: true, habilitado: true } }
+      - { en: web02, verificar: { servicio: node_exporter, activo: true, habilitado: true } }
+      - { salida_contiene: node_memory_MemAvailable_bytes }
+    pistas:
+      - "ssh web01 \"sudo systemctl enable --now node_exporter\" (y lo mismo en web02)"
+      - "curl -s http://web01:9100/metrics | grep MemAvailable"
+    solucion:
+      - ssh web01 "sudo systemctl enable --now node_exporter"
+      - ssh web02 "sudo systemctl enable --now node_exporter"
+      - curl -s http://web01:9100/metrics | grep MemAvailable
+    explicacion: >-
+      Un exporter es un programa que publica métricas en texto plano por HTTP: una línea por serie,
+      con su nombre, sus etiquetas y su valor. Prometheus no instala nada en los equipos: viene a
+      buscarlas (pull).
+  - consigna: >-
+      Agregá a /etc/prometheus/prometheus.yml un job llamado node con los dos servidores como
+      objetivos (web01:9100 y web02:9100), revisá la configuración con promtool y arrancá
+      Prometheus. Uno de los dos va a aparecer caído: averiguá por qué y arreglalo.
+    verificar:
+      - { archivo: /etc/prometheus/prometheus.yml, contenido_incluye: "job_name: \"node\"" }
+      - { prometheus_objetivo: "web01:9100", estado: up }
+      - { prometheus_objetivo: "web02:9100", estado: up }
+    pistas:
+      - "Debajo de scrape_configs, con la misma sangría que el job de prometheus: - job_name: \"node\" y su static_configs con targets: [\"web01:9100\", \"web02:9100\"]."
+      - "promtool check config /etc/prometheus/prometheus.yml y después sudo systemctl enable --now prometheus"
+      - "curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}' muestra el error de cada objetivo. web02 es Rocky: firewalld."
+    solucion:
+      - |-
+        sudo tee -a /etc/prometheus/prometheus.yml >/dev/null <<'EOF'
+
+          - job_name: "node"
+            static_configs:
+              - targets: ["web01:9100", "web02:9100"]
+        EOF
+      - promtool check config /etc/prometheus/prometheus.yml
+      - sudo systemctl enable --now prometheus
+      - "curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}'"
+      - ssh web02 "sudo firewall-cmd --permanent --add-port=9100/tcp && sudo firewall-cmd --reload"
+      - "curl -s localhost:9090/api/v1/targets | jq -r '.data.activeTargets[] | \"\\(.labels.instance) \\(.health)\"'"
+    explicacion: >-
+      "connect: no route to host" en lastError es firewalld rechazando: el exporter funciona, pero
+      Prometheus no llega. La página Status, Targets de la interfaz web muestra lo mismo; la API sirve
+      para revisarlo desde la terminal o desde un script.
+  - consigna: >-
+      Consultá a Prometheus por su API cuánta memoria disponible tiene cada servidor, y mostrá una
+      línea por servidor con la instancia y el valor en MB.
+    verificar:
+      - { salida_regex: "web01:9100 \\d+" }
+      - { salida_regex: "web02:9100 \\d+" }
+      - { comando_usado: jq }
+    pistas:
+      - "curl -s 'localhost:9090/api/v1/query?query=node_memory_MemAvailable_bytes' devuelve JSON: el resultado está en .data.result[], con .metric.instance y .value[1] (un texto)."
+      - "Se puede dividir en la consulta misma: node_memory_MemAvailable_bytes / 1024 / 1024, codificada en la URL (curl -G --data-urlencode lo hace solo)."
+    solucion:
+      - "curl -s -G localhost:9090/api/v1/query --data-urlencode 'query=node_memory_MemAvailable_bytes / 1024 / 1024' | jq -r '.data.result[] | \"\\(.metric.instance) \\(.value[1] | tonumber | floor)\"'"
+    explicacion: >-
+      Todo lo que muestra Prometheus (y Grafana) sale de esta misma API: una consulta PromQL que
+      devuelve series con sus etiquetas y valores. Con curl y jq se pueden armar chequeos y reportes
+      propios sin abrir el navegador.

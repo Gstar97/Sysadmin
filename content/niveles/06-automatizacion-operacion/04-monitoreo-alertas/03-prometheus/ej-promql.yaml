@@ -1,0 +1,78 @@
+tipo: promql
+titulo: Consultas que vas a usar todos los días
+descripcion: >-
+  Prometheus junta las métricas de dos servidores web (node_exporter) y de la API de la tienda,
+  que expone http_requests_total (con las etiquetas handler, method y code) y el histograma
+  http_request_duration_seconds. Hace media hora la API empezó a dar más errores.
+metricas:
+  nodos:
+    - { instancia: "web01:9100", carga: 0.35, memoria_usada: 0.62 }
+    - { instancia: "web02:9100", carga: 0.2, memoria_usada: 0.4 }
+  http:
+    - instancia: "api01:8080"
+      rps: 60
+      errores: 0.004
+      latencia_ms: 110
+      eventos:
+        - { desde: "-30m", errores: 0.06, latencia_ms: 380 }
+pasos:
+  - consigna: >-
+      http_requests_total es un contador: solo sube. ¿Cuántos pedidos por segundo recibe la API en
+      total, calculado sobre los últimos 5 minutos?
+    verificar:
+      - { series: 1 }
+      - { usa: rate }
+      - { sin_etiqueta: code }
+      - { valor: { min: 40, max: 80 } }
+    pistas:
+      - "rate(http_requests_total[5m]) da los pedidos por segundo de cada serie (cada combinación de handler, method y code)."
+      - "sum(...) las junta en una sola."
+    solucion: sum(rate(http_requests_total[5m]))
+    explicacion: >-
+      El valor crudo de un contador no dice mucho (cuántos pedidos hubo desde que arrancó el
+      programa); rate lo convierte en una velocidad y además maneja los reinicios del contador.
+  - consigna: Ahora separalo por código de respuesta, para ver cuántos son 200, 404 y 500.
+    verificar:
+      - { series: 3 }
+      - { contiene: { code: "500" } }
+      - { sin_etiqueta: handler }
+    pistas:
+      - "sum by (code) (...) agrupa y deja solo la etiqueta code."
+    solucion: sum by (code) (rate(http_requests_total[5m]))
+    explicacion: by deja las etiquetas que nombrás y suma todo lo demás; without hace lo contrario (suma esas y deja el resto).
+  - consigna: >-
+      Calculá el porcentaje de respuestas con error (los códigos 5xx) sobre el total. Es el
+      indicador de errores de RED.
+    verificar:
+      - { series: 1 }
+      - { valor: { min: 3, max: 10 } }
+      - { usa: "=~" }
+    pistas:
+      - "Un matcher con expresión regular: code=~\"5..\" elige 500, 502, 503..."
+      - "100 * (errores por segundo) / (pedidos por segundo), cada uno con sum(rate(...[5m]))."
+    solucion: 100 * sum(rate(http_requests_total{code=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))
+    explicacion: Este número (y no la CPU) es el que conviene alertar, porque es lo que sienten los clientes.
+  - consigna: ¿Cuánto tarda el 95 % de los pedidos (el p95 de la latencia), en segundos?
+    verificar:
+      - { series: 1 }
+      - { usa: histogram_quantile }
+      - { valor: { min: 0.3, max: 2.5 } }
+    pistas:
+      - "El histograma tiene una serie por cubeta (le = menor o igual a): http_request_duration_seconds_bucket."
+      - "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))"
+    solucion: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))
+    explicacion: >-
+      histogram_quantile estima el percentil a partir de las cubetas; por eso hay que dejar la
+      etiqueta le en el sum by. Con la latencia y los errores juntos se ve el incidente de hace media
+      hora completo.
+  - consigna: Por último, el porcentaje de memoria en uso de cada servidor web (100 menos el porcentaje disponible).
+    verificar:
+      - { series: 2 }
+      - { con_etiqueta: instance }
+      - { valor: { min: 30, max: 75 } }
+    pistas:
+      - "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes es la parte disponible (de 0 a 1)."
+    solucion: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+    explicacion: >-
+      Entre dos vectores, la operación se hace serie por serie con las mismas etiquetas (salvo el
+      nombre): por eso cada servidor se divide por su propio total.

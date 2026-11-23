@@ -1,0 +1,98 @@
+- id: p01
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Cómo junta Prometheus las métricas?
+  opciones:
+    - { texto: "Va a buscarlas por HTTP a cada objetivo cada cierto intervalo (pull)", correcta: true, explicacion: "Lee /metrics de cada exporter." }
+    - { texto: "Los agentes se las mandan (push)", explicacion: "Ese es el modelo de los chequeos activos de Zabbix." }
+    - { texto: "Las lee de los logs", explicacion: "No." }
+    - { texto: "Por SNMP solamente", explicacion: "Para SNMP se usa un exporter." }
+- id: p02
+  tipo: opcion_multiple
+  diagnostico: true
+  dificultad: 1
+  enunciado: ¿Qué indica up == 0 para un objetivo?
+  opciones:
+    - { texto: "Que Prometheus no pudo leer sus métricas en el último intento", correcta: true, explicacion: "Puede ser el equipo, el exporter o la red." }
+    - { texto: "Que el equipo tiene la CPU en 0", explicacion: "No." }
+    - { texto: "Que no hay pedidos", explicacion: "No." }
+    - { texto: "Que el objetivo es nuevo", explicacion: "No." }
+- id: p03
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: http_requests_total es un contador. ¿Qué consulta da los pedidos por segundo?
+  opciones:
+    - { texto: "rate(http_requests_total[5m])", correcta: true, explicacion: "La velocidad promedio de los últimos 5 minutos." }
+    - { texto: "http_requests_total", explicacion: "Es el total acumulado desde que arrancó." }
+    - { texto: "sum(http_requests_total)", explicacion: "Sigue siendo un acumulado." }
+    - { texto: "http_requests_total[5m]", explicacion: "Son las muestras crudas, no una velocidad." }
+- id: p04
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Cuál es correcta para el total de pedidos por segundo de todas las instancias?
+  opciones:
+    - { texto: "sum(rate(http_requests_total[5m]))", correcta: true, explicacion: "Primero rate de cada serie, después sum." }
+    - { texto: "rate(sum(http_requests_total)[5m])", explicacion: "No es válida: rate necesita un rango de un selector o una subconsulta, y sumar contadores antes rompe con los reinicios." }
+    - { texto: "sum(http_requests_total) / 300", explicacion: "No." }
+    - { texto: "avg(http_requests_total)", explicacion: "No." }
+- id: p05
+  tipo: interpretar_salida
+  dificultad: 2
+  enunciado: ¿Por qué falla este objetivo?
+  salida: |
+    $ curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[1] | {scrapeUrl, health, lastError}'
+    {
+      "scrapeUrl": "http://db01:9100/metrics",
+      "health": "down",
+      "lastError": "Get \"http://db01:9100/metrics\": dial tcp 192.168.10.31:9100: connect: connection refused"
+    }
+  opciones:
+    - { texto: "En db01 no hay nada escuchando en el 9100: node_exporter no está corriendo", correcta: true, explicacion: "connection refused: el equipo responde pero rechaza el puerto." }
+    - { texto: "El firewall de db01 descarta los paquetes", explicacion: "Sería un timeout (context deadline exceeded) o no route to host si rechaza." }
+    - { texto: "El nombre db01 no resuelve", explicacion: "Sería no such host." }
+    - { texto: "prometheus.yml tiene un error", explicacion: "Prometheus está andando y consultando." }
+- id: p06
+  tipo: completar_comando
+  dificultad: 2
+  enunciado: Revisá la configuración de Prometheus antes de reiniciarlo.
+  prompt: "ana@mon01:~$"
+  aceptadas:
+    - "promtool check config /etc/prometheus/prometheus.yml"
+  explicacion: También revisa los archivos de reglas que nombra.
+- id: p07
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Qué devuelve sum by (instance) (rate(node_network_receive_bytes_total[5m]))?
+  opciones:
+    - { texto: "Los bytes por segundo recibidos por cada servidor, sumando todas sus interfaces", correcta: true, explicacion: "by (instance) deja una serie por servidor." }
+    - { texto: "El total de toda la red", explicacion: "Eso sería sin by." }
+    - { texto: "Una serie por interfaz", explicacion: "Se suman las interfaces de cada instancia." }
+    - { texto: "Los bytes acumulados", explicacion: "rate da una velocidad." }
+- id: p08
+  tipo: opcion_multiple
+  dificultad: 3
+  enunciado: ¿Qué hace predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24 * 3600) < 0?
+  opciones:
+    - { texto: "Devuelve los discos que, al ritmo de las últimas 6 horas, se quedarían sin espacio en 24 horas", correcta: true, explicacion: "Una alerta de tendencia." }
+    - { texto: "Los discos con menos de 24 GB libres", explicacion: "No." }
+    - { texto: "Los discos que se llenaron hace 6 horas", explicacion: "Proyecta hacia adelante." }
+    - { texto: "Da error porque el resultado es negativo", explicacion: "La comparación filtra." }
+- id: p09
+  tipo: respuesta_multiple
+  dificultad: 2
+  enunciado: ¿Qué tipo de métrica es cada una? Marcá las que son gauges.
+  opciones:
+    - { texto: "node_memory_MemAvailable_bytes", correcta: true, explicacion: "Sube y baja." }
+    - { texto: "node_filesystem_avail_bytes", correcta: true, explicacion: "Sube y baja." }
+    - { texto: "http_requests_total", explicacion: "Contador (_total)." }
+    - { texto: "node_network_receive_bytes_total", explicacion: "Contador." }
+- id: p10
+  tipo: opcion_multiple
+  dificultad: 2
+  enunciado: ¿Para qué sirve blackbox_exporter?
+  opciones:
+    - { texto: "Para probar servicios desde afuera: HTTP, DNS, TLS, ping", correcta: true, explicacion: "Los chequeos de caja negra." }
+    - { texto: "Para leer las métricas de Windows", explicacion: "Eso es windows_exporter." }
+    - { texto: "Para guardar métricas por años", explicacion: "No." }
+    - { texto: "Para mandar alertas", explicacion: "Eso es Alertmanager." }
