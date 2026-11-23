@@ -13,7 +13,7 @@ import { SERVICE_CHECKS } from './sysinfo'
 
 System.resolver = systemResolve
 
-const VERSION = (sys: System) => (sys.distro === 'rocky' ? '9.18.33' : '9.18.30-0ubuntu0.24.04.2-Ubuntu')
+const VERSION = (sys: System) => (sys.distro === 'rocky' ? '9.18.33' : '9.20.24-1ubuntu0.5-Ubuntu')
 
 function digWhen(): string {
   const d = new Date()
@@ -340,8 +340,8 @@ function keaLoad(sys: System): { config?: KeaConfig; error?: string; warnings: s
   } catch {
     return { error: `configuration error using file: ${KEA_FILE}, error: Unable to open file ${KEA_FILE}`, warnings: [] }
   }
-  // Ubuntu 24.04 trae Kea 2.4 (el id de subred todavía no es obligatorio); Rocky 10, Kea 2.6.
-  const { config, problems } = parseKea(text, KEA_FILE, { idRequired: sys.distro === 'rocky' })
+  // Rocky 10 trae Kea 2.6 y Ubuntu 26.04, Kea 3.0: en las dos el id de cada subred es obligatorio.
+  const { config, problems } = parseKea(text, KEA_FILE)
   const errs = problems.filter((p) => p.severity === 'error')
   const warnings = problems.filter((p) => p.severity === 'warning').map((p) => p.kea)
   if (errs.length || !config) return { error: `configuration error using file: ${KEA_FILE}, error: ${errs[0]?.kea ?? 'syntax error'}`, warnings }
@@ -365,7 +365,7 @@ register('kea-dhcp4', {
       ctx.err(`Syntax check failed with: Unable to open file ${file}\n`)
       return 1
     }
-    const { problems } = parseKea(text, file, { idRequired: ctx.sys.distro === 'rocky' })
+    const { problems } = parseKea(text, file)
     const stamp = new Date().toISOString().replace('T', ' ').slice(0, 23)
     for (const w of problems.filter((p) => p.severity === 'warning')) ctx.out(`${stamp} WARN  [kea-dhcp4.dhcp4/1042.] DHCP4_CONFIG_SYNTAX_WARNING configuration syntax warning: ${w.kea}\n`)
     const err = problems.find((p) => p.severity === 'error')

@@ -312,7 +312,7 @@ register(['apt', 'apt-get'], {
           if (r.err) ctx.err(r.err)
           return r.code
         }
-        ctx.out(`Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease\nGet:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]\nHit:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease\nFetched 126 kB in 1s (138 kB/s)\nReading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\n${sys.upgradable.size ? `${sys.upgradable.size} package${sys.upgradable.size > 1 ? 's' : ''} can be upgraded. Run 'apt list --upgradable' to see ${sys.upgradable.size > 1 ? 'them' : 'it'}.` : 'All packages are up to date.'}\n`)
+        ctx.out(`Hit:1 http://archive.ubuntu.com/ubuntu resolute InRelease\nGet:2 http://security.ubuntu.com/ubuntu resolute-security InRelease [126 kB]\nHit:3 http://archive.ubuntu.com/ubuntu resolute-updates InRelease\nFetched 126 kB in 1s (138 kB/s)\nReading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\n${sys.upgradable.size ? `${sys.upgradable.size} package${sys.upgradable.size > 1 ? 's' : ''} can be upgraded. Run 'apt list --upgradable' to see ${sys.upgradable.size > 1 ? 'them' : 'it'}.` : 'All packages are up to date.'}\n`)
         return 0
       case 'install': {
         if (lockError()) return 100
@@ -391,7 +391,7 @@ register(['apt', 'apt-get'], {
         const term = (names[0] ?? '').toLowerCase()
         ctx.out('Sorting... Done\nFull Text Search... Done\n')
         for (const [n, i] of Object.entries(sys.catalog).filter(([n, i]) => (n.includes(term) || i.summary.toLowerCase().includes(term)) && !gated(sys, n))) {
-          ctx.out(`${n}/noble ${i.version} amd64${sys.installed.has(n) ? ' [installed]' : ''}\n  ${i.summary}\n\n`)
+          ctx.out(`${n}/resolute ${i.version} amd64${sys.installed.has(n) ? ' [installed]' : ''}\n  ${i.summary}\n\n`)
         }
         return 0
       }
@@ -407,11 +407,11 @@ register(['apt', 'apt-get'], {
       case 'list': {
         ctx.out('Listing... Done\n')
         if (ctx.args.includes('--upgradable')) {
-          for (const n of [...sys.upgradable].sort()) ctx.out(`${n}/noble-updates ${bump(ver(sys, n))} amd64 [upgradable from: ${ver(sys, n)}]\n`)
+          for (const n of [...sys.upgradable].sort()) ctx.out(`${n}/resolute-updates ${bump(ver(sys, n))} amd64 [upgradable from: ${ver(sys, n)}]\n`)
           return 0
         }
         const list = ctx.args.includes('--installed') ? [...sys.installed] : Object.keys(sys.catalog)
-        for (const n of list.sort()) ctx.out(`${n}/noble,now ${ver(sys, n)} amd64${sys.installed.has(n) ? ' [installed]' : ''}\n`)
+        for (const n of list.sort()) ctx.out(`${n}/resolute,now ${ver(sys, n)} amd64${sys.installed.has(n) ? ' [installed]' : ''}\n`)
         return 0
       }
       default:
@@ -534,7 +534,7 @@ register('apt-cache', {
     }
     const installed = sys.installed.has(name) ? ver(sys, name) : '(none)'
     const candidate = sys.upgradable.has(name) ? bump(ver(sys, name)) : ver(sys, name)
-    ctx.out(`${name}:\n  Installed: ${installed}\n  Candidate: ${candidate}\n  Version table:\n${sys.upgradable.has(name) ? `     ${candidate} 500\n        500 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages\n` : ''} ${sys.installed.has(name) ? '***' : '   '} ${ver(sys, name)} 500\n        500 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages\n${sys.installed.has(name) ? '        100 /var/lib/dpkg/status\n' : ''}`)
+    ctx.out(`${name}:\n  Installed: ${installed}\n  Candidate: ${candidate}\n  Version table:\n${sys.upgradable.has(name) ? `     ${candidate} 500\n        500 http://archive.ubuntu.com/ubuntu resolute-updates/main amd64 Packages\n` : ''} ${sys.installed.has(name) ? '***' : '   '} ${ver(sys, name)} 500\n        500 http://archive.ubuntu.com/ubuntu resolute/main amd64 Packages\n${sys.installed.has(name) ? '        100 /var/lib/dpkg/status\n' : ''}`)
     return 0
   },
 })

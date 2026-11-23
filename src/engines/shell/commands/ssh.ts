@@ -311,7 +311,7 @@ function welcome(ctx: CommandContext, s: Session) {
   const last = host.lastLogins.get(s.user)
   const from = sourceIp(ctx.sys, host.ownIps()[1] ?? '')
   if (host.distro === 'ubuntu') {
-    ctx.out(`Welcome to Ubuntu 24.04.3 LTS (GNU/Linux 6.8.0-58-generic x86_64)\n\n * Documentation:  https://help.ubuntu.com\n * Management:     https://landscape.canonical.com\n * Support:        https://ubuntu.com/pro\n\n`)
+    ctx.out(`Welcome to Ubuntu 26.04.1 LTS (GNU/Linux 7.0.0-44-generic x86_64)\n\n * Documentation:  https://help.ubuntu.com\n * Management:     https://landscape.canonical.com\n * Support:        https://ubuntu.com/pro\n\n`)
   } else ctx.out(`Web console: https://${host.hostname}:9090/ or https://${host.ownIps()[1] ?? '127.0.0.1'}:9090/\n\n`)
   if (last) ctx.out(`Last login: ${strftime('%a %b %e %T %Y', new Date(last.time))} from ${last.from}\n`)
   host.lastLogins.set(s.user, { time: Date.now(), from })

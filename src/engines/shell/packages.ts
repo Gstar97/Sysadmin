@@ -1247,11 +1247,11 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   ...common,
   apparmor: { summary: 'user-space parser utility for AppArmor', version: '4.0.1', commands: ['aa-status', 'apparmor_parser', 'aa-enabled'] },
   'apparmor-utils': { summary: 'utilities for controlling AppArmor', version: '4.0.1', commands: ['aa-complain', 'aa-enforce', 'aa-disable', 'aa-logprof', 'aa-genprof'] },
-  dnsutils: { summary: 'Clients provided with BIND 9', version: '9.18.30', commands: ['dig', 'nslookup', 'host'] },
+  dnsutils: { summary: 'Clients provided with BIND 9', version: '9.20.24', commands: ['dig', 'nslookup', 'host'] },
   bind9: {
     user: { name: 'bind', uid: 114, home: '/var/cache/bind', gecos: '' },
     summary: 'Internet Domain Name Server',
-    version: '9.18.30',
+    version: '9.20.24',
     services: [{ name: 'named', description: 'BIND Domain Name Server', ports: [53], enabledByDefault: true, activeAfterInstall: true }],
     files: {
       '/etc/bind/named.conf': BIND9_CONF,
@@ -1277,7 +1277,7 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   'kea-dhcp4-server': {
     user: { name: '_kea', uid: 116, home: '/var/lib/kea', gecos: 'Kea DHCP' },
     summary: 'IPv4 DHCP server',
-    version: '2.4.1',
+    version: '3.0.3',
     services: [{ name: 'kea-dhcp4-server', description: 'Kea IPv4 DHCP daemon', ports: [67], enabledByDefault: true, activeAfterInstall: true }],
     files: { '/etc/kea/kea-dhcp4.conf': KEA_DHCP4_CONF, '/var/lib/kea/.keep': '', '/var/log/kea/.keep': '' },
     commands: ['kea-dhcp4', 'kea-lfc'],
@@ -1295,13 +1295,13 @@ export const UBUNTU_PACKAGES: Record<string, PackageInfo> = {
   chrony: {
     user: { name: '_chrony', uid: 111, home: '/var/lib/chrony', gecos: 'Chrony daemon' },
     summary: 'Versatile implementation of the Network Time Protocol',
-    version: '4.6.1',
+    version: '4.8',
     services: [{ name: 'chrony', description: 'chrony, an NTP client/server', ports: [123], enabledByDefault: true, activeAfterInstall: true }],
     commands: ['chronyc'],
   },
   'openssh-server': {
     summary: 'secure shell (SSH) server, for secure access from remote machines',
-    version: '9.9p1',
+    version: '10.2p1',
     services: [{ name: 'ssh', description: 'OpenBSD Secure Shell server', ports: [22], enabledByDefault: true, activeAfterInstall: true }],
   },
   ufw: { summary: 'program for managing a Netfilter firewall', version: '0.36.2', commands: ['ufw'] },

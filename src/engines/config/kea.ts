@@ -100,8 +100,7 @@ function keyLine(text: string, key: string, from = 0): number {
   return i < 0 ? 1 : lineOf(text, i)
 }
 
-export function parseKea(text: string, file = '/etc/kea/kea-dhcp4.conf', opts: { idRequired?: boolean } = {}): { config?: KeaConfig; problems: KeaProblem[] } {
-  const idRequired = opts.idRequired ?? true
+export function parseKea(text: string, file = '/etc/kea/kea-dhcp4.conf'): { config?: KeaConfig; problems: KeaProblem[] } {
   const problems: KeaProblem[] = []
   let clean = stripComments(text)
   // Comas sobrantes antes de cerrar.
@@ -166,10 +165,8 @@ export function parseKea(text: string, file = '/etc/kea/kea-dhcp4.conf', opts: {
     }
     if (range.net !== ip(cidr.split('/')[0])) warn(line, `subnet ${cidr}: address is not a network address`, `"${cidr}" no es la dirección de red: con /${range.prefix} la red es ${[24, 16, 8, 0].map((sh) => Math.floor(range.net / 2 ** sh) % 256).join('.')}.`)
     const id = typeof s.id === 'number' ? s.id : undefined
-    if (id === undefined) {
-      if (idRequired) err(line, "subnet configuration failed: missing parameter 'id'", 'Cada subred necesita un "id" numérico único (1, 2, 3...). Desde Kea 2.6 es obligatorio: los préstamos se guardan asociados a ese número.')
-      else warn(line, "subnet without 'id'", 'Esta subred no tiene "id": esta versión de Kea le asigna uno solo, pero desde Kea 2.6 es obligatorio. Ponelo siempre (1, 2, 3...).')
-    } else if (subnets.some((x) => x.id === id)) err(line, `subnet configuration failed: subnet with the prefix of '${cidr}' already exists or id ${id} is duplicated`, `El id ${id} ya lo usa otra subred: cada subred necesita un id distinto.`)
+    if (id === undefined) err(line, "subnet configuration failed: missing parameter 'id'", 'Cada subred necesita un "id" numérico único (1, 2, 3...). Desde Kea 2.6 es obligatorio: los préstamos se guardan asociados a ese número.')
+    else if (subnets.some((x) => x.id === id)) err(line, `subnet configuration failed: subnet with the prefix of '${cidr}' already exists or id ${id} is duplicated`, `El id ${id} ya lo usa otra subred: cada subred necesita un id distinto.`)
     for (const o of subnets) {
       const r = cidrRange(o.subnet)!
       if (range.net <= r.bcast && r.net <= range.bcast) err(line, `subnet configuration failed: subnet with the prefix of '${cidr}' already exists`, `La subred ${cidr} se superpone con ${o.subnet}.`)

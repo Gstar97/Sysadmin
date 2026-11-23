@@ -153,7 +153,7 @@ register('iostat', {
     const m = metrics(ctx.sys)
     const ext = ctx.args.some((x) => /^-\w*x/.test(x))
     const d = new Date()
-    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${ctx.sys.ncpu} CPU)\n\n`)
+    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${ctx.sys.ncpu} CPU)\n\n`)
     ctx.out(`avg-cpu:  %user   %nice %system %iowait  %steal   %idle\n          ${[m.us, m.ni, m.sy, m.wa, m.st, m.id].map((v) => v.toFixed(2).padStart(6)).join('  ')}\n\n`)
     const devs = [{ name: 'sda', share: 1 }, { name: 'dm-0', share: 0.97 }]
     if (ext) {
@@ -240,7 +240,7 @@ register('sar', {
       return `${pad(d.getHours())}:${pad(d.getMinutes())}:01`
     }
     const d = new Date()
-    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${ctx.sys.ncpu} CPU)\n\n`)
+    ctx.out(`Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic'} (${ctx.sys.hostname}) \t${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} \t_x86_64_\t(${ctx.sys.ncpu} CPU)\n\n`)
     const j = (v: number, i: number, amt: number) => Math.max(0, v + jitter(i, amt))
     const avg = (f: (m: typeof cur) => number) => samples.reduce((s, x) => s + f(x.m), 0) / Math.max(1, samples.length)
     if (kind === 'u') {

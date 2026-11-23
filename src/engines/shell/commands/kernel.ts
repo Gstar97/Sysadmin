@@ -136,7 +136,7 @@ register('modinfo', {
       ctx.err(`modinfo: ERROR: Module ${name ?? ''} not found.\n`)
       return 1
     }
-    const kv = ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'
+    const kv = ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic'
     const field = ctx.args.includes('-F') ? ctx.args[ctx.args.indexOf('-F') + 1] : undefined
     const rows: [string, string][] = [
       ['filename', `/lib/modules/${kv}/${m.file}`],
@@ -173,7 +173,7 @@ register('modprobe', {
       return 1
     }
     if (!MODS[mod]) {
-      ctx.err(`modprobe: FATAL: Module ${name} not found in directory /lib/modules/${sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'}\n`)
+      ctx.err(`modprobe: FATAL: Module ${name} not found in directory /lib/modules/${sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic'}\n`)
       return 1
     }
     if (remove) {
@@ -208,7 +208,7 @@ register('modprobe', {
     const load = (m: string) => {
       for (const d of MODS[m]?.deps ?? []) load(d)
       if (!sys.modules.has(m)) {
-        if (verbose || dry) ctx.out(`insmod /lib/modules/${sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'}/${MODS[m].file}\n`)
+        if (verbose || dry) ctx.out(`insmod /lib/modules/${sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic'}/${MODS[m].file}\n`)
         if (!dry) sys.modules.add(m)
       }
     }

@@ -35,7 +35,7 @@ export const SYSCTL_DEFAULTS: Record<string, string> = {
 export function initKernel(sys: System) {
   for (const [k, v] of Object.entries(SYSCTL_DEFAULTS)) sys.sysctl.set(k, v)
   sys.sysctl.set('kernel.hostname', sys.hostname)
-  sys.sysctl.set('kernel.osrelease', sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic')
+  sys.sysctl.set('kernel.osrelease', sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic')
   if (sys.distro === 'ubuntu') sys.sysctl.set('kernel.dmesg_restrict', '1')
   for (const [k, v] of sys.sysctl) writeProcSys(sys, k, v)
   for (const m of LOADED_BY_DEFAULT) sys.modules.add(m)

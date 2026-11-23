@@ -252,3 +252,28 @@ describe('umask con sudo y su', () => {
     expect((await run('whoami')).out).toBe('ana\n')
   })
 })
+
+describe('identidad de Ubuntu', () => {
+  it('se presenta como Ubuntu 26.04 con kernel 7.0 en todos lados', async () => {
+    const { run } = await session({ distro: 'ubuntu', usuarios: [{ nombre: 'estudiante', sudo: true }], paquetes: { instalados: ['bind9', 'kea-dhcp4-server'] } })
+    const osRelease = (await run('cat /etc/os-release')).out
+    expect(osRelease).toContain('PRETTY_NAME="Ubuntu 26.04.1 LTS"')
+    expect(osRelease).toContain('VERSION_CODENAME=resolute')
+    const kernel = (await run('uname -r')).out.trim()
+    expect(kernel).toBe('7.0.0-44-generic')
+    expect((await run('cat /proc/version')).out).toContain(kernel)
+    expect((await run('hostnamectl')).out).toMatch(/Ubuntu 26\.04\.1 LTS[\s\S]*Linux 7\.0\.0-44-generic/)
+    expect((await run('cat /etc/apt/sources.list.d/ubuntu.sources')).out).toContain('Suites: resolute resolute-updates')
+    expect((await run('named -v')).out).toContain('9.20.24-1ubuntu0.5-Ubuntu')
+    const out = (await run('sudo grep -rh "24\\.04\\|noble" /etc /proc/version')).out
+    expect(out).toBe('')
+  })
+
+  it('Kea 3.0 de Ubuntu exige el id de cada subred', async () => {
+    const { run } = await session({ distro: 'ubuntu', usuarios: [{ nombre: 'estudiante', sudo: true }], paquetes: { instalados: ['kea-dhcp4-server'] } })
+    await run(`echo '{ "Dhcp4": { "subnet4": [ { "subnet": "192.168.10.0/24" } ] } }' | sudo tee /etc/kea/kea-dhcp4.conf`)
+    const r = await run('kea-dhcp4 -t /etc/kea/kea-dhcp4.conf')
+    expect(r.code).not.toBe(0)
+    expect(r.err).toContain("missing parameter 'id'")
+  })
+})

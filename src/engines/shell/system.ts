@@ -243,7 +243,7 @@ export class System {
   kernelRelease?: string
   kernelBuild?: string
   /** Repositorio que muestra apt al instalar (por defecto, el de Ubuntu). */
-  aptMirror = 'http://archive.ubuntu.com/ubuntu noble/main'
+  aptMirror = 'http://archive.ubuntu.com/ubuntu resolute/main'
   /** apt update con repositorios propios (devuelve la salida o undefined para la de Ubuntu). */
   static aptUpdateHooks: ((sys: System) => { out: string; err: string; code: number } | undefined)[] = []
   secureBoot: boolean
@@ -916,7 +916,7 @@ export class System {
     const osRelease =
       this.distro === 'rocky'
         ? 'NAME="Rocky Linux"\nVERSION="10.0 (Red Quartz)"\nID="rocky"\nID_LIKE="rhel centos fedora"\nVERSION_ID="10.0"\nPRETTY_NAME="Rocky Linux 10.0 (Red Quartz)"\n'
-        : 'PRETTY_NAME="Ubuntu 24.04.2 LTS"\nNAME="Ubuntu"\nVERSION_ID="24.04"\nVERSION="24.04.2 LTS (Noble Numbat)"\nID=ubuntu\nID_LIKE=debian\n'
+        : 'PRETTY_NAME="Ubuntu 26.04.1 LTS"\nNAME="Ubuntu"\nVERSION_ID="26.04"\nVERSION="26.04.1 LTS (Resolute Raccoon)"\nVERSION_CODENAME=resolute\nID=ubuntu\nID_LIKE=debian\nUBUNTU_CODENAME=resolute\n'
     const files: Record<string, string> = {
       '/etc/os-release': osRelease,
       '/etc/hostname': `${this.hostname}\n`,
@@ -963,7 +963,7 @@ export class System {
       '/proc/version':
         this.distro === 'rocky'
           ? 'Linux version 6.12.0-55.el10.x86_64 (mockbuild@rocky) (gcc 14.2.1) #1 SMP PREEMPT_DYNAMIC\n'
-          : 'Linux version 6.8.0-58-generic (buildd@lcy02-amd64-074) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0) #60-Ubuntu SMP PREEMPT_DYNAMIC\n',
+          : 'Linux version 7.0.0-44-generic (buildd@lcy02-amd64-074) (x86_64-linux-gnu-gcc-15 (Ubuntu 15.2.0) 15.2.0) #44-Ubuntu SMP PREEMPT_DYNAMIC Thu Nov  5 10:42:17 UTC 2026\n',
       ...bootFiles(this.distro, this.firmware),
       ...logrotateFiles(this.distro),
       ...kernelFiles(this.distro),
@@ -1108,7 +1108,7 @@ export class System {
 // Arranque (GRUB, kernel, initramfs) y rotación de logs
 // ---------------------------------------------------------------------------------------
 
-export const KERNEL_VERSION = { rocky: '6.12.0-55.el10.x86_64', ubuntu: '6.8.0-58-generic' } as const
+export const KERNEL_VERSION = { rocky: '6.12.0-55.el10.x86_64', ubuntu: '7.0.0-44-generic' } as const
 export const MACHINE_ID = '4b0c2f1e9a7d4c55b1e2f30a8d6c7e91'
 
 const KERNEL_ARGS = {
@@ -1430,13 +1430,13 @@ gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-10
 
 const UBUNTU_SOURCES = `Types: deb
 URIs: http://archive.ubuntu.com/ubuntu/
-Suites: noble noble-updates noble-backports
+Suites: resolute resolute-updates resolute-backports
 Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
 Types: deb
 URIs: http://security.ubuntu.com/ubuntu/
-Suites: noble-security
+Suites: resolute-security
 Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 `

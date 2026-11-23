@@ -201,7 +201,7 @@ register('named', {
   path: '/usr/sbin',
   run(ctx) {
     if (ctx.args.includes('-v') || ctx.args.includes('-V')) {
-      ctx.out(`BIND ${ctx.sys.distro === 'rocky' ? '9.18.33-RH' : '9.18.30-0ubuntu0.24.04.2-Ubuntu'} (Extended Support Version) <id:>\n`)
+      ctx.out(`BIND ${ctx.sys.distro === 'rocky' ? '9.18.33-RH' : '9.20.24-1ubuntu0.5-Ubuntu'} (Extended Support Version) <id:>\n`)
       return 0
     }
     ctx.err('[simulador] named se maneja como servicio: systemctl start named.\n')

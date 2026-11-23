@@ -402,8 +402,8 @@ register('pgrep', {
 register('uname', {
   usage: 'uname [-a|-r|-n|-m|-s|-o]',
   run(ctx) {
-    const kernel = ctx.sys.kernelRelease ?? (ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic')
-    const version = ctx.sys.kernelBuild ?? (ctx.sys.distro === 'rocky' ? '#1 SMP PREEMPT_DYNAMIC Fri Jun 20 12:00:00 UTC 2025' : '#60-Ubuntu SMP PREEMPT_DYNAMIC Fri Mar 14 18:29:48 UTC 2025')
+    const kernel = ctx.sys.kernelRelease ?? (ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic')
+    const version = ctx.sys.kernelBuild ?? (ctx.sys.distro === 'rocky' ? '#1 SMP PREEMPT_DYNAMIC Fri Jun 20 12:00:00 UTC 2025' : '#44-Ubuntu SMP PREEMPT_DYNAMIC Thu Nov  5 10:42:17 UTC 2026')
     const f = ctx.args.join('')
     if (!f || f === '-s') ctx.out('Linux\n')
     else if (f.includes('a')) ctx.out(`Linux ${ctx.sys.hostname} ${kernel} ${version} x86_64 x86_64 x86_64 GNU/Linux\n`)
@@ -459,7 +459,7 @@ register('hostnamectl', {
     }
     const os = /PRETTY_NAME="([^"]+)"/.exec(ctx.sys.vfs.readFile('/etc/os-release', ROOT_CRED))?.[1]
     ctx.out(
-      ` Static hostname: ${ctx.sys.hostname}\n       Icon name: computer-vm\n         Chassis: vm 🖴\n      Machine ID: 4b0c2f1e9a7d4c55b1e2f30a8d6c7e91\n  Virtualization: kvm\nOperating System: ${os}\n          Kernel: Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic'}\n    Architecture: x86-64\n`,
+      ` Static hostname: ${ctx.sys.hostname}\n       Icon name: computer-vm\n         Chassis: vm 🖴\n      Machine ID: 4b0c2f1e9a7d4c55b1e2f30a8d6c7e91\n  Virtualization: kvm\nOperating System: ${os}\n          Kernel: Linux ${ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic'}\n    Architecture: x86-64\n`,
     )
     return 0
   },
@@ -970,7 +970,7 @@ register('dmesg', {
       ctx.err('dmesg: read kernel buffer failed: Operation not permitted\n')
       return 1
     }
-    ctx.out('[    0.000000] Linux version ' + (ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '6.8.0-58-generic') + '\n[    0.000000] Command line: BOOT_IMAGE=(hd0,msdos1)/vmlinuz root=/dev/mapper/rl-root ro\n[    1.204331] sd 0:0:0:0: [sda] 41943040 512-byte logical blocks: (21.5 GB/20.0 GiB)\n[    2.581092] XFS (dm-0): Mounting V5 Filesystem\n[    3.912577] e1000: enp0s3 NIC Link is Up 1000 Mbps Full Duplex, Flow Control: RX\n')
+    ctx.out('[    0.000000] Linux version ' + (ctx.sys.distro === 'rocky' ? '6.12.0-55.el10.x86_64' : '7.0.0-44-generic') + '\n[    0.000000] Command line: BOOT_IMAGE=(hd0,msdos1)/vmlinuz root=/dev/mapper/rl-root ro\n[    1.204331] sd 0:0:0:0: [sda] 41943040 512-byte logical blocks: (21.5 GB/20.0 GiB)\n[    2.581092] XFS (dm-0): Mounting V5 Filesystem\n[    3.912577] e1000: enp0s3 NIC Link is Up 1000 Mbps Full Duplex, Flow Control: RX\n')
     for (const j of ctx.sys.journal.filter((e) => e.ident === 'kernel')) ctx.out(`[${((j.time - ctx.sys.bootTime) / 1000).toFixed(6).padStart(12)}] ${j.message}\n`)
     return 0
   },

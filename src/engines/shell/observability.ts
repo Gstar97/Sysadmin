@@ -322,7 +322,7 @@ function nodeMetricsText(sys: System): string {
   h('node_time_seconds', 'System time in seconds since epoch (1970).', 'gauge')
   lines.push(`node_time_seconds ${now.toFixed(3)}`)
   h('node_uname_info', 'Labeled system information as provided by the uname system call.', 'gauge')
-  lines.push(`node_uname_info{domainname="(none)",machine="x86_64",nodename="${sys.hostname}",release="${sys.distro === 'rocky' ? '6.12.0-55.12.1.el10_0.x86_64' : '6.8.0-88-generic'}",sysname="Linux",version="#1 SMP PREEMPT_DYNAMIC"} 1`)
+  lines.push(`node_uname_info{domainname="(none)",machine="x86_64",nodename="${sys.hostname}",release="${sys.distro === 'rocky' ? '6.12.0-55.12.1.el10_0.x86_64' : '7.0.0-44-generic'}",sysname="Linux",version="#1 SMP PREEMPT_DYNAMIC"} 1`)
   return lines.join('\n') + '\n'
 }
 
@@ -1711,7 +1711,7 @@ export function zabbixItem(sys: System, key: string, conf: ZbxConf): string {
     case 'system.hostname':
       return sys.hostname
     case 'system.uname':
-      return `Linux ${sys.hostname} ${sys.distro === 'rocky' ? '6.12.0-55.12.1.el10_0.x86_64' : '6.8.0-88-generic'} #1 SMP PREEMPT_DYNAMIC x86_64`
+      return `Linux ${sys.hostname} ${sys.distro === 'rocky' ? '6.12.0-55.12.1.el10_0.x86_64' : '7.0.0-44-generic'} #1 SMP PREEMPT_DYNAMIC x86_64`
     case 'system.uptime':
       return String(Math.round((obsNow(sys) - sys.bootTime) / 1000))
     case 'system.cpu.num':
